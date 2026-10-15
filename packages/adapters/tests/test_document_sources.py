@@ -132,6 +132,61 @@ async def test_a_server_error_is_unreadable_not_deleted() -> None:
     assert changes.unreadable == [f"{root}a.html"]
 
 
+def _redirecting(routes: dict[str, tuple[int, str, str | None]]) -> httpx.MockTransport:
+    """url -> (status, body, location)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="")
+        status, body, location = routes.get(url, (404, "", None))
+        headers = {"content-type": "text/html"}
+        if location:
+            headers["location"] = location
+        return httpx.Response(status, text=body, headers=headers)
+
+    return httpx.MockTransport(handler)
+
+
+async def test_a_crawl_excludes_paths_and_names_pages_by_their_whole_path() -> None:
+    root = "https://example.test/"
+    pages = {
+        root: (200, '<a href="/en/about">en</a><a href="/es/about">es</a><a href="/es">es</a>'),
+        f"{root}en/about": (200, "english"),
+        f"{root}es/about": (200, "spanish"),
+        f"{root}es": (200, "spanish home"),
+    }
+    crawl = WebCrawlSource(url=root, exclude=["/es", "/es/*"], transport=_site(pages), resolver=_public)
+    changes = await crawl.changes(None)
+    assert [i.name for i in changes.items] == ["index.html", "en-about.html"]
+    assert not changes.unreadable
+
+
+async def test_a_redirect_inside_the_allow_list_is_followed() -> None:
+    root = "https://example.test/"
+    routes = {
+        root: (200, '<a href="/en/">en</a>', None),
+        f"{root}en/": (301, "", "/en"),
+        f"{root}en": (200, "english", None),
+    }
+    changes = await WebCrawlSource(url=root, transport=_redirecting(routes), resolver=_public).changes(None)
+    assert [(i.ref, i.name) for i in changes.items] == [(root, "index.html"), (f"{root}en", "en.html")]
+
+
+async def test_a_crawl_that_lists_nothing_is_unreadable_not_empty() -> None:
+    routes = {"https://www.example.test/": (301, "", "https://example.test/")}
+    crawl = WebCrawlSource(url="https://www.example.test/", transport=_redirecting(routes), resolver=_public)
+    changes = await crawl.changes({"pages": 3})
+    assert changes.items == [] and changes.unreadable == ["https://www.example.test/"]
+
+
+async def test_a_start_that_redirects_off_the_allow_list_is_refused_with_its_target() -> None:
+    routes = {"https://www.example.test/": (301, "", "https://example.test/")}
+    crawl = WebCrawlSource(url="https://www.example.test/", transport=_redirecting(routes), resolver=_public)
+    with pytest.raises(SourceRefusedError, match=r"redirects to `https://example.test/`: start there"):
+        await crawl.check_start()
+
+
 @pytest.mark.parametrize(
     ("url", "addresses", "reason"),
     [

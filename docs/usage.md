@@ -1035,7 +1035,13 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   refused until a `page_id` narrows it. Signing in per person (OAuth 2.0, 3LO) is a possible
   follow-up; today the service account is the identity.
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
-  `max_pages` ≤ 500; a host that resolves to a private address is refused.
+  `max_pages` ≤ 500; a host that resolves to a private address is refused. `exclude` is a list of
+  path globs (at most 50, each starting with `/`, for example `["/es", "/es/*"]`) that are neither
+  fetched nor followed. Redirects are followed inside the allow-list only; a start URL that
+  redirects off it (`www.example.com` to `example.com`) is refused when the source is created, with
+  the target to use instead. Pages are named by their whole path (`/en/about` is `en-about.html`).
+  A crawl that lists no page at all (a moved site, a wall) is reported as unreadable and **deletes
+  nothing**.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
   (`*.md` by default).
 

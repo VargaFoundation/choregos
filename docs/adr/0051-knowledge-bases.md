@@ -116,6 +116,16 @@ there (D10), with full-text search built in and `pgvector` one extension away.
    (`agent:knowledge-distiller`), so the administrator who asked may approve it; the request and
    the documents used are recorded on the base (`distillation`).
 
+## Update — 2026-10-15: a crawl never empties its source (S39-18a)
+
+10. **An empty crawl is unreadable, not empty.** A full listing deletes what it does not list
+    (decision 7 of the sources update), which made a crawl that suddenly lists nothing (the start
+    URL now redirects, the site is behind a wall) a mass deletion of the source's documents. A web
+    crawl that lists no page reports its start URL as `unreadable`, so nothing is deleted and the
+    sync says why. A start URL that redirects off the allow-list is refused at creation.
+    Redirects inside the allow-list are followed; `exclude` path globs bound the crawl; page names
+    come from the whole path so two languages do not collide.
+
 ## Update — 2026-10-15: ownership, a project-owned base (S39-14)
 
 11. **Ownership is a fact apart from reach.** `knowledge_bases.owner_project` (nullable) names the

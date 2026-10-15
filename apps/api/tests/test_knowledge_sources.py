@@ -503,3 +503,82 @@ async def test_the_confluence_connector_type_is_listed_with_its_secret_field(
               "config": {"base_url": "https://x.atlassian.net", "email": "a@b.c", "api_token": "plain"}},
     )  # fmt: skip
     assert clear.status_code == 422
+
+
+async def test_a_crawl_that_suddenly_lists_nothing_deletes_nothing(client: AsyncClient, admin: str) -> None:
+    """The start redirects off the site: no page, and no mass deletion of what was indexed."""
+    import httpx
+    from choregos_adapters.documents.web import WebCrawlSource
+
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "web", "name": "Site", "config": {"url": "https://docs.example.com/"}},
+    )
+    assert created.status_code == 201, created.text
+    source_id = created.json()["id"]
+    state = {"up": True}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="")
+        if not state["up"]:
+            return httpx.Response(301, headers={"location": "https://other.example.com/"})
+        page = {"https://docs.example.com/": '<a href="a">a</a><a href="b">b</a>'}.get(url, f"<h1>{url}</h1>")
+        return httpx.Response(200, text=page, headers={"content-type": "text/html"})
+
+    async def public(host: str) -> list[str]:
+        return ["93.184.216.34"]
+
+    def crawl() -> WebCrawlSource:
+        return WebCrawlSource(
+            url="https://docs.example.com/", transport=httpx.MockTransport(handler), resolver=public
+        )
+
+    from choregos_api.knowledge.sync import sync_source
+
+    assert (await sync_source("varga", source_id, adapter=crawl()))["added"] == 3
+    state["up"] = False
+    second = await sync_source("varga", source_id, adapter=crawl())
+    assert second["deleted"] == 0, second
+    assert len((await client.get(f"{BASE}/framework")).json()["documents"]) == 3
+
+
+async def test_a_web_source_starting_on_a_redirect_is_refused(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import respx
+    from choregos_adapters.documents import web
+
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+
+    async def public(host: str) -> list[str]:
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(web, "resolve", public)
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.example.test/").respond(301, headers={"location": "https://example.test/"})
+        refused = await client.post(
+            f"{BASE}/framework/sources",
+            json={"kind": "web", "name": "w", "config": {"url": "https://www.example.test/"}},
+        )
+    assert refused.status_code == 422, refused.text
+    assert "redirects to `https://example.test/`" in refused.json()["detail"]
+
+
+async def test_a_web_source_keeps_its_exclusions_and_refuses_a_bad_one(
+    client: AsyncClient, admin: str
+) -> None:
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    url = {"url": "https://docs.example.com/"}
+    ok = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "web", "name": "w", "config": {**url, "exclude": ["/es", "/es/*"]}},
+    )
+    assert ok.status_code == 201 and ok.json()["config"]["exclude"] == ["/es", "/es/*"]
+    bad = await client.post(
+        f"{BASE}/framework/sources", json={"kind": "web", "name": "x", "config": {**url, "exclude": ["es"]}}
+    )
+    assert bad.status_code == 422 and "exclude" in bad.json()["detail"]
