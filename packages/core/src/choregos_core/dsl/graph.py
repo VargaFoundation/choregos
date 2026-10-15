@@ -30,7 +30,7 @@ def _lane(wf: Workflow, state: str) -> str:
 
 
 def to_graph(wf: Workflow) -> dict[str, Any]:
-    """Graphe {nodes, edges, artifacts} consommé par React Flow (`/p/{slug}/workflow`).
+    """Graph {nodes, edges, artifacts} read by React Flow (`/p/{slug}/workflow`).
 
     Les arêtes nominales (`kind: "nominal"`) viennent des transitions ; les arêtes
     secondaires (rejet, reprise, escalade, défauts) sont rendues aussi, sinon les états
