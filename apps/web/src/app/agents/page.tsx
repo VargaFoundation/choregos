@@ -105,9 +105,9 @@ function Agents() {
                         {agent.display_name}
                       </Link>
                       <span className="ml-2 font-mono text-xs text-ink-muted">{agent.slug}</span>
-                      {agent.kind === "external" && (
+                      {agent.kind !== "internal" && (
                         <Badge tone="accent" className="ml-2">
-                          External
+                          {agent.kind === "remote" ? "Remote · A2A" : "External"}
                         </Badge>
                       )}
                     </TD>

@@ -18,6 +18,10 @@ import type {
   AgentCatalogueConnection,
   AgentCatalogueEntry,
   AgentCreate,
+  RemoteAgentDiscovery,
+  RemoteCredential,
+  RemoteCredentialAuthorization,
+  RemoteCredentialCreate,
   AgentCredential,
   AgentLifecycleChange,
   AgentLifecycleResult,
@@ -299,6 +303,19 @@ export const api = {
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
+  /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
+  remoteCredentials: (org: string) => request<RemoteCredential[]>(`/orgs/${org}/remote-credentials`),
+  createRemoteCredential: (org: string, body: RemoteCredentialCreate) =>
+    request<RemoteCredential>(`/orgs/${org}/remote-credentials`, { method: "POST", body: JSON.stringify(body) }),
+  authorizeRemoteCredential: (org: string, name: string) =>
+    request<RemoteCredentialAuthorization>(`/orgs/${org}/remote-credentials/${name}/authorize`, { method: "POST" }),
+  revokeRemoteCredential: (org: string, name: string) =>
+    request<void>(`/orgs/${org}/remote-credentials/${name}`, { method: "DELETE" }),
+  discoverRemoteAgent: (org: string, cardUrl: string) =>
+    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover`, {
+      method: "POST",
+      body: JSON.stringify({ card_url: cardUrl }),
+    }),
   /** Le catalogue de la plateforme (ADR 0040) : ce qu'il propose, ce qui en est installé. */
   agentCatalogue: (org: string) => request<AgentCatalogueEntry[]>(`/orgs/${org}/agent-catalogue`),
   installCatalogueAgent: (org: string, slug: string, upgrade = false) =>

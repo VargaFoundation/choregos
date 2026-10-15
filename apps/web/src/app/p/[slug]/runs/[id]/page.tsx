@@ -15,6 +15,8 @@ import { PodLogs } from "@/components/pod-logs";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { activiteDuRun } from "@/lib/activite-du-run";
+import { RemoteTaskCard } from "@/components/remote/remote-task";
+import { remoteTask } from "@/lib/remote-run";
 import { planDeLAgent } from "@/lib/plan-de-l-agent";
 import { finDeclaree } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
@@ -67,6 +69,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const plan = planDeLAgent(events);
   // Ce que l'agent a appelé, relu du même journal (S25-02) : lisible, au-dessus du journal brut.
   const activite = activiteDuRun(events);
+  // What the remote agent did, when the step called one (ADR 0062).
+  const remote = remoteTask(events);
   // L'agent se dit fini ; la plateforme l'a-t-elle constaté (ADR 0045) ?
   const fin = finDeclaree(run.data.result?.status, verdictsDe(events));
 
@@ -152,6 +156,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           <p className="mt-2 text-xs">{run.data.result?.diagnostics?.permission_denials ?? 0} permission(s) refused</p>
         </Card>
       </div>
+
+      {remote && <RemoteTaskCard task={remote} />}
 
       {plan && (
         <Card title="Agent plan" action={<Provenance de="declared" />}>

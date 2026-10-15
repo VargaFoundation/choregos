@@ -11,6 +11,8 @@ import type {
   Action,
   Agent,
   AgentBackendInfo,
+  RemoteAgentDiscovery,
+  RemoteCredential,
   GatewayModel,
   AgentCatalogueEntry,
   AgentCreate,
@@ -559,6 +561,40 @@ export const runDiff = {
 /** Une mise à jour ACP telle que le runner la journalise : les `params` bruts de `session/update`. */
 const maj = (update: Record<string, unknown>) => ({ sessionId: "sess-r3", update });
 const tache = (content: string, status: string, priority = "medium") => ({ content, priority, status });
+
+/** A run whose step a remote agent carried (S39-08): its task and its states, from the runner's journal. */
+export const remoteRun: Run = { ...run("r-remote", "ask-rovo", "succeeded", 0.05, "Three open issues"), backend: "a2a", model: "a2a:rovo" };
+/** The latest run of the remote agent: its card moved, nothing was sent. */
+export const remoteRunDrifted: Run = {
+  ...run("r-remote-drift", "ask-rovo", "failed", 0, "card changed"),
+  backend: "a2a",
+  model: "a2a:rovo",
+  result: { schema: "choregos/StageResult/v1", status: "failed", reason: "remote_card_changed", summary: "card changed" } as Run["result"],
+};
+const remoteEvents = (drift: boolean): RunEventDto[] =>
+  drift
+    ? [
+        { seq: 1, type: "run.started", ts: iso(40), payload: { role: "ask-rovo" } },
+        {
+          seq: 2,
+          type: "remote.card_changed",
+          ts: iso(40),
+          payload: { pinned: rovoDiscovery.card.digest, now: `sha256:${"0a1b2c3d4e5f".repeat(5)}0a1b`.slice(0, 71), endpoint: "https://a2a.atlassian.com/v1/rovo" },
+        },
+      ]
+    : [
+        { seq: 1, type: "run.started", ts: iso(40), payload: { role: "ask-rovo" } },
+        {
+          seq: 2,
+          type: "remote.started",
+          ts: iso(40),
+          payload: { endpoint: "https://a2a.atlassian.com/v1/rovo", skill: "work-in-jira", card_digest: rovoDiscovery.card.digest, protocol_version: "0.3.0" },
+        },
+        { seq: 3, type: "remote.update", ts: iso(39), payload: { state: "submitted", task_id: "task-7f3a" } },
+        { seq: 4, type: "remote.update", ts: iso(39), payload: { state: "working", task_id: "task-7f3a" } },
+        { seq: 5, type: "remote.update", ts: iso(38), payload: { state: "completed", task_id: "task-7f3a" } },
+        { seq: 6, type: "remote.finished", ts: iso(38), payload: { state: "completed", task_id: "task-7f3a", duration_s: 74, reason: null } },
+      ];
 
 export const runEvents: RunEventDto[] = [
   { seq: 1, type: "run.started", ts: iso(60), payload: { role: "implement" } },
@@ -1261,7 +1297,96 @@ function editionSimulee(yaml: string, operations: WorkflowOperation[]): Workflow
 }
 
 /** Le registre de démonstration (ADR 0033) : un agent interne qui porte une skill, et un Claude Code. */
+/** Atlassian's real card, summarised (S39-08): one agent, two skills, OAuth with Dynamic Client Registration. */
+export const rovoDiscovery: RemoteAgentDiscovery = {
+  card: {
+    name: "Atlassian Rovo",
+    description: "Chat with Rovo, Atlassian's AI teammate that helps you get things done across all your work tools.",
+    endpoint: "https://a2a.atlassian.com/v1/rovo",
+    host: "a2a.atlassian.com",
+    protocol_version: "0.3.0",
+    digest: `sha256:${"4f9c1e7a2b6d".repeat(5)}d8c3`.slice(0, 71),
+    skills: [
+      { id: "work-in-jira", name: "Work in Jira", description: "Get Jira context and update work items." },
+      { id: "work-in-confluence", name: "Work in Confluence", description: "Find answers and create pages." },
+    ],
+    auth_types: ["oauth2_authorization_code"],
+    scopes: ["read:me", "offline_access", "full_access:chat:rovo"],
+    streaming: true,
+    dcr_available: true,
+  },
+  proposed: {
+    slug: "atlassian-rovo",
+    kind: "remote",
+    display_name: "Atlassian Rovo",
+    description: "Chat with Rovo, Atlassian's AI teammate.",
+    lifecycle: "draft",
+    spec: { runtime: { kind: "a2a", card_url: "https://a2a.atlassian.com/.well-known/agent.json", credential: "atlassian-rovo" } },
+  },
+  credentials: ["atlassian-rovo"],
+  domains: ["a2a.atlassian.com"],
+};
+
+export const remoteCredentials: RemoteCredential[] = [
+  {
+    name: "atlassian-rovo",
+    type: "oauth2_authorization_code",
+    status: "connected",
+    authorised_as: "choregos-bot@acme.dev",
+    scopes: ["read:me", "offline_access", "full_access:chat:rovo"],
+    card_url: "https://a2a.atlassian.com/.well-known/agent.json",
+    host: "a2a.atlassian.com",
+    created_by: "lea@acme.dev",
+    last_refresh_at: iso(25),
+  },
+  {
+    name: "partner-agent",
+    type: "oauth2_authorization_code",
+    status: "pending",
+    scopes: ["chat"],
+    card_url: "https://agent.partner.example/.well-known/agent.json",
+    host: "agent.partner.example",
+    created_by: "lea@acme.dev",
+  },
+];
+
 export const agents: Agent[] = [
+  {
+    slug: "rovo",
+    kind: "remote",
+    display_name: "Atlassian Rovo",
+    description: "Answers from the team's Jira and Confluence, as the dedicated Atlassian account.",
+    status: "active",
+    owner: "lea@acme.dev",
+    latest_version: 1,
+    created_at: iso(60 * 24 * 3),
+    versions: [
+      {
+        version: 1,
+        spec: {
+          instructions: "Answer about the work item, in two paragraphs at most.",
+          runtime: {
+            kind: "a2a",
+            card_url: "https://a2a.atlassian.com/.well-known/agent.json",
+            skill: "work-in-jira",
+            credential: "atlassian-rovo",
+            timeout_minutes: 10,
+            declared_cost: { per_task_usd: 0.05, per_minute_usd: 0 },
+            input: "text",
+            pinned_card: {
+              url: "https://a2a.atlassian.com/v1/rovo",
+              protocol_version: "0.3.0",
+              digest: rovoDiscovery.card.digest,
+              skills: ["work-in-jira", "work-in-confluence"],
+            },
+          },
+        },
+        checksum: "sha256:77aa00bb11cc22dd33ee44ff55aa66bb",
+        created_by: "lea@acme.dev",
+        created_at: iso(60 * 24 * 3),
+      },
+    ],
+  },
   {
     slug: "onboarding-coordinator",
     kind: "internal",
@@ -1890,6 +2015,13 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
+  if (method === "POST" && /^\/orgs\/[^/]+\/agents\/discover$/.test(chemin ?? "")) return rovoDiscovery as T;
+  if (method === "POST" && /^\/orgs\/[^/]+\/remote-credentials$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { name: string; type: RemoteCredential["type"]; card_url?: string };
+    return { name: corps.name, type: corps.type, status: corps.type === "oauth2_authorization_code" ? "pending" : "connected", card_url: corps.card_url ?? null, host: null, scopes: [] } as T;
+  }
+  const autorise = /^\/orgs\/[^/]+\/remote-credentials\/([^/]+)\/authorize$/.exec(chemin ?? "");
+  if (method === "POST" && autorise) return { redirect_url: `/admin/remote-agents?connected=${autorise[1]}` } as T;
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
@@ -1910,6 +2042,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return agentCredentials.map((c) => ({ ...c, agent: "leas-claude-code" })) as T;
   }
   if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? "")) return agentMetricsList() as T;
+  if (/^\/orgs\/[^/]+\/agents\/rovo\/runs$/.test(route ?? "")) return [remoteRunDrifted, remoteRun] as T;
+  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return remoteCredentials as T;
+  if (/^\/runs\/r-remote\/events$/.test(route ?? "")) return remoteEvents(false) as T;
+  if (/^\/runs\/r-remote-drift\/events$/.test(route ?? "")) return remoteEvents(true) as T;
+  if (/^\/runs\/r-remote(-drift)?$/.test(route ?? "")) return (route?.endsWith("drift") ? remoteRunDrifted : remoteRun) as T;
   // The runs of an agent, newest first (S30-05).
   if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
   if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
