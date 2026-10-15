@@ -499,6 +499,7 @@ async def test_a_run_with_an_image_the_pool_was_not_made_from_is_refused() -> No
 def test_the_factory_reads_the_pool_image_from_the_runner_image_env(monkeypatch: pytest.MonkeyPatch) -> None:
     from choregos_adapters import build
 
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE", "harbor.example/choregos-runner:0.17.12")
     executor = build(
         "runtime",
