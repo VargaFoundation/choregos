@@ -1,5 +1,5 @@
-# Déploiement canary piloté par une AnalysisTemplate : le train abandonne
-# automatiquement si les SLO se dégradent.
+# Canary deployment driven by an AnalysisTemplate: the train aborts
+# automatically if the SLOs degrade.
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:

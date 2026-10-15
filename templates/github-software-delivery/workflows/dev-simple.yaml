@@ -1,12 +1,12 @@
-# Un bogue ou un correctif léger, du ticket à la production vérifiée, sans humain — sauf si ça déraille.
+# A bug or a light fix, from the ticket to verified production, without a human — unless it goes off the rails.
 #
-# Le triage arrête ce qui n'est pas petit (`outputs_in` sur la taille et le risque) : un humain le
-# migre vers `dev-complex`. Le testeur renvoie au développeur avec son rapport ; une revue qui demande
-# des changements part chez le répondeur ; une CI rouge chez le réparateur. Le train de prod part sans
-# approbation : ce workflow n'en nomme pas (ADR 0041). Aucun agent ne déploie — le train le fait,
-# l'agent de production vérifie ensuite, en lecture seule.
+# Triage stops what is not small (`outputs_in` on size and risk): a human migrates it to
+# `dev-complex`. The tester sends it back to the developer with its report; a review asking for
+# changes goes to the responder; a red CI to the fixer. The production train leaves without
+# approval: this workflow names none (ADR 0041). No agent deploys — the train does,
+# the production agent then verifies, read-only.
 #
-# Les états ne portent aucun effet par leur nom : `does` et `production` sont écrits (ADR 0037).
+# States carry no effect by their name: `does` and `production` are written out (ADR 0037).
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
