@@ -184,7 +184,6 @@ export function AgentBuilder({
   /** The version one starts from: the latest, for a new version. */
   start?: AgentSpec;
   /** What the first step of the page collected (create mode). */
-  initial?: { display_name?: string; slug?: string; description?: string };
   /** The input "Try it" starts with, such as a drafted agent's sample (S39-05). */
   initialSample?: { title?: string; body?: string };
   initial?: { display_name?: string; slug?: string; description?: string; scope?: string; project?: string };

@@ -8,7 +8,6 @@ import { Suspense, useState } from "react";
 import { slugFromName } from "@/components/agents/builder";
 import { creatableScopes, makeScopes } from "@/components/agents/registre";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { api, ApiError } from "@/lib/api";
 import type { AgentDraft } from "@/lib/types";
