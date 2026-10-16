@@ -46,11 +46,13 @@ export function TagList({ tags, link = false }: { tags?: readonly string[] | nul
       {tags.map((tag) => (
         <li key={tag}>
           {link ? (
-            <Link href={`/agents?tag=${encodeURIComponent(tag)}`} className={`${CHIP} hover:bg-accent-soft hover:text-accent-strong`}>
+            <Link href={`/agents?tag=${encodeURIComponent(tag)}`} className={`${CHIP} hover:bg-accent-soft hover:text-accent-strong`} data-donnee>
               {tag}
             </Link>
           ) : (
-            <span className={CHIP}>{tag}</span>
+            <span className={CHIP} data-donnee>
+              {tag}
+            </span>
           )}
         </li>
       ))}
@@ -94,7 +96,7 @@ export function TagEditor({
       {value.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="Tags on this agent">
           {value.map((tag) => (
-            <li key={tag} className={CHIP}>
+            <li key={tag} className={CHIP} data-donnee>
               {tag}
               <button type="button" className="rounded-full px-1 hover:bg-line" onClick={() => onChange(value.filter((t) => t !== tag))}>
                 <span aria-hidden="true">×</span>
@@ -168,6 +170,7 @@ export function TagFilter({
             type="button"
             className={chip(active)}
             aria-pressed={active}
+            data-donnee
             onClick={() => onChange(active ? value.filter((t) => t !== tag) : [...value, tag])}
           >
             {tag} ({counts.get(tag) ?? 0})
