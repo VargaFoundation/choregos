@@ -59,6 +59,7 @@ from ..schemas import (
     AgentTrialCreate,
     AgentUpstream,
     AgentVersionDto,
+    AgentVersionMetrics,
     ApiTokenCreated,
     ImplicitAgent,
     ProjectAgentDto,
@@ -85,6 +86,7 @@ from ..services.agent_lifecycle import (
     running_work_items,
     unused,
 )
+from ..services.agent_releases import after_publish, policy_of, production_spec, served
 from ..services.agents import (
     AgentIndisponible,
     depense_du_jour,
@@ -128,13 +130,20 @@ async def _versions(session: AsyncSession, agent: Agent) -> list[AgentVersion]:
     return list(lignes.scalars())
 
 
-def _version_dto(ligne: AgentVersion) -> AgentVersionDto:
+def _version_dto(ligne: AgentVersion, agent: Agent | None = None) -> AgentVersionDto:
+    channels: list[Literal["stable", "candidate"]] = []
+    if agent is not None:
+        if agent.stable_version == ligne.version:
+            channels.append("stable")
+        if agent.candidate_version == ligne.version:
+            channels.append("candidate")
     return AgentVersionDto(
         version=ligne.version,
         spec=AgentSpec.model_validate(ligne.spec),
         checksum=ligne.checksum,
         created_by=ligne.created_by,
         created_at=ligne.created_at,
+        channels=channels,
     )
 
 
@@ -183,11 +192,16 @@ async def _dto(
         revoked_at=agent.revoked_at,
         latest_version=versions[0].version if versions else 0,
         created_at=agent.created_at,
-        versions=[_version_dto(v) for v in versions] if avec_versions else None,
+        versions=[_version_dto(v, agent) for v in versions] if avec_versions else None,
         lifecycle=agent.lifecycle or "active",
         retired_at=agent.retired_at,
         last_run_at=dernier,
         unused=unused(agent, dernier),
+        stable_version=agent.stable_version,
+        candidate_version=agent.candidate_version,
+        candidate_percent=agent.candidate_percent or 0,
+        candidate_since=agent.candidate_since,
+        release_policy=policy_of(agent),
     )
 
 
@@ -295,6 +309,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         lifecycle=body.lifecycle,
         scope=body.scope,
         project_id=projet.id if projet else None,
+        release_policy=body.release_policy.model_dump(mode="json") if body.release_policy else None,
     )
     session.add(agent)
     await session.flush()
@@ -309,6 +324,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         )
     )
     await session.flush()
+    await after_publish(session, principal, agent, 1, principal.email)
     await record(
         session,
         principal,
@@ -404,7 +420,9 @@ async def publish_version(
         target_id=agent.id,
         version=ligne.version,
     )
-    return _version_dto(ligne)
+    # What saving a revision does to the channels is the agent's policy (ADR 0071).
+    await after_publish(session, principal, agent, ligne.version, principal.email)
+    return _version_dto(ligne, agent)
 
 
 @router.get(
@@ -421,7 +439,7 @@ async def get_version(org: str, slug: Slug, version: int, session: Db, principal
     ).scalar_one_or_none()
     if ligne is None:
         raise not_found("Agent version", f"{slug}@{version}")
-    return _version_dto(ligne)
+    return _version_dto(ligne, agent)
 
 
 FINIS = {"succeeded", "failed", "timed_out", "cancelled"}
@@ -440,9 +458,18 @@ async def agent_metrics(
     depuis = utcnow() - timedelta(days=days)
     runs = (
         await session.execute(
-            select(Run.id, Run.status, Project.slug)
+            select(Run.id, Run.status, Project.slug, Run.agent_version)
             .join(Project, Project.id == Run.project_id)
             .where(Run.agent_slug == slug, Project.org_id == organisation.id, Run.created_at >= depuis)
+        )
+    ).all()
+    couts_par_version = (
+        await session.execute(
+            select(Run.agent_version, func.sum(CostLedger.cost_usd))
+            .join(Run, Run.id == CostLedger.run_id)
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug == slug, Project.org_id == organisation.id, CostLedger.ts >= depuis)
+            .group_by(Run.agent_version)
         )
     ).all()
     couts = (
@@ -454,23 +481,27 @@ async def agent_metrics(
             .group_by(CostLedger.kind, Project.slug)
         )
     ).all()
-    reussis = sum(1 for _, statut, _ in runs if statut == "succeeded")
-    termines = sum(1 for _, statut, _ in runs if statut in FINIS)
+    reussis = sum(1 for _, statut, _, _ in runs if statut == "succeeded")
+    termines = sum(1 for _, statut, _, _ in runs if statut in FINIS)
     par_sorte: dict[str, float] = {}
     par_projet: dict[str, list[float]] = {}
     for sorte, projet, montant in couts:
         par_sorte[sorte] = par_sorte.get(sorte, 0.0) + float(montant or 0.0)
         par_projet.setdefault(projet, [0, 0.0])[1] += float(montant or 0.0)
-    for _, _, projet in runs:
+    for _, _, projet, _ in runs:
         par_projet.setdefault(projet, [0, 0.0])[0] += 1
-    derniere = (
-        await session.execute(
-            select(AgentVersion.spec)
-            .where(AgentVersion.agent_id == agent.id)
-            .order_by(AgentVersion.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    par_version: dict[int, list[int]] = {}
+    for _, statut, _, numero in runs:
+        if numero is None:
+            continue
+        ligne_v = par_version.setdefault(int(numero), [0, 0, 0])
+        if statut in FINIS:
+            ligne_v[0] += 1
+            ligne_v[1] += 1 if statut == "succeeded" else 0
+        ligne_v[2] += 1
+    cout_de_version = {int(v): float(c or 0.0) for v, c in couts_par_version if v is not None}
+    # The budget shown is production's: it is the revision most runs use (ADR 0071).
+    en_production = await production_spec(session, agent)
     return AgentMetrics(
         agent=slug,
         days=days,
@@ -485,7 +516,18 @@ async def agent_metrics(
             for projet, (n, c) in sorted(par_projet.items())
         ],
         spent_today_usd=round(await depense_du_jour(session, organisation.id, slug), 6),
-        daily_budget_usd=AgentSpec.model_validate(derniere or {}).budget.daily_usd,
+        daily_budget_usd=AgentSpec.model_validate(en_production or {}).budget.daily_usd,
+        by_version=[
+            AgentVersionMetrics(
+                version=numero,
+                runs=total_v,
+                succeeded=reussis_v,
+                failed=finis_v - reussis_v,
+                success_rate=round(reussis_v / finis_v, 4) if finis_v else None,
+                cost_usd=round(cout_de_version.get(numero, 0.0), 6),
+            )
+            for numero, (finis_v, reussis_v, total_v) in sorted(par_version.items())
+        ],
     )
 
 
@@ -770,6 +812,7 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
         )
     )
     await session.flush()
+    await after_publish(session, principal, fork, 1, principal.email)
     await record(
         session,
         principal,
@@ -857,12 +900,26 @@ async def _version_de(session: AsyncSession, agent: Agent, version: int) -> Agen
     return ligne
 
 
+async def _latest(session: AsyncSession, agent: Agent) -> int:
+    return (
+        await session.execute(select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == agent.id))
+    ).scalar() or 1
+
+
+async def _served_version(session: AsyncSession, agent: Agent, epingle: ProjectAgent | None) -> int:
+    """The revision a pin serves now: its fixed one, or the one of the channel it follows."""
+    version, _, _ = served(agent, pin=epingle, project_channel="stable", work_item_id=None)
+    return version if version is not None else await _latest(session, agent)
+
+
 async def _projet_dto(session: AsyncSession, epingle: ProjectAgent, agent: Agent) -> ProjectAgentDto:
-    spec = AgentSpec.model_validate((await _version_de(session, agent, epingle.version)).spec)
+    version = await _served_version(session, agent, epingle)
+    spec = AgentSpec.model_validate((await _version_de(session, agent, version)).spec)
     surcharges = AgentOverrides.model_validate(epingle.overrides or {})
     return ProjectAgentDto(
         agent=agent.slug,
-        version=epingle.version,
+        version=version,
+        channel=epingle.channel,
         overrides=surcharges,
         effective=effective(spec, surcharges),
         warning=(
@@ -934,7 +991,9 @@ async def resolve_project_agents(
     """Which agent version a run of this project would load for each reference (S39-13).
 
     It delegates to the runtime's own resolver, so the console shows exactly what a run loads: an
-    explicit `@N`, else the project's pin, else the latest version. Read only, no audit record."""
+    explicit `@N`, else the project's pin, else the project's channel, else production (ADR 0071).
+    A canary share depends on the work item, so it is reported (`candidate_percent`), not applied.
+    Read only, no audit record."""
     from choregos_core.catalogue_d_agents import entree
 
     reponses: list[AgentResolution] = []
@@ -977,6 +1036,12 @@ async def resolve_project_agents(
                 status="resolved",
                 version=resolu.version,
                 pinned=resolu.pinned,
+                source=resolu.source,
+                channel=resolu.channel,
+                candidate_version=resolu.agent.candidate_version,
+                candidate_percent=(
+                    resolu.agent.candidate_percent if resolu.agent.candidate_version is not None else None
+                ),
                 display_name=resolu.agent.display_name,
                 lifecycle=resolu.agent.lifecycle,
             )
@@ -999,7 +1064,13 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
         raise conflict(f"agent `{slug}` is {agent.status}: it cannot be pinned")
     if agent.lifecycle in {"draft", "retired"}:
         raise conflict(f"agent `{slug}` is {agent.lifecycle}: it cannot be pinned")
-    spec = AgentSpec.model_validate((await _version_de(session, agent, body.version)).spec)
+    if body.version is not None:
+        pinned_version = body.version
+    elif body.channel == "candidate" and agent.candidate_version is not None:
+        pinned_version = agent.candidate_version
+    else:
+        pinned_version = agent.stable_version or await _latest(session, agent)
+    spec = AgentSpec.model_validate((await _version_de(session, agent, pinned_version)).spec)
     ecarts = elargissements(spec, body.overrides)
     if ecarts:
         raise unprocessable(
@@ -1019,6 +1090,7 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
         )
         session.add(epingle)
     epingle.version = body.version
+    epingle.channel = body.channel
     epingle.overrides = body.overrides.model_dump(mode="json")
     await session.flush()
     await record(
@@ -1030,6 +1102,7 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
         target_id=agent.id,
         project=ctx.project.slug,
         version=body.version,
+        channel=body.channel,
     )
     return await _projet_dto(session, epingle, agent)
 
@@ -1116,8 +1189,8 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     publiee = None
     if body.agent:
         agent = await _agent(session, organisation, body.agent)
-        versions = await _versions(session, agent)
-        publiee = AgentSpec.model_validate(versions[0].spec) if versions else None
+        en_production = await production_spec(session, agent)
+        publiee = AgentSpec.model_validate(en_production) if en_production is not None else None
     plafonds = [TRIAL_CAP_USD, body.budget_usd or TRIAL_DEFAULT_USD]
     if body.spec.budget.run_usd is not None:
         plafonds.append(body.spec.budget.run_usd)

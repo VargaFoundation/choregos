@@ -58,6 +58,20 @@ archive it, but cannot widen it to the organisation, to other projects or to gro
 never decides what *other* projects' runs read. An administrator who widens it makes it the
 organisation's: the owner stops curating. Another project's owners, and developers, read at most.
 
+## Decisions that need a fresh sign-in
+
+Some gestures are too consequential to be made from a browser left open: the session must have been
+authenticated recently (`step_up_minutes`; the API answers `401 step_up_required` and the console
+signs the person in again). They are made by a person in a session, never by an API token or an MCP
+client, which propose and do not decide:
+
+- deciding a governed action (approving one; [ADR 0035](adr/0035-governed-actions-in-the-core.md));
+- **releasing an agent revision to production, or to a canary share, and loosening the release
+  policy of an agent** ([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md);
+  default 10 minutes; a personal agent is exempt; an edition can add its own rule through the
+  `agent.release` gesture check). A release also runs the eval suite again and keeps a history of
+  every move.
+
 ## Injection through context
 
 Context packs and tickets contain text written by third parties. Two rules:

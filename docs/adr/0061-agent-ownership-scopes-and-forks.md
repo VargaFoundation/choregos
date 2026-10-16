@@ -1,5 +1,9 @@
 # 0061 — Agent ownership scopes and forks
 
+> **Amended by [ADR 0071](0071-an-agent-version-reaches-production-through-channels.md)**: the matrix
+> has one more action, `release` (send a revision to testing or production, roll back), on the row of
+> publish, edit and life.
+
 - **Status**: accepted, 2026-10-15
 - **Concerns**: the `agents` table (`scope`, `project_id`, `forked_from_*`), the agent registry API
   (`AgentCreate`, `AgentDto`, `forkAgent`, `changeAgentScope`, the `scope` and `project` filters of

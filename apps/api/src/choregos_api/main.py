@@ -29,6 +29,7 @@ from .metriques import boucle_de_rafraichissement, exposer, requetes_http
 from .routers import (
     actions,
     admin,
+    agent_releases,
     agents,
     auth,
     budget_alerts,
@@ -294,6 +295,7 @@ def create_app() -> FastAPI:
         templates.router,
         admin.router,
         agents.router,
+        agent_releases.router,
         skills.router,
         knowledge.router,
         webhooks.router,
