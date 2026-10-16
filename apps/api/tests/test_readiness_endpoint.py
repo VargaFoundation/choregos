@@ -65,7 +65,9 @@ async def test_a_project_with_only_a_tracker_and_a_repository_is_not_ready(
     assert _by_state(body, "todo") == {"connector-cd", "notifications", "people-release-captain"}, body[
         "items"
     ]
-    assert {"connector-tracker", "connector-scm"} <= _by_state(body, "check"), "configured, never tested"
+    assert {"connector-tracker", "connector-scm"} <= _by_state(body, "done"), (
+        "tested by the save itself (S40-05)"
+    )
     assert "connector-runtime" in _by_state(body, "done"), "provided by the deployment"
     assert body["summary"]["todo"] == 3
     assert body["summary"]["done"] + body["summary"]["check"] + body["summary"]["todo"] == len(

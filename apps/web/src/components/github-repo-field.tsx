@@ -166,7 +166,7 @@ export function GitHubRepoField({
             onChange={(event) => setQ(event.target.value)}
           />
           {repositories.error && <ErrorNote>{String(repositories.error)}</ErrorNote>}
-          <ul className="max-h-48 divide-y divide-line overflow-auto rounded-md border border-line" aria-label="Repositories">
+          <ul className="max-h-48 divide-y divide-line overflow-auto rounded-md border border-line" aria-label="Matches">
             {items.map((repo) => (
               <li key={`${repo.installation_id}/${repo.full_name}`}>
                 <button
