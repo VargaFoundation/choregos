@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     #: Hosts no run of this deployment may reach, whatever an organisation or a project says (ADR 0070):
     #: a comma-separated list of host patterns (`CHOREGOS_NETWORK_INSTANCE_DENY`).
     network_instance_deny: str = ""
+    #: Where an operator can reach this deployment, written into the User-Agent of what the platform
+    #: fetches (`CHOREGOS_USER_AGENT_CONTACT`); an organisation's own contact wins (ADR 0070).
+    user_agent_contact: str = ""
 
     # Services
     temporal_address: str = "localhost:7233"
