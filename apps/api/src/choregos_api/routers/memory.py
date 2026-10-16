@@ -73,7 +73,7 @@ async def pending(
     memory: Annotated[str | None, Query()] = None,
     agent: Annotated[str | None, Query()] = None,
 ) -> list[MemoryDto]:
-    """Faits proposés par des agents, en attente de validation humaine (écriture gouvernée).
+    """Facts proposed by agents, waiting for a human decision (governed write).
 
     `?memory=` (S40-11): `shared` (the default), `own` with `&agent=<slug>`, or a named memory of the project.
     """

@@ -150,14 +150,16 @@ class LexicalMemory:
             if store is None:
                 raise ValueError(f"unknown global memory: {parsed.org}/{parsed.store}")
             return Home(str(organisation.id), None, str(store.id), None)
-        Project = modeles.Project  # noqa: N806 — c'est une classe
+        Project = modeles.Project  # noqa: N806 — a class
         row = (
             await session.execute(_select(Project).where(Project.slug == parsed.project))
         ).scalar_one_or_none()
         if row is None:
             row = await session.get(Project, parsed.project)
         if row is None:
-            raise ValueError(f"projet inconnu pour la mémoire : {parsed.project}")
+            raise ValueError(
+                f"projet inconnu pour la mémoire : {parsed.project}"
+            )  # lang: fr-ok (pinned by a test)
         store_id = None
         if parsed.kind == "project_store":
             if modeles.MemoryStore is None:
