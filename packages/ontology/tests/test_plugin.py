@@ -464,12 +464,12 @@ def test_onto0003_copies_the_proposals_into_the_actions_then_drops_the_table(
         with Session(engine) as session:
             session.add(Organization(id="o1", slug="varga", name="Varga"))
             session.flush()
-            # Raw SQL: the table is at the revision this test stops at, without the columns later migrations add.
+            # Raw SQL: the table is at the revision this test stops at, without later columns.
             session.execute(
                 text(
-                    "INSERT INTO projects (id, org_id, slug, name, status, config, provision_state, workflow_routing, "
-                    "created_at, updated_at) VALUES ('p1', 'o1', 'infra', 'Infra', 'active', '{}', '{}', '[]', "
-                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                    "INSERT INTO projects (id, org_id, slug, name, status, config, provision_state, "
+                    "workflow_routing, created_at, updated_at) VALUES ('p1', 'o1', 'infra', 'Infra', "
+                    "'active', '{}', '{}', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
                 )
             )
             session.add(
