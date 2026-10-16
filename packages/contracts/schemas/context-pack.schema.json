@@ -51,7 +51,8 @@
         "score": { "type": "number" },
         "valid_from": { "type": ["string", "null"], "format": "date-time" },
         "valid_to": { "type": ["string", "null"], "format": "date-time" },
-        "provenance": { "type": "object", "additionalProperties": true }
+        "provenance": { "type": "object", "additionalProperties": true },
+        "memory": { "type": ["string", "null"], "description": "The label of the memory the item came from, e.g. `global:security-lessons` (S40-11)." }
       }
     }
   }

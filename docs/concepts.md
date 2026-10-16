@@ -91,6 +91,27 @@ Rovo). A version's **runtime** says how it runs: `acp` (a coding agent the runne
 agent written in code, ADR 0063) or `a2a` (a remote agent: the runner pod calls it, a declared cost
 is booked, the same gates read its outputs).
 
+## Memory
+
+What agents learn from work is kept in **memories** ([ADR 0075](adr/0075-an-agent-reads-several-memories.md)),
+apart from knowledge bases (a corpus a human curates, read-only):
+
+- every project has two **implicit** memories: **shared** (what the project knows) and **own** (what one
+  agent learnt in that project, read by that agent only);
+- a project owner may add **named project memories** (`decisions`), read by that project's runs only;
+- an organisation administrator may add **global memories** (`security-lessons`), with a **reach**: every
+  project, or a listed few.
+
+An agent version **binds** up to eight of them, in order, each read or read-and-write
+(`"memories": [{"scope": "global", "slug": "security-lessons"}, {"scope": "project", "slug": "shared",
+"mode": "write"}]`). A `project` reference means "of whichever project the run is in", so an organisation
+agent works in many projects without ever reading another one's memory. **Earlier wins**: when two
+memories hold the same subject, the first is kept, and what fits the token budget is taken from each
+memory in turn. At most one binding **writes**: the run's lessons and the agent's proposals go there; for
+a **global** memory they are only ever **proposals**, accepted by an administrator. A version that
+says nothing keeps its legacy `memory` field (`project`, `agent`, `none`), which means the same
+bindings as before; nothing already published changes.
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,

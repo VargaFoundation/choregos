@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 from choregos_adapters.memory.ecphoria import EcphoriaMemory, _memory
 from choregos_core.domain import Fact, Provenance
 
@@ -144,3 +145,30 @@ async def test_l_ingestion_par_lot_et_le_test_de_connexion() -> None:
     assert fil.corps(0)["memories"][0]["metadata"]["provenance"] == {"source": "choregos", "ref": "e-1"}
     assert (await m.test())["ok"] is True
     assert (await memoire(Fil({("GET", "/health"): (503, "down")})).test())["ok"] is False
+
+
+async def test_named_and_global_memories_travel_in_their_own_tenant_and_namespace() -> None:
+    """S40-11: a global memory is the organisation's tenant; every namespace but the project's shared one
+    is sent in full in `X-Ecphoria-Namespace`."""
+    fil = Fil({("POST", "/api/v1/context-pack"): (200, {})})
+    m = memoire(fil, tenant="billing")
+    for namespace in (
+        "billing",
+        "billing#agent:architect",
+        "billing#memory:decisions",
+        "org:varga#memory:lessons",
+    ):
+        await m.context_pack(namespace, "q", [], 100)
+    seen = [(r.headers["X-Ecphoria-Tenant"], r.headers.get("X-Ecphoria-Namespace")) for r in fil.requetes]
+    assert seen == [
+        ("billing", None),
+        ("billing", "billing#agent:architect"),
+        ("billing", "billing#memory:decisions"),
+        ("org:varga", "org:varga#memory:lessons"),
+    ]
+
+
+async def test_a_namespace_that_is_none_of_the_four_forms_is_refused() -> None:
+    fil = Fil({("POST", "/api/v1/context-pack"): (200, {})})
+    with pytest.raises(ValueError, match="malformed"):
+        await memoire(fil).context_pack("org:varga", "q", [], 100)

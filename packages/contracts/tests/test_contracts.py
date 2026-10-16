@@ -296,3 +296,28 @@ def test_the_edition_schema_refuses_a_malformed_publisher_or_version(extra: dict
 
     with pytest.raises(ValidationError):
         _edition_validator().validate({"edition": "community", "features": [], "version": "1", **extra})
+
+
+def test_stage_input_carries_the_resolved_memories() -> None:
+    """S40-11: the example holds two memories, the model reads them, the schema refuses unknown fields."""
+    example = _load("stage-input.example.json")
+    assert [m["label"] for m in example["memories"]] == ["global:security-lessons", "project:shared"]
+    parsed = contracts.StageInput.model_validate(example)
+    assert [(m.label, m.mode) for m in parsed.memories] == [
+        ("global:security-lessons", "read"),
+        ("project:shared", "write"),
+    ]
+    bad = {**example, "memories": [{**example["memories"][0], "surprise": 1}]}
+    assert list(_validator("stage-input.schema.json").iter_errors(bad))
+    # Before S40-11 a stage input had none: the field defaults to an empty list.
+    legacy = {k: v for k, v in example.items() if k != "memories"}
+    assert contracts.StageInput.model_validate(legacy).memories == []
+
+
+def test_a_context_pack_item_may_name_its_memory() -> None:
+    item = contracts.MemoryItem(kind="decision", subject="s", content="c", memory="global:lessons")
+    assert item.memory == "global:lessons"
+    assert contracts.MemoryItem(kind="decision", subject="s", content="c").memory is None
+    pack = _load("context-pack.example.json")
+    pack["memories"][0]["memory"] = "global:lessons"
+    assert not list(_validator("context-pack.schema.json").iter_errors(pack))

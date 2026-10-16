@@ -22,6 +22,11 @@
   "gateway_key": "sk-choregos-run-01J8ZQK4C9R7M3N2P5T6V7W8X9",
   "budget": { "usd": 12.0, "max_turns": 80, "max_minutes": 60 },
   "allowed_paths": ["src/orders/**", "tests/orders/**"],
+  "memory_scope": "project",
+  "memories": [
+    { "label": "global:security-lessons", "scope": "global", "slug": "security-lessons", "mode": "read", "namespace": "org:varga#memory:security-lessons" },
+    { "label": "project:shared", "scope": "project", "slug": "shared", "mode": "write", "namespace": "billing-api" }
+  ],
   "context_pack_url": "s3://choregos/runs/01J8ZQK4C9R7M3N2P5T6V7W8X9/context.json",
   "playbook": { "ref": "implement@sha256:3b1f0c", "prompt_url": "s3://choregos/runs/01J8ZQK4C9R7M3N2P5T6V7W8X9/prompt.md", "prompt": null },
   "tools": { "mcp": {

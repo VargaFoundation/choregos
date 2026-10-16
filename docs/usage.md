@@ -932,12 +932,14 @@ expired agent does not start, and neither does one that has spent its `daily_usd
 (UTC) — models **and** tool calls. `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
 their success rate, their cost by kind and by project, and what it spent today.
 
-A version also says **whose memory** its runs use — `"memory": "project"` (the default: the
-project's shared memory, as before), `"agent"` (its own memory within the project: what it learns
-is not mixed with what the project knows, and no other agent reads it) or `"none"` (nothing read,
-nothing written). The run's `StageInput` carries it (`memory_scope`); the context pack, the lessons
-and the proposals of the run follow it, and the memory MCP server — which serves the project's
-memory — is only handed to a run whose scope is the project.
+A version also says **which memories** its runs read and write — `"memories"`, an ordered list of at
+most eight bindings, each `{"scope": "global" | "project", "slug": …, "mode": "read" | "write"}` (see
+[Memories](#memories)). The older `"memory"` field (`"project"` by default, `"agent"`, `"none"`) is
+superseded: a version that has no `memories` still means what it said (`project` is the project's shared
+memory, `agent` the agent's own within the project, `none` nothing), and sending both is a 422. The
+run's `StageInput` carries the resolved list (`memories`) and the legacy equivalent when there is one
+(`memory_scope`); the memory MCP server — which serves the project's shared memory only — is handed to a
+run whose bindings are exactly that.
 
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). A revocation is final.
@@ -1091,6 +1093,47 @@ type the card does not accept, is a 422. A step names the agent as any other (`a
 what the agent costs (`declared_cost`): the platform cannot measure it, so the ledger books your
 declaration, apart from model spend, and says `unmeasured` when you declared nothing. A project that
 uses it must allow the agent's host in `sandbox.network.allow_domains`.
+
+### Memories
+
+A **memory** holds facts learned from work: proposed by agents, accepted by people
+([ADR 0075](adr/0075-an-agent-reads-several-memories.md)). Every project has two implicit ones —
+`shared` (the project's) and `own` (one agent's within the project). On top of them you create
+**global** memories (an organisation administrator, `agent:manage`), each with a reach (`org`, or the
+listed `projects`), and **project** memories (a project owner, `project:write`), read by that project's
+runs only.
+
+```bash
+# a global memory every project's runs may read
+curl -X POST $API/orgs/acme/memories -H 'Content-Type: application/json' \
+  -d '{"slug": "security-lessons", "display_name": "Security lessons", "reach": "org"}'
+# a memory of one project
+curl -X POST $API/projects/billing-api/memories -H 'Content-Type: application/json' \
+  -d '{"slug": "decisions", "display_name": "Billing decisions"}'
+# what a run of this project may bind: shared, own, its named memories and the global ones reaching it
+curl $API/projects/billing-api/memories
+```
+
+An agent version binds them in its spec; earlier bindings win, at most one binding writes:
+
+```json
+{"memories": [
+  {"scope": "global",  "slug": "security-lessons",  "mode": "read"},
+  {"scope": "project", "slug": "decisions",         "mode": "read"},
+  {"scope": "project", "slug": "shared",            "mode": "write"}
+]}
+```
+
+`GET /orgs/{org}/agents/{slug}/versions/{n}` answers `effective_memories`, the list a run binds, derived
+from the legacy `memory` field when `memories` is absent. Publishing refuses (422) a global memory the
+publisher does not see, or is archived; a **project** reference is relative, so it is checked when a run
+resolves it. `GET /orgs/{org}/memories` lists what you see (`?scope=global|project`, `?project=`) with
+`used_by`, the agents whose latest version binds each; `PATCH` renames, changes the reach or archives
+(`status: archived`). To review: `GET /orgs/{org}/memories/{slug}/search?q=…` and
+`GET|POST /orgs/{org}/memories/{slug}/pending` for a global memory (proposals wait for an administrator);
+for a project, `GET /projects/{id}/memory/search?q=…&memory=decisions` and `…/memory/pending?memory=own&agent=architect`
+(`memory` defaults to `shared`). Global memories are stored by the organisation's `memory` connector when
+it declares one (`/orgs/{org}/connectors`), else by the deployment default.
 
 ### Knowledge bases
 

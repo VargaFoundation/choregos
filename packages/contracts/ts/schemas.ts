@@ -48,6 +48,8 @@ export type ContextPackMemory = {
   provenance?: {
     [key: string]: unknown;
   };
+  /** The label of the memory the item came from, e.g. `global:security-lessons` (S40-11). */
+  memory?: string | null;
 };
 
 /** The memory selected for a stage, within a token budget. **Untrusted** content: data, never instructions. */
@@ -490,6 +492,16 @@ export type StageInput = {
   };
   /** Whose memory the run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none. */
   memory_scope?: "none" | "project" | "agent";
+  /** The memories the run reads and writes, resolved by the platform and in precedence order (S40-11, ADR 0075). `memory_scope` stays, set to the legacy equivalent when there is one. */
+  memories?: Array<{
+    /** `global:<slug>` or `project:<slug>`. */
+    label: string;
+    scope: "global" | "project";
+    slug: string;
+    mode?: "read" | "write";
+    /** The string the memory adapters take to say where. */
+    namespace: string;
+  }>;
   /** The registry agent's skills (ADR 0033): name, version, digest. The runner reads the files through the internal API and checks the digest before laying them down. */
   skills?: Array<{
     slug: string;

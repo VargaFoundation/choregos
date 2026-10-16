@@ -97,6 +97,7 @@ from ..services.agents import (
     erreurs_d_une_version,
     resoudre_l_agent,
 )
+from ..services.memory_access import check_bindings_at_publish
 from ..services.remote_agents import pin_remote_runtime
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
@@ -316,6 +317,13 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
+    await check_bindings_at_publish(
+        session,
+        principal,
+        organisation,
+        body.spec,
+        project_slug=body.project if body.scope == "project" else None,
+    )
     existant = (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -428,6 +436,7 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
         check_remote_kind(agent.kind, spec)
     except ValueError as erreur:
         raise unprocessable(str(erreur)) from erreur
+    await check_bindings_at_publish(session, principal, organisation, spec, project_slug=sujet.project_slug)
     spec = await pin_remote_runtime(session, organisation.id, spec)
     if agent.status == "revoked":
         raise conflict(f"agent `{agent.slug}` is revoked: it can no longer publish")
@@ -890,6 +899,14 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
         copiee = next((v for v in versions if v.version == body.version), None)
     if copiee is None:
         raise not_found("Agent version", f"{slug}@{body.version or 'latest'}")
+    # The copy binds the same memories: the forker must see the global ones (S40-11).
+    await check_bindings_at_publish(
+        session,
+        principal,
+        organisation,
+        AgentSpec.model_validate(copiee.spec),
+        project_slug=body.project if body.scope == "project" else None,
+    )
     if (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -1268,6 +1285,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     _exiger(decide(principal, org, sujet, Action.TRIAL, project_slug=body.project))
     erreurs_d_une_version(body.spec)
     await _model_allowed(session, organisation, body.spec)
+    await check_bindings_at_publish(session, principal, organisation, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:
