@@ -16,9 +16,9 @@ const PROFILS = ["standard", "strong", "cheap", "by_size"];
 
 /** The models the project's agents call, and the combinations the nightly evals have validated. */
 export function AgentsModelsSection({ slug }: { slug: string }) {
+  const { org } = useSession();
   const matrix = useQuery({ queryKey: ["matrix", slug], queryFn: () => api.modelMatrix(slug) });
   const models = useQuery({ queryKey: ["models", slug], queryFn: () => api.models(slug) });
-  const { org } = useSession();
   // The models the organisation lets agents use (`/admin/models`, ADR 0060), the gateway's list when it has none.
   const platformModels = useQuery({ queryKey: ["usable-models", org], queryFn: () => usableModels(org, { usage: "agent" }) });
   const { faire, notice } = useSectionWrites(slug);

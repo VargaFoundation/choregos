@@ -92,7 +92,7 @@ describe("the sidebar switches scope", () => {
 
   it("at the organisation's level, lists the organisation's pages", () => {
     const bar = sidebar("/skills");
-    expect(labels(within(bar).getByRole("list", { name: "Catalogue" }))).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers"]);
+    expect(labels(within(bar).getByRole("list", { name: "Catalogue" }))).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers", "Connectors"]);
     expect(labels(within(bar).getByRole("list", { name: "Organisation" }))).toEqual(["Integrations", "Spend", "Admin"]);
     expect(within(bar).queryByTestId("project-switcher")).toBeNull();
   });

@@ -26,6 +26,7 @@ const PAGES = [
   "/admin",
   "/admin/connectors",
   "/catalogue/mcp-servers",
+  "/catalogue/connectors",
   "/admin/members",
   "/admin/audit",
   "/admin/platform",

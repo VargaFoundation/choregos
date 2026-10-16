@@ -77,6 +77,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       projectTools: vi.fn(async () => ({ tools: [], allows_all: false })),
       models: vi.fn(async () => ({ profiles: {}, allow_unvalidated: false, inherited: {} })),
       platformModels: vi.fn(async () => []),
+      usableModels: vi.fn(async () => []),
       projectOperations: vi.fn(async () => []),
       orgConnectors: vi.fn(async () => []),
       project: vi.fn(async () => structuredClone(projectDto)),
