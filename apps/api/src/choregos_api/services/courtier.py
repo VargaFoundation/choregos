@@ -38,6 +38,13 @@ from ..db.models import (
 )
 from ..secret_store import resolved_configuration
 from .connecteurs import human_floor, plus_stricte
+from .platform_network import (
+    WHERE,
+    PlatformNetworkRefused,
+    PlatformRateLimited,
+    enforce_connector_call,
+    with_identity,
+)
 
 SEPARATEUR = "__"
 #: L'espace des identifiants d'une écriture appelée par un run : le même appel (run, outil,
@@ -332,9 +339,17 @@ def verifier_les_arguments(outil: OutilDuCourtier, arguments: dict[str, Any]) ->
 
 
 async def appeler(
-    session: AsyncSession, outil: OutilDuCourtier, arguments: dict[str, Any]
+    session: AsyncSession,
+    outil: OutilDuCourtier,
+    arguments: dict[str, Any],
+    *,
+    run: Run | None = None,
+    project: Project | None = None,
 ) -> tuple[int, dict[str, Any]]:
-    """`tools/call` sur le serveur, avec la clé du connecteur résolue ICI — jamais dans le pod."""
+    """`tools/call` on the server, with the connector's key resolved HERE — never in the pod.
+
+    The organisation's network policy is read FIRST (ADR 0070): a host it refuses (403) or that the
+    organisation already called too often this minute (429) never receives the call."""
     import httpx
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
@@ -344,8 +359,24 @@ async def appeler(
 
     instance = outil.connecteur
     try:
-        config = await resolved_configuration(
-            session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        await enforce_connector_call(
+            session,
+            instance,
+            project=project,
+            run_id=run.id if run else None,
+            agent_slug=run.agent_slug if run else None,
+        )
+    except PlatformNetworkRefused as refus:
+        return 403, {"error": f"{refus.message()}: {WHERE}", "type": "network_policy"}
+    except PlatformRateLimited as limite:
+        return 429, {"error": str(limite), "type": "rate_limited"}
+    try:
+        config = await with_identity(
+            session,
+            instance.org_id,
+            await resolved_configuration(
+                session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+            ),
         )
         client = build(instance.kind, instance.type, config)
         if hasattr(client, "call_tool"):

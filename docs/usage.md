@@ -1016,6 +1016,37 @@ it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `un
 24 hours, or since `since`, optionally for one `decision` or `project`. The first refusal of a host for a
 run is also an event on the work item (`choregos.network.denied`).
 
+**Calls the platform makes for an agent obey the same ceiling.** An MCP connector, a knowledge source
+(web or git) and a git skill source are fetched by the API, which sees the whole request, so the
+organisation's `network` section applies to them twice:
+
+- *when it is declared* (create or update of a connector, a knowledge source, a skill import or
+  preview): a host outside `allow_domains`, or matched by `deny_domains`, is a 422 naming the host and
+  the rule (`not_allowed`, `denied:<pattern>`);
+- *when it is called*: the broker (a run's tool call), a governed write, a connector's discovery and
+  every knowledge sync read the ceiling again, because it may have been tightened since. A refused
+  tool call answers 403 `network_policy` (the server is never reached) and is journaled under Network
+  activity with layer `broker`; a refused knowledge sync fails with the reason in the source's
+  `last_error`.
+
+Hosts that are not on the internet (an IP address, a single-label name such as `pfsense`) are not held
+to `allow_domains`: the cap bounds the internet, not the organisation's own appliances; the deny list
+still applies to a name. A connector whose configuration holds no address (`url`, `base_url`,
+`api_url`, `endpoint`, `server_url` or `host`) is not checked.
+
+`per_host_per_minute` throttles the organisation's calls to one host: it counts the tool calls of the
+last 60 seconds to that host over every project and every replica (from the cost ledger) and answers
+429 `rate_limited` past the cap. A throttled or refused call is not counted, so an agent that keeps
+retrying recovers one minute after it stops. Governed writes are checked against the allowed set only
+(they are played by a workflow, which retries).
+
+Every request carries `User-Agent: Choregos/<version> (+<contact>)`: the ceiling's `user_agent_contact`,
+else the deployment's `CHOREGOS_USER_AGENT_CONTACT`, else the project's page. It is sent on MCP calls,
+web crawls, git knowledge fetches and skill downloads. A web crawl also waits between two pages for the
+longer of the site's `Crawl-delay` (read under the names `ChoregosKnowledge` and `Choregos`) and
+`60 / per_host_per_minute` seconds, and stops, keeping every page it did not reach, when the site
+answers 429 (or 503 with `Retry-After`).
+
 **Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
 the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session
 and the stage fails with `reason: max_turns`. The same tool with the same arguments

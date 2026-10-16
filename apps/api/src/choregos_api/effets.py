@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.models import Action, ConnectorOperation, OrgConnector, Project
 from .secret_store import resolved_configuration
+from .services.platform_network import PlatformNetworkRefused, enforce_connector_call, with_identity
 
 
 class EffetRefuse(Exception):  # noqa: N818 - un refus définitif, rendu tel quel
@@ -149,9 +150,24 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
         except jsonschema.ValidationError as exc:
             raise EffetRefuse(f"{nom}/{operation} : {exc.message}") from exc
     arguments.update(await _arguments_de_la_plateforme(ctx, instance, operation, arguments))
+    # The organisation's network policy is read again at the moment of the call (ADR 0070): it may
+    # have been tightened since the action was approved. A refusal is final, the action compensates.
     try:
-        config = await resolved_configuration(
-            ctx.session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        await enforce_connector_call(ctx.session, instance, project=ctx.project, polite=False)
+    except PlatformNetworkRefused as refus:
+        raise EffetRefuse(f"{nom}/{operation} : {refus.message()}") from refus
+    try:
+        config = await with_identity(
+            ctx.session,
+            instance.org_id,
+            await resolved_configuration(
+                ctx.session,
+                instance.org_id,
+                instance.kind,
+                instance.type,
+                instance.config,
+                instance.secret_refs,
+            ),
         )
         client = build(instance.kind, instance.type, config)
         if hasattr(client, "call_tool"):

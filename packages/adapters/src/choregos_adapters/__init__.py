@@ -578,6 +578,7 @@ def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
         auth_scheme=cfg.get("auth_scheme", "bearer"),
         username=cfg.get("username", ""),
         transport=FAUX_MCP.transport(),
+        user_agent=str(cfg.get("user_agent", "")),
     )
 
 
@@ -1039,6 +1040,7 @@ def _register_builtins() -> None:
             auth_scheme=cfg.get("auth_scheme", "bearer"),
             username=cfg.get("username", ""),
             timeout_s=float(cfg.get("timeout_s", 30)),
+            user_agent=str(cfg.get("user_agent", "")),
         )
     )
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(
