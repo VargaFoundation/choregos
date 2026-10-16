@@ -131,8 +131,30 @@ describe("the Definition tab", () => {
     expect(within(groups).getByText("20 lines")).toBeTruthy();
     expect(within(groups).getByText("1 case")).toBeTruthy();
     expect(groups.textContent).toContain("adr-framework");
-    expect(groups.textContent).toContain("Its own, within the project");
+    expect(groups.textContent).toContain("Its own memory in the project");
     expect(groups.textContent).toContain("has a title");
+  });
+
+  it("lists the memories a version binds, in order, and where it writes (S40-11 step 18)", async () => {
+    const spec = {
+      ...SPEC_3,
+      memory: undefined,
+      memories: [
+        { scope: "global" as const, slug: "security-lessons", mode: "read" as const },
+        { scope: "project" as const, slug: "shared", mode: "write" as const },
+      ],
+    };
+    vi.mocked(api.agent).mockResolvedValue(architect({ versions: [{ version: 3, spec, checksum: "sha256:3", pinned_by: [] }] }));
+    await open(page());
+    const list = await screen.findByTestId("memory-bindings");
+    const items = within(list).getAllByRole("listitem").map((n) => n.textContent ?? "");
+    expect(items[0]).toContain("security-lessons (organisation)");
+    expect(items[0]).toContain("read");
+    expect(items[1]).toContain("The project's shared memory");
+    expect(items[1]).toContain("read and written");
+    expect(list.textContent).toContain("writes to the project's shared memory");
+    // The folded group says the same in one line.
+    expect(screen.getByText(/1 organisation, 1 project · writes to the project's shared memory/)).toBeTruthy();
   });
 
   it("folds long instructions behind Show all", async () => {
@@ -267,7 +289,10 @@ describe("the History tab", () => {
     const compare = await screen.findByTestId("compare");
     expect(within(compare).getByTestId("change-instructions")).toBeTruthy();
     expect(within(compare).getByTestId("change-budget.run_usd").textContent).toContain("Added");
-    expect(within(compare).getByTestId("change-memory").textContent).toContain("Changed");
+    // `memory: "agent"` is read as the bindings it means: the shared memory goes, the agent's own comes (S40-11).
+    const memories = within(compare).getAllByTestId("change-memories").map((n) => n.textContent ?? "");
+    expect(memories.some((m) => m.includes("Removed"))).toBe(true);
+    expect(memories.some((m) => m.includes("Added") && m.includes("Its own memory in the project"))).toBe(true);
     expect(compare.textContent).toContain("Knowledge base adr-framework");
   });
 
