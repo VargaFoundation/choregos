@@ -44,6 +44,21 @@ async def test_une_panne_sur_la_branche_n_est_pas_prise_pour_une_absence() -> No
     assert fil.envoyees("POST") == [], "on ne crée pas une branche sur un 401"
 
 
+async def test_branch_exists_reads_the_ref() -> None:
+    present = Fil({("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (200, {"ref": "x"})})
+    assert await scm(present).branch_exists(REPO, "choregos/12-x") is True
+    absent = Fil({("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (404, {"message": "Not Found"})})
+    assert await scm(absent).branch_exists(REPO, "choregos/12-x") is False
+
+
+async def test_an_outage_reading_the_branch_is_not_an_absence() -> None:
+    """S22-46: only a 404 means "no branch"; a 403 or a 5xx is raised, and retried upstream."""
+    for status in (403, 502):
+        fil = Fil({("GET", f"/repos/{REPO}/git/ref/heads/x"): (status, {"message": "nope"})})
+        with pytest.raises(UpstreamError):
+            await scm(fil).branch_exists(REPO, "x")
+
+
 async def test_ouvrir_une_pr_reutilise_celle_qui_existe() -> None:
     fil = Fil({("GET", f"/repos/{REPO}/pulls"): (200, [{"number": 7, "html_url": "https://gh/pr/7"}])})
     ref = await scm(fil).open_pr(REPO, "choregos/12-x", "main", "titre", "corps", draft=True)

@@ -11,9 +11,15 @@ from choregos_contracts import StageResult
 from choregos_core.domain import PrRef
 from choregos_core.dsl.flow import PULL_REQUEST_SECTIONS
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from .base import db, load_work_item, project_bundle
 from .gates import _repo_slug
+
+#: The error type `open_pull_request` raises when the work item has no branch to open a pull request
+#: from (S22-46): the implementation changed nothing, so nothing was pushed. Non-retryable — a retry
+#: finds the same absent branch — and the interpreter escalates the work item on it.
+NO_BRANCH = "NoBranch"
 
 
 def _depot(bundle: Any) -> Any:
@@ -43,6 +49,16 @@ async def open_pull_request(payload: dict[str, Any]) -> dict[str, Any]:
         base = _depot(bundle).default_branch
         documents = item.documents or {}
         body = _pr_body(item, documents)
+        # Without a pushed branch GitHub answers 422 `head invalid`, retried then fatal (#539, on
+        # sandbox-dev#21). Refused here instead, with a reason a person can read. Any error reading
+        # the branch (403, 5xx) is raised as it is, and retried as before.
+        if not await bundle.adapters.scm.branch_exists(repo, branch):
+            raise ApplicationError(
+                f"no branch: the implementation changed nothing — `{branch}` was never pushed to "
+                f"{repo}, so there is no pull request to open",
+                type=NO_BRANCH,
+                non_retryable=True,
+            )
         ref = await bundle.adapters.scm.open_pr(repo, branch, base, item.title, body, draft=False)
         await bundle.adapters.scm.update_pr(ref, body=body, draft=False)
         item.pr_url = ref.url or item.pr_url
