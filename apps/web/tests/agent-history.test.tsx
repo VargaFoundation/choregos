@@ -157,6 +157,16 @@ describe("the Definition tab", () => {
     expect(screen.getByText(/1 organisation, 1 project · writes to the project's shared memory/)).toBeTruthy();
   });
 
+  it("says the version's network access (S40-01 x S40-12)", async () => {
+    vi.mocked(api.agent).mockResolvedValue(
+      architect({ versions: architect().versions?.map((v) => (v.version === 3 ? { ...v, spec: { ...SPEC_3, network: { domains: ["pypi.org"], per_host_per_minute: 10 } } } : v)) }),
+    );
+    await open(page());
+    const groups = await screen.findByTestId("definition-groups");
+    expect(within(groups).getByTestId("agent-network-line").textContent).toBe("1 host · 10/min per host");
+    expect(within(groups).queryByText("Other fields")).toBeNull();
+  });
+
   it("folds long instructions behind Show all", async () => {
     await open(page());
     const text = (await screen.findByLabelText("Instructions")).textContent ?? "";
@@ -265,6 +275,27 @@ describe("the History tab", () => {
     expect(screen.getByTestId("revision-1").textContent).toContain("No message");
     expect(list.querySelectorAll("li")).toHaveLength(3);
     expect(screen.queryByRole("button", { name: "Restore v3" })).toBeNull();
+  });
+
+  it("marks the revision in production as current and shows each revision's channels (S40-02 x S40-12)", async () => {
+    query.current = new URLSearchParams("tab=history");
+    vi.mocked(api.agent).mockResolvedValue(
+      architect({
+        stable_version: 2,
+        candidate_version: 3,
+        versions: architect().versions?.map((v) => ({
+          ...v,
+          channels: v.version === 2 ? ["stable" as const] : v.version === 3 ? ["candidate" as const] : [],
+        })),
+      }),
+    );
+    await open(page());
+    await screen.findByTestId("history");
+    expect(within(screen.getByTestId("revision-2")).getByText("Current")).toBeTruthy();
+    expect(within(screen.getByTestId("revision-2")).getByText("Production")).toBeTruthy();
+    expect(within(screen.getByTestId("revision-3")).queryByText("Current")).toBeNull();
+    expect(within(screen.getByTestId("revision-3")).getByText("Testing")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Restore v3" })).toBeTruthy();
   });
 
   it("opens on ?tab=versions, the former name", async () => {
