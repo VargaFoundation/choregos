@@ -13,7 +13,7 @@ const LIBELLES: Record<string, string> = {
   tracker: "work tracker",
   scm: "source code",
   ci: "CI pipelines",
-  cd: "deployment",
+  cd: "deployment (CD)",
   runtime: "agent runtime",
   gateway: "model gateway",
   memory: "memory",
