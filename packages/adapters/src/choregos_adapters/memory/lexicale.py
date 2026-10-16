@@ -286,6 +286,19 @@ class LexicalMemory:
 
         async with self._sessions()() as session:
             home = await self._home(session, project)
+            if fact.external_id:
+                # Idempotent: proposing the same thing again (a replayed activity) is one proposal.
+                same = (
+                    await session.execute(
+                        _select(MemoryFact.id).where(
+                            self._scope(MemoryFact, home),
+                            MemoryFact.external_id == fact.external_id,
+                            MemoryFact.status.in_(["pending", "active"]),
+                        )
+                    )
+                ).first()
+                if same is not None:
+                    return str(same[0])
             created = MemoryFact(
                 org_id=home.org_id,
                 project_id=home.project_id,

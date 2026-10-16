@@ -153,6 +153,8 @@ from .memory import (
     MemoryStorePatch,
     MemoryStoreUser,
     ProjectMemoryCreate,
+    RunMemoryHit,
+    RunMemorySearch,
 )
 from .mesures import (
     BudgetAlertDto,
@@ -437,6 +439,8 @@ __all__ = [
     "RunEventsBatch",
     "RunInputFile",
     "RunLogsDto",
+    "RunMemoryHit",
+    "RunMemorySearch",
     "RunSummary",
     "RunTicket",
     "RunTicketComment",

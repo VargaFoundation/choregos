@@ -14,6 +14,7 @@ What a caller may not see does not exist for it (404 on a route, "unknown memory
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from choregos_core.memory_bindings import RESERVED_SLUGS
@@ -195,3 +196,96 @@ async def project_namespace(
     if store is None:
         raise not_found("Memory", f"{project.slug}/{memory}")
     return project_store_namespace(str(project.slug), memory)
+
+
+def run_memories(run: Any, project_slug: str) -> list[dict[str, str]]:
+    """The memories a run reads, as its `StageInput` resolved them: `label`, `scope`, `namespace`.
+
+    A run prepared before S40-11 has no `memories`: its legacy `memory_scope` says which one.
+    """
+    from choregos_core import memory_namespace
+
+    stage_input = run.stage_input or {}
+    if stage_input.get("memories"):
+        return [
+            {"label": str(m["label"]), "scope": str(m["scope"]), "namespace": str(m["namespace"])}
+            for m in stage_input["memories"]
+        ]
+    scope = str(stage_input.get("memory_scope") or "project")
+    namespace = memory_namespace(project_slug, scope, run.agent_slug)
+    if namespace is None:
+        return []
+    return [
+        {
+            "label": f"project:{'own' if scope == 'agent' else 'shared'}",
+            "scope": "project",
+            "namespace": namespace,
+        }
+    ]
+
+
+async def search_run_memories(
+    session: AsyncSession,
+    run: Any,
+    project: Any,
+    org_slug: str,
+    query: str,
+    k: int,
+    only: str | None,
+    timeout_s: float,
+) -> list[dict[str, Any]]:
+    """Search the memories a run reads, and only those (S40-11): nothing outside `StageInput.memories`.
+
+    Each memory is searched under the read timeout and a failing one contributes nothing; results are
+    deduplicated by subject (the earlier memory wins) then interleaved by precedence, at most `k`.
+    """
+    from ..errors import not_found
+
+    readable = run_memories(run, project.slug)
+    if only is not None:
+        readable = [m for m in readable if m["label"] == only]
+        if not readable:
+            raise not_found("Memory of the run", only)
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == org_slug))
+    ).scalar_one_or_none()
+
+    async def one(memory: dict[str, str]) -> list[Any]:
+        try:
+            if memory["scope"] == "global":
+                if organisation is None:
+                    return []
+                adapter = await global_adapter(session, organisation)
+            else:
+                adapter = await project_adapter(session, project.id, project.slug, org_slug)
+            return list(await asyncio.wait_for(adapter.search(memory["namespace"], query, k), timeout_s))
+        except Exception:  # a memory that fails or is slow contributes nothing (ADR 0007)
+            return []
+
+    results = await asyncio.gather(*(one(memory) for memory in readable))
+    seen: set[str] = set()
+    queues: list[list[dict[str, Any]]] = []
+    for memory, found in zip(readable, results, strict=True):
+        queue: list[dict[str, Any]] = []
+        for item in found:
+            if item.subject in seen:
+                continue
+            seen.add(item.subject)
+            queue.append(
+                {
+                    "memory": memory["label"],
+                    "kind": str(item.kind),
+                    "subject": item.subject,
+                    "content": item.content,
+                    "score": item.score,
+                }
+            )
+        queues.append(queue)
+    hits: list[dict[str, Any]] = []
+    position = 0
+    while len(hits) < k and any(position < len(queue) for queue in queues):
+        for queue in queues:
+            if position < len(queue) and len(hits) < k:
+                hits.append(queue[position])
+        position += 1
+    return hits

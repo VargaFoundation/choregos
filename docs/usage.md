@@ -1135,6 +1135,20 @@ for a project, `GET /projects/{id}/memory/search?q=…&memory=decisions` and `�
 (`memory` defaults to `shared`). Global memories are stored by the organisation's `memory` connector when
 it declares one (`/orgs/{org}/connectors`), else by the deployment default.
 
+**At run time.** When a stage is prepared, each binding is resolved for the run's project, in order. A
+global memory must exist, be active and reach the project; a named project memory must exist and be
+active in it; a binding that does not resolve is **skipped, never fatal**, and the run page lists it
+(a `memory.skipped` event with the reason). Every memory the run reads is queried at the same time
+(one that is down or slow contributes nothing; the others still do) and the answers are merged: a
+subject two memories share is kept once, from the earlier binding, then what fits the role's token
+budget is taken from each memory in turn. The agent reads each item with the memory it came from
+(`context.md`: "(from global:security-lessons)") and, with the sidecar's `search_memory`, searches the
+same memories live (optionally one, by label); a label the run does not read is refused. Lessons and
+findings of the run go to its one `write` binding, and when that memory is global they become
+**proposals** an administrator accepts. A run with no `write` binding writes nothing. The automatic
+acceptance rule (`auto_accept_after_runs`) covers a project's memories — shared, each agent's own and the
+named ones — and never a global memory.
+
 ### Knowledge bases
 
 A **knowledge base** is a corpus you curate — an architecture framework, a security policy,

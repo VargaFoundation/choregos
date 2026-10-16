@@ -1011,6 +1011,22 @@ export type AgentMemoryBinding = {
   mode?: "read" | "write";
 };
 
+export type RunMemorySearch = {
+  query: string;
+  k?: number;
+  /** one memory of the run, by label (`global:security-lessons`); absent, all of them */
+  memory?: string | null;
+};
+
+export type RunMemoryHit = {
+  /** the label of the memory the hit came from */
+  memory: string;
+  kind: string;
+  subject: string;
+  content: string;
+  score?: number | null;
+};
+
 export type MemoryStoreUser = {
   agent: string;
   version: number;
@@ -3057,6 +3073,7 @@ export interface Operations {
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
+  searchRunMemory: { method: "POST"; path: "/internal/runs/{id}/memory/search"; body: RunMemorySearch; response: Array<RunMemoryHit> };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
