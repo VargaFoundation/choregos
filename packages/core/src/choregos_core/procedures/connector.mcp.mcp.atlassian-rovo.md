@@ -33,7 +33,9 @@ fields:
      with the account's email;
    - a **service account API key** (Directory, Service accounts), sent as **Bearer**.
 3. The server's endpoint is `https://mcp.atlassian.com/v1/mcp`. The older `/v1/sse` endpoint stopped on
-   30 June 2026.
+   30 June 2026. The MCP server catalogue may list a newer `/v2/mcp` address that signs in with OAuth
+   instead: this procedure is the API-token route on `/v1/mcp`; check Atlassian's documentation for the
+   address your site supports.
 
 ## Permissions
 
