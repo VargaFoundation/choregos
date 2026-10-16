@@ -6,7 +6,7 @@ and `org_connector_projects`, the projects a `selected_projects` connector is tu
 forced RLS like the rest of the registry.
 
 Revision ID: 9d2e4f6a8b1c
-Revises: a4c6e8b0d2f4
+Revises: a8c0e2b4d6f8
 Create Date: 2026-10-17 09:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = '9d2e4f6a8b1c'
-down_revision: str | None = 'a4c6e8b0d2f4'
+down_revision: str | None = 'a8c0e2b4d6f8'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
