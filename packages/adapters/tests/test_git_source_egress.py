@@ -16,7 +16,7 @@ class Spy:
     def __init__(self) -> None:
         self.argv: list[tuple[str, ...]] = []
 
-    async def __call__(self, cwd: object, *args: str) -> str:
+    async def __call__(self, cwd: object, *args: str, **_: object) -> str:
         self.argv.append(args)
         return "0" * 40 + "\n" if "rev-parse" in args else ""
 
