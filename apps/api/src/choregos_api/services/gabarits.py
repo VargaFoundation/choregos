@@ -44,6 +44,9 @@ class Livraison:
     #: l'organisation (S20-07).
     agents: list[dict[str, Any]] = field(default_factory=list)
     skills: list[dict[str, str]] = field(default_factory=list)
+    #: Among these agents, those the template takes from the catalogue: slug -> `catalogue:<slug>@<version>`,
+    #: the provenance of a direct install (S39-25).
+    agents_du_catalogue: dict[str, str] = field(default_factory=dict)
     #: Ce que des greffons installent (S20-09) : nom de l'installateur → fichiers de son dossier.
     extensions: dict[str, dict[str, str]] = field(default_factory=dict)
 
@@ -84,6 +87,7 @@ def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
         routage=list(defauts.get("routing") or []),
         agents=[_document_de_l_agent(str(ref), dossier) for ref in defauts.get("agents") or []],
         skills=[_fichiers_de_la_skill(str(ref), dossier) for ref in defauts.get("skills") or []],
+        agents_du_catalogue=_agents_du_catalogue(defauts.get("agents") or []),
         extensions={
             str(nom): _fichiers_du_dossier(str(ref), dossier, f"extension `{nom}`")
             for nom, ref in (defauts.get("extensions") or {}).items()
@@ -104,6 +108,17 @@ def _chemin_du_gabarit(ref: str, dossier: Path | None) -> Path:
 
 #: Un gabarit nomme un agent ou une skill du catalogue de la plateforme par `catalogue:<nom>` (ADR 0040).
 PREFIXE_CATALOGUE = "catalogue:"
+
+
+def _agents_du_catalogue(refs: list[Any]) -> dict[str, str]:
+    from choregos_core.catalogue_d_agents import entree
+
+    provenances: dict[str, str] = {}
+    for ref in map(str, refs):
+        trouve = entree(ref.removeprefix(PREFIXE_CATALOGUE)) if ref.startswith(PREFIXE_CATALOGUE) else None
+        if trouve is not None:
+            provenances[trouve.slug] = f"{PREFIXE_CATALOGUE}{trouve.slug}@{trouve.version}"
+    return provenances
 
 
 def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:

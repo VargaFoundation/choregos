@@ -1403,6 +1403,13 @@ async def install_catalogue_agent(
         )
     elif not (body and body.upgrade):
         raise conflict(f"`{slug}` is already installed: ask for `upgrade` to publish the catalogue's version")
+    elif etat.divergent:
+        raise conflict(
+            f"`{slug}` comes from the catalogue but {org} has published its own text since: the upgrade "
+            f"would publish catalogue version {proposition.version} over it, so it is left untouched. "
+            "Publish the catalogue's text as the next version by hand (`POST …/agents/<slug>/versions`) "
+            "if that is what you want"
+        )
     else:
         await catalogue.mettre_a_jour(session, organisation.id, proposition, principal)
     return await _dto(session, await _agent(session, organisation, slug), principal, org, avec_versions=True)
