@@ -7,24 +7,29 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, status
+from sqlalchemy import select
 
 from ..audit import record
-from ..db.models import Agent, Organization
+from ..db.models import Agent, AgentVersion, Organization, Project
+from ..db.models import AgentEvaluation as AgentEvaluationRow
 from ..deps import Db, Me, ProjectCtx
-from ..errors import forbidden
+from ..errors import forbidden, not_found
 from ..fraicheur import exiger_une_authentification_fraiche
 from ..rbac import Permission
 from ..schemas import (
     AgentDto,
+    AgentEvaluation,
+    AgentEvaluationCreate,
     AgentExposure,
     AgentReleaseCreate,
     AgentReleaseDecision,
     AgentReleaseDto,
     AgentReleasePolicy,
     AgentReleaseReadiness,
+    AgentSpec,
     ProjectAgentChannel,
 )
-from ..services import agent_releases
+from ..services import agent_live_evals, agent_releases
 from ..services.agent_governance import PERSONAL, Action, decide, visible_clause
 from .agents import Slug, _charger, _dto, _exiger, _lire, _organisation
 
@@ -205,3 +210,90 @@ async def set_project_agent_channel(
         after=body.channel,
     )
     return ProjectAgentChannel(channel=body.channel)
+
+
+async def _spec_of(session: Db, agent: Agent, version: int) -> AgentSpec:
+    spec = (
+        await session.execute(
+            select(AgentVersion.spec).where(
+                AgentVersion.agent_id == agent.id, AgentVersion.version == version
+            )
+        )
+    ).scalar_one_or_none()
+    if spec is None:
+        raise not_found("Agent version", f"{agent.slug}@{version}")
+    return AgentSpec.model_validate(spec)
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/versions/{version}/evaluations",
+    response_model=AgentEvaluation,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="startAgentEvaluation",
+)
+async def start_agent_evaluation(
+    org: str, slug: Slug, version: int, body: AgentEvaluationCreate, session: Db, principal: Me
+) -> AgentEvaluation:
+    """Run the revision's `live` eval cases as capped trials in a project (needs the right to try the
+    agent there). The policy's `max_eval_usd` bounds the total; refused (409) above it. The score is read
+    from the runs: `GET` the evaluations to follow it."""
+    organisation, agent, subject = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, subject, Action.TRIAL, project_slug=body.project))
+    project = (
+        await session.execute(
+            select(Project).where(Project.org_id == organisation.id, Project.slug == body.project)
+        )
+    ).scalar_one_or_none()
+    if project is None:
+        raise not_found("Project", f"{org}/{body.project}")
+    policy = agent_releases.policy_of(agent)
+    spec = await _spec_of(session, agent, version)
+    evaluation = await agent_live_evals.start(
+        session, principal, agent, project, version, policy.max_eval_usd
+    )
+    await record(
+        session,
+        principal,
+        "agent.evaluation.start",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=agent.id,
+        version=version,
+        project=project.slug,
+        cases=len(evaluation.cases),
+        budget_usd=evaluation.budget_usd,
+    )
+    floor = (
+        policy.stable.min_live_score
+        if policy.stable.min_live_score is not None
+        else policy.candidate.min_live_score
+    )
+    return await agent_live_evals.read(session, evaluation, project.slug, spec, floor)
+
+
+@router.get(
+    "/orgs/{org}/agents/{slug}/versions/{version}/evaluations",
+    response_model=list[AgentEvaluation],
+    operation_id="listAgentEvaluations",
+)
+async def list_agent_evaluations(
+    org: str, slug: Slug, version: int, session: Db, principal: Me
+) -> list[AgentEvaluation]:
+    """The live evaluations of the revision, newest first, each judged from its runs as they stand."""
+    _, agent, _ = await _charger(session, principal, org, slug)
+    spec = await _spec_of(session, agent, version)
+    policy = agent_releases.policy_of(agent)
+    floor = (
+        policy.stable.min_live_score
+        if policy.stable.min_live_score is not None
+        else policy.candidate.min_live_score
+    )
+    rows = (
+        await session.execute(
+            select(AgentEvaluationRow, Project.slug)
+            .join(Project, Project.id == AgentEvaluationRow.project_id)
+            .where(AgentEvaluationRow.agent_id == agent.id, AgentEvaluationRow.version == version)
+            .order_by(AgentEvaluationRow.created_at.desc(), AgentEvaluationRow.id.desc())
+        )
+    ).tuples()
+    return [await agent_live_evals.read(session, row, slug_, spec, floor) for row, slug_ in rows]

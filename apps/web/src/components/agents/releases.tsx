@@ -94,6 +94,7 @@ const CHECK_LABEL: Record<string, string> = {
   previously_in_production: "Was in production before",
   human_session: "Made by a person in a signed-in session",
   fresh_authentication: "A recent sign-in",
+  live_eval: "The live evaluation scores high enough",
   approvals: "Approvals",
 };
 
@@ -122,6 +123,73 @@ export function CheckList({ checks }: { checks: AgentReleaseCheck[] }) {
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * The live evaluation of a revision (S40-02d): its `live` eval cases, run as capped trials in a project, scored
+ * from what the runs produced. Says the most it may spend before it starts; "not run" is never "passed".
+ */
+export function LiveEvaluation({ org, agent, version }: { org: string; agent: Agent; version: number }) {
+  const refresh = useRefresh(org, agent.slug);
+  const client = useQueryClient();
+  const spec = (agent.versions ?? []).find((v) => v.version === version)?.spec;
+  const cases = (spec?.evals ?? []).filter((c) => c.live === true);
+  const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org), enabled: cases.length > 0 });
+  const evaluations = useQuery({
+    queryKey: ["agent-evaluations", org, agent.slug, version],
+    queryFn: () => api.agentEvaluations(org, agent.slug, version),
+    enabled: cases.length > 0,
+    refetchInterval: (query) => ((query.state.data ?? []).some((e) => e.status === "running") ? 5000 : false),
+  });
+  const [project, setProject] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  if (cases.length === 0) return null;
+  const chosen = project || (projects.data?.items ?? [])[0]?.slug || "";
+  const estimate = cases.reduce((total, c) => total + Math.min(0.5, c.max_cost_usd ?? 0.25), 0);
+  const latest = (evaluations.data ?? [])[0];
+  const locked = agent.can?.release === false;
+  async function start() {
+    setError(null);
+    try {
+      await api.startAgentEvaluation(org, agent.slug, version, chosen);
+      await client.invalidateQueries({ queryKey: ["agent-evaluations", org, agent.slug, version] });
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "refused");
+    }
+  }
+  return (
+    <div className="space-y-2 rounded border border-line p-3" data-testid="live-evaluation">
+      <p className="text-xs text-ink-muted">
+        {cases.length} live case{cases.length === 1 ? "" : "s"}: run on the real model as capped trials, at most about{" "}
+        <span data-testid="live-estimate">{`$${estimate.toFixed(2)}`}</span> in all.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Project">
+          {(props) => (
+            <Select {...props} value={chosen} onChange={(e) => setProject(e.target.value)}>
+              {(projects.data?.items ?? []).map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {p.slug}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Button size="sm" disabled={locked || !chosen} onClick={() => void start()}>
+          Run live evaluation
+        </Button>
+      </div>
+      {latest && (
+        <p className="text-xs" data-testid="live-score">
+          <Badge tone={latest.status === "passed" ? "ok" : latest.status === "failed" ? "danger" : "neutral"}>{latest.status.replace("_", " ")}</Badge>{" "}
+          {latest.score != null ? `score ${percent(latest.score)}` : latest.status === "not_run" ? "could not run: no model to call" : "running…"}
+          {(latest.cases ?? []).filter((c) => c.status === "failed").map((c) => ` — ${c.name}: ${c.reason ?? "failed"}`)}
+        </p>
+      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </div>
   );
 }
 
@@ -337,6 +405,7 @@ export function ReleasePipeline({ org, agent, history }: { org: string; agent: A
                     {evalCheck.detail ? ` ${evalCheck.detail}.` : ""}
                   </p>
                 )}
+                <LiveEvaluation org={org} agent={agent} version={fresh.version} />
                 <Field label={`Share of work items: ${share} %`} hint="Of the projects that follow production. Projects that follow testing always get it.">
                   {(props) => (
                     <input
@@ -386,6 +455,7 @@ export function ReleasePipeline({ org, agent, history }: { org: string; agent: A
                   {agent.candidate_since ? ` · since ${relative(agent.candidate_since)}` : ""}
                 </p>
                 <Who exposure={exposure.data} agent={agent} />
+                <LiveEvaluation org={org} agent={agent} version={candidate} />
                 <StatsLine label="Testing" stats={forProduction.data?.candidate} />
                 <StatsLine label="Production" testid="compare-production" stats={forProduction.data?.production ?? byVersionStats(byVersion, agent.stable_version)} />
                 {newShare == null ? (
@@ -594,6 +664,9 @@ export function ReleasePolicyForm({ org, agent }: { org: string; agent: Agent })
   const [rate, setRate] = useState(gates.min_success_rate != null ? String(gates.min_success_rate) : "");
   const [soak, setSoak] = useState(gates.min_soak_hours != null ? String(gates.min_soak_hours) : "");
   const [stepUp, setStepUp] = useState(String(gates.step_up_minutes ?? 10));
+  const [liveStable, setLiveStable] = useState(gates.min_live_score != null ? String(gates.min_live_score) : "");
+  const [liveCandidate, setLiveCandidate] = useState(policy.candidate?.min_live_score != null ? String(policy.candidate.min_live_score) : "");
+  const [maxEval, setMaxEval] = useState(String(policy.max_eval_usd ?? 2));
   const [approvals, setApprovals] = useState(String(gates.approvals ?? 0));
   const [separation, setSeparation] = useState(gates.separation_of_duties ?? true);
   const [error, setError] = useState<string | null>(null);
@@ -609,11 +682,14 @@ export function ReleasePolicyForm({ org, agent }: { org: string; agent: Agent })
     try {
       await api.setAgentReleasePolicy(org, agent.slug, {
         on_publish: onPublish,
+        candidate: { min_live_score: num(liveCandidate) },
+        max_eval_usd: num(maxEval) ?? 2,
         stable: {
           require_candidate: toStable ? false : requireCandidate,
           min_candidate_runs: toStable ? 0 : (num(runs) ?? 0),
           min_success_rate: toStable ? null : num(rate),
           min_soak_hours: toStable ? null : num(soak),
+          min_live_score: toStable ? null : num(liveStable),
           step_up_minutes: num(stepUp) ?? 10,
           approvals: num(approvals) ?? 0,
           separation_of_duties: separation,
@@ -660,6 +736,9 @@ export function ReleasePolicyForm({ org, agent }: { org: string; agent: Agent })
           {field("Finished runs in testing", runs, setRuns, { min: 0, max: 10000, disabled: toStable })}
           {field("Success rate, 0 to 1", rate, setRate, { min: 0, max: 1, step: "0.05", disabled: toStable })}
           {field("Hours in testing", soak, setSoak, { min: 0, max: 720, disabled: toStable })}
+          {field("Live score for production, 0 to 1", liveStable, setLiveStable, { min: 0, max: 1, step: "0.05", disabled: toStable })}
+          {field("Live score for testing, 0 to 1", liveCandidate, setLiveCandidate, { min: 0, max: 1, step: "0.05" })}
+          {field("Live evaluation budget, USD", maxEval, setMaxEval, { min: 0.01, max: 10, step: "any" })}
           {field("Sign-in age, minutes", stepUp, setStepUp, { min: 1, max: 120 })}
           {field("Approvals from other people", approvals, setApprovals, { min: 0, max: 3 })}
           <label className="flex items-center gap-2 text-sm md:col-span-3">

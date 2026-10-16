@@ -1166,6 +1166,12 @@ export type AgentEvalCase = {
   input?: AgentSampleInput;
   must_contain?: Array<string>;
   must_not_contain?: Array<string>;
+  /** a live case runs as a capped trial on the real model and asserts on the run's result (S40-02d); the level-1 gate leaves it out */
+  live?: boolean;
+  /** the status the run's result must have */
+  expect_status?: "done" | "blocked";
+  /** what this case's trial may spend; absent, 0.25 $ */
+  max_cost_usd?: number | null;
 };
 
 /** A sample work item an agent is tried or evaluated on. */
@@ -1440,10 +1446,48 @@ export type AgentStableGates = {
   min_soak_hours?: number | null;
   /** how recent the person's sign-in must be */
   step_up_minutes?: number;
+  /** the latest finished live evaluation of the revision must score at least this; a rollback skips it */
+  min_live_score?: number | null;
   /** people other than the requester who must approve a promotion before production moves; a rollback never waits (ADR 0071) */
   approvals?: number;
   /** neither the requester nor the revision's author may approve */
   separation_of_duties?: boolean;
+};
+
+/** What a revision must satisfy before it is sent to testing by hand (saving it to testing under `on_publish` is the owner's stated policy and is not gated). */
+export type AgentCandidateGates = {
+  min_live_score?: number | null;
+};
+
+export type AgentEvaluationCreate = {
+  /** the project's slug: the trials run there (needs the right to try an agent in it) */
+  project: string;
+};
+
+/** A live evaluation of one revision, judged from its trial runs as they stand. `not_run` (no model to call) is never `passed`. */
+export type AgentEvaluation = {
+  id: string;
+  version: number;
+  project: string;
+  /** `passed` when every case finished and the score reaches the policy's minimum (every case when none is set) */
+  status: "running" | "passed" | "failed" | "not_run";
+  /** passed cases over live cases */
+  score?: number | null;
+  /** the most the evaluation may spend in all */
+  budget_usd: number;
+  started_by?: string | null;
+  started_at: string;
+  cases?: Array<{
+    name: string;
+    /** read it at `GET /runs/{id}` */
+    run_id: string;
+    status: "running" | "passed" | "failed" | "not_run";
+    passed?: boolean | null;
+    budget_usd?: number;
+    cost_usd?: number;
+    /** why it failed or did not run */
+    reason?: string | null;
+  }>;
 };
 
 /** What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate. */
@@ -1451,6 +1495,9 @@ export type AgentReleasePolicy = {
   /** `stable`: a saved revision goes to production (the behaviour before channels); `candidate`: to testing; `none`: nowhere */
   on_publish?: "stable" | "candidate" | "none";
   stable?: AgentStableGates;
+  candidate?: AgentCandidateGates;
+  /** the most one live evaluation may spend in all */
+  max_eval_usd?: number;
 };
 
 export type AgentReleaseCreate = {
@@ -1463,7 +1510,7 @@ export type AgentReleaseCreate = {
 };
 
 export type AgentReleaseCheck = {
-  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, approvals (informational: how many people must approve) */
+  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve) */
   name: string;
   required?: boolean;
   /** null: not applicable */
@@ -3216,6 +3263,7 @@ export interface Operations {
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
+  listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: Array<AgentEvaluation> };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
@@ -3328,6 +3376,7 @@ export interface Operations {
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
+  startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };

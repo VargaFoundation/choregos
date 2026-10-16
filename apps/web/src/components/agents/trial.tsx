@@ -61,7 +61,45 @@ export function EvalSuiteEditor({ cases, onChange }: { cases: AgentEvalCase[]; o
               onChange={(e) => update(index, { must_not_contain: lines(e.target.value) })}
             />
           </label>
-          <div className="sm:col-span-2">
+          <div className="space-y-2 sm:col-span-2">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={c.live === true}
+                onChange={(e) => update(index, { live: e.target.checked })}
+                className="mt-1"
+                aria-label={`Live case ${c.name}`}
+              />
+              <span>
+                Live: run it on the real model
+                <span className="block text-xs text-ink-muted">
+                  A live case is not checked when you publish (there is no output yet). A live evaluation, from the Lifecycle
+                  tab, runs it as a capped trial and checks what the run produced.
+                </span>
+              </span>
+            </label>
+            {c.live === true && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-ink-muted">Expected result</span>
+                  <Select value={c.expect_status ?? "done"} onChange={(e) => update(index, { expect_status: e.target.value as "done" | "blocked" })}>
+                    <option value="done">Done</option>
+                    <option value="blocked">Blocked: asks for a person</option>
+                  </Select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-ink-muted">Most it may spend, USD (0.50 at most)</span>
+                  <Input
+                    type="number"
+                    min={0.01}
+                    max={0.5}
+                    step="0.05"
+                    value={c.max_cost_usd ?? ""}
+                    onChange={(e) => update(index, { max_cost_usd: e.target.value === "" ? null : Number(e.target.value) })}
+                  />
+                </label>
+              </div>
+            )}
             <Button size="sm" onClick={() => onChange(cases.filter((_, i) => i !== index))}>
               Remove the case<span className="sr-only"> {c.name}</span>
             </Button>
