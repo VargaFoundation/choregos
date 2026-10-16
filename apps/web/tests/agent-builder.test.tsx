@@ -48,6 +48,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       skills: vi.fn(),
       knowledgeBases: vi.fn(),
       memories: vi.fn(async (_org: string, filter: { scope?: string } = {}) => STORES.filter((m) => !filter.scope || m.scope === filter.scope)),
+      policyCeiling: vi.fn().mockResolvedValue({ ceiling: null }),
     },
   };
 });
@@ -108,6 +109,7 @@ describe("the folded sections", () => {
       limits: "the role's defaults",
       skills: "none",
       tools: "none",
+      network: "the project's hosts",
       knowledge: "none",
       memory: "1 project · writes to the project's shared memory",
       evals: "0 cases",

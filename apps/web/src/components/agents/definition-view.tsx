@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, Disclosure, Field, Select, buttonClasses } from "@/components/ui";
 import { normalizeSpec } from "@/lib/agent-diff";
+import { networkSummary } from "@/lib/network";
 import { api } from "@/lib/api";
 import { canEdit, currentVersion, previousVersion, sortedVersions, versionOf } from "@/lib/agent-versions";
 import { relative, usd } from "@/lib/format";
@@ -26,7 +27,7 @@ import { sectionSummaries } from "./spec-summary";
 /** Lines of instructions shown before "Show all". */
 export const INSTRUCTION_LINES = 12;
 
-const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals"]);
+const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network"]);
 
 const here = (slug: string, query: string) => `/agents/${slug}?${query}`;
 
@@ -262,6 +263,14 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
             </Row>
             <Row label="Memory">
               <MemoryList spec={spec} />
+            </Row>
+          </dl>
+        </Disclosure>
+
+        <Disclosure title="Network access" summary={summaries.network}>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+            <Row label="Network">
+              <span data-testid="agent-network-line">{networkSummary(spec.network)}</span>
             </Row>
           </dl>
         </Disclosure>

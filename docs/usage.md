@@ -1394,6 +1394,28 @@ wants run credentials sets `CHOREGOS_RUNNER_EGRESS_AUTH=run` on the orchestrator
 run id and run token to `HTTP(S)_PROXY` before starting anything. These guardrails are a **net**, not a
 wall: see [security](security.md).
 
+**Where each network setting lives in the console.**
+
+- *The organisation's* — **Administration → Network access** (an `org_admin` writes it, a member reads it):
+  the allowed hosts (**No cap**, **Any public host**, or **Only these hosts**, one per line), the denied
+  hosts, the requests per minute per host and per run, the built-in web tools (inherit, allow, deny) and
+  the contact written into the User-Agent. It is the `network` section of the policy ceiling: saving
+  reads the whole ceiling again and replaces only that section, so the JSON **Policy ceiling** card below
+  it and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
+  flagged before anything is sent.
+- *The agent's* — the **Network access** section of the agent builder (new agent, new version): **Same as
+  the project's policy**, **No internet** or **Only these hosts**, the politeness, and the built-in web
+  tools (**As the policy says** or **Off**). A host the organisation does not allow, or denies, is flagged
+  under the list; the publication would be refused (422). The folded section says its value in one line,
+  and opens by itself when it holds something. The agent's page shows a **Network** line in its definition.
+- *The project's* — **Settings → Network access**, read-only: the hosts its runs really get (the project's
+  policy under the organisation's ceiling, the repository host marked as implied), the denied hosts, the
+  rates, the built-in web tools and what the ceiling clamped. The project's own side is `sandbox.network`
+  in the policy editor under it.
+- *What happened* — **Administration → Network activity** (`org_admin`): per host, where it was seen
+  (egress proxy, runner, tool broker, platform), the decision, the reason, the counts and the projects;
+  **Refused only** is on by default, the period is the last 24 hours or 7 days.
+
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
 it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `unreachable`) for the last
