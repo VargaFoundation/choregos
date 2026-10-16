@@ -210,3 +210,19 @@ there (D10), with full-text search built in and `pgvector` one extension away.
     so it is in no argv, error message or `.git/config`, and it is pinned to the connector's host.
     A git listing that matches no file is unreadable, not empty (decision 10). Documents are named
     by their whole path.
+
+## Update 2026-10-16 — nothing CPU-bound on the API's event loop (S39-26)
+
+On the dev tenant (0.18.1), fourteen uploads into an `index` base pinned the single-CPU API pod and
+the ingress answered 502 to unrelated requests for minutes: cutting chunks and ranking ran on the
+API's event loop. Since S39-26:
+
+23. **The converter is a child process at a low priority** (`nice 15`): under the pod's CPU limit
+    the kernel serves the API's own threads first.
+24. **What stays CPU-bound in the API runs in a worker process** (`knowledge.offload`: one spawned,
+    niced worker, a timeout, replaced when it dies or hangs): chunking a document, and the in-process
+    rankings of a search (BM25, cosine). A worker *thread* is not enough — pure-Python work holds the
+    GIL and still delays every request of the process. Parsing the converter's answer and titling a
+    document run in a thread. Only I/O awaits on the loop.
+25. **One conversion at a time per replica by default** (`knowledge_conversion_concurrency: 1`): the
+    API pod has one CPU, a second converter would only share it.
