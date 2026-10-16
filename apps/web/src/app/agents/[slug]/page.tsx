@@ -6,7 +6,9 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
+import { ChannelBadges, RevisionChannels } from "@/components/agents/channels";
 import { LifecycleBadges, LifecyclePanel } from "@/components/agents/lifecycle";
+import { LifecycleTab, ManageReleases } from "@/components/agents/releases";
 import {
   CatalogueWarning,
   ForkDialog,
@@ -50,6 +52,7 @@ const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m
 const AGENT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "definition", label: "Definition" },
+  { id: "lifecycle", label: "Lifecycle" },
   { id: "versions", label: "Versions" },
   { id: "runs", label: "Runs" },
   { id: "access", label: "Access" },
@@ -85,6 +88,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         <ScopeBadge agent={a} />
         <Badge tone={a.status === "active" ? "ok" : "danger"}>{a.status}</Badge>
         <LifecycleBadges agent={a} />
+        <ChannelBadges agent={a} />
         {a.owner && <span className="text-xs text-ink-muted">Owned by {a.owner}</span>}
         {a.expires_at && <span className="text-xs text-ink-muted">Expires {shortDate(a.expires_at)}</span>}
       </div>
@@ -115,9 +119,10 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         <>
           {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
           <Statut org={org} agent={a} />
-          <Card title="Lifecycle">
-            <LifecyclePanel org={org} agent={a} disabled={a.can?.manage === false || readOnly(a)} />
-          </Card>
+          <p className="flex flex-wrap items-center gap-3 text-sm" data-testid="overview-channels">
+            <ChannelBadges agent={a} />
+            <ManageReleases slug={a.slug} />
+          </p>
           {a.can?.manage === true && a.scope !== "platform" && (
             <Card title="Scope">
               <ScopePanel org={org} agent={a} />
@@ -127,6 +132,13 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         </>
       )}
       {onglet === "definition" && <Definition org={org} agent={a} />}
+      {onglet === "lifecycle" && (
+        <LifecycleTab org={org} agent={a}>
+          <Card title="Agent status">
+            <LifecyclePanel org={org} agent={a} disabled={a.can?.manage === false || readOnly(a)} />
+          </Card>
+        </LifecycleTab>
+      )}
       {onglet === "versions" && <Versions agent={a} />}
       {onglet === "runs" && <Runs org={org} slug={slug} />}
       {onglet === "access" && (
@@ -319,6 +331,7 @@ function Versions({ agent }: { agent: Agent }) {
           <THead>
             <TR>
               <TH>Version</TH>
+              <TH>Channel</TH>
               <TH>Published by</TH>
               <TH>When</TH>
               <TH>Checksum</TH>
@@ -331,6 +344,9 @@ function Versions({ agent }: { agent: Agent }) {
             {versions.map((v) => (
               <TR key={v.version} aria-current={v.version === choisie?.version ? "true" : undefined}>
                 <TD className="font-mono">v{v.version}</TD>
+                <TD>
+                  <RevisionChannels channels={v.channels} />
+                </TD>
                 <TD>{v.created_by ?? "—"}</TD>
                 <TD className="font-mono text-xs">{v.created_at ? shortDate(v.created_at) : "—"}</TD>
                 <TD className="font-mono text-xs">{v.checksum.slice(0, 19)}</TD>

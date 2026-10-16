@@ -13,7 +13,7 @@ import {
 } from "@/components/agents/registre";
 import { ScopeBadge } from "@/components/agents/governance";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select, buttonClasses } from "@/components/ui";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Agent, ProjectAgent } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
@@ -34,6 +34,7 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
   );
   return (
     <div className="space-y-6">
+      <ProjectChannel projet={slug} />
       <Card title="Project agents">
         <div className="space-y-3">
           <p className="text-sm text-ink-muted">
@@ -74,7 +75,8 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
           <p className="text-sm text-ink-muted">Reading…</p>
         ) : epingles.data.length === 0 ? (
           <Empty title="Nothing pinned">
-            A workflow actor that names an agent runs its latest version; pin one to hold it, and tighten it.
+            A workflow actor that names an agent runs its production version; pin one to hold a revision or follow a
+            channel, and tighten it.
           </Empty>
         ) : (
           <ul className="space-y-3" data-testid="epingles">
@@ -90,6 +92,57 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
   );
 }
 
+/** Which channel of the agents the project runs when it pins nothing (S40-02, ADR 0071). */
+function ProjectChannel({ projet }: { projet: string }) {
+  const client = useQueryClient();
+  const lu = useQuery({ queryKey: ["project-agent-channel", projet], queryFn: () => api.projectAgentChannel(projet), retry: false });
+  const [refuse, setRefuse] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  async function changer(channel: "stable" | "candidate") {
+    setErreur(null);
+    try {
+      await api.setProjectAgentChannel(projet, channel);
+      await client.invalidateQueries({ queryKey: ["project-agent-channel", projet] });
+      await client.invalidateQueries({ queryKey: ["agent-exposure"] });
+    } catch (cause) {
+      // The API's sentence stays, and the control is held back: the person cannot do this here.
+      if (cause instanceof ApiError && cause.status === 403) setRefuse(cause.message);
+      else setErreur(cause instanceof Error ? cause.message : "refused");
+    }
+  }
+  if (lu.error) return null;
+  const canal = lu.data?.channel ?? "stable";
+  return (
+    <Card title="Which versions this project runs">
+      <div className="space-y-2 text-sm" data-testid="project-channel">
+        <label className="flex flex-wrap items-center gap-2">
+          <span>This project runs:</span>
+          <Select
+            aria-label="Versions this project runs"
+            value={canal}
+            disabled={!lu.data || refuse != null}
+            onChange={(e) => void changer(e.target.value as "stable" | "candidate")}
+          >
+            <option value="stable">Production versions</option>
+            <option value="candidate">Testing versions</option>
+          </Select>
+        </label>
+        <p className="text-xs text-ink-muted">
+          {canal === "candidate"
+            ? "Every agent that has a revision in testing runs it here. Agents with nothing in testing run production. A fixed pin below still wins."
+            : "Every agent runs its production revision here, unless pinned below. A share of work items may still run an agent's testing revision (its canary)."}
+        </p>
+        {refuse && (
+          <p className="text-xs text-ink-muted" data-testid="project-channel-refused">
+            {refuse}
+          </p>
+        )}
+        {erreur && <ErrorNote>{erreur}</ErrorNote>}
+      </div>
+    </Card>
+  );
+}
+
 function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent }) {
   const client = useQueryClient();
   const resserre = Object.values(epingle.overrides ?? {}).some((valeur) => valeur != null);
@@ -99,11 +152,14 @@ function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent })
         {epingle.agent}
       </Link>
       <Badge tone="neutral">v{epingle.version}</Badge>
+      <Badge tone={epingle.channel ? "agent" : "neutral"} data-testid="pin-mode">
+        {epingle.channel === "candidate" ? "follows testing" : epingle.channel === "stable" ? "follows production" : "fixed revision"}
+      </Badge>
       {resserre && <Badge tone="warn">Tightened</Badge>}
       <span className="text-xs text-ink-muted">{resumeDeLaVersion(epingle.effective)}</span>
       <span className="ml-auto">
         <GesteConfirme
-          question={`Unpin ${epingle.agent}? Its workflows run its latest version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
+          question={`Unpin ${epingle.agent}? Its workflows run its production version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
           confirmer={`Unpin ${epingle.agent}`}
           action={async () => {
             await api.unpinProjectAgent(projet, epingle.agent);
@@ -122,6 +178,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
   const client = useQueryClient();
   const [agent, setAgent] = useState("");
   const [version, setVersion] = useState("");
+  const [mode, setMode] = useState<"stable" | "candidate" | "fixed">("stable");
   const [quotidien, setQuotidien] = useState("");
   const [tours, setTours] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
@@ -130,7 +187,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
     setErreur(null);
     try {
       await api.pinProjectAgent(projet, agent, {
-        version: Number(version || choisi?.latest_version || 1),
+        ...(mode === "fixed" ? { version: Number(version || choisi?.latest_version || 1) } : { channel: mode }),
         overrides: {
           ...(quotidien ? { budget: { daily_usd: Number(quotidien) } } : {}),
           ...(tours ? { limits: { max_turns: Number(tours) } } : {}),
@@ -138,6 +195,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
       });
       setAgent("");
       setVersion("");
+      setMode("stable");
       setQuotidien("");
       setTours("");
       await client.invalidateQueries({ queryKey: ["project-agents", projet] });
@@ -173,8 +231,16 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
           </Select>
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Version</span>
-          <Select value={version} onChange={(e) => setVersion(e.target.value)} disabled={!choisi}>
+          <span className="text-xs text-ink-muted">Follow</span>
+          <Select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)} disabled={!choisi}>
+            <option value="stable">Follow production</option>
+            <option value="candidate">Follow testing</option>
+            <option value="fixed">Fixed revision</option>
+          </Select>
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs text-ink-muted">Revision</span>
+          <Select value={version} onChange={(e) => setVersion(e.target.value)} disabled={!choisi || mode !== "fixed"}>
             {Array.from({ length: choisi?.latest_version ?? 0 }, (_, i) => (choisi?.latest_version ?? 0) - i).map((v) => (
               <option key={v} value={v}>
                 v{v}

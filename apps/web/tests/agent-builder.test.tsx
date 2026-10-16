@@ -241,3 +241,45 @@ describe("the builder", () => {
     expect(open[0]).toHaveTextContent("Add a skill");
   });
 });
+
+describe("the release section of a new agent (S40-02c)", () => {
+  const open = (scope: "org" | "personal") =>
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder
+          org="acme"
+          mode={{ kind: "create" }}
+          initial={{ display_name: "Triage", scope }}
+          scopes={{ options: ["org", "personal"], projects: [] }}
+        />
+      </QueryClientProvider>,
+    );
+  beforeEach(() => {
+    vi.mocked(api.createAgent).mockClear();
+    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.skills).mockResolvedValue([]);
+    vi.mocked(api.knowledgeBases).mockResolvedValue([]);
+  });
+
+  it("an organisation agent is released through testing unless the box is unticked", async () => {
+    open("org");
+    const builder = screen.getByTestId("agent-builder");
+    expect(within(builder).getByLabelText(/Release through testing \(recommended\)/)).toBeChecked();
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createAgent).mock.calls[0]![1]).toMatchObject({
+      scope: "org",
+      release_policy: { on_publish: "candidate", stable: { require_candidate: true } },
+    });
+  });
+
+  it("a personal agent carries no release policy: saving it is releasing it", async () => {
+    open("personal");
+    const builder = screen.getByTestId("agent-builder");
+    expect(within(builder).queryByLabelText(/Release through testing/)).toBeNull();
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createAgent).mock.calls[0]![1]).not.toHaveProperty("release_policy");
+  });
+});
+

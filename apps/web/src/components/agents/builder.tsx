@@ -168,6 +168,16 @@ export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
 
 type Mode = { kind: "create" } | { kind: "version"; agent: Agent };
 
+/** Where a saved revision went, from the answer's `channels` (S40-02): the sentence is the server's fact, not a guess. */
+export function publishedSentence(published: { version: number; channels?: Array<"stable" | "candidate"> }, agent: Pick<Agent, "stable_version">): string {
+  const channels = published.channels ?? [];
+  if (channels.includes("stable")) return `v${published.version} is in production`;
+  if (channels.includes("candidate")) return `v${published.version} saved and sent to testing`;
+  return agent.stable_version != null
+    ? `v${published.version} saved; production still runs v${agent.stable_version}`
+    : `v${published.version} saved`;
+}
+
 export function AgentBuilder({
   org,
   mode,
@@ -221,6 +231,8 @@ export function AgentBuilder({
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<"try" | "costs">("try");
+  // New organisation and project agents are released through testing unless the author says otherwise (S40-02, ADR 0071).
+  const [viaTesting, setViaTesting] = useState(true);
 
   const models = useQuery({ queryKey: ["platform-models"], queryFn: () => api.platformModels(), retry: false });
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
@@ -250,13 +262,16 @@ export function AgentBuilder({
           spec: cleanSpec(spec),
           lifecycle,
           ...(scope ? { scope, project: scope === "project" ? projectChoice : null } : {}),
+          ...(scope && scope !== "personal" && viaTesting
+            ? { release_policy: { on_publish: "candidate" as const, stable: { require_candidate: true } } }
+            : {}),
         });
         await client.invalidateQueries({ queryKey: ["agents", org] });
         onDone?.(`${agent.display_name} registered as v${agent.latest_version}${lifecycle === "draft" ? ", as a draft" : ""}`);
         onCreated?.(agent);
       } else {
         const published = await api.publishAgentVersion(org, mode.agent.slug, cleanSpec(spec));
-        onDone?.(`v${published.version} published: projects keep the version they pinned`);
+        onDone?.(publishedSentence(published, mode.agent));
         await client.invalidateQueries({ queryKey: ["agent", org, mode.agent.slug] });
       }
     } catch (cause) {
@@ -498,6 +513,24 @@ export function AgentBuilder({
         <Disclosure title="Eval suite" summary={summaries.evals} defaultOpen={opened.evals || failing.length > 0}>
           <EvalSuiteEditor cases={spec.evals ?? []} onChange={(evals) => set({ evals })} />
         </Disclosure>
+        {creating && scope && scope !== "personal" && (
+          <Disclosure
+            title="Release"
+            summary={viaTesting ? "through testing (recommended)" : "straight to production"}
+            id="release-section"
+          >
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={viaTesting} onChange={(e) => setViaTesting(e.target.checked)} className="mt-1" />
+              <span>
+                Release through testing (recommended)
+                <span className="block text-xs text-ink-muted">
+                  A saved revision goes to testing first, and production only takes a revision that was tested. Untick it and
+                  every saved revision goes to production at once. Changeable later, on the agent&apos;s Lifecycle tab.
+                </span>
+              </span>
+            </label>
+          </Disclosure>
+        )}
 
         {error && <ErrorNote>{error}</ErrorNote>}
         {failing.length > 0 && (

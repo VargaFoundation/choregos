@@ -7,6 +7,7 @@
  * avance sans l'API — c'est ce que demande la section 3.4 du plan.
  */
 import devComplex from "./dev-complex.json";
+import { agentReleasesApi, applyPolicy, decorateAgent, savedRevision, touchAgent } from "./agent-releases";
 import type {
   Action,
   Agent,
@@ -1824,6 +1825,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method !== "GET") recordWrite(method, path, body);
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
+  // The release channels of the agents (S40-02): production, testing, the checks, the history.
+  if (typeof window !== "undefined") (window as unknown as { __mockAgents?: Agent[] }).__mockAgents = agents;
+  const channels = agentReleasesApi(method, path.split("?")[0] ?? path, path.split("?")[1] ?? "", body, agents, me.email);
+  if (channels !== undefined) return structuredClone(channels) as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
@@ -1937,7 +1942,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
     } as Agent;
     // The agent joins the registry for the time of the page (S32-01): its page reads it back.
-    if (!agents.some((a) => a.slug === cree.slug)) agents.push(cree);
+    if (!agents.some((a) => a.slug === cree.slug)) {
+      agents.push(cree);
+      applyPolicy(cree, corps.release_policy);
+    }
     return structuredClone(cree) as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/agent-drafts$/.test(chemin ?? "")) {
@@ -2022,10 +2030,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
     const spec = JSON.parse(String(init.body ?? "{}")) as AgentSpec;
     evalGate(spec, agent.versions?.find((v) => v.version === agent.latest_version)?.spec);
+    touchAgent(agent);
     const version = { version: agent.latest_version + 1, spec, checksum: "sha256:suivante", created_by: me.email };
     agent.latest_version = version.version;
     agent.versions = [version, ...(agent.versions ?? [])];
-    return version as T;
+    // What saving does to the channels is the agent's policy (S40-02): production, testing, or nothing.
+    return { ...version, channels: savedRevision(agent, version.version) } as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/credentials") {
     const corps = JSON.parse(String(init.body ?? "{}")) as { token_id?: string };
@@ -2131,7 +2141,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
-  if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
+  if (agentLu) return structuredClone(decorateAgent(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]!)) as T;
   // Le parcours d'un ticket et son détail, par identifiant : chacun le sien (S22-02).
   const parcours = /^\/work-items\/([^/]+)\/journey$/.exec(route ?? "");
   if (parcours) return parcoursDe(parcours[1]!) as T;
@@ -2160,7 +2170,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
     [/^\/me\/tokens$/, myTokens],
-    [/^\/orgs\/[^/]+\/agents$/, agents],
+    [/^\/orgs\/[^/]+\/agents$/, agents.map(decorateAgent)],
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, projectAgents],

@@ -27,6 +27,13 @@ import type {
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentMetrics,
+  AgentExposure,
+  AgentRelease,
+  AgentReleaseCreate,
+  AgentReleaseDecision,
+  AgentReleasePolicy,
+  AgentReleaseReadiness,
+  ProjectAgentChannel,
   AgentTrial,
   AgentTrialCreate,
   AgentMetricsSummary,
@@ -313,6 +320,24 @@ export const api = {
     request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
   publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
+  /** Channels (S40-02, ADR 0071): point production or testing at a revision; the history, the checklist. */
+  releaseAgentVersion: (org: string, slug: string, body: AgentReleaseCreate) =>
+    request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases`, { method: "POST", body: JSON.stringify(body) }),
+  agentReleases: (org: string, slug: string, limit = 50) =>
+    request<AgentRelease[]>(`/orgs/${org}/agents/${slug}/releases?limit=${limit}`),
+  agentReleaseReadiness: (org: string, slug: string, version: number, channel: "stable" | "candidate") =>
+    request<AgentReleaseReadiness>(`/orgs/${org}/agents/${slug}/versions/${version}/readiness?channel=${channel}`),
+  setAgentReleasePolicy: (org: string, slug: string, body: AgentReleasePolicy) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/release-policy`, { method: "PUT", body: JSON.stringify(body) }),
+  agentExposure: (org: string, slug: string) => request<AgentExposure>(`/orgs/${org}/agents/${slug}/exposure`),
+  decideAgentRelease: (org: string, slug: string, id: string, body: AgentReleaseDecision) =>
+    request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
+  /** The approvers' inbox: releases of the agents one may see, by status. */
+  orgAgentReleases: (org: string, status?: AgentRelease["status"]) =>
+    request<AgentRelease[]>(`/orgs/${org}/agent-releases${status ? `?status=${status}` : ""}`),
+  projectAgentChannel: (id: string) => request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`),
+  setProjectAgentChannel: (id: string, channel: ProjectAgentChannel["channel"]) =>
+    request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`, { method: "PUT", body: JSON.stringify({ channel }) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
   /** Le catalogue de la plateforme (ADR 0040) : ce qu'il propose, ce qui en est installé. */
