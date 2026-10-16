@@ -111,12 +111,15 @@ def _request(campaign: Campaign, tool: str) -> dict[str, Any]:
     return {"tool": tool, "symbols": campaign.symbols, "start": campaign.start, "end": campaign.end}
 
 
-def _facts(snap: dict[str, Any], reused: bool) -> dict[str, Any]:
+def _facts(snap: dict[str, Any], reused: bool, max_diverging: int) -> dict[str, Any]:
     """`cross_checked`: symbols a second source confirmed on common days; `diverging`: symbols with
-    at least one close beyond the composite's tolerance. A source that is down leaves a symbol
-    unchecked, and `cross_checked < symbols` says so."""
+    at least one close beyond the composite's tolerance; `max_rel_diff`: the worst relative gap of
+    any symbol; `diverging_excess`: the symbols diverging beyond the campaign's
+    `max_diverging_symbols` (0 = the sources agree enough), the number the `t-snapshot` gate caps
+    (S38-14). A source that is down leaves a symbol unchecked, and `cross_checked < symbols` says so."""
     rows = dict(snap["rows"])
     checks = [c for c in (snap.get("cross_check") or {}).values() if isinstance(c, dict)]
+    diverging = sum(1 for c in checks if c.get("diverging_days", 0) > 0)
     return {
         "symbols": len(rows),
         "missing": len(snap["missing"]),
@@ -124,7 +127,9 @@ def _facts(snap: dict[str, Any], reused: bool) -> dict[str, Any]:
         "bars_sha256": snap["bars_sha256"],
         "reused": int(reused),
         "cross_checked": sum(1 for c in checks if c.get("common_days", 0) > 0),
-        "diverging": sum(1 for c in checks if c.get("diverging_days", 0) > 0),
+        "diverging": diverging,
+        "max_rel_diff": max((float(c.get("max_rel_diff") or 0.0) for c in checks), default=0.0),
+        "diverging_excess": max(0, diverging - max_diverging),
     }
 
 
@@ -162,7 +167,9 @@ def take_snapshot(
     if previous is not None and stored is not None:
         shutil.copyfile(previous / "bars.csv", out / "bars.csv")
         write_text(out / "snapshot.json", dumps(stored))
-        write_text(out / "result.json", dumps({"facts": _facts(stored, reused=True)}))
+        write_text(
+            out / "result.json", dumps({"facts": _facts(stored, True, campaign.max_diverging_symbols)})
+        )
         if len(stored["missing"]) > max_missing:
             absent = len(stored["missing"])
             raise SnapshotError(f"{absent} symbols missing (> {max_missing}) in the stored snapshot")
@@ -199,7 +206,7 @@ def take_snapshot(
         "bars_sha256": sha256_file(out / "bars.csv"),
     }
     write_text(out / "snapshot.json", dumps(snap))
-    write_text(out / "result.json", dumps({"facts": _facts(snap, reused=False)}))
+    write_text(out / "result.json", dumps({"facts": _facts(snap, False, campaign.max_diverging_symbols)}))
     if len(missing) > max_missing:
         raise SnapshotError(f"{len(missing)} symbols missing (> {max_missing}): {', '.join(sorted(missing))}")
     return snap
