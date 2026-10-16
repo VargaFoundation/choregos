@@ -97,6 +97,7 @@ class AgentSpec(Dto):
 
 Channel = Literal["stable", "candidate"]
 ReleaseKind = Literal["publish", "promote", "rollback", "withdraw", "baseline"]
+ReleaseStatus = Literal["done", "pending_approval", "rejected", "cancelled", "superseded"]
 
 
 class AgentStableGates(Dto):
@@ -110,6 +111,10 @@ class AgentStableGates(Dto):
     min_soak_hours: int | None = Field(default=None, ge=0, le=720)
     #: How recent the human's authentication must be, in minutes.
     step_up_minutes: int = Field(default=10, ge=1, le=120)
+    #: People other than the requester who must approve a promotion before production moves (S40-02b).
+    approvals: int = Field(default=0, ge=0, le=3)
+    #: Neither the requester nor the revision's author may approve.
+    separation_of_duties: bool = True
 
 
 class AgentReleasePolicy(Dto):
@@ -160,6 +165,23 @@ class AgentReleaseCheck(Dto):
     detail: str | None = None
 
 
+class AgentReleaseVote(Dto):
+    """One person's answer to a release that waits for approval."""
+
+    by: str
+    decision: Literal["approve", "reject", "cancel"]
+    reason: str | None = None
+    at: datetime
+    #: How old the person's sign-in was, in seconds, when they decided.
+    auth_age_seconds: int | None = None
+
+
+class AgentReleaseDecision(Dto):
+    decision: Literal["approve", "reject", "cancel"]
+    #: Required for a rejection.
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class AgentReleaseDto(Dto):
     id: str
     agent: str
@@ -168,7 +190,10 @@ class AgentReleaseDto(Dto):
     version: int | None = None
     previous_version: int | None = None
     percent: int | None = None
-    status: Literal["done"] = "done"
+    status: ReleaseStatus = "done"
+    #: How many other people must approve before production moves; 0 for a release that did not wait.
+    approvals_required: int = 0
+    decisions: list[AgentReleaseVote] = Field(default_factory=list)
     requested_by: str | None = None
     requested_at: datetime
     done_at: datetime | None = None
@@ -451,6 +476,8 @@ class AgentDto(Dto):
     candidate_percent: int = 0
     candidate_since: datetime | None = None
     release_policy: AgentReleasePolicy = Field(default_factory=AgentReleasePolicy)
+    #: The release waiting for approval, if any (S40-02b).
+    pending_release: AgentReleaseDto | None = None
 
 
 class AgentOverrides(Dto):

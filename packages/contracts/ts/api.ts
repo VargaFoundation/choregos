@@ -897,6 +897,14 @@ export type Agent = {
   candidate_percent?: number;
   candidate_since?: string | null;
   release_policy?: AgentReleasePolicy;
+  /** the release waiting for approval */
+  pending_release?: AgentRelease | null;
+};
+
+export type AgentReleaseDecision = {
+  decision: "approve" | "reject" | "cancel";
+  /** required for a rejection */
+  reason?: string | null;
 };
 
 /** What a revision must satisfy before it reaches production; a rollback skips them. */
@@ -909,6 +917,10 @@ export type AgentStableGates = {
   min_soak_hours?: number | null;
   /** how recent the person's sign-in must be */
   step_up_minutes?: number;
+  /** people other than the requester who must approve a promotion before production moves; a rollback never waits (ADR 0071) */
+  approvals?: number;
+  /** neither the requester nor the revision's author may approve */
+  separation_of_duties?: boolean;
 };
 
 /** What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate. */
@@ -928,7 +940,7 @@ export type AgentReleaseCreate = {
 };
 
 export type AgentReleaseCheck = {
-  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication */
+  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, approvals (informational: how many people must approve) */
   name: string;
   required?: boolean;
   /** null: not applicable */
@@ -944,7 +956,18 @@ export type AgentRelease = {
   version?: number | null;
   previous_version?: number | null;
   percent?: number | null;
-  status: "done";
+  /** `pending_approval`: waits for `approvals_required` people; `superseded`: production moved meanwhile */
+  status: "done" | "pending_approval" | "rejected" | "cancelled" | "superseded";
+  /** how many other people must approve before production moves; 0 for a release that did not wait */
+  approvals_required?: number;
+  decisions?: Array<{
+    by: string;
+    decision: "approve" | "reject" | "cancel";
+    reason?: string | null;
+    at: string;
+    /** how old the person's sign-in was when they decided */
+    auth_age_seconds?: number | null;
+  }>;
   requested_by?: string | null;
   requested_at: string;
   done_at?: string | null;
@@ -2370,6 +2393,7 @@ export interface Operations {
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
+  decideAgentRelease: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases/{release_id}/decision"; body: AgentReleaseDecision; response: AgentRelease };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
@@ -2557,6 +2581,7 @@ export interface Operations {
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
+  listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
