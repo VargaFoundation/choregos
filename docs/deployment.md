@@ -254,7 +254,11 @@ is admitted in arrival order. A policy that asks for a RuntimeClass the pool was
 is refused, never run without it. The same goes for the image: a pool's pods are made from one
 image (`CHOREGOS_RUNNER_IMAGE`, or `pool_image` in the connector), so a step that names its own
 image (a `job` with `image:`) is refused with a `ConfigurationError` instead of running in the
-pool's image; use `runner.executor: k8s_job` for such steps.
+pool's image. A deployment on `agent_sandbox` sends such a step to a second executor,
+`runner.customImageExecutor` (default `k8s_job`; empty keeps the refusal): the choice is made at
+start on the step's image, and the run's executor kind, persisted per run, routes its status, logs
+and cancel afterwards. Add `k8s_job` to `global.runner.allowedExecutors`. A run on the second
+executor has that executor's capabilities (no suspension across a question).
 
 When an agent asks a question, its sandbox is **suspended** (pod gone, workspace volume kept)
 and the answer resumes the same run in it: one run, not two. The policy bounds the wait:

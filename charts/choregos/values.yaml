@@ -322,6 +322,9 @@ choregos-orchestrator:
     # Skip the render-time check that the agent-sandbox operator is installed, for an offline
     # rendering (CI, a preview). Never needed under Argo CD or `helm install`.
     skipOperatorCheck: false
+    # `agent_sandbox` only (ADR 0072): the executor that runs a step naming its own image, since a
+    # warm pool is made from one image. Add it to `global.runner.allowedExecutors` too. Empty: refused.
+    customImageExecutor: k8s_job
     # What each agent pod receives in addition. `env` carries plain values (never a
     # secret); `envFromSecrets` lists the namespace's Secrets, mounted by reference —
     # this is how a backend token or git credentials get through.

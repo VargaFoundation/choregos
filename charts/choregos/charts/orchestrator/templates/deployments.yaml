@@ -141,6 +141,10 @@ spec:
               value: "choregos-runner"
             - name: CHOREGOS_SANDBOX_ASSIGNMENT_PORT
               value: {{ (($root.Values.runner.sandbox | default dict).assignmentPort | default 8765) | quote }}
+            # A step that names its own image cannot run in a pool made from one image (ADR 0072):
+            # it goes to this executor. Empty keeps the sandbox executor's refusal.
+            - name: CHOREGOS_CUSTOM_IMAGE_EXECUTOR
+              value: {{ $root.Values.runner.customImageExecutor | default "" | quote }}
             {{- end }}
             # The kill switch for context reduction (ADR 0055): "off" refuses rtk and headroom
             # to every run, whatever a project's policy asks.
