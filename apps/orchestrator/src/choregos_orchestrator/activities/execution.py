@@ -70,6 +70,9 @@ def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
     sert qu'à sortir. Sans `runner_egress_proxy`, rien n'est ajouté.
     """
     env = dict(settings.runner_env)
+    if str(getattr(settings, "runner_egress_auth", "") or "") == "run":
+        # The runner adds the run id and token to the proxy URL itself, before any child starts.
+        env["CHOREGOS_EGRESS_AUTH"] = "run"
     proxy = str(getattr(settings, "runner_egress_proxy", "") or "").format(namespace=namespace)
     if proxy:
         env.setdefault("HTTP_PROXY", proxy)

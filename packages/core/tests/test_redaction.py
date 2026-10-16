@@ -64,3 +64,12 @@ def test_a_remembered_secret_is_masked_whatever_its_shape() -> None:
     assert redact_known("abc is kept") == "abc is kept"
     forget_secrets()
     assert redact_known(value) == value
+
+
+def test_the_run_credentials_in_a_proxy_url_are_masked() -> None:
+    """ADR 0070: the runner puts its run id and token in `HTTPS_PROXY`; a pod log that echoes the
+    environment must not archive them."""
+    token = "tok" + "x" * 24
+    line = f"HTTPS_PROXY=http://billing-1-t-1:{token}@choregos-egress.choregos.svc:3128"
+    masked = redact(line)
+    assert token not in masked and "choregos-egress.choregos.svc:3128" in masked
