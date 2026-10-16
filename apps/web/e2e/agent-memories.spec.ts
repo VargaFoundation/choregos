@@ -45,6 +45,14 @@ test("an agent binds an organisation memory and a project memory, and the versio
   await expect(page).toHaveURL(/\/agents\/architect-two$/);
   // Its next version starts from what v1 holds, in the same order.
   await page.getByRole("link", { name: "Definition" }).click();
+  // The Definition tab reads the version first (S40-12): the bindings are listed, in order, with where it writes.
+  await page.getByText("Capabilities", { exact: true }).click();
+  const read = page.getByTestId("memory-bindings");
+  await expect(read.getByRole("listitem")).toHaveCount(3);
+  await expect(read.getByRole("listitem").nth(0)).toContainText("security-lessons (organisation)");
+  await expect(read.getByRole("listitem").nth(2)).toContainText("decisions (project)");
+  await expect(read).toContainText("It writes to the project's shared memory");
+  await page.getByRole("link", { name: "Edit" }).click();
   const next = page.getByTestId("agent-builder");
   await expect(next.getByTestId("memory-binding")).toHaveCount(3);
   await expect(next.getByTestId("memory-binding").nth(0)).toContainText("global:security-lessons");
