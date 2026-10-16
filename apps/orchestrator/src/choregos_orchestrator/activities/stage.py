@@ -47,6 +47,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..context_reduction import forced_context, resolve_context, stage_input_payload
+from ..org_egress import merged_domains, org_runner_hosts
 from .base import db, load_work_item, project_bundle, without_secrets
 from .bilan import collect_spend, record_run_outcome
 from .execution import (
@@ -309,7 +310,11 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             permissions=Permissions(
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
-                allow_domains=engine.allow_domains(),
+                # What the project's policy allows, plus the hosts the organisation opened for its
+                # runners (S39-22d).
+                allow_domains=merged_domains(
+                    engine.allow_domains(), await org_runner_hosts(session, bundle.project.org_id)
+                ),
                 dod_iterations=engine.dod_iterations(),
                 max_findings=engine.max_findings_per_run(),
                 unknown_requests=bundle.policy.sandbox.unknown_requests,

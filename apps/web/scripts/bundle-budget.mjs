@@ -7,7 +7,8 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1600);
+// 1600 -> 1650 on 2026-10-16: main stood at 1599 kB, and the setup procedure panel (S39-23) weighs 11.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1650);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {

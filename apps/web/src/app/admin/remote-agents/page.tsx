@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { RemoteCredentials } from "@/components/remote/credentials";
 import { buttonClasses, Empty } from "@/components/ui";
 import { useSession } from "@/lib/session";
@@ -19,9 +20,18 @@ function RemoteAgentsAdmin() {
         A remote agent is called by a workflow step over A2A and runs outside the platform, for example Atlassian&apos;s Rovo. Connect its
         credential here, then register the agent.
       </p>
-      <Link href="/agents/new/remote" className={buttonClasses("primary")}>
-        Register a remote agent
-      </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/agents/new/remote" className={buttonClasses("primary")}>
+          Register a remote agent
+        </Link>
+        <ProcedurePanel target="agent:remote.a2a" autoOpen={false} />
+        <ProcedurePanel
+          target="agent:remote.a2a"
+          cardHost="a2a.atlassian.com"
+          label="Set up Atlassian Rovo"
+          autoOpen={false}
+        />
+      </div>
       <RemoteCredentials org={org} connected={connected} />
     </div>
   );

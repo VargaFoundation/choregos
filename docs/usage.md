@@ -52,6 +52,20 @@ and *add a connector* for the rest. `GET /connectors/types` reads the adapter re
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
 draws the form from it) and its **secret fields**.
 
+**Network access.** The platform calls an MCP server, a git repository or a web site from its own
+pods, for your organisation, and only for hosts the organisation has opened
+([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). Declaring an `mcp` connector, importing
+skills from git or adding a web or git knowledge source checks the hosts first. If one is missing the
+console opens a **network access** modal listing each host, whether this organisation allows it
+(`allowed` / `requested by X` / `not allowed`) and whether the platform's network does (`declared
+open` / `outside the declared ceiling` / `not declared by this deployment`). An administrator
+presses *Allow and install*: the hosts are opened and the connector created in one call. Anyone else
+sees who the administrators are and presses *Ask an administrator*; the request waits in the
+administrators' inbox and the person retries once it is approved. When the cluster's network also
+needs a change, the modal shows it (a snippet to copy, and a prefilled issue when the deployment
+configures one): Choregos cannot apply it. `/admin/egress` lists the rules, the requests and the
+ceiling. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
+
 **Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
@@ -89,6 +103,12 @@ pattern. A name outside it is a `422` at write and a connector in error at use. 
 organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
 refused. **Breaking:** a reference written before this rule that is outside the pattern stops
 resolving; rename the variable (or widen the pattern) and rewrite the reference.
+
+**Every type has its procedure**, in the app and here. Choosing a type in a form opens a side panel with
+what to create at the vendor, which permissions to give, where to paste each value, how to test it and what
+the usual failures mean, with this platform's webhook and callback addresses filled in. The same text is in
+[`docs/procedures/`](procedures/README.md), generated from the same files
+([ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)); `GET /procedures` serves it.
 
 **The organisation's connectors.** A directory, a device manager, an MCP server is declared once
 by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),

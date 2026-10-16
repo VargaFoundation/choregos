@@ -13,7 +13,9 @@ import {
   problemOfDraft,
   type SecretDraft,
 } from "@/components/secret-field";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { Button, Card, ErrorNote, Select, StateBadge } from "@/components/ui";
+import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
@@ -304,6 +306,15 @@ function Formulaire({
           ))}
         </Select>
       </label>
+      {choisi && (
+        <div className="flex items-center gap-2">
+          <ProcedurePanel
+            target={connectorTarget(choisi.kind, choisi.type)}
+            preset={choisi.kind === "mcp" ? presetOfMcpUrl(config.url) : undefined}
+            autoOpen={!actuel}
+          />
+        </div>
+      )}
       <SchemaForm schema={schema} value={config} onChange={setConfig} />
       {(choisi?.secret_fields ?? []).length > 0 && (
         <fieldset className="space-y-2">

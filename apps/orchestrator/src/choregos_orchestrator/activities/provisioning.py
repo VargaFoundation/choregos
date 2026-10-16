@@ -358,13 +358,20 @@ async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -
     from choregos_core.quotas import quota_pour
 
     from ..gitops import EGRESS_IMAGE, render_project_manifests
+    from ..org_egress import org_runner_hosts
 
+    org_id = getattr(getattr(bundle, "project", None), "org_id", None)
+    org_hosts: list[str] = []
+    if org_id:
+        async with db() as session:
+            org_hosts = await org_runner_hosts(session, org_id)
     manifests = render_project_manifests(
         bundle.slug,
         bundle.config,
         bundle.policy,
         egress_image=str(getattr(settings, "egress_image", "") or EGRESS_IMAGE),
         quota=await quota_pour(bundle.org_slug, bundle.slug),
+        org_allow_domains=org_hosts,
     )
     writer = getattr(bundle.adapters.cd, "write_files", None)
     if writer is not None:

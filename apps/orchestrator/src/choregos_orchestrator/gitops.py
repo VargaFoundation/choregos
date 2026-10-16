@@ -191,8 +191,12 @@ def render_project_manifests(
     *,
     egress_image: str = EGRESS_IMAGE,
     quota: Quota = DEFAUT,
+    org_allow_domains: list[str] | None = None,
 ) -> dict[str, str]:
     """Rend les fichiers d'un projet : namespaces, quotas, netpol, RBAC, egress, Tekton, Argo.
+
+    `org_allow_domains`: the hosts the organisation opened for its runners (S39-22d), joined to the
+    policy's own allowlist in the proxy and in the network policy's annotation.
 
     `quota` vient de `choregos_core.quotas` : un greffon le fixe selon l'organisation ; il était figé.
     """
@@ -256,7 +260,7 @@ def render_project_manifests(
         ]
     )
 
-    allowed_domains = list(policy.sandbox.network.allow_domains)
+    allowed_domains = sorted({*policy.sandbox.network.allow_domains, *(org_allow_domains or [])})
     # Internet, pour un runner, c'est le proxy du namespace — et seulement s'il y a des
     # domaines à autoriser. Avant : la politique ouvrait un namespace `choregos-egress`
     # qu'aucun chart ne livrait ; l'allowlist n'était qu'une annotation (état des lieux du

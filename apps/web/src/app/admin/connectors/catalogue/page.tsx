@@ -7,7 +7,9 @@ import { useState } from "react";
 import { CatalogueCard, CatalogueGrid } from "@/components/catalogue/catalogue-grid";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { InstallDrawer } from "@/components/catalogue/install-drawer";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { estUneReference } from "@/components/connecteurs";
+import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { ConnectorTabs } from "@/components/connecteurs-onglets";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { Alert, Badge, Button, EtatDeLecture, ErrorNote, Input } from "@/components/ui";
@@ -145,6 +147,7 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
   const [reference, setReference] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const guard = useEgressGuard();
   const host = hostOf(entry);
   const unreadable = reference !== "" && !estUneReference(reference);
   async function install() {
@@ -152,10 +155,19 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
     setBusy(true);
     let created = name;
     try {
-      const connector = await api.installMcpCatalogueEntry(org, entry.id, {
-        name,
-        secret_refs: needsSecret && reference ? { token: reference } : {},
-      });
+      const connector = await guard(
+        (allow) =>
+          api.installMcpCatalogueEntry(org, entry.id, {
+            name,
+            secret_refs: needsSecret && reference ? { token: reference } : {},
+            ...egressFlag(allow),
+          }),
+        {
+          gesture: `Install the ${entry.id} MCP server`,
+          origin: `mcp-catalogue:${entry.id}`,
+          reason: `the ${entry.id} MCP server`,
+        },
+      );
       created = connector.name;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "refused");
@@ -183,6 +195,11 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
         void install();
       }}
     >
+      {entry.procedure && (
+        <div className="flex flex-wrap items-center gap-2" data-testid="install-procedure">
+          <ProcedurePanel target="connector:mcp/mcp" procedure={entry.procedure} autoOpen={false} inline />
+        </div>
+      )}
       <p className="text-ink-muted" data-donnee>
         {entry.description}
       </p>

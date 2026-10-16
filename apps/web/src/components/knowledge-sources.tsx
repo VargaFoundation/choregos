@@ -4,7 +4,10 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
+import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Badge, Card, ErrorNote, Input, Select, buttonClasses, type Tone } from "@/components/ui";
+import { connectorTarget, sourceTarget } from "@/lib/procedures";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { RefreshFields } from "@/components/knowledge-refresh";
@@ -33,6 +36,8 @@ export function KnowledgeSources({
   onChange: () => void;
 }) {
   const [kind, setKind] = useState<Kind>("sharepoint");
+  // The procedure opens by itself once the person has chosen a kind, not when the page loads.
+  const [chosen, setChosen] = useState(false);
   const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", exclude: "", ref: "main", paths: "*.md" });
   const [refresh, setRefresh] = useState<RefreshDraft>(draftOf());
   const [editing, setEditing] = useState<string | null>(null);
@@ -40,6 +45,7 @@ export function KnowledgeSources({
   const [applyAll, setApplyAll] = useState(false);
   const [attachments, setAttachments] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const guard = useEgressGuard();
   // A connected source picks one of the organisation's `documents/<kind>` connectors: never typed.
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
   const pickable = (connectors.data ?? []).filter((c) => c.kind === "documents" && c.type === kind);
@@ -135,22 +141,48 @@ export function KnowledgeSources({
           onSubmit={(event) => {
             event.preventDefault();
             void act(() =>
-              api.createKnowledgeSource(org, slug, {
-                kind,
-                name: fields.name || KIND[kind],
-                connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
-                config: sourceConfig(kind, { ...fields, attachments }),
-                ...refreshBody(refresh),
-              }),
+              guard(
+                (allow) =>
+                  api.createKnowledgeSource(org, slug, {
+                    kind,
+                    name: fields.name || KIND[kind],
+                    connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
+                    config: sourceConfig(kind, { ...fields, attachments }),
+                    ...refreshBody(refresh),
+                    ...egressFlag(allow),
+                  }),
+                {
+                  gesture: `Add the ${KIND[kind]} source ${fields.name || KIND[kind]}`,
+                  origin: `knowledge-source:${fields.name || KIND[kind]}`,
+                  reason: `the ${KIND[kind]} knowledge source ${fields.name || KIND[kind]}`,
+                },
+              ),
             );
           }}
         >
-          <Select aria-label="source kind" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+          <Select
+            aria-label="source kind"
+            value={kind}
+            onChange={(e) => {
+              setKind(e.target.value as Kind);
+              setChosen(true);
+            }}
+          >
             <option value="sharepoint">SharePoint / OneDrive</option>
             <option value="confluence">Confluence space or page tree</option>
             <option value="web">web site (https, same host)</option>
             <option value="git">git repository (https)</option>
           </Select>
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-3" data-testid="source-procedures">
+            <ProcedurePanel target={sourceTarget(kind)} autoOpen={chosen} />
+            {CONNECTED.includes(kind) && (
+              <ProcedurePanel
+                target={connectorTarget("documents", kind)}
+                label="Set up the connector"
+                autoOpen={false}
+              />
+            )}
+          </div>
           <Input aria-label="source name" placeholder="name" value={fields.name} onChange={set("name")} />
           <RefreshFields value={refresh} onChange={setRefresh} />
           {CONNECTED.includes(kind) && (

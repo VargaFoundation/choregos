@@ -73,9 +73,11 @@ import type {
 } from "@/lib/types";
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
+import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
 import skillCatalogueFile from "./skill-catalogue.json";
+import { proceduresApi } from "./procedures";
 
 export { peopleOpsFixtures };
 
@@ -1867,6 +1869,7 @@ export const connectorTypes: ConnectorType[] = [
     capabilities: ["documents"],
     secret_fields: ["client_secret"],
   },
+  { kind: "mcp", type: "mcp", display: "MCP server (Streamable HTTP)", config_schema: objet({ url: { type: "string" } }, ["url"]), capabilities: ["mcp"], secret_fields: ["token"] },
 ];
 
 /**
@@ -1880,9 +1883,11 @@ export function mcpCatalogue(): McpCatalogue {
     ...file,
     entries: file.entries.map((entry: McpCatalogueEntry) => {
       const installed = orgConnectors.filter((c) => c.catalogue_entry?.startsWith(`${entry.id}@`));
+      // What the API adds: the setup procedure the install shows (Atlassian's has its own).
+      const withProcedure = { ...entry, procedure: entry.id === "atlassian" ? "connector.mcp.mcp.atlassian-rovo" : "connector.mcp.mcp" };
       return installed.length
-        ? { ...entry, state: "installed" as const, installed_as: installed.map((c) => c.name) }
-        : entry;
+        ? { ...withProcedure, state: "installed" as const, installed_as: installed.map((c) => c.name) }
+        : withProcedure;
     }),
   };
 }
@@ -2052,8 +2057,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   await new Promise((resolve) => setTimeout(resolve, 40));
   const body: unknown = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
   if (method !== "GET") recordWrite(method, path, body);
+  const procedures = proceduresApi(method, path);
+  if (procedures !== undefined) return procedures as T;
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
+  const network = egressApi(method, path.split("?")[0] ?? path, body);
+  if (network !== undefined) return network as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).

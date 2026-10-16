@@ -177,6 +177,9 @@ address for `/mcp` and `/.well-known/oauth-protected-resource`, or Anthropic's M
 
 ## Any other MCP client
 
+Each client above also has a short procedure, shown in the console and listed in
+[the procedures](procedures/README.md).
+
 Point it at `https://<console-host>/mcp` with the header `Authorization: Bearer <token>`, transport
 Streamable HTTP. The door has no SSE stream and no session: a `GET` answers 405, which the protocol
 allows.
@@ -201,6 +204,11 @@ read on **every call**: revoked, suspended or expired, the next call answers `40
 
 ## Atlassian's Rovo MCP Server, as a connector
 
+The step-by-step setup (what to enable in Atlassian Administration, which credential goes with which
+authentication scheme, the scopes) is the procedure
+[Connect Atlassian's Rovo MCP Server](procedures/connector.mcp.mcp.atlassian-rovo.md), also shown in the
+console when you add an MCP server. What follows keeps the concepts.
+
 The other direction: an internal agent calling **Rovo's tools** (search, Jira, Confluence, JSM,
 Bitbucket, Compass) through an `mcp` connector. This gives the agents Atlassian's tools under the
 platform's per-operation policy and approvals; it does not invoke the Rovo agent itself.
@@ -220,12 +228,20 @@ curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "rovo", "type
   "secret_refs": {"token": "env:CONNECTOR_ROVO_API_TOKEN"}}'
 ```
 
+   Declaring it opens `mcp.atlassian.com` in the organisation's egress allowlist: an administrator
+   does it in the same call (`allow_egress`) or from the console's network-access modal; anyone else
+   asks ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). On a cluster with a restricted
+   network, the platform team may also need to open the host (the modal shows the change).
 4. *Discover* the connector, then open the tools the agents need: a new tool is born closed.
 
 `auth_scheme` is `bearer` (the default, unchanged) or `basic`; `basic` needs `username`. The
 server allows about 1 000 calls per hour on Standard and Premium plans.
 
 ## A remote agent: Atlassian Rovo over A2A
+
+The step-by-step setup is the procedure [Add Atlassian Rovo as a remote agent](procedures/agent.remote.a2a.atlassian-rovo.md)
+(and [Add a remote agent (A2A)](procedures/agent.remote.a2a.md) for any other), shown in the console when you
+add one. What follows keeps the concepts and the limits.
 
 The reverse of the door: instead of a client calling Choregos, a **workflow step calls an agent that
 runs elsewhere**, over the A2A protocol ([ADR 0062](adr/0062-remote-agents-over-a2a.md)). Atlassian's

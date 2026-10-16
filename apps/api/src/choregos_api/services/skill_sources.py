@@ -30,6 +30,8 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote, urlsplit
 
+from choregos_adapters.http.egress import guarded
+
 from .skills import MAX_FICHIERS, MAX_OCTETS, SkillRefusee, chemin_sur, entete, valider
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -313,7 +315,9 @@ class HttpsSourceFetcher:
     def _client(self) -> Any:
         import httpx
 
-        return httpx.AsyncClient(timeout=self.timeout_s, follow_redirects=False, transport=self.transport)
+        return httpx.AsyncClient(
+            timeout=self.timeout_s, follow_redirects=False, transport=guarded(self.transport)
+        )
 
     def _urls(self, source: GitSource, ref: str) -> tuple[str, dict[str, str], str]:
         if source.host == "github.com":

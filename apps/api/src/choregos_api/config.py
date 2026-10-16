@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 
 from choregos_core.images import check_image_map
 from pydantic import BaseModel, Field, model_validator
@@ -131,6 +131,7 @@ class Settings(BaseSettings):
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
     #: instead of `undeclared` (ADR 0065). It restricts nothing; the network policy does.
+    #: Deprecated (S39-22): read as `CHOREGOS_EGRESS_CEILING` `{"api": …}` when that names no API family.
     api_egress_hosts: list[str] = Field(default_factory=list)
     #: The operator's own MCP catalogue entries, merged after the shipped catalogue (ADR 0065).
     mcp_catalogue_extra: str | None = None
@@ -142,6 +143,18 @@ class Settings(BaseSettings):
     #: A reference without `@sha256:` is refused at start-up (the chart sets it; a local setup may not).
     require_image_digest: bool = False
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
+    #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
+    #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under
+    #: `CHOREGOS_FAKES=1`.
+    egress_mode: str = ""
+    #: What the cluster's network lets through, per pod family (`api`, `workers`, `runners`), as host
+    #: patterns: `CHOREGOS_EGRESS_CEILING='{"api": ["api.github.com"]}'`. An absent or empty family
+    #: is unknown: the ceiling is not checked and the organisation's list alone governs.
+    egress_ceiling: dict[str, list[str]] = Field(default_factory=dict)
+    #: How the console renders "what the platform must still open": `format`, `template` (mustache:
+    #: `{{hosts_csv}}`, `{{#hosts}}{{.}}{{/hosts}}`, `{{family}}`, `{{ports}}`, `{{reason}}`,
+    #: `{{origin}}`, `{{requested_by}}`, `{{entry}}`, `{{selector}}`), `issueUrl`, `owner`, `entries`.
+    egress_platform_change: dict[str, Any] | None = None
     memory_url: str = "http://localhost:8432"
     object_store_url: str = "s3://choregos"
     #: The S3 endpoint (RustFS in development: `http://localhost:9000`); empty means AWS.
@@ -165,6 +178,9 @@ class Settings(BaseSettings):
     knowledge_conversion_concurrency: int = 2
     #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.
     knowledge_embedding_model: str = "platform/embed"
+    #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the
+    #: setup procedures that ship with the platform (ADR 0067). Empty: none.
+    procedures_extra: str = ""
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
 

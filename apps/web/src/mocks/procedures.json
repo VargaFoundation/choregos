@@ -1,0 +1,3030 @@
+[
+  {
+    "id": "agent.code",
+    "title": "Add an agent written in code",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "agent": "code"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A **code agent** is a Python program that runs under the same guarantees as any agent: the runner starts\n  it, decides its permissions, counts its turns, journals its tool calls and reads its result. Use it for a\n  program of your own that must run governed. A fixed computation with no model is a `job`; a judgement\n  that instructions can carry is a prompt agent.\n- Two people are involved: the author, who builds the image, and the **operator**, who names it. A workflow\n  or an agent never writes an image.\n- Read `docs/code-agents.md` and ADR 0063: this page is its checklist."
+      },
+      {
+        "key": "at",
+        "title": "At the registry",
+        "markdown": "1. Write the agent with `choregos-agent-sdk`: `@agent(name=...)`, an `async def run(ctx)` that uses\n   `ctx.llm` for the model and `ctx.tools()` for tools, and returns a `Result`.\n2. Build the image **FROM the runner image**: the runner is the entrypoint and your agent is the\n   subprocess it starts. Give the agent its own virtualenv. See `examples/agents/plain/Dockerfile`.\n3. Check it with `make conformance-agent IMAGE=<reference> COMMAND='[...]'`, then push the image and\n   note its **digest**."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The model is reached only through the gateway, with the run's own key. No provider key is in the pod.\n- `tools.call` and `write_output` ask the runner's guard first. Calling a tool server or a provider\n  directly works and **skips the guard**: no permission request, no journal line, no turn count.\n- The sandbox (RuntimeClass, network policy, egress proxy) bounds what your code reaches."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. **The operator names the image**: `global.images.agents` in the chart maps a name to a reference\n   **pinned by digest**. By default (`global.images.requireDigest: true`) a tag-only reference stops the API and\n   the workers at start-up; `false` is for a bench only.\n2. **Agents**, **New**, **Runtime**: choose **Code (image)**. Pick the image by its name, give the command\n   (one argument per line) and the model API (`openai` or `anthropic`).\n3. Run it from a workflow like any registry agent. Use an executor that starts a pod per run\n   (`k8s_job`): `agent_sandbox` runs one pool image and refuses a run whose image differs."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run the conformance suite on the image, then run a one-step workflow with the agent and read its journal\nand its result."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- An unknown image name is refused at publication, and the error lists the known names: the operator has\n  not named it yet.\n- The API or the workers stop at start-up naming a tag-only reference: pin the image by digest.\n- `agent_sandbox` refuses the image: the pool was made from another one; use `k8s_job`.\n- The run ends `max_turns`, or `permission_denied`: the guard stopped it, by design.\n- `agent_error`: your function raised; the journal has the traceback line."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the registry that holds the agent image"
+    ],
+    "fields": {},
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.chatgpt",
+    "title": "Connect ChatGPT to Choregos",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "chatgpt"
+    },
+    "link": "/integrations/chatgpt",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "ChatGPT connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nChatGPT calls from the vendor's cloud and signs in with OAuth, so it needs a public HTTPS address and OAuth enabled on the door."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "The Integrations page of this console is the procedure: it gives the exact snippet for ChatGPT, with this\nplatform's address filled in. Open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "OAuth: your identity provider's token, with the `mcp:read` or `mcp:write` scope it granted, then your role. The door refuses a full-access token. A token can be bound to one project, and the door's tools\nannounce only what your role allows."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Open **Integrations**, choose ChatGPT and copy the snippet. The page gives what to enter when the platform names a ChatGPT client."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- The connector cannot be reached: the platform has no public HTTPS address, or it is behind a VPN."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "OpenAI: Building MCP servers",
+        "url": "https://platform.openai.com/docs/mcp"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.claude-ai",
+    "title": "Connect claude.ai to Choregos",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "claude-ai"
+    },
+    "link": "/integrations/claude-ai",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "claude.ai connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nclaude.ai calls from the vendor's cloud and signs in with OAuth: it cannot be handed a token, so it needs a public HTTPS address and OAuth enabled on the door."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "The Integrations page of this console is the procedure: it gives the exact snippet for claude.ai, with this\nplatform's address filled in. Open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "OAuth: your identity provider's token, with the `mcp:read` or `mcp:write` scope it granted, then your role. The door refuses a full-access token. A token can be bound to one project, and the door's tools\nannounce only what your role allows."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Open **Integrations**, choose claude.ai and copy the snippet. When the platform names a claude.ai client, the page shows the URL and client ID to enter in Settings, Connectors, Add custom connector; the client secret is never shown there."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- claude.ai never offers to sign in: `/.well-known/oauth-protected-resource` is not routed to the API, or OAuth is off.\n- `403` \"sign in to the console once\": the identity provider knows you and Choregos does not yet."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "Custom connectors using remote MCP",
+        "url": "https://support.anthropic.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.claude-code",
+    "title": "Connect Claude Code to Choregos",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "claude-code"
+    },
+    "link": "/integrations/claude-code",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "Claude Code connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nClaude Code runs on your machine: it reaches a platform behind your VPN."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "The Integrations page of this console is the procedure: it gives the exact snippet for Claude Code, with this\nplatform's address filled in. Open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "A token with an MCP scope (`mcp:read` or `mcp:write`) that you mint yourself, or your single sign-on when the platform names a Claude Code client. The door refuses a full-access token. A token can be bound to one project, and the door's tools\nannounce only what your role allows."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Open **Integrations**, choose Claude Code and copy the snippet. With single sign-on the page shows a `claude mcp add --client-id …` command and you authenticate from `/mcp` in Claude Code."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- A `403` with an `Origin`: a web page tried to call the door; only your client may."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "Claude Code: connect to MCP servers",
+        "url": "https://docs.claude.com/en/docs/claude-code/mcp"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.claude-desktop",
+    "title": "Connect Claude Desktop to Choregos",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "claude-desktop"
+    },
+    "link": "/integrations/claude-desktop",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "Claude Desktop connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nClaude Desktop's own connectors call from Anthropic's network; for a platform inside your network use the local bridge on the page."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "The Integrations page of this console is the procedure: it gives the exact snippet for Claude Desktop, with this\nplatform's address filled in. Open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "A token with an MCP scope that you mint yourself, kept in the client's configuration file in clear: keep it narrow and short-lived. The door refuses a full-access token. A token can be bound to one project, and the door's tools\nannounce only what your role allows."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Open **Integrations**, choose Claude Desktop and copy the snippet. The snippet goes in `claude_desktop_config.json` and uses the `mcp-remote` bridge; add `--allow-http` only for a plain HTTP platform."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- The server never appears: the JSON is invalid, or Claude Desktop was not restarted."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "Connect Claude Desktop to MCP servers",
+        "url": "https://modelcontextprotocol.io/quickstart/user"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.cli",
+    "title": "Use the Choregos CLI",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "cli"
+    },
+    "link": "/integrations/cli",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "The CLI is for you and your scripts, not for an AI client: it calls the REST API at `https://choregos.example.com`, with\n**your** rights. It is listed with the door's clients because it is installed the same way, but it does\nnot go through the MCP door."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "Install the CLI (`choregos`). The Integrations page of this console gives the exact commands with this\nplatform's address filled in; open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "A **full-access** token (scope `*`) that you mint yourself. The REST API accepts it and the MCP door\nrefuses it. Keep it off shared machines and give it an expiry."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Mint a token (Integrations, or `choregos-admin tokens create` for the very first one), then\n`choregos login --api-url https://choregos.example.com --token <token> --org <org>`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "`choregos projects list` should list the projects you can read."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, revoked or expired, or belongs to another organisation.\n- `403`: your role does not allow that command; the CLI never has more rights than you.\n- A connection error: `--api-url` is wrong, or the platform is behind a VPN you are not on."
+      }
+    ],
+    "values": {
+      "api_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.cursor",
+    "title": "Connect Cursor to Choregos",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "cursor"
+    },
+    "link": "/integrations/cursor",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "Cursor connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nCursor runs on your machine."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "The Integrations page of this console is the procedure: it gives the exact snippet for Cursor, with this\nplatform's address filled in. Open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "A token with an MCP scope that you mint yourself. The door refuses a full-access token. A token can be bound to one project, and the door's tools\nannounce only what your role allows."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Open **Integrations**, choose Cursor and copy the snippet. The snippet goes in `~/.cursor/mcp.json` and reads the token from an environment variable."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- The server is listed but red: the token variable is not set where Cursor starts."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "Cursor: Model Context Protocol",
+        "url": "https://docs.cursor.com/context/model-context-protocol"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.other",
+    "title": "Connect another MCP client to Choregos",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "other"
+    },
+    "link": "/integrations/other",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "another MCP client connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nAny client that speaks the Model Context Protocol over Streamable HTTP will do."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "The Integrations page of this console is the procedure: it gives the exact snippet for another MCP client, with this\nplatform's address filled in. Open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "A token with an MCP scope that you mint yourself, sent as `Authorization: Bearer <token>`. The door refuses a full-access token. A token can be bound to one project, and the door's tools\nannounce only what your role allows."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Open **Integrations**, choose another MCP client and copy the snippet. Point the client at the door with that header; the door has no SSE stream and no session, and a `GET` answers 405, which the protocol allows."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- A client that insists on SSE or a session fails: use its Streamable HTTP mode."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "MCP specification: transports",
+        "url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.rest",
+    "title": "Use the Choregos REST API",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "rest"
+    },
+    "link": "/integrations/rest",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "The REST API at `https://choregos.example.com` is for your own programs; its OpenAPI document describes every route. It is\nlisted with the door's clients because it is set up the same way, but it does not go through the MCP door."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "Nothing to install. Any HTTP client works. The Integrations page of this console has a `curl` example\nwith this platform's address filled in; open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "A **full-access** token (scope `*`) that you mint yourself, sent as `Authorization: Bearer <token>`. A\ntoken with an MCP scope is refused here. The API applies **your** rights to every call."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Mint a token from Integrations, store it where your program keeps secrets, and give it an expiry."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "`curl -H \"Authorization: Bearer <token>\" https://choregos.example.com/api/v1/me` should answer who you are."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, revoked or expired.\n- `403`: an MCP-scoped token was used, or your role lacks the right for that route."
+      }
+    ],
+    "values": {
+      "api_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.door.vscode",
+    "title": "Connect VS Code to Choregos",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "door_client": "vscode"
+    },
+    "link": "/integrations/vscode",
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "VS Code connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nVS Code runs on your machine."
+      },
+      {
+        "key": "at",
+        "title": "At the client",
+        "markdown": "The Integrations page of this console is the procedure: it gives the exact snippet for VS Code, with this\nplatform's address filled in. Open it with the link below the panel."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "A token with an MCP scope that you mint yourself; VS Code asks for it once and keeps it in its secret store. The door refuses a full-access token. A token can be bound to one project, and the door's tools\nannounce only what your role allows."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Open **Integrations**, choose VS Code and copy the snippet. The snippet goes in `.vscode/mcp.json`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- VS Code asks again for the token: it was not saved, or it was rejected."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "VS Code: MCP servers",
+        "url": "https://code.visualstudio.com/docs/copilot/customization/mcp-servers"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.remote.a2a",
+    "title": "Add a remote agent (A2A)",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "agent": "remote.a2a"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A **remote agent** runs elsewhere: a workflow step calls it over the A2A protocol and takes its answer\n  as the step's result. It is the reverse of the MCP door. Choregos reads its **card** and pins it.\n- You need the **agent card URL** (A2A 0.3 serves `/.well-known/agent.json`; newer versions an\n  `agent-card.json`), the protocol version it speaks, the **skill** to call and how it authenticates.\n- An organisation administrator does the first part (the credential); whoever builds agents does the\n  second.\n- The agent acts with whatever identity the credential carries. Choose that account with care."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "1. In the vendor's administration, allow the agent to be called by other applications, if it asks for it.\n2. Note the card URL. If it uses OAuth and its card advertises **dynamic client registration**, you\n   register nothing. Otherwise register a client at the vendor with the redirect address below and keep\n   its client id and secret.\n3. Authentication is one of: OAuth 2.0 authorization code with PKCE; a bearer token; or none."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The credential decides what the agent may do. Prefer a dedicated account holding only the access the\n  agent needs.\n- OAuth redirect (callback) address to register, when the vendor needs one: `https://choregos.example.com/api/v1/remote-credentials/oauth/callback`.\n- The refresh token is sealed in the platform's secret store and never shown again; reconnecting replaces\n  it."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Remote agents**, **Connect**: give the card URL, then sign in **as the account the\n   agent will act as** and accept. The credential shows `connected` and who it is authorised as.\n2. **Agents**, **New**, **Remote agent (A2A)**: paste the card URL, **Read the card**, pick the skill and\n   the credential, set the timeout and the **declared cost** (A2A reports none: it is declared, not\n   measured), then publish. Publication pins the card's digest.\n3. Allow the hosts: a project that uses it must allow the agent's host in `sandbox.network.allow_domains`,\n   and the runner pods, the API and the orchestrator must be allowed to reach the card, endpoint and\n   token hosts (see the network allowlist of your platform)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Add a two-step workflow: the remote agent, then a human review of its answer. The answer is\n`response.md`, an artifact of the step; the facts it states are recorded as declared, never measured."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `remote_card_changed`: the card changed since publication. Publish a new version to accept it.\n- `remote_auth_required`: the credential expired or was revoked. Reconnect it.\n- `remote_input_required`: the agent asked a question. It is shown; answering it from the console is not\n  supported yet.\n- `remote_timeout`: the remote task is cancelled; raise the timeout or narrow the task.\n- A cut at about 30 s on a synchronous call: Choregos streams, so a long task still works.\n- A refusal naming a host: it is not in the stage's allowed domains, or the platform's egress allowlist\n  does not open it."
+      }
+    ],
+    "values": {
+      "oauth_callback:remote": "https://choregos.example.com/api/v1/remote-credentials/oauth/callback"
+    },
+    "egress": [
+      "the agent card's host",
+      "the agent endpoint's host",
+      "the token endpoint's host"
+    ],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "A2A protocol specification",
+        "url": "https://a2a-protocol.org/latest/specification/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "agent.remote.a2a.atlassian-rovo",
+    "title": "Add Atlassian Rovo as a remote agent",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "agent": "remote.a2a",
+      "card_host": "a2a.atlassian.com"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Atlassian site with **Rovo**, and an Atlassian organisation administrator.\n- A **dedicated Atlassian account** (for example `choregos-bot@your-domain`) licensed for Rovo, whose Jira\n  and Confluence permissions are exactly what Rovo may do for Choregos. Rovo acts **as that user**. There\n  are no service accounts for A2A.\n- This calls the Rovo **agent**. To give your own agents Rovo's **tools** (search, Jira, Confluence) use\n  the Rovo MCP Server procedure instead; they are two different things.\n- Not run against the real service from this repository: the registration exchange with Atlassian is\n  exercised against a fake. Check the first connection on a test site."
+      },
+      {
+        "key": "at",
+        "title": "At Atlassian",
+        "markdown": "1. In Atlassian Administration, **allow A2A connections** (Manage A2A connections in Admin Hub).\n2. The agent card is `https://a2a.atlassian.com/.well-known/agent.json` and the endpoint\n   `https://a2a.atlassian.com/v1/rovo`, A2A 0.3.0. It is **one agent with two skills**:\n   `work-in-jira` and `work-in-confluence`. Agents built in Rovo Studio are **not** individually\n   addressable.\n3. You register no client: the card advertises dynamic client registration and Choregos registers itself."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- OAuth 2.0 authorization code with PKCE and dynamic client registration, nothing else: no API token.\n  Scopes: `read:me`, `offline_access`, `full_access:chat:rovo`.\n- The callback address Choregos registers is `https://choregos.example.com/api/v1/remote-credentials/oauth/callback`.\n- The agent can do whatever the dedicated account can do in Jira and Confluence."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Remote agents**, **Connect**: card URL `https://a2a.atlassian.com/.well-known/agent.json`.\n   Atlassian's consent page opens: sign in **as the dedicated account** and accept. The credential shows\n   `connected` and who it is authorised as.\n2. **Agents**, **New**, **Remote agent (A2A)**: paste the same card URL, **Read the card**, pick the skill\n   (`work-in-jira` or `work-in-confluence`) and the credential, and set the timeout.\n3. Set the **declared cost**: Rovo reports none, and its use counts against your Atlassian subscription.\n4. Allow `a2a.atlassian.com` in the projects that use it (`sandbox.network.allow_domains`), and open\n   `a2a.atlassian.com` for the runner pods and `auth.atlassian.com` for the API and the orchestrator."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Add a two-step workflow: a step with the Rovo agent asking for a read-only summary of a Jira issue, then a\nhuman review. The answer is the step's `response.md`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `access_denied` at consent: A2A connections are not allowed in Atlassian Administration.\n- `401` when the token is refreshed: it was revoked. Reconnect the credential.\n- `remote_card_changed`: Atlassian changed the card. Publish a new version to accept it.\n- A cut at about 30 s on a synchronous call: Choregos streams; Rovo has no push notifications.\n- A refusal naming `a2a.atlassian.com` or `auth.atlassian.com`: the stage's allowed domains or the\n  egress allowlist."
+      }
+    ],
+    "values": {
+      "oauth_callback:remote": "https://choregos.example.com/api/v1/remote-credentials/oauth/callback"
+    },
+    "egress": [
+      "a2a.atlassian.com",
+      "auth.atlassian.com"
+    ],
+    "fields": {},
+    "vendor_docs": [
+      {
+        "title": "Rovo A2A",
+        "url": "https://developer.atlassian.com/cloud/rovo-a2a/"
+      },
+      {
+        "title": "Manage A2A connections in Admin Hub",
+        "url": "https://support.atlassian.com/security-and-access-policies/docs/manage-a2a-connections-in-admin-hub/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.access_control.demo",
+    "title": "The demo badge readers (demonstration only)",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "connector": "access_control/demo"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "This is a **demonstration** of the badge readers: it is held in memory and is **refused in staging and prod**. Use it\nto try the joiners-leavers and delivery templates without any real system."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "There is no vendor. Nothing is created anywhere."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "None: nothing leaves the platform. Nothing is stored beyond the process's memory, so it forgets on restart."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run the template's workflow. The demonstration answers like the real system would, with invented data."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A refusal in staging or prod: by design. Declare the real connector instead.\n- State that disappears: it lives in memory; with several replicas, set `url` to a single process."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "url": "the endpoint of the one process serving the demonstration fakes; empty to run them in this process",
+      "api_key": "not needed by the demonstration, typed once if you set one"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.cd.argocd",
+    "title": "Promote through Argo CD",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "cd/argocd"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- Argo CD, and a **GitOps repository** it watches. Choregos never runs `kubectl apply`: a promotion is a\n  pull request on that repository, and Argo CD applies it.\n- The GitHub App of the platform installed on the GitOps repository (see the GitHub procedures): the\n  writes go through it.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`)."
+      },
+      {
+        "key": "at",
+        "title": "At Argo CD",
+        "markdown": "1. Create a local account or use a project role for the platform, and generate an **API token** for it\n   (`argocd account generate-token --account <name>`). Give it read access to the applications only.\n2. Send application health events to `https://choregos.example.com/api/v1/webhooks/argocd` with the header `X-Choregos-Secret` set to\n   the shared secret (an Argo CD Notifications webhook service does this).\n3. Name applications by one pattern. The connector looks for `{app}-{env}` (for example `billing-prod`)\n   unless `app_pattern` says otherwise."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The API token: `get` on applications, nothing more. Writes never use it.\n- The GitHub App: `contents` and `pull_requests` write on the GitOps repository."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **CD**, type **Argo CD**.\n2. `gitops_repo`: `owner/repo`. `base_url`: the Argo CD server's address. `path_prefix` and `app_pattern`\n   if your layout differs from `apps/` and `{app}-{env}`.\n3. `token`: the API token, in the password field."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: it calls Argo CD's `/api/version` and shows the version. A promotion on a test\napplication then proves the GitOps write."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or `403` on the test: the token is wrong, expired, or the account has no `get` right.\n- The pull request is not opened: the GitHub App is not installed on the GitOps repository, or lacks\n  `pull_requests: write`.\n- Health never changes on the work item: Argo CD's events do not reach the webhook, or the application's\n  name does not follow `app_pattern`."
+      }
+    ],
+    "values": {
+      "webhook_url:argocd": "https://choregos.example.com/api/v1/webhooks/argocd"
+    },
+    "egress": [],
+    "fields": {
+      "gitops_repo": "owner/repo of the GitOps repository the promotions are written to",
+      "base_url": "the Argo CD server's address",
+      "app_pattern": "how an application is named, {app}-{env} by default",
+      "path_prefix": "the directory of the applications in the GitOps repository, apps by default",
+      "token": "an Argo CD API token, read only, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Argo CD user management (API tokens)",
+        "url": "https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/"
+      },
+      {
+        "title": "Argo CD webhooks and notifications",
+        "url": "https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.cd.demo",
+    "title": "The demo deployment (demonstration only)",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "connector": "cd/demo"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "This is a **demonstration** of the deployment (promotion and health): it is held in memory and is **refused in staging and prod**. Use it\nto try the joiners-leavers and delivery templates without any real system."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "There is no vendor. Nothing is created anywhere."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "None: nothing leaves the platform. Nothing is stored beyond the process's memory, so it forgets on restart."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run the template's workflow. The demonstration answers like the real system would, with invented data."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A refusal in staging or prod: by design. Declare the real connector instead.\n- State that disappears: it lives in memory; with several replicas, set `url` to a single process."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "url": "the endpoint of the one process serving the demonstration fakes; empty to run them in this process",
+      "api_key": "not needed by the demonstration, typed once if you set one"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.ci.tekton",
+    "title": "Read pipeline status from Tekton",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "ci/tekton"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A cluster where Tekton Pipelines is installed, and a namespace where the project's `PipelineRun`s run.\n- The platform reads the cluster with the API's own in-cluster service account: it must be allowed to\n  `get` and `list` `pipelineruns.tekton.dev` in that namespace. If you only use GitHub Actions, the\n  project needs no `ci` connector: checks are read through the `scm` connector.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`)."
+      },
+      {
+        "key": "at",
+        "title": "At the cluster",
+        "markdown": "1. Label each `PipelineRun` the platform should follow with `choregos/sha=<commit>`; the connector\n   finds a commit's runs through that label. Runs that carry `choregos/project`, `choregos/work-item`\n   and `choregos/run-id` are also mapped back to their work item.\n2. Point Tekton's CloudEvents sink at the platform:\n   `https://choregos.example.com/api/v1/webhooks/tekton?jeton=<the shared webhook secret>`. Tekton's sink is configured by URL and\n   cannot add a header, which is why the secret travels in the query string."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- A `Role` granting `get`, `list` on `pipelineruns` in the namespace, bound to the API's service account.\n- The shared webhook secret is the only credential of the sink. Treat the URL as a secret."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **CI**, type **Tekton Pipelines**.\n2. `namespace`: where the runs live. `pipeline`: the Pipeline's name, `choregos-ci` by default."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector asks the cluster for the Tekton API and answers `ok`. Then start a build\nand watch its state change on the work item."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `Forbidden` from the cluster: the API's service account lacks the `Role` above.\n- Status stays `unknown`: no `PipelineRun` carries the `choregos/sha` label of that commit.\n- Tekton events refused with `401`: the secret in the sink URL differs from the platform's.\n- Events never arrive: the sink URL is unreachable from the cluster, or Tekton's `config-defaults` ConfigMap does\n  not name it in `default-cloud-events-sink`."
+      }
+    ],
+    "values": {
+      "webhook_url:tekton": "https://choregos.example.com/api/v1/webhooks/tekton"
+    },
+    "egress": [],
+    "fields": {
+      "namespace": "the namespace whose PipelineRuns carry the project's builds",
+      "pipeline": "the Pipeline's name (choregos-ci by default)"
+    },
+    "vendor_docs": [
+      {
+        "title": "Tekton Pipelines events (CloudEvents)",
+        "url": "https://tekton.dev/docs/pipelines/events/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.documents.confluence",
+    "title": "Connect Confluence Cloud",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "documents/confluence"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Atlassian administrator, for a **service account** (recommended) or a dedicated user.\n- The Confluence space (and, if you want only a branch, the page) to read. The account's permissions are\n  what Choregos can read: everything it reads in the space becomes readable by everyone the knowledge\n  base is open to, whatever the page restrictions say for other people."
+      },
+      {
+        "key": "at",
+        "title": "At Atlassian",
+        "markdown": "Two ways; the scoped one is recommended.\n\n**Scoped token on a service account (recommended).** Atlassian Administration, Directory,\n**Service accounts**: create one, then **Create credentials**, an **API token with scopes**. The expiry\nis between 1 and 365 days: note it. Copy the token when it is shown.\n\n**Classic token on a user account.** On `id.atlassian.com`, Security, **API tokens**, **Create API\ntoken**. It carries all of that user's rights: prefer a Confluence-only user."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- Scopes for a scoped token: `read:space:confluence`, `read:page:confluence`,\n  `read:hierarchical-content:confluence`, plus `read:attachment:confluence` when the source indexes\n  attachments.\n- Give the account **read** on the spaces to index (Space settings, Permissions) and nothing else.\n- A scoped token is only accepted through `https://api.atlassian.com/ex/confluence/<cloudId>/…`, with\n  Basic authentication using the service account's email. Choregos does that when `auth` is `scoped`."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Confluence**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the account's email.\n3. `auth`: `basic` (the default) for a classic token, `scoped` for a scoped one. For `scoped`, set\n   `cloud_id`; the site publishes it at `https://<site>.atlassian.net/_edge/tenant_info`.\n4. `api_token`: paste the token in the password field (sealed, shown once).\n5. **Knowledge**, a base, **Add source**, **Confluence**: pick the connector, a space key (for example\n   `ENG`; a personal space starts with `~`), optionally a page id (the number in\n   `…/wiki/spaces/ENG/pages/<id>/Title`) for that page and everything under it, labels, attachments."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Add the source and press **Sync now**: it lists the space once and downloads each page. A first sync\nthat adds documents proves the token, the scopes, `cloud_id` and the space permission."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` with a scoped token: `auth` is still `basic`. A scoped token is refused on the site's own address.\n- `401` with a classic token: wrong email, or a revoked token.\n- `403`, or an empty space: the account has no read permission on that space, or a scope is missing.\n- `404` on the space: the space key is case-sensitive.\n- `429`: Atlassian's rate limit. The sync waits for `Retry-After` and tries again.\n- A timeout: the egress allowlist must open `api.atlassian.com` (scoped) or the site (classic)."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.atlassian.com",
+      "<site>.atlassian.net"
+    ],
+    "fields": {
+      "base_url": "https://<site>.atlassian.net",
+      "email": "the email of the account the token belongs to (the service account's, for a scoped token)",
+      "auth": "basic for a classic token, scoped for a scoped token",
+      "cloud_id": "scoped tokens only: the site's cloud id",
+      "api_token": "the token, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Manage API tokens for service accounts",
+        "url": "https://support.atlassian.com/user-management/docs/manage-api-tokens-for-service-accounts/"
+      },
+      {
+        "title": "Scoped API tokens in Confluence Cloud",
+        "url": "https://support.atlassian.com/confluence/kb/scoped-api-tokens-in-confluence-cloud/"
+      },
+      {
+        "title": "Manage API tokens for your Atlassian account",
+        "url": "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.documents.git",
+    "title": "Connect a private git repository as a documents source",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "documents/git"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A **private** git repository whose documentation (Markdown by default) a knowledge base should read. A\n  public repository needs no connector: a git source reads it directly.\n- This is an organisation connector: an organisation administrator declares it once. The credential is\n  **pinned to its host**: a source whose repository is on another host is refused, so a token is never\n  sent elsewhere. Declare one connector per host."
+      },
+      {
+        "key": "at",
+        "title": "At the forge",
+        "markdown": "**Token (simplest).** GitHub: Settings, Developer settings, **Fine-grained personal access tokens**,\nGenerate new token. Pick **only the repository** and the repository permission **Contents: Read-only**.\nSet an expiry and note it. The token is sent to git as HTTP Basic with the user name `x-access-token`; that\nis what GitHub expects, and it has **not been verified here against other forges**, so test a GitLab or\nGitea host before relying on it.\n\n**GitHub App (no token to rotate).** Create or reuse an App with the repository permission\n**Contents: Read-only**, install it on the repository, and note its **App ID**, the **installation id**\n(the number at the end of the installation's address) and a generated **private key**. At each read the\nplatform mints a one-hour installation token limited to that repository and to `contents: read`."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- Contents read on the one repository, nothing else. No write permission is needed or used.\n- The credential travels to git in the environment, never on a command line, in an error message or in\n  `.git/config`."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Git over https**.\n2. `host`: `github.com` (the default) or your host.\n3. `auth`: `token`, then paste the token in `token`. Or `auth`: `github_app`, then `app_id`, optionally\n   `installation_id`, and the App's key in `private_key`. For GitHub Enterprise Server also set `api_url`.\n4. **Knowledge**, a base, **Add source**, kind **Git**: pick this connector, then the repository's https\n   address, a `ref` (a branch is followed, a commit is pinned) and `paths` (globs; markdown by default)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Add the source and press **Sync now**. A repository whose files match `paths` adds documents; a\nrepository where no file matches is reported unreadable and **deletes nothing**."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A refusal saying the address is not on the connector's host: the repository is on another host than\n  the connector's `host`, by design.\n- `Authentication failed` or `404` from git: the token is wrong, expired or has no access to that\n  repository; for an App, it is not installed on the repository.\n- \"not an https address\": a git source is fetched over https only.\n- Unreadable, nothing deleted: no file matches `paths`, or the `ref` does not exist.\n- A timeout: the git fetch is cut at 5 minutes, or the egress allowlist does not open the host."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "github.com",
+      "api.github.com"
+    ],
+    "fields": {
+      "host": "the git host the credential is for, github.com by default",
+      "auth": "token for an access token, github_app for a GitHub App",
+      "token": "a fine-grained access token with Contents: read, typed once",
+      "app_id": "the GitHub App's id, for auth github_app",
+      "installation_id": "the App's installation on the repository, optional",
+      "private_key": "the App's private key, typed once",
+      "api_url": "the GitHub API address, https://api.github.com by default (change it for GitHub Enterprise Server)"
+    },
+    "vendor_docs": [
+      {
+        "title": "Managing your personal access tokens (fine-grained)",
+        "url": "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens"
+      },
+      {
+        "title": "Registering a GitHub App",
+        "url": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.documents.sharepoint",
+    "title": "Connect SharePoint and OneDrive",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "documents/sharepoint"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Microsoft Entra administrator who can **grant admin consent** (Global Administrator or Privileged\n  Role Administrator).\n- Someone who can **grant the app access to each site**: a SharePoint administrator, or a Graph caller\n  holding `Sites.FullControl.All`. Consent alone opens no site (see Permissions).\n- The address of each site to read, for example `https://contoso.sharepoint.com/sites/Archi`.\n- This is an organisation connector: an organisation administrator declares it once, and knowledge\n  sources pick it by name."
+      },
+      {
+        "key": "at",
+        "title": "At Microsoft",
+        "markdown": "1. Entra admin center, **App registrations**, **New registration**. Name it for the platform, single\n   tenant, no redirect URI.\n2. On the new app's Overview page, copy the **Directory (tenant) ID** and the **Application (client) ID**.\n3. **Certificates & secrets**, **New client secret**. Copy the secret's **Value** now: it is shown once.\n   The Value is what Choregos needs, not the Secret ID. A secret expires (24 months at most): note the\n   date in your calendar, because the day it expires every sync of this connector fails."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Least privilege first: the app reads only the sites you name.\n\n1. **API permissions**, **Add a permission**, **Microsoft Graph**, **Application permissions**,\n   `Sites.Selected`, then **Grant admin consent**. Never `Files.Read.All` or `Sites.Read.All`.\n2. Grant the app **each site**. Find the site's id with\n   `GET https://graph.microsoft.com/v1.0/sites/<host>:/sites/<path>` (the answer's `id`), then\n   `POST https://graph.microsoft.com/v1.0/sites/{site-id}/permissions` with the body\n   `{\"roles\": [\"read\"], \"grantedToIdentities\": [{\"application\": {\"id\": \"<client_id>\", \"displayName\": \"Choregos\"}}]}`.\n   The call must be made by a caller that holds `Sites.FullControl.All`. PnP PowerShell does the same\n   with `Grant-PnPAzureADAppSitePermission -AppId <client_id> -DisplayName Choregos -Site <site url> -Permissions Read`.\n\nWithout step 2 the app is authorised and reads **nothing**: every site answers 403."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **SharePoint**, any name\n   (it is lowercase, and knowledge sources refer to it).\n2. `tenant_id`: the Directory (tenant) ID. `client_id`: the Application (client) ID.\n3. `client_secret`: paste the secret's Value in the password field. It is sealed and never shown again;\n   to rotate it, use **Replace**.\n4. Leave `graph_url` and `login_url` alone unless you use a sovereign cloud.\n5. Then **Knowledge**, a base, **Add source**, **SharePoint**: pick this connector, the site (or a\n   OneDrive's drive) and, if you want, a folder."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "This connector has no test button of its own. Add the source, then press **Sync now**: the source shows\nwhat it added and, if it failed, its last error. A first sync that lists documents proves the secret,\nthe consent and the site grant at once."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `AADSTS7000215` (invalid client secret): the Secret **ID** was pasted instead of the **Value**.\n- `AADSTS700016` (application not found): wrong `client_id`, or wrong `tenant_id`.\n- `403 accessDenied` on a site: the site grant (Permissions, step 2) is missing for that site.\n- `401` months after it worked: the client secret expired. Create a new one and **Replace** it.\n- A timeout: the API cannot reach `graph.microsoft.com` or `login.microsoftonline.com`; the\n  network egress allowlist must open both."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "graph.microsoft.com",
+      "login.microsoftonline.com"
+    ],
+    "fields": {
+      "tenant_id": "Directory (tenant) ID, from the app's Overview page",
+      "client_id": "Application (client) ID, from the app's Overview page",
+      "client_secret": "the secret's Value (not its Secret ID), typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Register an application in Microsoft Entra ID",
+        "url": "https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app"
+      },
+      {
+        "title": "Controlling app access on specific SharePoint site collections",
+        "url": "https://devblogs.microsoft.com/microsoft365dev/controlling-app-access-on-specific-sharepoint-site-collections/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.firewall.pfsense",
+    "title": "Connect a pfSense firewall",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "firewall/pfsense"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A pfSense with the **REST API package** (`pfSense-pkg-RESTAPI`, v2) installed, and an administrator who\n  can create a user and an API key for it.\n- Reads (rules, aliases, port forwards, interfaces, gateway status) are allowed operations. Writes\n  (create, update, delete, restore a rule) are **governed actions**: they wait for a person's approval and\n  carry a compensation that puts the previous rule back.\n- The platform must be able to reach the firewall's management address from where the API runs."
+      },
+      {
+        "key": "at",
+        "title": "At pfSense",
+        "markdown": "1. Create a dedicated user whose privileges are only the REST API pages the operations use.\n2. Generate an **API key** for that user (the package's own settings; check its documentation at\n   pfrest.org for the current menu).\n3. Note the address (`https://<pfsense>`) and the CA that signed its certificate."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The key can do what its user's privileges allow, so give a read-only user if agents only need to read. Even\nwith write rights, no write happens without a human approval in Choregos."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Firewall**, type **pfSense**.\n2. `base_url`: `https://<pfsense>`, **without** `/api/v2`.\n3. `ca_cert`: the PEM of the CA, if the certificate is private. Keep `verify_tls` true:\n   `verify_tls: false` is accepted in development only, logged each time, and refused in staging and prod.\n4. `api_key`: in the password field. Then open the operations the agents need."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector, then run `list_firewall_rules` or `gateway_status` from a workflow."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A TLS error: the certificate's CA is not trusted; set `ca_cert`.\n- `401` or `403`: the API key is wrong, or its user lacks the privilege for that page.\n- `404` on `/api/v2/...`: the REST API package is missing or is not v2, or `base_url` ends in `/api/v2`.\n- A timeout: the platform cannot route to the management address."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the pfSense host"
+    ],
+    "fields": {
+      "base_url": "https://<pfsense>, without /api/v2",
+      "verify_tls": "true; false only in development",
+      "ca_cert": "PEM of the CA that signed the device's certificate",
+      "api_key": "the REST API key of a pfSense user, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "pfSense REST API package",
+        "url": "https://pfrest.org/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.gateway.direct",
+    "title": "Use the direct gateway (development only)",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "gateway/direct"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- **Development only.** This gateway hands out the key it was given: it mints no key per run, so there is\n  no hard cap, and the cost ledger stays at zero. On staging and prod Choregos **refuses to build it** and\n  says so: use `litellm` (or `openai-compatible`, knowing its limits)."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Create a provider API key with a spending limit set at the provider's side."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The key is used as is by every run. Give it only the models you list."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Gateway**, type **direct**: `models` (a list of names), `key` in the password field."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run a stage on a development project."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A refusal that names `gateway: direct` in staging or prod: by design; change the gateway type.\n- A cost always at zero: expected, nothing is measured."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the provider's host"
+    ],
+    "fields": {
+      "models": "the model names the key may use",
+      "key": "the provider key, typed once"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.gateway.litellm",
+    "title": "Connect a LiteLLM gateway",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "gateway/litellm"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A LiteLLM proxy and its **master key**. The platform uses it to **mint one virtual key per run**, with\n  a hard budget: when the budget is reached LiteLLM refuses, and the run ends `failed (reason=budget)`.\n- The usual place for this is the chart: `global.gateway.url` and `global.gateway.secretRef` (key\n  `master-key`). A deployment-wide default needs no connector.\n- Adding a model for agents to use is done at the gateway; the model catalogue of the administration\n  lists what it routes."
+      },
+      {
+        "key": "at",
+        "title": "At LiteLLM",
+        "markdown": "Create the models in the proxy's configuration. Optionally create a **team** and note its id so that spend\nis attributed to it."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The master key can mint and revoke keys and read spend, so it is the platform's: the runner never holds it\n(it gets a per-run key). Tags on keys are a LiteLLM **Enterprise** feature: on the open-source proxy leave\n`enterprise_tags` false, or minting fails with `403`."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Chart values, or Connectors, **Gateway**, type **LiteLLM**: `base_url`, optionally `team_id`,\n`internal_prices`, `enterprise_tags`, and `master_key` in the password field."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then open the administration's models list: it shows what the proxy routes."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401 LiteLLM Virtual Key expected. Received=<no value>`: the master key never resolved (a missing\n  secret renders as the words `<no value>`); the API refuses to start in that case, so fix the secret's\n  source.\n- `403` when minting keys: `enterprise_tags` is on against an open-source proxy.\n- No models listed: the proxy has none, or the key cannot list them."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "base_url": "the proxy's address",
+      "team_id": "the LiteLLM team projects are attributed to",
+      "internal_prices": "a price list for models the proxy cannot price",
+      "enterprise_tags": "true only on LiteLLM Enterprise: key tags",
+      "master_key": "the proxy's master key, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "LiteLLM virtual keys",
+        "url": "https://docs.litellm.ai/docs/proxy/virtual_keys"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.gateway.openai-compatible",
+    "title": "Connect an OpenAI-compatible gateway",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "gateway/openai-compatible"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- Any gateway that serves `GET {base_url}/models` and `/chat/completions` (Portkey, Kong AI Gateway, Envoy\n  AI Gateway, OpenRouter, a vLLM router...).\n- Read the limits first. This adapter gives **discovery only**: no per-run virtual key, no hard budget at\n  the source, no measured cost (spend is \"not measured\", not \"free\"). Choregos alone holds the budget\n  (the reservation, turns and minutes)."
+      },
+      {
+        "key": "at",
+        "title": "At the gateway",
+        "markdown": "Create two credentials: one for **discovery** (`api_key`), and one that **runs** will use (`run_key`). Every\nrun receives the same `run_key`, so scope it at the gateway: a consumer of its own, with its own token rate\nlimit."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "`api_key` only lists models. `run_key` can call the models you allow: that is where the damage is bounded,\nso bound it there."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Chart (`global.gateway.type: openai-compatible`) or Connectors, **Gateway**: `base_url`, optional `headers`\nand `timeout_s`, then `api_key` and `run_key` in their password fields."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Open the administration's models list: it shows what `GET {base_url}/models` returns."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- An empty models list: the `api_key` cannot list, or `base_url` is wrong (it must be the base of the API).\n- `401`: wrong key, or a header the gateway needs is missing (`headers`).\n- Spend always shows nothing: expected with this adapter."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the gateway's host"
+    ],
+    "fields": {
+      "base_url": "the gateway's address, ending where /models and /chat/completions hang",
+      "headers": "extra headers the gateway requires",
+      "timeout_s": "request timeout in seconds",
+      "api_key": "the key used to discover models, typed once",
+      "run_key": "the key every run receives, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "OpenAI API: list models",
+        "url": "https://platform.openai.com/docs/api-reference/models/list"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.identity.entra",
+    "title": "Connect Microsoft Entra ID for joiners and leavers",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "identity/entra"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Entra administrator (Global Administrator or Privileged Role Administrator) who can grant consent\n  and assign directory roles.\n- An **administrative unit** that holds only the accounts the platform may manage. A\n  restricted-management administrative unit is recommended.\n- This connector writes to the directory: its operations (`create_user`, `add_to_group`,\n  `remove_from_group`, `disable_user`, `revoke_sessions`) are governed actions that wait for a human\n  approval, and `get_user` reads."
+      },
+      {
+        "key": "at",
+        "title": "At Microsoft",
+        "markdown": "1. App registrations, **New registration** (single tenant, no redirect URI). Copy the **Directory\n   (tenant) ID** and the **Application (client) ID**.\n2. **Certificates & secrets**, **New client secret**: copy the **Value**, shown once. Note its expiry.\n3. Create the administrative unit (Entra ID, Roles & admins, Administrative units) and copy its\n   **Object ID**."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Preferred, because it is bounded: give the app's service principal the **User Administrator** and\n**Groups Administrator** roles **scoped to the administrative unit** (Roles and administrators, open the\nrole, **Add assignments**, choose the administrative unit scope, select the app).\n\nFallback: Microsoft Graph **application** permissions `User.ReadWrite.All` and `GroupMember.ReadWrite.All`\nwith admin consent. They are **tenant-wide**: the connector refuses to touch an account outside\n`administrative_unit_id`, and that check is then the only bound. Say so when you ask for approval.\n\nNot proven here: the role-based variant has not been run against a live tenant from this repository.\nCheck the first run on a test unit before pointing it at people."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Identity**, type **Microsoft Entra ID**.\n2. `tenant_id`, `client_id`: from the app's Overview. `client_secret`: the Value, in the password field.\n3. `administrative_unit_id`: the unit's Object ID. Every account the platform creates enters it; any\n   other account is refused."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run a workflow step (or ask through the MCP door) that calls `get_user` on a known user principal name\ninside the unit. A returned profile proves the secret and the read permission."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `AADSTS7000215`: the Secret ID was pasted instead of the Value.\n- `AADSTS700016`: wrong `client_id` or `tenant_id`.\n- `403 Authorization_RequestDenied`: the role or permission is missing, or the target account is not in\n  the administrative unit.\n- A refusal naming the administrative unit: the account is outside `administrative_unit_id`, by design.\n- A timeout: open `graph.microsoft.com` and `login.microsoftonline.com` in the egress allowlist."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "graph.microsoft.com",
+      "login.microsoftonline.com"
+    ],
+    "fields": {
+      "tenant_id": "Directory (tenant) ID",
+      "client_id": "Application (client) ID",
+      "client_secret": "the secret's Value, typed once",
+      "administrative_unit_id": "the Object ID of the administrative unit the platform may touch"
+    },
+    "vendor_docs": [
+      {
+        "title": "Register an application in Microsoft Entra ID",
+        "url": "https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app"
+      },
+      {
+        "title": "Assign Microsoft Entra roles with administrative unit scope",
+        "url": "https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/admin-units-assign-roles"
+      },
+      {
+        "title": "Microsoft Graph permissions reference",
+        "url": "https://learn.microsoft.com/en-us/graph/permissions-reference"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.marketdata.alphavantage",
+    "title": "Use Alpha Vantage for daily market data",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "marketdata/alphavantage"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A free Alpha Vantage API key. The free tier allows about **25 requests a day** and gives **unadjusted**\n  daily bars: a backtest over many tickers will exhaust it. A paid plan raises the limit."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Request a key at alphavantage.co (the support page above). It is shown once on the page and sent by email."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The key only reads market data. It is yours: do not share one key between organisations."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Market data**, type **Alpha Vantage**. `api_key` in the password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then call `get_instrument` for a known ticker."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A note about the call frequency or \"standard API call frequency\": the daily limit is reached; wait or\n  upgrade.\n- An invalid key message: the key is wrong or not activated.\n- Prices that look off after a split: the bars are unadjusted."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "www.alphavantage.co"
+    ],
+    "fields": {
+      "api_key": "your Alpha Vantage API key, typed once",
+      "timeout_s": "request timeout in seconds"
+    },
+    "vendor_docs": [
+      {
+        "title": "Alpha Vantage: get a free API key",
+        "url": "https://www.alphavantage.co/support/#api-key"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.marketdata.composite",
+    "title": "Combine several market data sources",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "marketdata/composite"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- Decide which sources to combine: `stooq`, `yahoo` and `alphavantage`. Each has its own limits and terms:\n  see their procedures. The composite tries them **in order** and falls back to the next when one fails.\n- With `cross_check` on, the closes of two sources are compared and a difference above `tolerance` (2 % by\n  default) is reported, which catches a broken or unadjusted source."
+      },
+      {
+        "key": "at",
+        "title": "At the vendors",
+        "markdown": "Only what each source needs: nothing for Stooq and Yahoo, an API key for Alpha Vantage."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "They read public market data. Nothing is written."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Market data**, type **composite**. `sources`: for example `[\"stooq\", \"alphavantage\"]`.\n`source_configs`: a sub-configuration per provider, for example `{\"stooq\": {\"suffix_map\": {}}}`.\n`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then call `get_bars` and compare with a source you trust."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A disagreement reported between sources: one is unadjusted (Alpha Vantage free), or a corporate action\n  happened; check the dates before trusting either.\n- Everything falls back to the last source: the first ones fail; see their procedures.\n- A rate limit: the free tiers are small; order the sources so the limited one is last."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the hosts of the sources it combines"
+    ],
+    "fields": {
+      "sources": "the providers, in the order they are tried: stooq, yahoo, alphavantage",
+      "source_configs": "the configuration of each provider, by name",
+      "cross_check": "true to compare the closes of two sources",
+      "tolerance": "the largest relative difference of two closes before they disagree, 0.02 by default",
+      "stooq_api_key": "Stooq's key, if any, typed once",
+      "alphavantage_api_key": "Alpha Vantage's key, typed once"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.marketdata.stooq",
+    "title": "Use Stooq for daily market data",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "marketdata/stooq"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- Stooq serves **daily** bars as CSV, free. Read Stooq's terms of use before relying on it.\n- It is the right default for a study or a backtest on daily closes; it is not a real-time feed."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Stooq may demand an `apikey` on CSV downloads, obtained once through its site. Without one, the endpoint can\nanswer a \"get your apikey\" page instead of data. Get the key there and put it in `api_key`."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "None: it only reads public market data. Nothing is written."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Market data**, type **Stooq**. `suffix_map` maps your tickers to Stooq's market suffixes\n(for example the empty suffix to `.us`, `.L` to `.uk`). `timeout_s` defaults to 20."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then call `get_instrument` and `get_bars` for a known ticker."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A \"get your apikey\" answer: set `api_key`.\n- No bars: the ticker's suffix is not in `suffix_map`, so Stooq does not know the symbol.\n- Empty or truncated data: the market was closed, or the date range has no sessions.\n- A timeout: the egress allowlist must open `stooq.com`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "stooq.com"
+    ],
+    "fields": {
+      "suffix_map": "ticker suffix to Stooq market suffix, for example {\"\": \".us\", \".L\": \".uk\"}",
+      "timeout_s": "request timeout in seconds",
+      "api_key": "an optional key, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Stooq",
+        "url": "https://stooq.com/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.marketdata.yahoo",
+    "title": "Use Yahoo Finance for daily market data",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "marketdata/yahoo"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- This uses Yahoo Finance's **unofficial** chart endpoint. It is for personal use, and it **may break** or be\n  blocked without notice. Read Yahoo's terms of service before using it for anything else.\n- Prefer a source with a stated licence for anything that matters; the `composite` type can cross-check it\n  against another."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Nothing to create: there is no key."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "None: it reads public data."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Market data**, type **Yahoo**. The only option is `timeout_s` (20 by default)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then call `get_bars` for a known ticker."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- Empty answers or `429`: Yahoo is throttling or blocking the platform's address.\n- A changed format: the endpoint is unofficial and may have changed; use another source.\n- A timeout: the egress allowlist must open `query1.finance.yahoo.com`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "query1.finance.yahoo.com"
+    ],
+    "fields": {
+      "timeout_s": "request timeout in seconds"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.mcp.mcp",
+    "title": "Connect an MCP server",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "mcp/mcp"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The server's **Streamable HTTP** endpoint, over https. A server that speaks only the older SSE\n  transport is refused.\n- An organisation administrator declares the connector. What an agent may then call is decided tool by\n  tool, below.\n- Read the vendor's terms: the server acts with the token's account, and everything an agent sends to\n  it leaves the platform."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Create the credential in the vendor's own settings: an API token, a service account key, or a personal\naccess token. The catalogue entry for a known server says where. Prefer a token of a dedicated account\nwhose rights are exactly what the agents should have, and the narrowest scopes the vendor offers."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The connector's tools act with **that account's permissions**, nothing in Choregos can widen them.\n- Tools are **born closed** (ADR 0034): after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server**, a lowercase name.\n2. `url`: the endpoint.\n3. `auth_scheme`: `bearer` (the default) sends `Authorization: Bearer <token>`. `basic` sends\n   `Authorization: Basic base64(username:token)`; it needs `username`, usually an email.\n4. `token`: paste it in the password field. It is sealed and shown once; **Replace** rotates it.\n5. Press **Discover**, then open the operations the agents need, one by one."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "**Discover** asks the server for its tools. A list of tools proves the URL, the scheme and the token."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or `403`: the token is wrong, expired, or sent with the wrong scheme (Bearer versus Basic).\n- `406 Not Acceptable`: the server wants an `Accept: application/json, text/event-stream` header and\n  rejected the request; check that the URL is the Streamable HTTP endpoint and not an SSE one.\n- A timeout or a connection refused: the egress allowlist does not open the server's host.\n- \"No tools\", or only a few: discovery has not run, or the token's scopes are too narrow for the server\n  to list more."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the server's host"
+    ],
+    "fields": {
+      "url": "the server's Streamable HTTP endpoint, https",
+      "auth_scheme": "bearer, or basic (username plus token)",
+      "username": "the account, for basic",
+      "token": "the token or key the vendor gave you, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "MCP specification: transports (Streamable HTTP)",
+        "url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.mcp.mcp.atlassian-rovo",
+    "title": "Connect Atlassian's Rovo MCP Server",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "mcp/mcp",
+      "preset": "atlassian-rovo"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Atlassian organisation administrator, because **API token access to the Rovo MCP Server is off\n  until an admin enables it**.\n- This gives agents Atlassian's tools (search, Jira, Confluence, and more) under Choregos's per-tool\n  policy. It does not call the Rovo agent itself; for that, see the remote agent procedure.\n- The server allows about 1 000 calls an hour on Standard and Premium plans."
+      },
+      {
+        "key": "at",
+        "title": "At Atlassian",
+        "markdown": "1. Atlassian Administration: enable **API token authentication** for the Rovo MCP Server.\n2. Create the credential. Two kinds exist and they are sent differently:\n   - a **personal API token with scopes** (id.atlassian.com, Security, API tokens), sent as **Basic**\n     with the account's email;\n   - a **service account API key** (Directory, Service accounts), sent as **Bearer**.\n3. The server's endpoint is `https://mcp.atlassian.com/v1/mcp`. The older `/v1/sse` endpoint stopped on\n   30 June 2026. The MCP server catalogue may list a newer `/v2/mcp` address that signs in with OAuth\n   instead: this procedure is the API-token route on `/v1/mcp`; check Atlassian's documentation for the\n   address your site supports."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- Give the token granular scopes. A starting set for reading: `read:jira-work`, `read:page:confluence`,\n  `search:confluence`, `search:rovo:mcp`. Add `write:jira-work` and the like only if agents must write.\n- With classic or broad scopes, only the **Teamwork Graph** tools appear (Atlassian's own knowledge-base\n  article says so). If you see only those, the token is the cause.\n- Every tool acts with the account's own Jira and Confluence permissions."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Install it from the MCP catalogue (\"Atlassian Rovo MCP\"), or Administration, **Connectors**,\n   **Declare**: capability **MCP**, type **MCP server**.\n2. `url`: `https://mcp.atlassian.com/v1/mcp`.\n3. Personal token: `auth_scheme` `basic`, `username` the account's email. Service account key:\n   `auth_scheme` `bearer`. A personal token sent as Bearer fails.\n4. `token`: the token or key, in the password field.\n5. **Discover**, then open the tools the agents need."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Discover**. The list should include Jira and Confluence tools, not only Teamwork Graph ones."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: wrong scheme for the credential (a personal token needs `basic`, a service account key\n  needs `bearer`), a wrong email, or API token access is not enabled by an administrator.\n- Only a few Teamwork Graph tools: the token's scopes are classic or too broad; create a token with\n  granular scopes.\n- `429`: the hourly limit.\n- A timeout: the egress allowlist must open `mcp.atlassian.com`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "mcp.atlassian.com"
+    ],
+    "fields": {
+      "url": "https://mcp.atlassian.com/v1/mcp",
+      "auth_scheme": "basic for a personal API token, bearer for a service account API key",
+      "username": "the account's email, for basic",
+      "token": "the API token or key, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Configuring authentication via API token (Rovo MCP Server)",
+        "url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/configuring-authentication-via-api-token"
+      },
+      {
+        "title": "Rovo MCP Server only returns Teamwork Graph tools when using an API token",
+        "url": "https://support.atlassian.com/rovo/kb/rovo-mcp-server-only-returns-teamwork-graph-tools-when-using-api-token/"
+      },
+      {
+        "title": "Manage API tokens for service accounts",
+        "url": "https://support.atlassian.com/user-management/docs/manage-api-tokens-for-service-accounts/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.mdm.demo",
+    "title": "The demo device management (demonstration only)",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "connector": "mdm/demo"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "This is a **demonstration** of the device management (laptops, phones): it is held in memory and is **refused in staging and prod**. Use it\nto try the joiners-leavers and delivery templates without any real system."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "There is no vendor. Nothing is created anywhere."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "None: nothing leaves the platform. Nothing is stored beyond the process's memory, so it forgets on restart."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run the template's workflow. The demonstration answers like the real system would, with invented data."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A refusal in staging or prod: by design. Declare the real connector instead.\n- State that disappears: it lives in memory; with several replicas, set `url` to a single process."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "url": "the endpoint of the one process serving the demonstration fakes; empty to run them in this process",
+      "api_key": "not needed by the demonstration, typed once if you set one"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.memory.ecphoria",
+    "title": "Connect Ecphoria, the platform's memory",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "memory/ecphoria"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A running Ecphoria. The chart can deploy one (`global.memory.embedded: true`) or point at yours\n  (`global.memory.url`, `global.memory.tokenSecret`).\n- Memory is optional: without it the platform falls back to the `lexical` memory, with no service.\n- Reads have a short timeout on purpose (300 ms by default): a slow memory never blocks a stage, it gives\n  an empty context pack. Writes are governed: the orchestrator writes, the agent proposes."
+      },
+      {
+        "key": "at",
+        "title": "At Ecphoria",
+        "markdown": "Create or choose the **tenant** each project writes to, and a token if Ecphoria requires one. Ecphoria's\nown documentation is the reference for that; this repository does not describe it."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The token must be able to read and write memories of the tenant and create tenants if the platform is to\ncreate one per project."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Usually the chart's `global.memory.*` values. To declare it on a project: Connectors, **Memory**, type\n**Ecphoria**, `base_url`, `tenant`, optionally `read_timeout_ms`, and `token` in the password field."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: it calls Ecphoria's `/health` for the tenant and shows its status."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `ok: false` with an error: the address is unreachable from the API, or the token is refused.\n- Runs start with an empty memory: the read hit the timeout; raise `read_timeout_ms` if Ecphoria is\n  healthy but slow.\n- `401` on writes: the token lacks write rights."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "base_url": "Ecphoria's address, for example http://ecphoria.<namespace>.svc:8432",
+      "tenant": "the Ecphoria tenant a project writes to",
+      "read_timeout_ms": "how long a read may take before the run goes on without memory",
+      "token": "Ecphoria's token, typed once"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.memory.lexical",
+    "title": "Use the built-in lexical memory",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "memory/lexical"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "Nothing to install. The lexical memory is the fallback: it searches by words in the platform's own\ndatabase, with no external service and no embedding."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "There is no vendor and nothing to create."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "It reads and writes only the platform's own tables, under the organisation's isolation."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Memory**, type **lexical**. There is nothing to configure."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then run a stage and look at its context pack."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- Poor recall on paraphrases: it matches words, not meaning. Use Ecphoria for semantic memory."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.memory.pgvector",
+    "title": "pgvector memory (deprecated name)",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "memory/pgvector"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "This name is **deprecated** and is never offered to a new project. It is kept so projects that already\ncarry it keep working. It is an alias of the `lexical` memory: the name promised vectors, the code does\nfull-text search."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Nothing to create."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Same as the lexical memory: the platform's own tables only."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Change the project's memory connector to `lexical` (same behaviour) or `ecphoria` (semantic memory)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the new connector and run a stage."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A project that still names `pgvector` works as `lexical`; if you expected vectors, switch to Ecphoria."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.network_policy.cilium",
+    "title": "Connect Cilium and Hubble",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "network_policy/cilium"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A cluster running Cilium, with **Hubble Relay** if you want flows. The platform reads policies from the\n  Kubernetes API and flows through the `hubble` CLI against Relay (the CLI ships in the API and worker\n  image, never in the runner).\n- A GitOps repository where policy changes are proposed as pull requests. **No path applies a policy to a\n  cluster**: a change is a pull request that your release process carries."
+      },
+      {
+        "key": "at",
+        "title": "At the cluster",
+        "markdown": "1. A dedicated **read-only service account**, never the pod's own token, with a `ClusterRole` that can\n   `get` and `list` `ciliumnetworkpolicies` and `ciliumclusterwidenetworkpolicies` (`cilium.io`), and a\n   binding. Create a token for it.\n2. If Hubble Relay requires mTLS, issue a client certificate and key for the platform.\n3. A token for the GitOps repository that can push a branch and open a pull request."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- Kubernetes: `get` and `list` on the two Cilium policy kinds, nothing else.\n- Relay: read of flows.\n- GitOps repository: branch and pull request only. The platform never merges it."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Network policy**, type **Cilium**.\n2. `kubernetes_url`, `ca_cert`, and `token` (password field). `verify_tls` stays true; `false` is for\n   development only.\n3. For flows: `hubble_server`, `hubble_tls`, `hubble_ca_cert`, `hubble_tls_server_name`, and for mTLS\n   `hubble_client_cert` and `hubble_client_key`.\n4. For proposals: `gitops_repo`, `gitops_base` (default `main`), `gitops_path` (default `cilium`) and\n   `gitops_token`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then call `list_network_policies` and `get_flows` from a workflow."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `Forbidden` from the API server: the role is missing or not bound to the account.\n- A TLS error: set `ca_cert` (cluster) or `hubble_ca_cert` (Relay).\n- No flows: Relay is not reachable, or requires mTLS you did not configure.\n- A proposal that fails: `gitops_token` cannot push to `gitops_repo`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the Kubernetes API server",
+      "Hubble Relay"
+    ],
+    "fields": {
+      "kubernetes_url": "the cluster's API server, https",
+      "token": "the read-only service account's token, typed once",
+      "ca_cert": "PEM of the cluster's CA",
+      "hubble_server": "Hubble Relay's address, hubble-relay.kube-system.svc:443 by default",
+      "hubble_client_key": "the mTLS client key, if Relay requires one",
+      "gitops_repo": "owner/repo where policy changes are proposed",
+      "gitops_token": "a token that can open a pull request there, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Cilium network policy",
+        "url": "https://docs.cilium.io/en/stable/security/policy/"
+      },
+      {
+        "title": "Setting up Hubble observability",
+        "url": "https://docs.cilium.io/en/stable/observability/hubble/setup/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.notify.slack",
+    "title": "Connect Slack for notifications and decisions",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "notify/slack"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Slack workspace where you may create or install an app (otherwise an administrator does).\n- The channel notifications go to.\n- Choose a mode. **Incoming webhook**: simplest, fixed to one channel. **Bot token**: posts to any\n  channel the bot is in, and can also be tested with `auth.test`."
+      },
+      {
+        "key": "at",
+        "title": "At Slack",
+        "markdown": "1. `api.slack.com/apps`, **Create New App**, **From scratch**, pick the workspace.\n2. Either:\n   - **Incoming Webhooks**: turn it on, **Add New Webhook to Workspace**, pick the channel, copy the\n     webhook URL; or\n   - **OAuth & Permissions**: add the bot scope `chat:write` (and `chat:write.public` to post in\n     channels the bot has not joined), **Install to Workspace**, copy the **Bot User OAuth Token**.\n3. For a bot token, invite the bot to the channel: `/invite @<app name>`."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- Webhook mode needs nothing else: the webhook can post to the one channel you picked.\n- Bot mode needs `chat:write`. Nothing else is read from the workspace.\n- Do not enable Interactivity: Choregos exposes no Slack interactivity endpoint today, so a message's\n  decision buttons do not post back. The button that opens the item in the console is a plain link and\n  works; decisions are taken in the console."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **Notify**, type **Slack** (or an organisation connector).\n2. `channel`: for example `#choregos`.\n3. `public_url`: this platform's console address, `https://choregos.example.com`. Messages carry a button that opens\n   the item here.\n4. Paste **one** of `webhook_url` or `bot_token` in its password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector. In bot mode it calls `auth.test` and shows the workspace; in webhook\nmode it checks that a webhook URL is set. Then trigger a notification and look at the channel."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `channel_not_found`: the channel name is wrong, or the bot cannot see a private channel.\n- `not_in_channel`: invite the bot (`/invite @app`), or add `chat:write.public`.\n- `invalid_auth` or `token_revoked`: the bot token is wrong or the app was reinstalled; paste the new one.\n- A `404` or `no_service` from a webhook: the webhook was revoked; create a new one.\n- A timeout: the egress allowlist must open `slack.com` (bot) or `hooks.slack.com` (webhook)."
+      }
+    ],
+    "values": {
+      "public_url": "https://choregos.example.com"
+    },
+    "egress": [
+      "slack.com",
+      "hooks.slack.com"
+    ],
+    "fields": {
+      "channel": "the channel notifications go to, for example #choregos",
+      "public_url": "this platform's console address, used for the buttons' links",
+      "webhook_url": "an incoming webhook URL (simple mode)",
+      "bot_token": "a bot token (the mode that posts to any channel it is in)"
+    },
+    "vendor_docs": [
+      {
+        "title": "Your Slack apps",
+        "url": "https://api.slack.com/apps"
+      },
+      {
+        "title": "Sending messages using incoming webhooks",
+        "url": "https://api.slack.com/messaging/webhooks"
+      },
+      {
+        "title": "chat:write scope",
+        "url": "https://api.slack.com/scopes/chat:write"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.runtime.aca",
+    "title": "Run agent stages as Azure Container Apps jobs",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "runtime/aca"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Azure subscription, a resource group and a **Container Apps environment**, and a registry that holds\n  the runner image.\n- A **user-assigned managed identity** with pull rights on the registry: the job pulls its image with it,\n  so no cloud credential is held by the runner.\n- See the deployment guide and the `github-aca` template."
+      },
+      {
+        "key": "at",
+        "title": "At Azure",
+        "markdown": "1. Create an app registration (service principal) for the platform and a client secret; note the tenant\n   id, client id and the secret's **Value**.\n2. Give it a role that can create and start jobs in the resource group (for example a custom role on\n   `Microsoft.App/jobs/*`; check Azure's built-in roles for the narrowest that fits).\n3. Note the environment's resource id, the managed identity's resource id and the registry host.\n4. Optional: a Log Analytics workspace, so the platform can read the job's logs. Without it, logs say\n   where to look instead of showing nothing."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The service principal creates and starts jobs; the managed identity only pulls images. The run's token is\na job secret referenced by `secretRef`, never an environment variable in clear."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Set `runner.executor: aca` in the chart and declare the connector: `subscription_id`, `resource_group`,\n`environment_id` (required), `location` (default `westeurope`), `tenant_id`, `client_id`, `client_secret`\n(password field; or a ready `token` instead of the three identity fields), `identity_id`, `registry_server` and `log_analytics_workspace_id`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Start a run on a test project: the job appears in the resource group and its execution finishes."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `AuthorizationFailed`: the service principal's role does not cover the resource group.\n- The job cannot pull its image: the managed identity lacks pull rights on the registry.\n- No logs: no Log Analytics workspace is configured.\n- A timeout: the egress allowlist must open `management.azure.com` and `login.microsoftonline.com`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "management.azure.com",
+      "login.microsoftonline.com",
+      "api.loganalytics.io"
+    ],
+    "fields": {
+      "subscription_id": "the Azure subscription",
+      "resource_group": "the resource group of the jobs",
+      "environment_id": "the Container Apps environment's resource id",
+      "tenant_id": "the Entra tenant",
+      "client_id": "the service principal's application id",
+      "client_secret": "the service principal's secret, typed once",
+      "token": "an Azure Resource Manager access token you already hold, instead of tenant_id, client_id and client_secret",
+      "identity_id": "the managed identity the job uses to pull its image",
+      "registry_server": "the container registry's host",
+      "log_analytics_workspace_id": "where the job's logs are read"
+    },
+    "vendor_docs": [
+      {
+        "title": "Jobs in Azure Container Apps",
+        "url": "https://learn.microsoft.com/en-us/azure/container-apps/jobs"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.runtime.agent_sandbox",
+    "title": "Run agent stages in warm sandboxes (opt-in)",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "runtime/agent_sandbox"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The agent-sandbox **operator**, whose CRDs are cluster-scoped: a platform team installs it, a tenant of\n  a shared cluster cannot. `tekton` and `k8s_job` stay the defaults.\n- Read the deployment guide, section \"The `agent_sandbox` executor\", and ADR 0053: it is the reference;\n  this page is its checklist."
+      },
+      {
+        "key": "at",
+        "title": "At the cluster",
+        "markdown": "1. The operator, pinned (v1.0.6 at the time of writing), by Argo CD or by hand with\n   `kubectl apply --server-side -k infra/operators/agent-sandbox`.\n2. The Kyverno policy of the repository so a template that breaks non-root is refused where it is written.\n3. The chart: `runner.executor: agent_sandbox`, `runner.namespacePattern` set to the release namespace,\n   `runner.warmPool.size`, `runner.runtimeClass`, `runner.sandbox.*`."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "`global.rbac.jobRunner: true`, or the platform grants the same verbs. The chart renders a NetworkPolicy\nso only the orchestrator's workers reach the assignment port; where the platform forbids a tenant's\nNetworkPolicy, set `runner.sandbox.assignmentNetworkPolicy: false` and close that port yourself."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Chart values; the connector's `pool_image`, `max_active` and the rest are optional. A step that names its\nown image is refused in a pool: use `k8s_job` for such steps."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "`CHOREGOS_CLUSTER_CONTEXT=<context> CHOREGOS_CLUSTER_ALLOW_SHARED=<context> make test-cluster` on a\ncluster that has the operator (it uses a namespace of its own and deletes it)."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A claim that never binds: the pool is empty and the template cannot cold-start; check the operator.\n- A refusal about a RuntimeClass or an image: the pool was made with another one; recreate it.\n- A run that waits: `max_active` is reached; it is admitted in arrival order."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "warm_pool": "the SandboxWarmPool's name, choregos-runner by default",
+      "pool_image": "the image the pool's pods are made from",
+      "runtime_class": "the template's RuntimeClass, for example gvisor",
+      "max_active": "concurrent runs; beyond it a run waits"
+    },
+    "vendor_docs": [
+      {
+        "title": "kubernetes-sigs/agent-sandbox",
+        "url": "https://github.com/kubernetes-sigs/agent-sandbox"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.runtime.k8s_job",
+    "title": "Run agent stages as Kubernetes Jobs",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "runtime/k8s_job"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Kubernetes cluster and a namespace for agent pods. This is the executor with the fewest moving parts\n  and the one that supports queueing; use it when Tekton is not there.\n- This is a chart setting, not a form: `runner.executor: k8s_job` in the orchestrator's values."
+      },
+      {
+        "key": "at",
+        "title": "At the cluster",
+        "markdown": "Set the values of `choregos-orchestrator.runner` (see the deployment guide, \"Running agent stages\"):\n`executor`, `namespacePattern` (for example `proj-{slug}-runners`), `maxActive`, `limits`, and\n`envFromSecrets` for credentials mounted by reference into each agent pod."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The orchestrator needs rights to create and read `Job`s and `Secret`s in the runner namespaces\n(`global.rbac.jobRunner: true`, or the platform grants the same verbs). Under a namespace `LimitRange`,\nset `runner.limits` below the per-container ceiling, or the pod is rejected and the Job waits without\nsaying why."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Nothing to type: the executor is chosen by the chart. `maxActive` caps concurrent runs per namespace;\nbeyond it a Job is created suspended (no pod, no image pull, no quota) and admitted in arrival order."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Start a run on a test project and watch its pod: `kubectl get jobs -n <runner namespace>`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A Job that never starts: the namespace quota or a `LimitRange` refuses the pod. Lower `runner.limits`.\n- `Forbidden` creating the Job: the orchestrator's service account lacks the rights above.\n- A pod that cannot pull its image: the image or registry credentials; the run reports the container's\n  reason and the runner's exit code."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.runtime.local_docker",
+    "title": "Run agent stages in local Docker (development)",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "runtime/local_docker"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- Development only: it needs a Docker daemon on the machine that runs the orchestrator.\n- Use it with `docker compose up` (`dev/compose.yaml`). On a cluster use `k8s_job` or `tekton`."
+      },
+      {
+        "key": "at",
+        "title": "At the host",
+        "markdown": "Docker must be installed and the orchestrator must be able to call it. The runner image is pulled on the\nfirst run, which can take several minutes (the pull has a 15 minute timeout)."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Whoever can reach the Docker socket controls the host. Do not use this executor on a shared machine."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Chart or compose settings: `runner.executor: local_docker`. The only option is `network`, the Docker\nnetwork the runner container joins so it can reach the API."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Start a run: `docker ps` shows a container named `choregos-run-<id>`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- The run cannot reach the API: the container is not on `network`.\n- `Cannot connect to the Docker daemon`: the orchestrator has no access to the socket.\n- A very slow first run: the runner image is still being pulled."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "network": "the Docker network the runner joins, choregos_default by default"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.runtime.tekton",
+    "title": "Run agent stages as Tekton PipelineRuns",
+    "version": 1,
+    "audience": "operator",
+    "applies_to": {
+      "connector": "runtime/tekton"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A cluster with Tekton Pipelines, and a `Pipeline` named `choregos-agent` (or your own name) in the\n  runner namespace, installed from the chart.\n- The default executor when Tekton is present: `runner.executor: tekton`."
+      },
+      {
+        "key": "at",
+        "title": "At the cluster",
+        "markdown": "Install Tekton, then the chart's Pipeline. Set `runner.executor: tekton` and `runner.namespacePattern`\nin the orchestrator's values. Each agent stage becomes one `PipelineRun`; its Secret belongs to the run\nand goes with it however it ends."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The orchestrator creates, reads and deletes `PipelineRun`s and `Secret`s in the runner namespaces. The\n`service_account` is the identity of the stage's pod: give it nothing beyond what the runner needs."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Mostly chart values. If a connector is declared, `pipeline` names the Pipeline to start and\n`service_account` the account it runs as."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Start a run and look at `kubectl get pipelineruns -n <runner namespace>`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A `PipelineRun` that never schedules: the Pipeline name does not exist in that namespace.\n- `Forbidden`: the orchestrator's service account lacks `pipelineruns` rights.\n- The run's pod is rejected at admission: see the namespace policies (security context, `LimitRange`)."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "pipeline": "the Pipeline each run starts, choregos-agent by default",
+      "service_account": "the service account the PipelineRun runs as"
+    },
+    "vendor_docs": [
+      {
+        "title": "Tekton Pipelines",
+        "url": "https://tekton.dev/docs/pipelines/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.scm.github",
+    "title": "Use GitHub for branches, pull requests and checks",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "scm/github"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The same **GitHub App** as the tracker (see \"Use GitHub Issues and Projects v2 as the board\"): one App\n  serves both. Its id, private key and webhook secret are platform settings.\n- The repository the agents change. They work on a branch and open a pull request; nothing is pushed to\n  the default branch."
+      },
+      {
+        "key": "at",
+        "title": "At GitHub",
+        "markdown": "1. Create the App with the **Webhook URL** `https://choregos.example.com/api/v1/webhooks/github`, or reuse the platform's.\n2. **Install** it on the repository.\n3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).\n   Without one, set `merge_queue` to false."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n\nOrganization permissions, only if the same App serves the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents edit `.github/workflows`."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **SCM**, type **GitHub (App)**.\n2. `repo`: `owner/repo`. `installation_id`: the installation's number.\n3. `merge_queue`: true (the default) enqueues through the merge queue; `merge_method`: `SQUASH` (the\n   default), `MERGE` or `REBASE`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: it reads the repository through the App. A run that opens a pull request then proves\nthe write permissions."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `404` on the repository: the App is not installed on it.\n- `403` on a branch, a pull request or a check: a permission above is missing or its upgrade was not\n  accepted on the installation.\n- A merge that never happens: the merge queue is not enabled on the branch, or a required check is red.\n- A push refused for a workflow file: the App lacks `workflows: write`.\n- A timeout: the egress allowlist must open `api.github.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:github": "https://choregos.example.com/api/v1/webhooks/github"
+    },
+    "egress": [
+      "api.github.com"
+    ],
+    "fields": {
+      "repo": "owner/repo",
+      "installation_id": "the number at the end of the installation's address",
+      "merge_queue": "true to enqueue pull requests in the repository's merge queue",
+      "merge_method": "MERGE, SQUASH or REBASE"
+    },
+    "vendor_docs": [
+      {
+        "title": "Registering a GitHub App",
+        "url": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app"
+      },
+      {
+        "title": "Permissions required for GitHub Apps",
+        "url": "https://docs.github.com/en/rest/overview/permissions-required-for-github-apps"
+      },
+      {
+        "title": "Managing a merge queue",
+        "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.shipping.demo",
+    "title": "The demo carrier (demonstration only)",
+    "version": 1,
+    "audience": "everyone",
+    "applies_to": {
+      "connector": "shipping/demo"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "This is a **demonstration** of the carrier (parcels): it is held in memory and is **refused in staging and prod**. Use it\nto try the joiners-leavers and delivery templates without any real system."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "There is no vendor. Nothing is created anywhere."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "None: nothing leaves the platform. Nothing is stored beyond the process's memory, so it forgets on restart."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run the template's workflow. The demonstration answers like the real system would, with invented data."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A refusal in staging or prod: by design. Declare the real connector instead.\n- State that disappears: it lives in memory; with several replicas, set `url` to a single process."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "url": "the endpoint of the one process serving the demonstration fakes; empty to run them in this process",
+      "api_key": "not needed by the demonstration, typed once if you set one"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.tracker.github-issues",
+    "title": "Use GitHub Issues and Projects v2 as the board",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "tracker/github-issues"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A **GitHub App** for the platform: one per installation of Choregos, never a broad personal token.\n  Its id, private key and webhook secret are platform settings (`github-app-id`,\n  `github-app-private-key`, `github-webhook-secret`), set by the person who installs Choregos.\n  If they are set, skip to \"Install it\".\n- The repository and, for a board, the organisation's Projects v2 number."
+      },
+      {
+        "key": "at",
+        "title": "At GitHub",
+        "markdown": "1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in. The installation's number is at the end of\n   its address (`…/settings/installations/<number>`)."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **GitHub Issues + Projects v2**.\n2. `repo`: `owner/repo`. `installation_id`: the installation's number.\n3. For a board: `org` and `project_number` (the number in the board's address).\n4. Label a ticket `agent-ready`: the platform starts one workflow per ticket."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector: it reads the repository through the App. Then label a ticket\n`agent-ready` and watch the board."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `404` on the repository: the App is not installed on it. Install it, or add the repository to the\n  installation.\n- `403` and a permission named: grant it in the App's settings and **accept** the new permissions on the\n  installation (GitHub asks the owner to approve a change).\n- Webhook deliveries refused with `401`: the secret on the App differs from the platform's\n  `github-webhook-secret`.\n- Nothing starts when a ticket is labelled: check the App's **Recent deliveries**; the URL must be this\n  platform's and reachable from GitHub.\n- A timeout: the egress allowlist must open `api.github.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:github": "https://choregos.example.com/api/v1/webhooks/github"
+    },
+    "egress": [
+      "api.github.com"
+    ],
+    "fields": {
+      "repo": "owner/repo",
+      "project_number": "the number in the Projects v2 board's address",
+      "org": "the organisation that owns the Projects v2 board",
+      "installation_id": "the number at the end of the installation's address",
+      "webhook_secret": "not used by the GitHub webhook endpoint: the App's own webhook secret is set on the platform"
+    },
+    "vendor_docs": [
+      {
+        "title": "Registering a GitHub App",
+        "url": "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app"
+      },
+      {
+        "title": "Permissions required for GitHub Apps",
+        "url": "https://docs.github.com/en/rest/overview/permissions-required-for-github-apps"
+      },
+      {
+        "title": "Installing your own GitHub App",
+        "url": "https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.tracker.gitlab-issues",
+    "title": "Use GitLab Issues as the board",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "tracker/gitlab-issues"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A GitLab project where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
+      },
+      {
+        "key": "at",
+        "title": "At GitLab",
+        "markdown": "1. Project, Settings, **Access tokens**, **Add new token**: role **Developer**, scope **api**, and an\n   expiry. Copy the token when it is shown.\n2. Project, Settings, **Webhooks**, **Add new webhook**: URL `https://choregos.example.com/api/v1/webhooks/gitlab`, **Secret token**\n   the platform's shared webhook secret, and triggers **Issues events**, **Comments** and **Merge request\n   events**."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The token needs the `api` scope and the Developer role: it reads issues, creates issues and comments,\n  and changes labels. A narrower scope cannot write.\n- The token is project-scoped: it cannot touch another project."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **GitLab Issues**.\n2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's\n   path (for example `group/app`) or numeric id.\n3. `token`: the access token, in the password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector, then create an issue in GitLab with the label the workflow expects and\nwatch the board."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` from GitLab: the token is wrong, expired or revoked.\n- `403` or `404` on the project: the token belongs to another project, or the path is wrong.\n- A webhook that GitLab shows as failing with `401`: the Secret token differs from the platform's shared\n  webhook secret.\n- A self-managed GitLab with a private certificate authority: the API must trust it."
+      }
+    ],
+    "values": {
+      "webhook_url:gitlab": "https://choregos.example.com/api/v1/webhooks/gitlab"
+    },
+    "egress": [
+      "gitlab.com"
+    ],
+    "fields": {
+      "base_url": "https://gitlab.com, or your self-managed GitLab",
+      "project": "the project's path with namespace, or its numeric id",
+      "token": "a project access token, typed once",
+      "webhook_secret": "not used by the GitLab webhook endpoint: the platform's shared webhook secret is"
+    },
+    "vendor_docs": [
+      {
+        "title": "GitLab project access tokens",
+        "url": "https://docs.gitlab.com/user/project/settings/project_access_tokens/"
+      },
+      {
+        "title": "GitLab webhooks",
+        "url": "https://docs.gitlab.com/user/project/integrations/webhooks/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.tracker.internal",
+    "title": "Let Choregos hold the work items",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "tracker/internal"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "Nothing to create anywhere. Use this when the work does not live in GitHub, Jira or GitLab: requests are\nfiled in Choregos itself."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "There is no vendor. Work items live in the platform's own database."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Only Choregos roles apply: who may create, move and decide a work item is set by the project's members\nand the workflow's guarantees."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **internal**. There is nothing to configure.\n2. File work from the board with **New work item**, from the CLI, or through the MCP door with\n   `create_work_item`. The platform mints the key."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Create a work item on the board and watch it enter its workflow."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- A workflow that reads an external tracker finds nothing here: such work needs a GitHub, Jira or GitLab\n  connector instead.\n- Work items disappear from view: filter by state and project; they are never filed anywhere else."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {},
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.tracker.jira",
+    "title": "Use Jira Cloud as the board",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "tracker/jira"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Jira Cloud site and an Atlassian account **dedicated to Choregos**: its permissions are what the\n  platform may do in the project, and comments and transitions appear under its name.\n- The project key.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this\n  secret in an `X-Choregos-Secret` header."
+      },
+      {
+        "key": "at",
+        "title": "At Atlassian",
+        "markdown": "1. As the dedicated account: `id.atlassian.com`, Security, **API tokens**, **Create API token**. Copy the\n   token when it is shown.\n2. In the Jira project, give that account the permissions below.\n3. **Webhook.** The endpoint is `https://choregos.example.com/api/v1/webhooks/jira` and it requires the header `X-Choregos-Secret`.\n   Jira's own System, **WebHooks** screen lets you set a URL; check there whether it can add a header.\n   If it cannot, use a **Jira Automation** rule: trigger on issue created, issue updated and comment\n   added in the project, action **Send web request** to that URL with a custom header\n   `X-Choregos-Secret`. This path has not been exercised against a live site from this repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,\n**Transition issues**, **Add comments**.\n\nA classic API token carries all of the account's rights. A scoped API token works only through\n`https://api.atlassian.com/ex/jira/<cloudId>` as the `base_url`; that variant is **not proven** here, so\nuse a classic token unless you have tested it."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the\n   key.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector (it reads the project). Then create an issue labelled `agent-ready` and\nwatch it appear on the board."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: wrong email or a revoked token. The email and the token must belong to the same account.\n- `403`: the account lacks one of the project permissions above.\n- `404` on the project: wrong `project_key`, or the account cannot browse it.\n- A webhook answered `401 invalid shared secret`: the `X-Choregos-Secret` header is missing or differs\n  from the platform's shared secret.\n- Nothing starts after labelling: the label must be exactly `agent-ready`, and the webhook must reach\n  this platform from Jira.\n- A timeout: the egress allowlist must open the Atlassian site."
+      }
+    ],
+    "values": {
+      "webhook_url:jira": "https://choregos.example.com/api/v1/webhooks/jira"
+    },
+    "egress": [
+      "<site>.atlassian.net"
+    ],
+    "fields": {
+      "base_url": "https://<site>.atlassian.net",
+      "email": "the email of the account the API token belongs to",
+      "project_key": "the project's key, the prefix of its issue keys (BILL in BILL-42)",
+      "field_names": "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira",
+      "api_token": "a classic API token, typed once",
+      "webhook_secret": "not used by the Jira webhook endpoint: the platform's shared webhook secret is"
+    },
+    "vendor_docs": [
+      {
+        "title": "Manage API tokens for your Atlassian account",
+        "url": "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/"
+      },
+      {
+        "title": "Jira automation actions (Send web request)",
+        "url": "https://support.atlassian.com/cloud-automation/docs/jira-automation-actions/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.web_server.nginx",
+    "title": "Read nginx configuration from the GitOps repository",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "web_server/nginx"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The configuration lives in a **GitOps repository**; the platform reads the files from there, not from the\n  live server.\n- Changes are proposed as pull requests (`propose_nginx_config`). Validation (`nginx -t`) runs in the\n  runner on the agent's workspace; files that exist only on the server, such as certificates, are\n  reported as missing: the report is shown, not hidden."
+      },
+      {
+        "key": "at",
+        "title": "At the forge",
+        "markdown": "Create a token (a fine-grained personal access token on the repository, or a GitHub App's) that can read\ncontents and open pull requests there."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "Contents read, and pull requests write on that repository. Nothing reaches the server: the release\nprocess applies what is merged."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Web server**, type **nginx**.\n2. `repo`: `owner/repo`. `ref`, `root` if your layout differs. `api_url` for a self-hosted forge.\n3. `token`: in the password field."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then call `list_nginx_files` and `read_nginx_file`."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `404` on the repository or the root: wrong `repo`, `ref` or `root`, or the token cannot see it.\n- `401` or `403`: the token is wrong, expired or too narrow.\n- `nginx -t` reports a missing file: a certificate or an include that exists only on the server."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.github.com"
+    ],
+    "fields": {
+      "repo": "owner/repo of the GitOps repository",
+      "ref": "the branch or commit read, main by default",
+      "root": "the directory that holds the configuration, nginx by default",
+      "api_url": "the forge's API, https://api.github.com by default",
+      "token": "a token that can read, and open pull requests on, the repository, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "nginx documentation",
+        "url": "https://nginx.org/en/docs/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "source.confluence",
+    "title": "Add a Confluence space or page tree to a knowledge base",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "source": "confluence"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A **Confluence connector** declared by an organisation administrator (see \"Connect Confluence Cloud\").\n  It holds the service account's token; the source form never asks for a secret.\n- The service account must have **read** on the space.\n- A space larger than 5 000 pages is refused until a `page_id` narrows it."
+      },
+      {
+        "key": "at",
+        "title": "At Atlassian",
+        "markdown": "Nothing more than the connector's setup. To read a **sub-space**, open the branch's root page: its number\nis in the address, `…/wiki/spaces/ENG/pages/<id>/Title`."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The source mirrors what the connector's account can read. A page that is deleted, archived, moved out of\nthe chosen tree or restricted against the account leaves the base at the next sync."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Confluence**.\n2. Pick the **connector**, then `space_key`; optionally `page_id` (and `include_root`), `labels` (one request\n   per page) and `include_attachments`.\n3. Choose the refresh: an interval, a cron expression, or manual."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Sync now**. Each sync lists the space once and downloads only pages whose version changed."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `404` on the space: the key is case-sensitive; a personal space starts with `~`.\n- `403`, or a base that is empty: the account has no read permission, or a scope is missing on its token.\n- \"refused until a page_id narrows it\": the space has more than 5 000 pages.\n- A sync that stops part-way: a listing that fails stops the sync and deletes nothing.\n- `401`: see the connector's procedure (a scoped token needs `auth: scoped`)."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.atlassian.com",
+      "<site>.atlassian.net"
+    ],
+    "fields": {
+      "connector": "the organisation's documents/confluence connector, picked from a list",
+      "space_key": "the space's key, for example ENG",
+      "page_id": "a page's number, to read that page and everything under it",
+      "include_root": "false to leave the page itself out",
+      "include_attachments": "true to index pdf, docx, pptx, xlsx, md, txt and html attachments",
+      "labels": "keep only pages carrying one of these labels"
+    },
+    "vendor_docs": [
+      {
+        "title": "Scoped API tokens in Confluence Cloud",
+        "url": "https://support.atlassian.com/confluence/kb/scoped-api-tokens-in-confluence-cloud/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "source.git",
+    "title": "Add a git repository's documentation to a knowledge base",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "source": "git"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The repository's **https** address. A `git://` or `ssh` address is refused.\n- A **public** repository needs no credential. A **private** one is read through a `documents/git`\n  connector that an organisation administrator declared (see \"Connect a private git repository as a\n  documents source\"): it holds the token or the GitHub App, and the repository must be on the connector's\n  host.\n- Choose what to follow: a **branch** is followed at each sync; a **commit** pins the content."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Nothing to create for a public repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The source makes one shallow fetch of the ref and reads files. It reads at most 500 files of 5 MiB each."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Git**.\n2. For a private repository, name the **connector**. Then `url`, `ref` and `paths` (globs; the default is markdown anywhere).\n3. Choose the refresh. The cursor is the commit: the same commit is no change, and a file gone from the new\n   commit is deleted from the base.\n4. The egress allowlist must open the git host."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Sync now** and open the documents that were added."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- \"a git source is fetched over https\": the address is not https.\n- Nothing indexed: no file matches `paths`.\n- A fetch that fails: the ref does not exist, or the repository is private and no connector is named.\n- A timeout: the fetch is cut at 5 minutes; the egress allowlist may not open the host."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the git host"
+    ],
+    "fields": {
+      "connector": "optional: a documents/git connector, for a private repository",
+      "url": "the repository's https address",
+      "ref": "a branch (followed) or a commit (pinned), main by default",
+      "paths": "glob patterns of the files to index, *.md by default"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  },
+  {
+    "id": "source.sharepoint",
+    "title": "Add a SharePoint or OneDrive source to a knowledge base",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "source": "sharepoint"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A **SharePoint connector** declared by an organisation administrator (see \"Connect SharePoint and\n  OneDrive\"): it holds the Entra app and its secret. The source form picks it from a list and never asks\n  for a secret.\n- The app must have been **granted the site** (`Sites.Selected` plus a per-site grant). Consent alone grants\n  none, and every sync then fails with 403.\n- The site's Graph id, or the id of the drive."
+      },
+      {
+        "key": "at",
+        "title": "At Microsoft",
+        "markdown": "Find the site's id with `GET https://graph.microsoft.com/v1.0/sites/<host>:/sites/<path>` (the answer's\n`id`), or a drive's id with `GET /v1.0/sites/{site-id}/drives`. The connector's procedure shows how to\ngrant the app the site."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The source reads what the app was granted on that site, with delta sync. Everything it reads becomes\nreadable by everyone the base is open to, whatever the document's own permissions say."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **SharePoint**.\n2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare\n   one.\n3. `site_id` (or `drive_id` for a OneDrive), and optionally a `folder`.\n4. Choose the refresh: every N minutes (5 minutes to 7 days), a cron expression, or manual."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Sync now** on the source: it shows added, updated, deleted and skipped documents, and the last\nerror if there is one."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- \"no `documents` connector\": no administrator has declared a SharePoint connector yet.\n- `403 accessDenied`: the app was not granted that site.\n- A wrong connector name: names are lowercase, and the connector must be of type SharePoint (the message\n  suggests the right one).\n- Documents missing: the app was granted another site, or the folder does not exist."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "graph.microsoft.com",
+      "login.microsoftonline.com"
+    ],
+    "fields": {
+      "connector": "the organisation's documents/sharepoint connector, picked from a list",
+      "site_id": "the SharePoint site's Graph id",
+      "drive_id": "a OneDrive's or a library's drive id, instead of a site",
+      "folder": "a folder under the drive, to read only a branch"
+    },
+    "vendor_docs": [
+      {
+        "title": "Controlling app access on specific SharePoint site collections",
+        "url": "https://devblogs.microsoft.com/microsoft365dev/controlling-app-access-on-specific-sharepoint-site-collections/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "source.web",
+    "title": "Add a web site to a knowledge base",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "source": "web"
+    },
+    "link": null,
+    "reviewed": "2026-10-16",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The https address of the pages to index. The crawl stays on the **same scheme and host**, under the start\n  address's path, obeys the site's `robots.txt`, follows at most 5 levels and reads at most 500 pages.\n- A host that resolves to a private, loopback or link-local address is **refused**: a knowledge base is not\n  a way into the platform's network. For an internal site, use a git repository or a connector.\n- Read the site's terms: you are copying its content into your knowledge base."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Nothing to create. If the site blocks automated readers, ask its owner, or use their feed or repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The crawl is anonymous: it reads only what any visitor reads."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Web**.\n2. `url`, `max_depth` and `max_pages`.\n3. Choose the refresh. Web content changes: an interval of a day or a cron expression is usual.\n4. The API must be allowed to reach the site: the network egress allowlist must open its host."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Sync now** and open the documents that were added."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- \"resolves to a private address\": not crawled, by design.\n- Nothing indexed: `robots.txt` disallows the paths, or the start page links nowhere under its path.\n- A redirect to another host: the crawl does not follow it, and the base is not emptied.\n- A timeout: the egress allowlist does not open the site."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the site's host"
+    ],
+    "fields": {
+      "url": "the https address the crawl starts from",
+      "max_depth": "how many links deep to follow, at most 5",
+      "max_pages": "how many pages to read, at most 500"
+    },
+    "vendor_docs": [],
+    "origin": "shipped"
+  }
+]
