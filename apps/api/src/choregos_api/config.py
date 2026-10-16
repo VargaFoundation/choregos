@@ -161,6 +161,8 @@ class Settings(BaseSettings):
     knowledge_max_markdown_mib: int = 8
     #: A conversion runs in a child process, killed past this delay.
     knowledge_conversion_timeout_s: float = 120.0
+    #: How long a connector's connection test may take, when it runs on save (S40-05).
+    connector_test_timeout_s: float = 10.0
     #: How many conversions run at once in one API replica.
     knowledge_conversion_concurrency: int = 2
     #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.

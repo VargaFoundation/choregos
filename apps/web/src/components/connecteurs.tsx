@@ -2,22 +2,12 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useState } from "react";
-import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
-import {
-  EMPTY_DRAFT,
-  SecretField,
-  bodyOfDrafts,
-  estUneReference,
-  problemOfDraft,
-  type SecretDraft,
-} from "@/components/secret-field";
-import { Button, Card, ErrorNote, Select, StateBadge } from "@/components/ui";
+import { ConnectorCard } from "@/components/project-settings/connector-card";
+import { estUneReference } from "@/components/secret-field";
+import { Button, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { shortDate } from "@/lib/format";
-import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
-import type { ConnectorDto, ConnectorType, ProjectRequirement } from "@/lib/types";
+import type { ConnectorDto, ProjectRequirement } from "@/lib/types";
 
 /** L'ordre dans lequel la console montre les capacités (celui de `choregos_core.dsl.exigences`). */
 const ORDRE = ["tracker", "scm", "ci", "cd", "runtime", "gateway", "memory", "notify"];
@@ -37,11 +27,18 @@ export function lignesDeConnecteurs(exigences: ProjectRequirement[], configures:
 
 export { estUneReference };
 
+/** Cards to show first: what a workflow needs and nothing provides (S40-03b). */
+export function manquantEnPremier(lignes: string[], parSorte: Map<string, ProjectRequirement>, configures: ConnectorDto[]): string[] {
+  const manque = (sorte: string) => !configures.some((c) => c.kind === sorte) && !!parSorte.get(sorte) && !parSorte.get(sorte)?.default_type;
+  return [...lignes.filter(manque), ...lignes.filter((sorte) => !manque(sorte))];
+}
+
 export function Connecteurs({ slug }: { slug: string }) {
   const client = useQueryClient();
   const exigences = useQuery({ queryKey: ["requirements", slug], queryFn: () => api.projectRequirements(slug) });
   const connecteurs = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
+  const executeurs = useQuery({ queryKey: ["executors"], queryFn: () => api.executors() });
   const [ajout, setAjout] = useState("");
   const [ajoutees, setAjoutees] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -49,15 +46,27 @@ export function Connecteurs({ slug }: { slug: string }) {
   if (exigences.error) return <ErrorNote>{String(exigences.error)}</ErrorNote>;
   const actuelDe = (sorte: string) => (connecteurs.data ?? []).find((c) => c.kind === sorte);
   const parSorte = new Map((exigences.data ?? []).map((e) => [e.capability, e]));
-  const lignes = [...lignesDeConnecteurs(exigences.data ?? [], connecteurs.data ?? []), ...ajoutees];
+  // A connector added by hand and then saved is a configured one: one row, not two.
+  const lignes = manquantEnPremier(
+    [...new Set([...lignesDeConnecteurs(exigences.data ?? [], connecteurs.data ?? []), ...ajoutees])],
+    parSorte,
+    connecteurs.data ?? [],
+  );
+  // The runtimes this deployment runs (`GET /platform/executors`): a project cannot pick another one.
+  // An empty answer means the deployment did not say, not that nothing runs.
+  const permis = new Set<string>((executeurs.data ?? []).filter((e) => e.enabled).map((e) => e.kind));
+  const typesDe = (sorte: string) =>
+    (types.data ?? []).filter(
+      (t) => t.kind === sorte && (sorte !== "runtime" || permis.size === 0 || permis.has(t.type) || actuelDe(sorte)?.type === t.type),
+    );
   const autres = [...new Set((types.data ?? []).map((t) => t.kind))].filter((k) => !lignes.includes(k)).sort();
 
-  async function agir(action: () => Promise<unknown>, succes: string) {
+  async function agir(action: () => Promise<unknown>, succes: string | ((result: unknown) => string)) {
     setErreur(null);
     setMessage(null);
     try {
-      await action();
-      setMessage(succes);
+      const result = await action();
+      setMessage(typeof succes === "function" ? succes(result) : succes);
       await client.invalidateQueries({ queryKey: ["connectors", slug] });
       await client.invalidateQueries({ queryKey: ["requirements", slug] });
     } catch (cause) {
@@ -66,18 +75,8 @@ export function Connecteurs({ slug }: { slug: string }) {
   }
 
   return (
-    <Card title="Connectors" className="lg:col-span-2">
+    <div>
       <div className="space-y-3">
-        <p className="text-sm text-ink-muted">
-          What this project&apos;s workflows need, and why. A secret is typed once and stored encrypted: the console
-          then only shows that it is set and when it last changed. An operator may name it by reference
-          (<code>env:NAME</code>) instead. Systems the whole organisation
-          shares — a directory, MCP servers — are declared in{" "}
-          <Link href="/admin/connectors" className="underline">
-            Admin › connectors
-          </Link>
-          .
-        </p>
         {(message || erreur) && (
           <div>
             {message && (
@@ -88,15 +87,24 @@ export function Connecteurs({ slug }: { slug: string }) {
             {erreur && <ErrorNote>{erreur}</ErrorNote>}
           </div>
         )}
-        <ul className="space-y-2" data-testid="connecteurs">
+        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="connecteurs">
           {lignes.map((sorte) => (
-            <Ligne
+            <ConnectorCard
               key={sorte}
               sorte={sorte}
               exigence={parSorte.get(sorte)}
               actuel={(connecteurs.data ?? []).find((c) => c.kind === sorte)}
-              types={(types.data ?? []).filter((t) => t.kind === sorte)}
-              onSave={(corps) => agir(() => api.putConnector(slug, sorte, corps), `${sorte} connector saved`)}
+              types={typesDe(sorte)}
+              onSave={(corps) =>
+                agir(
+                  () => api.putConnector(slug, sorte, corps),
+                  (saved) => {
+                    const { status, last_error } = saved as ConnectorDto;
+                    if (status === "ok") return `${sorte} connector saved: connected`;
+                    return `${sorte} connector saved: ${status === "error" ? `failing, ${last_error ?? "the test failed"}` : "not tested yet"}`;
+                  },
+                )
+              }
               onSecret={(field, draft) =>
                 agir(async () => {
                   if (draft.mode === "value") await api.setConnectorSecret(slug, sorte, field, draft.text);
@@ -156,184 +164,6 @@ export function Connecteurs({ slug }: { slug: string }) {
           </form>
         )}
       </div>
-    </Card>
-  );
-}
-
-function Ligne({
-  sorte,
-  exigence,
-  actuel,
-  types,
-  onSave,
-  onSecret,
-  onClearSecret,
-  onTest,
-}: {
-  sorte: string;
-  exigence?: ProjectRequirement;
-  actuel?: ConnectorDto;
-  types: ConnectorType[];
-  onSave: (corps: ConnectorBody) => Promise<void>;
-  onSecret: (field: string, draft: SecretDraft) => Promise<void>;
-  onClearSecret: (field: string) => Promise<void>;
-  onTest: () => Promise<void>;
-}) {
-  const [ouvert, setOuvert] = useState(false);
-  return (
-    <li className="rounded border border-line p-3" data-testid={`connecteur-${sorte}`}>
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span className="w-44">
-          <span className="font-medium">{sorte}</span>
-          {libelleDeSorte(sorte) !== sorte && <span className="ml-2 text-xs text-ink-muted">{libelleDeSorte(sorte)}</span>}
-        </span>
-        <span className="font-mono text-xs">
-          {actuel ? (
-            actuel.type
-          ) : exigence?.default_type ? (
-            <span className="text-ink-muted">Platform default: {exigence.default_type}</span>
-          ) : (
-            <span className="text-ink-muted">— not configured</span>
-          )}
-        </span>
-        {actuel && (
-          <StateBadge
-            state={actuel.status}
-            display={actuel.status}
-            kind={actuel.status === "ok" ? "terminal" : actuel.status === "error" ? "blocked" : "wait"}
-          />
-        )}
-        {actuel?.last_check_at && <span className="text-xs text-ink-muted">Tested {shortDate(actuel.last_check_at)}</span>}
-        <span className="ml-auto inline-flex gap-2">
-          {actuel && (
-            <Button size="sm" onClick={() => void onTest()}>
-              Test
-            </Button>
-          )}
-          <Button size="sm" onClick={() => setOuvert(!ouvert)}>
-            {ouvert ? "Close" : actuel ? "Edit" : "Configure"}
-          </Button>
-        </span>
-      </div>
-      {exigence && exigence.reasons.length > 0 && (
-        <ul className="mt-1 list-disc pl-6 text-xs text-ink-muted">
-          {exigence.reasons.slice(0, 3).map((raison) => (
-            <li key={raison}>{raison}</li>
-          ))}
-          {exigence.reasons.length > 3 && <li>And {exigence.reasons.length - 3} more</li>}
-        </ul>
-      )}
-      {ouvert && (
-        <Formulaire
-          types={types}
-          actuel={actuel}
-          onSecret={onSecret}
-          onClearSecret={onClearSecret}
-          onSave={async (corps) => {
-            await onSave(corps);
-            setOuvert(false);
-          }}
-        />
-      )}
-    </li>
-  );
-}
-
-type ConnectorBody = {
-  type: string;
-  config: Record<string, unknown>;
-  secret_refs: Record<string, string>;
-  secret_values: Record<string, string>;
-};
-
-/**
- * The type, its configuration drawn from its schema, and its secrets (ADR 0058). A secret that is
- * already set is replaced or cleared on the spot (its own call, the value never comes back); one
- * that is not is typed here and goes with Save. The references already held are sent again, since a
- * save replaces them; a stored value the body does not name is kept by the API.
- */
-function Formulaire({
-  types,
-  actuel,
-  onSave,
-  onSecret,
-  onClearSecret,
-}: {
-  types: ConnectorType[];
-  actuel?: ConnectorDto;
-  onSave: (corps: ConnectorBody) => Promise<void>;
-  onSecret: (field: string, draft: SecretDraft) => Promise<void>;
-  onClearSecret: (field: string) => Promise<void>;
-}) {
-  const [type, setType] = useState(actuel?.type ?? types[0]?.type ?? "");
-  const [config, setConfig] = useState<Record<string, unknown>>(actuel?.config ?? {});
-  const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
-  const choisi = types.find((t) => t.type === type);
-  const schema = (choisi?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
-  const manquants = champsManquants(schema, config);
-  const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
-  const memeType = actuel?.type === type;
-  const etats = memeType ? (actuel?.secrets ?? []) : [];
-  return (
-    <form
-      className="mt-3 space-y-3 border-t border-line pt-3 text-sm"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const kept = Object.fromEntries(
-          etats.filter((s) => s.source === "reference" && s.reference).map((s) => [s.field, s.reference as string]),
-        );
-        const { secret_values, secret_refs } = bodyOfDrafts(secrets);
-        void onSave({ type, config, secret_refs: { ...kept, ...secret_refs }, secret_values });
-      }}
-    >
-      <label className="block space-y-1">
-        <span className="text-xs text-ink-muted">Implementation</span>
-        <Select
-          className="w-full"
-          value={type}
-          onChange={(event) => {
-            setType(event.target.value);
-            setConfig({});
-            setSecrets({});
-          }}
-        >
-          {types.map((t) => (
-            <option key={t.type} value={t.type}>
-              {t.display}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <SchemaForm schema={schema} value={config} onChange={setConfig} />
-      {(choisi?.secret_fields ?? []).length > 0 && (
-        <fieldset className="space-y-2">
-          <legend className="text-xs text-ink-muted">Secrets — typed once, never shown again</legend>
-          {(choisi?.secret_fields ?? []).map((champ) => {
-            const etat = etats.find((s) => s.field === champ);
-            return etat ? (
-              <SecretField
-                key={champ}
-                field={champ}
-                state={etat}
-                onSave={(draft) => onSecret(champ, draft)}
-                onClear={() => onClearSecret(champ)}
-              />
-            ) : (
-              <SecretField
-                key={champ}
-                field={champ}
-                draft={secrets[champ] ?? EMPTY_DRAFT}
-                onChange={(draft) => setSecrets({ ...secrets, [champ]: draft })}
-              />
-            );
-          })}
-        </fieldset>
-      )}
-      <div className="flex justify-end">
-        <Button size="sm" tone="primary" type="submit" disabled={!type || manquants.length > 0 || illisibles.length > 0}>
-          Save
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }

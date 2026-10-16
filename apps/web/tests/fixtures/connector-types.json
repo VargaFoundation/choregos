@@ -1,0 +1,134 @@
+[
+ {
+  "kind": "access_control",
+  "type": "demo"
+ },
+ {
+  "kind": "cd",
+  "type": "argocd"
+ },
+ {
+  "kind": "cd",
+  "type": "demo"
+ },
+ {
+  "kind": "ci",
+  "type": "tekton"
+ },
+ {
+  "kind": "documents",
+  "type": "confluence"
+ },
+ {
+  "kind": "documents",
+  "type": "sharepoint"
+ },
+ {
+  "kind": "firewall",
+  "type": "pfsense"
+ },
+ {
+  "kind": "gateway",
+  "type": "direct"
+ },
+ {
+  "kind": "gateway",
+  "type": "litellm"
+ },
+ {
+  "kind": "gateway",
+  "type": "openai-compatible"
+ },
+ {
+  "kind": "identity",
+  "type": "entra"
+ },
+ {
+  "kind": "marketdata",
+  "type": "alphavantage"
+ },
+ {
+  "kind": "marketdata",
+  "type": "composite"
+ },
+ {
+  "kind": "marketdata",
+  "type": "stooq"
+ },
+ {
+  "kind": "marketdata",
+  "type": "yahoo"
+ },
+ {
+  "kind": "mcp",
+  "type": "mcp"
+ },
+ {
+  "kind": "mdm",
+  "type": "demo"
+ },
+ {
+  "kind": "memory",
+  "type": "ecphoria"
+ },
+ {
+  "kind": "memory",
+  "type": "lexical"
+ },
+ {
+  "kind": "network_policy",
+  "type": "cilium"
+ },
+ {
+  "kind": "notify",
+  "type": "slack"
+ },
+ {
+  "kind": "runtime",
+  "type": "aca"
+ },
+ {
+  "kind": "runtime",
+  "type": "agent_sandbox"
+ },
+ {
+  "kind": "runtime",
+  "type": "k8s_job"
+ },
+ {
+  "kind": "runtime",
+  "type": "local_docker"
+ },
+ {
+  "kind": "runtime",
+  "type": "tekton"
+ },
+ {
+  "kind": "scm",
+  "type": "github"
+ },
+ {
+  "kind": "shipping",
+  "type": "demo"
+ },
+ {
+  "kind": "tracker",
+  "type": "github-issues"
+ },
+ {
+  "kind": "tracker",
+  "type": "gitlab-issues"
+ },
+ {
+  "kind": "tracker",
+  "type": "internal"
+ },
+ {
+  "kind": "tracker",
+  "type": "jira"
+ },
+ {
+  "kind": "web_server",
+  "type": "nginx"
+ }
+]
