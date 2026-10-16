@@ -21,7 +21,7 @@ import { useId, useState, type ReactNode } from "react";
 import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
 import { diffSpecs } from "@/lib/agent-diff";
 import { ApiError, api } from "@/lib/api";
-import { type CeilingNetwork, flaggedByCeiling, isDefaultNetwork, networkMode, networkSummary, parseHosts } from "@/lib/network";
+import { type CeilingNetwork, flaggedByCeiling, isDefaultNetwork, networkMode, parseHosts } from "@/lib/network";
 import { scopeHint, scopeLabel } from "./registre";
 import { refusalSentence, MAX_MESSAGE } from "./history";
 import { ChangeList } from "./spec-changes";
