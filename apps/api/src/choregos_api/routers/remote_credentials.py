@@ -495,7 +495,12 @@ def card_summary(card: AgentCard) -> RemoteCardSummary:
     operation_id="discoverRemoteAgent",
 )
 async def discover_remote_agent(
-    org: str, body: RemoteAgentDiscover, session: Db, principal: Me, allow_egress: bool = False
+    org: str,
+    body: RemoteAgentDiscover,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    allow_egress: bool = False,
 ) -> RemoteAgentDiscovery:
     """Reads a card and suggests the registry entry; creates nothing. The card's host must be open
     in the organisation's egress allowlist first (S39-22): 409 `egress_required`, or `allow_egress`."""
@@ -510,7 +515,9 @@ async def discover_remote_agent(
         origin=f"remote-agent:{body.card_url}",
         reason=f"the remote agent at {body.card_url}",
     )
-    card = await read_card(body.card_url)
+    # A fresh policy: the gate above may just have opened the host, after the route's own scope loaded.
+    async with egress_scope(session, organisation, "api", f"remote-agent:{body.card_url}", settings):
+        card = await read_card(body.card_url)
     rows = (
         await session.execute(select(RemoteCredential).where(RemoteCredential.org_id == organisation.id))
     ).scalars()

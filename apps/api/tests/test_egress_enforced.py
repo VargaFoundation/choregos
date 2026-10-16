@@ -191,7 +191,7 @@ async def _public(host: str) -> list[str]:
     return ["93.184.216.34"]
 
 
-async def test_a_remote_agents_card_fetch_on_a_revoked_host_is_refused_and_never_sent(
+async def test_a_remote_agents_card_fetch_outside_the_ceiling_is_refused_and_never_sent(
     client: AsyncClient, admin: str, enforce: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_adapters.fakes.a2a import FakeA2aAgent
@@ -204,11 +204,16 @@ async def test_a_remote_agents_card_fetch_on_a_revoked_host_is_refused_and_never
         await client.post(f"{ORG}/remote-credentials", json={"name": "rovo", "type": "none"})
         remote.security = "none"
         host = urlsplit(remote.card_url).hostname or ""
-        await client.post(f"{ORG}/egress/rules", json={"host": host, "used_by": ["api"]})
+        await client.post(f"{ORG}/egress/rules", json={"host": host, "used_by": ["api", "runners"]})
         discover = {"card_url": remote.card_url}
         assert (await client.post(f"{ORG}/agents/discover", json=discover)).status_code == 200
         fetched = remote.card_fetches
-        await _revoke(client, host)
+        # the organisation still allows it, the deployment's ceiling no longer does: the gate passes,
+        # the guard refuses before the card is requested
+        from choregos_api.config import reset_settings_cache
+
+        monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["elsewhere.example.test"]}')
+        reset_settings_cache()
         refused = await client.post(f"{ORG}/agents/discover", json=discover)
         assert refused.status_code == 422 and "egress refused" in refused.text, refused.text
         assert remote.card_fetches == fetched, "the card was never requested"
