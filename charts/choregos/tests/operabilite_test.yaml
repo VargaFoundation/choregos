@@ -9,6 +9,10 @@ templates:
   - charts/choregos-orchestrator/templates/deployments.yaml
   - charts/choregos-api/templates/deployment.yaml
   - templates/garde.yaml
+# Offline rendering: the default executor (agent_sandbox, ADR 0072) refuses to render without its
+# operator among the cluster's API versions, which a unit test does not have.
+set:
+  choregos-orchestrator.runner.skipOperatorCheck: true
 tests:
   - it: the front end has a disruption budget from two replicas up
     template: charts/choregos-web/templates/pdb.yaml

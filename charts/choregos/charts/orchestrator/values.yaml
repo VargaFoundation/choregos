@@ -27,8 +27,11 @@ runner:
   # broad cut), the agent pods re-pointed at a missing image. A default that is only correct
   # thanks to a fix elsewhere is not a default, it is a trap.
   tag: ""
-  namespacePattern: "proj-{slug}-runners"
-  executor: tekton
+  # Empty: the release namespace for `agent_sandbox`, `proj-{slug}-runners` otherwise.
+  namespacePattern: ""
+  # Empty: `global.runner.executor` (default agent_sandbox, ADR 0072) decides.
+  executor: ""
+  skipOperatorCheck: false
   runtimeClass: ""
   # `executor: agent_sandbox` only (ADR 0016): see the umbrella chart's values.
   warmPool:

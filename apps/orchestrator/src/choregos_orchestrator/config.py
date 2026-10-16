@@ -48,7 +48,7 @@ class OrchestratorSettings(BaseSettings):
     #: pinned by digest. A workflow names an image, never pulls one: the operator decides what runs.
     #: Each is built FROM the runner image — the runner is what runs the job's command.
     job_images: dict[str, str] = {}
-    executor_kind: str = "tekton"
+    executor_kind: str = "agent_sandbox"
     # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
     # secret n'a rien à faire ici : `CHOREGOS_RUNNER_ENV_SECRETS` liste des secrets, que
     # l'exécuteur monte par référence.

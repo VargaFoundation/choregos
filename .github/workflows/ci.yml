@@ -169,11 +169,13 @@ jobs:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
         with: { version: v3.22.0 }
-      - run: helm lint charts/choregos
+      # The default executor (agent_sandbox, ADR 0072) refuses to render without its operator in the
+      # cluster's API versions: an offline rendering skips that check, nothing else.
+      - run: helm lint charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true
       - name: render the four environments (local = the bundled dependencies)
         run: |
           for env in local dev staging prod; do
-            helm template choregos charts/choregos -f charts/choregos/values/$env.yaml > /tmp/$env.yaml
+            helm template choregos charts/choregos -f charts/choregos/values/$env.yaml --set choregos-orchestrator.runner.skipOperatorCheck=true > /tmp/$env.yaml
           done
       - name: kubeconform
         run: |

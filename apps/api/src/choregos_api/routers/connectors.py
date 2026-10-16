@@ -124,8 +124,10 @@ async def put_connector(
             "the `direct` gateway is refused in this environment: it measures no cost and "
             "enforces no cap. Use `litellm`."
         )
-    from ..services.connecteurs import spec_du_type, verifier_les_secrets
+    from ..services.connecteurs import check_runtime_allowed, spec_du_type, verifier_les_secrets
 
+    if kind == "runtime":
+        check_runtime_allowed(body.type)
     prefix = _prefix(ctx, kind)
     verifier_les_secrets(
         spec_du_type(kind, body.type),

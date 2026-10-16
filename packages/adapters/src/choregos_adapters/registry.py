@@ -198,12 +198,34 @@ def fakes_enabled() -> bool:
 
 
 def default_executor_kind() -> str:
-    """L'exécuteur d'un projet qui n'en déclare pas : celui du déploiement.
+    """The executor of a project that declares none: the deployment's own (ADR 0072).
 
-    `CHOREGOS_EXECUTOR_KIND` était posé par le chart et lu nulle part — chaque projet
-    retombait sur Tekton, y compris là où Tekton n'existe pas (un locataire qui ne peut
-    lancer que des Jobs dans son namespace)."""
-    return os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or "tekton"
+    `agent_sandbox` when the deployment says nothing: Tekton is no longer assumed, since it
+    is absent from the clusters this platform runs on. A deployment that wants Tekton says so
+    (`global.runner.executor: tekton`)."""
+    return os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or "agent_sandbox"
+
+
+def executors_declared() -> bool:
+    """True when the deployment says which executors it runs (the chart always does)."""
+    return bool(
+        os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or os.environ.get("CHOREGOS_EXECUTORS_ALLOWED", "")
+    )
+
+
+def allowed_executor_kinds() -> list[str]:
+    """The executors a project may pick as its `runtime`: the deployment's, plus the allowed ones.
+
+    `CHOREGOS_EXECUTORS_ALLOWED` is a comma-separated list (chart `global.runner.allowedExecutors`);
+    the default executor is always in it. `fake` is added under `CHOREGOS_FAKES`."""
+    kinds = [default_executor_kind()]
+    for raw in os.environ.get("CHOREGOS_EXECUTORS_ALLOWED", "").split(","):
+        name = raw.strip()
+        if name and name not in kinds:
+            kinds.append(name)
+    if fakes_enabled() and "fake" not in kinds:
+        kinds.append("fake")
+    return kinds
 
 
 def available(kind: ConnectorKind | str) -> list[str]:

@@ -2,6 +2,9 @@
 global:
   domain: choregos.dev
   environment: prod
+  runner:
+    # ADR 0072: the default, written here so the choice is visible. Needs the operator on the cluster.
+    executor: agent_sandbox
   fakes: false
   logLevel: INFO
   imagePullPolicy: IfNotPresent
@@ -13,7 +16,7 @@ choregos-web:
   replicaCount: 3
 choregos-orchestrator:
   runner:
-    executor: tekton
+    warmPool: { size: 2 }
   queues:
     - name: orchestrator
       replicas: 3

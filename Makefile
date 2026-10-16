@@ -94,9 +94,9 @@ web-ci: web-lint web-typecheck web-test web-build  ## CI du front
 .PHONY: charts-lint
 charts-lint:  ## helm lint + kubeconform (ignoré si helm absent)
 	@command -v helm >/dev/null 2>&1 || { echo "helm absent — étape ignorée"; exit 0; }
-	helm lint charts/choregos
+	helm lint charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true
 	@command -v kubeconform >/dev/null 2>&1 \
-		&& helm template choregos charts/choregos | kubeconform -strict -ignore-missing-schemas -summary \
+		&& helm template choregos charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true | kubeconform -strict -ignore-missing-schemas -summary \
 		|| echo "kubeconform absent — validation de schéma ignorée"
 
 .PHONY: charts-test
