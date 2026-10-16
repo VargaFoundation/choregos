@@ -33,6 +33,7 @@ from ..schemas import (
     SkillUpdate,
     SkillVersionDto,
 )
+from ..services.platform_network import check_platform_host, user_agent
 from ..services.skill_gate import assess
 from ..services.skill_gate import columns as gate_columns
 from ..services.skill_sources import (
@@ -346,18 +347,27 @@ def _source(repo_url: str, path: str) -> tuple[GitSource, str]:
         raise unprocessable(str(refus)) from refus
 
 
-async def _resolve(fetcher: SourceFetcher, source: GitSource, ref: str) -> str:
+async def _network_gate(session: AsyncSession, org_id: str, source: GitSource) -> str:
+    """The organisation's network policy applies to the fetch (ADR 0070): 422 when it refuses the
+    repository's host. Returns the User-Agent the fetch carries."""
+    await check_platform_host(session, org_id, source.url, "skill source")
+    return await user_agent(session, org_id)
+
+
+async def _resolve(fetcher: SourceFetcher, source: GitSource, ref: str, agent: str = "") -> str:
     try:
-        return await fetcher.resolve(source, ref)
+        return await fetcher.resolve(source, ref, user_agent=agent)
     except SourceRefused as refus:
         raise unprocessable(str(refus)) from refus
     except SourceUnavailable as panne:
         raise upstream(source.host, str(panne)) from panne
 
 
-async def _snapshot(fetcher: SourceFetcher, source: GitSource, sha: str, path: str) -> Snapshot:
+async def _snapshot(
+    fetcher: SourceFetcher, source: GitSource, sha: str, path: str, agent: str = ""
+) -> Snapshot:
     try:
-        return read_tarball(await fetcher.tarball(source, sha), path)
+        return read_tarball(await fetcher.tarball(source, sha, user_agent=agent), path)
     except SourceRefused as refus:
         raise unprocessable(str(refus)) from refus
     except SourceUnavailable as panne:
@@ -420,9 +430,10 @@ async def preview_skills_from_git(
     sources, _ = await _skill_sources(session, organisation)
     permis = allowed(source, sources)
     _may_import(principal, org, source, permis, [])
+    agent = await _network_gate(session, organisation.id, source)
     fetcher = get_fetcher(settings.fakes)
-    sha = await _resolve(fetcher, source, body.ref)
-    snapshot = await _snapshot(fetcher, source, sha, base)
+    sha = await _resolve(fetcher, source, body.ref, agent)
+    snapshot = await _snapshot(fetcher, source, sha, base, agent)
     existantes = await _latest_versions(
         session, organisation, [skill.name for skill in snapshot.skills if skill.name]
     )
@@ -478,7 +489,8 @@ async def import_skills_from_git(
     noms = list(dict.fromkeys(body.skills))
     existantes = await _latest_versions(session, organisation, noms)
     _may_import(principal, org, source, allowed(source, sources), sorted(existantes))
-    snapshot = await _snapshot(get_fetcher(settings.fakes), source, body.sha, base)
+    agent = await _network_gate(session, organisation.id, source)
+    snapshot = await _snapshot(get_fetcher(settings.fakes), source, body.sha, base, agent)
     choisies: list[FoundSkill] = []
     for nom in noms:
         trouvees = [skill for skill in snapshot.skills if skill.name == nom]
@@ -541,15 +553,16 @@ async def check_skill_update(
         )
     origine = SkillSourceDto.model_validate(derniere.source)
     source, chemin = _source(origine.repo, origine.path)
+    agent = await _network_gate(session, organisation.id, source)
     fetcher = get_fetcher(settings.fakes)
-    sha = await _resolve(fetcher, source, ref)
+    sha = await _resolve(fetcher, source, ref, agent)
     reponse = SkillUpdate(
         slug=slug, version=derniere.version, source=origine, ref=ref, sha=sha, up_to_date=sha == origine.sha
     )
     if reponse.up_to_date:
         reponse.digest = derniere.digest
         return reponse
-    snapshot = await _snapshot(fetcher, source, sha, chemin)
+    snapshot = await _snapshot(fetcher, source, sha, chemin, agent)
     trouvee = next((s for s in snapshot.skills if s.path == chemin), None)
     if trouvee is None:
         reponse.problem = f"there is no skill at `{chemin or '/'}` any more at {sha[:12]}"

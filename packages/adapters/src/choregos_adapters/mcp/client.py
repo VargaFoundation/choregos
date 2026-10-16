@@ -81,6 +81,7 @@ class ClientMcp:
         username: str = "",
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        user_agent: str = "",
     ) -> None:
         if auth_scheme not in {"bearer", "basic"}:
             raise ValueError(f"unknown MCP auth scheme `{auth_scheme}`: `bearer` or `basic`")
@@ -92,6 +93,8 @@ class ClientMcp:
         # which Atlassian's Rovo MCP Server asks for when it is given an API token.
         self._auth_scheme = auth_scheme
         self._username = username
+        #: Sent on every request when given: who is calling, and how to reach them (ADR 0070).
+        self._user_agent = user_agent
         self._timeout = timeout_s
         self._transport = transport
         self._session: str | None = None
@@ -105,6 +108,8 @@ class ClientMcp:
             "Accept": "application/json, text/event-stream",
             "MCP-Protocol-Version": self._version,
         }
+        if self._user_agent:
+            entetes["User-Agent"] = self._user_agent
         if self._token and self._auth_scheme == "basic":
             pair = base64.b64encode(f"{self._username}:{self._token}".encode()).decode("ascii")
             entetes["Authorization"] = f"Basic {pair}"

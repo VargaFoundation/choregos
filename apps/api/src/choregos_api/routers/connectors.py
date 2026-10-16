@@ -125,7 +125,9 @@ async def put_connector(
             "enforces no cap. Use `litellm`."
         )
     from ..services.connecteurs import spec_du_type, verifier_les_secrets
+    from ..services.platform_network import check_connector_declaration
 
+    await check_connector_declaration(session, ctx.project.org_id, body.config, kind)
     prefix = _prefix(ctx, kind)
     verifier_les_secrets(
         spec_du_type(kind, body.type),

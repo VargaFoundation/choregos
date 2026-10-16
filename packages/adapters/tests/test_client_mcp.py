@@ -117,3 +117,22 @@ def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatc
         },
     )
     assert client._entetes()["Authorization"].startswith("Basic ")
+
+
+async def test_le_user_agent_de_la_plateforme_part_avec_chaque_requete() -> None:
+    """ADR 0070: a server's operator sees who calls, and how to reach them."""
+    serveur = FakeMcpServer(outils=OUTILS[:1])
+    agent = "Choregos/1.2 (+https://ops.example.com)"
+    client = ClientMcp("https://fournisseur.test/mcp", transport=serveur.transport(), user_agent=agent)
+    await client.call_tool("lire_commande", {})
+    assert serveur.recues
+    for methode, entetes, _ in serveur.recues:
+        assert entetes["user-agent"] == agent, methode
+
+
+async def test_sans_user_agent_le_client_garde_celui_de_httpx() -> None:
+    serveur = FakeMcpServer(outils=OUTILS[:1])
+    await ClientMcp("https://fournisseur.test/mcp", transport=serveur.transport()).call_tool(
+        "lire_commande", {}
+    )
+    assert all("choregos" not in e["user-agent"].lower() for _, e, _ in serveur.recues)

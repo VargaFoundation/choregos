@@ -287,11 +287,11 @@ def detect_licence(skill_files: dict[str, str], repo_licences: dict[str, str] | 
 
 
 class SourceFetcher(Protocol):
-    async def resolve(self, source: GitSource, ref: str) -> str:
+    async def resolve(self, source: GitSource, ref: str, *, user_agent: str = "") -> str:
         """The full commit SHA a branch, a tag or a SHA names."""
         ...
 
-    async def tarball(self, source: GitSource, sha: str) -> bytes:
+    async def tarball(self, source: GitSource, sha: str, *, user_agent: str = "") -> bytes:
         """The tarball of the repository at that commit."""
         ...
 
@@ -308,10 +308,15 @@ class HttpsSourceFetcher:
         #: An `httpx` transport: the tests' `MockTransport`, never the network in a unit test.
         self.transport = transport
 
-    def _client(self) -> Any:
+    def _client(self, user_agent: str = "") -> Any:
         import httpx
 
-        return httpx.AsyncClient(timeout=self.timeout_s, follow_redirects=False, transport=self.transport)
+        return httpx.AsyncClient(
+            timeout=self.timeout_s,
+            follow_redirects=False,
+            transport=self.transport,
+            headers={"User-Agent": user_agent} if user_agent else None,
+        )
 
     def _urls(self, source: GitSource, ref: str) -> tuple[str, dict[str, str], str]:
         if source.host == "github.com":
@@ -327,12 +332,12 @@ class HttpsSourceFetcher:
             f"https://gitlab.com/api/v4/projects/{projet}/repository/archive.tar.gz?sha={ref}",
         )
 
-    async def resolve(self, source: GitSource, ref: str) -> str:
+    async def resolve(self, source: GitSource, ref: str, *, user_agent: str = "") -> str:
         import httpx
 
         url, entetes, _ = self._urls(source, ref)
         try:
-            async with self._client() as client:
+            async with self._client(user_agent) as client:
                 reponse = await client.get(url, headers=entetes)
         except httpx.HTTPError as panne:
             raise SourceUnavailable(f"{source.host} did not answer: {panne}") from panne
@@ -345,7 +350,7 @@ class HttpsSourceFetcher:
             raise SourceUnavailable(f"{source.host} did not give a commit SHA for `{ref}`")
         return sha
 
-    async def tarball(self, source: GitSource, sha: str) -> bytes:
+    async def tarball(self, source: GitSource, sha: str, *, user_agent: str = "") -> bytes:
         import httpx
 
         _, _, url = self._urls(source, sha)
@@ -353,7 +358,7 @@ class HttpsSourceFetcher:
         recus = 0
         try:
             async with (
-                self._client() as client,
+                self._client(user_agent) as client,
                 client.stream("GET", url) as reponse,
             ):
                 if reponse.status_code != 200:
@@ -377,6 +382,8 @@ class FakeSourceFetcher:
         self.refs: dict[str, dict[str, str]] = {}
         self.tarballs: dict[tuple[str, str], bytes] = {}
         self.calls: list[tuple[str, str, str]] = []
+        #: The User-Agent each call carried, in order (ADR 0070).
+        self.user_agents: list[str] = []
 
     def add(self, repo_url: str, sha: str, tarball: bytes, refs: dict[str, str] | None = None) -> None:
         cle = parse_repo_url(repo_url).key
@@ -385,8 +392,9 @@ class FakeSourceFetcher:
         for nom in refs or {}:
             self.refs[cle][nom] = (refs or {})[nom]
 
-    async def resolve(self, source: GitSource, ref: str) -> str:
+    async def resolve(self, source: GitSource, ref: str, *, user_agent: str = "") -> str:
         self.calls.append(("resolve", source.key, ref))
+        self.user_agents.append(user_agent)
         if source.key not in self.refs:
             raise SourceUnavailable(f"{source.url} is not a recorded repository")
         sha = self.refs[source.key].get(ref)
@@ -394,8 +402,9 @@ class FakeSourceFetcher:
             raise SourceRefused(f"`{ref}` is not a branch, tag or commit of {source.url}")
         return sha
 
-    async def tarball(self, source: GitSource, sha: str) -> bytes:
+    async def tarball(self, source: GitSource, sha: str, *, user_agent: str = "") -> bytes:
         self.calls.append(("tarball", source.key, sha))
+        self.user_agents.append(user_agent)
         contenu = self.tarballs.get((source.key, sha))
         if contenu is None:
             raise SourceUnavailable(f"no recorded tarball for {source.url}@{sha}")
