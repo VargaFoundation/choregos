@@ -18,7 +18,7 @@ import ipaddress
 import os
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -70,9 +70,15 @@ def _is_ip(host: str) -> bool:
 
 
 def host_matches(pattern: str, host: str) -> bool:
-    """`*.x.y` matches `a.x.y` and `a.b.x.y`, never `x.y` nor `evilx.y`; anything else is exact."""
+    """`*.x.y` matches `a.x.y` and `a.b.x.y`, never `x.y` nor `evilx.y`; anything else is exact.
+
+    `host` may itself be a `*.` pattern (a connector that reaches every subdomain of a domain): it
+    is then covered only by an equal pattern, or by a wider wildcard."""
     if pattern.startswith("*."):
-        return host.endswith(pattern[1:]) and len(host) > len(pattern) - 1
+        suffix = pattern[1:]
+        if host.startswith("*."):
+            return host[1:].endswith(suffix)
+        return host.endswith(suffix) and len(host) > len(suffix)
     return pattern == host
 
 
@@ -159,7 +165,7 @@ class EgressPolicy:
     mode: Mode = "enforce"
 
     def verdict(self, host: str, port: int = 443, family: str = "api") -> Verdict:
-        host = normalize_host(host)
+        host = normalize_host(host, allow_wildcard=True)
         if any(rule.covers(host, port, family) for rule in self.rules):
             org: OrgState = "allowed"
         elif any(rule.covers(host, port, family) for rule in self.requested):
@@ -221,6 +227,15 @@ _SCOPE: ContextVar[EgressScope | None] = ContextVar("choregos_egress_scope", def
 
 def current_scope() -> EgressScope | None:
     return _SCOPE.get()
+
+
+def push_scope(policy: EgressPolicy, family: str = "api", origin: str = "") -> Token[EgressScope | None]:
+    """`use_policy` for a block too long to indent: pair it with `pop_scope` in a `finally`."""
+    return _SCOPE.set(EgressScope(policy, family, origin))
+
+
+def pop_scope(token: Token[EgressScope | None]) -> None:
+    _SCOPE.reset(token)
 
 
 @contextmanager

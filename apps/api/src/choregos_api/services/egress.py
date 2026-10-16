@@ -44,6 +44,8 @@ from ..schemas.egress import (
 LIVE = ("requested", "allowed")
 #: A member may have this many requests waiting at once.
 MAX_OPEN_REQUESTS = 20
+#: Where a Confluence download is redirected to (a signed URL on another origin).
+CONFLUENCE_MEDIA_HOST = "api.media.atlassian.com"
 
 #: The pod selector of each family in the chart, when the deployment does not say otherwise.
 DEFAULT_SELECTORS = {
@@ -125,8 +127,17 @@ async def egress_scope(
         yield
 
 
-async def organisation_by_id(session: AsyncSession, org_id: str) -> Organization | None:
-    return await session.get(Organization, org_id)
+@asynccontextmanager
+async def egress_scope_for_org(
+    session: AsyncSession, org_id: str, family: str = "api", origin: str = ""
+) -> AsyncIterator[None]:
+    """`egress_scope` for a caller that holds the organisation's id (a run's, a connector's)."""
+    organisation = await session.get(Organization, org_id)
+    if organisation is None:
+        yield
+        return
+    async with egress_scope(session, organisation, family, origin):
+        yield
 
 
 async def approvers(session: AsyncSession, org_id: str) -> list[Approver]:
@@ -231,7 +242,7 @@ def targets_of_urls(urls: Iterable[object], family: str = "api") -> list[Target]
 def targets_of_hosts(hosts: Iterable[tuple[str, int]], family: str = "api") -> list[Target]:
     out: list[Target] = []
     for host, port in hosts:
-        target = Target(normalize_host(host), port, family)
+        target = Target(normalize_host(host, allow_wildcard=True), port, family)
         if target not in out:
             out.append(target)
     return out
@@ -450,13 +461,17 @@ def skill_import_targets(repo_url: str) -> list[Target]:
 
 def knowledge_source_targets(kind: str, config: dict[str, Any]) -> list[Target]:
     """A `web` source's host, a `git` source's repository host (plus GitHub's API for a GitHub App).
-    A connected kind (`sharepoint`, `confluence`) gets its hosts from its connector, which is gated
-    when the connector is declared."""
-    if kind not in ("web", "git"):
+    A connected kind (`sharepoint`, `confluence`) gets most of its hosts from its connector; what the
+    source adds is where a download is redirected to (`*.sharepoint.com`, Confluence's media host)."""
+    if kind not in ("web", "git", "confluence", "sharepoint"):
         return []
     hosts = [hp for hp in (host_port_of(config.get("url")),) if hp]
     if kind == "git" and any(h == "github.com" for h, _ in hosts) and config.get("github_app"):
         hosts.append(("api.github.com", 443))
+    if kind == "sharepoint":
+        hosts.append(("*.sharepoint.com", 443))
+    if kind == "confluence" and config.get("include_attachments"):
+        hosts.append((CONFLUENCE_MEDIA_HOST, 443))
     return targets_of_hosts(hosts, "api") + targets_of_hosts(hosts, "workers")
 
 

@@ -435,7 +435,10 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
-**Total** : 280 livrées, 127 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+
+| S39-22b | S39 | 🟡 | #… | the MCP client, the web, Confluence and Graph knowledge sources and the git skill fetch refuse a host the organisation has not opened — before sending, redirects included, fail closed without a policy in `enforce` (`GuardedTransport`); a `git` source checks its host up front and forbids redirects; the sync reads the `workers` family, the broker and the skill fetch the `api` one, governed-action effects the `workers` one; a refusal is a connector or source error naming egress (an HTTP 422 for a git import), not a timeout. Proved by `test_egress_transport.py` (the inner transport records no call; a redirect to an absent host is refused on its hop; killed mutant: an unguarded MCP client turns four tests red), `test_git_source_egress.py`, `test_egress_enforced.py` (discovery, broker, git import and preview, web sync: recorders see nothing) and `test_knowledge_sync_egress.py` (killed mutant: the wrong family turns it red). Does not prove: the A2A card fetch and the catalogue installs (they land with the integration branch), the REST connectors (phase 2, `warn` first), a Confluence media host or a SharePoint download host other than `api.media.atlassian.com` and `*.sharepoint.com` (derived, not observed), nor that the cluster lets an allowed host through. |
+
+**Total** : 280 livrées, 128 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

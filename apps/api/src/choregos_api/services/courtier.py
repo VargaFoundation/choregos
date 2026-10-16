@@ -334,7 +334,19 @@ def verifier_les_arguments(outil: OutilDuCourtier, arguments: dict[str, Any]) ->
 async def appeler(
     session: AsyncSession, outil: OutilDuCourtier, arguments: dict[str, Any]
 ) -> tuple[int, dict[str, Any]]:
-    """`tools/call` sur le serveur, avec la clé du connecteur résolue ICI — jamais dans le pod."""
+    """`tools/call` sur le serveur, avec la clé du connecteur résolue ICI — jamais dans le pod.
+
+    Under the organisation's egress allowlist (S39-22): a host it has not opened is a tool error
+    that says so, not a timeout."""
+    from .egress import egress_scope_for_org
+
+    async with egress_scope_for_org(session, outil.connecteur.org_id, "api", f"mcp:{outil.connecteur.name}"):
+        return await _appeler(session, outil, arguments)
+
+
+async def _appeler(
+    session: AsyncSession, outil: OutilDuCourtier, arguments: dict[str, Any]
+) -> tuple[int, dict[str, Any]]:
     import httpx
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError

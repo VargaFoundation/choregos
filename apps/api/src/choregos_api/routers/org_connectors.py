@@ -40,7 +40,7 @@ from ..services.connector_secrets import (
     refs_with_values,
     require_store,
 )
-from ..services.egress import egress_gate_for_connector
+from ..services.egress import egress_gate_for_connector, egress_scope
 
 router = APIRouter(tags=["connectors"])
 
@@ -477,7 +477,8 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
         if lister is None:
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
-        outils = await lister()
+        async with egress_scope(session, organisation, "api", f"org-connector:{name}"):
+            outils = await lister()
     except (ErreurMcp, SecretIntrouvable, httpx.HTTPError) as panne:
         instance.status, instance.last_check_at = "error", utcnow()
         instance.last_error = redact(str(panne))[:1000]
