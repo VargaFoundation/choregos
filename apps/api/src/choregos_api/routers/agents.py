@@ -175,6 +175,8 @@ async def _pins(session: AsyncSession, principal: Me, org: str, agent: Agent) ->
     )
     pins: dict[int, list[str]] = {}
     for version, slug in rows:
+        if version is None:  # a pin on a channel (ADR 0071) names no revision: the channel badges tell
+            continue
         if is_admin(principal, org) or principal.role_for(org, slug) is not None:
             pins.setdefault(version, []).append(slug)
     return pins
