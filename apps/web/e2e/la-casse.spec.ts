@@ -38,6 +38,8 @@ const PAGES = [
   "/costs",
   "/skills/onboarding-procedure",
   "/knowledge",
+  "/memories",
+  "/memories/security-lessons",
   "/integrations",
   "/integrations/claude-code",
   "/admin",

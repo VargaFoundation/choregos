@@ -25,11 +25,13 @@ import { scopeHint, scopeLabel } from "./registre";
 import { refusalSentence, MAX_MESSAGE } from "./history";
 import { ChangeList } from "./spec-changes";
 import { TagEditor } from "./tags";
-import { MEMORY_SCOPES, openByDefault, sectionSummaries, type SectionId } from "./spec-summary";
+import { openByDefault, sectionSummaries, type SectionId } from "./spec-summary";
+import { MemoryBindingsEditor } from "./memory-bindings";
+import { describe, effectiveBindings, isLegacyDefault, summaryOf, writesTo, labelOf, type Binding } from "@/lib/memories";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
-import type { Agent, AgentSpec, CodeRuntime, UsableModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
+import type { Agent, AgentSpec, CodeRuntime, UsableModel, KnowledgeBase, MemoryStore, OrgConnector, Skill } from "@/lib/types";
 
 /** The model profiles a project maps to models (its settings, `models.yaml`). */
 export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as const;
@@ -37,7 +39,7 @@ export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as cons
 /** Statuses of a skill that cannot be carried: archived, or not yet approved (S32-06). */
 const SKILL_UNUSABLE = new Set(["archived", "pending_review", "rejected", "quarantined"]);
 
-export { MEMORY_SCOPES, openByDefault, sectionSummaries, type SectionId };
+export { openByDefault, sectionSummaries, type SectionId };
 
 /** Who a knowledge base is served to: an agent reading it runs only in those projects. */
 export function servedTo(base: KnowledgeBase): string {
@@ -117,7 +119,10 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     skills: spec.skills ?? [],
     mcp_servers: (spec.mcp_servers ?? []).filter((s) => s.connector),
     knowledge: spec.knowledge ?? [],
-    memory: spec.memory ?? "project",
+    // The console writes `memories` only (S40-11): the legacy `memory` is read when a version has no list,
+    // then left at its default — the API refuses both.
+    memories: effectiveBindings(spec),
+    memory: "project",
     evals: (spec.evals ?? []).filter((c) => c.name.trim()),
   };
 }
@@ -205,6 +210,9 @@ export function AgentBuilder({
     skills: [...(start.skills ?? [])],
     mcp_servers: (start.mcp_servers ?? []).map((s) => ({ ...s, tools: [...(s.tools ?? [])] })),
     knowledge: (start.knowledge ?? []).map((k) => ({ ...k })),
+    // The bindings the version has, or what its legacy `memory` means: the editor works on the list.
+    memories: effectiveBindings(start),
+    memory: "project",
     evals: (start.evals ?? []).map((c) => ({ ...c })),
   }));
   const [error, setError] = useState<string | null>(null);
@@ -227,6 +235,8 @@ export function AgentBuilder({
   const registry = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org), enabled: mode.kind === "create", retry: false });
   const knownTags = [...new Set((registry.data ?? []).flatMap((a) => a.tags ?? []))].sort();
   const bases = useQuery({ queryKey: ["knowledge", org], queryFn: () => api.knowledgeBases(org), retry: false });
+  const globalMemories = useQuery({ queryKey: ["memories", org, "global"], queryFn: () => api.memories(org, { scope: "global" }), retry: false });
+  const projectMemories = useQuery({ queryKey: ["memories", org, "project"], queryFn: () => api.memories(org, { scope: "project" }), retry: false });
 
   const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
   const set = (patch: Partial<AgentSpec>) => setSpec((s) => ({ ...s, ...patch }));
@@ -502,24 +512,11 @@ export function AgentBuilder({
         <KnowledgeSection bases={bases.data ?? []} spec={spec} set={set} summary={summaries.knowledge} defaultOpen={opened.knowledge} />
 
         <Disclosure title="Memory" summary={summaries.memory} defaultOpen={opened.memory}>
-          <Field
-            label="Memory scope"
-            hint="What a run remembers from earlier runs, and where it writes what it learns. Memory is data in the context, never instructions."
-          >
-            {(id) => (
-              <Select
-                id={id}
-                value={spec.memory ?? "project"}
-                onChange={(e) => set({ memory: e.target.value as keyof typeof MEMORY_SCOPES })}
-              >
-                {Object.entries(MEMORY_SCOPES).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+          <MemoryBindingsEditor
+            value={effectiveBindings(spec)}
+            onChange={(memories) => set({ memories })}
+            options={{ global: globalMemories.data ?? [], project: projectMemories.data ?? [] }}
+          />
         </Disclosure>
 
         <Disclosure title="Limits and budget" summary={summaries.limits} defaultOpen={opened.limits}>
@@ -734,6 +731,7 @@ export function AgentBuilder({
             connectors={mcpConnectors}
             library={library.data ?? []}
             bases={bases.data ?? []}
+            memories={[...(globalMemories.data ?? []), ...(projectMemories.data ?? [])]}
           />
         </div>
       </aside>
@@ -1052,13 +1050,16 @@ export function BuilderSummary({
   connectors,
   library,
   bases = [],
+  memories = [],
 }: {
   spec: AgentSpec;
   models: UsableModel[];
   connectors: OrgConnector[];
   library: Skill[];
   bases?: KnowledgeBase[];
+  memories?: MemoryStore[];
 }) {
+  const bindings: Binding[] = effectiveBindings(spec);
   const model = models.find((m) => m.model_name === spec.model);
   const servers = spec.mcp_servers ?? [];
   return (
@@ -1182,13 +1183,24 @@ export function BuilderSummary({
       </div>
       <div className="space-y-1">
         <h4 className="text-xs font-medium text-ink-muted">Memory</h4>
-        <p data-testid="memoire-resolue">
-          {spec.memory === "none"
-            ? "No memory: a run neither reads nor writes what earlier runs learnt."
-            : spec.memory === "agent"
-              ? "Its own memory within each project: what it learns stays with it."
-              : "The project's shared memory: it reads and adds to what every agent of the project learnt."}
-        </p>
+        <div data-testid="memoire-resolue">
+          {bindings.length === 0 ? (
+            <p>No memory: a run neither reads nor writes what earlier runs learnt.</p>
+          ) : (
+            <>
+              <ol className="list-decimal space-y-0.5 pl-5 text-xs">
+                {bindings.map((b) => (
+                  <li key={labelOf(b)}>
+                    {describe(b, memories)} — {b.mode === "write" ? "read and written" : "read"}
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-1 text-xs text-ink-muted">
+                In this order: the earlier memory wins a subject two share. It {writesTo(bindings, memories)}.
+              </p>
+            </>
+          )}
+        </div>
       </div>
     </section>
   );

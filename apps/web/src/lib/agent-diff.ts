@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { describe as describeBinding, effectiveBindings, labelOf, type Binding } from "@/lib/memories";
 import type { AgentSpec } from "@/lib/types";
 
 /**
@@ -38,7 +39,7 @@ export const GROUP_LABELS: Record<ChangeGroup, string> = {
 };
 export const GROUP_ORDER: ChangeGroup[] = ["instructions", "model", "capabilities", "limits", "evals", "other"];
 
-const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "evals"]);
+const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals"]);
 
 /** A spec with absent, null and default values made the same, so none of them shows as a change. */
 export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string, unknown> {
@@ -57,7 +58,8 @@ export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string
   out.skills = s.skills ?? [];
   out.mcp_servers = (s.mcp_servers ?? []).filter((m) => m.connector);
   out.knowledge = s.knowledge ?? [];
-  out.memory = s.memory ?? "project";
+  // `memories`, or what the legacy `memory` means: a version published either way reads the same (S40-11).
+  out.memories = effectiveBindings(s);
   out.evals = (s.evals ?? []).filter((c) => c.name?.trim());
   return out;
 }
@@ -176,7 +178,29 @@ export function diffSpecs(before: AgentSpec | null | undefined, after: AgentSpec
   scalar(out, "limits", "budget.run_usd", "Budget per run", a.budget.run_usd, b.budget.run_usd, "none", usd);
   scalar(out, "limits", "budget.daily_usd", "Budget per day", a.budget.daily_usd, b.budget.daily_usd, "none", usd);
   scalar(out, "limits", "budget.monthly_usd", "Budget per month", a.budget.monthly_usd, b.budget.monthly_usd, "none", usd);
-  scalar(out, "capabilities", "memory", "Memory", a.memory, b.memory, "project");
+  keyed<Binding>(
+    out,
+    "capabilities",
+    "memories",
+    a.memories,
+    b.memories,
+    labelOf,
+    (m) => `Memory ${describeBinding(m)}`,
+    (m) => (m.mode === "write" ? "read and written" : "read"),
+    (x, y) => (x.mode === y.mode ? null : {}),
+  );
+  const common = (bindings: Binding[], other: Binding[]) =>
+    bindings.map(labelOf).filter((l) => other.some((o) => labelOf(o) === l));
+  if (common(a.memories, b.memories).join() !== common(b.memories, a.memories).join())
+    out.push({
+      group: "capabilities",
+      field: "memories",
+      label: "Memory order",
+      kind: "changed",
+      before: a.memories.map(labelOf).join(", "),
+      after: b.memories.map(labelOf).join(", "),
+      detail: "the earlier memory wins a subject two share",
+    });
 
   type Skill = { slug: string; version?: number | null };
   keyed<Skill>(
