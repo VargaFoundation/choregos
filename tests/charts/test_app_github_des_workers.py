@@ -1,9 +1,9 @@
-"""Chaque worker de l'orchestrateur reçoit l'App GitHub, comme l'API (S22-04).
+"""Every orchestrator worker receives the GitHub App, like the API (S22-04).
 
-Le 2026-10-08, le locataire dev avait son App GitHub (Infisical → `choregos-api-secrets`) : l'API la
-voyait, mais le rattrapage du tracker échouait en « [github] aucune authentification configurée ».
-Le chart ne passait `CHOREGOS_GITHUB_APP_ID` et `CHOREGOS_GITHUB_APP_PRIVATE_KEY` qu'au pod de l'API,
-alors que ce sont les workers qui lisent les issues et ouvrent les pull requests.
+On 2026-10-08, the dev tenant had its GitHub App (Infisical -> `choregos-api-secrets`): the API
+saw it, but the tracker catch-up failed with "[github] no authentication configured".
+The chart only passed `CHOREGOS_GITHUB_APP_ID` and `CHOREGOS_GITHUB_APP_PRIVATE_KEY` to the API pod,
+whereas it is the workers that read the issues and open the pull requests.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _deploiements() -> list[dict[str, Any]]:
 
 def test_chaque_worker_de_l_orchestrateur_recoit_l_app_github_en_option() -> None:
     workers = [d for d in _deploiements() if "orchestrator" in d["metadata"]["name"]]
-    assert workers, "aucun worker de l'orchestrateur rendu"
+    assert workers, "no orchestrator worker rendered"
     for worker in workers:
         conteneur = worker["spec"]["template"]["spec"]["containers"][0]
         env = {e["name"]: e for e in conteneur.get("env", [])}
@@ -43,6 +43,6 @@ def test_chaque_worker_de_l_orchestrateur_recoit_l_app_github_en_option() -> Non
             ("CHOREGOS_GITHUB_APP_ID", "github-app-id"),
             ("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "github-app-private-key"),
         ):
-            assert nom in env, f"{worker['metadata']['name']} ne reçoit pas {nom}"
+            assert nom in env, f"{worker['metadata']['name']} does not receive {nom}"
             ref = env[nom]["valueFrom"]["secretKeyRef"]
             assert (ref["name"], ref["key"], ref.get("optional")) == ("choregos-api-secrets", cle, True)

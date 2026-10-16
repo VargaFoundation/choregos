@@ -1,8 +1,8 @@
-"""Les faux du scénario RH servis par un seul processus (S20-07), et leur garde.
+"""The HR scenario fakes served by a single process (S20-07), and their guard.
 
-L'API tourne en deux répliques et l'orchestrateur à part : un faux en mémoire leur montrerait autant
-d'états que de processus. Le chart sait servir les faux depuis UN pod, que l'API et l'orchestrateur
-joignent — pour une démonstration seulement : staging et prod le refusent, en le nommant.
+The API runs in two replicas and the orchestrator separately: an in-memory fake would show them as many
+states as there are processes. The chart can serve the fakes from ONE pod, which the API and the orchestrator
+reach -- for a demonstration only: staging and prod refuse it, naming it.
 """
 
 from __future__ import annotations
@@ -50,9 +50,9 @@ def test_un_seul_pod_que_l_api_et_l_orchestrateur_joignent() -> None:
     assert deploiement["spec"]["replicas"] == 1 and deploiement["spec"]["strategy"]["type"] == "Recreate"
     (conteneur,) = deploiement["spec"]["template"]["spec"]["containers"]
     assert conteneur["command"] == ["python", "-m", "choregos_adapters.fakes.serveur"]
-    assert conteneur["image"].split("/")[-1].startswith("choregos-api:"), "l'image de l'API porte les faux"
+    assert conteneur["image"].split("/")[-1].startswith("choregos-api:"), "the API image carries the fakes"
     jeton = next(e for e in conteneur["env"] if e["name"] == "CONNECTOR_DEMO_JETON")
-    assert jeton["valueFrom"]["secretKeyRef"] == {"name": "demo", "key": "jeton"}, "par référence"
+    assert jeton["valueFrom"]["secretKeyRef"] == {"name": "demo", "key": "jeton"}, "by reference"
     assert service["spec"]["ports"][0]["port"] == 8090
     sortie = next(
         d
@@ -65,7 +65,7 @@ def test_un_seul_pod_que_l_api_et_l_orchestrateur_joignent() -> None:
             "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": "choregos-demo-fakes"}}}],
             "ports": [{"protocol": "TCP", "port": 8090}],
         }
-    ], "la politique réseau ouvre ce pod-là, et lui seul"
+    ], "the network policy opens that pod, and only that one"
 
 
 @pytest.mark.parametrize("environnement", ["staging", "prod"])

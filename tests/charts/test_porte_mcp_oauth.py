@@ -1,8 +1,8 @@
-"""La porte MCP accepte les jetons de l'IdP quand le déploiement le dit (ADR 0030).
+"""The MCP gate accepts the IdP's tokens when the deployment says so (ADR 0030).
 
-`global.mcp.oauth` devient les réglages de l'API : avant, il fallait poser des variables à la main
-dans `global.extraEnv`, et le guide d'exploitation montrait un `choregos-api.env` que le chart
-n'a jamais lu. Les clients deviennent le JSON que l'API attend — `client_id`, `callback_port`.
+`global.mcp.oauth` becomes the API's settings: before, variables had to be set by hand
+in `global.extraEnv`, and the operations guide showed a `choregos-api.env` the chart
+never read. The clients become the JSON the API expects -- `client_id`, `callback_port`.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def test_allumee_avec_ses_clients() -> None:
     )
     assert env["CHOREGOS_MCP_OAUTH_ENABLED"] == "true"
     assert env["CHOREGOS_MCP_OAUTH_AUDIENCE"] == "choregos-mcp"
-    assert "CHOREGOS_MCP_OAUTH_ISSUER" not in env, "vide : l'émetteur de la console"
+    assert "CHOREGOS_MCP_OAUTH_ISSUER" not in env, "empty: the console's issuer"
     assert json.loads(env["CHOREGOS_MCP_OAUTH_CLIENTS"]) == {
         "claude-ai": {"client_id": "choregos-claude-ai", "callback_port": None},
         "claude-code": {"client_id": "choregos-claude-code", "callback_port": 33418},
@@ -59,7 +59,7 @@ def test_allumee_avec_ses_clients() -> None:
 
 
 def test_l_api_lit_ce_que_le_chart_ecrit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Le JSON rendu est celui que les réglages de l'API acceptent — pas seulement du JSON."""
+    """The rendered JSON is what the API settings accept -- not merely JSON."""
     from choregos_api.config import Settings
 
     env = _env_de_l_api(
