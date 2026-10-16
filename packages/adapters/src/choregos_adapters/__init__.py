@@ -248,6 +248,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "assignment_port": _ENTIER,
                 "runtime_class": _TEXTE,
                 "pool_image": _TEXTE,
+                "ttl_seconds": _ENTIER,
                 "max_active": _ENTIER,
                 "env_from_secrets": {"type": "array", "items": _TEXTE},
             }
@@ -851,7 +852,7 @@ def _register_builtins() -> None:
     from .cd.argocd import ArgoCdAdapter
     from .ci.tekton import TektonCi
     from .executor.aca import AcaExecutor, AzureArmClient
-    from .executor.agent_sandbox import AgentSandboxExecutor
+    from .executor.agent_sandbox import DEFAULT_TTL_SECONDS, AgentSandboxExecutor
     from .executor.k8s_job import KubernetesJobExecutor
     from .executor.local_docker import LocalDockerExecutor
     from .executor.tekton import KubernetesClient, TektonExecutor
@@ -963,6 +964,12 @@ def _register_builtins() -> None:
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
             env_from_secrets=cfg.get("env_from_secrets")
             or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
+            # How long a finished sandbox keeps its volume (`runner.sandbox.ttlSecondsAfterFinished`).
+            ttl_seconds=int(
+                cfg.get(
+                    "ttl_seconds", os.environ.get("CHOREGOS_SANDBOX_TTL_SECONDS", "") or DEFAULT_TTL_SECONDS
+                )
+            ),
         )
     )
     register("runtime", "aca", _SPECS_LIVREES[("runtime", "aca")])(

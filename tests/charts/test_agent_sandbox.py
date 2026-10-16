@@ -241,3 +241,14 @@ def test_a_platform_that_owns_network_policies_can_leave_the_assignment_one_out(
     assert "NetworkPolicy/choregos-runner-assignment" in kept, "rendered by default"
     assert "NetworkPolicy/choregos-runner-assignment" not in dropped
     assert set(kept) - set(dropped) == {"NetworkPolicy/choregos-runner-assignment"}
+
+
+@needs_helm
+def test_the_executor_is_told_how_long_a_finished_sandbox_keeps_its_volume() -> None:
+    def ttl(*overrides: str) -> str:
+        deployment = _objects(*overrides)["Deployment/choregos-orchestrator-executor"]
+        (container,) = deployment["spec"]["template"]["spec"]["containers"]
+        return next(e["value"] for e in container["env"] if e["name"] == "CHOREGOS_SANDBOX_TTL_SECONDS")
+
+    assert int(ttl()) <= 600, "not an hour of a volume per finished stage"
+    assert ttl("choregos-orchestrator.runner.sandbox.ttlSecondsAfterFinished=120") == "120"

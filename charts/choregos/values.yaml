@@ -332,6 +332,10 @@ choregos-orchestrator:
       storageClassName: ""
       # Where a warm runner listens for its one assignment (run id, token, environment).
       assignmentPort: 8765
+      # How long a finished run's sandbox keeps its volume before the controller deletes it.
+      # Each one counts against the namespace's quota until then: at 3600, one ticket's six
+      # stages filled a 10-PVC, 50Gi tenant quota, and the next claim found no volume.
+      ttlSecondsAfterFinished: 300
       # `choregos-runner-assignment`, the NetworkPolicy that lets only the `executor` workers
       # reach that port (ADR 0053). `false` only where the platform owns the namespace's
       # NetworkPolicies and refuses a tenant's (an Argo CD AppProject that blacklists them):
