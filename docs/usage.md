@@ -1446,6 +1446,12 @@ decision itself.
 Costs export as CSV from the project overview, grouped by day, stage, model, backend, size
 or kind.
 
+**Your roles.** The administration overview (Session card) lists your roles by scope instead of
+repeating the organisation: `platform : org_admin` on the community edition (one organisation, whose
+administrator administers the instance), `organisation : org_admin` under each organisation's name on
+the enterprise edition, and `project/<slug> : <role>` for each project. `choregos whoami` gives the
+same as a table with an organisation column.
+
 **Renaming an organisation.** `PATCH /orgs/{org}` changes its `name` (its administrator) or its
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id
 `<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names

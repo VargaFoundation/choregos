@@ -131,6 +131,13 @@ test("administration : membres et jetons ont un écran", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Remove / }).first()).toBeVisible();
 });
 
+test("the administration lists my roles by scope (S40-07)", async ({ page }) => {
+  await page.goto("/admin");
+  const roles = page.getByRole("list", { name: "Your roles" });
+  await expect(roles).toContainText("platform : org_admin");
+  await expect(roles).not.toContainText("acme :");
+});
+
 test("members: a person appears once; a project has its members; org_admin is not a project role (S30-06)", async ({ page }) => {
   await page.goto("/admin/members");
   const membres = page.getByTestId("membres");
