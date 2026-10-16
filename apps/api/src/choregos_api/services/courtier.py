@@ -334,7 +334,7 @@ def verifier_les_arguments(outil: OutilDuCourtier, arguments: dict[str, Any]) ->
 async def appeler(
     session: AsyncSession, outil: OutilDuCourtier, arguments: dict[str, Any]
 ) -> tuple[int, dict[str, Any]]:
-    """`tools/call` sur le serveur, avec la clé du connecteur résolue ICI — jamais dans le pod.
+    """`tools/call` on the server, with the connector's key resolved HERE, never in the pod.
 
     Under the organisation's egress allowlist (S39-22): a host it has not opened is a tool error
     that says so, not a timeout."""
