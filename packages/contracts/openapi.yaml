@@ -1792,13 +1792,48 @@ paths:
     post:
       tags: [agents]
       operationId: publishAgentVersion
-      description: Publish the next version; none is ever rewritten.
+      description: "Superseded by `publishAgentVersionWithMessage` (a message, a base version); kept as is for the clients written before, which publish with no message. Publish the next version; none is ever rewritten."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSpec" } } }
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
         "409": { description: "A case of the agent's eval suite fails (S32-03): `errors` names each failing case", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/agents/{slug}/versions/publish:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: publishAgentVersionWithMessage
+      description: "Publish the next version with the author's message, from the version they read (`base_version`). 409 `stale_base` when the latest is no longer that version (the problem carries `latest_version` and `latest_author`); 409 `no_change` when the spec's checksum equals the latest's; 409 `eval_failed` when a case of the eval suite fails. Same rights and checks as `publishAgentVersion`. Audited (`agent.publish`)."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersionPublish" } } }
+      responses:
+        "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`code` is `stale_base`, `no_change` or `eval_failed`", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/versions/{version}/restore:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [agents]
+      operationId: restoreAgentVersion
+      description: "Copy version N byte for byte (same spec, same checksum) as the next version, with `restored_from` = N and a default message `Restore vN`. Nothing is rewritten or deleted: a restore appends. Same 409s and eval gate as a publication; restoring the current spec is `no_change`. An unknown version is a 404. Audited (`agent.publish` with `restored_from`)."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersionRestore" } } }
+      responses:
+        "201": { description: The new version, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`code` is `stale_base`, `no_change` or `eval_failed`", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/versions/{version}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2944,6 +2979,9 @@ components:
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }
+        code: { type: string, description: "A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12)" }
+        latest_version: { type: integer, description: "On `stale_base` and `no_change`: the agent's latest version" }
+        latest_author: { type: [string, "null"], description: "On `stale_base`: who published the latest version" }
     PageMeta:
       type: object
       required: [has_more]
@@ -3807,6 +3845,7 @@ components:
         scope: { type: string, enum: [org, project, personal], default: org, description: "who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue" }
         project: { type: [string, "null"], description: "the project's slug: required for, and only for, a `project` agent" }
         tags: { $ref: "#/components/schemas/AgentTags" }
+        message: { type: [string, "null"], maxLength: 500, description: "why version 1 exists; absent, `Created` (S40-12)" }
     AgentFork:
       type: object
       required: [slug, scope]
@@ -3816,6 +3855,7 @@ components:
         scope: { type: string, enum: [org, project, personal] }
         project: { type: [string, "null"], description: "required for, and only for, a `project` fork" }
         version: { type: [integer, "null"], minimum: 1, description: "the source version to copy; absent, its latest" }
+        message: { type: [string, "null"], maxLength: 500, description: "why version 1 exists; absent, `Forked from <slug>@<version>` (S40-12)" }
     AgentScopeChange:
       type: object
       required: [scope]
@@ -3915,6 +3955,22 @@ components:
         checksum: { type: string }
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
+        message: { type: [string, "null"], description: "why the version exists, in its author's words (S40-12); null for a version published before messages or through the bare-spec endpoint" }
+        restored_from: { type: [integer, "null"], description: "the version this one copies, when it is a restore" }
+        pinned_by: { type: array, items: { type: string }, description: "the slugs of the projects the caller may see that pin this version" }
+    AgentVersionPublish:
+      type: object
+      required: [spec, message, base_version]
+      properties:
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+        message: { type: string, minLength: 1, maxLength: 500, description: what changed and why }
+        base_version: { type: integer, minimum: 0, description: "the latest version the author started from (0 for an agent with none)" }
+    AgentVersionRestore:
+      type: object
+      required: [base_version]
+      properties:
+        message: { type: [string, "null"], maxLength: 500, description: "absent, `Restore vN`" }
+        base_version: { type: integer, minimum: 1, description: the latest version the author saw }
     Agent:
       type: object
       required: [slug, kind, display_name, status, latest_version]

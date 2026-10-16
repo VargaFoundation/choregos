@@ -694,7 +694,7 @@ curl -X POST $API/orgs/acme/agents -d '{"slug": "onboarding-coordinator",
   "spec": {"instructions": "Prepare the access plan of a newcomer…",
            "budget": {"run_usd": 2, "daily_usd": 20},
            "mcp_servers": [{"connector": "entra", "tools": ["entra_read_*"]}]}}'
-curl -X POST $API/orgs/acme/agents/onboarding-coordinator/versions -d '{...}'   # v2; v1 is kept as is
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/versions -d '{...}'   # v2; v1 is kept as is (no message)
 curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
   -d '{"version": 2, "overrides": {"budget": {"run_usd": 1}}}'
 ```
@@ -722,6 +722,36 @@ In the console, **Agents → New agent** opens a full page (`/agents/new`), in t
    before it starts). Below 1280 px the panel falls under the form.
 
 **New version**, on an agent's page (Definition tab), is the same form without the first step.
+
+### Read, change and go back (S40-12, ADR 0076)
+
+A version carries a **message** (1 to 500 characters: what changed and why), its author and its date. The
+console calls a version a *revision*; the API keeps *version*. To publish, say which version you started
+from:
+
+```bash
+curl -X POST $API/orgs/acme/agents/architect/versions/publish \
+  -d '{"spec": {...}, "message": "Tighten the run budget", "base_version": 3}'   # 201, version 4
+```
+
+- **409 `stale_base`**: someone published since you read v3. The problem carries `code`, `latest_version`
+  and `latest_author`; compare, then publish again with `base_version` set to the new latest.
+- **409 `no_change`**: the spec is the latest's. **409 `eval_failed`**: a case of the eval suite fails
+  (`errors` names it), as for any publication.
+- The original `POST …/versions` (a bare spec) still works and records no message.
+
+**Restore** copies an older version, byte for byte (same spec, same checksum), as the next one:
+
+```bash
+curl -X POST $API/orgs/acme/agents/architect/versions/1/restore -d '{"base_version": 4}'   # version 5,
+# restored_from 1, message "Restore v1" unless you give one
+```
+
+Nothing is rewritten or deleted; a restore is never a rollback of production. The platform writes the
+message of the versions it creates (`Created`, `Installed from the catalogue (architect@2)`, `Catalogue
+update to architect@3`, `Forked from developer@2`). `GET …/agents/{slug}` lists each version with its
+message, `restored_from` and `pinned_by`, the projects you may see that pin it. The console's Definition
+and History tabs use these (the console part ships separately).
 
 **Tags** (S40-10) are the labels people find an agent by: `madr`, `architecture`, `design`. A tag is a
 lowercase slug (`^[a-z0-9][a-z0-9-]{0,31}$`), an agent carries at most **10**, and they are **metadata, not
