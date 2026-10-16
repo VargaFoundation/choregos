@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { slugFromName } from "@/components/agents/builder";
+import { useEgressGuard } from "@/components/egress/egress-provider";
 import { Alert, Badge, Button, Card, ErrorNote, Field, Input, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDigest } from "@/lib/remote-run";
@@ -55,8 +56,14 @@ export function RemoteAgentForm({
   const [input, setInput] = useState<"text" | "text+files">(current?.input ?? "text");
   const [error, setError] = useState<string | null>(null);
 
+  const guard = useEgressGuard();
   const read = useMutation({
-    mutationFn: () => api.discoverRemoteAgent(org, cardUrl.trim()),
+    mutationFn: () =>
+      guard((allow) => api.discoverRemoteAgent(org, cardUrl.trim(), allow), {
+        gesture: `Read the card of the remote agent at ${cardUrl.trim()}`,
+        origin: `remote-agent:${cardUrl.trim()}`,
+        reason: `the remote agent at ${cardUrl.trim()}`,
+      }),
     onSuccess: (discovery) => {
       setFound(discovery);
       setError(null);

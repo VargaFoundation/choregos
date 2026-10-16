@@ -47,6 +47,7 @@ const PAGES = [
   "/admin",
   "/admin/connectors",
   "/admin/connectors/catalogue",
+  "/admin/egress",
   "/admin/members",
   "/admin/audit",
   "/admin/platform",

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { CatalogueCard, CatalogueGrid } from "@/components/catalogue/catalogue-grid";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { InstallDrawer } from "@/components/catalogue/install-drawer";
+import { useEgressGuard } from "@/components/egress/egress-provider";
 import { RiskBadge } from "@/components/skills/gate";
 import { SkillTabs } from "@/components/skills/onglets";
 import { Badge, Button, ErrorNote, EtatDeLecture, Eyebrow, Heading } from "@/components/ui";
@@ -155,11 +156,16 @@ function Confirm({ org, entry, onDone }: { org: string; entry: SkillCatalogueEnt
   const client = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const guard = useEgressGuard();
   async function install() {
     setError(null);
     setBusy(true);
     try {
-      const skill = await api.installSkillCatalogueEntry(org, entry.id);
+      const skill = await guard((allow) => api.installSkillCatalogueEntry(org, entry.id, allow), {
+        gesture: `Install the ${entry.id} skill`,
+        origin: `skill-catalogue:${entry.id}`,
+        reason: `the ${entry.id} skill from its repository`,
+      });
       await client.invalidateQueries({ queryKey: ["skills", org] });
       await client.invalidateQueries({ queryKey: ["skill-catalogue", org] });
       onDone();

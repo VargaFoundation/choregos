@@ -96,6 +96,14 @@ import type {
   ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
+  EgressCheck,
+  EgressCheckResult,
+  EgressDecision,
+  EgressOverview,
+  EgressRequestCreate,
+  EgressRule,
+  EgressRuleCreate,
+  EgressVerdict,
   CostReport,
   DoraReport,
   Edition,
@@ -158,7 +166,15 @@ export function qualify(id: string): string {
 }
 
 /** An RFC 9457 problem as the API answers it; `correlation_id` ties a 500 to the API's logs (S26-02). */
-export type Problem = { title?: string; detail?: string; errors?: unknown[]; correlation_id?: string };
+export type Problem = {
+  title?: string;
+  detail?: string;
+  errors?: unknown[];
+  correlation_id?: string;
+  /** `egress_required` on the 409 of a governed "add" whose host the organisation has not opened (S39-22). */
+  code?: string;
+  verdicts?: EgressVerdict[];
+};
 
 export class ApiError extends Error {
   constructor(
@@ -319,8 +335,11 @@ export const api = {
   /** Le registre d'agents de l'organisation (ADR 0033) : une version ne se modifie jamais. */
   agents: (org: string) => request<Agent[]>(`/orgs/${org}/agents`),
   agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
-  createAgent: (org: string, body: AgentCreate) =>
-    request<Agent>(`/orgs/${org}/agents`, { method: "POST", body: JSON.stringify(body) }),
+  createAgent: (org: string, body: AgentCreate, allowEgress = false) =>
+    request<Agent>(`/orgs/${org}/agents${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** A model drafts an agent from its description: a proposal, never saved (S39-05). */
   draftAgent: (org: string, body: AgentDraftRequest) =>
     request<AgentDraft>(`/orgs/${org}/agent-drafts`, { method: "POST", body: JSON.stringify(body) }),
@@ -337,8 +356,11 @@ export const api = {
     request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),
   transferAgentOwnership: (org: string, slug: string, email: string) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
-  publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
-    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
+  publishAgentVersion: (org: string, slug: string, spec: AgentSpec, allowEgress = false) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(spec),
+    }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
   /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
@@ -349,8 +371,8 @@ export const api = {
     request<RemoteCredentialAuthorization>(`/orgs/${org}/remote-credentials/${name}/authorize`, { method: "POST" }),
   revokeRemoteCredential: (org: string, name: string) =>
     request<void>(`/orgs/${org}/remote-credentials/${name}`, { method: "DELETE" }),
-  discoverRemoteAgent: (org: string, cardUrl: string) =>
-    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover`, {
+  discoverRemoteAgent: (org: string, cardUrl: string, allowEgress = false) =>
+    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover${allowEgress ? "?allow_egress=true" : ""}`, {
       method: "POST",
       body: JSON.stringify({ card_url: cardUrl }),
     }),
@@ -401,8 +423,11 @@ export const api = {
   skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
   /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
   skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
-  installSkillCatalogueEntry: (org: string, id: string) =>
-    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, { method: "POST" }),
+  installSkillCatalogueEntry: (org: string, id: string, allowEgress = false) =>
+    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, {
+      method: "POST",
+      ...(allowEgress && { body: JSON.stringify({ allow_egress: true }) }),
+    }),
   skill: (org: string, slug: string) => request<Skill>(`/orgs/${org}/skills/${slug}`),
   skillVersion: (org: string, slug: string, version: number) =>
     request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}`),
@@ -712,6 +737,20 @@ export const api = {
   /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
   budgetAlerts: (org: string, status: "open" | "acknowledged" | "all" = "open") =>
     request<BudgetAlert[]>(`/orgs/${org}/budget-alerts${query({ status })}`),
+  /** The organisation's egress allowlist: rules, requests, the deployment's ceiling (S39-22, ADR 0066). */
+  orgEgress: (org: string) => request<EgressOverview>(`/orgs/${org}/egress`),
+  checkOrgEgress: (org: string, body: EgressCheck) =>
+    request<EgressCheckResult>(`/orgs/${org}/egress/check`, { method: "POST", body: JSON.stringify(body) }),
+  createOrgEgressRule: (org: string, body: EgressRuleCreate) =>
+    request<EgressRule>(`/orgs/${org}/egress/rules`, { method: "POST", body: JSON.stringify(body) }),
+  revokeOrgEgressRule: (org: string, id: string) =>
+    request<EgressRule>(`/orgs/${org}/egress/rules/${id}`, { method: "DELETE" }),
+  requestOrgEgress: (org: string, body: EgressRequestCreate) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests`, { method: "POST", body: JSON.stringify(body) }),
+  approveOrgEgressRequest: (org: string, id: string, body: EgressDecision = {}) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests/${id}/approve`, { method: "POST", body: JSON.stringify(body) }),
+  refuseOrgEgressRequest: (org: string, id: string, body: EgressDecision = {}) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests/${id}/refuse`, { method: "POST", body: JSON.stringify(body) }),
   acknowledgeBudgetAlert: (org: string, id: string) =>
     request<BudgetAlert>(`/orgs/${org}/budget-alerts/${id}/acknowledge`, { method: "POST" }),
   orgCostsCsvUrl: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
