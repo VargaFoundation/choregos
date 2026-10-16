@@ -32,6 +32,8 @@ runner:
   # Empty: `global.runner.executor` (default agent_sandbox, ADR 0072) decides.
   executor: ""
   skipOperatorCheck: false
+  # `agent_sandbox` only: the executor for steps that name their own image. Empty: such a step is refused.
+  customImageExecutor: k8s_job
   runtimeClass: ""
   # `executor: agent_sandbox` only (ADR 0016): see the umbrella chart's values.
   warmPool:
