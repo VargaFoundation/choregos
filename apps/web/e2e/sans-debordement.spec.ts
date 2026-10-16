@@ -45,6 +45,7 @@ const PAGES = [
   "/agents/architect?tab=definition",
   "/agents/architect?tab=definition&edit=1",
   "/agents/architect?tab=history&compare=1..3",
+  "/agents/onboarding-coordinator?tab=lifecycle",
   "/skills",
   "/skills/catalogue",
   "/costs",

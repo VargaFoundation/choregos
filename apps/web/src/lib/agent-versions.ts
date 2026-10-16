@@ -22,10 +22,11 @@ export function previousVersion(agent: Pick<Agent, "versions">, n: number): Agen
 
 /**
  * Which revision is current: what a run loads unless a project pins another. This is the one place that
- * says so: when releases point a channel at a revision (the lifecycle story), the answer changes here.
+ * says so: the revision in production (S40-02, ADR 0071), else the latest for an agent with no production
+ * pointer.
  */
-export function currentVersion(agent: Pick<Agent, "latest_version">): number {
-  return agent.latest_version;
+export function currentVersion(agent: Pick<Agent, "latest_version"> & Partial<Pick<Agent, "stable_version">>): number {
+  return agent.stable_version ?? agent.latest_version;
 }
 
 /** Whether the agent may take a new version at all: revoked and retired agents never do. */
