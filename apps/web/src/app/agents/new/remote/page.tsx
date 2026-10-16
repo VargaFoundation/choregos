@@ -2,8 +2,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
 import { Breadcrumbs, Empty, Heading, Lead } from "@/components/ui";
+import { hostOf } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
 
 /** A remote agent (A2A), registered from its card (ADR 0062, S39-08). */
@@ -19,7 +21,14 @@ export default function NewRemoteAgentPage() {
         </Heading>
         <Lead>An agent that runs elsewhere, such as Atlassian&apos;s Rovo. Paste its card URL: the platform reads it and you choose how to call it.</Lead>
       </div>
-      {org ? <RemoteAgentForm org={org} onDone={(agent) => router.push(`/agents/${agent.slug}`)} /> : <Empty>Reading your session…</Empty>}
+      {org ? (
+        <RemoteAgentForm
+          org={org}
+          onDone={(agent) => router.push(`/agents/${agent.slug}`)}
+          // The generic A2A procedure; the Rovo one as soon as the card address is Atlassian's.
+          procedure={(cardUrl) => <ProcedurePanel target="agent:remote.a2a" cardHost={hostOf(cardUrl)} />}
+        />
+      ) : <Empty>Reading your session…</Empty>}
     </div>
   );
 }

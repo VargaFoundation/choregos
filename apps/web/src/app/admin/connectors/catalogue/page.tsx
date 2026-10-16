@@ -7,6 +7,7 @@ import { useState } from "react";
 import { CatalogueCard, CatalogueGrid } from "@/components/catalogue/catalogue-grid";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { InstallDrawer } from "@/components/catalogue/install-drawer";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { estUneReference } from "@/components/connecteurs";
 import { ConnectorTabs } from "@/components/connecteurs-onglets";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
@@ -183,6 +184,11 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
         void install();
       }}
     >
+      {entry.procedure && (
+        <div className="flex flex-wrap items-center gap-2" data-testid="install-procedure">
+          <ProcedurePanel target="connector:mcp/mcp" procedure={entry.procedure} autoOpen={false} inline />
+        </div>
+      )}
       <p className="text-ink-muted" data-donnee>
         {entry.description}
       </p>

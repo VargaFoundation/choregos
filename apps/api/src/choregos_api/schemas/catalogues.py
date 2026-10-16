@@ -49,6 +49,8 @@ class McpCatalogueEntryDto(Dto):
     state: Literal["available", "installed", "update"]
     installed_as: list[str] = Field(default_factory=list)
     egress: Literal["open", "undeclared", "unknown"]
+    #: The setup procedure (`GET /procedures/{id}`) its install shows: its own, else the generic MCP one.
+    procedure: str | None = None
 
 
 class McpCatalogueDto(Dto):

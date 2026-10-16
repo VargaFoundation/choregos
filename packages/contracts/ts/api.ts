@@ -417,6 +417,8 @@ export type McpCatalogueEntry = {
   installed_as?: Array<string>;
   /** whether the deployment declares the host reachable from the API */
   egress: "open" | "undeclared" | "unknown";
+  /** the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067) */
+  procedure?: string | null;
 };
 
 export type McpCatalogueInstall = {
@@ -1910,6 +1912,48 @@ export type Integrations = {
   version: string;
 };
 
+export type ProcedureSummary = {
+  /** `connector.documents.sharepoint`, `source.web`, `agent.remote.a2a`, `agent.door.cursor`… */
+  id: string;
+  title: string;
+  /** +1 on any change of substance */
+  version: number;
+  audience: "org_admin" | "project_owner" | "operator" | "everyone";
+  /** One of `connector`, `source`, `agent`, `door_client` (what it is for), plus `card_host` or `preset` when it is a preset. */
+  applies_to: {
+    [key: string]: string;
+  };
+  /** An in-app route that IS the procedure (the MCP-door clients' page). */
+  link?: string | null;
+};
+
+export type Procedure = ProcedureSummary & {
+  /** The day it was last compared with the vendor's own pages. */
+  reviewed: string;
+  sections: Array<{
+    key: "before" | "at" | "permissions" | "in_choregos" | "test" | "fails" | "site";
+    title: string;
+    markdown: string;
+  }>;
+  /** The copy boxes with this deployment's URLs, e.g. `webhook_url:jira`. */
+  values: {
+    [key: string]: string;
+  };
+  /** Hosts the setup needs to reach. */
+  egress: Array<string>;
+  /** The form fields the procedure talks about, with what to paste in each. */
+  fields: {
+    [key: string]: string;
+  };
+  /** The only links the sections may carry. */
+  vendor_docs: Array<{
+    title: string;
+    url: string;
+  }>;
+  /** `shipped`, `extra` or `plugin:<name>` */
+  origin: string;
+};
+
 /** `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP door only (ADR 0030) — such a token is refused by the REST API, and the door refuses `*`. */
 export type TokenScope = "*" | "mcp:read" | "mcp:write";
 
@@ -2642,6 +2686,7 @@ export interface Operations {
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
+  getProcedure: { method: "GET"; path: "/procedures/{procedure_id}"; body: never; response: Procedure };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
   getProjectCosts: { method: "GET"; path: "/projects/{id}/costs"; body: never; response: CostReport };
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
@@ -2791,6 +2836,7 @@ export interface Operations {
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
+  listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
   listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: Array<ProjectOperation> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };

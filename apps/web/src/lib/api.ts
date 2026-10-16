@@ -100,6 +100,8 @@ import type {
   DoraReport,
   Edition,
   Integrations,
+  Procedure,
+  ProcedureSummary,
   FindingPage,
   MeDto,
   Memory,
@@ -275,6 +277,14 @@ export const api = {
   edition: () => request<Edition>("/edition"),
   /** Où brancher un client MCP (ADR 0030) : l'URL de la porte, pour la page Integrations. */
   integrations: () => request<Integrations>("/integrations"),
+  /** The setup procedures (ADR 0067); `for` answers the one best for a target, a preset before the generic one. */
+  listProcedures: (query: { for?: string; card_host?: string; preset?: string } = {}) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
+    const q = params.toString();
+    return request<ProcedureSummary[]>(`/procedures${q ? `?${q}` : ""}`);
+  },
+  getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
   loginUrl: (next?: string, as?: string, reauth = false) => {
     const params = new URLSearchParams();

@@ -38,7 +38,7 @@ export function RemoteAgentForm({
   existing?: Existing;
   onDone: (agent: { slug: string }) => void;
   /** A per-type procedure (Rovo, generic A2A…): a later story fills this place, above the card step. */
-  procedure?: React.ReactNode;
+  procedure?: React.ReactNode | ((cardUrl: string) => React.ReactNode);
 }) {
   const current = existing?.spec.runtime?.kind === "a2a" ? (existing.spec.runtime as A2aRuntime) : undefined;
   const [cardUrl, setCardUrl] = useState(current?.card_url ?? "");
@@ -108,7 +108,7 @@ export function RemoteAgentForm({
 
   return (
     <div className="space-y-4" data-testid="remote-agent-form">
-      {procedure && <div data-testid="remote-procedure">{procedure}</div>}
+      {procedure && <div data-testid="remote-procedure">{typeof procedure === "function" ? procedure(cardUrl) : procedure}</div>}
       <Card title="1. The agent's card">
         <form
           className="flex max-w-3xl flex-wrap items-end gap-3"

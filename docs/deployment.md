@@ -436,6 +436,33 @@ A server that authenticates per user with OAuth is listed but cannot be installe
 that runs as a local process (stdio) is listed with what to run: neither is something an install
 button can do.
 
+## Site notes on the setup procedures
+
+The console shows a setup procedure beside every "add" form (a connector, a knowledge source, an
+external agent): what to create at the vendor, then where to paste what, with this platform's webhook
+and callback addresses. They ship with the platform ([`procedures/`](procedures/README.md),
+[ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)). A deployment adds what is true only
+here: who registers an Entra app on this platform, where an egress change is requested, how secrets
+are handled.
+
+Put one Markdown file per procedure in a ConfigMap and name it in the API's values:
+
+```yaml
+choregos-api:
+  proceduresExtra: choregos-procedures   # a ConfigMap; mounted read-only at /etc/choregos/procedures
+```
+
+- `<id>.site.md` appends an **On this platform** section to the procedure `<id>`
+  (`connector.documents.sharepoint.site.md`). Plain Markdown, no front matter; a leading
+  `## On this platform` heading is dropped. Placeholders such as `{{api_url}}` work. A link must be
+  `https` and appear in the procedure's `vendor_docs`, otherwise the file is refused.
+- `<new-id>.md` adds a whole procedure for a type the platform does not know (a plugin's), with the
+  front matter of the shipped ones. It cannot replace a shipped id.
+
+A refused file is logged (`procedures.file.refused`) and skipped: the API still starts and the other
+files still apply. A plugin can supply the same directory through a `choregos.procedures` entry point
+whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EXTRA`.
+
 ## Multi-tenant installations
 
 For a tenant that may not create cluster-scoped resources:

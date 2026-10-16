@@ -1,0 +1,53 @@
+---
+id: connector.runtime.agent_sandbox
+title: Run agent stages in warm sandboxes (opt-in)
+applies_to: {connector: runtime/agent_sandbox}
+audience: operator
+version: 1
+reviewed: 2026-10-16
+vendor_docs:
+  - {title: "kubernetes-sigs/agent-sandbox", url: "https://github.com/kubernetes-sigs/agent-sandbox"}
+egress: []
+fields:
+  warm_pool: "the SandboxWarmPool's name, choregos-runner by default"
+  pool_image: "the image the pool's pods are made from"
+  runtime_class: "the template's RuntimeClass, for example gvisor"
+  max_active: "concurrent runs; beyond it a run waits"
+---
+
+## Before you start
+
+- The agent-sandbox **operator**, whose CRDs are cluster-scoped: a platform team installs it, a tenant of
+  a shared cluster cannot. `tekton` and `k8s_job` stay the defaults.
+- Read the deployment guide, section "The `agent_sandbox` executor", and ADR 0053: it is the reference;
+  this page is its checklist.
+
+## At the cluster
+
+1. The operator, pinned (v1.0.6 at the time of writing), by Argo CD or by hand with
+   `kubectl apply --server-side -k infra/operators/agent-sandbox`.
+2. The Kyverno policy of the repository so a template that breaks non-root is refused where it is written.
+3. The chart: `runner.executor: agent_sandbox`, `runner.namespacePattern` set to the release namespace,
+   `runner.warmPool.size`, `runner.runtimeClass`, `runner.sandbox.*`.
+
+## Permissions
+
+`global.rbac.jobRunner: true`, or the platform grants the same verbs. The chart renders a NetworkPolicy
+so only the orchestrator's workers reach the assignment port; where the platform forbids a tenant's
+NetworkPolicy, set `runner.sandbox.assignmentNetworkPolicy: false` and close that port yourself.
+
+## In Choregos
+
+Chart values; the connector's `pool_image`, `max_active` and the rest are optional. A step that names its
+own image is refused in a pool: use `k8s_job` for such steps.
+
+## Test it
+
+`CHOREGOS_CLUSTER_CONTEXT=<context> CHOREGOS_CLUSTER_ALLOW_SHARED=<context> make test-cluster` on a
+cluster that has the operator (it uses a namespace of its own and deletes it).
+
+## When it fails
+
+- A claim that never binds: the pool is empty and the template cannot cold-start; check the operator.
+- A refusal about a RuntimeClass or an image: the pool was made with another one; recreate it.
+- A run that waits: `max_active` is reached; it is admitted in arrival order.

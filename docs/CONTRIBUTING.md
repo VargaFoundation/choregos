@@ -77,6 +77,7 @@ work builds on it, and ask before naming a **product** as if it were ours.
 | `make typecheck` | `mypy --strict` on all Python |
 | `make test` | unit and integration tests (fakes); PostgreSQL tests when `CHOREGOS_TEST_DATABASE_URL` is set |
 | `make contracts-check` | generated types are current |
+| `make procedures-check` | `docs/procedures/` is what the setup procedures render to |
 | `make docs-cli` then a clean tree | `docs/cli.md` is current |
 | `make charts-lint` | charts render and validate, four environments including the embedded one |
 | `make web-ci` | lint, types, tests and build of the front |
@@ -97,6 +98,15 @@ archived Temporal histories, a blocking dependency scan.
 - **Nothing is ✅ without a test that fails in its absence** — and for anything an agent
   traverses, without the bench.
 - **Secrets**: never hard-coded, never in an agent workspace, never in Git.
+
+## A new type ships with its procedure
+
+A new connector type, knowledge source kind or MCP-door client comes with its setup procedure, a
+Markdown file in `packages/core/src/choregos_core/procedures/` (see
+[the procedures](procedures/README.md) and [ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)):
+`tests/procedures/test_coverage.py` is red without it. Write what a person does at the vendor, then in
+Choregos, and where you could not check a vendor fact, say so in the text. Then `make procedures` and
+commit `docs/procedures/`.
 
 ## Out of scope
 

@@ -1,0 +1,46 @@
+---
+id: agent.door.cursor
+title: Connect Cursor to Choregos
+applies_to: {door_client: cursor}
+audience: everyone
+version: 1
+reviewed: 2026-10-16
+link: /integrations/cursor
+vendor_docs:
+  - {title: "Cursor: Model Context Protocol", url: "https://docs.cursor.com/context/model-context-protocol"}
+values: [public_url]
+egress: []
+---
+
+## Before you start
+
+Cursor connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your
+projects, reads workflows and work items, and tells you what waits for a decision. It never decides: a
+decision needs you, signed in again, in the console. The door is `{{public_url}}/mcp`.
+
+Cursor runs on your machine.
+
+## At the client
+
+The Integrations page of this console is the procedure: it gives the exact snippet for Cursor, with this
+platform's address filled in. Open it with the link below the panel.
+
+## Permissions
+
+A token with an MCP scope that you mint yourself. The door refuses a full-access token. A token can be bound to one project, and the door's tools
+announce only what your role allows.
+
+## In Choregos
+
+Open **Integrations**, choose Cursor and copy the snippet. The snippet goes in `~/.cursor/mcp.json` and reads the token from an environment variable.
+
+## Test it
+
+Ask the client "what is waiting for my decision in Choregos?". It should call `list_pending_decisions`.
+
+## When it fails
+
+- `401`: the token is missing, unknown, revoked or expired.
+- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.
+- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.
+- The server is listed but red: the token variable is not set where Cursor starts.
