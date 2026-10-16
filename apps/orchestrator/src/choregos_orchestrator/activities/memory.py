@@ -289,7 +289,7 @@ async def _project_namespaces(session: Any, bundle: Any) -> list[str]:
 
 @activity.defn(name="accept_pending_facts")
 async def accept_pending_facts(payload: dict[str, Any]) -> dict[str, Any]:
-    """Règle d'auto-acceptation : un fait proposé par ≥ N runs devient actif sans humain.
+    """Auto-accept rule: a fact proposed by at least N runs becomes active without a person.
 
     Applies to the project's memories only (S40-11): its shared memory, the own memory of its agents and
     its named memories. A global memory's proposals wait for an administrator.
