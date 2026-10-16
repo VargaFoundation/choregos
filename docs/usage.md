@@ -153,6 +153,31 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
+**The catalogue, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
+catalogues list what exists: `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
+(the registry's connector types by family, organisation or project scope, where each is installed or
+configured; platform plumbing and fakes are left out). **Every member of the organisation reads them**,
+whether the role is an organisation role or only a project role. Each entry carries `can`
+(`install`, `configure_projects`, `enable_projects`) and `cannot_reason`, decided by the server:
+
+| Gesture | Organisation admin | Project owner | Other member |
+| :-- | :-- | :-- | :-- |
+| see | yes | yes | yes |
+| install an organisation connector (MCP server, directory, documents, network operations) | yes | no | no |
+| configure a project connector (tracker, scm, ci, cd, notify) | yes | in their project | no |
+| set availability, operation policies and groups | yes | no | no |
+| enable or disable an organisation connector for a project | any project | their project | no |
+
+An organisation connector is `all_projects` (the default through the API: every project whose groups
+match reaches it) or `selected_projects`: only the projects it is enabled for. Set it with
+`PATCH /orgs/{org}/connectors/{name}` (`{"availability": "selected_projects"}`, administrator only;
+the install and declare bodies take it too). Switching to `selected_projects` turns it on for no
+project. An owner or an administrator then enables it per project:
+`PUT /projects/{id}/org-connectors/{name}/enablement`, `DELETE` to turn it off (`409` while the
+connector is available to every project), `GET /projects/{id}/org-connectors` to see the state. A run
+reaches the connector only if it is enabled for its project, the effective policy is not forbidden, the
+groups match and the agent version selects it; the same holds for governed actions.
+
 **The MCP catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) is a list
 of well-known MCP servers shipped in the image, so an administrator does not need to know a
 vendor's URL by heart: `choregos_core/mcp_catalogue/catalogue.yaml`, about a hundred entries,
@@ -168,7 +193,7 @@ that runs as a local process: running a third party's code is the operator's dec
 listed with what to run and nothing more).
 
 **Installing an entry** is `POST /orgs/{org}/mcp-catalogue/{entry_id}/install` (the organisation's
-administrator only; *Administration → connectors → MCP catalogue* in the console: search, category, *official only*, *installable only*; an install opens a panel for the name and the secret reference, then discovers the tools and lands on the connector). It declares an
+administrator only; *Catalogue → MCP servers* in the console: search, category, *official only*, *installable only*; an install opens a panel for the name and the secret reference, then discovers the tools and lands on the connector). It declares an
 ordinary `mcp` connector through the same door as `POST /orgs/{org}/connectors`: `{"name": "notion",
 "secret_refs": {"token": "env:CONNECTOR_NOTION"}}` (the name defaults to the entry id; the
 credential is a reference, never a value, and an entry that needs none refuses one). The connector

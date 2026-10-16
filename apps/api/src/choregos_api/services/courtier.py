@@ -37,6 +37,7 @@ from ..db.models import (
     Run,
 )
 from ..secret_store import resolved_configuration
+from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
 from .connecteurs import human_floor, plus_stricte
 from .platform_network import (
     WHERE,
@@ -126,8 +127,12 @@ async def outils_du_courtier(session: AsyncSession, run: Run, project: Project) 
             )
         ).scalars()
     }
+    allumes = await enabled_ids(session, project)
     outils: dict[str, OutilDuCourtier] = {}
     for operation, connecteur in lignes:
+        # ADR 0074: an organisation connector restricted to selected projects reaches only those.
+        if connecteur.availability == SELECTED_PROJECTS and connecteur.id not in allumes:
+            continue
         effective = human_floor(
             connecteur, operation.name, plus_stricte(operation.policy, resserres.get(operation.id))
         )
