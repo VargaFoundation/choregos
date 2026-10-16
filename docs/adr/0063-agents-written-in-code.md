@@ -77,3 +77,36 @@ Three shapes were compared:
 - Publishing `choregos-agent-sdk` and `choregos-contracts` to PyPI is a release gesture (trusted
   publishing, `release.yml`, off until `PUBLISH_TO_PYPI` is set); resume of a code agent
   (`session/load`) is not supported in v1.
+
+## Amendment (2026-10-16): no Choregos framework
+
+Asked whether a custom agent framework is warranted against the market's (LangGraph, OpenAI Agents
+SDK, Google ADK, Pydantic AI, CrewAI, Microsoft Agent Framework, smolagents, Strands, Mastra), the
+answer is **no**, and `choregos-agent-sdk` stays what it is:
+
+1. **A run-contract adapter, not a framework.** Its scope is the four things a step needs: ACP to
+   the runner, MCP tools through the runner's permission path, the gateway as the model with the
+   run's key, `result.json`. No control-flow model, prompt templates, memory or multi-agent
+   abstractions. Every framework needs only a model endpoint and an MCP endpoint, so every framework
+   runs inside it. Durable state, retries and human gates are the workflow's (Temporal). The public
+   surface is frozen by `packages/agent-sdk/tests/test_public_surface.py`; widening it needs an
+   amendment of this ADR.
+2. **Two gaps closed.** A framework's own model client escaped turn accounting, and its native MCP
+   client escaped the permission path. `ctx.llm.http_client()` / `openai_client()` count every
+   model request as a turn (refused before it leaves at `max_turns`, journaled, streaming intact);
+   `integrations.{langchain,openai_agents,pydantic_ai}` build a framework's tools from the run's
+   tools so each call goes through the guard. Frameworks are never dependencies of the SDK. The
+   conformance check `max_turns` now compares the gateway's request count with the limit, so a
+   client the SDK does not count fails it. This is cooperation, not a boundary (the agent runs as
+   the runner's uid): loopback proxies the runner governs (a model proxy, an MCP proxy) would make
+   native clients governed without bridges, and are not built.
+3. **The protocols, named.** ACP is the Agent Client Protocol (Zed), the agent seam of ADR 0002;
+   it is not IBM's Agent Communication Protocol, which merged into A2A (Linux Foundation) in 2025.
+   A2A is the remote-agent path, not the in-pod one. `agent-client-protocol` 0.12.1 is pinned; the
+   1.0 release candidate is followed, the pin moves when 1.0 is final and 14 days old.
+4. **Where it lives.** In this monorepo (`packages/agent-sdk`), in lockstep with
+   `choregos-contracts`, the runner image and the conformance suite; no separate repository. It is
+   published to PyPI from this repository's GitHub Actions (`release.yml`, trusted publishing),
+   because PyPI trusted publishing accepts GitHub Actions and not Tekton, the CE's contributors are
+   not on the Diametral platform, and its images are already signed keylessly with GitHub OIDC.
+

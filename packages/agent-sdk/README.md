@@ -1,5 +1,9 @@
 # choregos-agent-sdk
 
+**This is not an agent framework: bring yours.** It is the run contract between an agent written in
+Python and the Choregos runner (ACP, MCP tools through the runner's permission check, the gateway as
+the model, the result file). LangGraph, the OpenAI Agents SDK, Pydantic AI or plain Python run inside it.
+
 Write a [Choregos](https://github.com/VargaFoundation/choregos) agent in Python. An agent is one
 async function; the SDK speaks the Agent Client Protocol (ACP) to the platform's runner, so the
 agent runs under the same guarantees as any coding agent: its tool calls and writes go through the
@@ -41,6 +45,25 @@ platform's `CHOREGOS_AGENT_IMAGES`, and register the agent with
 - What you `return` is validated against `choregos/StageResult/v1` and written to
   `.choregos/result.json`; an exception becomes a `failed` result that says why.
 - Standard output belongs to the protocol: `print` goes to standard error.
+
+## Bring your framework
+
+```python
+# the model: every request counts as a turn against the step's max_turns
+ChatOpenAI(
+    model=ctx.llm.model,
+    base_url=ctx.llm.base_url,
+    api_key=ctx.llm.api_key,
+    http_async_client=ctx.llm.http_client(),
+)
+# the tools: every call asks the runner's guard (not the framework's own MCP client)
+from choregos_agent_sdk.integrations import langchain  # or openai_agents, pydantic_ai
+
+tools = await langchain.tools(await ctx.tools())
+```
+
+Frameworks are never dependencies of this package: each bridge imports its own lazily. See the
+[guide](https://github.com/VargaFoundation/choregos/blob/main/docs/code-agents.md#bring-your-framework).
 
 ## What it does not do
 

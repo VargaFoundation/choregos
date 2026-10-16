@@ -43,7 +43,7 @@ from acp.schema import (
 
 from ._version import __version__
 from .context import Context, env_int
-from .errors import MaxTurnsExceeded, PermissionDenied
+from .errors import MaxTurnsExceeded, PermissionDenied, sdk_error_in
 from .result import Result, failure, write_result
 from .session import RunSession
 
@@ -145,13 +145,16 @@ class _Server:
                 outcome = failure(f"the agent returned {type(outcome).__name__}, not a Result", "agent_error")
         except asyncio.CancelledError:
             raise
-        except PermissionDenied as refusal:
-            outcome = failure(f"the runner's guard refused an action: {refusal}", "permission_denied")
-        except MaxTurnsExceeded as limit:
-            outcome = failure(f"the agent reached the step's turn limit: {limit}", "max_turns")
         except Exception as exc:
-            traceback.print_exc(file=sys.stderr)
-            outcome = failure(f"the agent failed: {type(exc).__name__}: {exc}", "agent_error")
+            # A framework's client wraps what its transport raises: look for the SDK's own error.
+            limit = sdk_error_in(exc)
+            if isinstance(limit, PermissionDenied):
+                outcome = failure(f"the runner's guard refused an action: {limit}", "permission_denied")
+            elif isinstance(limit, MaxTurnsExceeded):
+                outcome = failure(f"the agent reached the step's turn limit: {limit}", "max_turns")
+            else:
+                traceback.print_exc(file=sys.stderr)
+                outcome = failure(f"the agent failed: {type(exc).__name__}: {exc}", "agent_error")
         finally:
             await ctx.aclose()
         try:
