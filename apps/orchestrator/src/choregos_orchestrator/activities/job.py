@@ -21,7 +21,6 @@ from choregos_contracts import (
     EventType,
     JobSpec,
     ModelRef,
-    Permissions,
     PlaybookRef,
     ProjectRef,
     RepoRef,
@@ -36,6 +35,7 @@ from temporalio.exceptions import ApplicationError
 
 from .base import without_secrets
 from .plan import StagePlan
+from .run_network import network_permissions, run_network
 
 #: What `agent.backend` and `run.backend` say for a job: there is no agent backend.
 JOB_BACKEND = "job"
@@ -141,10 +141,10 @@ async def prepare_job(
         budget=budget,
         allowed_paths=allowed_paths,
         playbook=PlaybookRef(ref=job_ref(command, image)),
-        permissions=Permissions(
+        permissions=network_permissions(
+            run_network(bundle, None, settings),
             write_paths=allowed_paths,
             deny_commands=engine.deny_commands(),
-            allow_domains=engine.allow_domains(),
             dod_iterations=0,
             max_findings=engine.max_findings_per_run(),
             unknown_requests=bundle.policy.sandbox.unknown_requests,

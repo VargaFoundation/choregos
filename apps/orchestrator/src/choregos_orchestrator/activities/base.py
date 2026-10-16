@@ -21,7 +21,7 @@ from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
 from choregos_api.services.definitions import ceiling_of
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import Message, PolicyEngine
-from choregos_core.policy_ceiling import clamp
+from choregos_core.policy_ceiling import PolicyCeiling, clamp
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
@@ -46,6 +46,9 @@ class ProjectBundle:
     adapters: AdapterSet
     #: La version de ce défaut, pour épingler un ticket à sa naissance.
     workflow_def_id: str | None = None
+    #: The organisation's policy ceiling, if it set one: its `network` section bounds the run's
+    #: network (ADR 0070). `policy` above is already brought down to it.
+    ceiling: PolicyCeiling | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -102,6 +105,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         workflow_def_id=workflow_row.id if workflow_row is not None else None,
         # The policy that runs: the project's, brought down to its organisation's ceiling (S27-05).
         policy=clamp(policy_model(policy_row), ceiling_of(org))[0],
+        ceiling=ceiling_of(org),
         adapters=AdapterSet.from_connectors(
             {
                 # La mémoire `lexical` vit dans les tables de l'API : elle doit dire depuis

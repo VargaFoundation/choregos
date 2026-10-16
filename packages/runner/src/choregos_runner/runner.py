@@ -35,6 +35,7 @@ from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, get_settings
 from .dod import run_checks
+from .egress import authenticate_proxy_env
 from .exits import Exit
 from .guardrails import GuardRails
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
@@ -144,6 +145,9 @@ class Runner:
         self.compressor: compression.Compressor | None = None
 
     async def run(self) -> RunOutcome:
+        # ADR 0070: before anything makes a network call — git, pip, the agent — the egress proxy
+        # learns which run is calling (proxy credentials = run id and run token).
+        os.environ.update(authenticate_proxy_env(os.environ, self.settings.run_id, self.settings.run_token))
         client = self.client or InternalClient(
             self.settings.api_url, self.settings.run_id, self.settings.run_token
         )
