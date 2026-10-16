@@ -446,29 +446,66 @@ async def _reservation(
     trial: bool = False,
 ) -> Any:
     """What this run may spend (ADR 0047): the smallest of what is left under the stage budget, the
-    agent's run, day and month budgets, the ticket budget and the project's day budget. A trial has
-    no day or month budget: its runs belong to no agent, so no spend is counted against one (S32-03)."""
+    agent's run, day and month budgets, the ticket budget, the project's day budget and the
+    organisation's month budget. What is left under a scope is its cap, minus the ledger, minus the
+    keys still open at that scope (S27-11). A trial has no day or month budget: its runs belong to
+    no agent, so no spend is counted against one (S32-03).
+
+    Serialized per scope: the scopes this stage reserves from are locked until the transaction ends
+    (`lock_budget_scopes`), so a second stage reads the first one's reservation instead of the same
+    remainder."""
+    from choregos_api.db.models import Organization
     from choregos_api.services.agents import depense_du_jour, depense_du_mois
     from choregos_api.services.budgets import (
+        lock_budget_scopes,
         open_reservations,
+        org_spent_since,
         project_spent_since,
         reserve,
         start_of_day,
+        start_of_month,
         ticket_budget,
         ticket_spent,
     )
+    from choregos_api.services.definitions import ceiling_of
 
     engine = bundle.engine
+    org_id = bundle.project.org_id
+    org_cap = None
+    if (ceiling := ceiling_of(await session.get(Organization, org_id))) is not None:
+        org_cap = ceiling.budgets.monthly_org_usd
+    agent_slug = agent.agent.slug if agent is not None and not trial else None
+    agent_capped = (
+        agent is not None
+        and not trial
+        and (agent.spec.budget.daily_usd is not None or agent.spec.budget.monthly_usd is not None)
+    )
+    scopes = [f"ticket:{item.id}"]
+    if engine.daily_budget() is not None:
+        scopes.append(f"project:{bundle.project.id}")
+    if org_cap is not None:
+        scopes.append(f"org:{org_id}")
+    if agent_capped:
+        scopes.append(f"agent:{org_id}:{agent_slug}")
+    await lock_budget_scopes(session, scopes)
+
     left: dict[str, float | None] = {"stage": stage_usd}
     if agent is not None:
         left["agent_run"] = agent.spec.budget.run_usd
         if agent.spec.budget.daily_usd is not None and not trial:
-            spent = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
-            left["agent_day"] = agent.spec.budget.daily_usd - spent
+            spent = await depense_du_jour(session, org_id, agent.agent.slug)
+            held = await open_reservations(
+                session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
+            )
+            left["agent_day"] = agent.spec.budget.daily_usd - spent - held
         if agent.spec.budget.monthly_usd is not None and not trial:
-            # The monthly cap is a reservation too (S27-09): a run cannot spend past it.
-            month = await depense_du_mois(session, bundle.project.org_id, agent.agent.slug)
-            left["agent_month"] = agent.spec.budget.monthly_usd - month
+            # The monthly cap is a reservation too (S27-09): a run cannot spend past it, nor can
+            # the agent's runs in flight, each of which may still spend its key's cap (S27-11).
+            month = await depense_du_mois(session, org_id, agent.agent.slug)
+            held = await open_reservations(
+                session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
+            )
+            left["agent_month"] = agent.spec.budget.monthly_usd - month - held
     left["ticket"] = (
         ticket_budget(engine, item)
         - await ticket_spent(session, item.id)
@@ -479,6 +516,12 @@ async def _reservation(
             day
             - await project_spent_since(session, bundle.project.id, start_of_day())
             - await open_reservations(session, project_id=bundle.project.id, exclude_run=run_id)
+        )
+    if org_cap is not None:
+        left["org_month"] = (
+            org_cap
+            - await org_spent_since(session, org_id, start_of_month())
+            - await open_reservations(session, org_id=org_id, exclude_run=run_id)
         )
     return reserve(left)
 
