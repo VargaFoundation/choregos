@@ -8,18 +8,61 @@ from typing import Any
 
 from choregos_api.db.models import Finding, Release, Run, WorkItem
 from choregos_core import Fact, Message, Provenance, memory_namespace, utcnow
+from choregos_core.memory_scope import parse_namespace
 from sqlalchemy import select
 from temporalio import activity
 
-from .base import db, project_bundle, send_courtesy
+from .base import db, org_memory, project_bundle, send_courtesy
+
+
+def _write_target(project: str, run: Any) -> tuple[str | None, bool]:
+    """Where a fact born of a run goes, and whether it is only a proposal (S32-02, S40-11).
+
+    A run prepared with `StageInput.memories` writes to its one `write` binding — as a proposal when
+    that memory is global — or nowhere when it has none. A run without them (started before S40-11,
+    or a playbook) follows the memory scope its `StageInput` carried, so replays and runs in flight
+    behave as before.
+    """
+    if run is None:
+        return project, False
+    stage_input = run.stage_input or {}
+    memories = stage_input.get("memories")
+    if memories:
+        target = next((m for m in memories if m.get("mode") == "write"), None)
+        if target is None:
+            return None, False
+        return str(target["namespace"]), target.get("scope") == "global"
+    scope = str(stage_input.get("memory_scope") or "project")
+    return memory_namespace(project, scope, run.agent_slug), False
 
 
 def _namespace_of(project: str, run: Any) -> str | None:
-    """Where a fact born of a run goes: the memory scope its `StageInput` carried (S32-02)."""
-    if run is None:
-        return project
-    scope = str((run.stage_input or {}).get("memory_scope") or "project")
-    return memory_namespace(project, scope, run.agent_slug)
+    """Where a fact born of a run goes: its write target's namespace (see `_write_target`)."""
+    return _write_target(project, run)[0]
+
+
+def _adapter_for(bundle: Any, org_adapter: Any, namespace: str) -> Any:
+    """The adapter that serves a namespace: the organisation's for a global memory, else the project's."""
+    return org_adapter if parse_namespace(namespace).kind == "global_store" else bundle.adapters.memory
+
+
+async def _propose_events(adapter: Any, namespace: str, events: list[dict[str, Any]]) -> None:
+    """Hand events to a memory as proposals, pending a human decision (a global write target)."""
+    for event in events:
+        await adapter.propose_fact(
+            namespace,
+            Fact(
+                kind=event.get("kind", "other"),
+                subject=str(event.get("subject", "")),
+                content=str(event.get("content", "")),
+                external_id=event.get("external_id"),
+            ),
+            Provenance(
+                source=str(event.get("source", "ingest")),
+                ref=event.get("external_id"),
+                run_id=event.get("_run_id"),
+            ),
+        )
 
 
 async def _runs_by_id(session: Any, ids: list[str]) -> dict[str, Any]:
@@ -78,9 +121,12 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
             )
             for run in runs:
                 reason = (run.result or {}).get("reason") or "failed"
+                namespace, propose = _write_target(bundle.slug, run)
                 events.append(
                     {
-                        "_namespace": _namespace_of(bundle.slug, run),
+                        "_namespace": namespace,
+                        "_propose": propose,
+                        "_run_id": run.id,
                         "external_id": f"run:{run.id}",
                         "kind": "run_lesson",
                         "subject": f"run_lesson:{bundle.slug}:{run.stage_role}",
@@ -131,9 +177,12 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
             )
             origines = await _runs_by_id(session, [f.origin_run_id for f in findings if f.origin_run_id])
             for finding in findings:
+                namespace, propose = _write_target(bundle.slug, origines.get(finding.origin_run_id or ""))
                 events.append(
                     {
-                        "_namespace": _namespace_of(bundle.slug, origines.get(finding.origin_run_id or "")),
+                        "_namespace": namespace,
+                        "_propose": propose,
+                        "_run_id": finding.origin_run_id,
                         "external_id": f"finding:{finding.id}",
                         "kind": "finding",
                         "subject": f"finding:{bundle.slug}:{finding.id}",
@@ -142,15 +191,23 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                     }
                 )
 
-        # Each fact goes where its run's agent keeps memory (S32-02): the project, the agent's own,
-        # or nowhere for an agent that keeps none.
-        par_espace: dict[str, list[dict[str, Any]]] = {}
+        # Each fact goes where its run's write target is (S32-02, S40-11): the project, the agent's own,
+        # a named memory, a global one (as proposals), or nowhere for a run that writes nothing.
+        grouped: dict[tuple[str, bool], list[dict[str, Any]]] = {}
         for event in events:
-            espace = event.pop("_namespace", bundle.slug)
-            if espace is not None:
-                par_espace.setdefault(espace, []).append(event)
-        for espace, lot in par_espace.items():
-            await bundle.adapters.memory.ingest_events(espace, lot)
+            namespace = event.pop("_namespace", bundle.slug)
+            propose = bool(event.pop("_propose", False))
+            if namespace is not None:
+                grouped.setdefault((namespace, propose), []).append(event)
+        org_adapter = None
+        for (namespace, propose), batch in grouped.items():
+            if parse_namespace(namespace).kind == "global_store" and org_adapter is None:
+                org_adapter = await org_memory(session, bundle)
+            adapter = _adapter_for(bundle, org_adapter, namespace)
+            if propose:
+                await _propose_events(adapter, namespace, batch)
+            else:
+                await adapter.ingest_events(namespace, batch)
         return {"facts": len(events), "sources": sources}
 
 
@@ -181,38 +238,79 @@ async def write_run_lesson(payload: dict[str, Any]) -> dict[str, Any]:
         if not bundle.engine.memory_enabled():
             return {"written": False}
         run = await session.get(Run, payload["run_id"]) if payload.get("run_id") else None
-        espace = _namespace_of(bundle.slug, run)
+        espace, propose = _write_target(bundle.slug, run)
         if espace is None:
             return {"written": False, "skipped": "the agent keeps no memory"}
-        await bundle.adapters.memory.write_fact(
-            espace,
-            Fact(
-                kind="run_lesson",
-                subject=payload["subject"],
-                content=payload["content"],
-                external_id=payload.get("external_id"),
-                provenance=Provenance(source="orchestrator", run_id=payload.get("run_id")),
-            ),
+        provenance = Provenance(source="orchestrator", run_id=payload.get("run_id"))
+        fact = Fact(
+            kind="run_lesson",
+            subject=payload["subject"],
+            content=payload["content"],
+            external_id=payload.get("external_id"),
+            provenance=provenance,
         )
+        adapter = _adapter_for(bundle, await org_memory(session, bundle), espace)
+        if propose:
+            # A global memory only ever receives proposals: an administrator decides (ADR 0075).
+            await adapter.propose_fact(espace, fact, provenance)
+            return {"written": False, "proposed": True}
+        await adapter.write_fact(espace, fact)
         return {"written": True}
+
+
+async def _project_namespaces(session: Any, bundle: Any) -> list[str]:
+    """The namespaces a project's pending facts can be in: its shared memory, the own memory of every
+    agent that ran in it, and its named memories. Never a global memory: an administrator decides those."""
+    from choregos_api.db.models import MemoryStore
+
+    agents = (
+        await session.execute(
+            select(Run.agent_slug)
+            .where(Run.project_id == bundle.project.id, Run.agent_slug.is_not(None))
+            .distinct()
+            .order_by(Run.agent_slug)
+        )
+    ).scalars()
+    stores = (
+        await session.execute(
+            select(MemoryStore.slug).where(
+                MemoryStore.org_id == bundle.project.org_id,
+                MemoryStore.owner_key == str(bundle.project.id),
+                MemoryStore.status == "active",
+            )
+        )
+    ).scalars()
+    return [
+        bundle.slug,
+        *(f"{bundle.slug}#agent:{agent}" for agent in agents),
+        *(f"{bundle.slug}#memory:{slug}" for slug in stores),
+    ]
 
 
 @activity.defn(name="accept_pending_facts")
 async def accept_pending_facts(payload: dict[str, Any]) -> dict[str, Any]:
-    """Règle d'auto-acceptation : un fait proposé par ≥ N runs devient actif sans humain."""
+    """Règle d'auto-acceptation : un fait proposé par ≥ N runs devient actif sans humain.
+
+    Applies to the project's memories only (S40-11): its shared memory, the own memory of its agents and
+    its named memories. A global memory's proposals wait for an administrator.
+    """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         adapter = bundle.adapters.memory
-        pending = getattr(adapter, "pending", {}).get(bundle.slug, [])
         threshold = bundle.policy.memory.auto_accept_after_runs
-        counts: dict[str, int] = {}
-        for memory in pending:
-            counts[memory.subject] = counts.get(memory.subject, 0) + 1
         accepted = 0
-        for memory in list(pending):
-            if counts.get(memory.subject, 0) >= threshold and hasattr(adapter, "accept_pending"):
-                await adapter.accept_pending(bundle.slug, memory.id)
-                accepted += 1
+        for namespace in await _project_namespaces(session, bundle):
+            if hasattr(adapter, "list_pending"):
+                pending = list(await adapter.list_pending(namespace))
+            else:
+                pending = list(getattr(adapter, "pending", {}).get(namespace, []))
+            counts: dict[str, int] = {}
+            for memory in pending:
+                counts[memory.subject] = counts.get(memory.subject, 0) + 1
+            for memory in pending:
+                if counts.get(memory.subject, 0) >= threshold and hasattr(adapter, "accept_pending"):
+                    await adapter.accept_pending(namespace, memory.id)
+                    accepted += 1
         return {"accepted": accepted, "threshold": threshold}
 
 
