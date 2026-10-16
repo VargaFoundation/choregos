@@ -39,6 +39,7 @@ from ..schemas import (
 )
 from .agent_evals import evaluate, suite_for
 from .agent_governance import PERSONAL, is_admin
+from .agent_live_evals import latest_finished
 
 FINISHED = ("succeeded", "failed", "timed_out", "cancelled")
 PENDING = "pending_approval"
@@ -118,6 +119,11 @@ def _percent(agent: Agent, body: AgentReleaseCreate) -> int:
     return (agent.candidate_percent or 0) if agent.candidate_version is not None else 0
 
 
+def _lower(old: float | None, new: float | None) -> bool:
+    """A threshold that is dropped or lowered."""
+    return old is not None and (new is None or new < old)
+
+
 def loosens(before: AgentReleasePolicy, after: AgentReleasePolicy) -> bool:
     """Does `after` let a revision reach production on less than `before` asked?"""
     if after.on_publish == "stable" and before.on_publish != "stable":
@@ -126,6 +132,10 @@ def loosens(before: AgentReleasePolicy, after: AgentReleasePolicy) -> bool:
     if old.require_candidate and not new.require_candidate:
         return True
     if new.min_candidate_runs < old.min_candidate_runs or new.step_up_minutes > old.step_up_minutes:
+        return True
+    if _lower(old.min_live_score, new.min_live_score) or _lower(
+        before.candidate.min_live_score, after.candidate.min_live_score
+    ):
         return True
     if new.approvals < old.approvals or (old.separation_of_duties and not new.separation_of_duties):
         return True
@@ -284,6 +294,9 @@ async def checks_for(
                     else f"v{version} is not newer than production (v{agent.stable_version})",
                 )
             )
+        floor = policy.candidate.min_live_score if channel == "candidate" else gates.min_live_score
+        if floor is not None:
+            checks.append(await _live_check(session, agent, version, spec, floor))
         if channel == "stable":
             checks += await _candidate_gate_checks(session, agent, version, gates)
             if gates.approvals > 0:
@@ -321,6 +334,23 @@ async def checks_for(
             )
         )
     return checks
+
+
+async def _live_check(
+    session: AsyncSession, agent: Agent, version: int, spec: AgentSpec, floor: float
+) -> AgentReleaseCheck:
+    """The latest finished live evaluation of the revision reaches the policy's minimum score. Nothing
+    evaluated, or an evaluation that could not run, is a failure — never a pass (ADR 0020)."""
+    latest = await latest_finished(session, agent, version, spec, floor)
+    if latest is None:
+        return _check("live_eval", False, f"no live evaluation of v{version} has finished: run one")
+    if latest.status == "not_run" or latest.score is None:
+        return _check("live_eval", False, "the last live evaluation could not run: no model to call")
+    return _check(
+        "live_eval",
+        latest.score >= floor,
+        f"score {latest.score:.0%} against {floor:.0%} required",
+    )
 
 
 async def _candidate_gate_checks(

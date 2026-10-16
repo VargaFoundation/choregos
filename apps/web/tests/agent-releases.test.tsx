@@ -333,11 +333,14 @@ describe("the lifecycle tab", () => {
     await waitFor(() =>
       expect(api.setAgentReleasePolicy).toHaveBeenCalledWith("acme", "reviewer", {
         on_publish: "candidate",
+        candidate: { min_live_score: null },
+        max_eval_usd: 2,
         stable: {
           require_candidate: true,
           min_candidate_runs: 2,
           min_success_rate: null,
           min_soak_hours: 24,
+          min_live_score: null,
           step_up_minutes: 10,
           approvals: 1,
           separation_of_duties: true,

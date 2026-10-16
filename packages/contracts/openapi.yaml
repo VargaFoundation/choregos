@@ -2087,6 +2087,36 @@ paths:
       responses:
         "200": { description: The checks, content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseReadiness" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/versions/{version}/evaluations:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [agents]
+      operationId: startAgentEvaluation
+      description: >-
+        Run the revision's `live` eval cases as capped trials in a project (ADR 0071, live evaluation).
+        Needs the right to try the agent in that project. Each trial is capped at the case's
+        `max_cost_usd` (0.25 $ by default, 0.50 $ at most); `409` when the cases together could spend
+        more than the policy's `max_eval_usd`, when the revision has no live case, or more than 10.
+        Without a model to call (no gateway key) the evaluation is `not_run`. Audited
+        (`agent.evaluation.start`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentEvaluationCreate" } } }
+      responses:
+        "201": { description: The evaluation, started, content: { application/json: { schema: { $ref: "#/components/schemas/AgentEvaluation" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    get:
+      tags: [agents]
+      operationId: listAgentEvaluations
+      description: The live evaluations of the revision, newest first, each judged from its runs as they stand.
+      responses:
+        "200": { description: The evaluations, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentEvaluation" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/release-policy:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -4281,6 +4311,9 @@ components:
         input: { $ref: "#/components/schemas/AgentSampleInput" }
         must_contain: { type: array, items: { type: string } }
         must_not_contain: { type: array, items: { type: string } }
+        live: { type: boolean, default: false, description: "a live case runs as a capped trial on the real model and asserts on the run's result (S40-02d); the level-1 gate leaves it out" }
+        expect_status: { type: string, enum: [done, blocked], default: done, description: the status the run's result must have }
+        max_cost_usd: { type: [number, "null"], exclusiveMinimum: 0, maximum: 0.5, description: "what this case's trial may spend; absent, 0.25 $" }
     AgentSampleInput:
       type: object
       description: A sample work item an agent is tried or evaluated on.
@@ -4511,14 +4544,53 @@ components:
         min_success_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
         min_soak_hours: { type: [integer, "null"], minimum: 0, maximum: 720 }
         step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10, description: how recent the person's sign-in must be }
+        min_live_score: { type: [number, "null"], minimum: 0, maximum: 1, description: "the latest finished live evaluation of the revision must score at least this; a rollback skips it" }
         approvals: { type: integer, minimum: 0, maximum: 3, default: 0, description: "people other than the requester who must approve a promotion before production moves; a rollback never waits (ADR 0071)" }
         separation_of_duties: { type: boolean, default: true, description: "neither the requester nor the revision's author may approve" }
+    AgentCandidateGates:
+      type: object
+      description: What a revision must satisfy before it is sent to testing by hand (saving it to testing under `on_publish` is the owner's stated policy and is not gated).
+      properties:
+        min_live_score: { type: [number, "null"], minimum: 0, maximum: 1 }
+    AgentEvaluationCreate:
+      type: object
+      required: [project]
+      properties:
+        project: { type: string, description: "the project's slug: the trials run there (needs the right to try an agent in it)" }
+    AgentEvaluation:
+      type: object
+      description: A live evaluation of one revision, judged from its trial runs as they stand. `not_run` (no model to call) is never `passed`.
+      required: [id, version, project, status, budget_usd, started_at]
+      properties:
+        id: { type: string }
+        version: { type: integer }
+        project: { type: string }
+        status: { type: string, enum: [running, passed, failed, not_run], description: "`passed` when every case finished and the score reaches the policy's minimum (every case when none is set)" }
+        score: { type: [number, "null"], description: passed cases over live cases }
+        budget_usd: { type: number, description: the most the evaluation may spend in all }
+        started_by: { type: [string, "null"] }
+        started_at: { type: string, format: date-time }
+        cases:
+          type: array
+          items:
+            type: object
+            required: [name, run_id, status]
+            properties:
+              name: { type: string }
+              run_id: { type: string, description: "read it at `GET /runs/{id}`" }
+              status: { type: string, enum: [running, passed, failed, not_run] }
+              passed: { type: [boolean, "null"] }
+              budget_usd: { type: number }
+              cost_usd: { type: number }
+              reason: { type: [string, "null"], description: why it failed or did not run }
     AgentReleasePolicy:
       type: object
       description: "What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate."
       properties:
         on_publish: { type: string, enum: [stable, candidate, none], default: stable, description: "`stable`: a saved revision goes to production (the behaviour before channels); `candidate`: to testing; `none`: nowhere" }
         stable: { $ref: "#/components/schemas/AgentStableGates" }
+        candidate: { $ref: "#/components/schemas/AgentCandidateGates" }
+        max_eval_usd: { type: number, exclusiveMinimum: 0, maximum: 10, default: 2.0, description: the most one live evaluation may spend in all, in dollars }
     AgentReleaseCreate:
       type: object
       required: [channel]
@@ -4531,7 +4603,7 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, approvals (informational: how many people must approve)" }
+        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve)" }
         required: { type: boolean, default: true }
         passed: { type: [boolean, "null"], description: "null: not applicable" }
         detail: { type: [string, "null"] }
