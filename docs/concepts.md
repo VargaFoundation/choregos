@@ -107,8 +107,8 @@ actually executed; `scope_respected` compares the diff to the declared scope;
 minimum. Gates shipped today:
 
 ```
-action_succeeded · adr_number_free · ci_green · coverage_delta_min · diff_size_max
-docs_updated · evidence_facts · evidence_present · external · flag_present · markdown_sections
+action_succeeded · adr_number_free · already_fixed_proven · ci_green · coverage_delta_min
+diff_size_max · docs_updated · evidence_facts · evidence_present · external · flag_present · markdown_sections
 no_secrets · numbers_measured · output_schema · outputs_in · outputs_present
 provenance_signed · review_approved · scans_ok · scope_respected · tool_called
 ```
@@ -139,6 +139,20 @@ the branch, not the writer's report, so a developer who already documented lets 
 nothing and still pass; it never takes an agent's word that nothing needed saying. The
 `dev-complex` workflow of the `github-software-delivery` template (version 2) uses it on its
 documentation step.
+
+`already_fixed_proven` closes a ticket whose fix is already on the default branch, on measured
+evidence only. It guards a `system` transition from the state an agent step starts from — the
+platform's "already fixed" exit — and the interpreter takes that exit only after the step **measured
+no change**: `diff_files` and `diff_lines` measured by git, both 0, no commit. The guarantee then
+requires that no branch was pushed (read from the SCM) and that the runner ran the tests on that
+unchanged checkout — the default branch — with at least one run and none failed (`tests_run`,
+`tests_failed` in `evidence.measured`). Proven, the work item ends in the exit's terminal state, with
+no test, review or pull request, and its issue is closed as completed with a comment citing the
+evidence. Unproven, the step escalates at once: "the implementation changed nothing and the evidence
+does not prove the fix already exists", followed by what is missing. The default selection never
+takes such an exit, and the validator refuses one placed anywhere else
+(`gate.already_fixed_not_an_exit`). The `dev-simple` workflow of the `github-software-delivery`
+template (version 2) declares it as `t-already-fixed`.
 
 **A gate that cannot see what it must check refuses.** If the SCM connector cannot produce a
 diff, `scope_respected` does not pass — it declines. A guarantee that passes blindly is worse

@@ -6,12 +6,17 @@
 # approval: this workflow names none (ADR 0041). No agent deploys — the train does,
 # the production agent then verifies, read-only.
 #
+# A ticket whose fix is already on `main` (#539): when the implementation changes nothing, the platform
+# takes `t-already-fixed` instead — on measured evidence only (no change, no commit, no branch, the
+# tests run and green on `main`, `already_fixed_proven`). The ticket ends `already_fixed` and its issue
+# is closed with that evidence; without it, the implementation escalates to a person at once.
+#
 # States carry no effect by their name: `does` and `production` are written out (ADR 0037).
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: dev-simple
-  version: 1
+  version: 2
   description: "A bug or a small fix: triage, implementation, tests, agent review, pull request, merge, release train to production, production check. No human unless something goes wrong."
 initial: inbox
 actors:
@@ -36,6 +41,7 @@ states:
   integrated: { display: Merged, tracker: { status: Merged } }
   live: { display: In production, production: true, tracker: { status: Deployed } }
   verified: { display: Verified in production, terminal: true, tracker: { status: Done } }
+  already_fixed: { display: Already fixed, terminal: true, tracker: { status: Done } }
   needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
   abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
 transitions:
@@ -54,6 +60,11 @@ transitions:
     inputs: [test_report, human_feedback]
     gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 20, lines: 800 } }]
     on_fail: { to: triaged, max_attempts: 3, escalate_to: needs_human }
+  - id: t-already-fixed
+    from: triaged
+    to: already_fixed
+    by: platform
+    gates: [already_fixed_proven]
   - id: t-test
     from: implemented
     to: tested

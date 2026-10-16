@@ -30,7 +30,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
 from ..errors import Issue
-from ..gates import known_gates
+from ..gates import ALREADY_FIXED_GATE, known_gates
 from .dates import champ_de
 from .legacy import legacy_outputs
 from .yamlsource import json_pointer, locate
@@ -78,6 +78,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_roles_connus(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
+    _check_already_fixed_exits(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
     _check_effets(wf, report, source)
@@ -152,6 +153,29 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             ["metadata", "inputs"],
             source,
         )
+
+
+def _check_already_fixed_exits(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`already_fixed_proven` (S22-47) guards the platform's "already fixed" exit: a `system`
+    transition from the state an agent or job step starts from. It is taken only after that step
+    measured no change; anywhere else it would never be taken, and its guarantee never read."""
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            if g.name != ALREADY_FIXED_GATE:
+                continue
+            system = isinstance(wf.actors.get(t.by or ""), SystemActor)
+            step = any(
+                isinstance(wf.actors.get(other.by or ""), RUN_ACTORS)
+                for other in wf.transitions_from(t.from_)
+            )
+            if not (system and step):
+                report.error(
+                    "gate.already_fixed_not_an_exit",
+                    f"guarantee `{ALREADY_FIXED_GATE}` guards a `system` transition from the state an agent "
+                    "step starts from: it is taken only when that step changed nothing",
+                    ["transitions", index, "gates", g_index],
+                    source,
+                )
 
 
 def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:

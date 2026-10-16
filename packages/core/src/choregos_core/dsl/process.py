@@ -28,6 +28,8 @@ from choregos_core.gates import DIFF_GATES
 RESUMES: dict[str, str] = {
     "action_succeeded": "its governed action succeeded",
     "adr_number_free": "the decision record's number is not already taken on the default branch",
+    "already_fixed_proven": "the step changed nothing, pushed no branch, and the tests pass on the default "
+    "branch, as measured",
     "ci_green": "the CI pipeline is green",
     "coverage_delta_min": "test coverage does not drop below the threshold",
     "diff_size_max": "the change stays under the size limit",

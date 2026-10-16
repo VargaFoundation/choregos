@@ -23,7 +23,7 @@ from choregos_contracts import (
     missing_outputs,
 )
 
-from ..gates import GateOutcome
+from ..gates import ALREADY_FIXED_GATE, ALREADY_FIXED_UNPROVEN, GateOutcome
 from .legacy import legacy_outputs
 
 
@@ -72,6 +72,9 @@ class WorkflowEngine:
         3. pour `changes_requested`, la transition portée par un agent `address_review` ;
         4. sinon, la première transition déclarée depuis cet état (hors transitions de
            réparation, qui ne se jouent que sur un résultat explicite).
+
+        An "already fixed" exit (`already_fixed_exit`) is never selected here: it is taken only after
+        the agent step from the same state measured no change (S22-47).
         """
         candidates = self.wf.transitions_from(state)
         if not candidates:
@@ -88,11 +91,38 @@ class WorkflowEngine:
                         return t
         repair_roles = {"fix_ci", "address_review"}
         for t in candidates:
+            if self._is_already_fixed_exit(t):
+                continue
             actor = self.wf.actor_of(t)
             if isinstance(actor, AgentActor) and str(actor.role) in repair_roles:
                 continue
             return t
         return candidates[0]
+
+    def already_fixed_exit(self, state: str) -> Transition | None:
+        """The platform's "already fixed" exit from `state` (S22-47, #539): a `system` transition
+        guarded by `already_fixed_proven`. The agent step from the same state takes it instead of its
+        own target when it changed nothing; `None` when the workflow declares none."""
+        return next((t for t in self.wf.transitions_from(state) if self._is_already_fixed_exit(t)), None)
+
+    def _is_already_fixed_exit(self, transition: Transition) -> bool:
+        return isinstance(self.wf.actor_of(transition), SystemActor) and any(
+            g.name == ALREADY_FIXED_GATE for g in transition.gates
+        )
+
+    def after_unchanged_stage(
+        self, transition: Transition, exit_: Transition, outcomes: list[GateOutcome]
+    ) -> Decision:
+        """An agent step that changed nothing (S22-47, #539): the work item ends in the exit's
+        terminal state when every guarantee of the exit passes — the fix is already there, proven —
+        and escalates the step at once otherwise, with what the evidence lacks. Never a retry: the
+        same unchanged checkout would measure the same thing."""
+        failing = [o for o in outcomes if not o.passed]
+        if not failing:
+            proof = "; ".join(o.detail for o in outcomes if o.detail)
+            return Decision(exit_.to, reason=f"already fixed: {proof}"[:300])
+        missing = "; ".join(f"{o.name} ({o.detail})" for o in failing)
+        return self.escalate(transition, f"{ALREADY_FIXED_UNPROVEN}: {missing}"[:300])
 
     def actor_kind(self, transition: Transition) -> str:
         if transition.via == "release_train":
