@@ -36,6 +36,7 @@ class ApiError(Exception):
         type_: str = "about:blank",
         errors: list[dict[str, Any]] | None = None,
         retry_after: int | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(title)
         self.status_code = status_code
@@ -44,6 +45,8 @@ class ApiError(Exception):
         self.type = type_
         self.errors = errors or []
         self.retry_after = retry_after
+        #: Machine-readable extension members of the problem (RFC 9457 §3.2), e.g. `code`.
+        self.extra = extra or {}
 
     def to_problem(self, instance: str = "") -> dict[str, Any]:
         problem: dict[str, Any] = {"type": self.type, "title": self.title, "status": self.status_code}
@@ -55,6 +58,8 @@ class ApiError(Exception):
             problem["errors"] = self.errors
         if self.retry_after is not None:
             problem["retry_after"] = self.retry_after
+        for key, value in self.extra.items():
+            problem.setdefault(key, value)
         return problem
 
 
@@ -70,8 +75,8 @@ def unauthorized(detail: str = "authentication required") -> ApiError:
     return ApiError(status.HTTP_401_UNAUTHORIZED, "Not authenticated", detail)
 
 
-def conflict(detail: str) -> ApiError:
-    return ApiError(status.HTTP_409_CONFLICT, "State conflict", detail)
+def conflict(detail: str, *, extra: dict[str, Any] | None = None) -> ApiError:
+    return ApiError(status.HTTP_409_CONFLICT, "State conflict", detail, extra=extra)
 
 
 def unprocessable(detail: str, errors: list[dict[str, Any]] | None = None) -> ApiError:

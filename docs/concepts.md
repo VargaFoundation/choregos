@@ -71,7 +71,8 @@ one person can change at will or take away when they leave. It runs in trials, a
 project (or forked into one) to reach a workflow. A **fork** is a new agent whose first version copies
 one version of its source and which remembers where it came from; it never follows the source on its
 own — it tells you when the source moved on. An agent also carries **tags**, labels people find it by;
-they are metadata outside its versions, so editing them publishes nothing.
+they are metadata outside its versions, so editing them publishes nothing. A version carries a
+**message**, and going back to an older one **appends** a copy of it (ADR 0076): nothing is rewritten.
 
 ## Stage and run
 

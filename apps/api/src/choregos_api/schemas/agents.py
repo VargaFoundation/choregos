@@ -18,6 +18,9 @@ TAG = r"^[a-z0-9][a-z0-9-]{0,31}$"
 MAX_TAGS = 10
 AgentTag = Annotated[str, Field(pattern=TAG)]
 
+#: The longest message a version carries (S40-12).
+MESSAGE_MAX = 500
+
 
 def _no_duplicate_tags(tags: list[str] | None) -> list[str] | None:
     if tags is not None:
@@ -147,6 +150,8 @@ class AgentCreate(Dto):
     project: str | None = Field(default=None, min_length=1)
     #: Labels people find the agent by (S40-10); never part of a version.
     tags: list[AgentTag] = Field(default_factory=list, max_length=MAX_TAGS)
+    #: Why version 1 exists (S40-12); absent, `Created`.
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
 
     _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
 
@@ -173,6 +178,8 @@ class AgentFork(Dto):
     project: str | None = Field(default=None, min_length=1)
     #: The source version to copy; absent, its latest.
     version: int | None = Field(default=None, ge=1)
+    #: Why version 1 exists (S40-12); absent, `Forked from <slug>@<version>`.
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
 
     @model_validator(mode="after")
     def _a_project_fork_names_its_project(self) -> AgentFork:
@@ -311,6 +318,41 @@ class AgentVersionDto(Dto):
     checksum: str
     created_by: str | None = None
     created_at: datetime | None = None
+    #: Why the version exists, in its author's words; absent for a version published before messages.
+    message: str | None = None
+    #: The version this one copies, when it is a restore.
+    restored_from: int | None = None
+    #: The projects the caller may see that pin this version.
+    pinned_by: list[str] = Field(default_factory=list)
+
+
+class AgentVersionPublish(Dto):
+    """Publish the next version from the one the author read: refused when the latest has moved (S40-12)."""
+
+    spec: AgentSpec
+    message: str = Field(min_length=1, max_length=MESSAGE_MAX)
+    #: The latest version the author started from (0 for an agent with none).
+    base_version: int = Field(ge=0)
+
+    @field_validator("message")
+    @classmethod
+    def _message_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a message says what changed and why")
+        return value
+
+
+class AgentVersionRestore(Dto):
+    """Copy an older version as the next one; nothing is rewritten or deleted (S40-12)."""
+
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
+    base_version: int = Field(ge=1)
+
+    @field_validator("message")
+    @classmethod
+    def _message_is_stripped(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
 
 
 class AgentDto(Dto):
