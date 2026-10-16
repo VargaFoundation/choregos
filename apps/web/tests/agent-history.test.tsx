@@ -277,7 +277,7 @@ describe("the History tab", () => {
     expect(screen.queryByRole("button", { name: "Restore v3" })).toBeNull();
   });
 
-  it("marks the revision in production as current and shows each revision's channels (S40-02 x S40-12)", async () => {
+  it("shows each revision's channels beside the latest one, and says what production runs (S40-02 x S40-12)", async () => {
     query.current = new URLSearchParams("tab=history");
     vi.mocked(api.agent).mockResolvedValue(
       architect({
@@ -291,11 +291,17 @@ describe("the History tab", () => {
     );
     await open(page());
     await screen.findByTestId("history");
-    expect(within(screen.getByTestId("revision-2")).getByText("Current")).toBeTruthy();
     expect(within(screen.getByTestId("revision-2")).getByText("Production")).toBeTruthy();
-    expect(within(screen.getByTestId("revision-3")).queryByText("Current")).toBeNull();
+    expect(within(screen.getByTestId("revision-2")).queryByText("Current")).toBeNull();
+    expect(within(screen.getByTestId("revision-3")).getByText("Current")).toBeTruthy();
     expect(within(screen.getByTestId("revision-3")).getByText("Testing")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Restore v3" })).toBeTruthy();
+  });
+
+  it("the Definition tab says production runs another revision than the latest (S40-02 x S40-12)", async () => {
+    vi.mocked(api.agent).mockResolvedValue(architect({ stable_version: 2 }));
+    await open(page());
+    const bar = await screen.findByTestId("version-bar");
+    expect(within(bar).getByTestId("current-note").textContent).toContain("Production runs v2");
   });
 
   it("opens on ?tab=versions, the former name", async () => {
