@@ -84,6 +84,9 @@ class Project(Base, PkMixin, TimestampMixin):
     #: ordonnée de `{when: {labels_any, labels_all, item_type}, workflow}`. Hors de `config`, que
     #: `PATCH /projects/{id}` remplace en entier.
     workflow_routing: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    #: Which channel of the agents this project runs when it pins nothing (S40-02, ADR 0071):
+    #: `stable` (production, the default) or `candidate` (testing).
+    agent_channel: Mapped[str] = mapped_column(String(16), default="stable", server_default="stable")
 
     org: Mapped[Organization] = relationship(back_populates="projects")
     connectors: Mapped[list[Connector]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -773,6 +776,7 @@ class Agent(Base, PkMixin, TimestampMixin):
         UniqueConstraint("org_id", "slug", name="uq_agents_org_slug"),
         # A project agent has a project, and only a project agent has one (S39-09, ADR 0061).
         CheckConstraint("(scope = 'project') = (project_id IS NOT NULL)", name="scope_project"),
+        CheckConstraint("candidate_percent BETWEEN 0 AND 100", name="candidate_percent"),
     )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
@@ -801,6 +805,15 @@ class Agent(Base, PkMixin, TimestampMixin):
     #: may be suspended, a retired one never runs again.
     lifecycle: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The channels (S40-02, ADR 0071): each points at an immutable revision (`agent_versions.version`).
+    #: `stable_version` is production; `candidate_version` is testing, served to the projects that
+    #: follow it and to a share (`candidate_percent`, 0-100) of the other projects' work items.
+    stable_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_percent: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    candidate_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: `AgentReleasePolicy` as JSON; NULL means the defaults.
+    release_policy: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class AgentVersion(Base, PkMixin, TimestampMixin):
@@ -822,13 +835,44 @@ class ProjectAgent(Base, PkMixin, TimestampMixin):
     """L'épingle d'un projet sur une version d'agent, et ses surcharges — qui ne font que resserrer."""
 
     __tablename__ = "project_agents"
-    __table_args__ = (UniqueConstraint("project_id", "agent_id", name="uq_project_agents_project_agent"),)
+    __table_args__ = (
+        UniqueConstraint("project_id", "agent_id", name="uq_project_agents_project_agent"),
+        # A pin is a fixed revision XOR a channel (S40-02, ADR 0071).
+        CheckConstraint("(version IS NULL) <> (channel IS NULL)", name="version_or_channel"),
+    )
 
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
-    version: Mapped[int] = mapped_column(Integer)
+    #: The fixed revision, or `None` when the pin follows a channel.
+    version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: `stable` or `candidate` when the pin follows a channel, else `None`.
+    channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
     overrides: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+
+
+class AgentRelease(Base, PkMixin, TimestampMixin):
+    """One move of an agent's channels (S40-02, ADR 0071): the release history, the timeline of the
+    lifecycle tab and the rollback oracle."""
+
+    __tablename__ = "agent_releases"
+    __table_args__ = (Index("ix_agent_releases_agent_created", "agent_id", "created_at"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    #: `candidate` or `stable`.
+    channel: Mapped[str] = mapped_column(String(16))
+    #: `publish`, `promote`, `rollback`, `withdraw` or `baseline`.
+    kind: Mapped[str] = mapped_column(String(16))
+    version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    previous_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="done")
+    requested_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The checks as they were evaluated, a snapshot (`AgentReleaseCheck[]`).
+    checks: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ───────────────────────────── la bibliothèque de skills (ADR 0033) ─────────────────────────────

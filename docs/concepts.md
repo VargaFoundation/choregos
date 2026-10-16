@@ -72,6 +72,23 @@ project (or forked into one) to reach a workflow. A **fork** is a new agent whos
 one version of its source and which remembers where it came from; it never follows the source on its
 own — it tells you when the source moved on.
 
+## Agent revisions and channels
+
+A **revision** is one numbered, immutable version of an agent
+([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md)). An agent has two
+**channels**, each a pointer to a revision:
+
+- **production** — what every project that pins nothing runs;
+- **testing** — served to the projects that chose to follow testing, and to a **canary share** (a
+  percentage of the work items of the other projects), picked by a hash of the work item so that all
+  its stages and retries run one revision.
+
+*Publish* saves a revision; *release* moves a channel. What saving does is the agent's policy (production,
+testing or nothing; production by default, as before). Reaching production checks the eval suite again,
+what testing measured (runs, success rate, time), and takes a person with a recent sign-in; a
+**rollback** to a revision that was in production before skips the measurements, not the person. Every
+move is kept in a history, and the run records the revision it used.
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,

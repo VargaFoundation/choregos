@@ -15,6 +15,7 @@ U = the personal agent's owner.
 | see                   | any member      | any member      | M(P), A          | U, A                    |
 | create                | A (catalogue)   | A               | O(P), A          | D (becomes U), A        |
 | publish, edit, life   | A               | A               | O(P), A          | U, A                    |
+| release (S40-02)      | A               | A               | O(P), A          | U, A                    |
 | manage (suspend, ...) | A               | A               | O(P), A          | U, A                    |
 | pin in project Q      | O(Q)            | O(Q)            | O(Q) with Q = P  | never (422)             |
 | trial in project Q    | item:control(Q) | item:control(Q) | Q = P            | U, item:control(Q)      |
@@ -49,6 +50,8 @@ class Action(StrEnum):
     SEE = "see"
     CREATE = "create"
     PUBLISH = "publish"
+    #: Move the channels of an agent: send a revision to testing or production, roll back (S40-02).
+    RELEASE = "release"
     MANAGE = "manage"
     PIN = "pin"
     TRIAL = "trial"
@@ -265,6 +268,7 @@ TABLE: dict[Action, Rule] = {
     Action.SEE: _see,
     Action.CREATE: _create,
     Action.PUBLISH: _change,
+    Action.RELEASE: _change,
     Action.MANAGE: _change,
     Action.PIN: _pin,
     Action.TRIAL: _trial,
@@ -339,6 +343,7 @@ def permissions_of(principal: Principal, org: str, subject: Subject) -> tuple[Ag
     """What the DTO carries: the caller's rights on this agent and the sentence for the first they lack."""
     publish = decide(principal, org, subject, Action.PUBLISH)
     manage = decide(principal, org, subject, Action.MANAGE)
+    release = decide(principal, org, subject, Action.RELEASE)
     pin = _can_pin_somewhere(principal, org, subject)
     forks = [
         scope
@@ -353,6 +358,7 @@ def permissions_of(principal: Principal, org: str, subject: Subject) -> tuple[Ag
             publish=publish.allowed,
             manage=manage.allowed,
             pin=pin.allowed,
+            release=release.allowed,
             fork_scopes=forks,
         ),
         reason,

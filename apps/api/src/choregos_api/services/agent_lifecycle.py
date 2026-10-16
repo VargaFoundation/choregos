@@ -109,6 +109,8 @@ async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
         await session.delete(epingle)
     agent.lifecycle = "retired"
     agent.retired_at = maintenant
+    # Nothing stays in testing for an agent that will never run again (ADR 0071).
+    agent.candidate_version, agent.candidate_percent, agent.candidate_since = None, 0, None
     await session.flush()
     return {"revoked_credentials": len(accreditations), "unpinned_projects": projets}
 

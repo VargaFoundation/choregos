@@ -1514,6 +1514,81 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/releases:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listAgentReleases
+      description: Every move of the agent's channels, newest first — the release history (ADR 0071).
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200": { description: The history, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentRelease" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [agents]
+      operationId: releaseAgentVersion
+      description: >-
+        Point a channel at a revision (ADR 0071). `candidate` sends it to testing, with a canary share;
+        `version: null` withdraws the candidate. `stable` releases to production: it checks the eval suite
+        again, the candidate's record against the agent's gates, needs a person (human session) with a
+        sign-in younger than the policy's `step_up_minutes` (not for a personal agent), and the plugin
+        gesture `agent.release`. Rolling back to a revision that was in production skips the gates. 409
+        lists the failing checks in `errors` (`type: release_check_failed`); 401 `step_up_required` asks
+        for a fresh sign-in. Audited (`agent.release`). Needs the right to release the agent.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseCreate" } } }
+      responses:
+        "201": { description: The move, as recorded, content: { application/json: { schema: { $ref: "#/components/schemas/AgentRelease" } } } }
+        "401": { description: A fresh authentication is needed (`step_up_required`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/versions/{version}/readiness:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [agents]
+      operationId: getAgentReleaseReadiness
+      description: What releasing this revision to a channel would check, without doing it — the checklist the console shows before "Promote".
+      parameters:
+        - { name: channel, in: query, required: false, schema: { type: string, enum: [stable, candidate], default: stable } }
+      responses:
+        "200": { description: The checks, content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseReadiness" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/release-policy:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [agents]
+      operationId: setAgentReleasePolicy
+      description: What saving a revision does (`on_publish`) and the gates of production. Loosening the policy needs a person with a fresh sign-in. Audited (`agent.release_policy`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleasePolicy" } } }
+      responses:
+        "200": { description: The agent, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "401": { description: A fresh authentication is needed (`step_up_required`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/exposure:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgentExposure
+      description: Production, testing and the projects (among those the caller may read) that chose their own revision.
+      responses:
+        "200": { description: Who is served what, content: { application/json: { schema: { $ref: "#/components/schemas/AgentExposure" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agent-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1969,8 +2044,9 @@ paths:
       operationId: resolveProjectAgents
       description: >-
         Which agent version a run would load for each reference (`slug` or `slug@N`), through the
-        runtime's own resolver: an explicit `@N`, else the project's pin, else the latest version
-        (ADR 0033). Read only. The console builds the list from the `agent` of the process steps,
+        runtime's own resolver: an explicit `@N`, else the project's fixed pin, else its pin on a channel,
+        else the project's "follow testing" switch, else production (ADR 0071; a canary share depends on
+        the work item, so it is reported in `candidate_percent`, not applied). Read only. The console builds the list from the `agent` of the process steps,
         so it works on a draft too (S39-13).
       parameters:
         - name: ref
@@ -1985,6 +2061,24 @@ paths:
         "200": { description: One answer per reference, in the order asked, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentResolution" } } } } }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/agent-channel:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [agents]
+      operationId: getProjectAgentChannel
+      description: Which channel of the agents the project runs when it pins nothing (ADR 0071).
+      responses:
+        "200": { description: The channel, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentChannel" } } } }
+    put:
+      tags: [agents]
+      operationId: setProjectAgentChannel
+      description: Make the project run the agents' testing revisions (`candidate`) or their production (`stable`). `project:write`. Audited (`project.agent_channel`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentChannel" } } }
+      responses:
+        "200": { description: The channel, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentChannel" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /projects/{id}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -1992,7 +2086,7 @@ paths:
     put:
       tags: [agents]
       operationId: pinProjectAgent
-      description: "Pin a version; an override that widens the version gets 422, and so does a personal agent or another project's agent (ADR 0061). 403 carries the reason; an agent the caller may not see is a 404."
+      description: "Pin a fixed revision (`version`) or follow a channel (`channel`), exactly one of the two; an override that widens the revision gets 422, and so does a personal agent or another project's agent (ADR 0061). 403 carries the reason; an agent the caller may not see is a 404."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentPut" } } }
@@ -3167,6 +3261,7 @@ components:
         lifecycle: { type: string, enum: [draft, active], default: active, description: a draft is neither pinned nor run until it is activated }
         scope: { type: string, enum: [org, project, personal], default: org, description: "who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue" }
         project: { type: [string, "null"], description: "the project's slug: required for, and only for, a `project` agent" }
+        release_policy: { oneOf: [{ $ref: "#/components/schemas/AgentReleasePolicy" }, { type: "null" }], description: "what saving a revision does (ADR 0071); absent, the defaults: it goes to production" }
     AgentFork:
       type: object
       required: [slug, scope]
@@ -3200,6 +3295,7 @@ components:
         publish: { type: boolean, description: "publish a version, edit it, move it through its life" }
         manage: { type: boolean, description: "suspend, revoke, change its owner, attach clients" }
         pin: { type: boolean, description: pin it on a project the caller owns }
+        release: { type: boolean, description: "send a revision to testing or production, roll back (ADR 0071)" }
         fork_scopes: { type: array, items: { type: string, enum: [org, project, personal] } }
     AgentDraftRequest:
       type: object
@@ -3273,6 +3369,7 @@ components:
         checksum: { type: string }
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
+        channels: { type: array, items: { type: string, enum: [stable, candidate] }, description: "the channels this revision sits on now (ADR 0071)" }
     Agent:
       type: object
       required: [slug, kind, display_name, status, latest_version]
@@ -3297,6 +3394,101 @@ components:
         forked_from: { oneOf: [{ $ref: "#/components/schemas/AgentUpstream" }, { type: "null" }], description: set on a fork }
         can: { $ref: "#/components/schemas/AgentPermissions" }
         cannot_reason: { type: [string, "null"], description: "the server's sentence for what the caller may not do: shown as is, never guessed from roles" }
+        stable_version: { type: [integer, "null"], description: "the revision in production (ADR 0071)" }
+        candidate_version: { type: [integer, "null"], description: "the revision in testing" }
+        candidate_percent: { type: integer, minimum: 0, maximum: 100, default: 0, description: "the share of work items, of projects that follow production, served the candidate" }
+        candidate_since: { type: [string, "null"], format: date-time }
+        release_policy: { $ref: "#/components/schemas/AgentReleasePolicy" }
+    AgentStableGates:
+      type: object
+      description: What a revision must satisfy before it reaches production; a rollback skips them.
+      properties:
+        require_candidate: { type: boolean, default: false, description: the revision must be the current candidate }
+        min_candidate_runs: { type: integer, minimum: 0, maximum: 10000, default: 0, description: finished runs of the candidate since it became the candidate }
+        min_success_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+        min_soak_hours: { type: [integer, "null"], minimum: 0, maximum: 720 }
+        step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10, description: how recent the person's sign-in must be }
+    AgentReleasePolicy:
+      type: object
+      description: "What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate."
+      properties:
+        on_publish: { type: string, enum: [stable, candidate, none], default: stable, description: "`stable`: a saved revision goes to production (the behaviour before channels); `candidate`: to testing; `none`: nowhere" }
+        stable: { $ref: "#/components/schemas/AgentStableGates" }
+    AgentReleaseCreate:
+      type: object
+      required: [channel]
+      properties:
+        channel: { type: string, enum: [candidate, stable] }
+        version: { type: [integer, "null"], minimum: 1, description: "`null` with `candidate` withdraws the candidate; `null` with `stable` releases the current candidate" }
+        percent: { type: [integer, "null"], minimum: 0, maximum: 100, description: "candidate only: the share of work items served the candidate; absent keeps the current share (0 for a new candidate)" }
+        reason: { type: [string, "null"], maxLength: 500 }
+    AgentReleaseCheck:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication" }
+        required: { type: boolean, default: true }
+        passed: { type: [boolean, "null"], description: "null: not applicable" }
+        detail: { type: [string, "null"] }
+    AgentRelease:
+      type: object
+      required: [id, agent, channel, kind, status, requested_at]
+      properties:
+        id: { type: string }
+        agent: { type: string }
+        channel: { type: string, enum: [candidate, stable] }
+        kind: { type: string, enum: [publish, promote, rollback, withdraw, baseline] }
+        version: { type: [integer, "null"] }
+        previous_version: { type: [integer, "null"] }
+        percent: { type: [integer, "null"] }
+        status: { type: string, enum: [done] }
+        requested_by: { type: [string, "null"] }
+        requested_at: { type: string, format: date-time }
+        done_at: { type: [string, "null"], format: date-time }
+        reason: { type: [string, "null"] }
+        checks: { type: array, items: { $ref: "#/components/schemas/AgentReleaseCheck" }, description: the checks as they were evaluated (a snapshot) }
+    AgentChannelStats:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer }
+        runs: { type: integer, description: finished runs }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        success_rate: { type: [number, "null"] }
+        since: { type: [string, "null"], format: date-time }
+    AgentReleaseReadiness:
+      type: object
+      required: [version, channel, kind, ready]
+      properties:
+        version: { type: integer }
+        channel: { type: string, enum: [candidate, stable] }
+        kind: { type: string, enum: [publish, promote, rollback, withdraw, baseline] }
+        ready: { type: boolean, description: every required check passes }
+        checks: { type: array, items: { $ref: "#/components/schemas/AgentReleaseCheck" } }
+        candidate: { oneOf: [{ $ref: "#/components/schemas/AgentChannelStats" }, { type: "null" }] }
+        production: { oneOf: [{ $ref: "#/components/schemas/AgentChannelStats" }, { type: "null" }] }
+    AgentExposure:
+      type: object
+      properties:
+        stable_version: { type: [integer, "null"] }
+        candidate_version: { type: [integer, "null"] }
+        candidate_percent: { type: integer }
+        projects:
+          type: array
+          items:
+            type: object
+            required: [project, source, version]
+            properties:
+              project: { type: string }
+              source: { type: string, enum: [pin, pin_channel, project_channel] }
+              channel: { type: [string, "null"], enum: [stable, candidate, null] }
+              version: { type: integer }
+    ProjectAgentChannel:
+      type: object
+      required: [channel]
+      properties:
+        channel: { type: string, enum: [stable, candidate], description: "which channel of the agents the project runs when it pins nothing" }
     AgentLifecycleChange:
       type: object
       required: [to]
@@ -3332,7 +3524,18 @@ components:
         cost_by_kind: { type: object, additionalProperties: { type: number } }
         by_project: { type: array, items: { type: object, required: [project, runs, cost_usd], properties: { project: { type: string }, runs: { type: integer }, cost_usd: { type: number } } } }
         spent_today_usd: { type: number }
-        daily_budget_usd: { type: [number, "null"] }
+        daily_budget_usd: { type: [number, "null"], description: "production's daily budget" }
+        by_version: { type: array, items: { $ref: "#/components/schemas/AgentVersionMetrics" } }
+    AgentVersionMetrics:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer }
+        runs: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        success_rate: { type: [number, "null"] }
+        cost_usd: { type: number }
     AgentMetricsSummary:
       type: object
       description: An agent's line in the registry over a period.
@@ -3358,7 +3561,11 @@ components:
             `unavailable`: it exists but a run would not start (`reason`: draft, retired, expired,
             disabled, no such version).
         version: { type: [integer, "null"] }
-        pinned: { type: boolean, description: True when the version comes from the project's pin rather than from the reference or the latest. }
+        pinned: { type: boolean, description: "True when the version comes from the project's pin (fixed or by channel) rather than from the reference or from the agent's channels." }
+        source: { type: [string, "null"], enum: [explicit, pin, pin_channel, project_channel, canary, stable, latest, null], description: "why this revision (ADR 0071); `latest` only for an agent that has no production pointer" }
+        channel: { type: [string, "null"], enum: [stable, candidate, null] }
+        candidate_version: { type: [integer, "null"], description: "the revision in testing, if any: the console says `v4, 10 % of work items run v5`" }
+        candidate_percent: { type: [integer, "null"] }
         display_name: { type: [string, "null"] }
         lifecycle: { type: [string, "null"] }
         in_catalogue: { type: boolean }
@@ -3406,16 +3613,18 @@ components:
         tools: { type: [array, "null"], items: { type: string } }
     ProjectAgentPut:
       type: object
-      required: [version]
+      description: "Exactly one of `version` (a fixed revision) and `channel` (follow production or testing); the server answers 422 otherwise."
       properties:
-        version: { type: integer, minimum: 1 }
+        version: { type: [integer, "null"], minimum: 1 }
+        channel: { type: [string, "null"], enum: [stable, candidate, null] }
         overrides: { $ref: "#/components/schemas/AgentOverrides" }
     ProjectAgent:
       type: object
       required: [agent, version, overrides, effective]
       properties:
         agent: { type: string }
-        version: { type: integer }
+        version: { type: integer, description: "the revision served now (the channel's, for a channel pin)" }
+        channel: { type: [string, "null"], enum: [stable, candidate, null], description: "set when the pin follows a channel" }
         overrides: { $ref: "#/components/schemas/AgentOverrides" }
         effective: { $ref: "#/components/schemas/AgentSpec" }
         warning: { type: [string, "null"], description: said when the agent is deprecated }
