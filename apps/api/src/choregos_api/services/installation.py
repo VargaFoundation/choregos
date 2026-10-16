@@ -37,7 +37,13 @@ async def installer_ce_que_livre_le_gabarit(
     installées et de celles qu'aucun greffon n'installe."""
     auteur = f"template:{gabarit}"
     installes = await installer_skills_et_agents(
-        session, projet.org_id, livree.skills, livree.agents, auteur, quoi=f"le gabarit `{gabarit}`"
+        session,
+        projet.org_id,
+        livree.skills,
+        livree.agents,
+        auteur,
+        quoi=f"le gabarit `{gabarit}`",
+        du_catalogue=getattr(livree, "agents_du_catalogue", None),
     )
     installes |= {"extensions": [], "sans_greffon": []}
     await _installer_les_extensions(session, projet, livree, auteur, installes)
@@ -52,10 +58,17 @@ async def installer_skills_et_agents(
     auteur: str,
     *,
     quoi: str,
+    du_catalogue: dict[str, str] | None = None,
 ) -> dict[str, list[str]]:
-    """Des skills puis des agents dans une organisation, en version 1 quand ils n'y sont pas, JAMAIS
-    réécrits quand ils y sont — le chemin commun d'un gabarit (S20-07) et du catalogue (ADR 0040).
-    Un agent nomme ses skills par leur nom : elles s'installent d'abord."""
+    """Skills then agents into an organisation, as version 1 when absent and NEVER rewritten when present
+    — the path shared by a template (S20-07) and the catalogue (ADR 0040). An agent names its skills, so
+    they are installed first.
+
+    `du_catalogue`: slug -> `catalogue:<slug>@<version>` for the agents a template takes from the catalogue
+    (`catalogue:<slug>`). They carry the SAME provenance as a direct install (author of version 1, scope
+    `platform`) so the catalogue's upgrade recognises them (S39-25); the template stays in the audit
+    trail (`via`).
+    """
     installes: dict[str, list[str]] = {"skills": [], "agents": []}
     for fichiers in skills:
         try:
@@ -90,6 +103,7 @@ async def installer_skills_et_agents(
             await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == corps.slug))
         ).first():
             continue
+        provenance = (du_catalogue or {}).get(corps.slug, auteur)
         agent = Agent(
             org_id=org_id,
             slug=corps.slug,
@@ -100,7 +114,7 @@ async def installer_skills_et_agents(
             status="active",
             # What the built-in catalogue installs is common to everyone (ADR 0061); a template's
             # agents belong to the organisation.
-            scope="platform" if auteur.startswith("catalogue:") else "org",
+            scope="platform" if provenance.startswith("catalogue:") else "org",
         )
         session.add(agent)
         await session.flush()
@@ -111,7 +125,7 @@ async def installer_skills_et_agents(
                 version=1,
                 spec=corps.spec.model_dump(mode="json"),
                 checksum=empreinte_de_l_agent(corps.spec),
-                created_by=auteur,
+                created_by=provenance,
             )
         )
         await record(session, SYSTEM, "agent.create", org_id=org_id, target_type="agent",

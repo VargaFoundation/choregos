@@ -122,3 +122,22 @@ The console, meanwhile, offers editing to whoever opens the page and lets the AP
   `project:write` for any scope, so a stale pin can always be removed.
 - The console (S39-09b) reads `can`, `cannot_reason`, `scope` and `forked_from`; until it lands, the
   API alone enforces the matrix.
+
+## Amendment 2026-10-16 (S39-25, #674): provenance of a catalogue agent installed by a template
+
+The catalogue's provenance is the author of version 1, `catalogue:<slug>@<version>` (decision 1, and
+[ADR 0040](0040-a-built-in-agent-catalogue.md) §4). A project template that lists `catalogue:<slug>`
+used to import the agent authored `template:<name>@<v>` and scoped `org`, so the catalogue's upgrade
+answered 409 "does not come from the catalogue" and the agent was frozen at the template's version.
+
+- A template import records the **same provenance as a direct install**: version 1 authored
+  `catalogue:<slug>@<catalogue version>`, scope `platform`. The template stays visible in the audit
+  trail (`via: template:<name>@<v>`).
+- A data migration (`f3a5c7e9b1d2`) backfills agents already imported: version 1 authored `template:*`,
+  slug in the catalogue, scope `org`, not a fork. When the latest version still equals the catalogue's
+  text, version 1 becomes `catalogue:<slug>@<version>`. When it does not — the organisation published
+  its own text since — the provenance is recorded with a `!diverged` suffix (`@0` when the catalogue
+  version it came from cannot be told). The scope becomes `platform` in both cases.
+- An upgrade of a **diverged** agent whose latest text differs from the catalogue's is refused with a
+  409 that says why: the upgrade proposes, it never publishes over what the organisation wrote. The
+  organisation publishes the catalogue's text by hand (or forks) if that is what it wants.

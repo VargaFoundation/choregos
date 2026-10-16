@@ -30,6 +30,9 @@ from .skills import empreinte as empreinte_de_skill
 
 #: Préfixe de l'auteur d'une version venue du catalogue : `catalogue:<slug>@<version>`.
 PREFIXE = "catalogue:"
+#: Suffix of the author of version 1 when the agent's text no longer follows the catalogue's (S39-25):
+#: the upgrade proposes, it does not publish over what the organisation wrote.
+DIVERGE = "!diverged"
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +44,9 @@ class EtatDansLOrganisation:
     mise_a_jour: bool
     #: The scope of the agent of that name (ADR 0061), if there is one.
     scope: str | None = None
+    #: The agent comes from the catalogue but its latest version is not the catalogue's text and was
+    #: marked as written by hand (backfill of S39-25): an upgrade is refused with that reason.
+    divergent: bool = False
 
 
 def auteur(entree_: EntreeDuCatalogue) -> str:
@@ -67,7 +73,10 @@ async def etat(session: AsyncSession, org_id: Any, entree_: EntreeDuCatalogue) -
     premiere, derniere = versions[0], versions[-1]
     du_catalogue = (premiere.created_by or "").startswith(PREFIXE)
     change = derniere.checksum != empreinte(spec_de(entree_))
-    return EtatDansLOrganisation(True, derniere.version, du_catalogue, du_catalogue and change, agent.scope)
+    divergent = du_catalogue and (premiere.created_by or "").endswith(DIVERGE) and change
+    return EtatDansLOrganisation(
+        True, derniere.version, du_catalogue, du_catalogue and change, agent.scope, divergent
+    )
 
 
 async def installer(
