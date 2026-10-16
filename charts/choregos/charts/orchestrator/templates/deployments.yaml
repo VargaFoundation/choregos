@@ -115,6 +115,14 @@ spec:
               value: {{ $root.Values.runner.egressProxy | default "" | quote }}
             - name: CHOREGOS_EGRESS_IMAGE
               value: {{ $root.Values.runner.egressImage | default "" | quote }}
+            {{- if (($root.Values.global.egress | default dict).enabled) }}
+            # The per-run egress proxy of the release namespace (ADR 0070): runners present their run
+            # id and token as proxy credentials, and the deployment's deny list applies to every run.
+            - name: CHOREGOS_RUNNER_EGRESS_AUTH
+              value: "run"
+            - name: CHOREGOS_NETWORK_INSTANCE_DENY
+              value: {{ join "," (($root.Values.global.egress).denyDomains | default list) | quote }}
+            {{- end }}
             # The RuntimeClass of agent pods when the policy imposes none: a
             # cluster that has gVisor or Kata says so here once. Empty: the cluster's.
             - name: CHOREGOS_RUNNER_RUNTIME_CLASS
