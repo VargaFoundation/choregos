@@ -893,8 +893,9 @@ An agent with no run for 60 days says so (`unused`, `last_run_at`), and
 Agents are under the same
 row-level security as everything else: an agent of another organisation does not exist for you.
 
-In the console, **agents** (top bar) lists the registry and **your AI clients** — your `mcp:*`
-tokens, each with its last call and the client that made it. A Claude Code that has called the door
+In the console, the **Integrations** page (sidebar, *Organisation* group) is where you connect an AI
+client and see your `mcp:*` tokens, each with its last call and the client that made it; **Agents**
+is the registry. A Claude Code that has called the door
 shows as *connected*; **register as an external agent** creates the agent (with its human's tools,
 or read-only ones) and attaches the token, and its calls then carry the agent. An agent's page gives
 its last 30 days (runs, success rate, cost, today against its daily budget), its versions, a new
