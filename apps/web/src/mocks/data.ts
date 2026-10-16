@@ -27,6 +27,7 @@ import type {
   AgentSpec,
   AgentTrialCreate,
   ConnectorType,
+  ConnectorCatalogue,
   McpCatalogue,
   McpCatalogueEntry,
   McpCatalogueInstall,
@@ -2058,6 +2059,62 @@ export const connectorTypes: ConnectorType[] = [
  */
 const mockProjectSlugs = ["billing-api", "checkout-web"];
 
+const FAMILY_OF_KIND: Record<string, string> = {
+  scm: "Source code",
+  tracker: "Work trackers",
+  ci: "CI",
+  cd: "Deployment",
+  documents: "Documents",
+  identity: "Directory",
+  notify: "Notifications",
+  mcp: "MCP servers",
+};
+const PROJECT_KINDS = new Set(["tracker", "scm", "ci", "cd", "notify"]);
+const FAMILY_ORDER = ["Source code", "Work trackers", "CI", "Deployment", "Documents", "Directory", "Notifications", "MCP servers"];
+/** The project connectors this demo organisation has configured, by `kind/type`. */
+const CONFIGURED_IN: Record<string, string[]> = {
+  "scm/github": ["billing-api"],
+  "tracker/github-issues": ["billing-api"],
+  "cd/demo": ["billing-api"],
+};
+
+/** The connector catalogue (ADR 0074) as the API answers the demo's administrator. */
+export function connectorCatalogue(): ConnectorCatalogue {
+  const types = [...connectorTypes, { kind: "mcp", type: "mcp", display: "MCP server", config_schema: objet({}), capabilities: ["mcp"], secret_fields: ["token"] }];
+  const entries = types
+    .filter((t) => !["runtime", "gateway", "memory"].includes(t.kind))
+    .map((t) => {
+      const project = PROJECT_KINDS.has(t.kind);
+      const here = orgConnectors.filter((c) => c.kind === t.kind && c.type === t.type);
+      const selected = here.some((c) => c.availability === "selected_projects");
+      return {
+        kind: t.kind,
+        type: t.type,
+        display: t.display,
+        family: FAMILY_OF_KIND[t.kind] ?? "Other",
+        scope: project ? ("project" as const) : ("organisation" as const),
+        capabilities: t.capabilities ?? [],
+        secret_fields: t.secret_fields ?? [],
+        operations: here[0]?.operations?.length ?? 0,
+        installed_as: here.map((c) => c.name),
+        configured_in: CONFIGURED_IN[`${t.kind}/${t.type}`] ?? [],
+        enablement: here.map((c) => ({
+          connector: c.name,
+          availability: c.availability ?? ("all_projects" as const),
+          enabled_projects: c.enabled_projects ?? [],
+        })),
+        can: {
+          install: !project,
+          configure_projects: project ? mockProjectSlugs : [],
+          enable_projects: !project && selected ? mockProjectSlugs : [],
+        },
+        cannot_reason: null,
+      };
+    })
+    .sort((a, b) => FAMILY_ORDER.indexOf(a.family) - FAMILY_ORDER.indexOf(b.family) || a.display.localeCompare(b.display));
+  return { entries };
+}
+
 export function mcpCatalogue(): McpCatalogue {
   const file = mcpCatalogueFile as unknown as McpCatalogue;
   return {
@@ -3092,6 +3149,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
     [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
+    [/^\/orgs\/[^/]+\/connector-catalogue$/, connectorCatalogue()],
     [/^\/projects\/[^/]+\/actions$/, actions],
     [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, platformModels],

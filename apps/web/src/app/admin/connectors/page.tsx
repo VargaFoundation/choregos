@@ -52,6 +52,10 @@ export default function OrgConnectorsPage() {
         Catalogue:{" "}
         <Link href="/catalogue/mcp-servers" className="underline">
           MCP servers
+        </Link>{" "}
+        ·{" "}
+        <Link href="/catalogue/connectors" className="underline">
+          Connectors
         </Link>
       </p>
       {arrivee && (
