@@ -2761,6 +2761,19 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchRequest" } } }
       responses:
         "200": { description: Citations, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchResult" } } } }
+  /internal/runs/{id}/memory/search:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: searchRunMemory
+      description: "The sidecar's `search_memory` (S40-11, ADR 0075): searches the memories the run's StageInput resolved, and no others, each under the read timeout (one that fails contributes nothing). `memory` names one by label; a label the run does not read is 404."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RunMemorySearch" } } }
+      responses:
+        "200": { description: Hits, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RunMemoryHit" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/runs/{id}/ticket:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3921,6 +3934,23 @@ components:
         scope: { type: string, enum: [global, project], description: "`global`: the organisation's memory; `project`: a memory of whichever project the run is in (`shared`, `own`, or a named one)" }
         slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
         mode: { type: string, enum: [read, write], default: read }
+    RunMemorySearch:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query: { type: string, minLength: 1, maxLength: 2000 }
+        k: { type: integer, minimum: 1, maximum: 20, default: 5 }
+        memory: { type: [string, "null"], description: "one memory of the run, by label (`global:security-lessons`); absent, all of them" }
+    RunMemoryHit:
+      type: object
+      required: [memory, kind, subject, content]
+      properties:
+        memory: { type: string, description: the label of the memory the hit came from }
+        kind: { type: string }
+        subject: { type: string }
+        content: { type: string }
+        score: { type: [number, "null"] }
     MemoryStoreUser:
       type: object
       required: [agent, version]
