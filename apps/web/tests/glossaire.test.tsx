@@ -7,7 +7,7 @@ describe("le glossaire des quatre notions (S21-03)", () => {
     render(<Glossaire ici="agents" ouvert />);
     const glossaire = screen.getByTestId("glossaire");
     expect(within(glossaire).getByRole("link", { name: "Skill" })).toHaveAttribute("href", "/skills");
-    expect(within(glossaire).getByRole("link", { name: "Connector" })).toHaveAttribute("href", "/admin/connectors");
+    expect(within(glossaire).getByRole("link", { name: "Connector" })).toHaveAttribute("href", "/catalogue/connectors");
     expect(within(glossaire).getByRole("link", { name: "Client" })).toHaveAttribute("href", "/integrations");
   });
 
