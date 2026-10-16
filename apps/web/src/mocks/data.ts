@@ -33,6 +33,9 @@ import type {
   SkillCatalogue,
   SkillCatalogueEntry,
   ProjectOperation,
+  ProjectDto,
+  ProjectReadiness,
+  ReadinessItem,
   ConnectorDto,
   ProjectRequirement,
   AgentCredential,
@@ -2245,6 +2248,69 @@ const devConnectors = [
   { id: "c-dev-scm", kind: "scm", type: "github", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
   { id: "c-dev-cd", kind: "cd", type: "demo", config: { url: "http://choregos-demo-fakes:8090/cd/mcp" }, secret_refs: {}, status: "unknown" },
 ];
+/** The project `dev`: the sandbox project, as configured before anyone opens its settings. */
+const devProject = (): ProjectDto => ({
+  ...structuredClone(projects.items[0]!),
+  id: "p-dev",
+  slug: "dev",
+  name: "Dev",
+  template_ref: "github-tekton-argo-k8s@1.0.0",
+  config: {
+    slug: "dev",
+    org: "acme",
+    template_ref: "github-tekton-argo-k8s@1.0.0",
+    repo: { url: "https://github.com/DiametralGroup/choregos-sandbox-dev.git", default_branch: "main", language: "python" },
+    envs: ["dev", "staging", "prod"],
+    agent: { default_backend: "claude-code", allowed_backends: [] },
+    notify: {},
+    tools: [],
+    groups: ["dev"],
+    labels: { team: "platform" },
+  },
+});
+/** What a PATCH wrote, per project slug: the mock keeps it for the time of the page, as the API would. */
+const writtenProjects = new Map<string, ProjectDto>();
+const mockProject = (slug: string): ProjectDto => {
+  const bare = decodeURIComponent(slug).split(":").at(-1) ?? slug;
+  const written = writtenProjects.get(bare);
+  if (written) return structuredClone(written);
+  if (bare === "dev") return devProject();
+  return structuredClone(/checkout-web$/.test(bare) ? projects.items[1]! : projects.items[0]!);
+};
+
+/**
+ * What `GET /projects/{id}/readiness` answers on the mock, computed from the written configuration so
+ * that setting a Slack channel or a test command turns the matching item done, as on the real API.
+ */
+const mockReadiness = (slug: string): ProjectReadiness => {
+  const bare = decodeURIComponent(slug).split(":").at(-1) ?? slug;
+  const config = mockProject(bare).config;
+  const settings = `/p/${bare}/settings`;
+  const items: ReadinessItem[] = [
+    { id: "provisioned", section: "general", title: "Project provisioned", state: "done", detail: "Its repository, tracker and pipelines are in place.", fix: { by: "project_owner" } },
+    { id: "workflow", section: "general", title: "A workflow published", state: "done", detail: "2 workflows, default-simple by default.", fix: { by: "project_owner" } },
+    !config.repo?.url
+      ? { id: "repository", section: "general", title: "Repository", state: "todo", detail: "No repository URL: a run has nothing to clone.", fix: { href: `${settings}#general`, by: "project_owner" } }
+      : !config.repo.test_command
+        ? { id: "repository-checks", section: "general", title: "Measured checks", state: "check", detail: "No test command: the runner does not measure the tests.", fix: { href: `${settings}#general`, by: "project_owner" } }
+        : { id: "repository-checks", section: "general", title: "Measured checks", state: "done", detail: "The runner runs the test command itself.", fix: { by: "project_owner" } },
+    { id: "connector-tracker", section: "connections", title: "Work tracker", state: "done", detail: "github-issues, connected.", fix: { by: "project_owner" } },
+    { id: "connector-scm", section: "connections", title: "Source code", state: "done", detail: "github, connected.", fix: { by: "project_owner" } },
+    { id: "connector-cd", section: "connections", title: "Deployment (CD)", state: "check", detail: "demo is a stand-in: nothing real is deployed.", fix: { href: `${settings}#connections`, by: "project_owner" } },
+    { id: "connector-runtime", section: "connections", title: "Agent runtime", state: "done", detail: "Provided by the platform: agent_sandbox.", fix: { by: "platform_operator" } },
+    { id: "backend", section: "agents", title: "Agent backend", state: "done", detail: `${config.agent?.default_backend ?? "claude-code"} is run by this deployment.`, fix: { by: "project_owner" } },
+    { id: "budgets", section: "guardrails", title: "Budgets", state: "check", detail: "No daily project budget in the policy.", fix: { href: `${settings}#guardrails`, by: "project_owner" } },
+    { id: "people-release-captain", section: "people", title: "A release captain", state: "todo", detail: "The release train has no release_captain member.", fix: { href: `/p/${bare}/members`, by: "project_owner" } },
+    config.notify?.slack_channel
+      ? { id: "notifications", section: "notifications", title: "Notifications", state: "done", detail: `Announcements go to ${config.notify.slack_channel}.`, fix: { by: "project_owner" } }
+      : { id: "notifications", section: "notifications", title: "Notifications", state: "todo", detail: "The release train announces itself, and no Slack channel is set.", fix: { href: `${settings}#notifications`, by: "project_owner" } },
+    { id: "tools", section: "tools", title: "Tools", state: "done", detail: "No catalogue tool opened.", fix: { by: "project_owner" } },
+    { id: "first-item", section: "general", title: "A first request", state: "check", detail: "File one to see the workflow run end to end.", fix: { href: `/p/${bare}/board`, by: "project_owner" } },
+  ];
+  const count = (state: ReadinessItem["state"]) => items.filter((i) => i.state === state).length;
+  return { ready: count("todo") === 0, summary: { done: count("done"), check: count("check"), todo: count("todo") }, items };
+};
+
 const devRequirements: ProjectRequirement[] = [
   { capability: "tracker", reasons: ["default-simple: work items live in a tracker"], connector: devConnectors[0] as unknown as ConnectorDto, default_type: null },
   { capability: "scm", reasons: ["default-simple: the guarantee scope_respected on t-implement", "hotfix: the agent dev opens a pull request"], connector: devConnectors[1] as unknown as ConnectorDto, default_type: null },
@@ -2414,6 +2480,19 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/github\/install-link$/.test(chemin ?? ""))
     return { url: "https://github.com/apps/choregos-bot/installations/new?state=mock-signed-state" } as T;
+  const projectRoot = /^\/projects\/([^/]+)$/.exec(chemin ?? "");
+  if (projectRoot && method === "PATCH") {
+    const corps = (body ?? {}) as { name?: string; config?: ProjectDto["config"] };
+    const bare = decodeURIComponent(projectRoot[1]!).split(":").at(-1) ?? "";
+    const base = mockProject(bare);
+    const updated = { ...base, name: corps.name ?? base.name, config: corps.config ?? base.config, updated_at: new Date().toISOString() };
+    writtenProjects.set(bare, updated);
+    return structuredClone(updated) as T;
+  }
+  if (projectRoot && method === "GET" && /(?:^|[:/])dev$/.test(decodeURIComponent(projectRoot[1]!))) return mockProject("dev") as T;
+  if (projectRoot && method === "GET" && writtenProjects.has(decodeURIComponent(projectRoot[1]!).split(":").at(-1) ?? "")) return mockProject(projectRoot[1]!) as T;
+  const readinessRoute = /^\/projects\/([^/]+)\/readiness$/.exec(chemin ?? "");
+  if (readinessRoute && method === "GET") return mockReadiness(readinessRoute[1]!) as T;
   const projectConnectors = /^\/projects\/([^/]+)\/connectors(?:\/([a-z_]+))?$/.exec(chemin ?? "");
   if (projectConnectors) {
     const [, project = "", kind] = projectConnectors;
