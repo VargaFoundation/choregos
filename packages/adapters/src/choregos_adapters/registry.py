@@ -228,6 +228,21 @@ def allowed_executor_kinds() -> list[str]:
     return kinds
 
 
+def with_custom_image_executor(executor: Any) -> Any:
+    """On `agent_sandbox`, send a step that names its own image to a second executor (ADR 0072).
+
+    `CHOREGOS_CUSTOM_IMAGE_EXECUTOR` (chart `runner.customImageExecutor`) names it; empty keeps the
+    sandbox executor's refusal. Nothing changes for any other executor, or when the pool's image
+    (`CHOREGOS_RUNNER_IMAGE`) is unknown, because an override cannot then be told from the default."""
+    secondary = os.environ.get("CHOREGOS_CUSTOM_IMAGE_EXECUTOR", "")
+    pool_image = os.environ.get("CHOREGOS_RUNNER_IMAGE", "")
+    if not secondary or not pool_image or str(getattr(executor, "kind", "")) != "agent_sandbox":
+        return executor
+    from .executor.routing import RoutingExecutor
+
+    return RoutingExecutor(executor, build("runtime", secondary, {}), pool_image)
+
+
 def available(kind: ConnectorKind | str) -> list[str]:
     return sorted(type_name for (k, type_name) in _REGISTRY if k == str(kind))
 
@@ -308,7 +323,7 @@ class AdapterSet:
             scm=get("scm", TYPES_PAR_DEFAUT["scm"]),
             ci=get("ci", TYPES_PAR_DEFAUT["ci"]),
             cd=get("cd", TYPES_PAR_DEFAUT["cd"]),
-            executor=get("runtime", default_executor_kind()),
+            executor=with_custom_image_executor(get("runtime", default_executor_kind())),
             memory=get("memory", TYPES_PAR_DEFAUT["memory"]),
             gateway=get("gateway", default_gateway_type()),
             notify=get("notify", TYPES_PAR_DEFAUT["notify"]),

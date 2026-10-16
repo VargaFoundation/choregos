@@ -121,3 +121,13 @@ def test_the_orchestrator_cannot_disagree_with_the_global_setting() -> None:
 def test_prod_values_write_the_executor_and_warm_the_pool() -> None:
     objects = _docs("-f", str(CHART / "values" / "prod.yaml"))
     assert objects["SandboxWarmPool/choregos-runner"]["spec"]["replicas"] == 2
+
+
+@needs_helm
+def test_custom_image_executor_is_wired() -> None:
+    default = _env(_docs()["Deployment/choregos-orchestrator-executor"])
+    assert default["CHOREGOS_CUSTOM_IMAGE_EXECUTOR"] == "k8s_job"
+    off = _docs("--set", "choregos-orchestrator.runner.customImageExecutor=")
+    assert _env(off["Deployment/choregos-orchestrator-executor"])["CHOREGOS_CUSTOM_IMAGE_EXECUTOR"] == ""
+    jobs = _docs("--set", "global.runner.executor=k8s_job")
+    assert "CHOREGOS_CUSTOM_IMAGE_EXECUTOR" not in _env(jobs["Deployment/choregos-orchestrator-executor"])
