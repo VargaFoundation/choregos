@@ -246,13 +246,19 @@ def main() -> int:
 
 def _report_tool_calls(session_id: str, calls: list[dict[str, Any]], outgoing_id: int) -> int:
     """`tool_calls`: calls reported the way opencode does (S22-44) — announced `pending` with an
-    empty `rawInput`, the arguments on the `in_progress` update, then `completed`."""
+    empty `rawInput` (or `pending_input`: opencode's shell calls carry their `cwd` already, #611),
+    the arguments on the `in_progress` update, then `completed`."""
     for call in calls:
         outgoing_id += 1
         call_id = f"tc-{outgoing_id}"
         announced = {"toolCallId": call_id, "title": call["tool"], "kind": call["kind"]}
         for update in (
-            {"sessionUpdate": "tool_call", **announced, "status": "pending", "rawInput": {}},
+            {
+                "sessionUpdate": "tool_call",
+                **announced,
+                "status": "pending",
+                "rawInput": call.get("pending_input", {}),
+            },
             {
                 "sessionUpdate": "tool_call_update",
                 **announced,
