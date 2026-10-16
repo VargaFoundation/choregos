@@ -13,7 +13,8 @@ test("the settings never print the raw word Unknown, and a save reads Connected"
   await expect(page.getByTestId("connecteur-runtime").getByTestId("etat-runtime")).toHaveText("Provided by the platform");
 
   await scm.getByRole("button", { name: "Configure" }).click();
-  await scm.getByLabel("repo").fill("acme/billing-api");
+  // The repository is picked from what the App sees (S40-04c), not typed beside an installation id.
+  await scm.getByRole("button", { name: /acme\/billing-api/ }).click();
   await scm.getByRole("button", { name: "Save" }).click();
   await expect(scm.getByTestId("etat-scm")).toHaveText("Connected");
   await expect(page.getByRole("status")).toContainText("scm connector saved: connected");
