@@ -14,6 +14,8 @@ from typing import Any
 
 from choregos_contracts import Permissions
 from choregos_core import matches_any
+from choregos_core.network import allowed as host_allowed
+from choregos_core.network import validate_pattern
 
 DANGEROUS_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\brm\s+-rf\s+/(?!\w)", "recursive deletion of the root"),
@@ -144,6 +146,17 @@ class GuardRails:
 
         if command:
             decision = self.check_command(command)
+        elif not self.permissions.builtin_web_tools and _builtin_web_tool(title):
+            # ADR 0070: the policy, the agent or the organisation switched the CLI's own web tools
+            # off. The backend's settings deny them too; this is the net behind that wall.
+            decision = Decision(
+                False,
+                "the built-in web tools (WebFetch, WebSearch) are switched off for this run "
+                "(sandbox.network.builtin_web_tools, the agent's Network section or the "
+                "organisation's ceiling); reading the web goes through the platform's tools",
+                "network",
+                url or title,
+            )
         elif path and kind in {"edit", "write", "create", "delete", "move"}:
             decision = self.check_write(path)
         elif url:
@@ -228,14 +241,37 @@ class GuardRails:
         return Decision(True, "command allowed", "execute", command[:200])
 
     def check_network(self, url: str) -> Decision:
-        if not self.permissions.allow_domains:
-            return Decision(True, "no network allowlist: allowed (the sandbox filters)", "network", url)
+        """The host against the run's network (ADR 0070): the deny list first, then the allowlist.
+
+        With `egress: listed` the list is complete and an empty one means no internet. Otherwise
+        (an older orchestrator) an empty list keeps its old meaning: no list, the sandbox filters.
+        """
+        perms = self.permissions
         host = _host_of(url)
-        if any(host == domain or host.endswith(f".{domain}") for domain in self.permissions.allow_domains):
+        allow = _patterns(perms.allow_domains)
+        deny = _patterns(perms.deny_domains)
+        where = (
+            "change it in the agent's Network section, the project's policy "
+            "(sandbox.network) or the organisation's policy ceiling"
+        )
+        ok, reason = host_allowed(host, allow, deny)
+        if reason.startswith("denied:"):
+            return Decision(False, f"domain denied: {host} ({reason}); {where}", "network", url)
+        if perms.egress == "listed" and not allow:
+            return Decision(
+                False,
+                f"no internet for this run: the agent's network is [] or the project allows no host "
+                f"({host} refused); {where}",
+                "network",
+                url,
+            )
+        if not allow:
+            return Decision(True, "no network allowlist: allowed (the sandbox filters)", "network", url)
+        if ok:
             return Decision(True, f"allowed domain: {host}", "network", url)
         return Decision(
             False,
-            f"domain not allowed: {host} (allowlist: {', '.join(self.permissions.allow_domains)})",
+            f"domain not allowed: {host} (allowlist: {', '.join(allow)}); {where}",
             "network",
             url,
         )
@@ -293,6 +329,23 @@ def _command_matches(command: str, denied: str) -> bool:
         if [t.rsplit("/", 1)[-1] for t in tokens[index : index + len(denied_tokens)]] == denied_tokens:
             return True
     return False
+
+
+def _patterns(values: list[str]) -> list[str]:
+    """Host patterns as the core reads them; an entry it cannot parse is kept lower-cased."""
+    out: list[str] = []
+    for value in values:
+        try:
+            out.append(validate_pattern(value))
+        except ValueError:
+            out.append(value.strip().lower())
+    return out
+
+
+def _builtin_web_tool(title: str) -> bool:
+    """Whether an ACP request is the CLI's own `WebFetch` or `WebSearch` (a search has no URL)."""
+    first = title.split(" ", 1)[0].rstrip(":").lower() if title else ""
+    return first in {"webfetch", "websearch"}
 
 
 def _host_of(url: str) -> str:
