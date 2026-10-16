@@ -527,6 +527,12 @@ class AgentVersionDto(Dto):
     #: The projects the caller may see that pin this version.
     pinned_by: list[str] = Field(default_factory=list)
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def effective_memories(self) -> list[AgentMemoryBinding]:
+        """The memories a run of this version binds, derived from `memory` when `memories` is absent."""
+        return self.spec.effective_memories()
+
 
 class AgentVersionPublish(Dto):
     """Publish the next version from the one the author read: refused when the latest has moved (S40-12)."""
@@ -555,12 +561,6 @@ class AgentVersionRestore(Dto):
     @classmethod
     def _message_is_stripped(cls, value: str | None) -> str | None:
         return value.strip() or None if value is not None else None
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def effective_memories(self) -> list[AgentMemoryBinding]:
-        """The memories a run of this version binds, derived from `memory` when `memories` is absent."""
-        return self.spec.effective_memories()
 
 
 class AgentDto(Dto):

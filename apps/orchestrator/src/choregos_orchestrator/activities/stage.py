@@ -220,37 +220,16 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # A remote agent mints none, but the reservation row is what holds its declared cost against
         # the ticket and the day, and `release_run_key` closes it like any other.
         await reserve_key(
-            session,
-            bundle,
-            run_id,
-            Budget.model_construct(
-                usd=reserved_usd, max_turns=budget.max_turns, max_minutes=budget.max_minutes
-            )
-            if remote_runtime is not None
-            else budget,
+            session, bundle, run_id, _key_budget(budget, reserved_usd, remote=remote_runtime is not None)
         )
 
-        # A remote agent is sent what the step is about, never a memory (ADR 0062 §4).
-        resolved_memories = (
-            ResolvedMemories([], [])
-            if remote_runtime is not None
-            else await _memory_bindings(session, bundle, agent)
+        resolved_memories, context_pack = await _memories_and_pack(
+            session, bundle, item, plan, agent, remote=remote_runtime is not None
         )
         memory_scope = resolved_memories.legacy_scope or "none"
-        context_pack = await _context_pack(
-            bundle,
-            item,
-            plan,
-            resolved_memories,
-            None if remote_runtime is not None else await org_memory(session, bundle),
-        )
         await garde_contre_l_injection(session, bundle, item, run_id, plan, context_pack)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
-        digest = sha256(playbook_prompt.encode()).hexdigest()[:12]
-        source = (
-            f"agent:{agent.agent.slug}@{agent.version}" if agent is not None else (plan.playbook or plan.role)
-        )
-        playbook_ref = f"{source}@sha256:{digest}"
+        playbook_ref = _playbook_ref(plan, agent, playbook_prompt)
         allowed_paths = list(item.allowed_paths or []) or ["**"]
         documents = item.documents or {}
         depot = bundle.config.repo
@@ -624,6 +603,36 @@ async def _memory_bindings(session: Any, bundle: Any, agent: Any) -> ResolvedMem
             )
         )
     return ResolvedMemories(resolved, skipped)
+
+
+def _playbook_ref(plan: StagePlan, agent: Any, prompt: str) -> str:
+    """`agent:<slug>@<version>` (or the playbook, or the role) pinned by the prompt's digest."""
+    digest = sha256(prompt.encode()).hexdigest()[:12]
+    source = (
+        f"agent:{agent.agent.slug}@{agent.version}" if agent is not None else (plan.playbook or plan.role)
+    )
+    return f"{source}@sha256:{digest}"
+
+
+def _key_budget(budget: Budget, reserved_usd: float, *, remote: bool) -> Budget:
+    """What the reservation row holds: the run's budget, or a remote agent's declared cost."""
+    if not remote:
+        return budget
+    return Budget.model_construct(
+        usd=reserved_usd, max_turns=budget.max_turns, max_minutes=budget.max_minutes
+    )
+
+
+async def _memories_and_pack(
+    session: Any, bundle: Any, item: Any, plan: StagePlan, agent: Any, *, remote: bool
+) -> tuple[ResolvedMemories, ContextPack]:
+    """The memories this run binds and the context pack read from them. A remote agent is sent what the
+    step is about, never a memory (ADR 0062 §4)."""
+    if remote:
+        resolved = ResolvedMemories([], [])
+        return resolved, await _context_pack(bundle, item, plan, resolved, None)
+    resolved = await _memory_bindings(session, bundle, agent)
+    return resolved, await _context_pack(bundle, item, plan, resolved, await org_memory(session, bundle))
 
 
 async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dict[str, str]]) -> None:
