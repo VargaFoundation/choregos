@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+import structlog
 from choregos_adapters.errors import AdapterError
 from choregos_adapters.fakes.mcp import FakeMcpServer
 from choregos_adapters.http.egress import GuardedTransport, guarded
@@ -86,7 +87,7 @@ async def test_a_port_and_a_family_must_match() -> None:
 
 
 async def test_without_a_policy_in_context_enforce_fails_closed_and_warn_passes(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     inner = Recorder()
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
@@ -94,17 +95,18 @@ async def test_without_a_policy_in_context_enforce_fails_closed_and_warn_passes(
         await _get("https://allowed.test/x", inner)
     assert refused.value.reason == "no_policy_in_context" and inner.seen == []
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "warn")
-    assert (await _get("https://allowed.test/x", inner)).status_code == 200
-    assert "egress.would_refuse" in capsys.readouterr().out, "warn logs what it would refuse"
+    with structlog.testing.capture_logs() as logs:
+        assert (await _get("https://allowed.test/x", inner)).status_code == 200
+    assert "egress.would_refuse" in [e["event"] for e in logs], "warn logs what it would refuse"
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "off")
     assert (await _get("https://allowed.test/y", inner)).status_code == 200
 
 
-async def test_warn_mode_in_the_policy_logs_and_passes(capsys: pytest.CaptureFixture[str]) -> None:
+async def test_warn_mode_in_the_policy_logs_and_passes() -> None:
     inner = Recorder()
-    with use_policy(_policy(mode="warn")):
+    with structlog.testing.capture_logs() as logs, use_policy(_policy(mode="warn")):
         assert (await _get("https://evil.test/x", inner)).status_code == 200
-    assert "egress.would_refuse" in capsys.readouterr().out and inner.seen == ["https://evil.test/x"]
+    assert "egress.would_refuse" in [e["event"] for e in logs] and inner.seen == ["https://evil.test/x"]
 
 
 async def test_the_mcp_client_is_guarded() -> None:
