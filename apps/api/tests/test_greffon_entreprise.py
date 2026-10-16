@@ -89,6 +89,7 @@ def _installer(racine: pathlib.Path, nom: str, source: str) -> None:
 @pytest.fixture
 def greffon_ee_installe(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
     """Installe le greffon, et **nettoie tout** : l'édition et le mappeur sont des états de module."""
+    from choregos_adapters import registry
     from choregos_api.edition import reinitialiser
     from choregos_core import gates
 
@@ -96,6 +97,9 @@ def greffon_ee_installe(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
     # the gate outlives the test and `packages/core` tests that expect the shipped gates only (and
     # every gate to have a summary) fail depending on which tests ran before.
     gates_avant = (dict(gates._REGISTRY), set(gates._ASYNC_GATES), dict(gates._NEEDS))
+    # Same for the connector types it registers: `tests/web` compares the registry to the console's
+    # icon fixture, and a leftover `runtime/agent-sandbox` turned it red in a full run.
+    connectors_before = (dict(registry._REGISTRY), dict(registry._SPECS))
     sys.path.insert(0, str(tmp_path))
     _installer(tmp_path, "choregos_ee_factice", GREFFON_EE)
     try:
@@ -106,6 +110,10 @@ def greffon_ee_installe(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
         ):
             registre.clear()
             registre.update(avant)  # type: ignore[arg-type]
+        registry._REGISTRY.clear()
+        registry._REGISTRY.update(connectors_before[0])
+        registry._SPECS.clear()
+        registry._SPECS.update(connectors_before[1])
         sys.path.remove(str(tmp_path))
         sys.modules.pop("choregos_ee_factice", None)
         reinitialiser()
