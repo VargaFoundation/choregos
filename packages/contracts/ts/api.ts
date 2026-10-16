@@ -1988,6 +1988,11 @@ export type Totals = {
   cost_eur?: number;
   duration_s?: number;
   runs?: number;
+  /** how the cost was priced (ADR 0060) */
+  priced_by?: "gateway" | "override" | "none" | null;
+  /** the gateway's own figure when an override replaced it */
+  gateway_cost_usd?: number | null;
+  unmeasured?: boolean;
 };
 
 export type CostEstimate = {

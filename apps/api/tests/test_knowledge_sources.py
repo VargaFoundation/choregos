@@ -588,7 +588,7 @@ async def _git_connector(client: AsyncClient, name: str = "diametral-github") ->
     created = await client.post(
         "/api/v1/orgs/varga/connectors",
         json={"name": name, "kind": "documents", "type": "git", "config": {"host": "github.com"},
-              "secret_refs": {"token": "env:KB_GIT_TOKEN"}},
+              "secret_refs": {"token": "env:CONNECTOR_KB_GIT_TOKEN"}},
     )  # fmt: skip
     assert created.status_code == 201, created.text
 
@@ -598,7 +598,7 @@ async def test_a_git_source_names_a_git_connector_for_a_private_repository(
 ) -> None:
     from choregos_adapters.fakes.documents import fake_source
 
-    monkeypatch.setenv("KB_GIT_TOKEN", "t" + "ok-" + "x")
+    monkeypatch.setenv("CONNECTOR_KB_GIT_TOKEN", "t" + "ok-" + "x")
 
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     await _git_connector(client)
@@ -622,7 +622,7 @@ async def test_a_git_source_refuses_another_kind_of_connector_and_still_works_wi
         json={"kind": "git", "name": "g", "connector": "sharepoint",
               "config": {"url": "https://github.com/acme/private.git"}},
     )  # fmt: skip
-    assert refused.status_code == 422 and "of type `git`" in refused.json()["detail"]
+    assert refused.status_code == 422 and "a git source needs git" in refused.json()["detail"]
     missing = await client.post(
         f"{BASE}/framework/sources",
         json={
