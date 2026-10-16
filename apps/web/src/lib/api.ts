@@ -12,7 +12,9 @@ import type {
   ConnectorOperation,
   OperationPatch,
   McpCatalogue,
+  ConnectorCatalogue,
   McpCatalogueInstall,
+  ProjectOrgConnector,
   SkillCatalogue,
   OrgConnector,
   OrgConnectorCreate,
@@ -34,6 +36,14 @@ import type {
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentMetrics,
+  AgentEvaluation,
+  AgentExposure,
+  AgentRelease,
+  AgentReleaseCreate,
+  AgentReleaseDecision,
+  AgentReleasePolicy,
+  AgentReleaseReadiness,
+  ProjectAgentChannel,
   AgentTrial,
   AgentTrialCreate,
   AgentMetricsSummary,
@@ -83,6 +93,10 @@ import type {
   ModelCuratePreview,
   ModelSyncResult,
   UsableModel,
+  GitHubAppStatus,
+  GitHubInstallLink,
+  GitHubInstallLinkRequest,
+  GitHubRepositoryPage,
   HandOff,
   Membership,
   MembershipUpsert,
@@ -112,8 +126,12 @@ import type {
   ModelMatrix,
   PolicyDef,
   PolicyCeilingState,
+  NetworkActivity,
+  ProjectNetwork,
   ProjectDto,
   ProjectPage,
+  ProjectReadiness,
+  ProjectUpdate,
   ProvisionStatus,
   ReleasePage,
   Run,
@@ -350,6 +368,32 @@ export const api = {
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/${version}/restore`, { method: "POST", body: JSON.stringify(body) }),
   publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
+  /** Channels (S40-02, ADR 0071): point production or testing at a revision; the history, the checklist. */
+  releaseAgentVersion: (org: string, slug: string, body: AgentReleaseCreate) =>
+    request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases`, { method: "POST", body: JSON.stringify(body) }),
+  agentReleases: (org: string, slug: string, limit = 50) =>
+    request<AgentRelease[]>(`/orgs/${org}/agents/${slug}/releases?limit=${limit}`),
+  agentReleaseReadiness: (org: string, slug: string, version: number, channel: "stable" | "candidate") =>
+    request<AgentReleaseReadiness>(`/orgs/${org}/agents/${slug}/versions/${version}/readiness?channel=${channel}`),
+  setAgentReleasePolicy: (org: string, slug: string, body: AgentReleasePolicy) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/release-policy`, { method: "PUT", body: JSON.stringify(body) }),
+  /** A live evaluation: the revision's `live` cases run as capped trials in a project (S40-02d). */
+  startAgentEvaluation: (org: string, slug: string, version: number, project: string) =>
+    request<AgentEvaluation>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`, {
+      method: "POST",
+      body: JSON.stringify({ project }),
+    }),
+  agentEvaluations: (org: string, slug: string, version: number) =>
+    request<AgentEvaluation[]>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`),
+  agentExposure: (org: string, slug: string) => request<AgentExposure>(`/orgs/${org}/agents/${slug}/exposure`),
+  decideAgentRelease: (org: string, slug: string, id: string, body: AgentReleaseDecision) =>
+    request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
+  /** The approvers' inbox: releases of the agents one may see, by status. */
+  orgAgentReleases: (org: string, status?: AgentRelease["status"]) =>
+    request<AgentRelease[]>(`/orgs/${org}/agent-releases${status ? `?status=${status}` : ""}`),
+  projectAgentChannel: (id: string) => request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`),
+  setProjectAgentChannel: (id: string, channel: ProjectAgentChannel["channel"]) =>
+    request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`, { method: "PUT", body: JSON.stringify({ channel }) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
   /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
@@ -524,6 +568,11 @@ export const api = {
 
   projects: (org: string = DEFAULT_ORG) => request<ProjectPage>(`/orgs/${org}/projects`),
   project: (id: string) => request<ProjectDto>(`/projects/${qualify(id)}`),
+  /** What the project still lacks to run, computed by the API from stored state (S40-06). */
+  projectReadiness: (id: string) => request<ProjectReadiness>(`/projects/${qualify(id)}/readiness`),
+  /** `PATCH /projects/{id}`: the name and/or the WHOLE configuration (the API validates it as a `ProjectConfig`). */
+  updateProject: (id: string, body: ProjectUpdate) =>
+    request<ProjectDto>(`/projects/${qualify(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   createProject: (org: string, body: unknown) =>
     request<ProjectDto>(`/orgs/${org}/projects`, { method: "POST", body: JSON.stringify(body) }),
   provision: (id: string) => request<ProvisionStatus>(`/projects/${qualify(id)}/provision`, { method: "POST", body: "{}" }),
@@ -592,6 +641,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** The connector types of the registry, by family, with the caller's rights (ADR 0074). */
+  connectorCatalogue: (org: string) => request<ConnectorCatalogue>(`/orgs/${org}/connector-catalogue`),
+  /** The organisation's connectors as one project sees them: on or off, and may the caller switch. */
+  projectOrgConnectors: (id: string) => request<ProjectOrgConnector[]>(`/projects/${qualify(id)}/org-connectors`),
+  enableOrgConnector: (id: string, name: string) =>
+    request<ProjectOrgConnector>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "PUT" }),
+  disableOrgConnector: (id: string, name: string) =>
+    request<void>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "DELETE" }),
   /** Un serveur MCP dit ses outils ; un nouveau naît fermé, un schéma qui dérive le referme. */
   discoverConnectorOperations: (org: string, name: string) =>
     request<ConnectorDiscovery>(`/orgs/${org}/connectors/${name}/discover`, { method: "POST" }),
@@ -618,6 +675,15 @@ export const api = {
     request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}/secrets/${field}`, { method: "DELETE" }),
   testConnector: (id: string, kind: string) =>
     request<ConnectorTestResult>(`/projects/${qualify(id)}/connectors/${kind}/test`, { method: "POST" }),
+
+  /** The Choregos GitHub App as the organisation sees it: its installations, never an installation id to type (ADR 0073). */
+  githubStatus: (org: string) => request<GitHubAppStatus>(`/orgs/${org}/github`),
+  githubRefresh: (org: string) => request<GitHubAppStatus>(`/orgs/${org}/github/refresh`, { method: "POST" }),
+  /** The repositories of the installations the organisation claimed, filtered by `q`. */
+  githubRepositories: (org: string, q = "") =>
+    request<GitHubRepositoryPage>(`/orgs/${org}/github/repositories${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  githubInstallLink: (org: string, body: GitHubInstallLinkRequest) =>
+    request<GitHubInstallLink>(`/orgs/${org}/github/install-link`, { method: "POST", body: JSON.stringify(body) }),
 
   workflow: (id: string) => request<WorkflowDef>(`/projects/${qualify(id)}/workflow`),
   putWorkflow: (id: string, yaml: string) =>
@@ -668,6 +734,12 @@ export const api = {
   policyCeiling: (org: string) => request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`),
   putPolicyCeiling: (org: string, ceiling: Record<string, unknown> | null) =>
     request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`, { method: "PUT", body: JSON.stringify({ ceiling }) }),
+
+  /** What a project's runs really get (ADR 0070): its policy under the organisation's ceiling, and what was clamped. */
+  projectNetwork: (id: string) => request<ProjectNetwork>(`/projects/${qualify(id)}/network`),
+  /** Refusals and traffic per host, for the organisation's administrators. */
+  networkActivity: (org: string, params?: Record<string, string>) =>
+    request<NetworkActivity>(`/orgs/${org}/network-activity${query(params)}`),
 
   workItems: (id: string, params?: Record<string, string>) =>
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),

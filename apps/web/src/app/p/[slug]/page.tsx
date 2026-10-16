@@ -38,7 +38,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="space-y-6">
-      <MiseEnRoute slug={slug} projet={project.data} />
+      <MiseEnRoute slug={slug} />
       {enCours && !provisioning.data && <EtatDeLecture lecture={provisioning} quoi="the provisioning" />}
       {enCours && provisioning.data && (
         <Card

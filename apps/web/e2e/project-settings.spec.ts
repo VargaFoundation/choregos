@@ -56,10 +56,59 @@ test("the runtime lists only what the deployment runs", async ({ page }) => {
   expect(options).toEqual(["Kubernetes · agent-sandbox (warm pool)", "Kubernetes Job"]);
 });
 
+test("the readiness panel lists what is left, and setting a Slack channel and a test command turns two items done (S40-06c)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/p/dev/settings");
+  const panel = page.getByTestId("readiness-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByTestId("readiness-summary")).toContainText("ready");
+  await expect(panel.getByTestId("readiness-item-notifications")).toHaveAttribute("data-state", "todo");
+  await expect(panel.getByTestId("readiness-item-repository-checks")).toHaveAttribute("data-state", "check");
+  await expect(panel.getByTestId("readiness-item-connector-cd")).toHaveAttribute("data-state", "check");
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-readiness-before-fix.png`, fullPage: true });
+
+  const general = page.getByTestId("section-general");
+  await general.getByLabel("Test command").fill("pytest -q");
+  await general.getByRole("button", { name: "Save general settings" }).click();
+  await expect(general.getByRole("status")).toHaveText("General settings saved");
+  await expect(panel.getByTestId("readiness-item-repository-checks")).toHaveAttribute("data-state", "done");
+
+  const notifications = page.getByTestId("section-notifications");
+  await notifications.getByLabel("Slack channel").fill("#choregos-dev");
+  await notifications.getByRole("button", { name: "Save notification settings" }).click();
+  await expect(notifications.getByRole("status")).toHaveText("Notification settings saved");
+  await expect(panel.getByTestId("readiness-item-notifications")).toHaveAttribute("data-state", "done");
+  // What the first save wrote is still there after the second one: no section drops another's keys.
+  await expect(general.getByLabel("Test command")).toHaveValue("pytest -q");
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-readiness-after-fix.png`, fullPage: true });
+});
+
+test("a readiness fix link jumps to its section", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/p/dev/settings");
+  await page.getByTestId("fix-notifications").click();
+  await expect(page).toHaveURL(/#notifications$/);
+  await expect(page.locator("#notifications")).toBeInViewport();
+});
+
+test("the tools, backend and danger zone sections work on the mock", async ({ page }) => {
+  await page.goto("/p/dev/settings");
+  await expect(page.getByTestId("section-agents-models").getByLabel("Default backend")).toHaveValue("claude-code");
+  await page.getByTestId("section-agents-models").getByRole("button", { name: "Save backend" }).click();
+  await expect(page.getByTestId("section-agents-models").getByRole("status").first()).toHaveText("Backend saved");
+  const danger = page.getByTestId("section-danger-zone");
+  await danger.getByRole("button", { name: "Suspend" }).click();
+  await expect(danger.getByTestId("confirmation")).toContainText("Suspend dev?");
+  await danger.getByRole("button", { name: "Cancel" }).click();
+  await expect(danger.getByTestId("confirmation")).toHaveCount(0);
+});
+
 test("no serious accessibility violation and no horizontal scroll at 390 px", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/p/dev/settings");
   await expect(page.getByTestId("connecteur-cd")).toBeVisible();
+  await expect(page.getByTestId("readiness-panel")).toBeVisible();
+  await expect(page.getByTestId("section-general")).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-settings-390.png`, fullPage: true });

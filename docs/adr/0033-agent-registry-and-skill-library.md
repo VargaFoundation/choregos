@@ -3,6 +3,10 @@
 > **Amended by [ADR 0061](0061-agent-ownership-scopes-and-forks.md)**: an agent has a scope (common,
 > organisation, project, personal) and a fork records its origin; `agent:manage` now concerns the
 > organisation and common agents only.
+>
+> **Amended by [ADR 0071](0071-an-agent-version-reaches-production-through-channels.md)**: a run takes
+> the project's pin, else the project's channel, else the agent's **production** revision — no longer
+> "else the latest version".
 
 - **Status**: accepted, 2026-10-05
 - **Concerns**: new tables `agents`, `agent_versions`, `project_agents`, `agent_credentials`,

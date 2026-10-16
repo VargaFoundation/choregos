@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, Disclosure, Field, Select, buttonClasses } from "@/components/ui";
 import { normalizeSpec } from "@/lib/agent-diff";
+import { networkSummary } from "@/lib/network";
 import { api } from "@/lib/api";
-import { canEdit, currentVersion, previousVersion, sortedVersions, versionOf } from "@/lib/agent-versions";
+import { canEdit, currentVersion, previousVersion, productionVersion, sortedVersions, versionOf } from "@/lib/agent-versions";
 import { relative, usd } from "@/lib/format";
 import { describe, effectiveBindings, writesTo } from "@/lib/memories";
 import type { Agent, AgentSpec, AgentVersion } from "@/lib/types";
@@ -26,7 +27,7 @@ import { sectionSummaries } from "./spec-summary";
 /** Lines of instructions shown before "Show all". */
 export const INSTRUCTION_LINES = 12;
 
-const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals"]);
+const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network"]);
 
 const here = (slug: string, query: string) => `/agents/${slug}?${query}`;
 
@@ -99,6 +100,7 @@ function pins(agent: Agent): Array<{ project: string; version: number }> {
 function VersionBar({ agent, shown }: { agent: Agent; shown: AgentVersion }) {
   const router = useRouter();
   const current = currentVersion(agent);
+  const production = productionVersion(agent);
   const may = canEdit(agent);
   const before = previousVersion(agent, shown.version);
   const pinned = pins(agent);
@@ -123,7 +125,11 @@ function VersionBar({ agent, shown }: { agent: Agent; shown: AgentVersion }) {
           {shown.message ? `“${shown.message}”` : <span className="text-ink-muted">No message (published before revisions had one).</span>}
         </p>
         {shown.version === current && (
-          <p className="text-xs text-ink-muted">Current: what a run loads unless a project pins another revision.</p>
+          <p className="text-xs text-ink-muted" data-testid="current-note">
+            {production === current
+              ? "Current: what a run loads unless a project pins another revision."
+              : `Current: the latest saved revision. Production runs v${production}; a run loads that one unless a project pins another.`}
+          </p>
         )}
         {pinned.length > 0 && (
           <p className="text-xs text-ink-muted" data-testid="pinned">
@@ -262,6 +268,14 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
             </Row>
             <Row label="Memory">
               <MemoryList spec={spec} />
+            </Row>
+          </dl>
+        </Disclosure>
+
+        <Disclosure title="Network access" summary={summaries.network}>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+            <Row label="Network">
+              <span data-testid="agent-network-line">{networkSummary(spec.network)}</span>
             </Row>
           </dl>
         </Disclosure>

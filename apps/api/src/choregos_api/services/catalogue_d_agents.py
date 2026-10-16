@@ -24,6 +24,7 @@ from ..db.models import Agent, AgentVersion, Skill, SkillVersion
 from ..rbac import SYSTEM
 from ..schemas import AgentSpec
 from ..schemas.agents import MAX_TAGS
+from .agent_releases import after_publish
 from .agents import empreinte, erreurs_d_une_version
 from .installation import installer_skills_et_agents
 from .network import check_agent_network
@@ -136,6 +137,8 @@ async def mettre_a_jour(
     await session.flush()
     await record(session, principal, "agent.publish", org_id=org_id, target_type="agent", target_id=agent.id,
                  version=version, via=auteur(entree_))  # fmt: skip
+    # What an upgrade does to the channels is the agent's policy (ADR 0071).
+    await after_publish(session, principal, agent, version, auteur(entree_))
     return version
 
 

@@ -1,6 +1,6 @@
 # 0034 — Connectors by capability, a policy per operation; a discovered MCP tool is born closed
 
-- **Status**: accepted, 2026-10-05; amended 2026-10-06 (§7, a write is always a governed action)
+- **Status**: accepted, 2026-10-05; amended 2026-10-06 (§7, a write is always a governed action); amended by [ADR 0074](0074-catalogue-rights.md) (availability per project)
 - **Concerns**: the connector registry (`register`), the `connectors` table, `GET /connectors/types`,
   project settings, a new `connector_operations` table, the internal tool broker, the tool
   catalogue of [ADR 0014](0014-a-platform-held-tool-catalogue.md) (amended), the MCP

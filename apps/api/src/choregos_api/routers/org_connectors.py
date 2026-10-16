@@ -17,7 +17,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..db.models import ConnectorOperation, Organization, OrgConnector, ProjectOperationPolicy
+from ..db.models import (
+    ConnectorOperation,
+    Organization,
+    OrgConnector,
+    OrgConnectorProject,
+    ProjectOperationPolicy,
+)
 from ..deps import Db, Me, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
@@ -30,15 +36,32 @@ from ..schemas import (
     OrgConnectorUpdate,
     ProjectOperationDto,
     ProjectOperationPut,
+    ProjectOrgConnectorDto,
     SecretValue,
 )
 from ..secret_store import resolved_configuration, secret_states
+from ..services.catalogue_rights import (
+    SELECTED_PROJECTS,
+    CatalogueAction,
+    connector_enabled_for,
+    decide,
+    enabled_ids,
+    enabled_projects_of,
+    visible_projects,
+)
 from ..services.connecteurs import RANG, plus_stricte, spec_du_type, verifier_les_secrets
 from ..services.connector_secrets import (
     drop_replaced_store_values,
     put_values,
     refs_with_values,
     require_store,
+)
+from ..services.platform_network import (
+    PlatformNetworkRefused,
+    check_connector_declaration,
+    enforce_connector_call,
+    refusal_error,
+    with_identity,
 )
 
 router = APIRouter(tags=["connectors"])
@@ -73,7 +96,7 @@ async def _instance(session: AsyncSession, organisation: Organization, nom: str)
     return instance
 
 
-async def _dto(session: AsyncSession, instance: OrgConnector) -> OrgConnectorDto:
+async def _dto(session: AsyncSession, instance: OrgConnector, principal: Me) -> OrgConnectorDto:
     operations = (
         await session.execute(
             select(ConnectorOperation)
@@ -84,6 +107,12 @@ async def _dto(session: AsyncSession, instance: OrgConnector) -> OrgConnectorDto
     dto = OrgConnectorDto.model_validate(instance)
     dto.operations = [OperationDto.model_validate(o) for o in operations]
     dto.secrets = await secret_states(session, instance.org_id, instance.secret_refs or {})
+    organisation = await session.get(Organization, instance.org_id)
+    if organisation is not None and instance.availability == SELECTED_PROJECTS:
+        visible = await visible_projects(session, principal, organisation.id, organisation.slug)
+        dto.enabled_projects = (await enabled_projects_of(session, [instance], visible, organisation.id)).get(
+            instance.id, []
+        )
     return dto
 
 
@@ -120,7 +149,7 @@ async def list_org_connectors(org: str, session: Db, principal: Me) -> list[OrgC
             select(OrgConnector).where(OrgConnector.org_id == organisation.id).order_by(OrgConnector.name)
         )
     ).scalars()
-    return [await _dto(session, instance) for instance in instances]
+    return [await _dto(session, instance, principal) for instance in instances]
 
 
 @router.post(
@@ -176,6 +205,7 @@ async def declare_org_connector(
         store_prefix=prefix,
     )
     store = require_store(body.secret_values)
+    await check_connector_declaration(session, organisation.id, body.config, body.name)
     deja = (
         await session.execute(
             select(OrgConnector.id).where(OrgConnector.org_id == organisation.id, OrgConnector.name == name)
@@ -192,6 +222,7 @@ async def declare_org_connector(
         secret_refs=refs_with_values(secret_refs, prefix, body.secret_values) or None,
         created_by=principal.email,
         catalogue_entry=catalogue_entry,
+        availability=body.availability,
     )
     session.add(instance)
     await session.flush()
@@ -230,14 +261,14 @@ async def declare_org_connector(
         "connector.secret.set",
         {f: m.version for f, m in metas.items()},
     )
-    return await _dto(session, instance)
+    return await _dto(session, instance, principal)
 
 
 @router.get("/orgs/{org}/connectors/{name}", response_model=OrgConnectorDto, operation_id="getOrgConnector")
 async def get_org_connector(org: str, name: Nom, session: Db, principal: Me) -> OrgConnectorDto:
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"the connectors of {org} are readable by its members only")
-    return await _dto(session, await _instance(session, await _organisation(session, org), name))
+    return await _dto(session, await _instance(session, await _organisation(session, org), name), principal)
 
 
 @router.patch(
@@ -258,6 +289,7 @@ async def update_org_connector(
     refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
     verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
     store = require_store(values)
+    await check_connector_declaration(session, organisation.id, config, name)
     before = dict(instance.secret_refs or {})
     after = refs_with_values({**before, **refs_in}, prefix, values)
     metas = await put_values(session, store, organisation.id, prefix, values, principal.email)
@@ -265,6 +297,22 @@ async def update_org_connector(
     instance.config = config
     instance.secret_refs = after or None
     instance.status = "unknown"
+    if body.availability is not None and body.availability != instance.availability:
+        decision = decide(principal, org, CatalogueAction.SET_AVAILABILITY)
+        if not decision.allowed:  # pragma: no cover - `_administrer` already refused
+            raise forbidden(decision.reason or "refused")
+        previous, instance.availability = instance.availability, body.availability
+        await record(
+            session,
+            principal,
+            "org.connector.availability",
+            org_id=organisation.id,
+            target_type="org_connector",
+            target_id=instance.id,
+            name=name,
+            previous=previous,
+            availability=body.availability,
+        )
     await session.flush()
     await record(
         session,
@@ -287,7 +335,7 @@ async def update_org_connector(
     await _audit_secrets(
         session, principal, organisation, instance, "connector.secret.clear", dict.fromkeys(cleared)
     )
-    return await _dto(session, instance)
+    return await _dto(session, instance, principal)
 
 
 @router.put(
@@ -325,7 +373,7 @@ async def set_org_connector_secret(
     await _audit_secrets(
         session, principal, organisation, instance, "connector.secret.set", {field: metas[field].version}
     )
-    return await _dto(session, instance)
+    return await _dto(session, instance, principal)
 
 
 @router.delete(
@@ -353,7 +401,7 @@ async def clear_org_connector_secret(
     instance.status = "unknown"
     await session.flush()
     await _audit_secrets(session, principal, organisation, instance, "connector.secret.clear", {field: None})
-    return await _dto(session, instance)
+    return await _dto(session, instance, principal)
 
 
 @router.delete(
@@ -455,8 +503,16 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
     try:
-        config = await resolved_configuration(
-            session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        await enforce_connector_call(session, instance, polite=False)
+    except PlatformNetworkRefused as refused:
+        raise refusal_error(refused) from refused
+    try:
+        config = await with_identity(
+            session,
+            instance.org_id,
+            await resolved_configuration(
+                session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+            ),
         )
         lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
         if lister is None:
@@ -544,6 +600,18 @@ async def _operations_du_projet(ctx: ProjectCtx, session: AsyncSession) -> list[
             )
         ).scalars()
     }
+    allumes = await enabled_ids(session, ctx.project)
+    fermes = {
+        row.id
+        for row in (
+            await session.execute(
+                select(OrgConnector).where(
+                    OrgConnector.org_id == ctx.project.org_id, OrgConnector.availability == SELECTED_PROJECTS
+                )
+            )
+        ).scalars()
+        if row.id not in allumes
+    }
     return [
         ProjectOperationDto(
             connector=connecteur,
@@ -555,7 +623,7 @@ async def _operations_du_projet(ctx: ProjectCtx, session: AsyncSession) -> list[
             description=operation.description,
         )
         for operation, connecteur in lignes
-        if not operation.groups or groupes & set(operation.groups)
+        if operation.connector_id not in fermes and (not operation.groups or groupes & set(operation.groups))
     ]
 
 
@@ -656,4 +724,124 @@ async def relax_operation(ctx: ProjectCtx, connector: Nom, operation: str, sessi
     ).scalars()
     for ligne in lignes:
         await session.delete(ligne)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ───────────────────── enabling an organisation connector for a project (ADR 0074) ─────────────────────
+
+
+def _on_for_all(connector: str, org: str) -> str:
+    return f"`{connector}` is on for every project of {org}: its administrator restricts it first"
+
+
+async def _project_dto(
+    session: AsyncSession, ctx: ProjectCtx, connector: OrgConnector
+) -> ProjectOrgConnectorDto:
+    decision = decide(ctx.principal, ctx.org_slug, CatalogueAction.ENABLE, project_slug=ctx.slug)
+    toggle = decision.allowed and connector.availability == SELECTED_PROJECTS
+    reason = decision.reason
+    if decision.allowed and not toggle:
+        reason = _on_for_all(connector.name, ctx.org_slug)
+    return ProjectOrgConnectorDto(
+        name=connector.name,
+        kind=connector.kind,
+        type=connector.type,
+        availability=connector.availability,
+        enabled=await connector_enabled_for(session, connector, ctx.project),
+        can_toggle=toggle,
+        cannot_reason=None if toggle else reason,
+    )
+
+
+@router.get(
+    "/projects/{id}/org-connectors",
+    response_model=list[ProjectOrgConnectorDto],
+    operation_id="listProjectOrgConnectors",
+)
+async def list_project_org_connectors(ctx: ProjectCtx, session: Db) -> list[ProjectOrgConnectorDto]:
+    """The organisation's connectors and whether each is on for this project. Its members can read it."""
+    rows = (
+        await session.execute(
+            select(OrgConnector).where(OrgConnector.org_id == ctx.project.org_id).order_by(OrgConnector.name)
+        )
+    ).scalars()
+    return [await _project_dto(session, ctx, row) for row in rows]
+
+
+async def _selected(ctx: ProjectCtx, session: Db, connector: str) -> OrgConnector:
+    decision = decide(ctx.principal, ctx.org_slug, CatalogueAction.ENABLE, project_slug=ctx.slug)
+    if not decision.allowed:
+        raise forbidden(decision.reason or "refused")
+    row = (
+        await session.execute(
+            select(OrgConnector).where(
+                OrgConnector.org_id == ctx.project.org_id, OrgConnector.name == connector
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise not_found("Connector", connector)
+    if row.availability != SELECTED_PROJECTS:
+        raise conflict(_on_for_all(connector, ctx.org_slug))
+    return row
+
+
+@router.put(
+    "/projects/{id}/org-connectors/{connector}/enablement",
+    response_model=ProjectOrgConnectorDto,
+    operation_id="enableOrgConnector",
+)
+async def enable_org_connector(ctx: ProjectCtx, connector: Nom, session: Db) -> ProjectOrgConnectorDto:
+    """Turn an organisation connector on for this project (idempotent). Its owner or an administrator."""
+    row = await _selected(ctx, session, connector)
+    if not await connector_enabled_for(session, row, ctx.project):
+        session.add(
+            OrgConnectorProject(
+                org_id=ctx.project.org_id,
+                connector_id=row.id,
+                project_id=ctx.id,
+                enabled_by=ctx.principal.email,
+            )
+        )
+        await session.flush()
+        await record(
+            session,
+            ctx.principal,
+            "org.connector.enable",
+            org_id=ctx.project.org_id,
+            target_type="org_connector",
+            target_id=row.id,
+            connector=connector,
+            project=ctx.slug,
+        )
+    return await _project_dto(session, ctx, row)
+
+
+@router.delete(
+    "/projects/{id}/org-connectors/{connector}/enablement",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="disableOrgConnector",
+)
+async def disable_org_connector(ctx: ProjectCtx, connector: Nom, session: Db) -> Response:
+    """Turn it off for this project; turning off one that was not on is a no-op."""
+    row = await _selected(ctx, session, connector)
+    existing = (
+        await session.execute(
+            select(OrgConnectorProject).where(
+                OrgConnectorProject.connector_id == row.id, OrgConnectorProject.project_id == ctx.id
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        await session.delete(existing)
+        await record(
+            session,
+            ctx.principal,
+            "org.connector.disable",
+            org_id=ctx.project.org_id,
+            target_type="org_connector",
+            target_id=row.id,
+            connector=connector,
+            project=ctx.slug,
+        )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

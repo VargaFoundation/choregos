@@ -36,7 +36,7 @@ test("the Definition tab reads one version; editing, publishing, comparing and r
   await editor.getByLabel("What changed and why").fill("Shorter instructions");
   await editor.getByRole("button", { name: "Publish v4" }).click();
   await expect(page).not.toHaveURL(/edit=1/);
-  await expect(page.getByRole("status")).toContainText("v4 published");
+  await expect(page.getByRole("status")).toContainText("v4 is in production");
   const [publish] = await writes(page, /\/versions\/publish$/);
   expect(publish?.body).toMatchObject({ message: "Shorter instructions", base_version: 3 });
 

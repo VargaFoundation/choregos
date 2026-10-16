@@ -106,7 +106,7 @@ async def test_l_outil_du_greffon_est_annonce_au_run(
     run_id, entetes = await _run(project["id"])
     reponse = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=entetes)
     assert reponse.status_code == 200, reponse.text
-    assert [t["name"] for t in reponse.json()["tools"]] == ["annuaire_interne"]
+    assert [t["name"] for t in reponse.json()["tools"] if t["name"] != "web_fetch"] == ["annuaire_interne"]
 
 
 async def test_l_appel_passe_par_le_greffon_et_se_compte(

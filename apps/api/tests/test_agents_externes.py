@@ -184,3 +184,23 @@ async def test_un_client_rattache_dit_quand_il_a_appele_et_avec_quoi(client: Asy
     (apres,) = (await client.get("/api/v1/orgs/varga/agents/claude-de-lea/credentials")).json()
     assert apres["last_used_at"] is not None
     assert apres["last_client"] == "claude-code/2.1.0"
+
+
+async def test_a_client_gets_the_tools_of_the_production_revision_not_the_latest(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """S40-02: with `on_publish: none`, a saved revision that widens the tool patterns is not in
+    production, so the door does not honour it (red with the "latest revision" query)."""
+    await _agent_externe(client, ["list_projects"])
+    widened = {"mcp_servers": [{"connector": "choregos", "tools": ["list_projects", "search_*"]}]}
+    policy = await client.put(
+        "/api/v1/orgs/varga/agents/claude-de-lea/release-policy", json={"on_publish": "none"}
+    )
+    assert policy.status_code == 200, policy.text
+    saved = await client.post("/api/v1/orgs/varga/agents/claude-de-lea/versions", json=widened)
+    assert saved.status_code == 201, saved.text
+    jeton_id, jeton = await _jeton(client)
+    assert (await _rattacher(client, jeton_id)).status_code == 201
+    client.cookies.clear()
+    noms = {o["name"] for o in (await _outils(client, jeton)).json()["result"]["tools"]}
+    assert noms == {"list_projects"}

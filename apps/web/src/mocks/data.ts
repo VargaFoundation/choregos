@@ -7,6 +7,7 @@
  * avance sans l'API — c'est ce que demande la section 3.4 du plan.
  */
 import devComplex from "./dev-complex.json";
+import { agentReleasesApi, applyPolicy, decorateAgent, savedRevision, touchAgent } from "./agent-releases";
 import type {
   Action,
   Agent,
@@ -26,6 +27,7 @@ import type {
   AgentSpec,
   AgentTrialCreate,
   ConnectorType,
+  ConnectorCatalogue,
   McpCatalogue,
   McpCatalogueEntry,
   McpCatalogueInstall,
@@ -33,6 +35,9 @@ import type {
   SkillCatalogue,
   SkillCatalogueEntry,
   ProjectOperation,
+  ProjectDto,
+  ProjectReadiness,
+  ReadinessItem,
   ConnectorDto,
   ProjectRequirement,
   AgentCredential,
@@ -52,6 +57,8 @@ import type {
   DoraReport,
   FindingPage,
   MeDto,
+  NetworkActivity,
+  ProjectNetwork,
   Membership,
   Memory,
   ProjectPage,
@@ -1524,6 +1531,7 @@ export const agents: Agent[] = [
             { scope: "global", slug: "security-lessons", mode: "read" },
             { scope: "project", slug: "shared", mode: "write" },
           ],
+          network: { domains: ["pypi.org", "api.github.com"], per_host_per_minute: 10 },
         },
         checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
         created_by: "lea@acme.dev",
@@ -2000,6 +2008,12 @@ export const skillGitPreview: SkillGitPreview = {
 };
 
 /** Des types tirés du registre (ADR 0034) : jira est disponible, ses secrets se nomment. */
+/** The `repo` property of the GitHub types: a picker over the App's repositories, no installation id (ADR 0073). */
+const githubRepoProperty = {
+  type: "string",
+  format: "github-repo",
+  description: "The repository, as owner/repo; the Choregos App must be installed on its owner.",
+};
 const objet = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
 export const connectorTypes: ConnectorType[] = [
   { kind: "tracker", type: "internal", display: "internal (Choregos holds the work items)", config_schema: objet({}), capabilities: ["tracker"], secret_fields: [] },
@@ -2011,7 +2025,15 @@ export const connectorTypes: ConnectorType[] = [
     capabilities: ["tracker"],
     secret_fields: ["api_token", "webhook_secret"],
   },
-  { kind: "scm", type: "github", display: "GitHub (App choregos-bot)", config_schema: objet({ repo: { type: "string" } }, ["repo"]), capabilities: ["scm"], secret_fields: [] },
+  {
+    kind: "tracker",
+    type: "github-issues",
+    display: "GitHub Issues (App choregos-bot)",
+    config_schema: objet({ repo: githubRepoProperty }, ["repo"]),
+    capabilities: ["tracker"],
+    secret_fields: ["webhook_secret"],
+  },
+  { kind: "scm", type: "github", display: "GitHub (App choregos-bot)", config_schema: objet({ repo: githubRepoProperty }, ["repo"]), capabilities: ["scm"], secret_fields: [] },
   { kind: "ci", type: "tekton", display: "Tekton Pipelines", config_schema: objet({ namespace: { type: "string" } }), capabilities: ["ci"], secret_fields: [] },
   { kind: "cd", type: "argocd", display: "Argo CD + Rollouts", config_schema: objet({ gitops_repo: { type: "string" } }, ["gitops_repo"]), capabilities: ["cd"], secret_fields: ["token"] },
   { kind: "cd", type: "demo", display: "Demo stand-in (simulated CD)", config_schema: objet({ url: { type: "string" } }), capabilities: ["cd"], secret_fields: [] },
@@ -2035,15 +2057,88 @@ export const connectorTypes: ConnectorType[] = [
  * `make catalogues`, with the state this demo organisation gives them — an entry is installed once a
  * connector of the demo carries it.
  */
+const mockProjectSlugs = ["billing-api", "checkout-web"];
+
+const FAMILY_OF_KIND: Record<string, string> = {
+  scm: "Source code",
+  tracker: "Work trackers",
+  ci: "CI",
+  cd: "Deployment",
+  documents: "Documents",
+  identity: "Directory",
+  notify: "Notifications",
+  mcp: "MCP servers",
+};
+const PROJECT_KINDS = new Set(["tracker", "scm", "ci", "cd", "notify"]);
+const FAMILY_ORDER = ["Source code", "Work trackers", "CI", "Deployment", "Documents", "Directory", "Notifications", "MCP servers"];
+/** The project connectors this demo organisation has configured, by `kind/type`. */
+const CONFIGURED_IN: Record<string, string[]> = {
+  "scm/github": ["billing-api"],
+  "tracker/github-issues": ["billing-api"],
+  "cd/demo": ["billing-api"],
+};
+
+/** The connector catalogue (ADR 0074) as the API answers the demo's administrator. */
+export function connectorCatalogue(): ConnectorCatalogue {
+  const types = [...connectorTypes, { kind: "mcp", type: "mcp", display: "MCP server", config_schema: objet({}), capabilities: ["mcp"], secret_fields: ["token"] }];
+  const entries = types
+    .filter((t) => !["runtime", "gateway", "memory"].includes(t.kind))
+    .map((t) => {
+      const project = PROJECT_KINDS.has(t.kind);
+      const here = orgConnectors.filter((c) => c.kind === t.kind && c.type === t.type);
+      const selected = here.some((c) => c.availability === "selected_projects");
+      return {
+        kind: t.kind,
+        type: t.type,
+        display: t.display,
+        family: FAMILY_OF_KIND[t.kind] ?? "Other",
+        scope: project ? ("project" as const) : ("organisation" as const),
+        capabilities: t.capabilities ?? [],
+        secret_fields: t.secret_fields ?? [],
+        operations: here[0]?.operations?.length ?? 0,
+        installed_as: here.map((c) => c.name),
+        configured_in: CONFIGURED_IN[`${t.kind}/${t.type}`] ?? [],
+        enablement: here.map((c) => ({
+          connector: c.name,
+          availability: c.availability ?? ("all_projects" as const),
+          enabled_projects: c.enabled_projects ?? [],
+        })),
+        can: {
+          install: !project,
+          configure_projects: project ? mockProjectSlugs : [],
+          enable_projects: !project && selected ? mockProjectSlugs : [],
+        },
+        cannot_reason: null,
+      };
+    })
+    .sort((a, b) => FAMILY_ORDER.indexOf(a.family) - FAMILY_ORDER.indexOf(b.family) || a.display.localeCompare(b.display));
+  return { entries };
+}
+
 export function mcpCatalogue(): McpCatalogue {
   const file = mcpCatalogueFile as unknown as McpCatalogue;
   return {
     ...file,
     entries: file.entries.map((entry: McpCatalogueEntry) => {
       const installed = orgConnectors.filter((c) => c.catalogue_entry?.startsWith(`${entry.id}@`));
+      const selected = installed.some((c) => c.availability === "selected_projects");
+      const base = {
+        ...entry,
+        can: {
+          install: entry.install === "installable",
+          configure_projects: [],
+          enable_projects: selected ? mockProjectSlugs : [],
+        },
+        cannot_reason: entry.install === "installable" ? null : (entry.cannot_reason ?? null),
+        enablement: installed.map((c) => ({
+          connector: c.name,
+          availability: c.availability ?? ("all_projects" as const),
+          enabled_projects: c.enabled_projects ?? [],
+        })),
+      };
       return installed.length
-        ? { ...entry, state: "installed" as const, installed_as: installed.map((c) => c.name) }
-        : entry;
+        ? { ...base, state: "installed" as const, installed_as: installed.map((c) => c.name) }
+        : base;
     }),
   };
 }
@@ -2081,6 +2176,8 @@ export const orgConnectors: OrgConnector[] = [
     secrets: [{ field: "client_secret", source: "reference", reference: "env:CONNECTOR_ENTRA_CLIENT_SECRET" }],
     status: "ok",
     created_by: "lea@acme.dev",
+    availability: "all_projects",
+    enabled_projects: [],
     operations: [
       { name: "read_user", access: "read", policy: "allowed", groups: [] },
       { name: "create_account", access: "write", policy: "approval", groups: ["hr"], description: "creates an account" },
@@ -2098,6 +2195,8 @@ orgConnectors.push({
   // A value typed in the console: the console only knows it is set, when and by whom.
   secrets: [{ field: "token", source: "store", version: 2, rotated_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), rotated_by: "lea@acme.dev" }],
   status: "ok",
+  availability: "all_projects",
+  enabled_projects: [],
   operations: [
     { name: "track_order", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
     { name: "order_laptop", access: "write", policy: "forbidden", groups: [], schema_digest: "sha256:a07c", description: "orders a laptop" },
@@ -2194,6 +2293,25 @@ export const projectRequirements: ProjectRequirement[] = [
   { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
 ];
 
+/** The Choregos GitHub App on the mock: two accounts it is installed on, three repositories. */
+const githubInstallations = [
+  { id: 1001, account_login: "DiametralGroup", account_type: "Organization", repository_selection: "selected", suspended: false, claimed: true, settings_url: "https://github.com/organizations/DiametralGroup/settings/installations/1001" },
+  { id: 1002, account_login: "acme", account_type: "Organization", repository_selection: "all", suspended: false, claimed: true, settings_url: "https://github.com/organizations/acme/settings/installations/1002" },
+];
+const githubRepositories = [
+  { full_name: "DiametralGroup/choregos-sandbox-dev", private: true, default_branch: "main", installation_id: 1001 },
+  { full_name: "acme/billing-api", private: true, default_branch: "main", installation_id: 1002 },
+  { full_name: "acme/checkout-web", private: false, default_branch: "main", installation_id: 1002 },
+];
+const githubStatus = () => ({
+  configured: true,
+  app_slug: "choregos-bot",
+  app_name: "Choregos",
+  install_url: "https://github.com/apps/choregos-bot/installations/new",
+  multi_org_claim: "implicit",
+  installations: structuredClone(githubInstallations),
+});
+
 /** What a project's connectors are on the mock, before any write (Checkout Web has its own). */
 const checkoutWebConnectors = [
   { id: "c-jira", kind: "tracker", type: "jira", config: {}, secret_refs: {}, status: "ok" },
@@ -2209,6 +2327,71 @@ const devConnectors = [
   { id: "c-dev-scm", kind: "scm", type: "github", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
   { id: "c-dev-cd", kind: "cd", type: "demo", config: { url: "http://choregos-demo-fakes:8090/cd/mcp" }, secret_refs: {}, status: "unknown" },
 ];
+/** The project `dev`: the sandbox project, as configured before anyone opens its settings. */
+const devProject = (): ProjectDto => ({
+  ...structuredClone(projects.items[0]!),
+  id: "p-dev",
+  slug: "dev",
+  name: "Dev",
+  template_ref: "github-tekton-argo-k8s@1.0.0",
+  config: {
+    slug: "dev",
+    org: "acme",
+    template_ref: "github-tekton-argo-k8s@1.0.0",
+    repo: { url: "https://github.com/DiametralGroup/choregos-sandbox-dev.git", default_branch: "main", language: "python" },
+    envs: ["dev", "staging", "prod"],
+    agent: { default_backend: "claude-code", allowed_backends: [] },
+    notify: {},
+    tools: [],
+    groups: ["dev"],
+    labels: { team: "platform" },
+  },
+});
+/** What a PATCH wrote, per project slug: the mock keeps it for the time of the page, as the API would. */
+const writtenProjects = new Map<string, ProjectDto>();
+const mockProject = (slug: string): ProjectDto => {
+  const bare = decodeURIComponent(slug).split(":").at(-1) ?? slug;
+  const written = writtenProjects.get(bare);
+  if (written) return structuredClone(written);
+  if (bare === "dev") return devProject();
+  return structuredClone(/checkout-web$/.test(bare) ? projects.items[1]! : projects.items[0]!);
+};
+
+/**
+ * What `GET /projects/{id}/readiness` answers on the mock, computed from the written configuration so
+ * that setting a Slack channel or a test command turns the matching item done, as on the real API.
+ */
+const mockReadiness = (slug: string): ProjectReadiness => {
+  const bare = decodeURIComponent(slug).split(":").at(-1) ?? slug;
+  const config = mockProject(bare).config;
+  const settings = `/p/${bare}/settings`;
+  const items: ReadinessItem[] = [
+    { id: "provisioned", section: "general", title: "Project provisioned", state: "done", detail: "Its repository, tracker and pipelines are in place.", fix: { by: "project_owner" } },
+    { id: "workflow", section: "general", title: "A workflow published", state: "done", detail: "2 workflows, default-simple by default.", fix: { by: "project_owner" } },
+    !config.repo?.url
+      ? { id: "repository", section: "general", title: "Repository", state: "todo", detail: "No repository URL: a run has nothing to clone.", fix: { href: `${settings}#general`, by: "project_owner" } }
+      : !config.repo.test_command
+        ? { id: "repository-checks", section: "general", title: "Measured checks", state: "check", detail: "No test command: the runner does not measure the tests.", fix: { href: `${settings}#general`, by: "project_owner" } }
+        : { id: "repository-checks", section: "general", title: "Measured checks", state: "done", detail: "The runner runs the test command itself.", fix: { by: "project_owner" } },
+    { id: "connector-tracker", section: "connections", title: "Work tracker", state: "done", detail: "github-issues, connected.", fix: { by: "project_owner" } },
+    { id: "connector-scm", section: "connections", title: "Source code", state: "done", detail: "github, connected.", fix: { by: "project_owner" } },
+    { id: "connector-cd", section: "connections", title: "Deployment (CD)", state: "check", detail: "demo is a stand-in: nothing real is deployed.", fix: { href: `${settings}#connections`, by: "project_owner" } },
+    { id: "connector-runtime", section: "connections", title: "Agent runtime", state: "done", detail: "Provided by the platform: agent_sandbox.", fix: { by: "platform_operator" } },
+    { id: "backend", section: "agents", title: "Agent backend", state: "done", detail: `${config.agent?.default_backend ?? "claude-code"} is run by this deployment.`, fix: { by: "project_owner" } },
+    { id: "budgets", section: "guardrails", title: "Budgets", state: "check", detail: "No daily project budget in the policy.", fix: { href: `${settings}#guardrails`, by: "project_owner" } },
+    { id: "people-release-captain", section: "people", title: "A release captain", state: "todo", detail: "The release train has no release_captain member.", fix: { href: `/p/${bare}/members`, by: "project_owner" } },
+    config.notify?.slack_channel
+      ? { id: "notifications", section: "notifications", title: "Notifications", state: "done", detail: `Announcements go to ${config.notify.slack_channel}.`, fix: { by: "project_owner" } }
+      : { id: "notifications", section: "notifications", title: "Notifications", state: "todo", detail: "The release train announces itself, and no Slack channel is set.", fix: { href: `${settings}#notifications`, by: "project_owner" } },
+    { id: "tools", section: "tools", title: "Tools", state: "done", detail: "No catalogue tool opened.", fix: { by: "project_owner" } },
+    { id: "first-item", section: "general", title: "A first request", state: "check", detail: "File one to see the workflow run end to end.", fix: { href: `/p/${bare}/board`, by: "project_owner" } },
+  ];
+  // A project that runs (the demo's billing-api) has nothing left to do: the overview shows no list (S23-03).
+  if (bare === "billing-api") for (const item of items) item.state = "done";
+  const count = (state: ReadinessItem["state"]) => items.filter((i) => i.state === state).length;
+  return { ready: count("todo") === 0, summary: { done: count("done"), check: count("check"), todo: count("todo") }, items };
+};
+
 const devRequirements: ProjectRequirement[] = [
   { capability: "tracker", reasons: ["default-simple: work items live in a tracker"], connector: devConnectors[0] as unknown as ConnectorDto, default_type: null },
   { capability: "scm", reasons: ["default-simple: the guarantee scope_respected on t-implement", "hotfix: the agent dev opens a pull request"], connector: devConnectors[1] as unknown as ConnectorDto, default_type: null },
@@ -2235,6 +2418,50 @@ function recordWrite(method: string, path: string, body: unknown): void {
 const filedOnTheMock: WorkItemDto[] = [];
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
+/** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
+let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string; updated_at?: string } = {
+  ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
+};
+
+/** The hosts the demo project's own policy allows. */
+const PROJECT_ALLOW = ["github.com", "pypi.org", "files.pythonhosted.org", "registry.npmjs.org"];
+
+/** The demo project's effective network: its policy under the ceiling, plus the repository host (ADR 0070). */
+function mockProjectNetwork(): ProjectNetwork {
+  const net = ((mockCeiling.ceiling ?? {}) as { network?: { allow_domains?: string[] | null; deny_domains?: string[]; per_host_per_minute?: number | null; per_run_per_minute?: number | null; builtin_web_tools?: string | null } }).network ?? {};
+  const within = (host: string, outer: string) => outer === "*" || host === outer || host.endsWith(`.${outer}`);
+  const cap = net.allow_domains;
+  const outside = cap == null ? [] : PROJECT_ALLOW.filter((h) => !cap.some((o) => within(h, o)));
+  const deny = net.deny_domains ?? [];
+  const denied = (h: string) => deny.some((d) => within(h, d));
+  return {
+    policy: { allow_domains: PROJECT_ALLOW, deny_domains: [], builtin_web_tools: "allow" },
+    ceiling: (mockCeiling.ceiling as { network?: Record<string, unknown> } | null)?.network ?? null,
+    effective: {
+      allow: PROJECT_ALLOW.filter((h) => !outside.includes(h) && !denied(h)),
+      deny,
+      implied: denied("github.com") ? [] : ["github.com"],
+      per_host_per_minute: net.per_host_per_minute ?? null,
+      per_run_per_minute: net.per_run_per_minute ?? null,
+      org_per_host_per_minute: net.per_host_per_minute ?? null,
+      builtin_web_tools: net.builtin_web_tools !== "deny",
+    },
+    clamps: [
+      ...outside.map((h) => `network.allow_domains: \`${h}\` is outside the organisation's allowed hosts`),
+      ...PROJECT_ALLOW.filter(denied).map((h) => `network.allow_domains: \`${h}\` is denied by the organisation`),
+    ],
+  };
+}
+
+const mockNetworkActivity: NetworkActivity = {
+  rows: [
+    { host: "api.stripe.com", layer: "proxy", decision: "denied", reason: "not_allowed", count: 14, runs: 3, projects: ["billing-api"], agents: ["architect"], last_at: iso(35) },
+    { host: "news.ycombinator.com", layer: "runner", decision: "denied", reason: "denied:news.ycombinator.com", count: 2, runs: 1, projects: ["checkout-web"], agents: [], last_at: iso(190) },
+    { host: "vendor.example.com", layer: "broker", decision: "rate_limited", reason: "per_host_per_minute:60", count: 6, runs: 2, projects: ["billing-api"], agents: ["coordinator"], last_at: iso(75) },
+    { host: "github.com", layer: "proxy", decision: "allowed", reason: "allowed:github.com", count: 412, runs: 38, projects: ["billing-api", "checkout-web"], agents: ["architect"], last_at: iso(2) },
+  ],
+};
+
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -2242,6 +2469,19 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method !== "GET") recordWrite(method, path, body);
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
+  const bare = path.split("?")[0] ?? path;
+  if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
+    if (method === "PUT") {
+      mockCeiling = { ceiling: (body as { ceiling: Record<string, unknown> | null }).ceiling, updated_by: me.email, updated_at: new Date().toISOString() };
+    }
+    return structuredClone(mockCeiling) as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]+\/network$/.test(bare)) return mockProjectNetwork() as T;
+  if (method === "GET" && /^\/orgs\/[^/]+\/network-activity$/.test(bare)) return structuredClone(mockNetworkActivity) as T;
+  // The release channels of the agents (S40-02): production, testing, the checks, the history.
+  if (typeof window !== "undefined") (window as unknown as { __mockAgents?: Agent[] }).__mockAgents = agents;
+  const channels = agentReleasesApi(method, path.split("?")[0] ?? path, path.split("?")[1] ?? "", body, agents, me.email);
+  if (channels !== undefined) return structuredClone(channels) as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
@@ -2317,6 +2557,27 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
   }
   const [chemin] = path.split("?");
+  if (/^\/orgs\/[^/]+\/github(\/refresh)?$/.test(chemin ?? "")) return githubStatus() as T;
+  if (method === "GET" && /^\/orgs\/[^/]+\/github\/repositories$/.test(chemin ?? "")) {
+    const q = (new URLSearchParams(path.split("?")[1] ?? "").get("q") ?? "").toLowerCase();
+    const items = githubRepositories.filter((r) => r.full_name.toLowerCase().includes(q));
+    return { items, meta: { has_more: false } } as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/github\/install-link$/.test(chemin ?? ""))
+    return { url: "https://github.com/apps/choregos-bot/installations/new?state=mock-signed-state" } as T;
+  const projectRoot = /^\/projects\/([^/]+)$/.exec(chemin ?? "");
+  if (projectRoot && method === "PATCH") {
+    const corps = (body ?? {}) as { name?: string; config?: ProjectDto["config"] };
+    const bare = decodeURIComponent(projectRoot[1]!).split(":").at(-1) ?? "";
+    const base = mockProject(bare);
+    const updated = { ...base, name: corps.name ?? base.name, config: corps.config ?? base.config, updated_at: new Date().toISOString() };
+    writtenProjects.set(bare, updated);
+    return structuredClone(updated) as T;
+  }
+  if (projectRoot && method === "GET" && /(?:^|[:/])dev$/.test(decodeURIComponent(projectRoot[1]!))) return mockProject("dev") as T;
+  if (projectRoot && method === "GET" && writtenProjects.has(decodeURIComponent(projectRoot[1]!).split(":").at(-1) ?? "")) return mockProject(projectRoot[1]!) as T;
+  const readinessRoute = /^\/projects\/([^/]+)\/readiness$/.exec(chemin ?? "");
+  if (readinessRoute && method === "GET") return mockReadiness(readinessRoute[1]!) as T;
   const projectConnectors = /^\/projects\/([^/]+)\/connectors(?:\/([a-z_]+))?$/.exec(chemin ?? "");
   if (projectConnectors) {
     const [, project = "", kind] = projectConnectors;
@@ -2329,6 +2590,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (method === "GET" && !kind) return structuredClone(current) as T;
     if (method === "PUT" && kind) {
       const corps = (body ?? {}) as { type?: string; config?: Record<string, unknown>; secret_refs?: Record<string, string> };
+      const repo = typeof corps.config?.repo === "string" ? corps.config.repo : "";
+      const owner = repo.split("/")[0] ?? "";
+      if ((corps.type === "github" || corps.type === "github-issues") && owner && !githubInstallations.some((i) => i.account_login.toLowerCase() === owner.toLowerCase()))
+        throw new ApiError(422, {
+          detail: `The Choregos GitHub App is not installed on \`${owner}\` for this organisation. Install it: https://github.com/apps/choregos-bot/installations/new`,
+        });
       const saved = {
         id: `c-${kind}`,
         kind,
@@ -2382,7 +2649,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
     } as Agent;
     // The agent joins the registry for the time of the page (S32-01): its page reads it back.
-    if (!agents.some((a) => a.slug === cree.slug)) agents.push(cree);
+    if (!agents.some((a) => a.slug === cree.slug)) {
+      agents.push(cree);
+      applyPolicy(cree, corps.release_policy);
+    }
     return structuredClone(cree) as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/agent-drafts$/.test(chemin ?? "")) {
@@ -2481,6 +2751,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (JSON.stringify(normalizeSpec(spec)) === JSON.stringify(normalizeSpec(latest?.spec)))
       throw new ApiError(409, { detail: `nothing changed since v${agent.latest_version}`, code: "no_change", latest_version: agent.latest_version });
     evalGate(spec, latest?.spec);
+    touchAgent(agent);
     const version = {
       version: agent.latest_version + 1,
       spec: structuredClone(spec),
@@ -2492,17 +2763,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     };
     agent.latest_version = version.version;
     agent.versions = [version, ...(agent.versions ?? [])];
-    return structuredClone(version) as T;
+    // What saving does to the channels is the agent's policy (S40-02), for a restore too.
+    return { ...structuredClone(version), channels: savedRevision(agent, version.version) } as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
     // La version publiée s'ajoute à l'agent, le temps de la page : sa fiche la relit (S23-13).
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
     const spec = JSON.parse(String(init.body ?? "{}")) as AgentSpec;
     evalGate(spec, agent.versions?.find((v) => v.version === agent.latest_version)?.spec);
+    touchAgent(agent);
     const version = { version: agent.latest_version + 1, spec, checksum: "sha256:suivante", created_by: me.email };
     agent.latest_version = version.version;
     agent.versions = [version, ...(agent.versions ?? [])];
-    return version as T;
+    // What saving does to the channels is the agent's policy (S40-02): production, testing, or nothing.
+    return { ...version, channels: savedRevision(agent, version.version) } as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/credentials") {
     const corps = JSON.parse(String(init.body ?? "{}")) as { token_id?: string };
@@ -2553,6 +2827,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       config?: Record<string, unknown>;
       secret_refs?: Record<string, string>;
       secret_values?: Record<string, string>;
+      availability?: "all_projects" | "selected_projects";
     };
     const maintenant = new Date().toISOString();
     const etat = (field: string, version = 1): NonNullable<OrgConnector["secrets"]>[number] => ({
@@ -2594,8 +2869,28 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     }
     if (cible && method === "PATCH") {
       cible.config = corps.config ?? cible.config;
+      if (corps.availability && corps.availability !== cible.availability) {
+        // As the API does: restricting turns it on for no project.
+        cible.availability = corps.availability;
+        cible.enabled_projects = [];
+      }
       return structuredClone(cible) as T;
     }
+  }
+  const enablement = /^\/projects\/([^/]+)\/org-connectors\/([^/]+)\/enablement$/.exec(chemin ?? "");
+  if (enablement && (method === "PUT" || method === "DELETE")) {
+    const slug = decodeURIComponent(enablement[1]!).replace(/^[^:/]+[:/]/, "");
+    const cible = orgConnectors.find((c) => c.name === enablement[2]);
+    if (!cible) throw new ApiError(404, { title: "Not found" });
+    if (cible.availability !== "selected_projects") {
+      throw new ApiError(409, { title: "Conflict", detail: `${cible.name} is on for every project: its administrator restricts it first` });
+    }
+    const on = new Set(cible.enabled_projects ?? []);
+    if (method === "PUT") on.add(slug);
+    else on.delete(slug);
+    cible.enabled_projects = [...on].sort();
+    if (method === "DELETE") return undefined as T;
+    return { name: cible.name, kind: cible.kind, type: cible.type, availability: cible.availability, enabled: true, can_toggle: true } as T;
   }
   const skillInstall = /^\/orgs\/[^/]+\/skill-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
   if (method === "POST" && skillInstall) {
@@ -2652,6 +2947,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       status: "unknown",
       created_by: me.email,
       catalogue_entry: `${entry.id}@${mcpCatalogueFile.meta.catalogue_version}`,
+      availability: corps.availability ?? "all_projects",
+      enabled_projects: [],
       operations: [],
     };
     orgConnectors.push(connector);
@@ -2784,9 +3081,21 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const wanted = new URLSearchParams(path.split("?")[1] ?? "").getAll("tag");
     return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t)))) as T;
   }
+  const projectOrg = /^\/projects\/([^/]+)\/org-connectors$/.exec(route ?? "");
+  if (projectOrg) {
+    const slug = decodeURIComponent(projectOrg[1]!).replace(/^[^:/]+[:/]/, "");
+    return orgConnectors.map((c) => ({
+      name: c.name,
+      kind: c.kind,
+      type: c.type,
+      availability: c.availability ?? "all_projects",
+      enabled: c.availability !== "selected_projects" || (c.enabled_projects ?? []).includes(slug),
+      can_toggle: c.availability === "selected_projects",
+    })) as T;
+  }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
-  if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
+  if (agentLu) return structuredClone(decorateAgent(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]!)) as T;
   // Le parcours d'un ticket et son détail, par identifiant : chacun le sien (S22-02).
   const parcours = /^\/work-items\/([^/]+)\/journey$/.exec(route ?? "");
   if (parcours) return parcoursDe(parcours[1]!) as T;
@@ -2820,7 +3129,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
     [/^\/me\/tokens$/, myTokens],
-    [/^\/orgs\/[^/]+\/agents$/, agents],
+    [/^\/orgs\/[^/]+\/agents$/, agents.map(decorateAgent)],
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, projectAgents],
@@ -2844,6 +3153,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
     [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
+    [/^\/orgs\/[^/]+\/connector-catalogue$/, connectorCatalogue()],
     [/^\/projects\/[^/]+\/actions$/, actions],
     [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, platformModels],

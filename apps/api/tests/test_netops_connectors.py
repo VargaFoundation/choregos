@@ -138,7 +138,9 @@ async def test_the_netops_agent_reads_the_estate_through_the_broker(
 ) -> None:
     await _declare(client)
     base, headers = await _run(client, project)
-    tools = {t["name"]: t for t in (await client.get(base, headers=headers)).json()["tools"]}
+    listed = (await client.get(base, headers=headers)).json()["tools"]
+    # `web_fetch` is the platform's own tool (S40-01f): offered to any run whose network allows a host.
+    tools = {t["name"]: t for t in listed if t["name"] != "web_fetch"}
     assert set(tools) == {
         "pfsense__list_firewall_rules",
         "pfsense__list_aliases",

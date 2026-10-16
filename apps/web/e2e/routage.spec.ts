@@ -71,7 +71,7 @@ test("une skill se rattache à un agent dans sa nouvelle version (S23-13)", asyn
   await expect(skills).toContainText("onboarding-procedure (latest)");
   await page.getByLabel("What changed and why").fill("Follow the latest procedure");
   await page.getByRole("button", { name: /^Publish v\d+$/ }).click();
-  await expect(page.getByRole("status")).toContainText("published");
+  await expect(page.getByRole("status")).toContainText("sent to testing");
   // La version publiée porte la skill, sans version : la dernière, lue à chaque run.
   await expect(page.getByTestId("definition-groups")).toContainText("onboarding-procedure");
   await expect(page.getByTestId("definition-groups")).not.toContainText("onboarding-procedure@1");

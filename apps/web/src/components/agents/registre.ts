@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import type { AgentCredential, AgentSpec, ApiToken, ImplicitAgent } from "@/lib/types";
+import type { AgentCredential, AgentResolution, AgentSpec, ApiToken, ImplicitAgent } from "@/lib/types";
 
 /** Les portées qui ouvrent la porte MCP (ADR 0030) : un jeton qui en porte une est un client MCP. */
 const PORTEES_MCP = new Set(["mcp:read", "mcp:write"]);
@@ -166,4 +166,36 @@ export function makeScopes(c: Creatable, allProjects: string[]): MakeScope[] {
  */
 export function readOnly(agent: { can?: { publish?: boolean } }): boolean {
   return agent.can?.publish === false;
+}
+
+/**
+ * Why a run of the project would load this revision, in a word (S40-02, ADR 0071): the label that follows
+ * `v3 ·` on a process step. An answer from before channels carries no `source`: it says what it always said.
+ */
+export function sourceLabel(r: Pick<AgentResolution, "source" | "pinned" | "channel">): string {
+  switch (r.source) {
+    case "stable":
+      return "production";
+    case "latest":
+      return "latest";
+    case "project_channel":
+      return "testing";
+    case "pin_channel":
+      return r.channel === "candidate" ? "pinned to testing" : "pinned to production";
+    case "canary":
+      return "testing, canary";
+    case "pin":
+      return "pinned";
+    case "explicit":
+      return "explicit";
+    default:
+      return r.pinned ? "pinned" : "latest";
+  }
+}
+
+/** "10 % of work items run v5": what the project's answer cannot apply (it has no work item) but the page can say. */
+export function canarySentence(r: Pick<AgentResolution, "candidate_version" | "candidate_percent" | "source">): string | null {
+  if (r.candidate_version == null || !r.candidate_percent) return null;
+  if (r.source === "explicit" || r.source === "pin" || r.source === "pin_channel") return null;
+  return `${r.candidate_percent} % of work items run v${r.candidate_version}`;
 }

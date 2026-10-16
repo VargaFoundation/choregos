@@ -125,7 +125,9 @@ async def put_connector(
         )
     from ..services.connecteurs import check_runtime_allowed, spec_du_type, verifier_les_secrets
     from ..services.github_app import checked_config
+    from ..services.platform_network import check_connector_declaration
 
+    await check_connector_declaration(session, ctx.project.org_id, body.config, kind)
     if kind == "runtime":
         check_runtime_allowed(body.type)
     body = body.model_copy(

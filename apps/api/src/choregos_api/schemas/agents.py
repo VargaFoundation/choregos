@@ -104,6 +104,12 @@ class AgentEvalCase(Dto):
     input: AgentSampleInput = Field(default_factory=AgentSampleInput)
     must_contain: list[str] = Field(default_factory=list)
     must_not_contain: list[str] = Field(default_factory=list)
+    #: A live case (S40-02d) runs as a capped trial on the real model and asserts on what the run
+    #: produced; the level-1 gate leaves it out (it has no output to read before a run).
+    live: bool = False
+    #: The status the run's result must have (a case may expect the agent to stop and ask).
+    expect_status: Literal["done", "blocked"] = "done"
+    max_cost_usd: float | None = Field(default=None, gt=0, le=0.5)
 
 
 class AgentEvalResult(Dto):
@@ -298,6 +304,196 @@ class AgentSpec(Dto):
         return self
 
 
+# ───────────────────────────── release channels (S40-02, ADR 0071) ─────────────────────────────
+
+Channel = Literal["stable", "candidate"]
+ReleaseKind = Literal["publish", "promote", "rollback", "withdraw", "baseline"]
+ReleaseStatus = Literal["done", "pending_approval", "rejected", "cancelled", "superseded"]
+
+
+class AgentStableGates(Dto):
+    """What a revision must satisfy before it reaches production (a rollback skips them)."""
+
+    #: The revision must be the current candidate.
+    require_candidate: bool = False
+    #: Finished runs of the candidate since it became candidate.
+    min_candidate_runs: int = Field(default=0, ge=0, le=10_000)
+    min_success_rate: float | None = Field(default=None, ge=0, le=1)
+    min_soak_hours: int | None = Field(default=None, ge=0, le=720)
+    #: How recent the human's authentication must be, in minutes.
+    step_up_minutes: int = Field(default=10, ge=1, le=120)
+    #: The latest finished live evaluation of the revision must score at least this (S40-02d).
+    min_live_score: float | None = Field(default=None, ge=0, le=1)
+    #: People other than the requester who must approve a promotion before production moves (S40-02b).
+    approvals: int = Field(default=0, ge=0, le=3)
+    #: Neither the requester nor the revision's author may approve.
+    separation_of_duties: bool = True
+
+
+class AgentCandidateGates(Dto):
+    """What a revision must satisfy before it is sent to testing by hand (not when saving does it)."""
+
+    min_live_score: float | None = Field(default=None, ge=0, le=1)
+
+
+class AgentReleasePolicy(Dto):
+    """What saving a revision does, and the gates of production."""
+
+    #: `stable`: it goes to production (today's behaviour); `candidate`: to testing; `none`: nowhere.
+    on_publish: Literal["stable", "candidate", "none"] = "stable"
+    stable: AgentStableGates = Field(default_factory=AgentStableGates)
+    candidate: AgentCandidateGates = Field(default_factory=AgentCandidateGates)
+    #: The most one live evaluation may spend in all, in dollars.
+    max_eval_usd: float = Field(default=2.0, gt=0, le=10)
+
+    @model_validator(mode="after")
+    def _a_revision_published_to_production_is_never_a_candidate(self) -> AgentReleasePolicy:
+        gates = self.stable
+        if self.on_publish == "stable" and (
+            gates.require_candidate
+            or gates.min_candidate_runs > 0
+            or gates.min_success_rate is not None
+            or gates.min_soak_hours is not None
+            or gates.min_live_score is not None
+        ):
+            raise ValueError(
+                "`on_publish: stable` sends a revision straight to production, so it is never a candidate: "
+                "it cannot be combined with `require_candidate` or a candidate threshold"
+            )
+        return self
+
+
+class AgentEvaluationCreate(Dto):
+    """Run a revision's live cases as capped trials, in one project."""
+
+    project: str = Field(min_length=1)
+
+
+class AgentEvaluationCase(Dto):
+    name: str
+    run_id: str
+    status: Literal["running", "passed", "failed", "not_run"]
+    passed: bool | None = None
+    budget_usd: float = 0.0
+    cost_usd: float = 0.0
+    reason: str | None = None
+
+
+class AgentEvaluation(Dto):
+    id: str
+    version: int
+    project: str
+    status: Literal["running", "passed", "failed", "not_run"]
+    #: Passed cases over live cases; `None` while running and when nothing ran.
+    score: float | None = None
+    budget_usd: float
+    started_by: str | None = None
+    started_at: datetime
+    cases: list[AgentEvaluationCase] = Field(default_factory=list)
+
+
+class AgentReleaseCreate(Dto):
+    """Point a channel at a revision."""
+
+    channel: Channel
+    #: `null` with `candidate` withdraws the candidate; `null` with `stable` promotes the current candidate.
+    version: int | None = Field(default=None, ge=1)
+    #: Candidate only: the share of work items served the candidate; absent keeps the current share.
+    percent: int | None = Field(default=None, ge=0, le=100)
+    reason: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _the_share_belongs_to_testing(self) -> AgentReleaseCreate:
+        if self.percent is not None and self.channel != "candidate":
+            raise ValueError("`percent` only applies to the `candidate` channel")
+        return self
+
+
+class AgentReleaseCheck(Dto):
+    name: str
+    required: bool = True
+    #: `None`: not applicable.
+    passed: bool | None = None
+    detail: str | None = None
+
+
+class AgentReleaseVote(Dto):
+    """One person's answer to a release that waits for approval."""
+
+    by: str
+    decision: Literal["approve", "reject", "cancel"]
+    reason: str | None = None
+    at: datetime
+    #: How old the person's sign-in was, in seconds, when they decided.
+    auth_age_seconds: int | None = None
+
+
+class AgentReleaseDecision(Dto):
+    decision: Literal["approve", "reject", "cancel"]
+    #: Required for a rejection.
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AgentReleaseDto(Dto):
+    id: str
+    agent: str
+    channel: Channel
+    kind: ReleaseKind
+    version: int | None = None
+    previous_version: int | None = None
+    percent: int | None = None
+    status: ReleaseStatus = "done"
+    #: How many other people must approve before production moves; 0 for a release that did not wait.
+    approvals_required: int = 0
+    decisions: list[AgentReleaseVote] = Field(default_factory=list)
+    requested_by: str | None = None
+    requested_at: datetime
+    done_at: datetime | None = None
+    reason: str | None = None
+    checks: list[AgentReleaseCheck] = Field(default_factory=list)
+
+
+class AgentChannelStats(Dto):
+    version: int
+    runs: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    success_rate: float | None = None
+    since: datetime | None = None
+
+
+class AgentReleaseReadiness(Dto):
+    """What releasing a revision to a channel would check, without doing it."""
+
+    version: int
+    channel: Channel
+    kind: ReleaseKind
+    ready: bool
+    checks: list[AgentReleaseCheck] = Field(default_factory=list)
+    candidate: AgentChannelStats | None = None
+    production: AgentChannelStats | None = None
+
+
+class AgentExposedProject(Dto):
+    project: str
+    source: Literal["pin", "pin_channel", "project_channel"]
+    channel: Channel | None = None
+    version: int
+
+
+class AgentExposure(Dto):
+    """Who is served what: production, testing, and the projects that chose their own."""
+
+    stable_version: int | None = None
+    candidate_version: int | None = None
+    candidate_percent: int = 0
+    projects: list[AgentExposedProject] = Field(default_factory=list)
+
+
+class ProjectAgentChannel(Dto):
+    channel: Channel
+
+
 class AgentTrialCreate(Dto):
     """Try a draft version on a sample input, in one project, under a capped budget (S32-03)."""
 
@@ -351,6 +547,8 @@ class AgentCreate(Dto):
     message: str | None = Field(default=None, max_length=MESSAGE_MAX)
 
     _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
+    #: What saving a revision does (S40-02); absent, the defaults: it goes to production.
+    release_policy: AgentReleasePolicy | None = None
 
     @model_validator(mode="after")
     def _a_project_agent_names_its_project(self) -> AgentCreate:
@@ -426,6 +624,8 @@ class AgentPermissions(Dto):
     manage: bool = False
     #: Pin it on a project the caller owns.
     pin: bool = False
+    #: Move its channels: send a revision to testing, to production, roll back (S40-02).
+    release: bool = False
     #: The scopes the caller may fork it into.
     fork_scopes: list[CreatableScope] = Field(default_factory=list)
 
@@ -526,6 +726,8 @@ class AgentVersionDto(Dto):
     restored_from: int | None = None
     #: The projects the caller may see that pin this version.
     pinned_by: list[str] = Field(default_factory=list)
+    #: The channels this revision sits on now (S40-02).
+    channels: list[Channel] = Field(default_factory=list)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -593,6 +795,14 @@ class AgentDto(Dto):
     #: What the caller may do, and the server's own sentence for what they may not.
     can: AgentPermissions = Field(default_factory=AgentPermissions)
     cannot_reason: str | None = None
+    #: Production and testing (S40-02, ADR 0071).
+    stable_version: int | None = None
+    candidate_version: int | None = None
+    candidate_percent: int = 0
+    candidate_since: datetime | None = None
+    release_policy: AgentReleasePolicy = Field(default_factory=AgentReleasePolicy)
+    #: The release waiting for approval, if any (S40-02b).
+    pending_release: AgentReleaseDto | None = None
 
 
 class AgentOverrides(Dto):
@@ -605,13 +815,24 @@ class AgentOverrides(Dto):
 
 
 class ProjectAgentPut(Dto):
-    version: int = Field(ge=1)
+    #: Exactly one of `version` (a fixed revision) and `channel` (follow production or testing).
+    version: int | None = Field(default=None, ge=1)
+    channel: Channel | None = None
     overrides: AgentOverrides = Field(default_factory=AgentOverrides)
+
+    @model_validator(mode="after")
+    def _a_pin_is_a_revision_or_a_channel(self) -> ProjectAgentPut:
+        if (self.version is None) == (self.channel is None):
+            raise ValueError("give exactly one of `version` (a fixed revision) and `channel`")
+        return self
 
 
 class ProjectAgentDto(Dto):
     agent: str
+    #: The revision served now (the channel's, for a channel pin).
     version: int
+    #: Set when the pin follows a channel; `None` for a fixed revision.
+    channel: Channel | None = None
     overrides: AgentOverrides
     #: La version épinglée, surcharges appliquées : ce qui tournera.
     effective: AgentSpec
@@ -759,6 +980,15 @@ class AgentProjectMetrics(Dto):
     cost_usd: float
 
 
+class AgentVersionMetrics(Dto):
+    version: int
+    runs: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    success_rate: float | None = None
+    cost_usd: float = 0.0
+
+
 class AgentMetrics(Dto):
     """Ce qu'un agent a fait sur la période : ses runs, leur issue, ce qu'ils ont coûté."""
 
@@ -774,7 +1004,9 @@ class AgentMetrics(Dto):
     cost_by_kind: dict[str, float] = Field(default_factory=dict)
     by_project: list[AgentProjectMetrics] = Field(default_factory=list)
     spent_today_usd: float = 0.0
+    #: Production's daily budget (S40-02).
     daily_budget_usd: float | None = None
+    by_version: list[AgentVersionMetrics] = Field(default_factory=list)
 
 
 class AgentMetricsSummary(Dto):
@@ -796,6 +1028,14 @@ class AgentResolution(Dto):
     version: int | None = None
     #: True when the version comes from the project's pin (no explicit `@N` in the reference).
     pinned: bool = False
+    #: Why this revision (S40-02): the reference, a pin, a channel pin, the project's switch, a canary
+    #: share, production, or the latest (an agent that has no production pointer).
+    source: (
+        Literal["explicit", "pin", "pin_channel", "project_channel", "canary", "stable", "latest"] | None
+    ) = None
+    channel: Channel | None = None
+    candidate_version: int | None = None
+    candidate_percent: int | None = None
     display_name: str | None = None
     lifecycle: str | None = None
     #: For `not_installed`: publishing the workflow installs the agent from the catalogue (ADR 0040).

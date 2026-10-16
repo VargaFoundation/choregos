@@ -128,7 +128,8 @@ async def test_l_agent_appelle_un_outil_sans_jamais_voir_la_cle(
 
     liste = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)
     assert liste.status_code == 200, liste.text
-    assert [t["name"] for t in liste.json()["tools"]] == ["recherche_profils"]
+    # `web_fetch` is the platform's own tool (S40-01f): offered to any run whose network allows a host.
+    assert [t["name"] for t in liste.json()["tools"] if t["name"] != "web_fetch"] == ["recherche_profils"]
 
     reponse = await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/recherche_profils",
@@ -223,7 +224,8 @@ async def test_un_outil_non_declare_par_le_projet_est_introuvable(
     """Et il rend 404, pas 403 : un agent n'a pas à découvrir le catalogue du déploiement
     en essayant des noms."""
     run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch, outils="")
-    assert (await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)).json()["tools"] == []
+    tools = (await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)).json()["tools"]
+    assert [t["name"] for t in tools if t["name"] != "web_fetch"] == []
     refus = await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/recherche_profils", headers=headers, json={"metier": "x"}
     )
@@ -396,7 +398,7 @@ async def test_un_projet_hors_du_groupe_n_obtient_pas_l_outil(
     run_id, headers = await _projet_avec_mcp(project, tmp_path, monkeypatch, groupes=["juridique"])
 
     liste = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)
-    assert liste.json()["tools"] == []
+    assert [t["name"] for t in liste.json()["tools"] if t["name"] != "web_fetch"] == []
     refus = await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/rechercher_entreprise",
         headers=headers,

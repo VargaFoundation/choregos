@@ -74,13 +74,14 @@ async def test_a_project_with_only_a_tracker_and_a_repository_is_not_ready(
             f"/api/v1/projects/{project['id']}/connectors/{kind}", json={"type": type_, "config": config}
         )
         assert put.status_code == 200, put.text
-    await _forget_the_tests(project["id"])
     body = await _readiness(client, project["id"])
     assert body["ready"] is False
     assert _by_state(body, "todo") == {"connector-cd", "notifications", "people-release-captain"}, body[
         "items"
     ]
-    assert {"connector-tracker", "connector-scm"} <= _by_state(body, "check"), "configured, never tested"
+    assert {"connector-tracker", "connector-scm"} <= _by_state(body, "done"), (
+        "tested by the save itself (S40-05)"
+    )
     assert "connector-runtime" in _by_state(body, "done"), "provided by the deployment"
     assert body["summary"]["todo"] == 3
     assert body["summary"]["done"] + body["summary"]["check"] + body["summary"]["todo"] == len(
@@ -88,6 +89,9 @@ async def test_a_project_with_only_a_tracker_and_a_repository_is_not_ready(
     )
     assert "repository-checks" in _by_state(body, "check"), "no test command"
     assert all(i["fix"]["by"] for i in body["items"])
+    await _forget_the_tests(project["id"])
+    forgotten = await _readiness(client, project["id"])
+    assert {"connector-tracker", "connector-scm"} <= _by_state(forgotten, "check"), "configured, never tested"
 
 
 async def test_configuring_cd_and_notify_moves_the_items(client: AsyncClient, admin: str) -> None:

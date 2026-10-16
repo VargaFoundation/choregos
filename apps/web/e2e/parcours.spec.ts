@@ -462,10 +462,10 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   await expect(page.getByTestId("history").getByRole("listitem")).toHaveCount(1);
 });
 
-test("an agent's page is in tabs: overview, definition, history, runs, access (S30-05, S40-12)", async ({ page }) => {
+test("an agent's page is in tabs: overview, definition, history, lifecycle, runs, access (S30-05, S40-12)", async ({ page }) => {
   await page.goto("/agents/onboarding-coordinator");
   const onglets = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
-  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Runs", "Access"]);
+  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Lifecycle", "Runs", "Access"]);
   await expect(onglets.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("mesures")).toBeVisible();
   await expect(page.getByTestId("version")).toHaveCount(0);
@@ -613,11 +613,11 @@ test("mise en route : un projet neuf dit ce qui lui manque ; un projet qui tourn
   await page.goto("/p/checkout-web");
   const liste = page.getByTestId("mise-en-route");
   await expect(liste).toBeVisible();
-  await expect(page.getByTestId("etape-provisioning")).toContainText("provisioning is running");
-  await expect(page.getByTestId("etape-connecteur-cd")).toContainText("argocd: its last test failed");
-  await expect(page.getByTestId("etape-premier-ticket")).toContainText("(to do)");
-  await page.getByTestId("etape-connecteur-cd").getByRole("link", { name: "Settings" }).click();
-  await expect(page).toHaveURL(/\/p\/checkout-web\/settings$/);
+  await expect(page.getByTestId("etape-provisioned")).toContainText("Project provisioned");
+  await expect(page.getByTestId("etape-connector-cd")).toContainText("demo is a stand-in");
+  await expect(page.getByTestId("etape-people-release-captain")).toContainText("(to do)");
+  await page.getByTestId("etape-connector-cd").getByRole("link", { name: "Fix" }).click();
+  await expect(page).toHaveURL(/\/p\/checkout-web\/settings#connections$/);
 
   await page.goto("/p/billing-api");
   await expect(page.getByText("PRs merged on first pass")).toBeVisible();

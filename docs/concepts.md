@@ -15,7 +15,7 @@ control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, th
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 A **catalogue** is what the platform *offers*; a **connector** is what an organisation has
-*enabled*. The image ships a catalogue of well-known MCP servers (and one of skills): listing an
+*installed*, and each project uses only what is enabled for it (ADR 0074). The image ships a catalogue of well-known MCP servers (and one of skills): listing an
 entry enables nothing, and installing one goes through the same governance as declaring it by hand
 ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)).
 
@@ -111,6 +111,23 @@ memory in turn. At most one binding **writes**: the run's lessons and the agent'
 a **global** memory they are only ever **proposals**, accepted by an administrator. A version that
 says nothing keeps its legacy `memory` field (`project`, `agent`, `none`), which means the same
 bindings as before; nothing already published changes.
+
+## Agent revisions and channels
+
+A **revision** is one numbered, immutable version of an agent
+([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md)). An agent has two
+**channels**, each a pointer to a revision:
+
+- **production** — what every project that pins nothing runs;
+- **testing** — served to the projects that chose to follow testing, and to a **canary share** (a
+  percentage of the work items of the other projects), picked by a hash of the work item so that all
+  its stages and retries run one revision.
+
+*Publish* saves a revision; *release* moves a channel. What saving does is the agent's policy (production,
+testing or nothing; production by default, as before). Reaching production checks the eval suite again,
+what testing measured (runs, success rate, time), and takes a person with a recent sign-in; a
+**rollback** to a revision that was in production before skips the measurements, not the person. Every
+move is kept in a history, and the run records the revision it used.
 
 ## Stage and run
 

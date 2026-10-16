@@ -15,11 +15,12 @@ organisations must assume **a member of one will try to read another**.
 | Threat | Mechanism | Where |
 | :-- | :-- | :-- |
 | writing outside the allowed paths | ACP permission refused → diff verified after the run → revert → gate `scope_respected` | `guardrails.py`, `scope.py`, `gates/` |
-| exfiltrating data, or polluting the internet | egress is closed and bounded in three scopes that only narrow one another — organisation ceiling, project policy, agent version — with a deny list that always wins and IP literals refused (ADR 0070). **Enforced by layer**: a **per-run egress proxy** (S40-01c) is the wall for host, port and connection rate; the tool broker and the platform's own fetchers are a wall for what the platform requests (S40-01d); the runner's guardrails and the backend's settings are a net (S40-01b). Every decision is journaled per run (`network_decisions`), and `network` is part of an agent version's digest only when set. The per-project Squid of the GitOps provisioning (allowlist = `allow_domains`, `CONNECT` to 443 only) stays for per-project namespaces: host-level, project-level | `choregos_core/network.py`, `services/network.py`, `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
+| exfiltrating data, or polluting the internet | egress is closed and bounded in three scopes that only narrow one another — organisation ceiling, project policy, agent version — with a deny list that always wins and IP literals refused (ADR 0070). **Enforced by layer**: a **per-run egress proxy** (S40-01c) is the wall for host, port and connection rate; the tool broker and the platform's own fetchers (MCP connectors, knowledge crawls, git skill sources) are a wall for what the platform requests: the ceiling is read at declaration and again at every call, a refusal is a 403 journaled with layer `broker`, calls to one host are throttled organisation-wide and carry an identifying User-Agent (S40-01d); the built-in `web_fetch` tool is the one place where method, robots.txt, User-Agent and politeness hold for what an agent reads (S40-01f); the runner's guardrails and the backend's settings are a net (S40-01b). Every decision is journaled per run (`network_decisions`), and `network` is part of an agent version's digest only when set. The per-project Squid of the GitOps provisioning (allowlist = `allow_domains`, `CONNECT` to 443 only) stays for per-project namespaces: host-level, project-level | `choregos_core/network.py`, `services/network.py`, `services/platform_network.py`, `services/web_fetch.py`, `tests/test_platform_network.py`, `tests/test_web_fetch_tool.py`, `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
 | using credentials | there are none in the workspace; the run token only authenticates the agent **to us**, and never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py` |
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
 | leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
 | spending without limit | one virtual key per run with a hard cap, a budget per ticket, tool calls in the same ledger | ADR 0004, ADR 0014 |
+| a connector reaching a project that did not ask for it | an organisation connector is `all_projects` or `selected_projects`; a selected one reaches only the projects an owner or an administrator enabled, enforced in the broker, in the project policy behind governed actions and in the project's operations list (ADR 0074) | `services/catalogue_rights.py`, `tests/test_connector_enablement.py` |
 | touching production | `prod.requires_train` in the DSL, release train, Argo windows, GitHub Environment | ADR 0006 |
 | changing what an agent does | an agent has a scope — common, organisation, project or personal — and one server-side function decides who may publish, suspend or pin it, with the reason for every refusal: common and organisation agents are an `org_admin`'s, a project's agent its `project_owner`'s, a personal agent its owner's (and an `org_admin`'s); an agent you may not see is a 404; a personal agent or another project's agent can neither be pinned nor named in a workflow nor run in one (ADR 0061) | `services/agent_governance.py`, `routers/agents.py`, `services/agents.py`, `tests/test_agent_governance_matrix.py` |
 | changing its own configuration | `.choregos/**` refused for writing (except `result.json`) | `guardrails.py` |
@@ -83,6 +84,7 @@ tool call and every write through the runner's permission path; that path is the
 the user's code, makes the call. It is a convention the SDK keeps, not a wall: Python code in the pod
 can open a socket or run a command like any program, and is bounded by the sandbox, not by the SDK.
 Cosign verification of agent images is not built yet.
+
 ## What a run remembers
 
 A run reads only the memories its agent version binds **and** that reach its project
@@ -94,6 +96,20 @@ memory is a proposal: nothing it says becomes a fact the whole organisation read
 administrator accepts it. Publishing a version that binds a global memory needs to see it; a memory a
 caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
 Facts carry their organisation and sit under forced row-level security.
+
+## Decisions that need a fresh sign-in
+
+Some gestures are too consequential to be made from a browser left open: the session must have been
+authenticated recently (`step_up_minutes`; the API answers `401 step_up_required` and the console
+signs the person in again). They are made by a person in a session, never by an API token or an MCP
+client, which propose and do not decide:
+
+- deciding a governed action (approving one; [ADR 0035](adr/0035-governed-actions-in-the-core.md));
+- **releasing an agent revision to production, or to a canary share, and loosening the release
+  policy of an agent** ([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md);
+  default 10 minutes; a personal agent is exempt; an edition can add its own rule through the
+  `agent.release` gesture check). A release also runs the eval suite again and keeps a history of
+  every move.
 
 ## Injection through context
 
@@ -202,6 +218,7 @@ reference, tools born closed); a skill is assessed by the supply-chain gate agai
 high-risk one waits for a second administrator, and a bundled one is checked against its sha256
 provenance. A skill enters the catalogue only from a listed publisher, under an open licence, at a pinned
 commit; Anthropic's proprietary document skills and anything unlicensed are never listed or bundled.
+Who sees, installs and enables is decided by one server function (ADR 0074): every member sees a catalogue, only the organisation's administrator installs, and a project owner or the administrator enables an installed connector for a project.
 A changed upstream reaches an organisation only when a catalogue release is merged **and** an
 administrator updates the skill: two people, as ADR 0050 asks against bait-and-switch.
 

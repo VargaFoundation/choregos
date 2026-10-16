@@ -4,9 +4,9 @@ import { expect, test } from "@playwright/test";
 
 test("browse, filter, install and land on the connector", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/admin/connectors");
-  await page.getByRole("link", { name: "MCP catalogue" }).click();
-  await expect(page).toHaveURL(/\/admin\/connectors\/catalogue$/);
+  await page.goto("/");
+  await page.getByRole("navigation").getByRole("link", { name: "MCP servers" }).click();
+  await expect(page).toHaveURL(/\/catalogue\/mcp-servers$/);
   await expect(page.getByTestId("catalogue-version")).toContainText("Catalogue 2026.10.0");
 
   // The facets narrow the grid; an OAuth server stays listed, with its reason, and cannot be installed.
@@ -34,7 +34,21 @@ test("browse, filter, install and land on the connector", async ({ page }) => {
   await expect(card.getByRole("button", { name: "Discover" })).toBeVisible();
 
   // And the catalogue now says so.
-  await page.getByRole("link", { name: "MCP catalogue" }).click();
+  await page.getByRole("link", { name: "MCP servers" }).first().click();
   await page.getByLabel("Search the catalogue").fill("github");
-  await expect(page.getByTestId("entry-github")).toContainText("Installed");
+  const github = page.getByTestId("entry-github");
+  await expect(github).toContainText("Installed");
+
+  // Installed for selected projects (the default): on in no project yet, then on for billing-api.
+  await expect(github).toContainText("on in no project yet");
+  await github.getByRole("button", { name: "Projects…" }).click();
+  await page.getByRole("dialog").getByLabel("billing-api").check();
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await expect(github).toContainText("on in billing-api");
+});
+
+test("the old administration path redirects to Catalogue, MCP servers", async ({ page }) => {
+  await page.goto("/admin/connectors/catalogue");
+  await expect(page).toHaveURL(/\/catalogue\/mcp-servers$/);
+  await expect(page.getByRole("heading", { name: "MCP servers", level: 1 })).toBeVisible();
 });

@@ -83,6 +83,14 @@ and says how a claim works on this instance; `POST /orgs/{org}/github/refresh` r
 A legacy `installation_id` in a request is ignored. The installation used by a connector and by a run's
 git token is always the one the organisation claimed.
 
+In the console, the repository field of a GitHub connector (Settings, Connections) is a searchable list of
+the repositories the App can see, each marked private or public. When the organisation has no installation
+yet, the field says so and offers *Install on GitHub* (it opens GitHub in the same tab and returns to the
+settings page) and *Refresh*. *Type it instead* switches to a text input for a repository the App cannot
+list; an owner without an installation is warned about on the spot, with the same install action. A GitHub
+card reads "via the Choregos App on `<account>`", and a save refused with `422` shows *Install on GitHub*
+under the error. No screen asks for an installation id.
+
 Until a project can run, its overview opens on a **getting started** list, which is the project's
 readiness (below): one list, computed by the API, that the settings page, the CLI and the MCP door share.
 
@@ -145,6 +153,33 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
+**The catalogue, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
+catalogues list what exists: `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
+(the registry's connector types by family, organisation or project scope, where each is installed or
+configured; platform plumbing and fakes are left out). **Every member of the organisation reads them**,
+whether the role is an organisation role or only a project role. Each entry carries `can`
+(`install`, `configure_projects`, `enable_projects`) and `cannot_reason`, decided by the server:
+
+| Gesture | Organisation admin | Project owner | Other member |
+| :-- | :-- | :-- | :-- |
+| see | yes | yes | yes |
+| install an organisation connector (MCP server, directory, documents, network operations) | yes | no | no |
+| configure a project connector (tracker, scm, ci, cd, notify) | yes | in their project | no |
+| set availability, operation policies and groups | yes | no | no |
+| enable or disable an organisation connector for a project | any project | their project | no |
+
+An organisation connector is `all_projects` (the default through the API: every project whose groups
+match reaches it) or `selected_projects`: only the projects it is enabled for. Set it with
+`PATCH /orgs/{org}/connectors/{name}` (`{"availability": "selected_projects"}`, administrator only;
+the install and declare bodies take it too). Switching to `selected_projects` turns it on for no
+project. An owner or an administrator then enables it per project:
+`PUT /projects/{id}/org-connectors/{name}/enablement`, `DELETE` to turn it off (`409` while the
+connector is available to every project), `GET /projects/{id}/org-connectors` to see the state. A run
+reaches the connector only if it is enabled for its project, the effective policy is not forbidden, the
+groups match and the agent version selects it; the same holds for governed actions.
+
+In the console, **Catalogue → MCP servers** (`/catalogue/mcp-servers`; the former administration path redirects) shows each entry's Install button disabled, with the server's reason, for anyone who may not install. The install panel asks whether the server is available to *selected projects* (the default) or *every project*; an installed server says where it is on ("on in billing-api", "on in no project yet") and **Projects…** opens a panel that turns it on or off per project. **Catalogue → Connectors** (`/catalogue/connectors`) lists every connector type of the registry by family (source code, work trackers, CI, deployment, documents, directory, network operations, notifications), each with its icon, whether it is an organisation or a project connector, where it is installed or configured, and what the caller may do as the server decided: *Declare* (administrator, lands on the declare form with the type chosen), *Configure in <project>* (the project's owner), *Projects…* (turn an installed connector on per project), or the server's reason. *Administration → Connectors* sets each connector's availability, after a confirmation that every project loses it until it is enabled.
+
 **The MCP catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) is a list
 of well-known MCP servers shipped in the image, so an administrator does not need to know a
 vendor's URL by heart: `choregos_core/mcp_catalogue/catalogue.yaml`, about a hundred entries,
@@ -160,7 +195,7 @@ that runs as a local process: running a third party's code is the operator's dec
 listed with what to run and nothing more).
 
 **Installing an entry** is `POST /orgs/{org}/mcp-catalogue/{entry_id}/install` (the organisation's
-administrator only; *Administration → connectors → MCP catalogue* in the console: search, category, *official only*, *installable only*; an install opens a panel for the name and the secret reference, then discovers the tools and lands on the connector). It declares an
+administrator only; *Catalogue → MCP servers* in the console: search, category, *official only*, *installable only*; an install opens a panel for the name and the secret reference, then discovers the tools and lands on the connector). It declares an
 ordinary `mcp` connector through the same door as `POST /orgs/{org}/connectors`: `{"name": "notion",
 "secret_refs": {"token": "env:CONNECTOR_NOTION"}}` (the name defaults to the entry id; the
 credential is a reference, never a value, and an entry that needs none refuses one). The connector
@@ -362,8 +397,29 @@ a screen reader announces.
 ### Project settings
 
 `/p/<project>/settings` reads as sections, with an in-page navigation (a strip on small screens, a sticky
-list from `lg` up): **Connections**, **Agents & models**, **Guardrails**, **Tools**. A slot above them is
-kept for the project's readiness panel (S40-06).
+list from `lg` up): **Readiness** (on top), **General**, **Connections**, **Agents & models**, **Guardrails**,
+**Notifications**, **Tools**, **People**, **Knowledge & memory**, **Danger zone**.
+
+- **Readiness** is the list above, drawn from `GET /projects/{id}/readiness`: a summary ("9 of 13 ready, 3
+  to check"), the items grouped by section, and a *Fix* link to the section or page that fixes each open
+  one. When the viewer cannot fix an item it says whom to ask (a project owner, the organisation admin, the
+  platform operator, or "done outside Choregos") instead of the link. The overview's *Getting started* card
+  is the same list and disappears when nothing is to do.
+- **General**: name, template (read-only, with "a newer version exists" when the manifest has one),
+  environments, labels, the repository (URL, default branch, language, branch prefix, clone depth), the
+  measured checks (test, lint, typecheck commands) and definition-of-done facts (a fact name and the command
+  that proves it). One Save for the section.
+- **Notifications**: the notify connector's state (it is configured in Connections), the Slack channel and
+  the e-mail addresses (`notify.slack_channel`, `notify.emails`).
+- **Agents & models** also holds the default backend (a select over the backends the deployment runs) and
+  the allowed backends. **Tools** has a checkbox per catalogue tool and an explicit *open the whole catalogue*
+  (`*`); the groups a tool is open to are read-only (only `tools:grant` changes `groups`).
+- **People** and **Knowledge & memory** count and link to Members, Knowledge and Memory; nothing is
+  duplicated. **Danger zone** suspends or archives the project, each after a confirmation.
+
+Every section saves on its own through `PATCH /projects/{id}`. The console re-reads the project right before
+writing and sends the whole configuration with only that section's keys changed, so a section never drops
+what another one wrote and `groups` is sent untouched.
 
 - **Connections** is a card per connector: an icon (the product's mark when simple-icons has one, vendored
   as CC0 paths in `components/brand-icon-paths.ts`; a capability icon otherwise, including Slack and the
@@ -519,7 +575,8 @@ row outlines those boxes. Choosing a box shows the same card above its editor.
 `origin`, `context` (given to every agent stage) and `in_pull_request`.
 
 Which agent version a run would load for those references, through the runtime's own resolver
-(an explicit `@N`, else the project's pin, else the latest version), is read, without changing
+(an explicit `@N`, else the project's pin, else its channel, else production: see
+[Release an agent](#release-an-agent-eval-testing-production)), is read, without changing
 anything, with:
 
 ```bash
@@ -922,7 +979,9 @@ already installed at this version answers `409`. Nothing follows upstream by its
 newer catalogue release and a person clicking.
 
 A workflow actor **names** an agent — `{type: agent, role: implement, agent: onboarding-coordinator}`,
-or `…@2` for a given version. The run then takes the project's pinned version (else the latest),
+or `…@2` for a given version. The run then takes the project's pinned revision or channel, else the
+agent's production revision ([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md);
+the full order is in [Release an agent](#release-an-agent-eval-testing-production)),
 overrides applied: its model, its limits and its budget, which only tighten the actor's own. Its
 instructions **replace the playbook**: they are a Jinja template rendered in a **sandbox**
 (`{{ ''.__class__ }}` is refused, at publication already), with the playbook's variables
@@ -956,7 +1015,7 @@ An agent has a **scope** ([ADR 0061](adr/0061-agent-ownership-scopes-and-forks.m
 | `personal` | someone's own agent: drafts, experiments | its owner, or an `org_admin` |
 
 The server decides — the console only shows its answer. Each agent carries `can`
-(`publish`, `manage`, `pin`, `fork_scopes`) and, when something is refused, `cannot_reason`, one
+(`publish`, `manage`, `pin`, `release`, `fork_scopes`) and, when something is refused, `cannot_reason`, one
 sentence saying why and what to do instead ("`developer` is a common agent: only an org_admin changes
 it; fork it into your project or your own agents to extend it"). The matrix, by who may:
 
@@ -965,6 +1024,7 @@ it; fork it into your project or your own agents to extend it"). The matrix, by 
 | see | any member | any member | members of P, org_admin | U, org_admin |
 | create | org_admin (catalogue) | org_admin | P's project_owner, org_admin | any developer and above (becomes U) |
 | publish a version, edit, lifecycle | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
+| release to testing or production, roll back | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
 | suspend, revoke, transfer, clients | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
 | pin on project Q | Q's project_owner | Q's project_owner | only Q = P | refused (`422`): promote or fork first |
 | trial run | `item:control` on the trial project | same | trial project must be P | U only |
@@ -1159,6 +1219,149 @@ the agent builder, the **Memory** section is the ordered list of bindings: add a
 project's, whichever project the run is in, and the organisation's), choose read or read and write (choosing
 write on a row demotes the other), move rows up and down, remove them; its summary line says what it holds
 and where the run writes.
+
+### Release an agent: eval, testing, production
+
+Saving a revision and putting it to work are two gestures
+([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md)). A **revision** is a
+numbered version that never changes. An agent has two **channels**, each a pointer to a revision:
+**production** (`stable_version`) and **testing** (`candidate_version`, with a `candidate_percent`
+canary share). *Publish* saves the next revision; *release* points a channel at one.
+
+| Stage | What it is | To enter |
+| :-- | :-- | :-- |
+| **eval** | the revision's eval suite, run on its instructions (level 1) | saving it: the instructions render and the suite passes |
+| **testing** | served to the projects that follow testing, and to a share of the other projects' work items | the suite passes again, and the revision is newer than production |
+| **production** | what every project that pins nothing runs | the policy's gates, a person with a fresh sign-in, the plugin gesture |
+
+**What a run loads**, first match wins: `agent: slug@N` in the workflow; the project's fixed pin; the
+project's pin on a channel (`follow production` or `follow testing`); the project's "follow testing"
+switch, when the agent has a candidate; the **canary share** when the work item falls in it; production.
+The share is deterministic per work item — every stage and every retry of one work item runs the same
+revision — and `GET /projects/{id}/agent-resolution` says why (`source`: `explicit`, `pin`,
+`pin_channel`, `project_channel`, `canary`, `stable`) and how big the share is (`candidate_percent`;
+the endpoint has no work item, so it reports a canary without applying it). A project's overrides still
+only tighten, whatever channel supplies the revision.
+
+**What saving a revision does** is the agent's `release_policy.on_publish`: `stable` (the default —
+what happened before channels: a saved revision goes to production), `candidate` (it goes to testing)
+or `none` (nothing moves). Existing agents were migrated to production = their latest revision and
+the default policy: nothing changes until a policy is changed. The first revision of an agent, a fork,
+an installed template or catalogue agent is production.
+
+```bash
+# keep production steady: a saved revision goes to testing, and production takes only the candidate
+curl -X PUT $API/orgs/acme/agents/onboarding-coordinator/release-policy -d '{"on_publish": "candidate",
+  "stable": {"require_candidate": true, "min_candidate_runs": 5, "min_success_rate": 0.9,
+             "min_soak_hours": 24, "step_up_minutes": 10}}'
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/versions -d '{...}'      # v5: saved, in testing
+# send it to 10 % of the work items of the projects that follow production
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases \
+  -d '{"channel": "candidate", "version": 5, "percent": 10, "reason": "first week"}'
+# make a project run testing (`stable` to come back); or pin one agent on a channel
+curl -X PUT $API/projects/acme:dev/agent-channel -d '{"channel": "candidate"}'
+curl -X PUT $API/projects/acme:dev/agents/onboarding-coordinator -d '{"channel": "candidate"}'
+# what a release would check, without doing it
+curl "$API/orgs/acme/agents/onboarding-coordinator/versions/5/readiness?channel=stable"
+# production (the current candidate when `version` is left out)
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases -d '{"channel": "stable"}'
+# roll back to a revision that was in production before; withdraw the candidate
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases -d '{"channel": "stable", "version": 4}'
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases -d '{"channel": "candidate", "version": null}'
+curl $API/orgs/acme/agents/onboarding-coordinator/releases      # the history, newest first
+curl $API/orgs/acme/agents/onboarding-coordinator/exposure      # who is served what
+```
+
+**The gates of production** (`release_policy.stable`; each is a check the readiness endpoint lists, and
+a failing one is a `409` naming it in `errors`):
+
+| Check | Passes when |
+| :-- | :-- |
+| `eval_suite` | the suite (production's cases and the revision's) passes again |
+| `newer_than_production` | the revision is newer than production |
+| `is_candidate` | the revision is the current candidate (required with `require_candidate` or a threshold) |
+| `candidate_runs` | at least `min_candidate_runs` finished runs since it became the candidate |
+| `candidate_success_rate` | at least `min_success_rate` of them succeeded |
+| `soak` | it has been in testing at least `min_soak_hours` |
+| `human_session`, `fresh_authentication` | a person signed in less than `step_up_minutes` ago (below) |
+
+`on_publish: stable` cannot be combined with `require_candidate` or a threshold (`422`): a revision
+published straight to production is never a candidate.
+
+**A rollback** — a release to production of a revision older than the current one *that was in
+production before* — skips the suite, candidate and soak gates: it restores an approved state, and
+speed matters in an incident. It keeps the rights, the human session, the fresh sign-in and the
+gesture check. Any other move of production is a promotion with every gate. **Withdrawing** the
+candidate (`"version": null` on `candidate`) empties testing and needs no fresh sign-in. Two releases
+at once cannot both win: the second gets `409`.
+
+**Who may release.** The same people as publish (see the table above): an `org_admin` for common and
+organisation agents, the project owner for a project agent, the owner for a personal agent. A project
+owner switches *their project* to follow testing, or pins an agent on a channel, with the right to pin.
+**Releasing to production, or to a canary share above 0, is a person's decision**: it needs a human
+session (an API token gets `403`) with a sign-in less than `step_up_minutes` old (default 10; else
+`401 step_up_required`, and the console re-authenticates, as for governed actions), and the plugin
+gesture check `agent.release`, where an edition can add its own rule. A token may save revisions, send
+one to testing without a share and withdraw the candidate. A personal agent is exempt from the sign-in
+rule and the gesture; an agent whose policy is `on_publish: stable` (the organisation chose "publish is
+release") may be released by a token. Loosening a policy is itself such a gesture. Every move is a row
+of the history (`agent_releases`: channel, kind `publish | promote | rollback | withdraw | baseline`,
+revisions, share, who, why, the checks as evaluated) and an audit record (`agent.release`,
+`agent.release_policy`, `project.agent_channel`).
+
+**Approvals.** With `"stable": {"approvals": 1}` (up to 3) in the policy, a promotion to production does
+not move it: `POST …/releases` answers `201` with `status: "pending_approval"`, `approvals_required` and
+no `done_at`, and production stays where it was. Other people decide with
+`POST …/releases/{id}/decision {"decision": "approve"}`; each needs the right to release the agent, a
+human session with a sign-in younger than `step_up_minutes`, and — unless `separation_of_duties` is
+switched off — to be neither the requester nor the author of the revision (`422`). Nobody approves
+twice (`409`); with `approvals: 2`, two different people. The last approval re-checks the revision and
+moves production; if production moved meanwhile (a rollback, say) the request is `superseded` and the
+approval gets `409`. `reject` needs a `reason`; the requester or an `org_admin` can `cancel`. A rollback
+never waits. An agent with `on_publish: stable` and approvals saves the revision and opens the same
+request. `GET /orgs/acme/agent-releases?status=pending_approval` is the approvers' inbox (only agents
+you may see), and the agent carries its `pending_release`. Nobody is notified yet. Every step is audited
+(`agent.release.request`, `agent.release.decide`, `agent.release`).
+
+**Live evaluation.** The level-1 suite checks the *instructions*; a case marked `live` checks what a run
+*produces*. `POST $API/orgs/acme/agents/reviewer/versions/5/evaluations -d '{"project": "dev"}'` runs each
+live case of the revision (at most 10) as a capped trial in that project (the right to try the agent there
+is needed): `{"name": "asks when the ticket is empty", "live": true, "expect_status": "blocked",
+"max_cost_usd": 0.3, "input": {...}, "must_contain": [...], "must_not_contain": [...]}`. A case spends at most
+its `max_cost_usd` (0.25 $ by default, 0.50 $ at most) and the evaluation at most the policy's `max_eval_usd`
+(2 $ by default): above it, `409`. A case passes when its run succeeded, its result has the expected status
+and its summary holds what it must. `GET` the same path for the score, read from the runs as they stand
+(`running`, `passed`, `failed`). Without a model to call it says `not_run` — never `passed`. Set
+`"stable": {"min_live_score": 0.9}` (and/or `"candidate": {...}`) in the release policy and a release needs
+the newest finished evaluation of that revision to reach it (`live_eval` check; a rollback skips it). In the
+console, the Revisions and Testing cards offer **Run live evaluation** with a project and the most it may
+cost, and show the score and the failing cases; the builder's eval suite has a *Live* tick per case.
+
+**In the console**, an agent's page has a **Lifecycle** tab (S40-02c) after Definition. Three cards
+side by side (stacked below 1024 px): **Revisions** (the latest revision that sits in no channel, its eval
+result, and *Send to testing* with a share slider and the projects that follow testing), **Testing** (the
+candidate, since when, who gets it, its finished runs beside production's, *Change share*, *Withdraw*,
+*Promote to production…*) and **Production** (the revision, since when and by whom, its runs, *Roll back
+to…* listing only revisions that were in production before). *Promote* opens the checklist the server
+returns (each check passes, fails or does not apply, with its detail), is disabled while a required check
+about the revision fails, and says beforehand that it needs a sign-in less than N minutes old and N
+approvals; a stale sign-in does not block the click, it sends you through the identity provider and back.
+A release waiting for approval shows who asked, the approvals so far and *Approve* (disabled for the
+requester, with the separation-of-duties sentence), *Reject* (reason required) and *Cancel request*. Below:
+the release history and the folded **Release policy** form. Every control is disabled with the server's own
+sentence (`cannot_reason`) when `can.release` is false. The agent's status (draft, active, deprecated,
+retired) moved to that tab, under "Agent status"; the overview keeps one line of badges and a link. The
+header, the registry (a "Production / Testing" column and an "Awaiting approval" filter) and the Versions
+table show where each revision is. A new organisation or project agent is created with *Release through
+testing (recommended)* ticked (a personal agent is released as it is saved). On a project's agents page,
+"This project runs: Production versions / Testing versions" switches the project, and a pin is "Follow
+production", "Follow testing" or "Fixed revision"; a process step says `v3 · production`, `v5 · testing`
+or `v3 · pinned`.
+
+Metrics (`GET …/metrics`) now carry `by_version` — runs, success rate and cost per revision — so
+testing can be read against production; the daily budget shown, the budget alert and the tools an
+external agent gets at the MCP door are those of the revision that runs, not the latest one saved.
+A stage logs `agent resolved` with the `agent_version` and `agent_source` it took.
 
 ### Knowledge bases
 
@@ -1394,11 +1597,92 @@ wants run credentials sets `CHOREGOS_RUNNER_EGRESS_AUTH=run` on the orchestrator
 run id and run token to `HTTP(S)_PROXY` before starting anything. These guardrails are a **net**, not a
 wall: see [security](security.md).
 
+**Where each network setting lives in the console.**
+
+- *The organisation's* — **Administration → Network access** (an `org_admin` writes it, a member reads it):
+  the allowed hosts (**No cap**, **Any public host**, or **Only these hosts**, one per line), the denied
+  hosts, the requests per minute per host and per run, the built-in web tools (inherit, allow, deny) and
+  the contact written into the User-Agent. It is the `network` section of the policy ceiling: saving
+  reads the whole ceiling again and replaces only that section, so the JSON **Policy ceiling** card below
+  it and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
+  flagged before anything is sent.
+- *The agent's* — the **Network access** section of the agent builder (new agent, new version): **Same as
+  the project's policy**, **No internet** or **Only these hosts**, the politeness, and the built-in web
+  tools (**As the policy says** or **Off**). A host the organisation does not allow, or denies, is flagged
+  under the list; the publication would be refused (422). The folded section says its value in one line,
+  and opens by itself when it holds something. The agent's page shows a **Network** line in its definition.
+- *The project's* — **Settings → Network access**, read-only: the hosts its runs really get (the project's
+  policy under the organisation's ceiling, the repository host marked as implied), the denied hosts, the
+  rates, the built-in web tools and what the ceiling clamped. The project's own side is `sandbox.network`
+  in the policy editor under it.
+- *What happened* — **Administration → Network activity** (`org_admin`): per host, where it was seen
+  (egress proxy, runner, tool broker, platform), the decision, the reason, the counts and the projects;
+  **Refused only** is on by default, the period is the last 24 hours or 7 days.
+
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
 it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `unreachable`) for the last
 24 hours, or since `since`, optionally for one `decision` or `project`. The first refusal of a host for a
 run is also an event on the work item (`choregos.network.denied`).
+
+**Calls the platform makes for an agent obey the same ceiling.** An MCP connector, a knowledge source
+(web or git) and a git skill source are fetched by the API, which sees the whole request, so the
+organisation's `network` section applies to them twice:
+
+- *when it is declared* (create or update of a connector, a knowledge source, a skill import or
+  preview): a host outside `allow_domains`, or matched by `deny_domains`, is a 422 naming the host and
+  the rule (`not_allowed`, `denied:<pattern>`);
+- *when it is called*: the broker (a run's tool call), a governed write, a connector's discovery and
+  every knowledge sync read the ceiling again, because it may have been tightened since. A refused
+  tool call answers 403 `network_policy` (the server is never reached) and is journaled under Network
+  activity with layer `broker`; a refused knowledge sync fails with the reason in the source's
+  `last_error`.
+
+Hosts that are not on the internet (an IP address, a single-label name such as `pfsense`) are not held
+to `allow_domains`: the cap bounds the internet, not the organisation's own appliances; the deny list
+still applies to a name. A connector whose configuration holds no address (`url`, `base_url`,
+`api_url`, `endpoint`, `server_url` or `host`) is not checked.
+
+`per_host_per_minute` throttles the organisation's calls to one host: it counts the tool calls of the
+last 60 seconds to that host over every project and every replica (from the cost ledger) and answers
+429 `rate_limited` past the cap. A throttled or refused call is not counted, so an agent that keeps
+retrying recovers one minute after it stops. Governed writes are checked against the allowed set only
+(they are played by a workflow, which retries).
+
+Every request carries `User-Agent: Choregos/<version> (+<contact>)`: the ceiling's `user_agent_contact`,
+else the deployment's `CHOREGOS_USER_AGENT_CONTACT`, else the project's page. It is sent on MCP calls,
+web crawls, git knowledge fetches and skill downloads. A web crawl also waits between two pages for the
+longer of the site's `Crawl-delay` (read under the names `ChoregosKnowledge` and `Choregos`) and
+`60 / per_host_per_minute` seconds, and stops, keeping every page it did not reach, when the site
+answers 429 (or 503 with `Retry-After`).
+
+**`web_fetch`: how an agent should read the web.** A run whose effective network allows at least one host
+(its own list, the project's, the organisation's, plus the repository host) is offered a built-in tool,
+`web_fetch`, with no connector and no key. The agent names a URL (`GET` or `HEAD`, `max_bytes` up to
+2 MiB); the platform makes the request:
+
+- the host must be in the run's network and not denied; `https`, or `http` on the default port, never
+  another port, never credentials; an IP address, or a name that resolves to a private address, is
+  refused, and the connection is pinned to the address that was checked;
+- the site's `robots.txt` is read (cached for an hour) for the `Choregos` token: a disallowed path, or a
+  `robots.txt` that cannot be read, is a refusal (`robots_disallowed`) and the page is not requested;
+- a host is never called faster than allowed: the effective requests per minute per host (counted
+  across the organisation), the run's own rate, and the site's `Crawl-delay` give a `429` with
+  `retry_after_s` — the agent is told to wait, and a refused call is not counted;
+- the request carries `User-Agent: Choregos/<version> (+<contact>)`;
+- at most three redirects, each target going through every check above (a redirect to a host the run may
+  not reach stops there);
+- the answer is text, HTML (returned as text, scripts and styles dropped), JSON or markdown, cut at
+  `max_bytes`; anything else is a `415`. What comes back is third-party text: it goes through the
+  prompt-injection guard like a connector's answer.
+
+Every fetch is a tool call: it counts in `tool_calls_per_run`, writes a ledger row (`provider:
+web:<host>`) and a `choregos.tool.called` event, and is journaled under Network activity with layer
+`broker`. `web_fetch` is the only place where method and robots.txt can hold for what an agent reads:
+the egress proxy cannot see inside TLS. An agent that is still allowed its built-in `WebFetch`
+(`builtin_web_tools`) can bypass it, so organisations that want every read governed set the ceiling's
+`builtin_web_tools` to `deny` and tell their agents to use `web_fetch`. Its name is reserved: a tool of
+the catalogue or of a plugin with the same name makes the tool list answer 409.
 
 **Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
 the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session

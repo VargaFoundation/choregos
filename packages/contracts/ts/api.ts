@@ -414,6 +414,67 @@ export type OrgConnector = {
   /** `<id>@<catalogue_version>` when it was installed from the MCP catalogue (ADR 0065) */
   catalogue_entry?: string | null;
   operations?: Array<ConnectorOperation>;
+  availability?: ConnectorAvailability;
+  /** the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074) */
+  enabled_projects?: Array<string>;
+};
+
+/** `all_projects`: every project whose groups match reaches it (the default). `selected_projects`: only the projects it is enabled for (ADR 0074). */
+export type ConnectorAvailability = "all_projects" | "selected_projects";
+
+/** What the caller may do with a catalogue entry, decided by the server (ADR 0074). The console never derives it from a role. */
+export type CataloguePermissions = {
+  /** declare it in the organisation */
+  install: boolean;
+  /** project-scope types: the projects whose settings the caller may set */
+  configure_projects: Array<string>;
+  /** the projects where the caller may turn an installed organisation connector on or off */
+  enable_projects: Array<string>;
+};
+
+export type ConnectorEnablement = {
+  connector: string;
+  availability: ConnectorAvailability;
+  /** among the projects the caller sees; empty with all_projects */
+  enabled_projects: Array<string>;
+};
+
+export type ConnectorCatalogueEntry = {
+  kind: string;
+  type: string;
+  display: string;
+  /** Source code, Work trackers, CI, Deployment, Documents, Directory, Network operations, Notifications, MCP servers, or Other */
+  family: string;
+  /** an organisation connector is installed by the administrator; a project connector is configured in the project's settings */
+  scope: "organisation" | "project";
+  capabilities: Array<string>;
+  /** field names only, never values */
+  secret_fields: Array<string>;
+  /** operations the type declares; an MCP server discovers its own (0) */
+  operations: number;
+  /** names of the organisation connectors of this type */
+  installed_as: Array<string>;
+  /** slugs of the projects, among those the caller sees, that configure this type */
+  configured_in: Array<string>;
+  enablement: Array<ConnectorEnablement>;
+  can: CataloguePermissions;
+  /** the server's sentence when the caller may do nothing here */
+  cannot_reason?: string | null;
+};
+
+export type ConnectorCatalogue = {
+  entries: Array<ConnectorCatalogueEntry>;
+};
+
+export type ProjectOrgConnector = {
+  name: string;
+  kind: string;
+  type: string;
+  availability: ConnectorAvailability;
+  enabled: boolean;
+  /** the caller may turn it on or off here: availability is selected_projects and the caller owns the project or administers the organisation */
+  can_toggle: boolean;
+  cannot_reason?: string | null;
 };
 
 /** Provenance shared by the platform's catalogues (ADR 0065) — which file, built when, from what. */
@@ -473,6 +534,11 @@ export type McpCatalogueEntry = {
   installed_as?: Array<string>;
   /** whether the deployment declares the host reachable from the API */
   egress: "open" | "undeclared" | "unknown";
+  can: CataloguePermissions;
+  /** why the entry cannot be installed by the caller: the server's sentence */
+  cannot_reason?: string | null;
+  /** one per installed instance of this entry */
+  enablement?: Array<ConnectorEnablement>;
 };
 
 export type McpCatalogueInstall = {
@@ -488,6 +554,8 @@ export type McpCatalogueInstall = {
   };
   /** for an entry whose auth is header:<Name>, the header's name; defaults to the entry's */
   auth_header?: string | null;
+  /** defaults to all_projects through the API; the console proposes selected_projects (ADR 0074) */
+  availability?: ConnectorAvailability;
 };
 
 export type SkillCatalogueSignals = {
@@ -546,6 +614,7 @@ export type OrgConnectorCreate = {
   secret_values?: {
     [key: string]: string;
   };
+  availability?: ConnectorAvailability;
 };
 
 /** Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's. */
@@ -559,6 +628,8 @@ export type OrgConnectorUpdate = {
   secret_values?: {
     [key: string]: string;
   } | null;
+  /** the organisation's administrator only; switching to selected_projects turns it on for no project (ADR 0074) */
+  availability?: ConnectorAvailability | null;
 };
 
 export type OperationPatch = {
@@ -1166,6 +1237,12 @@ export type AgentEvalCase = {
   input?: AgentSampleInput;
   must_contain?: Array<string>;
   must_not_contain?: Array<string>;
+  /** a live case runs as a capped trial on the real model and asserts on the run's result (S40-02d); the level-1 gate leaves it out */
+  live?: boolean;
+  /** the status the run's result must have */
+  expect_status?: "done" | "blocked";
+  /** what this case's trial may spend; absent, 0.25 $ */
+  max_cost_usd?: number | null;
 };
 
 /** A sample work item an agent is tried or evaluated on. */
@@ -1225,6 +1302,8 @@ export type AgentCreate = {
   tags?: AgentTags;
   /** why version 1 exists; absent, `Created` (S40-12) */
   message?: string | null;
+  /** what saving a revision does (ADR 0071); absent, the defaults: it goes to production */
+  release_policy?: AgentReleasePolicy | null;
 };
 
 export type AgentFork = {
@@ -1268,6 +1347,8 @@ export type AgentPermissions = {
   manage?: boolean;
   /** pin it on a project the caller owns */
   pin?: boolean;
+  /** send a revision to testing or production, roll back (ADR 0071) */
+  release?: boolean;
   fork_scopes?: Array<"org" | "project" | "personal">;
 };
 
@@ -1361,6 +1442,8 @@ export type AgentVersion = {
   pinned_by?: Array<string>;
   /** what a run of this version binds: `spec.memories`, or what the legacy `spec.memory` means (S40-11) */
   effective_memories?: Array<AgentMemoryBinding>;
+  /** the channels this revision sits on now (ADR 0071) */
+  channels?: Array<"stable" | "candidate">;
 };
 
 export type AgentVersionPublish = {
@@ -1406,6 +1489,170 @@ export type Agent = {
   can?: AgentPermissions;
   /** the server's sentence for what the caller may not do: shown as is, never guessed from roles */
   cannot_reason?: string | null;
+  /** the revision in production (ADR 0071) */
+  stable_version?: number | null;
+  /** the revision in testing */
+  candidate_version?: number | null;
+  /** the share of work items, of projects that follow production, served the candidate */
+  candidate_percent?: number;
+  candidate_since?: string | null;
+  release_policy?: AgentReleasePolicy;
+  /** the release waiting for approval */
+  pending_release?: AgentRelease | null;
+};
+
+export type AgentReleaseDecision = {
+  decision: "approve" | "reject" | "cancel";
+  /** required for a rejection */
+  reason?: string | null;
+};
+
+/** What a revision must satisfy before it reaches production; a rollback skips them. */
+export type AgentStableGates = {
+  /** the revision must be the current candidate */
+  require_candidate?: boolean;
+  /** finished runs of the candidate since it became the candidate */
+  min_candidate_runs?: number;
+  min_success_rate?: number | null;
+  min_soak_hours?: number | null;
+  /** how recent the person's sign-in must be */
+  step_up_minutes?: number;
+  /** the latest finished live evaluation of the revision must score at least this; a rollback skips it */
+  min_live_score?: number | null;
+  /** people other than the requester who must approve a promotion before production moves; a rollback never waits (ADR 0071) */
+  approvals?: number;
+  /** neither the requester nor the revision's author may approve */
+  separation_of_duties?: boolean;
+};
+
+/** What a revision must satisfy before it is sent to testing by hand (saving it to testing under `on_publish` is the owner's stated policy and is not gated). */
+export type AgentCandidateGates = {
+  min_live_score?: number | null;
+};
+
+export type AgentEvaluationCreate = {
+  /** the project's slug: the trials run there (needs the right to try an agent in it) */
+  project: string;
+};
+
+/** A live evaluation of one revision, judged from its trial runs as they stand. `not_run` (no model to call) is never `passed`. */
+export type AgentEvaluation = {
+  id: string;
+  version: number;
+  project: string;
+  /** `passed` when every case finished and the score reaches the policy's minimum (every case when none is set) */
+  status: "running" | "passed" | "failed" | "not_run";
+  /** passed cases over live cases */
+  score?: number | null;
+  /** the most the evaluation may spend in all */
+  budget_usd: number;
+  started_by?: string | null;
+  started_at: string;
+  cases?: Array<{
+    name: string;
+    /** read it at `GET /runs/{id}` */
+    run_id: string;
+    status: "running" | "passed" | "failed" | "not_run";
+    passed?: boolean | null;
+    budget_usd?: number;
+    cost_usd?: number;
+    /** why it failed or did not run */
+    reason?: string | null;
+  }>;
+};
+
+/** What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate. */
+export type AgentReleasePolicy = {
+  /** `stable`: a saved revision goes to production (the behaviour before channels); `candidate`: to testing; `none`: nowhere */
+  on_publish?: "stable" | "candidate" | "none";
+  stable?: AgentStableGates;
+  candidate?: AgentCandidateGates;
+  /** the most one live evaluation may spend in all */
+  max_eval_usd?: number;
+};
+
+export type AgentReleaseCreate = {
+  channel: "candidate" | "stable";
+  /** `null` with `candidate` withdraws the candidate; `null` with `stable` releases the current candidate */
+  version?: number | null;
+  /** candidate only: the share of work items served the candidate; absent keeps the current share (0 for a new candidate) */
+  percent?: number | null;
+  reason?: string | null;
+};
+
+export type AgentReleaseCheck = {
+  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve) */
+  name: string;
+  required?: boolean;
+  /** null: not applicable */
+  passed?: boolean | null;
+  detail?: string | null;
+};
+
+export type AgentRelease = {
+  id: string;
+  agent: string;
+  channel: "candidate" | "stable";
+  kind: "publish" | "promote" | "rollback" | "withdraw" | "baseline";
+  version?: number | null;
+  previous_version?: number | null;
+  percent?: number | null;
+  /** `pending_approval`: waits for `approvals_required` people; `superseded`: production moved meanwhile */
+  status: "done" | "pending_approval" | "rejected" | "cancelled" | "superseded";
+  /** how many other people must approve before production moves; 0 for a release that did not wait */
+  approvals_required?: number;
+  decisions?: Array<{
+    by: string;
+    decision: "approve" | "reject" | "cancel";
+    reason?: string | null;
+    at: string;
+    /** how old the person's sign-in was when they decided */
+    auth_age_seconds?: number | null;
+  }>;
+  requested_by?: string | null;
+  requested_at: string;
+  done_at?: string | null;
+  reason?: string | null;
+  /** the checks as they were evaluated (a snapshot) */
+  checks?: Array<AgentReleaseCheck>;
+};
+
+export type AgentChannelStats = {
+  version: number;
+  /** finished runs */
+  runs?: number;
+  succeeded?: number;
+  failed?: number;
+  success_rate?: number | null;
+  since?: string | null;
+};
+
+export type AgentReleaseReadiness = {
+  version: number;
+  channel: "candidate" | "stable";
+  kind: "publish" | "promote" | "rollback" | "withdraw" | "baseline";
+  /** every required check passes */
+  ready: boolean;
+  checks?: Array<AgentReleaseCheck>;
+  candidate?: AgentChannelStats | null;
+  production?: AgentChannelStats | null;
+};
+
+export type AgentExposure = {
+  stable_version?: number | null;
+  candidate_version?: number | null;
+  candidate_percent?: number;
+  projects?: Array<{
+    project: string;
+    source: "pin" | "pin_channel" | "project_channel";
+    channel?: "stable" | "candidate" | null;
+    version: number;
+  }>;
+};
+
+export type ProjectAgentChannel = {
+  /** which channel of the agents the project runs when it pins nothing */
+  channel: "stable" | "candidate";
 };
 
 export type AgentLifecycleChange = {
@@ -1444,7 +1691,18 @@ export type AgentMetrics = {
     cost_usd: number;
   }>;
   spent_today_usd?: number;
+  /** production's daily budget */
   daily_budget_usd?: number | null;
+  by_version?: Array<AgentVersionMetrics>;
+};
+
+export type AgentVersionMetrics = {
+  version: number;
+  runs?: number;
+  succeeded?: number;
+  failed?: number;
+  success_rate?: number | null;
+  cost_usd?: number;
 };
 
 /** An agent's line in the registry over a period. */
@@ -1463,8 +1721,14 @@ export type AgentResolution = {
   /** `resolved`: a run would load `version`. `not_installed`: the organisation has no such agent (`in_catalogue` says whether publishing the workflow installs it, ADR 0040). `unavailable`: it exists but a run would not start (`reason`: draft, retired, expired, disabled, no such version). */
   status: "resolved" | "not_installed" | "unavailable";
   version?: number | null;
-  /** True when the version comes from the project's pin rather than from the reference or the latest. */
+  /** True when the version comes from the project's pin (fixed or by channel) rather than from the reference or from the agent's channels. */
   pinned: boolean;
+  /** why this revision (ADR 0071); `latest` only for an agent that has no production pointer */
+  source?: "explicit" | "pin" | "pin_channel" | "project_channel" | "canary" | "stable" | "latest" | null;
+  channel?: "stable" | "candidate" | null;
+  /** the revision in testing, if any: the console says `v4, 10 % of work items run v5` */
+  candidate_version?: number | null;
+  candidate_percent?: number | null;
   display_name?: string | null;
   lifecycle?: string | null;
   in_catalogue: boolean;
@@ -1513,14 +1777,19 @@ export type AgentOverrides = {
   tools?: Array<string> | null;
 };
 
+/** Exactly one of `version` (a fixed revision) and `channel` (follow production or testing); the server answers 422 otherwise. */
 export type ProjectAgentPut = {
-  version: number;
+  version?: number | null;
+  channel?: "stable" | "candidate" | null;
   overrides?: AgentOverrides;
 };
 
 export type ProjectAgent = {
   agent: string;
+  /** the revision served now (the channel's, for a channel pin) */
   version: number;
+  /** set when the pin follows a channel */
+  channel?: "stable" | "candidate" | null;
   overrides: AgentOverrides;
   effective: AgentSpec;
   /** said when the agent is deprecated */
@@ -2882,6 +3151,7 @@ export interface Operations {
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
+  decideAgentRelease: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases/{release_id}/decision"; body: AgentReleaseDecision; response: AgentRelease };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
@@ -2891,6 +3161,7 @@ export interface Operations {
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
+  disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
@@ -2906,6 +3177,7 @@ export interface Operations {
   /** the version of the edition plugin; null in the community edition */
   edition_version?: string | null;
 } };
+  enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
@@ -2914,7 +3186,9 @@ export interface Operations {
 }; response: void };
   getAction: { method: "GET"; path: "/projects/{id}/actions/{action_id}"; body: never; response: Action };
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
+  getAgentExposure: { method: "GET"; path: "/orgs/{org}/agents/{slug}/exposure"; body: never; response: AgentExposure };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
+  getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
@@ -2932,6 +3206,7 @@ export interface Operations {
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
+  getProjectAgentChannel: { method: "GET"; path: "/projects/{id}/agent-channel"; body: never; response: ProjectAgentChannel };
   getProjectCosts: { method: "GET"; path: "/projects/{id}/costs"; body: never; response: CostReport };
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
@@ -3061,13 +3336,16 @@ export interface Operations {
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
+  listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: Array<AgentEvaluation> };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
+  listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
   listBudgetAlerts: { method: "GET"; path: "/orgs/{org}/budget-alerts"; body: never; response: Array<BudgetAlert> };
+  listConnectorCatalogue: { method: "GET"; path: "/orgs/{org}/connector-catalogue"; body: never; response: ConnectorCatalogue };
   listConnectorTypes: { method: "GET"; path: "/connectors/types"; body: never; response: Array<ConnectorType> };
   listConnectors: { method: "GET"; path: "/projects/{id}/connectors"; body: never; response: Array<Connector> };
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
@@ -3083,6 +3361,7 @@ export interface Operations {
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
+  listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
@@ -3090,6 +3369,7 @@ export interface Operations {
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
   listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
   listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: Array<ProjectOperation> };
+  listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: Array<ProjectOrgConnector> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
@@ -3152,6 +3432,7 @@ export interface Operations {
 }; response: void };
   reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
+  releaseAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases"; body: AgentReleaseCreate; response: AgentRelease };
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
@@ -3166,8 +3447,11 @@ export interface Operations {
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchRunMemory: { method: "POST"; path: "/internal/runs/{id}/memory/search"; body: RunMemorySearch; response: Array<RunMemoryHit> };
+  setAgentReleasePolicy: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/release-policy"; body: AgentReleasePolicy; response: Agent };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
+  setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
+  startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };

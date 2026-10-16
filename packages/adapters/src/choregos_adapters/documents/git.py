@@ -46,6 +46,7 @@ class GitSource:
         allow_file: bool = False,
         credential: Credential | None = None,
         host: str | None = None,
+        user_agent: str = "",
     ) -> None:
         parts = urlsplit(url)
         scheme = parts.scheme
@@ -64,6 +65,8 @@ class GitSource:
         self.url = url
         self.ref = ref
         self.paths = tuple(paths or DEFAULT_PATHS)
+        #: Sent as the HTTP User-Agent of the fetch when given (ADR 0070).
+        self.user_agent = user_agent
         self._checkout: Path | None = None
 
     def _env(self, cwd: Path, token: str | None) -> dict[str, str]:
@@ -112,7 +115,10 @@ class GitSource:
         self._checkout = Path(tempfile.mkdtemp(prefix="choregos-kb-git-"))
         await self._git(self._checkout, "init", "-q")
         token = await self._token()
-        await self._git(self._checkout, "fetch", "-q", "--depth", "1", "--", self.url, self.ref, token=token)
+        agent = ["-c", f"http.userAgent={self.user_agent}"] if self.user_agent else []
+        await self._git(
+            self._checkout, *agent, "fetch", "-q", "--depth", "1", "--", self.url, self.ref, token=token
+        )
         commit = (await self._git(self._checkout, "rev-parse", "FETCH_HEAD")).strip()
         if (cursor or {}).get("commit") == commit:
             return Changes(cursor={"commit": commit})

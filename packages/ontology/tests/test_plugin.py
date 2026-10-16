@@ -239,7 +239,8 @@ async def test_the_run_sees_the_generated_tools_the_trial_can_serve(
 ) -> None:
     response = await client.get("/api/v1/internal/runs/run-infra-1/tools", headers=infra_run)
     assert response.status_code == 200, response.text
-    names = sorted(t["name"] for t in response.json()["tools"])
+    # `web_fetch` is the platform's own tool (S40-01f): offered to any run whose network allows a host.
+    names = sorted(t["name"] for t in response.json()["tools"] if t["name"] != "web_fetch")
     assert names == [
         "action_list",
         "action_status",
@@ -445,7 +446,7 @@ def test_onto0003_copies_the_proposals_into_the_actions_then_drops_the_table(
     import json
 
     from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization, Project
+    from choregos_api.db.models import Organization
     from choregos_api.migrer import main
     from choregos_ontology.service.store import OntologyVersion
     from sqlalchemy import create_engine, inspect, text
@@ -462,8 +463,15 @@ def test_onto0003_copies_the_proposals_into_the_actions_then_drops_the_table(
         main(["upgrade", "onto0002"])
         with Session(engine) as session:
             session.add(Organization(id="o1", slug="varga", name="Varga"))
-            session.add(Project(id="p1", org_id="o1", slug="infra", name="Infra", status="active", config={}))
             session.flush()
+            # Raw SQL: the table is at the revision this test stops at, without later columns.
+            session.execute(
+                text(
+                    "INSERT INTO projects (id, org_id, slug, name, status, config, provision_state, "
+                    "workflow_routing, created_at, updated_at) VALUES ('p1', 'o1', 'infra', 'Infra', "
+                    "'active', '{}', '{}', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                )
+            )
             session.add(
                 OntologyVersion(
                     id="v1", project_id="p1", name="it4it", version="1", checksum="sha", compiled_ir=ir
