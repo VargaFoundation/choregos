@@ -147,6 +147,10 @@ STAGE_CONFIG_REFUSAL_ESCALATES = "stage-config-refusal-escalates"
 #: handed back the run of that number, already over, `await_run` its old result, and the stage was
 #: never played again.
 ATTEMPTS_FROM_RUNS = "attempts-from-runs"
+#: `open_pull_request` refusing a work item that has no branch — its implementation changed nothing,
+#: so nothing was pushed — escalates the work item with that reason (S22-46, #539). Before this
+#: marker GitHub answered 422 `head invalid` and the interpreter failed.
+OPEN_PR_WITHOUT_BRANCH_ESCALATES = "open-pr-without-branch-escalates"
 #: The non-retryable error types `prepare_stage` raises for a configuration an operator can fix.
 #: Any other failure — a bug, an unreachable database once its retries are spent, an admission rule,
 #: a suspected prompt injection — still fails the interpreter, as before.
@@ -160,6 +164,17 @@ CONFIGURATION_REFUSALS = frozenset(
         "KnowledgeRefused",
     }
 )
+
+
+@dataclass(frozen=True)
+class Refusal:
+    """A typed refusal an activity raises, and how the work item escalates on it."""
+
+    types: frozenset[str]  # the non-retryable error types that are this refusal
+    marker: str  # the `workflow.patched` id behind which it escalates
+    reason: str  # the state change's reason
+    question: str  # the request's question, on the question state
+    kind: str  # the request's `reason`
 
 
 @dataclass
@@ -717,17 +732,64 @@ class WorkflowInterpreter:
         the configuration and replay the stage. `None` — the interpreter fails, as before — for any
         other error, for a history recorded before the marker, and for a transition with nowhere
         to escalate to: going back to the state it started from would refuse again, forever."""
+        detail = message_de(error)
+        return await self._refusal_escalates(
+            params,
+            engine,
+            transition,
+            error,
+            Refusal(
+                types=CONFIGURATION_REFUSALS,
+                marker=STAGE_CONFIG_REFUSAL_ESCALATES,
+                reason=f"configuration refused: {detail}",
+                question=f"The stage `{transition.key}` cannot start: {detail}. "
+                "Fix the configuration, then replay the stage.",
+                kind="configuration",
+            ),
+        )
+
+    async def _no_branch_refused(
+        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, error: ActivityError
+    ) -> Any:
+        """`open_pull_request` found no branch to open a pull request from (S22-46, #539): the
+        implementation changed nothing. The work item escalates with that reason, instead of the
+        interpreter failing on GitHub's 422. Any other error — a 403, a 5xx once its retries are
+        spent — is `None`, and fails the interpreter as before."""
+        detail = message_de(error)
+        return await self._refusal_escalates(
+            params,
+            engine,
+            transition,
+            error,
+            Refusal(
+                types=frozenset({scm_activities.NO_BRANCH}),
+                marker=OPEN_PR_WITHOUT_BRANCH_ESCALATES,
+                reason=detail,
+                question=f"`{transition.key}` cannot open a pull request: {detail}. "
+                "Check the work item (already fixed?), then close it or replay the implementation.",
+                kind="no_branch",
+            ),
+        )
+
+    async def _refusal_escalates(
+        self,
+        params: InterpreterInput,
+        engine: WorkflowEngine,
+        transition: Any,
+        error: ActivityError,
+        refusal: Refusal,
+    ) -> Any:
+        """A typed, non-retryable refusal escalates the work item, as after a failed attempt, with
+        its reason; a request asks its question when it lands on the question state. `None` for any
+        other error, for a history recorded before its marker, and for a transition with nowhere to
+        escalate to: going back to the state it started from would refuse again, forever."""
         cause = error.cause
-        if not (
-            isinstance(cause, ApplicationError)
-            and cause.non_retryable
-            and cause.type in CONFIGURATION_REFUSALS
-        ):
+        if not (isinstance(cause, ApplicationError) and cause.non_retryable and cause.type in refusal.types):
             return None
-        decision = engine.escalate(transition, f"configuration refused: {message_de(error)}"[:300])
+        decision = engine.escalate(transition, refusal.reason[:300])
         # The condition first, `patched` next: an older history replayed here answers no without
         # the marker being asked for an error the old code did not escalate.
-        if decision.next_state == transition.from_ or not workflow.patched(STAGE_CONFIG_REFUSAL_ESCALATES):
+        if decision.next_state == transition.from_ or not workflow.patched(refusal.marker):
             return None
         detail = message_de(error)
         if decision.next_state == engine.question_state():
@@ -736,11 +798,10 @@ class WorkflowInterpreter:
                 transition,
                 kind="approval",
                 payload={
-                    "question": f"The stage `{transition.key}` cannot start: {detail}. "
-                    "Fix the configuration, then replay the stage.",
+                    "question": refusal.question,
                     "options": [],
                     "summary": detail,
-                    "reason": "configuration",
+                    "reason": refusal.kind,
                 },
             )
         return decision
@@ -1003,12 +1064,18 @@ class WorkflowInterpreter:
         # nom de l'état visé, et se lit encore ainsi : une histoire enregistrée se rejoue à l'identique.
         effet = effet_de_la_transition(transition)
         if effet == "open_pr":
-            await executer_activite(
-                scm_activities.open_pull_request,
-                {"project_id": params.project_id, "work_item_id": params.work_item_id},
-                start_to_close_timeout=timedelta(minutes=3),
-                retry_policy=DEFAULT_RETRY,
-            )
+            try:
+                await executer_activite(
+                    scm_activities.open_pull_request,
+                    {"project_id": params.project_id, "work_item_id": params.work_item_id},
+                    start_to_close_timeout=timedelta(minutes=3),
+                    retry_policy=DEFAULT_RETRY,
+                )
+            except ActivityError as error:
+                escalated = await self._no_branch_refused(params, engine, transition, error)
+                if escalated is None:
+                    raise
+                return escalated
         outcomes = await self._gates(params, transition, self.current_run or self.last_run or "")
         if effet == "merge_pr" and all(not o.blocking and not o.pending for o in outcomes):
             await executer_activite(

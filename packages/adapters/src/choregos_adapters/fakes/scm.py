@@ -43,6 +43,13 @@ class FakeScm:
             ],
         )
 
+    def delete_branch(self, repo: str, name: str) -> None:
+        """The work branch was never pushed: the implementation changed nothing (S22-46)."""
+        self.branches.get(repo, {}).pop(name, None)
+        self.files.pop((repo, name), None)
+        for key in [k for k in self._diffs if k[0] == repo and k[2] == name]:
+            del self._diffs[key]
+
     def atlantis(self, conclusion: str = "success") -> None:
         """Simule Atlantis : un `atlantis apply` pose le check `atlantis/apply`."""
 
@@ -76,6 +83,15 @@ class FakeScm:
 
     async def ensure_branch(self, repo: str, name: str, base: str) -> None:
         self.branches.setdefault(repo, {})[name] = base
+
+    async def branch_exists(self, repo: str, name: str) -> bool:
+        """A branch exists once created (`ensure_branch`), written to (`commit_files`) or given a
+        scripted diff (`set_diff`): what a pushed work branch looks like here."""
+        return (
+            name in self.branches.get(repo, {})
+            or (repo, name) in self.files
+            or any(r == repo and head == name for (r, _base, head) in self._diffs)
+        )
 
     async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
         """Comme GitHub : un fichier déjà identique n'est pas réécrit, un rejeu ne crée aucun commit."""

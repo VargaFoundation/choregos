@@ -72,6 +72,17 @@ class GitHubScm:
             json={"ref": f"refs/heads/{name}", "sha": base_ref["object"]["sha"]},
         )
 
+    async def branch_exists(self, repo: str, name: str) -> bool:
+        """True when `name` is a branch of `repo`. Only a 404 means absent: any other error (403,
+        5xx) is raised, because an outage is not an absence."""
+        try:
+            await self.client.request("GET", f"/repos/{repo}/git/ref/heads/{name}", repo=repo)
+        except UpstreamError as exc:
+            if exc.status_code == 404:
+                return False
+            raise
+        return True
+
     async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
         """Écrit des fichiers sur une branche par l'API Contents, un commit par fichier modifié.
 
