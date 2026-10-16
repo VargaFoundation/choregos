@@ -46,6 +46,25 @@ async def test_a_connector_outside_the_ceiling_is_refused_at_creation(
     assert (await client.post(f"{ORG}/connectors", json=inside)).status_code == 201
 
 
+async def test_a_catalogue_install_outside_the_ceiling_is_refused_and_creates_nothing(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The MCP catalogue (ADR 0065) installs through `declare_org_connector`, the same door: the ceiling applies."""
+    monkeypatch.setenv("CONNECTOR_CATALOGUE_NETWORK_TEST", "a-test-value")
+    await _ceiling(client, {"allow_domains": ["vendor.example"]})
+    refused = await client.post(
+        f"{ORG}/mcp-catalogue/github/install", json={"secret_refs": {"token": "env:CONNECTOR_CATALOGUE_NETWORK_TEST"}}
+    )
+    assert refused.status_code == 422, refused.text
+    assert "api.githubcopilot.com" in refused.text and "not_allowed" in refused.text
+    assert (await client.get(f"{ORG}/connectors")).json() == [], "nothing was created"
+    await _ceiling(client, {"allow_domains": ["githubcopilot.com"]})
+    allowed = await client.post(
+        f"{ORG}/mcp-catalogue/github/install", json={"secret_refs": {"token": "env:CONNECTOR_CATALOGUE_NETWORK_TEST"}}
+    )
+    assert allowed.status_code == 201, allowed.text
+
+
 async def test_a_denied_host_is_refused_even_when_everything_else_is_allowed(
     client: AsyncClient, admin: str
 ) -> None:
