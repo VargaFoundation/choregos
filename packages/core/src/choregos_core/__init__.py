@@ -75,7 +75,17 @@ from .errors import (
 )
 from .gates import GateContext, GateOutcome, evaluate, is_async_gate, known_gates, matches_any, scan_secrets
 from .injection import Suspicion, analyser, suspicions
-from .memory_scope import MemoryScope, memory_namespace, split_namespace
+from .memory_bindings import (
+    Binding as MemoryBinding,
+)
+from .memory_bindings import (
+    binding_problems,
+    effective_bindings,
+    legacy_scope,
+    merge_context_packs,
+    namespace_of_binding,
+)
+from .memory_scope import MemoryScope, memory_namespace, parse_namespace, split_namespace
 from .models import (
     BY_SIZE_MAP,
     KNOWN_BACKEND_NAMES,
@@ -122,6 +132,7 @@ __all__ = [
     "LaunchContext",
     "LaunchSpec",
     "Memory",
+    "MemoryBinding",
     "MemoryScope",
     "Message",
     "MessageAction",
@@ -156,20 +167,26 @@ __all__ = [
     "analyser",
     "artifact_flow",
     "aware",
+    "binding_problems",
     "charger_catalogue",
     "checksum",
     "construire_requete",
     "dump_workflow",
+    "effective_bindings",
     "elapsed_seconds",
     "engine_for",
     "estimate_tokens",
     "evaluate",
     "is_async_gate",
     "known_gates",
+    "legacy_scope",
     "load_preset",
     "load_template",
     "matches_any",
     "memory_namespace",
+    "merge_context_packs",
+    "namespace_of_binding",
+    "parse_namespace",
     "parse_policy",
     "parse_workflow",
     "parse_workflow_file",

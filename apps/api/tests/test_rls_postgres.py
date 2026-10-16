@@ -302,6 +302,61 @@ EXEMPTEES = {
 }
 
 
+async def test_named_memories_and_their_facts_are_invisible_across_organisations(
+    deux_organisations: dict[str, str],
+) -> None:
+    """S40-11: `memory_stores` and the facts of a global memory (no project) are under forced RLS, keyed on
+    the organisation; a project fact is keyed the same way since `memory_facts.org_id`."""
+    from choregos_api.db.models import MemoryFact, MemoryStore, Organization
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        orgs = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for slug, org_id in orgs.items():
+            store = MemoryStore(
+                org_id=org_id,
+                slug="lessons",
+                display_name=f"{slug} lessons",
+                scope="global",
+                owner_key="org",
+                reach="org",
+                projects=[],
+                status="active",
+            )
+            session.add(store)
+            await session.flush()
+            for project_id, memory_store_id, subject in (
+                (None, store.id, f"{slug}-global"),
+                (deux_organisations[slug], None, f"{slug}-project"),
+            ):
+                session.add(
+                    MemoryFact(
+                        org_id=org_id,
+                        project_id=project_id,
+                        memory_store_id=memory_store_id,
+                        kind="decision",
+                        subject=subject,
+                        content="c",
+                    )
+                )
+    async with session_scope() as session:  # no scope: nothing
+        assert (await session.execute(select(MemoryStore))).scalars().all() == []
+        assert (await session.execute(select(MemoryFact))).scalars().all() == []
+    async with session_scope(orgs=["a"]) as session:
+        assert [s.display_name for s in (await session.execute(select(MemoryStore))).scalars()] == [
+            "a lessons"
+        ]
+        subjects = sorted((await session.execute(select(MemoryFact.subject))).scalars())
+        assert subjects == ["a-global", "a-project"]
+    async with session_scope(orgs=["b"]) as session:
+        assert sorted((await session.execute(select(MemoryFact.subject))).scalars()) == [
+            "b-global",
+            "b-project",
+        ]
+    async with session_scope(orgs="*") as session:
+        assert len((await session.execute(select(MemoryStore))).scalars().all()) == 2
+
+
 async def test_chaque_table_est_sous_rls_ou_exemptee(pg_app: Any) -> None:
     from choregos_api.db.session import session_scope
     from sqlalchemy import text

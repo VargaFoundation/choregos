@@ -58,6 +58,18 @@ archive it, but cannot widen it to the organisation, to other projects or to gro
 never decides what *other* projects' runs read. An administrator who widens it makes it the
 organisation's: the owner stops curating. Another project's owners, and developers, read at most.
 
+## What a run remembers
+
+A run reads only the memories its agent version binds **and** that reach its project
+([ADR 0075](adr/0075-an-agent-reads-several-memories.md)): a global memory with reach `projects` is
+invisible to the runs of the others, a project memory to every other project, and an unresolvable
+binding is skipped, not read from elsewhere. A namespace that is not the project's shared or own form is
+never read as the shared one (`split_namespace` refuses it). What an agent writes to a **global**
+memory is a proposal: nothing it says becomes a fact the whole organisation reads until an
+administrator accepts it. Publishing a version that binds a global memory needs to see it; a memory a
+caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
+Facts carry their organisation and sit under forced row-level security.
+
 ## Injection through context
 
 Context packs and tickets contain text written by third parties. Two rules:

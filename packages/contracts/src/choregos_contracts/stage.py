@@ -200,6 +200,18 @@ def empreinte_de_skill(fichiers: dict[str, str]) -> str:
     return "sha256:" + condense.hexdigest()
 
 
+class StageMemory(Strict):
+    """One memory a run reads and/or writes, resolved by the platform (S40-11, ADR 0075)."""
+
+    #: `global:<slug>` or `project:<slug>` (`project:shared`, `project:own` for the implicit ones).
+    label: str
+    scope: Literal["global", "project"]
+    slug: str
+    mode: Literal["read", "write"] = "read"
+    #: The string the memory adapters take to say where (`choregos_core.memory_scope`).
+    namespace: str
+
+
 class KnowledgeRef(Strict):
     """A knowledge base served to the run (ADR 0051).
 
@@ -267,6 +279,9 @@ class StageInput(Strict):
     #: Whose memory the run reads and writes (S32-02): the project's, the agent's own within the
     #: project, or none. `project` for a playbook and before the field existed.
     memory_scope: Literal["none", "project", "agent"] = "project"
+    #: The memories the run reads and writes, resolved and in precedence order (S40-11, ADR 0075).
+    #: `memory_scope` stays, set to the legacy equivalent when there is one.
+    memories: list[StageMemory] = Field(default_factory=list)
     permissions: Permissions = Field(default_factory=Permissions)
     context: StageContext = Field(default_factory=StageContext)
     callbacks: Callbacks
@@ -412,6 +427,9 @@ class MemoryItem(Strict):
     valid_from: str | None = None
     valid_to: str | None = None
     provenance: dict[str, Any] = Field(default_factory=dict)
+    #: The label of the memory this item came from, e.g. `global:security-lessons` (S40-11); `None`
+    #: for a run that reads a single memory.
+    memory: str | None = None
 
 
 class RelatedItem(Strict):

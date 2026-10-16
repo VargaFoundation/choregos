@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 from choregos_contracts import ContextPack, MemoryItem, RelatedItem
 from choregos_core.domain import Fact, Memory, Provenance, utcnow
-from choregos_core.memory_scope import split_namespace
+from choregos_core.memory_scope import parse_namespace
 
 from ..errors import UpstreamError
 
@@ -47,9 +47,22 @@ class EcphoriaMemory:
     def _headers(self, project: str) -> dict[str, str]:
         # An agent's own memory (S32-02) is the namespace `<project>#agent:<slug>`: without a
         # configured tenant it is its own tenant, so it never mixes with the project's; with one,
-        # the namespace travels in its own header.
-        headers = {"Content-Type": "application/json", "X-Ecphoria-Tenant": self.tenant or project}
-        if split_namespace(project)[1] is not None:
+        # the namespace travels in its own header. A global memory (S40-11) lives in the
+        # organisation's tenant, `org:<org>`; every namespace but the project's shared one is sent
+        # in full in `X-Ecphoria-Namespace`.
+        if not project:  # a call that names no namespace (the connection test)
+            return {"Content-Type": "application/json", "X-Ecphoria-Tenant": self.tenant or ""} | (
+                {"Authorization": f"Bearer {self.token}"} if self.token else {}
+            )
+        parsed = parse_namespace(project)
+        if parsed.kind == "global_store":
+            tenant = f"org:{parsed.org}"
+        elif parsed.kind == "project_store":
+            tenant = self.tenant or str(parsed.project)
+        else:
+            tenant = self.tenant or project
+        headers = {"Content-Type": "application/json", "X-Ecphoria-Tenant": tenant}
+        if parsed.kind != "project":
             headers["X-Ecphoria-Namespace"] = project
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
