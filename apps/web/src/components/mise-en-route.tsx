@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Card, Checkbox, Dot } from "@/components/ui";
 import { api } from "@/lib/api";
+import { isStandIn } from "@/lib/connector-state";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ProjectDto, ProjectRequirement, WorkflowSummary, WorkItemDto } from "@/lib/types";
 
@@ -87,7 +88,7 @@ export function etapesDeMiseEnRoute({
     if (connecteur) {
       etapes.push(etapeDeConnecteur(id, titre, connecteur, pourquoi, reglages));
     } else if (exigence.default_type) {
-      etapes.push({ id, titre, etat: "fait", detail: `platform default: ${exigence.default_type}.` });
+      etapes.push({ id, titre, etat: "fait", detail: `provided by the platform: ${exigence.default_type}.` });
     } else {
       etapes.push({ id, titre, etat: "a_faire", detail: `not connected — ${pourquoi}.`, lien: reglages });
     }
@@ -127,16 +128,19 @@ function etapeDeConnecteur(
   pourquoi: string,
   reglages: { href: string; label: string },
 ): Etape {
-  if (connecteur.status === "ok") return { id, titre, etat: "fait", detail: `${connecteur.type}, tested.` };
+  if (connecteur.status === "ok") {
+    const simule = isStandIn(connecteur.type) ? " (a demo stand-in)" : "";
+    return { id, titre, etat: "fait", detail: `${connecteur.type}${simule}, connected.` };
+  }
   if (connecteur.status === "unknown") {
-    return { id, titre, etat: "a_verifier", detail: `${connecteur.type}, never tested — ${pourquoi}.`, lien: reglages };
+    return { id, titre, etat: "a_verifier", detail: `${connecteur.type}, not tested yet — ${pourquoi}.`, lien: reglages };
   }
   return {
     id,
     titre,
     etat: "a_faire",
     detail: `${connecteur.type}: its last test ${connecteur.status === "degraded" ? "was degraded" : "failed"}${
-      connecteur.last_error ? ` (${connecteur.last_error})` : ""
+      connecteur.last_error ? ` (${connecteur.last_error.slice(0, 200)})` : ""
     }.`,
     lien: reglages,
   };

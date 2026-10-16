@@ -490,7 +490,7 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await page.goto("/p/billing-api/settings");
   const connecteurs = page.getByTestId("connecteurs");
   // Billing API livre du logiciel : un dépôt et une CI, chacun avec sa raison.
-  await expect(page.getByTestId("connecteur-scm")).toContainText("Platform default: github");
+  await expect(page.getByTestId("connecteur-scm")).toContainText("Not connected");
   await expect(page.getByTestId("connecteur-scm")).toContainText("the guarantee scope_respected on t-implement");
   // Rien n'exige de notification : la ligne n'existe pas tant qu'on ne l'ajoute pas.
   await expect(page.getByTestId("connecteur-notify")).toHaveCount(0);
@@ -535,7 +535,7 @@ test("connecteurs : systèmes métier, serveurs MCP et outils de livraison des p
   await expect(page.getByTestId("section-mcp")).toContainText("supplier-agent");
   await expect(page.getByTestId("section-metier")).not.toContainText("supplier-agent");
   await expect(page.getByTestId("livraison-checkout-web")).toContainText("Work tracker: jira");
-  await expect(page.getByTestId("livraison-checkout-web")).toContainText("Deployment: argocd");
+  await expect(page.getByTestId("livraison-checkout-web")).toContainText("Deployment (CD): argocd");
   await page.getByTestId("livraison-checkout-web").getByRole("link", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/p\/checkout-web\/settings$/);
 });
