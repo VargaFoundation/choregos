@@ -568,6 +568,37 @@ async def _context_pack(
         return ContextPack.empty(query)
 
 
+#: What the name of an agent's MCP server must contain to count as a production indicator source (the
+#: same cue as the `devops` agent: Loki, Prometheus, Grafana...).
+_OBSERVABILITY_MCP_NAMES = ("grafana", "prometheus", "loki", "datadog", "sentry", "newrelic", "honeycomb")
+
+
+def production_indicator_sources(config: Any, agent: Any = None) -> list[str]:
+    """The production indicator sources THIS run can read, by name (S22-48).
+
+    The production verifier demanded before/after figures for errors and latency, and a project with
+    no source of them (the dev tenant: demo CD, no metrics) was refused every time, with smoke_ok
+    measured true. Its instructions now say what to demand from what the project can measure; the
+    platform tells it, the agent does not guess.
+
+    Two sources, the ones a run actually reaches: the deployment catalogue's tools the project may
+    call and that the deployment files under `observability`; the agent version's MCP servers named
+    after an observability tool. Empty = none.
+    """
+    from choregos_api.catalogue import outils_du_projet
+
+    sources = {
+        tool.name
+        for tool in outils_du_projet(list(config.tools or []), list(config.groups or []))
+        if "observability" in tool.categories
+    }
+    servers = getattr(getattr(agent, "spec", None), "mcp_servers", None) or []
+    sources |= {
+        s.connector for s in servers if any(m in s.connector.lower() for m in _OBSERVABILITY_MCP_NAMES)
+    }
+    return sorted(sources)
+
+
 def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None) -> str:
     texte = _rendre_le_playbook(plan, bundle, item, context, agent)
     reponse = str((item.documents or {}).get("human_answer") or "").strip()
@@ -594,6 +625,7 @@ def _rendre_le_playbook(
         "allowed_paths": list(item.allowed_paths or []),
         "context": context,
         "project": bundle.config,
+        "production_indicators": production_indicator_sources(bundle.config, agent),
     }
     if agent is not None and agent.spec.instructions.strip():
         from choregos_core.instructions import rendre_les_instructions

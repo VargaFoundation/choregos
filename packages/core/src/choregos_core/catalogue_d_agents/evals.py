@@ -46,7 +46,10 @@ def evaluate(case: dict[str, Any], agent: EntreeDuCatalogue | None = None) -> Ag
     if agent is None:
         return AgentEvalResult(str(case["agent"]), False, 0.0, missing=["<no such catalogue agent>"])
     rendered = rendre_les_instructions(
-        str(agent.document["spec"].get("instructions", "")), inputs=dict(case.get("inputs") or {})
+        str(agent.document["spec"].get("instructions", "")),
+        inputs=dict(case.get("inputs") or {}),
+        # What the platform says the project can measure in production (S22-48); none by default.
+        production_indicators=list(case.get("production_indicators") or []),
     ).lower()
     expected = [str(n) for n in case.get("must_contain") or []]
     missing = [needle for needle in expected if needle.lower() not in rendered]
