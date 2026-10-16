@@ -122,3 +122,8 @@ The console, meanwhile, offers editing to whoever opens the page and lets the AP
   `project:write` for any scope, so a stale pin can always be removed.
 - The console (S39-09b) reads `can`, `cannot_reason`, `scope` and `forked_from`; until it lands, the
   API alone enforces the matrix.
+
+## Update — 2026-10-16 (S40-10)
+
+A fork copies the source's **tags** (§4, "inherits nothing else", is amended by this one line): they are
+metadata, not a version, and the fork's owner edits them afterwards.

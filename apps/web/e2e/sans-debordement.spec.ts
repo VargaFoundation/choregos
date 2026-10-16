@@ -37,6 +37,7 @@ const PAGES = [
   "/p/billing-api/runs/r3",
   "/inbox",
   "/agents",
+  "/agents?tag=madr",
   "/agents/new",
   "/agents/onboarding-coordinator",
   "/skills",

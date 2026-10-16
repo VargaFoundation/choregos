@@ -101,3 +101,20 @@ def test_l_architecte_verifie_son_numero_avant_d_accepter() -> None:
     assert "docs/adr/0007-queue.md" in accepter
     assert "adr_number_free" in accepter and "git ls-tree" in accepter
     assert "highest number on the default branch plus one" in accepter
+
+
+def test_every_entry_has_one_to_ten_valid_tags() -> None:
+    import re
+
+    for proposition in entrees():
+        assert 1 <= len(proposition.tags) <= 10, proposition.slug
+        assert len(set(proposition.tags)) == len(proposition.tags), proposition.slug
+        assert all(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", tag) for tag in proposition.tags), (
+            proposition.slug
+        )
+
+
+def test_the_architect_is_tagged_madr_architecture_design() -> None:
+    found = entree("architect")
+    assert found is not None
+    assert found.tags == ("madr", "architecture", "design")

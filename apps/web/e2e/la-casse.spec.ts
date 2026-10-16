@@ -29,6 +29,7 @@ const PAGES = [
   "/p/checkout-web",
   "/inbox",
   "/agents",
+  "/agents?tag=madr",
   "/agents/onboarding-coordinator",
   "/skills",
   "/skills/catalogue",

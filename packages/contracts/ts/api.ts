@@ -1041,6 +1041,9 @@ export type AgentTrial = {
   evals?: Array<AgentEvalResult>;
 };
 
+/** Labels people find the agent by (S40-10); never part of a version */
+export type AgentTags = Array<string>;
+
 export type AgentCreate = {
   /** `new` is reserved: the console's `/agents/new` page would shadow it (422) */
   slug: string;
@@ -1055,6 +1058,7 @@ export type AgentCreate = {
   scope?: "org" | "project" | "personal";
   /** the project's slug: required for, and only for, a `project` agent */
   project?: string | null;
+  tags?: AgentTags;
 };
 
 export type AgentFork = {
@@ -1130,6 +1134,8 @@ export type AgentCatalogueEntry = {
   /** the catalogue's version of the entry */
   version: number;
   skills?: Array<string>;
+  /** labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed */
+  tags?: Array<string>;
   /** an external client's id on the AI clients page */
   client?: string | null;
   /** `cloud`: it calls from its vendor's cloud */
@@ -1169,6 +1175,8 @@ export type AgentPatch = {
   description?: string | null;
   status?: "active" | "suspended" | "revoked" | null;
   expires_at?: string | null;
+  /** replaces the agent's tags; absent or null leaves them as they are (S40-10) */
+  tags?: AgentTags | null;
 };
 
 export type AgentVersion = {
@@ -1184,6 +1192,7 @@ export type Agent = {
   kind: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
+  tags?: AgentTags;
   status: string;
   owner?: string | null;
   expires_at?: string | null;

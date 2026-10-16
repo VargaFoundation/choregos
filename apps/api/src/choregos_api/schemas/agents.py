@@ -13,6 +13,22 @@ from .identite import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
 
+#: A tag (S40-10): a lowercase slug of at most 32 characters; an agent carries at most `MAX_TAGS`.
+TAG = r"^[a-z0-9][a-z0-9-]{0,31}$"
+MAX_TAGS = 10
+AgentTag = Annotated[str, Field(pattern=TAG)]
+
+
+def _no_duplicate_tags(tags: list[str] | None) -> list[str] | None:
+    if tags is not None:
+        seen: set[str] = set()
+        for tag in tags:
+            if tag in seen:
+                raise ValueError(f"duplicate tag: {tag}")
+            seen.add(tag)
+    return tags
+
+
 #: Who owns an agent (ADR 0061). `platform` is never asked for: a common agent comes from the catalogue.
 AgentScope = Literal["platform", "org", "project", "personal"]
 CreatableScope = Literal["org", "project", "personal"]
@@ -240,6 +256,10 @@ class AgentCreate(Dto):
     scope: CreatableScope = "org"
     #: The project's slug: required for, and only for, a `project` agent.
     project: str | None = Field(default=None, min_length=1)
+    #: Labels people find the agent by (S40-10); never part of a version.
+    tags: list[AgentTag] = Field(default_factory=list, max_length=MAX_TAGS)
+
+    _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
 
     @model_validator(mode="after")
     def _a_project_agent_names_its_project(self) -> AgentCreate:
@@ -351,6 +371,8 @@ class AgentCatalogueEntry(Dto):
     summary: str
     version: int
     skills: list[str] = Field(default_factory=list)
+    #: Labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed.
+    tags: list[str] = Field(default_factory=list)
     #: Pour un client externe : son identifiant sur la page des clients, et d'où il appelle.
     client: str | None = None
     reach: Literal["always", "cloud"] | None = None
@@ -393,6 +415,10 @@ class AgentPatch(Dto):
     #: `revoked` est définitif ; `suspended` se lève.
     status: Literal["active", "suspended", "revoked"] | None = None
     expires_at: datetime | None = None
+    #: Replaces the agent's tags; absent or null leaves them as they are (S40-10).
+    tags: list[AgentTag] | None = Field(default=None, max_length=MAX_TAGS)
+
+    _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
 
 
 class AgentVersionDto(Dto):
@@ -408,6 +434,8 @@ class AgentDto(Dto):
     kind: Literal["internal", "external", "remote"]
     display_name: str
     description: str | None = None
+    #: Labels people find the agent by (S40-10); apart from its versions.
+    tags: list[str] = Field(default_factory=list)
     status: str
     owner: str | None = None
     expires_at: datetime | None = None

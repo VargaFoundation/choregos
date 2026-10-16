@@ -8,6 +8,7 @@ catalogue:
   summary: Claude Code acting through the MCP door, with its person's rights intersected with this agent's.
 agent:
   slug: claude-code
+  tags: [mcp-client, ide]
   kind: external
   display_name: Claude Code
   description: Claude Code, connected to Choregos through the MCP door. It acts with its person's rights, never more, and never decides.

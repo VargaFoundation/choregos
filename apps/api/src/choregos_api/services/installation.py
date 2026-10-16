@@ -96,6 +96,7 @@ async def installer_skills_et_agents(
             kind=corps.kind,
             display_name=corps.display_name,
             description=corps.description,
+            tags=list(corps.tags),
             owner_id=None,
             status="active",
             # What the built-in catalogue installs is common to everyone (ADR 0061); a template's

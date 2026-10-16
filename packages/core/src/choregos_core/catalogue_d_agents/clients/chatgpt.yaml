@@ -8,6 +8,7 @@ catalogue:
   summary: ChatGPT acting through the MCP door, with its person's rights intersected with this agent's.
 agent:
   slug: chatgpt
+  tags: [mcp-client, chat]
   kind: external
   display_name: ChatGPT
   description: ChatGPT, connected to Choregos through the MCP door. It acts with its person's rights, never more, and never decides.

@@ -4,6 +4,7 @@ catalogue:
   summary: A security-only review — injection, authorization, secrets, dependencies, data exposure — with a verdict.
 agent:
   slug: security-reviewer
+  tags: [security, code-review]
   display_name: Security reviewer
   description: Reviews the branch for security only and gives a verdict, citing file and line. It changes nothing.
   spec:

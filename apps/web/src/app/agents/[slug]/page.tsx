@@ -15,6 +15,8 @@ import {
   ScopePanel,
   UpstreamBanner,
 } from "@/components/agents/governance";
+import { AgentDetailsCard } from "@/components/agents/details";
+import { TagList } from "@/components/agents/tags";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
 import { estUnClientMcp, etatDuClient, readOnly, resumeDeLaVersion } from "@/components/agents/registre";
@@ -92,6 +94,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         {a.owner && <span className="text-xs text-ink-muted">Owned by {a.owner}</span>}
         {a.expires_at && <span className="text-xs text-ink-muted">Expires {shortDate(a.expires_at)}</span>}
       </div>
+      <TagList tags={a.tags} link />
       <ReasonNote agent={a} />
       <UpstreamBanner agent={a} />
       {(a.can?.fork_scopes ?? []).length > 0 && (
@@ -117,7 +120,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       </Tabs>
       {onglet === "overview" && (
         <>
-          {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
+          <AgentDetailsCard key={`${a.slug}-${a.display_name}-${a.description}-${(a.tags ?? []).join(",")}`} org={org} agent={a} />
           {a.kind === "remote" && <RemoteDrift org={org} slug={slug} />}
           <Statut org={org} agent={a} />
           <Card title="Lifecycle">

@@ -6,6 +6,7 @@ catalogue:
   tools: ["runner:mutmut", "runner:stryker"]
 agent:
   slug: qa
+  tags: [qa, testing, mutation-testing]
   display_name: QA
   description: Derives the test plan from the specification, writes the missing edge-case tests, and runs mutation testing on the changed code so that every test proves something. It changes tests only.
   spec:
