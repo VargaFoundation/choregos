@@ -136,6 +136,8 @@ async def test_the_default_header_is_still_a_bearer() -> None:
     serveur = FakeMcpServer(outils=OUTILS[:1])
     await ClientMcp("https://f.test/mcp", token="t", transport=serveur.transport()).list_tools()
     assert all(entetes["authorization"] == "Bearer t" for _, entetes, _ in serveur.recues)
+
+
 async def test_le_user_agent_de_la_plateforme_part_avec_chaque_requete() -> None:
     """ADR 0070: a server's operator sees who calls, and how to reach them."""
     serveur = FakeMcpServer(outils=OUTILS[:1])
