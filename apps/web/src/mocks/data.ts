@@ -44,6 +44,7 @@ import type {
   ProjectAgentPut,
   BudgetAlert,
   KnowledgeBase,
+  MemoryStore,
   Skill,
   SkillGitPreview,
   SkillVersion,
@@ -887,6 +888,101 @@ export const pendingMemories: Memory[] = [
   },
 ];
 
+/**
+ * Named memories (S40-11, ADR 0075): two global ones — `security-lessons` for every project,
+ * `architecture-decisions` for billing-api alone — and `decisions`, a memory of billing-api (and, by the same
+ * name, of checkout-web). `used_by` is what the API computes from the agents' latest versions.
+ */
+export const memoryStores: MemoryStore[] = [
+  {
+    slug: "security-lessons",
+    display_name: "Security lessons",
+    description: "What the security reviews taught, for every project.",
+    scope: "global",
+    project: null,
+    reach: "org",
+    projects: [],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 12),
+    used_by: [{ agent: "onboarding-coordinator", version: 2 }],
+  },
+  {
+    slug: "architecture-decisions",
+    display_name: "Architecture decisions",
+    description: "The decision records the organisation keeps.",
+    scope: "global",
+    project: null,
+    reach: "projects",
+    projects: ["billing-api"],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 8),
+    used_by: [],
+  },
+  {
+    slug: "decisions",
+    display_name: "Decisions",
+    description: "Billing's own decisions.",
+    scope: "project",
+    project: "billing-api",
+    reach: null,
+    projects: ["billing-api"],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 5),
+    used_by: [],
+  },
+  {
+    slug: "decisions",
+    display_name: "Decisions",
+    description: null,
+    scope: "project",
+    project: "checkout-web",
+    reach: null,
+    projects: ["checkout-web"],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 4),
+    used_by: [],
+  },
+];
+
+/** `acme:billing-api` (how the client qualifies a project) or `billing-api`: the slug. */
+const bareSlug = (id: string): string => decodeURIComponent(id).split(/[:/]/).pop() ?? id;
+
+/** What `GET /projects/{id}/memories` returns for a project: the implicit memories, its own, the global ones that reach it. */
+export function projectMemoryList(project: string): MemoryStore[] {
+  const implicit: MemoryStore[] = (["shared", "own"] as const).map((slug) => ({
+    slug,
+    display_name: slug === "shared" ? "Shared memory" : "Own memory",
+    scope: "project",
+    project,
+    implicit: true,
+    status: "active",
+    used_by: [],
+  }));
+  const named = memoryStores.filter((m) => (m.scope === "project" && m.project === project) || (m.scope === "global" && (m.reach === "org" || (m.projects ?? []).includes(project))));
+  return [...implicit, ...named];
+}
+
+/** What agents proposed to the global `security-lessons` memory, waiting for an administrator. */
+const proposedToGlobal: Memory[] = [
+  {
+    id: "g1",
+    kind: "run_lesson",
+    subject: "lesson:tls:pin-the-minimum-version",
+    content: "Pin the minimum TLS version in every service configuration.",
+    status: "pending",
+    proposed_by: "r7",
+    provenance: { source: "agent", run_id: "r7" },
+  },
+];
+
 export const costs: CostReport = {
   group_by: "day",
   currency: "EUR",
@@ -1424,6 +1520,10 @@ export const agents: Agent[] = [
           budget: { run_usd: 1.5, daily_usd: 5 },
           skills: [{ slug: "onboarding-procedure", version: 1 }],
           mcp_servers: [],
+          memories: [
+            { scope: "global", slug: "security-lessons", mode: "read" },
+            { scope: "project", slug: "shared", mode: "write" },
+          ],
         },
         checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
         created_by: "lea@acme.dev",
@@ -2607,6 +2707,44 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const autorise = /^\/orgs\/[^/]+\/remote-credentials\/([^/]+)\/authorize$/.exec(chemin ?? "");
   if (method === "POST" && autorise) return { redirect_url: `/admin/remote-agents?connected=${autorise[1]}` } as T;
+  const memoryWrite = /^\/(orgs|projects)\/([^/]+)\/memories(?:\/([^/]+))?$/.exec(path.split("?")[0] ?? path);
+  if (memoryWrite && method === "POST" && !memoryWrite[3]) {
+    const corps = (body ?? {}) as { slug: string; display_name: string; description?: string; reach?: "org" | "projects"; projects?: string[] };
+    const project = memoryWrite[1] === "projects" ? bareSlug(memoryWrite[2]!) : null;
+    if (["shared", "own"].includes(corps.slug)) throw new ApiError(422, { detail: `\`${corps.slug}\` is reserved for the implicit memories of every project` });
+    if (memoryStores.some((m) => m.slug === corps.slug && m.scope === (project ? "project" : "global") && (project === null || m.project === project)))
+      throw new ApiError(409, { detail: `memory \`${corps.slug}\` already exists` });
+    const made: MemoryStore = {
+      slug: corps.slug,
+      display_name: corps.display_name,
+      description: corps.description ?? null,
+      scope: project ? "project" : "global",
+      project,
+      reach: project ? null : (corps.reach ?? "org"),
+      projects: project ? [project] : corps.reach === "projects" ? (corps.projects ?? []) : [],
+      status: "active",
+      implicit: false,
+      created_by: me.email,
+      created_at: new Date().toISOString(),
+      used_by: [],
+    };
+    memoryStores.push(made);
+    return structuredClone(made) as T;
+  }
+  if (memoryWrite && method === "PATCH" && memoryWrite[3]) {
+    const project = memoryWrite[1] === "projects" ? bareSlug(memoryWrite[2]!) : null;
+    const found = memoryStores.find((m) => m.slug === memoryWrite[3] && (project ? m.scope === "project" && m.project === project : m.scope === "global"));
+    if (!found) throw new ApiError(404, { detail: "memory not found" });
+    Object.assign(found, body ?? {});
+    return structuredClone(found) as T;
+  }
+  const memoryDecision = /^\/orgs\/[^/]+\/memories\/([^/]+)\/pending$/.exec(path.split("?")[0] ?? path);
+  if (memoryDecision && method === "POST") {
+    const decided = (body ?? {}) as { id?: string };
+    const at = proposedToGlobal.findIndex((m) => m.id === decided.id);
+    if (at >= 0) proposedToGlobal.splice(at, 1);
+    return { status: "accepted" } as T;
+  }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   if (/^\/orgs\/[^/]+\/models$/.test(route ?? "")) return modelCatalogue as T;
@@ -2618,6 +2756,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (installedVersion && catalogueSkills.has(installedVersion[1]!)) return catalogueSkills.get(installedVersion[1]!)!.version as T;
   const installedSkill = /^\/orgs\/[^/]+\/skills\/([^/]+)$/.exec(route ?? "");
   if (installedSkill && catalogueSkills.has(installedSkill[1]!)) return catalogueSkills.get(installedSkill[1]!)!.skill as T;
+  if (/^\/orgs\/[^/]+\/memories$/.test(route ?? "")) {
+    const wanted = new URLSearchParams(path.split("?")[1] ?? "").get("scope");
+    return structuredClone(memoryStores.filter((m) => !wanted || m.scope === wanted)) as T;
+  }
+  const memoryOf = /^\/orgs\/[^/]+\/memories\/([^/]+)(\/search|\/pending)?$/.exec(route ?? "");
+  if (memoryOf) {
+    if (memoryOf[2] === "/search") return memories.filter((m) => m.content.toLowerCase().includes((new URLSearchParams(path.split("?")[1] ?? "").get("q") ?? "").toLowerCase().split(" ")[0] ?? "")) as T;
+    if (memoryOf[2] === "/pending") return structuredClone(proposedToGlobal) as T;
+    const global = memoryStores.find((m) => m.scope === "global" && m.slug === memoryOf[1]);
+    if (!global) throw new ApiError(404, { detail: "memory not found" });
+    return structuredClone(global) as T;
+  }
+  const projectMemories = /^\/projects\/([^/]+)\/memories$/.exec(route ?? "");
+  if (projectMemories) return structuredClone(projectMemoryList(bareSlug(projectMemories[1]!))) as T;
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {

@@ -1,18 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import { usd } from "@/lib/format";
+import { effectiveBindings, isLegacyDefault, summaryOf } from "@/lib/memories";
 import type { AgentSpec } from "@/lib/types";
 
 /**
  * What a spec says in one line per section (S39-05), kept apart from the builder so the read view of a
  * version (S40-12) can say the same words without loading the whole form.
  */
-
-/** Whose memory a run reads and writes (S32-02); the API's default is the project's. */
-export const MEMORY_SCOPES = {
-  project: "The project's shared memory",
-  agent: "Its own, within the project",
-  none: "None",
-} as const;
 
 export type SectionId = "model" | "limits" | "skills" | "tools" | "knowledge" | "memory" | "evals";
 
@@ -37,7 +31,7 @@ export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
     skills: skills ? `${skills} attached` : "none",
     tools: servers ? plural(servers, "MCP server", "MCP servers") : "none",
     knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
-    memory: MEMORY_SCOPES[spec.memory ?? "project"].toLowerCase(),
+    memory: summaryOf(effectiveBindings(spec)),
     evals: plural(cases, "case", "cases"),
   };
 }
@@ -51,7 +45,7 @@ export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
     skills: (spec.skills ?? []).length > 0,
     tools: (spec.mcp_servers ?? []).length > 0,
     knowledge: (spec.knowledge ?? []).length > 0,
-    memory: Boolean(spec.memory && spec.memory !== "project"),
+    memory: !isLegacyDefault(effectiveBindings(spec)),
     evals: (spec.evals ?? []).length > 0,
   };
 }

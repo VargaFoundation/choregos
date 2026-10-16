@@ -10,10 +10,11 @@ import { normalizeSpec } from "@/lib/agent-diff";
 import { api } from "@/lib/api";
 import { canEdit, currentVersion, previousVersion, sortedVersions, versionOf } from "@/lib/agent-versions";
 import { relative, usd } from "@/lib/format";
+import { describe, effectiveBindings, writesTo } from "@/lib/memories";
 import type { Agent, AgentSpec, AgentVersion } from "@/lib/types";
 import { AgentDetailsCard } from "./details";
 import { RestoreDialog } from "./history";
-import { MEMORY_SCOPES, sectionSummaries } from "./spec-summary";
+import { sectionSummaries } from "./spec-summary";
 
 /**
  * One version of an agent, read-only and grouped (S40-12, ADR 0076). People read an agent far more often
@@ -25,7 +26,7 @@ import { MEMORY_SCOPES, sectionSummaries } from "./spec-summary";
 /** Lines of instructions shown before "Show all". */
 export const INSTRUCTION_LINES = 12;
 
-const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "evals"]);
+const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals"]);
 
 const here = (slug: string, query: string) => `/agents/${slug}?${query}`;
 
@@ -50,6 +51,24 @@ function CodeRuntimeRow({ runtime }: { runtime: { image: string; command?: strin
       </span>
       <span className="mt-1 block font-mono text-ink-muted">{(runtime.command ?? []).join(" ")}</span>
     </span>
+  );
+}
+
+/** The memories a run of this version binds, in precedence order, and where it writes (S40-11, ADR 0075). */
+function MemoryList({ spec }: { spec: AgentSpec }) {
+  const bindings = effectiveBindings(spec);
+  if (bindings.length === 0) return <span data-testid="memory-bindings">None: it reads and writes nothing</span>;
+  return (
+    <div data-testid="memory-bindings">
+      <ol className="list-decimal pl-5">
+        {bindings.map((b) => (
+          <li key={`${b.scope}:${b.slug}`}>
+            {describe(b)} <span className="text-ink-muted">{"\u2014"} {b.mode === "write" ? "read and written" : "read"}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-1 text-xs text-ink-muted">It {writesTo(bindings)}.</p>
+    </div>
   );
 }
 
@@ -241,7 +260,9 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
             <Row label="Knowledge">
               {(spec.knowledge ?? []).length === 0 ? "None" : (spec.knowledge ?? []).map((k) => k.slug).join(", ")}
             </Row>
-            <Row label="Memory">{MEMORY_SCOPES[spec.memory ?? "project"]}</Row>
+            <Row label="Memory">
+              <MemoryList spec={spec} />
+            </Row>
           </dl>
         </Disclosure>
 
