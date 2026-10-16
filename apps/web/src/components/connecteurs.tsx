@@ -3,6 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { InstallOnGitHub } from "@/components/github-repo-field";
 import { ConnectorCard } from "@/components/project-settings/connector-card";
 import { estUneReference } from "@/components/secret-field";
 import { Button, ErrorNote, Select } from "@/components/ui";
@@ -85,6 +86,11 @@ export function Connecteurs({ slug }: { slug: string }) {
               </p>
             )}
             {erreur && <ErrorNote>{erreur}</ErrorNote>}
+            {erreur && /GitHub App is not installed/.test(erreur) && (
+              <div className="mt-2">
+                <InstallOnGitHub />
+              </div>
+            )}
           </div>
         )}
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="connecteurs">

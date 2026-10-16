@@ -1651,6 +1651,12 @@ export const skillGitPreview: SkillGitPreview = {
 };
 
 /** Des types tirés du registre (ADR 0034) : jira est disponible, ses secrets se nomment. */
+/** The `repo` property of the GitHub types: a picker over the App's repositories, no installation id (ADR 0073). */
+const githubRepoProperty = {
+  type: "string",
+  format: "github-repo",
+  description: "The repository, as owner/repo; the Choregos App must be installed on its owner.",
+};
 const objet = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
 export const connectorTypes: ConnectorType[] = [
   { kind: "tracker", type: "internal", display: "internal (Choregos holds the work items)", config_schema: objet({}), capabilities: ["tracker"], secret_fields: [] },
@@ -1662,7 +1668,15 @@ export const connectorTypes: ConnectorType[] = [
     capabilities: ["tracker"],
     secret_fields: ["api_token", "webhook_secret"],
   },
-  { kind: "scm", type: "github", display: "GitHub (App choregos-bot)", config_schema: objet({ repo: { type: "string" } }, ["repo"]), capabilities: ["scm"], secret_fields: [] },
+  {
+    kind: "tracker",
+    type: "github-issues",
+    display: "GitHub Issues (App choregos-bot)",
+    config_schema: objet({ repo: githubRepoProperty }, ["repo"]),
+    capabilities: ["tracker"],
+    secret_fields: ["webhook_secret"],
+  },
+  { kind: "scm", type: "github", display: "GitHub (App choregos-bot)", config_schema: objet({ repo: githubRepoProperty }, ["repo"]), capabilities: ["scm"], secret_fields: [] },
   { kind: "ci", type: "tekton", display: "Tekton Pipelines", config_schema: objet({ namespace: { type: "string" } }), capabilities: ["ci"], secret_fields: [] },
   { kind: "cd", type: "argocd", display: "Argo CD + Rollouts", config_schema: objet({ gitops_repo: { type: "string" } }, ["gitops_repo"]), capabilities: ["cd"], secret_fields: ["token"] },
   { kind: "cd", type: "demo", display: "Demo stand-in (simulated CD)", config_schema: objet({ url: { type: "string" } }), capabilities: ["cd"], secret_fields: [] },
@@ -1806,6 +1820,25 @@ export const projectRequirements: ProjectRequirement[] = [
   { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
 ];
 
+/** The Choregos GitHub App on the mock: two accounts it is installed on, three repositories. */
+const githubInstallations = [
+  { id: 1001, account_login: "DiametralGroup", account_type: "Organization", repository_selection: "selected", suspended: false, claimed: true, settings_url: "https://github.com/organizations/DiametralGroup/settings/installations/1001" },
+  { id: 1002, account_login: "acme", account_type: "Organization", repository_selection: "all", suspended: false, claimed: true, settings_url: "https://github.com/organizations/acme/settings/installations/1002" },
+];
+const githubRepositories = [
+  { full_name: "DiametralGroup/choregos-sandbox-dev", private: true, default_branch: "main", installation_id: 1001 },
+  { full_name: "acme/billing-api", private: true, default_branch: "main", installation_id: 1002 },
+  { full_name: "acme/checkout-web", private: false, default_branch: "main", installation_id: 1002 },
+];
+const githubStatus = () => ({
+  configured: true,
+  app_slug: "choregos-bot",
+  app_name: "Choregos",
+  install_url: "https://github.com/apps/choregos-bot/installations/new",
+  multi_org_claim: "implicit",
+  installations: structuredClone(githubInstallations),
+});
+
 /** What a project's connectors are on the mock, before any write (Checkout Web has its own). */
 const checkoutWebConnectors = [
   { id: "c-jira", kind: "tracker", type: "jira", config: {}, secret_refs: {}, status: "ok" },
@@ -1929,6 +1962,14 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
   }
   const [chemin] = path.split("?");
+  if (/^\/orgs\/[^/]+\/github(\/refresh)?$/.test(chemin ?? "")) return githubStatus() as T;
+  if (method === "GET" && /^\/orgs\/[^/]+\/github\/repositories$/.test(chemin ?? "")) {
+    const q = (new URLSearchParams(path.split("?")[1] ?? "").get("q") ?? "").toLowerCase();
+    const items = githubRepositories.filter((r) => r.full_name.toLowerCase().includes(q));
+    return { items, meta: { has_more: false } } as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/github\/install-link$/.test(chemin ?? ""))
+    return { url: "https://github.com/apps/choregos-bot/installations/new?state=mock-signed-state" } as T;
   const projectConnectors = /^\/projects\/([^/]+)\/connectors(?:\/([a-z_]+))?$/.exec(chemin ?? "");
   if (projectConnectors) {
     const [, project = "", kind] = projectConnectors;
@@ -1941,6 +1982,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (method === "GET" && !kind) return structuredClone(current) as T;
     if (method === "PUT" && kind) {
       const corps = (body ?? {}) as { type?: string; config?: Record<string, unknown>; secret_refs?: Record<string, string> };
+      const repo = typeof corps.config?.repo === "string" ? corps.config.repo : "";
+      const owner = repo.split("/")[0] ?? "";
+      if ((corps.type === "github" || corps.type === "github-issues") && owner && !githubInstallations.some((i) => i.account_login.toLowerCase() === owner.toLowerCase()))
+        throw new ApiError(422, {
+          detail: `The Choregos GitHub App is not installed on \`${owner}\` for this organisation. Install it: https://github.com/apps/choregos-bot/installations/new`,
+        });
       const saved = {
         id: `c-${kind}`,
         kind,
