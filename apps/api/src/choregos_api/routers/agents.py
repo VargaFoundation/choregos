@@ -89,7 +89,14 @@ from ..services.agent_lifecycle import (
     running_work_items,
     unused,
 )
-from ..services.agent_releases import after_publish, policy_of, production_spec, served
+from ..services.agent_releases import (
+    after_publish,
+    pending_release,
+    policy_of,
+    production_spec,
+    release_dto,
+    served,
+)
 from ..services.agents import (
     AgentIndisponible,
     depense_du_jour,
@@ -230,6 +237,9 @@ async def _dto(
         candidate_percent=agent.candidate_percent or 0,
         candidate_since=agent.candidate_since,
         release_policy=policy_of(agent),
+        pending_release=release_dto(waiting, agent.slug)
+        if (waiting := await pending_release(session, agent))
+        else None,
     )
 
 
