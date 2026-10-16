@@ -17,7 +17,9 @@ assignment. A run goes like this:
    only ever carried ciphertext.
 3. The runner runs the stage and exits; the claim reports the pod's end, and is deleted
    `ttl_seconds` later by the controller, taking the sandbox, its volume and (through the owner
-   reference) the run's Secret with it. A sandbox is never handed out twice.
+   reference) the run's Secret with it. A sandbox is never handed out twice. Until then its
+   volume counts against the namespace's quota: an hour of it filled Diametral's dev tenant
+   (10 PVCs, 50Gi) after one ticket's six stages, and the next claim found no volume.
 
 `queue`: agent-sandbox v1.0.6 cold-starts a claim when the pool is empty — a claim never
 waits. So the waiting is ours, the discipline of ADR 0013: beyond `max_active` runs in the
@@ -68,6 +70,11 @@ QUEUED = "choregos/queued"
 POD_NAME_ANNOTATION = "agents.x-k8s.io/pod-name"
 
 
+#: Seconds a finished claim keeps its sandbox and volume: long enough to read the pod's end and
+#: its log, which takes the orchestrator one status poll; not an hour of a volume per stage.
+DEFAULT_TTL_SECONDS = 300
+
+
 class AgentSandboxExecutor:
     kind = ExecutorKind.AGENT_SANDBOX
     capabilities: frozenset[str] = frozenset({"queue", "renew", "snapshot", "suspend", "resume"})
@@ -80,7 +87,7 @@ class AgentSandboxExecutor:
         assignment_port: int = 8765,
         runtime_class: str | None = None,
         pool_image: str | None = None,
-        ttl_seconds: int = 3600,
+        ttl_seconds: int = DEFAULT_TTL_SECONDS,
         max_active: int = 0,
         env_from_secrets: list[str] | None = None,
         http: httpx.AsyncClient | None = None,

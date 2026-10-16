@@ -38,6 +38,7 @@ runner:
     storageClassName: ""
     assignmentPort: 8765
     assignmentNetworkPolicy: true
+    ttlSecondsAfterFinished: 300
   egressProxy: "http://choregos-egress.{namespace}.svc:3128"
   egressImage: ""
 podDisruptionBudget:

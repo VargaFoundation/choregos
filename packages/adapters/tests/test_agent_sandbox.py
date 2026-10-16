@@ -303,7 +303,7 @@ async def test_resume_gives_the_same_run_a_new_pod_on_the_same_volume_with_a_fre
     first_pod, second_pod = sandbox.pods
     assert [a["run_token"] for a in first_pod.assignments] == ["first"]
     assert [(a["run_id"], a["run_token"]) for a in second_pod.assignments] == [("r-1", "second")]
-    assert cluster.claims["run-r-1"]["spec"]["lifecycle"]["ttlSecondsAfterFinished"] == 3600
+    assert cluster.claims["run-r-1"]["spec"]["lifecycle"]["ttlSecondsAfterFinished"] == executor.ttl_seconds
 
 
 async def test_past_the_bound_there_is_nothing_to_resume() -> None:
@@ -507,3 +507,23 @@ def test_the_factory_reads_the_pool_image_from_the_runner_image_env(monkeypatch:
         {"kubernetes": {"base_url": "https://k8s.test", "token": "t", "verify": False}},
     )
     assert executor.pool_image == "harbor.example/choregos-runner:0.17.12"
+
+
+async def test_a_finished_sandbox_gives_its_volume_back_in_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An hour per finished stage filled the dev tenant's PVC quota after one ticket (2026-10-15):
+    the claim's clock is short by default, and the deployment sets it."""
+    from choregos_adapters.registry import build
+
+    kubernetes = {"kubernetes": {"token": "t", "verify": False}}
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # the real executor, not its fake
+    monkeypatch.delenv("CHOREGOS_SANDBOX_TTL_SECONDS", raising=False)
+    assert build("runtime", "agent_sandbox", kubernetes).ttl_seconds <= 600
+    monkeypatch.setenv("CHOREGOS_SANDBOX_TTL_SECONDS", "120")
+    executor = build("runtime", "agent_sandbox", kubernetes)
+    assert executor.ttl_seconds == 120
+
+    cluster = FakeSandboxCluster()
+    cluster.warm(1)
+    executor = _executor(cluster, ttl_seconds=120)
+    await executor.start(_spec("r-1"))
+    assert cluster.claims["run-r-1"]["spec"]["lifecycle"]["ttlSecondsAfterFinished"] == 120

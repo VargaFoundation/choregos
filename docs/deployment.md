@@ -181,10 +181,15 @@ choregos-orchestrator:
     namespacePattern: choregos        # the release namespace: the template lives there
     warmPool: { size: 2 }             # sandboxes made in advance, never used, holding nothing
     runtimeClass: gvisor              # the template's RuntimeClass; "" = the cluster's
-    sandbox: { storage: 10Gi, storageClassName: "", assignmentPort: 8765 }
+    sandbox: { storage: 10Gi, storageClassName: "", assignmentPort: 8765, ttlSecondsAfterFinished: 300 }
 global:
   rbac: { jobRunner: true }           # or the platform grants the same verbs (see rbac-jobs.yaml)
 ```
+
+A finished run's sandbox keeps its workspace volume for `ttlSecondsAfterFinished` seconds, then
+the controller deletes it. Until then the volume counts against the namespace's quota: size
+`storage` × (runs finished in that window + warm pool) against it. At 3600, one ticket's six
+stages filled the dev tenant's 10 PVCs / 50Gi, and the next claim found no volume.
 
 The chart also renders `choregos-runner-assignment`, a NetworkPolicy that lets only the
 orchestrator's `executor` workers reach the assignment port. Where the platform lays the
