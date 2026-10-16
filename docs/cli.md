@@ -362,6 +362,21 @@ Options:
   --help    Show this message and exit.
 ```
 
+### `choregos projects readiness`
+
+```text
+Usage: choregos projects readiness [OPTIONS] {project}
+
+  What the project still lacks to run, and who can fix each item. Exits 1
+  while something is to do.
+
+Arguments:
+  project  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
 ## `choregos runs`
 
 Runs

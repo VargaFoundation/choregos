@@ -1,22 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 """`GET /projects/{id}/readiness`: what a project still lacks to run (S40-06).
 
-S40-06a declares the contract: the operation answers 501 until S40-06b computes the list. The stub
-exists because the contract test requires the application to serve exactly the paths and operation
-ids the OpenAPI declares.
+Computed from stored state by `services/readiness.py`: no network call, so the settings page, the
+overview, the CLI and the MCP door can all read it cheaply and show the same list.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from fastapi import APIRouter
 
-from fastapi import APIRouter, HTTPException, status
+from ..deps import Db, ProjectCtx
+from ..schemas.readiness import ProjectReadiness
+from ..services.readiness import project_readiness
 
 router = APIRouter(tags=["projects"])
 
 
-@router.get("/projects/{id}/readiness", operation_id="getProjectReadiness")
-async def get_project_readiness(id: str) -> Any:
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="project readiness arrives with S40-06b"
-    )
+@router.get("/projects/{id}/readiness", response_model=ProjectReadiness, operation_id="getProjectReadiness")
+async def get_project_readiness(ctx: ProjectCtx, session: Db) -> ProjectReadiness:
+    return await project_readiness(session, ctx.project, ctx.org_slug)

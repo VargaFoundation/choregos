@@ -7,6 +7,7 @@ Seven ideas carry the whole platform. Everything else is plumbing.
 A project is a unit of work with its own connectors, workflow, policy and budgets. It lives
 in an organisation. Its configuration (`ProjectConfig`) names the repository, the model
 profiles and the labels; its **connectors** say which outside systems it talks to.
+Its **readiness** (`GET /projects/{id}/readiness`) lists, from stored state, what it still lacks to run and who can fix each item.
 
 Connectors ship for: trackers (`github-issues`, `jira`, `gitlab-issues`, `internal`), source
 control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, the deployment's default; `tekton`, `k8s_job`, `aca`,
