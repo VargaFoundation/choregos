@@ -33,6 +33,7 @@ import type {
   SkillCatalogue,
   SkillCatalogueEntry,
   ProjectOperation,
+  ConnectorDto,
   ProjectRequirement,
   AgentCredential,
   AgentMetrics,
@@ -1856,6 +1857,7 @@ export const connectorTypes: ConnectorType[] = [
   { kind: "ci", type: "tekton", display: "Tekton Pipelines", config_schema: objet({ namespace: { type: "string" } }), capabilities: ["ci"], secret_fields: [] },
   { kind: "cd", type: "argocd", display: "Argo CD + Rollouts", config_schema: objet({ gitops_repo: { type: "string" } }, ["gitops_repo"]), capabilities: ["cd"], secret_fields: ["token"] },
   { kind: "cd", type: "demo", display: "Demo stand-in (simulated CD)", config_schema: objet({ url: { type: "string" } }), capabilities: ["cd"], secret_fields: [] },
+  { kind: "runtime", type: "agent_sandbox", display: "Kubernetes · agent-sandbox (warm pool)", config_schema: objet({ runtime_class: { type: "string" } }), capabilities: ["runtime"], secret_fields: [] },
   { kind: "runtime", type: "k8s_job", display: "Kubernetes Job", config_schema: objet({ service_account: { type: "string" } }), capabilities: ["runtime"], secret_fields: [] },
   { kind: "gateway", type: "litellm", display: "LiteLLM", config_schema: objet({ base_url: { type: "string" } }), capabilities: ["gateway"], secret_fields: ["master_key"] },
   { kind: "notify", type: "slack", display: "Slack", config_schema: objet({ channel: { type: "string" } }), capabilities: ["notify"], secret_fields: ["webhook_url", "bot_token"] },
@@ -2040,6 +2042,23 @@ const checkoutWebConnectors = [
   { id: "c-gh", kind: "scm", type: "github", config: {}, secret_refs: {}, status: "ok" },
   { id: "c-argo", kind: "cd", type: "argocd", config: {}, secret_refs: {}, status: "error", last_error: "401 from Argo CD" },
 ];
+/**
+ * The project `dev` as `essai/projet-dev/scenario_dev.py preparer` leaves it: a tracker, a repository, and
+ * a CD that is the demo stand-in, never tested. The runtime is the deployment's own (agent-sandbox).
+ */
+const devConnectors = [
+  { id: "c-dev-tracker", kind: "tracker", type: "github-issues", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
+  { id: "c-dev-scm", kind: "scm", type: "github", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
+  { id: "c-dev-cd", kind: "cd", type: "demo", config: { url: "http://choregos-demo-fakes:8090/cd/mcp" }, secret_refs: {}, status: "unknown" },
+];
+const devRequirements: ProjectRequirement[] = [
+  { capability: "tracker", reasons: ["default-simple: work items live in a tracker"], connector: devConnectors[0] as unknown as ConnectorDto, default_type: null },
+  { capability: "scm", reasons: ["default-simple: the guarantee scope_respected on t-implement", "hotfix: the agent dev opens a pull request"], connector: devConnectors[1] as unknown as ConnectorDto, default_type: null },
+  { capability: "cd", reasons: ["hotfix: the release train deploys to prod"], connector: devConnectors[2] as unknown as ConnectorDto, default_type: null },
+  { capability: "runtime", reasons: ["default-simple: the agent dev runs somewhere"], connector: null, default_type: "agent_sandbox" },
+  { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
+];
+const isDev = (project: string) => /(?:^|[:/])dev$/.test(decodeURIComponent(project));
 const defaultProjectConnectors = [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }];
 /** Connectors written during the page's life, by project: saving tests (S40-05), so the mock answers `ok`. */
 const writtenConnectors = new Map<string, Array<Record<string, unknown>>>();
@@ -2143,7 +2162,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const projectConnectors = /^\/projects\/([^/]+)\/connectors(?:\/([a-z_]+))?$/.exec(chemin ?? "");
   if (projectConnectors) {
     const [, project = "", kind] = projectConnectors;
-    const base = /checkout-web$/.test(decodeURIComponent(project)) ? checkoutWebConnectors : defaultProjectConnectors;
+    const base = /checkout-web$/.test(decodeURIComponent(project))
+      ? checkoutWebConnectors
+      : isDev(project)
+        ? devConnectors
+        : defaultProjectConnectors;
     const current = writtenConnectors.get(project) ?? base;
     if (method === "GET" && !kind) return structuredClone(current) as T;
     if (method === "PUT" && kind) {
@@ -2564,6 +2587,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/members$/, membersOf(path)],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],
+    [/^\/projects\/(?:[^/]*:)?dev\/requirements$/, devRequirements],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
     [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
@@ -2572,7 +2596,17 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/agent-images$/, platformAgentImages],
-    [/^\/platform\/executors$/, []],
+    // What a deployment on agent-sandbox answers (ADR 0072): the others are not run there.
+    [
+      /^\/platform\/executors$/,
+      [
+        { kind: "agent_sandbox", enabled: true },
+        { kind: "k8s_job", enabled: true },
+        { kind: "tekton", enabled: false },
+        { kind: "aca", enabled: false },
+        { kind: "local_docker", enabled: false },
+      ],
+    ],
     [/^\/projects\/[^/]+\/models$/, { profiles: {}, allow_unvalidated: false, inherited: {} }],
     [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],
     [
