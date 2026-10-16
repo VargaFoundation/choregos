@@ -3,6 +3,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useState } from "react";
 import { Statut, propose } from "@/components/actions/statut";
 import { DecisionBar } from "@/components/decision-bar";
 import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
@@ -22,6 +23,8 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
   const { org } = useSession();
   const queryClient = useQueryClient();
   const boite = useADecider(org, project);
+  // A developer sees the alert but may not acknowledge it: the API's refusal is shown, not swallowed.
+  const [refus, setRefus] = useState<string | null>(null);
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -197,8 +200,10 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
       <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{boite.budgets.length} open</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           A project&apos;s or an agent&apos;s daily budget that reached the policy&apos;s alert share (80 % by default)
-          or the whole budget. One item per budget, threshold and day.
+          or the whole budget. One item per budget, threshold and day. Acknowledging one takes it out of everyone&apos;s
+          inbox, so it needs the project owner role or above.
         </p>
+        {refus && <ErrorNote>{refus}</ErrorNote>}
         {!boite.pret ? (
           <p className="text-sm text-ink-muted">Reading…</p>
         ) : boite.budgets.length === 0 ? (
@@ -215,7 +220,13 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                 <Button
                   size="sm"
                   onClick={async () => {
-                    await api.acknowledgeBudgetAlert(org, alerte.id);
+                    setRefus(null);
+                    try {
+                      await api.acknowledgeBudgetAlert(org, alerte.id);
+                    } catch (erreur) {
+                      setRefus(erreur instanceof Error ? erreur.message : String(erreur));
+                      return;
+                    }
                     await queryClient.invalidateQueries({ queryKey: ["budget-alerts", org] });
                   }}
                 >

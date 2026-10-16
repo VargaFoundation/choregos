@@ -57,13 +57,22 @@ async def list_budget_alerts(
     operation_id="acknowledgeBudgetAlert",
 )
 async def acknowledge_budget_alert(org: str, alert_id: str, session: Db, principal: Me) -> BudgetAlertDto:
-    """Someone has seen it: it leaves the inbox. The next threshold, or the next day, raises a new one."""
-    if not principal.can(Permission.ITEM_DECIDE, org):
-        raise forbidden("acknowledging a budget alert needs the developer role or above")
+    """Someone has seen it: it leaves the inbox. The next threshold, or the next day, raises a new one.
+
+    Only a project owner or an organisation administrator may (decision of 2026-10-16): acknowledging
+    takes the alert out of everyone's inbox, so it belongs to whoever can act on the budget. A
+    project's alert is checked against that project; an agent's, which spans the organisation,
+    against the organisation role.
+    """
+    if not principal.can(Permission.PROJECT_READ, org):
+        raise forbidden(f"acknowledging a budget alert of {org} requires being a member of it")
     organisation = await _organisation(session, org)
     alert = await session.get(BudgetAlert, alert_id)
     if alert is None or alert.org_id != organisation.id:
         raise not_found("Budget alert", alert_id)
+    project = alert.subject if alert.scope == "project" else None
+    if not principal.can(Permission.PROJECT_WRITE, org, project):
+        raise forbidden("acknowledging a budget alert needs the project owner role or above")
     if alert.status != "open":
         raise conflict("this budget alert is already acknowledged")
     alert.status = "acknowledged"
