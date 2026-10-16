@@ -58,6 +58,20 @@ async def _worker(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
     offload.shutdown()
 
 
+def _noop() -> None:
+    """Starts the worker process before anything is measured."""
+
+
+async def _warm(client: AsyncClient) -> None:
+    """Starts the worker process and answers the probed route once, BEFORE any heavy work is queued:
+    what is measured is the steady state (a cold start is slow on a CI runner whatever the loop does).
+    """
+    from choregos_api.knowledge import offload
+
+    await offload.run(_noop)
+    assert (await client.get(f"{BASE}/heavy")).status_code == 200
+
+
 async def _answers_meanwhile(client: AsyncClient, work: Any) -> float:
     """The longest a concurrent GET (or a loop tick) waited while `work()` ran."""
     worst = 0.0
@@ -111,6 +125,7 @@ async def test_a_cpu_heavy_indexing_does_not_starve_other_requests(
 
     monkeypatch.setattr(index, "chunk", heavy_chunk)
     await _base(client)
+    await _warm(client)
     sent = await client.post(
         f"{BASE}/heavy/documents", files={"file": ("a.md", b"# Title\n\nSome text about tls.\n")}
     )
@@ -130,6 +145,7 @@ async def test_a_cpu_heavy_search_does_not_starve_other_requests(
     await client.post(f"{BASE}/heavy/documents", files={"file": ("a.md", b"# Title\n\ntls text\n")})
     await conversions.drain()
     monkeypatch.setattr(index, "_rankings", heavy_rankings)
+    await _warm(client)
 
     async def search() -> None:
         found = await client.post(f"{BASE}/heavy/search", json={"query": "tls"})
