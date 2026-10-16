@@ -64,6 +64,12 @@ class AgentEvalCase(Dto):
     input: AgentSampleInput = Field(default_factory=AgentSampleInput)
     must_contain: list[str] = Field(default_factory=list)
     must_not_contain: list[str] = Field(default_factory=list)
+    #: A live case (S40-02d) runs as a capped trial on the real model and asserts on what the run
+    #: produced; the level-1 gate leaves it out (it has no output to read before a run).
+    live: bool = False
+    #: The status the run's result must have (a case may expect the agent to stop and ask).
+    expect_status: Literal["done", "blocked"] = "done"
+    max_cost_usd: float | None = Field(default=None, gt=0, le=0.5)
 
 
 class AgentEvalResult(Dto):
@@ -111,10 +117,18 @@ class AgentStableGates(Dto):
     min_soak_hours: int | None = Field(default=None, ge=0, le=720)
     #: How recent the human's authentication must be, in minutes.
     step_up_minutes: int = Field(default=10, ge=1, le=120)
+    #: The latest finished live evaluation of the revision must score at least this (S40-02d).
+    min_live_score: float | None = Field(default=None, ge=0, le=1)
     #: People other than the requester who must approve a promotion before production moves (S40-02b).
     approvals: int = Field(default=0, ge=0, le=3)
     #: Neither the requester nor the revision's author may approve.
     separation_of_duties: bool = True
+
+
+class AgentCandidateGates(Dto):
+    """What a revision must satisfy before it is sent to testing by hand (not when saving does it)."""
+
+    min_live_score: float | None = Field(default=None, ge=0, le=1)
 
 
 class AgentReleasePolicy(Dto):
@@ -123,6 +137,9 @@ class AgentReleasePolicy(Dto):
     #: `stable`: it goes to production (today's behaviour); `candidate`: to testing; `none`: nowhere.
     on_publish: Literal["stable", "candidate", "none"] = "stable"
     stable: AgentStableGates = Field(default_factory=AgentStableGates)
+    candidate: AgentCandidateGates = Field(default_factory=AgentCandidateGates)
+    #: The most one live evaluation may spend in all, in dollars.
+    max_eval_usd: float = Field(default=2.0, gt=0, le=10)
 
     @model_validator(mode="after")
     def _a_revision_published_to_production_is_never_a_candidate(self) -> AgentReleasePolicy:
@@ -132,12 +149,42 @@ class AgentReleasePolicy(Dto):
             or gates.min_candidate_runs > 0
             or gates.min_success_rate is not None
             or gates.min_soak_hours is not None
+            or gates.min_live_score is not None
         ):
             raise ValueError(
                 "`on_publish: stable` sends a revision straight to production, so it is never a candidate: "
                 "it cannot be combined with `require_candidate` or a candidate threshold"
             )
         return self
+
+
+class AgentEvaluationCreate(Dto):
+    """Run a revision's live cases as capped trials, in one project."""
+
+    project: str = Field(min_length=1)
+
+
+class AgentEvaluationCase(Dto):
+    name: str
+    run_id: str
+    status: Literal["running", "passed", "failed", "not_run"]
+    passed: bool | None = None
+    budget_usd: float = 0.0
+    cost_usd: float = 0.0
+    reason: str | None = None
+
+
+class AgentEvaluation(Dto):
+    id: str
+    version: int
+    project: str
+    status: Literal["running", "passed", "failed", "not_run"]
+    #: Passed cases over live cases; `None` while running and when nothing ran.
+    score: float | None = None
+    budget_usd: float
+    started_by: str | None = None
+    started_at: datetime
+    cases: list[AgentEvaluationCase] = Field(default_factory=list)
 
 
 class AgentReleaseCreate(Dto):

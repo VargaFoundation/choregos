@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api";
 import type {
   Agent,
   AgentChannelStats,
+  AgentEvaluation,
   AgentExposure,
   AgentRelease,
   AgentReleaseCheck,
@@ -30,6 +31,7 @@ type State = {
 };
 
 const states = new Map<string, State>();
+const evaluations = new Map<string, unknown[]>();
 let sequence = 0;
 let projectChannel: ProjectAgentChannel["channel"] = "stable";
 const nowIso = () => new Date().toISOString();
@@ -308,6 +310,32 @@ export function agentReleasesApi(method: string, path: string, query: string, bo
         production: stats(state, state.stable, "production"),
       };
       return readiness;
+    }
+  }
+  const ev = /^\/orgs\/[^/]+\/agents\/([^/]+)\/versions\/(\d+)\/evaluations$/.exec(path);
+  if (ev) {
+    const agent = agents.find((a) => a.slug === ev[1]);
+    if (!agent) return undefined;
+    const version = Number(ev[2]);
+    const list = (evaluations.get(`${agent.slug}@${version}`) ?? []) as AgentEvaluation[];
+    if (method === "GET") return structuredClone(list);
+    if (method === "POST") {
+      const live = (agent.versions?.find((v) => v.version === version)?.spec.evals ?? []).filter((c) => c.live === true);
+      if (live.length === 0) refuse(409, `v${version} has no live case in its eval suite: mark a case \`live\` first`);
+      sequence += 1;
+      const made: AgentEvaluation = {
+        id: `eval-${sequence}`,
+        version,
+        project: (body as { project: string }).project,
+        status: "passed",
+        score: 1,
+        budget_usd: live.reduce((t, c) => t + Math.min(0.5, c.max_cost_usd ?? 0.25), 0),
+        started_by: by,
+        started_at: nowIso(),
+        cases: live.map((c, i) => ({ name: c.name, run_id: `trial-${sequence}-${i}`, status: "passed", passed: true, budget_usd: 0.25, cost_usd: 0.08, reason: null })),
+      };
+      evaluations.set(`${agent.slug}@${version}`, [made, ...list]);
+      return structuredClone(made);
     }
   }
   if (/^\/projects\/[^/]+\/agent-channel$/.test(path)) {

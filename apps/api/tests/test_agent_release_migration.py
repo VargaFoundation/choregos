@@ -20,6 +20,7 @@ API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "b2c4d6e8f0a1"
 AFTER = "d4f6a8c0e2b4"
 APPROVALS = "f6b8d0a2c4e6"
+EVALUATIONS = "a8c0e2b4d6f8"
 
 
 def _config(url: str) -> Config:
@@ -115,6 +116,16 @@ def test_every_agent_starts_in_production_at_its_latest_version(
             released = {row[1] for row in connection.execute(text("PRAGMA table_info(agent_releases)")).all()}
         assert not {"approvals_required", "decisions"} & released and "channel" in released
         command.upgrade(_config(url), APPROVALS)
+        command.upgrade(_config(url), EVALUATIONS)
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT count(*) FROM agent_evaluations")).scalar_one() == 0
+        command.downgrade(_config(url), APPROVALS)
+        with engine.connect() as connection:
+            names = {
+                row[0]
+                for row in connection.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+            }
+        assert "agent_evaluations" not in names
         command.downgrade(_config(url), BEFORE)
         with engine.connect() as connection:
             columns = {row[1] for row in connection.execute(text("PRAGMA table_info(agents)")).all()}

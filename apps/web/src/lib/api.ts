@@ -27,6 +27,7 @@ import type {
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentMetrics,
+  AgentEvaluation,
   AgentExposure,
   AgentRelease,
   AgentReleaseCreate,
@@ -329,6 +330,14 @@ export const api = {
     request<AgentReleaseReadiness>(`/orgs/${org}/agents/${slug}/versions/${version}/readiness?channel=${channel}`),
   setAgentReleasePolicy: (org: string, slug: string, body: AgentReleasePolicy) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/release-policy`, { method: "PUT", body: JSON.stringify(body) }),
+  /** A live evaluation: the revision's `live` cases run as capped trials in a project (S40-02d). */
+  startAgentEvaluation: (org: string, slug: string, version: number, project: string) =>
+    request<AgentEvaluation>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`, {
+      method: "POST",
+      body: JSON.stringify({ project }),
+    }),
+  agentEvaluations: (org: string, slug: string, version: number) =>
+    request<AgentEvaluation[]>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`),
   agentExposure: (org: string, slug: string) => request<AgentExposure>(`/orgs/${org}/agents/${slug}/exposure`),
   decideAgentRelease: (org: string, slug: string, id: string, body: AgentReleaseDecision) =>
     request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
