@@ -29,7 +29,6 @@ from choregos_contracts import (
     KnowledgeRef,
     LaunchSpec,
     McpServerRef,
-    Permissions,
     PlaybookRef,
     ProjectRef,
     RepoRef,
@@ -66,6 +65,7 @@ from .job import NO_MODEL, prepare_job
 from .plan import StagePlan
 from .remote import A2A_BACKEND, a2a_runtime, check_remote_agent, remote_budget, remote_call
 from .run_key import reserve_key
+from .run_network import admit_network, network_permissions, run_network
 
 __all__ = [
     "FILE_MAX_MINUTES",
@@ -157,6 +157,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         agent = _agent_d_essai(plan) or await _agent_du_plan(session, bundle, plan)
         if agent is not None and plan.trial_spec is None:
             await _budget_du_jour(session, bundle, agent)
+        # ADR 0070: an agent that needs a host its project or the organisation does not allow does
+        # not start — before any key is reserved or minted.
+        admit_network(bundle, agent, settings)
         if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
         code_runtime = _code_runtime(agent)
@@ -322,10 +325,10 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             memories=resolved_memories.memories,
             skills=[] if remote_runtime is not None else await _skills_de_l_agent(session, bundle, agent),
             knowledge=[] if remote_runtime is not None else await _knowledge_of_agent(session, bundle, agent),
-            permissions=Permissions(
+            permissions=network_permissions(
+                run_network(bundle, agent.spec.network if agent is not None else None, settings),
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
-                allow_domains=engine.allow_domains(),
                 dod_iterations=engine.dod_iterations(),
                 max_findings=engine.max_findings_per_run(),
                 unknown_requests=bundle.policy.sandbox.unknown_requests,

@@ -52,6 +52,11 @@ class ClaudeCodeBackend(Backend):
                 ]
             },
         }
+        if not stage_input.permissions.builtin_web_tools:
+            # ADR 0070: the CLI's own web tools are switched off by the policy, the agent or the
+            # organisation. `WebSearch` runs at the model provider, outside every network layer
+            # of the platform: this setting is the only lever there is.
+            settings["permissions"]["deny"] += ["WebFetch", "WebSearch"]
         env = {"CLAUDE_PROJECT_DIR": str(workspace)}
         home_files: dict[str, str] = {}
         if stage_input.context.shell_filter == "rtk":

@@ -1378,8 +1378,21 @@ An agent version may carry its own `network`:
 
 `domains` absent (or `null`) means the project's list, `[]` no internet, a list only these hosts. Every
 host must be allowed by the organisation or the version is refused when created, published or tried
-(422, one line per host); the project's own list is checked when a run is admitted. The next stages
-carry it to the pod (S40-01b) and make it a wall (S40-01c).
+(422, one line per host); the project's own list is checked when a run is admitted: an agent that needs
+a host its project or the organisation does not allow does not start (`AgentIndisponible`, not retried,
+before any gateway key is minted), and the message names each host and where to change it.
+
+**What a run carries, and what an agent sees when refused.** The orchestrator writes the run's effective
+network into its `permissions`: `allow_domains` (the agent's hosts, or the project's, plus the host of the
+project's repository), `deny_domains`, `egress: listed` (the list is complete: an empty one means no
+internet) and `builtin_web_tools`. A job step gets the project's network; a trial gets the draft's. The
+runner's guardrails refuse a request for a host outside the list, a denied host, any host when the list is
+empty, and the CLI's own `WebFetch`/`WebSearch` when built-in web tools are off; the refusal names the host
+and says to change the agent's Network section, the project's policy or the organisation's ceiling. For
+Claude Code, `WebFetch` and `WebSearch` are also denied in its settings. A deployment whose egress proxy
+wants run credentials sets `CHOREGOS_RUNNER_EGRESS_AUTH=run` on the orchestrator: the runner then adds its
+run id and run token to `HTTP(S)_PROXY` before starting anything. These guardrails are a **net**, not a
+wall: see [security](security.md).
 
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
