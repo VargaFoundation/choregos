@@ -64,6 +64,7 @@ import type {
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
+import { proceduresApi } from "./procedures";
 
 export { peopleOpsFixtures };
 
@@ -1822,6 +1823,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   await new Promise((resolve) => setTimeout(resolve, 40));
   const body: unknown = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
   if (method !== "GET") recordWrite(method, path, body);
+  const procedures = proceduresApi(method, path);
+  if (procedures !== undefined) return procedures as T;
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);

@@ -73,6 +73,8 @@ export type {
   ConnectorOperation,
   ConnectorSecretState,
   Integrations,
+  Procedure,
+  ProcedureSummary,
   OperationPatch,
   OrgConnector,
   OrgConnectorCreate,

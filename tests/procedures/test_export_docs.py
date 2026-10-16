@@ -86,3 +86,10 @@ def test_the_mock_data_has_the_apis_shape(tmp_path: pathlib.Path, name: str) -> 
     jira = next(p for p in data if p["id"] == "connector.tracker.jira")
     assert jira["values"] == {"webhook_url:jira": "https://choregos.example.com/api/v1/webhooks/jira"}
     assert {"id", "title", "version", "audience", "applies_to", "link", "reviewed", "sections"} <= set(jira)
+
+
+def test_the_console_mocks_are_what_the_procedures_render_to() -> None:
+    mocks = ROOT / "apps/web/src/mocks/procedures.json"
+    assert json.loads(mocks.read_text(encoding="utf-8")) == export_docs.mock_data(), (
+        "run `uv run python tools/procedures/export_docs.py --mocks apps/web/src/mocks/procedures.json`"
+    )

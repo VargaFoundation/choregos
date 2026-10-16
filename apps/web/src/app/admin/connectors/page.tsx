@@ -8,10 +8,12 @@ import { Suspense, useState } from "react";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { Glossaire } from "@/components/glossaire";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import { EMPTY_DRAFT, SecretField, bodyOfDrafts, problemOfDraft, type SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
+import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
 import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorOperation, ConnectorSecretState, OperationPatch, OrgConnector } from "@/lib/types";
@@ -202,6 +204,11 @@ function Secrets({
         <Button size="sm" onClick={() => setEditing(!editing)}>
           {editing ? "Close settings" : "Edit settings"}
         </Button>
+        <ProcedurePanel
+          target={connectorTarget(instance.kind, instance.type)}
+          preset={instance.kind === "mcp" ? presetOfMcpUrl(config.url) : undefined}
+          autoOpen={false}
+        />
       </div>
       {editing && (
         <form
@@ -473,6 +480,14 @@ function Declarer({ org }: { org: string }) {
               </Select>
             </label>
           </div>
+          {type && (
+            <div className="flex items-center gap-2">
+              <ProcedurePanel
+                target={connectorTarget(type.kind, type.type)}
+                preset={type.kind === "mcp" ? presetOfMcpUrl(config.url) : undefined}
+              />
+            </div>
+          )}
           {type && <SchemaForm schema={schema} value={config} onChange={setConfig} />}
           {(type?.secret_fields ?? []).map((champ) => (
             <SecretField
