@@ -10,9 +10,15 @@ be written in the prompt only (`workspace.py`), which an agent is free to ignore
 A call's arguments are often unknown when it is announced: opencode sends its `tool_call` with an
 empty `rawInput` and fills it on a later `tool_call_update` (S22-44: five reads of five different
 files fingerprinted as `read:{}` and stopped a working verifier). So a call is counted as a turn when
-first seen, but fingerprinted only once its arguments are known — keyed by its id, from whichever
-notification first carries them. A call that ends with its arguments never known is not compared:
-it breaks the streak rather than extending it.
+first seen, but fingerprinted only once its arguments are known — keyed by its id. A call that ends
+with its arguments never known is not compared: it breaks the streak rather than extending it.
+
+Arguments sent with a `pending` call are not final either: opencode adds the working directory to a
+shell call's `rawInput` before the command is known, so its every `bash` is announced as
+`{"cwd": "/workspace"}` (#611: five different commands of a verifier stopped as one call). A call is
+fingerprinted on the first arguments it carries once it is no longer `pending`, or, if it ends
+without any, on the last ones it was announced with — what an agent that sends its arguments with
+the announcement only (claude-agent-acp) leaves to compare.
 """
 
 from __future__ import annotations
@@ -27,6 +33,9 @@ DEFAULT_LOOP_THRESHOLD = 5
 
 #: The statuses after which a call's arguments will not be reported any more.
 _FINISHED = frozenset({"completed", "failed"})
+
+#: The status of a call announced but not started: its arguments may still be incomplete.
+_PENDING = "pending"
 
 
 def tool_name(tool_call: dict[str, Any]) -> str:
@@ -67,6 +76,8 @@ class TurnGuard:
     detail: str = ""
     #: The tool of each call seen, by id, until its fingerprint is taken.
     _names: dict[str, str] = field(default_factory=dict)
+    #: The arguments a call was announced with (`pending`), kept until it starts or ends.
+    _announced: dict[str, Any] = field(default_factory=dict)
     #: The calls already compared (or given up on): a later update of them changes nothing.
     _settled: set[str] = field(default_factory=set)
     _last: str | None = None
@@ -77,8 +88,8 @@ class TurnGuard:
         """Takes in a `tool_call`, a `tool_call_update` or a permission request's `toolCall`.
 
         A call counts as one turn, the first time its id is seen; it is compared with the previous
-        call the first time its arguments are known. Returns the reason to stop when a limit is
-        crossed."""
+        call the first time its arguments are known outside of `pending`, or when it ends. Returns
+        the reason to stop when a limit is crossed."""
         if self.tripped is not None:
             return self.tripped
         call_id = str(tool_call.get("toolCallId") or "")
@@ -96,9 +107,18 @@ class TurnGuard:
         if call_id in self._settled:
             return None
         arguments = known_arguments(tool_call)
+        status = tool_call.get("status")
+        anonymous = call_id.startswith("\x00")
+        if arguments is not None and status == _PENDING and not anonymous:
+            # Perhaps only part of them (opencode's `{"cwd": …}`): kept, compared later.
+            self._announced[call_id] = arguments
+            return None
+        if arguments is None and (status in _FINISHED or anonymous):
+            arguments = self._announced.get(call_id)
         if arguments is not None:
+            self._announced.pop(call_id, None)
             self._compare(call_id, signature(self._names.pop(call_id), arguments))
-        elif tool_call.get("status") in _FINISHED or call_id.startswith("\x00"):
+        elif status in _FINISHED or anonymous:
             # Ended without its arguments ever being told: unknown is not "the same".
             self._names.pop(call_id, None)
             self._settled.add(call_id)
