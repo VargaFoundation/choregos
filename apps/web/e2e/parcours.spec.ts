@@ -186,7 +186,7 @@ test("administration : en communautaire, ce que l'édition entreprise ajoute, sa
 
 test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async ({ page }) => {
   await page.goto("/integrations");
-  await expect(page.getByRole("heading", { name: "AI clients", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integrations", level: 1 })).toBeVisible();
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp");
   await expect(page.getByTestId("snippet")).toContainText("claude mcp add --transport http choregos");
   await page.getByRole("button", { name: "Create an access token" }).click();
@@ -316,7 +316,7 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   // AI clients live on their own page now (S30-04).
   await expect(page.getByTestId("client-tok-claude")).toHaveCount(0);
   await page.goto("/integrations");
-  await expect(page.getByRole("heading", { name: "AI clients", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integrations", level: 1 })).toBeVisible();
   // Le jeton du Claude Code de Léa a appelé la porte : connecté, et rattaché à son agent externe.
   const claude = page.getByTestId("client-tok-claude");
   await expect(claude).toContainText("Connected");

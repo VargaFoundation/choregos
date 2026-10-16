@@ -26,7 +26,7 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
       {!projet && (
         <div className="space-y-2">
           <Heading as="h1" size="xl">
-            AI clients
+            Integrations
           </Heading>
           <p className="max-w-3xl text-sm text-ink-muted">
             Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work
@@ -47,7 +47,7 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
 }
 
 /**
- * Everything about AI clients lives here (S30-04, plan item 7): the caller's clients — and the
+ * Everything about AI clients lives on the Integrations page (S30-04, plan item 7): the caller's clients — and the
  * external agent each acts as — and the assistants that connect in one click. The agents' page is
  * the registry only.
  */
