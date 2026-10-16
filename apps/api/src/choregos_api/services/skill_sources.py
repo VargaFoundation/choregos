@@ -32,7 +32,7 @@ from urllib.parse import quote, urlsplit
 
 from choregos_adapters.http.egress import guarded
 
-from .skills import MAX_FICHIERS, MAX_OCTETS, SkillRefusee, chemin_sur, entete, valider
+from .skills import MAX_FICHIERS, MAX_OCTETS, SkillRefusee, chemin_sur, entete, file_value, valider
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 HOSTS = ("github.com", "gitlab.com")
@@ -180,9 +180,9 @@ def _add_file(archive: tarfile.TarFile, skill: FoundSkill, relatif: str, info: t
         skill.problem = f"`{relatif}` cannot be read"
         return
     try:
-        skill.files[relatif] = donnees.read().decode("utf-8")
-    except UnicodeDecodeError:
-        skill.problem = f"`{relatif}` is not UTF-8 text"
+        skill.files[relatif] = file_value(relatif, donnees.read())
+    except SkillRefusee as refus:
+        skill.problem = str(refus)
         return
     if info.mode & 0o111:
         skill.executables.append(relatif)

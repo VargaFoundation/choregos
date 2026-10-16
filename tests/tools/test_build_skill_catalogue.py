@@ -142,7 +142,7 @@ def test_a_skill_without_any_licence_is_dropped() -> None:
 
 
 def test_a_binary_file_drops_the_skill_as_the_gate_does() -> None:
-    result = run({"demo/SKILL.md": skill_md("demo"), "demo/font.ttf": b"\xff\xfe\x00\x01", "LICENSE": MIT})
+    result = run({"demo/SKILL.md": skill_md("demo"), "demo/blob.bin": b"\xff\xfe\x00\x01", "LICENSE": MIT})
     assert isinstance(result, gen.Dropped) and result.reason.startswith("gate:") and "UTF-8" in result.reason
 
 

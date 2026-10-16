@@ -715,8 +715,11 @@ Choregos' spend ledger.
 
 A skill **declares no permission**: an `allowed-tools` field is refused, because what an agent may
 call is decided by its version and its project, never by a file it reads. An archive that leaves
-its folder (`../`), holds a symbolic link, more than 256 files or 5 MiB, or a file that is not
-UTF-8 text is refused. Versions never change; a skill says which agents carry it.
+its folder (`../`), holds a symbolic link, more than 256 files or 5 MiB, or a file that is neither
+UTF-8 text nor an inert binary is refused. Inert binaries are fonts and images (`png`, `jpg`, `jpeg`,
+`gif`, `webp`, `ico`, `ttf`, `otf`, `woff`, `woff2`): at most 512 KiB each, their first bytes must
+match their extension, and they are stored as base64 (SVG is text). Any other binary refuses the
+skill. Versions never change; a skill says which agents carry it.
 
 Every version passes a **supply-chain gate** ([ADR 0050](adr/0050-skill-supply-chain-gate.md)): a
 risk tier — `low` (a `SKILL.md` alone), `medium` (references, assets), `high` (a script, an

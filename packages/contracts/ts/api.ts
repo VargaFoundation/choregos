@@ -1259,7 +1259,7 @@ export type ProjectAgent = {
 };
 
 export type SkillFiles = {
-  /** relative path → text */
+  /** path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text */
   files: {
     [key: string]: string;
   };
@@ -1285,6 +1285,7 @@ export type SkillVersion = {
   digest: string;
   created_by?: string | null;
   created_at?: string | null;
+  /** path → content: UTF-8 text, or base64 for a font or image extension (png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2) */
   files?: {
     [key: string]: string;
   } | null;
@@ -2905,6 +2906,7 @@ export interface Operations {
   slug: string;
   version: number;
   digest: string;
+  /** path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text */
   files: {
     [key: string]: string;
   };

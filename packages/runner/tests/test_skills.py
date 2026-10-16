@@ -115,3 +115,36 @@ async def test_le_runner_s_arrete_sur_une_skill_alteree(
     sortie = await Runner(runner_settings, client).execute(avec, client)  # type: ignore[arg-type]
     assert sortie.exit_code is Exit.SKILLS_INVALID
     assert client.results == [], "aucun résultat : l'agent n'a pas tourné"
+
+
+PNG = b"\x89PNG\r\n\x1a\n\x00\xff\xfe"
+
+
+def test_an_inert_binary_is_written_as_bytes_without_an_exec_bit(tmp_path: Path) -> None:
+    from choregos_contracts import encode_binary
+
+    fichiers = {**FICHIERS, "assets/logo.png": encode_binary(PNG)}
+    ref = SkillRef(slug="procedure-onboarding", version=2, digest=empreinte_de_skill(fichiers))
+    livree = {"slug": "procedure-onboarding", "version": 2, "digest": ref.digest, "files": fichiers}
+    ecrits, _ = poser([livree], [ref], tmp_path, ".claude/skills")
+    ecrit = tmp_path / ".claude/skills/procedure-onboarding/assets/logo.png"
+    assert ecrit.read_bytes() == PNG
+    assert ecrit.stat().st_mode & 0o777 == 0o644
+    assert ".claude/skills/procedure-onboarding/assets/logo.png" in ecrits
+
+
+def test_a_binary_swapped_after_preparation_stops_the_run(tmp_path: Path) -> None:
+    from choregos_contracts import encode_binary
+
+    attendus = {**FICHIERS, "a.png": encode_binary(PNG)}
+    ref = SkillRef(slug="procedure-onboarding", version=2, digest=empreinte_de_skill(attendus))
+    livres = {**FICHIERS, "a.png": encode_binary(PNG + b"x")}
+    livree = {"slug": "procedure-onboarding", "version": 2, "digest": ref.digest, "files": livres}
+    with pytest.raises(SkillInvalide, match="digest"):
+        poser([livree], [ref], tmp_path, ".claude/skills")
+
+
+def test_a_corrupt_binary_stops_the_run(tmp_path: Path) -> None:
+    livree = {**LIVREE, "files": {**FICHIERS, "a.png": "not base64!"}}
+    with pytest.raises(SkillInvalide, match="corrupt binary"):
+        poser([livree], [REF], tmp_path, ".claude/skills")
