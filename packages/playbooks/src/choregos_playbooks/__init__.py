@@ -97,6 +97,8 @@ def render_playbook(role: str, **variables: Any) -> str:
         "allowed_paths": [],
         "context": None,
         "project": None,
+        #: The production indicator sources the run can read (S22-48); empty = none configured.
+        "production_indicators": [],
         "output_contract": OUTPUT_CONTRACT,
         "invariants": INVARIANTS,
     }

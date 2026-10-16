@@ -83,6 +83,12 @@ No agent deploys: the release train does, under the project's policy. A batch th
    exits 0 when production is healthy (for instance `curl -fsS https://app.example.com/health`), and
    add the domain to the policy's `sandbox.network.allow_domains`. The production verifier fails
    without it.
+   The verifier judges what the project can measure. Without a production indicator source (a
+   catalogue tool filed under `observability` in the project's `tools`, or an MCP server of the
+   agent named after Grafana, Prometheus, Loki, Datadog, Sentry, New Relic or Honeycomb), a
+   measured `smoke_ok: true` is enough for a go, and its summary says that only the smoke test
+   was available. With a source, it compares errors, latency and business errors before and after
+   the release, and answers no-go when in doubt.
 6. Label an issue `agent-ready` (plus `bug`, `adr` or `feature`) to start it.
 
 The policy (`policy.yaml`) sets the budgets (10 / 30 / 80 / 160 USD per work item by size, 150 USD per
