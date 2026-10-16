@@ -875,6 +875,17 @@ findings of the run go to its one `write` binding, and when that memory is globa
 acceptance rule (`auto_accept_after_runs`) covers a project's memories — shared, each agent's own and the
 named ones — and never a global memory.
 
+**In the console.** **Memories** (`/memories`, next to Knowledge) is the registry of the organisation's global
+memories: name, reach, status and the agents that use each; an administrator creates one from the **New
+memory** drawer. A memory's page searches it, lists what agents proposed (accept or reject, administrators
+only), edits its reach with a project picker, archives it and links the agents that bind it. A project's
+**Memory** section picks which memory to read — the shared one, an agent's own, a named one, or an
+organisation memory that reaches it (read-only there) — and offers **New project memory** to its owners. In
+the agent builder, the **Memory** section is the ordered list of bindings: add a memory (grouped as the
+project's, whichever project the run is in, and the organisation's), choose read or read and write (choosing
+write on a row demotes the other), move rows up and down, remove them; its summary line says what it holds
+and where the run writes.
+
 ### Knowledge bases
 
 A **knowledge base** is a corpus you curate — an architecture framework, a security policy,
