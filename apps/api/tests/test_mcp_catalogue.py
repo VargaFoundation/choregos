@@ -320,3 +320,15 @@ async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it
     for method, headers, _ in server.recues:
         assert headers["x-api-key"] == "the-raw-key", method
         assert "authorization" not in headers, method
+
+
+async def test_every_entry_names_the_setup_procedure_its_install_shows(
+    client: AsyncClient, admin: str
+) -> None:
+    """Atlassian's entry has its own procedure; every other entry gets the generic MCP one (ADR 0067)."""
+    entries = _by_id((await client.get(BASE)).json())
+    assert entries["atlassian"]["procedure"] == "connector.mcp.mcp.atlassian-rovo"
+    others = {e["procedure"] for i, e in entries.items() if i != "atlassian"}
+    assert others == {"connector.mcp.mcp"}
+    for procedure_id in {e["procedure"] for e in entries.values()}:
+        assert (await client.get(f"/api/v1/procedures/{procedure_id}")).status_code == 200
