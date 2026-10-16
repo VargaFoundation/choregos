@@ -612,7 +612,8 @@ In the console, **Agents → New agent** opens a full page (`/agents/new`), in t
    reaches and their policy, and the projects a knowledge base is served to: a run elsewhere stops
    before it starts). Below 1280 px the panel falls under the form.
 
-**New version**, on an agent's page (Definition tab), is the same form without the first step.
+**New version** is the same form without the first step: on an agent's page, **Definition → Edit**
+(see "Read, change and go back" below).
 
 ### Read, change and go back (S40-12, ADR 0076)
 
@@ -642,7 +643,28 @@ Nothing is rewritten or deleted; a restore is never a rollback of production. Th
 message of the versions it creates (`Created`, `Installed from the catalogue (architect@2)`, `Catalogue
 update to architect@3`, `Forked from developer@2`). `GET …/agents/{slug}` lists each version with its
 message, `restored_from` and `pinned_by`, the projects you may see that pin it. The console's Definition
-and History tabs use these (the console part ships separately).
+and History tabs use these.
+
+In the console, an agent's page has the tabs **Overview, Definition, History, Runs, Access**:
+
+- **Definition** shows **one version, read-only**, in folded groups that each say their value in a
+  line: *About* (name, description, tags, with **Edit details**), *Instructions*, *Model and runtime*,
+  *Capabilities* (skills, tools, knowledge, memory), *Limits and budget*, *Eval suite*; a field the
+  console does not know is shown as JSON, never dropped. A bar on top says which version it is
+  (**Current**: what a run loads unless a project pins another), its message, author and date, and
+  which projects pin which version; a picker reads another version, with a banner ("You are reading
+  v1 — v3 is current") offering **Compare** and **Restore**. No field can be typed in until **Edit**.
+- **Edit** (`?tab=definition&edit=1`) opens the builder on the shown version. A third side tab,
+  **Changes (n)**, lists what differs from the version you started from, field by field. **What changed
+  and why** is required to **Publish**; **Discard** asks before dropping changes. If someone published
+  meanwhile, the console says "v4 was published by X since you started from v3", keeps your form, and
+  offers **Compare** (in a new tab) and **Publish on top of v4**; an unchanged definition answers
+  "Nothing changed since v3".
+- **History** (`?tab=history`, `?tab=versions` still opens it) lists revisions, newest first, with the
+  message, author, date and badges (*Current*, *Restored from v1*, *Pinned by billing-api*), **What
+  changed** against the revision before, two checkboxes to compare any two (`?compare=1..3`), and
+  **Restore** on the others. Restoring appends a copy as the next revision: the console never calls it
+  a rollback.
 
 **Tags** (S40-10) are the labels people find an agent by: `madr`, `architecture`, `design`. A tag is a
 lowercase slug (`^[a-z0-9][a-z0-9-]{0,31}$`), an agent carries at most **10**, and they are **metadata, not

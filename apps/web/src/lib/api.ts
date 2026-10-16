@@ -35,6 +35,8 @@ import type {
   AgentPatch,
   AgentSpec,
   AgentVersion,
+  AgentVersionPublish,
+  AgentVersionRestore,
   ProjectAgent,
   ProjectAgentPut,
   Skill,
@@ -140,7 +142,16 @@ export function qualify(id: string): string {
 }
 
 /** An RFC 9457 problem as the API answers it; `correlation_id` ties a 500 to the API's logs (S26-02). */
-export type Problem = { title?: string; detail?: string; errors?: unknown[]; correlation_id?: string };
+export type Problem = {
+  title?: string;
+  detail?: string;
+  errors?: unknown[];
+  correlation_id?: string;
+  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12). */
+  code?: string;
+  latest_version?: number;
+  latest_author?: string | null;
+};
 
 export class ApiError extends Error {
   constructor(
@@ -311,6 +322,12 @@ export const api = {
     request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),
   transferAgentOwnership: (org: string, slug: string, email: string) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
+  /** The next version with its message, from the version the author read; 409 `stale_base` or `no_change` otherwise (S40-12). */
+  publishAgentVersionWithMessage: (org: string, slug: string, body: AgentVersionPublish) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/publish`, { method: "POST", body: JSON.stringify(body) }),
+  /** Copy version N as the next version; nothing is rewritten (S40-12). */
+  restoreAgentVersion: (org: string, slug: string, version: number, body: AgentVersionRestore) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/${version}/restore`, { method: "POST", body: JSON.stringify(body) }),
   publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
   agentMetrics: (org: string, slug: string, days = 30) =>

@@ -323,7 +323,8 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await page.getByRole("link", { name: "Onboarding coordinator" }).click();
   await expect(page.getByTestId("mesures")).toContainText("14 (12 succeeded, 2 failed)");
   await page.getByRole("link", { name: "Definition" }).click();
-  await expect(page.getByTestId("version")).toContainText("onboarding-procedure@1");
+  await expect(page.getByTestId("definition-groups")).toContainText("onboarding-procedure@1");
+  await page.locator("summary", { hasText: "Capabilities" }).click();
   await page.getByRole("link", { name: "onboarding-procedure@1" }).click();
   await expect(page.getByTestId("fichiers")).toContainText("Entra accounts ten days before the start date");
 });
@@ -365,10 +366,11 @@ test("an agent is created from the builder alone, every field of its version set
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/triage$/);
   await page.getByRole("link", { name: "Definition" }).click();
-  const version = page.getByTestId("version");
+  const version = page.getByTestId("definition-groups");
   await expect(version).toContainText("platform/cheap");
   await expect(version).toContainText("claude-code");
-  await expect(version).toContainText("supplier-agent: track_*");
+  await expect(version).toContainText("supplier-agent");
+  await expect(version).toContainText("track_*");
   await expect(version).toContainText("onboarding-procedure");
 });
 
@@ -400,6 +402,8 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
 
   // Its next version starts from what v1 holds, and can drop both.
   await page.getByRole("link", { name: "Definition" }).click();
+  await expect(page.getByTestId("definition-groups")).toContainText("architecture-framework");
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
   const suivante = page.getByTestId("agent-builder");
   await expect(suivante.getByTestId("bases-de-la-version")).toContainText("architecture-framework");
   await expect(suivante.getByLabel("Memory scope")).toHaveValue("agent");
@@ -436,25 +440,27 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
 
   // Its next version breaks the case: the publication is refused, the case named.
   await page.getByRole("link", { name: "Definition" }).click();
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
   const suivante = page.getByTestId("agent-builder");
-  await suivante.getByLabel("Instructions").fill("Handle {{ ticket.title }} calmly.");
+  await suivante.getByRole("textbox", { name: "Instructions" }).fill("Handle {{ ticket.title }} calmly.");
+  await suivante.getByLabel("What changed and why").fill("Calmer wording");
   await suivante.getByRole("button", { name: "Publish v2" }).click();
   await expect(suivante.getByTestId("evals-en-echec")).toContainText("vip: missing “Escalate VIP outage”");
-  await page.getByRole("link", { name: "Versions" }).click();
-  await expect(page.getByRole("table", { name: "Versions" }).getByRole("row")).toHaveCount(2);
+  await page.getByRole("link", { name: "History" }).click();
+  await expect(page.getByTestId("history").getByRole("listitem")).toHaveCount(1);
 });
 
-test("an agent's page is in tabs: overview, definition, versions, runs, access (S30-05)", async ({ page }) => {
+test("an agent's page is in tabs: overview, definition, history, runs, access (S30-05, S40-12)", async ({ page }) => {
   await page.goto("/agents/onboarding-coordinator");
   const onglets = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
-  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "Versions", "Runs", "Access"]);
+  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Runs", "Access"]);
   await expect(onglets.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("mesures")).toBeVisible();
   await expect(page.getByTestId("version")).toHaveCount(0);
 
-  await onglets.getByRole("link", { name: "Versions" }).click();
-  await expect(page).toHaveURL(/tab=versions/);
-  await expect(page.getByRole("table", { name: "Versions" }).getByRole("row")).not.toHaveCount(1);
+  await onglets.getByRole("link", { name: "History" }).click();
+  await expect(page).toHaveURL(/tab=history/);
+  await expect(page.getByTestId("history").getByRole("listitem")).not.toHaveCount(1);
   await expect(page.getByTestId("mesures")).toHaveCount(0);
 
   await onglets.getByRole("link", { name: "Runs" }).click();

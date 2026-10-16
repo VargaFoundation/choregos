@@ -16,9 +16,10 @@ test("a tag chip filters the registry and writes the address", async ({ page }) 
 });
 
 test("the agent's page shows its tags and edits them without publishing a version", async ({ page }) => {
-  await page.goto("/agents/architect");
+  await page.goto("/agents/architect?tab=definition");
   const header = page.getByRole("list", { name: "Tags" }).first();
   await expect(header.getByRole("link", { name: "madr" })).toBeVisible();
+  await page.locator("summary", { hasText: "About" }).click();
   await page.getByRole("button", { name: "Edit details" }).click();
   const input = page.getByRole("combobox", { name: "Tags" });
   await input.fill("ADR");

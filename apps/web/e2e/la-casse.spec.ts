@@ -31,6 +31,8 @@ const PAGES = [
   "/agents",
   "/agents?tag=madr",
   "/agents/onboarding-coordinator",
+  "/agents/onboarding-coordinator?tab=definition",
+  "/agents/onboarding-coordinator?tab=history",
   "/skills",
   "/costs",
   "/skills/onboarding-procedure",
