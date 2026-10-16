@@ -59,6 +59,24 @@ def gateway() -> Iterator[Gateway]:
                 ],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             }
+            if body.get("stream"):
+                chunks = [
+                    {
+                        **reply,
+                        "object": "chat.completion.chunk",
+                        "choices": [{"index": 0, "delta": {"content": part}, "finish_reason": None}],
+                    }
+                    for part in ("he", "llo")
+                ]
+                payload = (
+                    "".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n"
+                ).encode()
+                self.send_response(200)
+                self.send_header("content-type", "text/event-stream")
+                self.send_header("content-length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
             payload = json.dumps(reply).encode()
             self.send_response(200)
             self.send_header("content-type", "application/json")

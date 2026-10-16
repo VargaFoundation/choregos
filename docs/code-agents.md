@@ -6,6 +6,53 @@ ACP to it, decides its permissions, counts its turns, journals its tool calls, c
 reads its result in the contract's shape. The decision and the alternatives are in
 [ADR 0063](adr/0063-agents-written-in-code.md).
 
+## Why no Choregos framework
+
+Choregos has no agent framework and does not need one. `choregos-agent-sdk` is a **run-contract
+adapter**: it gives an agent written on any framework the four things a step needs from the platform
+and nothing else —
+
+| The platform needs | How |
+| --- | --- |
+| the agent seam | ACP (Agent Client Protocol, from Zed) to the runner, through the official `agent-client-protocol` library. **Not** IBM's Agent Communication Protocol, which merged into A2A |
+| governed tools | MCP, every call through the runner's permission request |
+| a counted, budgeted model | an OpenAI-compatible (or Anthropic) endpoint, the run's own key, every request one turn |
+| a result | `.choregos/result.json`, validated against `choregos/StageResult/v1` |
+
+Control flow, prompts, memory and multi-agent patterns belong to the framework you choose. Durable
+state, retries and human gates belong to the workflow one level up (Temporal): a framework's own
+checkpointing is not needed inside one pod. A framework of our own would compete with eight
+maintained ones and duplicate the workflow engine, so the SDK's public surface is frozen by a test
+(`test_public_surface.py`); adding a planner, a memory or a graph primitive needs an amendment of
+[ADR 0063](adr/0063-agents-written-in-code.md). It lives in this repository, moves in lockstep with
+`choregos-contracts`, the runner image and the conformance suite, and is published to PyPI from this
+repository's GitHub Actions (trusted publishing, `release.yml`).
+
+## Bring your framework
+
+Two lines each: the model client, and the tools. Give the framework `ctx.llm.http_client()` or
+`ctx.llm.openai_client()` so that every model request counts against `max_turns`, and take the tools
+from a bridge so that every call asks the runner's guard. **Do not hand the run's MCP URLs to the
+framework's own MCP client, and do not build its model client from `base_url` and `api_key` alone**:
+both work and both skip the guard and the count (the conformance check `max_turns` fails for the
+second).
+
+| Framework | Model client | Tools | Switch off |
+| --- | --- | --- | --- |
+| LangGraph / LangChain | `ChatOpenAI(model=ctx.llm.model, base_url=ctx.llm.base_url, api_key=ctx.llm.api_key, http_async_client=ctx.llm.http_client())` | `await langchain.tools(await ctx.tools())` | |
+| OpenAI Agents SDK | `OpenAIChatCompletionsModel(model=ctx.llm.model, openai_client=ctx.llm.openai_client())` (chat completions: the gateway is not necessarily OpenAI) | `await openai_agents.tools(await ctx.tools())` | `set_tracing_disabled(True)`: tracing goes to OpenAI by default |
+| Pydantic AI | `OpenAIChatModel(name, provider=OpenAIProvider(openai_client=ctx.llm.openai_client()))` | `toolsets=[await pydantic_ai.toolset(await ctx.tools())]` | |
+| Google ADK | `LiteLlm(api_base=ctx.llm.base_url, api_key=ctx.llm.api_key)` (the client is not injectable: only the run's key bounds it) | wrap `tools.call` in a function tool | |
+| Microsoft Agent Framework | `OpenAIChatClient(base_url=..., api_key=..., async_client=ctx.llm.openai_client())` | wrap `tools.call` in a function tool | |
+| Strands Agents | `OpenAIModel(client_args={"base_url": ..., "api_key": ...})` | wrap `tools.call` in a tool | |
+| CrewAI | `LLM(model=..., base_url=..., api_key=...)` | wrap `tools.call` in a tool | telemetry is on by default: turn it off |
+| smolagents | `OpenAIServerModel(api_base=..., api_key=...)` | wrap `tools.call` in a tool | `CodeAgent` runs generated Python: it stays inside the sandboxed pod |
+
+The first three have bridges and examples (`examples/agents/`); for the others, the table is a
+starting point to confirm against the version you pin. A client the SDK cannot be injected into is
+bounded by the run's key (the budget) and still seen by the runner's turn guard only through the tool
+calls you route through the SDK. A stricter option, loopback proxies the runner governs, is not built.
+
 ## Which one do I write?
 
 | You have | Use |
@@ -129,6 +176,7 @@ the suite runs; an image is run with `docker run -i`.
 
 - [`examples/agents/plain`](../examples/agents/plain): the ticket triager in plain Python. Passes the
   seven checks in CI.
-- [`examples/agents/langgraph`](../examples/agents/langgraph): the same agent as a LangGraph graph.
-  LangGraph is heavy and outside the repository's lock file: it is built and checked by a manual
-  workflow (`code-agent-langgraph`), not by the blocking CI.
+- [`examples/agents/langgraph`](../examples/agents/langgraph), [`openai-agents`](../examples/agents/openai-agents)
+  and [`pydantic-ai`](../examples/agents/pydantic-ai): the same agent on each framework. The
+  frameworks are heavy and outside the repository's lock file: they are built and checked by a
+  nightly and manual workflow (`code-agent-examples`), not by the blocking CI.

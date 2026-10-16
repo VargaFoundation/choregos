@@ -1,0 +1,45 @@
+# Nightly and manual, never blocking: builds each framework example agent image (LangGraph, OpenAI
+# Agents SDK, Pydantic AI) and runs the seven conformance checks of a code agent inside it
+# (ADR 0063). The frameworks are heavy and stay out of the repository's lock file, so they are not
+# part of the blocking CI; the plain example is (`conformance-backends`).
+name: code-agent-examples
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      runner-image:
+        description: "The runner image the examples are built FROM"
+        default: ghcr.io/vargafoundation/choregos-runner:0.17.15
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    name: ${{ matrix.example }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { example: langgraph, module: langgraph_triager }
+          - { example: openai-agents, module: openai_agents_triager }
+          - { example: pydantic-ai, module: pydantic_ai_triager }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --frozen
+      - name: build the example image
+        run: |
+          docker build -f examples/agents/${{ matrix.example }}/Dockerfile \
+            --build-arg RUNNER_IMAGE="${{ inputs.runner-image || 'ghcr.io/vargafoundation/choregos-runner:0.17.15' }}" \
+            -t "${{ matrix.example }}-triager" .
+      - name: conformance of the image
+        run: |
+          make conformance-agent IMAGE="${{ matrix.example }}-triager" \
+            COMMAND='["/opt/agents/${{ matrix.example }}/bin/python","-m","${{ matrix.module }}"]'
