@@ -325,8 +325,11 @@ export const api = {
   /** Le registre d'agents de l'organisation (ADR 0033) : une version ne se modifie jamais. */
   agents: (org: string) => request<Agent[]>(`/orgs/${org}/agents`),
   agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
-  createAgent: (org: string, body: AgentCreate) =>
-    request<Agent>(`/orgs/${org}/agents`, { method: "POST", body: JSON.stringify(body) }),
+  createAgent: (org: string, body: AgentCreate, allowEgress = false) =>
+    request<Agent>(`/orgs/${org}/agents${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** A model drafts an agent from its description: a proposal, never saved (S39-05). */
   draftAgent: (org: string, body: AgentDraftRequest) =>
     request<AgentDraft>(`/orgs/${org}/agent-drafts`, { method: "POST", body: JSON.stringify(body) }),
@@ -343,8 +346,11 @@ export const api = {
     request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),
   transferAgentOwnership: (org: string, slug: string, email: string) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
-  publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
-    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
+  publishAgentVersion: (org: string, slug: string, spec: AgentSpec, allowEgress = false) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(spec),
+    }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
   /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
@@ -355,8 +361,8 @@ export const api = {
     request<RemoteCredentialAuthorization>(`/orgs/${org}/remote-credentials/${name}/authorize`, { method: "POST" }),
   revokeRemoteCredential: (org: string, name: string) =>
     request<void>(`/orgs/${org}/remote-credentials/${name}`, { method: "DELETE" }),
-  discoverRemoteAgent: (org: string, cardUrl: string) =>
-    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover`, {
+  discoverRemoteAgent: (org: string, cardUrl: string, allowEgress = false) =>
+    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover${allowEgress ? "?allow_egress=true" : ""}`, {
       method: "POST",
       body: JSON.stringify({ card_url: cardUrl }),
     }),
@@ -407,8 +413,11 @@ export const api = {
   skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
   /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
   skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
-  installSkillCatalogueEntry: (org: string, id: string) =>
-    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, { method: "POST" }),
+  installSkillCatalogueEntry: (org: string, id: string, allowEgress = false) =>
+    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, {
+      method: "POST",
+      ...(allowEgress && { body: JSON.stringify({ allow_egress: true }) }),
+    }),
   skill: (org: string, slug: string) => request<Skill>(`/orgs/${org}/skills/${slug}`),
   skillVersion: (org: string, slug: string, version: number) =>
     request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}`),

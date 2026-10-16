@@ -144,7 +144,7 @@ describe("registering a remote agent from its card (ADR 0062)", () => {
 
   it("shows what the card says before anything is created", async () => {
     await read();
-    expect(api.discoverRemoteAgent).toHaveBeenCalledWith("acme", "https://a2a.atlassian.com/.well-known/agent.json");
+    expect(api.discoverRemoteAgent).toHaveBeenCalledWith("acme", "https://a2a.atlassian.com/.well-known/agent.json", false);
     expect(api.createAgent).not.toHaveBeenCalled();
     const skills = screen.getByTestId("card-skills");
     expect(within(skills).getByText("work-in-jira")).toBeInTheDocument();

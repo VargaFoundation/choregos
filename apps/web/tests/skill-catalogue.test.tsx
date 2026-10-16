@@ -104,7 +104,7 @@ describe("the catalogue page", () => {
     expect(within(drawer).getByTestId("confirmation")).toHaveTextContent("Licence Apache-2.0 (permissive)");
     fireEvent.click(within(drawer).getByRole("button", { name: "Install" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/skills/write-spec"));
-    expect(install).toHaveBeenCalledWith("acme", "write-spec");
+    expect(install).toHaveBeenCalledWith("acme", "write-spec", false);
   });
 
   it("a high-risk skill's drawer says it needs a second administrator", async () => {
