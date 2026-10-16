@@ -68,6 +68,17 @@ tool call and every write through the runner's permission path; that path is the
 the user's code, makes the call. It is a convention the SDK keeps, not a wall: Python code in the pod
 can open a socket or run a command like any program, and is bounded by the sandbox, not by the SDK.
 Cosign verification of agent images is not built yet.
+## What a run remembers
+
+A run reads only the memories its agent version binds **and** that reach its project
+([ADR 0075](adr/0075-an-agent-reads-several-memories.md)): a global memory with reach `projects` is
+invisible to the runs of the others, a project memory to every other project, and an unresolvable
+binding is skipped, not read from elsewhere. A namespace that is not the project's shared or own form is
+never read as the shared one (`split_namespace` refuses it). What an agent writes to a **global**
+memory is a proposal: nothing it says becomes a fact the whole organisation reads until an
+administrator accepts it. Publishing a version that binds a global memory needs to see it; a memory a
+caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
+Facts carry their organisation and sit under forced row-level security.
 
 ## Injection through context
 

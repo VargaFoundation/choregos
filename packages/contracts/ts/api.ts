@@ -879,8 +879,10 @@ export type AgentSpec = {
   }>;
   /** The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published */
   evals?: Array<AgentEvalCase>;
-  /** whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none */
+  /** SUPERSEDED by `memories` (S40-11): read only when `memories` is absent. Whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none */
   memory?: "none" | "project" | "agent";
+  /** The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422. */
+  memories?: Array<AgentMemoryBinding> | null;
 };
 
 /** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
@@ -1000,6 +1002,60 @@ export type AgentImageInfo = {
   name: string;
   /** the reference carries an `@sha256:` digest */
   digest_pinned: boolean;
+};
+
+export type AgentMemoryBinding = {
+  /** `global`: the organisation's memory; `project`: a memory of whichever project the run is in (`shared`, `own`, or a named one) */
+  scope: "global" | "project";
+  slug: string;
+  mode?: "read" | "write";
+};
+
+export type MemoryStoreUser = {
+  agent: string;
+  version: number;
+};
+
+export type MemoryStore = {
+  slug: string;
+  display_name: string;
+  description?: string | null;
+  scope: "global" | "project";
+  /** the project's slug, for a project memory */
+  project?: string | null;
+  /** for a global memory: whose runs read it */
+  reach?: "org" | "projects" | null;
+  projects?: Array<string>;
+  status?: "active" | "archived";
+  /** `shared` and `own`: every project has them, they are not rows */
+  implicit?: boolean;
+  created_by?: string | null;
+  created_at?: string | null;
+  /** visible agents whose latest version binds it */
+  used_by?: Array<MemoryStoreUser>;
+};
+
+export type MemoryStoreCreate = {
+  slug: string;
+  display_name: string;
+  description?: string | null;
+  reach?: "org" | "projects";
+  /** required, non-empty, when `reach` is `projects` */
+  projects?: Array<string>;
+};
+
+export type ProjectMemoryCreate = {
+  slug: string;
+  display_name: string;
+  description?: string | null;
+};
+
+export type MemoryStorePatch = {
+  display_name?: string;
+  description?: string | null;
+  reach?: "org" | "projects";
+  projects?: Array<string>;
+  status?: "active" | "archived";
 };
 
 /** A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not. */
@@ -1201,6 +1257,8 @@ export type AgentVersion = {
   restored_from?: number | null;
   /** the slugs of the projects the caller may see that pin this version */
   pinned_by?: Array<string>;
+  /** what a run of this version binds: `spec.memories`, or what the legacy `spec.memory` means (S40-11) */
+  effective_memories?: Array<AgentMemoryBinding>;
 };
 
 export type AgentVersionPublish = {
@@ -2707,6 +2765,7 @@ export interface Operations {
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
   createGitHubInstallLink: { method: "POST"; path: "/orgs/{org}/github/install-link"; body: GitHubInstallLinkRequest; response: GitHubInstallLink };
+  createGlobalMemory: { method: "POST"; path: "/orgs/{org}/memories"; body: MemoryStoreCreate; response: MemoryStore };
   createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
   createKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources"; body: KnowledgeSourceCreate; response: KnowledgeSource };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
@@ -2714,12 +2773,14 @@ export interface Operations {
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
+  createProjectMemory: { method: "POST"; path: "/projects/{id}/memories"; body: ProjectMemoryCreate; response: MemoryStore };
   createRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials"; body: RemoteCredentialCreate; response: RemoteCredential };
   createSkill: { method: "POST"; path: "/orgs/{org}/skills"; body: SkillFiles; response: Skill };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
+  decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
@@ -2758,6 +2819,7 @@ export interface Operations {
   getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
+  getMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}"; body: never; response: MemoryStore };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
@@ -2907,10 +2969,12 @@ export interface Operations {
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
+  listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
+  listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
@@ -2919,6 +2983,7 @@ export interface Operations {
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
+  listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
   listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: Array<ProjectOperation> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
@@ -2988,6 +3053,7 @@ export interface Operations {
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
+  searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
@@ -3011,10 +3077,12 @@ export interface Operations {
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
+  updateMemory: { method: "PATCH"; path: "/orgs/{org}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateModelCatalogueEntry: { method: "PATCH"; path: "/orgs/{org}/models/{entry_id}"; body: ModelCataloguePatch; response: ModelCatalogueEntry };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
+  updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };

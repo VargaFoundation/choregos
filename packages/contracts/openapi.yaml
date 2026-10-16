@@ -1226,6 +1226,8 @@ paths:
         - { name: q, in: query, required: true, schema: { type: string } }
         - { name: k, in: query, schema: { type: integer, default: 10, maximum: 100 } }
         - { name: kinds, in: query, schema: { type: array, items: { type: string } }, style: form, explode: false }
+        - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
+        - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
   /projects/{id}/memory/pending:
@@ -1233,11 +1235,17 @@ paths:
     get:
       tags: [memory]
       operationId: listPendingMemory
+      parameters:
+        - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
+        - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
     post:
       tags: [memory]
       operationId: decidePendingMemory
+      parameters:
+        - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
+        - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/MemoryDecision" } } }
@@ -1260,6 +1268,125 @@ paths:
         - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 52, default: 4 } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAbReport" } } } }
+  /orgs/{org}/memories:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [memory]
+      operationId: listMemories
+      description: "The named memories the caller sees (S40-11, ADR 0075): global ones with their reach, project ones of their projects. `used_by` lists the agents whose latest version binds each."
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [global, project] } }
+        - { name: project, in: query, schema: { type: string }, description: only the memories of this project (a project memory) or reaching it }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MemoryStore" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [memory]
+      operationId: createGlobalMemory
+      description: A global memory, curated by an organisation administrator (`agent:manage`), with a reach. `shared` and `own` are reserved.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStoreCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/memories/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [memory]
+      operationId: getMemory
+      description: A global memory. One the caller may not see is 404.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [memory]
+      operationId: updateMemory
+      description: Renames it, changes its reach, archives it. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStorePatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/memories/{slug}/search:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [memory]
+      operationId: searchGlobalMemory
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: k, in: query, schema: { type: integer, default: 10, maximum: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/memories/{slug}/pending:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [memory]
+      operationId: listGlobalPendingMemory
+      description: What agents proposed to this global memory, waiting for an administrator (`agent:manage`). A global memory only ever receives proposals.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [memory]
+      operationId: decideGlobalPendingMemory
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryDecision" } } }
+      responses:
+        "200": { description: OK }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/memories:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [memory]
+      operationId: listProjectMemories
+      description: "What a run of this project may bind (S40-11): the implicit `shared` and `own` (`implicit: true`), the project's named memories, and the global ones that reach it."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MemoryStore" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [memory]
+      operationId: createProjectMemory
+      description: A named memory of this project, read by its runs only. `project:write`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectMemoryCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/memories/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [memory]
+      operationId: updateProjectMemory
+      description: Renames or archives a named memory of this project (`project:write`). It has no reach to change.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStorePatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/costs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3665,7 +3792,12 @@ components:
         mcp_servers: { type: array, items: { type: object, required: [connector], properties: { connector: { type: string }, tools: { type: array, items: { type: string } } } } }
         knowledge: { type: array, description: "the knowledge bases the agent reads (ADR 0051); each must be served to the run's project", items: { type: object, required: [slug], properties: { slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } } } }
         evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalCase" }, description: "The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published" }
-        memory: { type: string, enum: [none, project, agent], default: project, description: "whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none" }
+        memory: { type: string, enum: [none, project, agent], default: project, description: "SUPERSEDED by `memories` (S40-11): read only when `memories` is absent. Whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none" }
+        memories:
+          oneOf:
+            - { type: array, maxItems: 8, items: { $ref: "#/components/schemas/AgentMemoryBinding" } }
+            - { type: "null" }
+          description: "The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422."
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
@@ -3782,6 +3914,59 @@ components:
       properties:
         name: { type: string }
         digest_pinned: { type: boolean, description: "the reference carries an `@sha256:` digest" }
+    AgentMemoryBinding:
+      type: object
+      required: [scope, slug]
+      properties:
+        scope: { type: string, enum: [global, project], description: "`global`: the organisation's memory; `project`: a memory of whichever project the run is in (`shared`, `own`, or a named one)" }
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        mode: { type: string, enum: [read, write], default: read }
+    MemoryStoreUser:
+      type: object
+      required: [agent, version]
+      properties:
+        agent: { type: string }
+        version: { type: integer }
+    MemoryStore:
+      type: object
+      required: [slug, display_name, scope]
+      properties:
+        slug: { type: string }
+        display_name: { type: string }
+        description: { type: [string, "null"] }
+        scope: { type: string, enum: [global, project] }
+        project: { type: [string, "null"], description: "the project's slug, for a project memory" }
+        reach: { type: [string, "null"], enum: [org, projects, null], description: "for a global memory: whose runs read it" }
+        projects: { type: array, items: { type: string } }
+        status: { type: string, enum: [active, archived], default: active }
+        implicit: { type: boolean, default: false, description: "`shared` and `own`: every project has them, they are not rows" }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        used_by: { type: array, items: { $ref: "#/components/schemas/MemoryStoreUser" }, description: "visible agents whose latest version binds it" }
+    MemoryStoreCreate:
+      type: object
+      required: [slug, display_name]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        reach: { type: string, enum: [org, projects], default: org }
+        projects: { type: array, items: { type: string }, description: "required, non-empty, when `reach` is `projects`" }
+    ProjectMemoryCreate:
+      type: object
+      required: [slug, display_name]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+    MemoryStorePatch:
+      type: object
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        reach: { type: string, enum: [org, projects] }
+        projects: { type: array, items: { type: string } }
+        status: { type: string, enum: [active, archived] }
     AgentEvalCase:
       type: object
       description: A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not.
@@ -3958,6 +4143,7 @@ components:
         message: { type: [string, "null"], description: "why the version exists, in its author's words (S40-12); null for a version published before messages or through the bare-spec endpoint" }
         restored_from: { type: [integer, "null"], description: "the version this one copies, when it is a restore" }
         pinned_by: { type: array, items: { type: string }, description: "the slugs of the projects the caller may see that pin this version" }
+        effective_memories: { type: array, items: { $ref: "#/components/schemas/AgentMemoryBinding" }, description: "what a run of this version binds: `spec.memories`, or what the legacy `spec.memory` means (S40-11)" }
     AgentVersionPublish:
       type: object
       required: [spec, message, base_version]

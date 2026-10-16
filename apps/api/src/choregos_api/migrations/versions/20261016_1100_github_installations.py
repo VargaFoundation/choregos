@@ -6,7 +6,7 @@ Choregos organisation. Under forced RLS: a claimed row is readable by its organi
 unclaimed one only in the platform scope.
 
 Revision ID: d4f6a8c0e2b4
-Revises: b2c4d6e8f0a1
+Revises: a4c6e8b0d2f4
 Create Date: 2026-10-16 11:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4f6a8c0e2b4"
-down_revision: str | None = "b2c4d6e8f0a1"
+down_revision: str | None = "a4c6e8b0d2f4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

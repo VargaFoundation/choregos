@@ -6,7 +6,7 @@ from the table below, frozen at the time of the change: a migration never import
 catalogue, which keeps changing. Every other agent starts with no tag.
 
 Revision ID: d4f6a8c0e2b3
-Revises: b2c4d6e8f0a1
+Revises: d4f6a8c0e2b4
 Create Date: 2026-10-16 12:00:00+00:00
 """
 
@@ -19,7 +19,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "d4f6a8c0e2b3"
-down_revision: str | None = "b2c4d6e8f0a1"
+down_revision: str | None = "d4f6a8c0e2b4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
