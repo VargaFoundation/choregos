@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 
 from ..errors import UpstreamError
+from ..http.egress import guarded
 from .base import Changes, SourceItem
 
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -50,7 +51,7 @@ class GraphDriveSource:
         self.folder = "/" + folder.strip("/") if folder else None
         self.graph_url = graph_url.rstrip("/")
         self.login_url = login_url.rstrip("/")
-        self._http = httpx.AsyncClient(timeout=60.0, transport=transport, follow_redirects=True)
+        self._http = httpx.AsyncClient(timeout=60.0, transport=guarded(transport), follow_redirects=True)
         self._token: tuple[str, float] | None = None
 
     async def _headers(self) -> dict[str, str]:

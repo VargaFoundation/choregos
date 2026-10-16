@@ -31,6 +31,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from ..errors import ConfigurationError, UpstreamError
+from ..http.egress import guarded
 from ..http.rest import RestClient
 from .base import Changes, ItemUnreadableError, SourceItem, SourceRefusedError
 
@@ -123,7 +124,7 @@ class ConfluenceSource:
         # The gateway root for a scoped token, the site itself otherwise: `/wiki/api/v2` hangs off it.
         self.root = f"{GATEWAY}/ex/confluence/{cloud_id}" if auth == "scoped" else self.site
         self._auth = (email, api_token)
-        self._client = httpx.AsyncClient(timeout=60.0, transport=transport or TRANSPORT)
+        self._client = httpx.AsyncClient(timeout=60.0, transport=guarded(transport or TRANSPORT))
         self._rest = RestClient(self.root, auth=self._auth, client=self._client, service="confluence")
         self._trails: dict[str, list[str]] = {}
         self._titles: dict[str, str] = {}
@@ -327,7 +328,7 @@ class ConfluenceDocumentsConnector:
         base = str(self.config["base_url"]).rstrip("/")
         auth = (str(self.config["email"]), str(self.config.get("api_token", "")))
         cloud_id = self.config.get("cloud_id")
-        async with httpx.AsyncClient(timeout=20.0, transport=TRANSPORT) as client:
+        async with httpx.AsyncClient(timeout=20.0, transport=guarded(TRANSPORT)) as client:
             try:
                 if not cloud_id:
                     info = await client.get(f"{base}/_edge/tenant_info")

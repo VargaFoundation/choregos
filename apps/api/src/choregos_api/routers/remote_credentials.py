@@ -21,6 +21,7 @@ import base64
 import hashlib
 import secrets
 import time
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from urllib.parse import urlencode, urlsplit
 
@@ -28,7 +29,7 @@ import httpx
 from choregos_adapters.a2a import AUTH_BEARER, AUTH_NONE, AUTH_OAUTH, AgentCard
 from choregos_core import utcnow
 from choregos_core.redaction import remember_secret
-from fastapi import APIRouter, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,11 +53,28 @@ from ..schemas import (
 )
 from ..secret_store import SecretStoreUnavailable, get_secret_store
 from ..security import read_session, sign_session
-from ..services.egress import ensure_or_409, remote_agent_targets
+from ..services.egress import egress_scope, ensure_or_409, remote_agent_targets
 from ..services.remote_agents import a2a_transport, credential_named, read_card
 from ..services.remote_tokens import secret_name, store_refresh_token
 
-router = APIRouter(tags=["remote-agents"])
+
+async def _egress(session: Db, settings: Config, org: str | None = None) -> AsyncIterator[None]:
+    """Every outbound A2A call of these routes (card, DCR, token) is checked against the
+    organisation's egress allowlist (S39-22). The OAuth callback has no `{org}`: it sets its own."""
+    if org is None:
+        yield
+        return
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        yield
+        return
+    async with egress_scope(session, organisation, "api", "remote-agent", settings):
+        yield
+
+
+router = APIRouter(tags=["remote-agents"], dependencies=[Depends(_egress, scope="function")])
 
 Name = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
 OAUTH_COOKIE = "choregos_remote_oauth"
@@ -357,23 +375,28 @@ async def remote_credential_callback(
         form["client_secret"] = (
             await store.get_many(session, organisation.id, [config["client_secret_name"]])
         )[config["client_secret_name"]]
-    try:
-        async with httpx.AsyncClient(transport=a2a_transport(), timeout=20, follow_redirects=False) as client:
-            exchanged = await client.post(str(config.get("token_url")), data=form)
-            tokens = exchanged.json() if exchanged.status_code < 400 else {}
-            if exchanged.status_code >= 400 or not tokens.get("refresh_token"):
-                detail = (
-                    f"HTTP {exchanged.status_code}"
-                    if exchanged.status_code >= 400
-                    else "no refresh token (is `offline_access` granted?)"
-                )
-                raise upstream("remote-agent", f"the provider did not give a refresh token: {detail}")
-            access = str(tokens.get("access_token") or "")
-            remember_secret(access)
-            remember_secret(str(tokens["refresh_token"]))
-            who = await _who(client, config, tokens, access)
-    except httpx.HTTPError as exc:
-        raise upstream("remote-agent", f"the token endpoint is unreachable ({type(exc).__name__})") from exc
+    async with egress_scope(session, organisation, "api", "remote-agent", settings):
+        try:
+            async with httpx.AsyncClient(
+                transport=a2a_transport(), timeout=20, follow_redirects=False
+            ) as client:
+                exchanged = await client.post(str(config.get("token_url")), data=form)
+                tokens = exchanged.json() if exchanged.status_code < 400 else {}
+                if exchanged.status_code >= 400 or not tokens.get("refresh_token"):
+                    detail = (
+                        f"HTTP {exchanged.status_code}"
+                        if exchanged.status_code >= 400
+                        else "no refresh token (is `offline_access` granted?)"
+                    )
+                    raise upstream("remote-agent", f"the provider did not give a refresh token: {detail}")
+                access = str(tokens.get("access_token") or "")
+                remember_secret(access)
+                remember_secret(str(tokens["refresh_token"]))
+                who = await _who(client, config, tokens, access)
+        except httpx.HTTPError as exc:
+            raise upstream(
+                "remote-agent", f"the token endpoint is unreachable ({type(exc).__name__})"
+            ) from exc
     await store_refresh_token(session, store, row, str(tokens["refresh_token"]), principal.email)
     row.authorised_as = who
     row.status, row.last_error = "connected", None
@@ -472,7 +495,12 @@ def card_summary(card: AgentCard) -> RemoteCardSummary:
     operation_id="discoverRemoteAgent",
 )
 async def discover_remote_agent(
-    org: str, body: RemoteAgentDiscover, session: Db, principal: Me, allow_egress: bool = False
+    org: str,
+    body: RemoteAgentDiscover,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    allow_egress: bool = False,
 ) -> RemoteAgentDiscovery:
     """Reads a card and suggests the registry entry; creates nothing. The card's host must be open
     in the organisation's egress allowlist first (S39-22): 409 `egress_required`, or `allow_egress`."""
@@ -487,7 +515,9 @@ async def discover_remote_agent(
         origin=f"remote-agent:{body.card_url}",
         reason=f"the remote agent at {body.card_url}",
     )
-    card = await read_card(body.card_url)
+    # A fresh policy: the gate above may just have opened the host, after the route's own scope loaded.
+    async with egress_scope(session, organisation, "api", f"remote-agent:{body.card_url}", settings):
+        card = await read_card(body.card_url)
     rows = (
         await session.execute(select(RemoteCredential).where(RemoteCredential.org_id == organisation.id))
     ).scalars()
