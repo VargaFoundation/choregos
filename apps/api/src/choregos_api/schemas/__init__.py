@@ -22,6 +22,7 @@ from .agents import (
     AgentFork,
     AgentLifecycleChange,
     AgentLifecycleResult,
+    AgentMemoryBinding,
     AgentMetrics,
     AgentMetricsSummary,
     AgentOverrides,
@@ -105,6 +106,13 @@ from .livraison import (
     ReleaseItemDto,
     ReleasePage,
     TrainStatusDto,
+)
+from .memory import (
+    MemoryStoreCreate,
+    MemoryStoreDto,
+    MemoryStorePatch,
+    MemoryStoreUser,
+    ProjectMemoryCreate,
 )
 from .mesures import (
     BudgetAlertDto,
@@ -216,6 +224,7 @@ __all__ = [
     "AgentFork",
     "AgentLifecycleChange",
     "AgentLifecycleResult",
+    "AgentMemoryBinding",
     "AgentMetrics",
     "AgentMetricsSummary",
     "AgentOverrides",
@@ -284,6 +293,10 @@ __all__ = [
     "MemoryDecision",
     "MemoryDto",
     "MemoryReimport",
+    "MemoryStoreCreate",
+    "MemoryStoreDto",
+    "MemoryStorePatch",
+    "MemoryStoreUser",
     "ModelMatrix",
     "ModelMatrixEntry",
     "OAuthClientDto",
@@ -305,6 +318,7 @@ __all__ = [
     "ProjectAgentPut",
     "ProjectCreate",
     "ProjectDto",
+    "ProjectMemoryCreate",
     "ProjectModelProfile",
     "ProjectModels",
     "ProjectOperationDto",

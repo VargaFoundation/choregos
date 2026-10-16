@@ -7,16 +7,15 @@ from typing import Annotated, Any
 
 from choregos_core.domain import Memory
 from fastapi import APIRouter, Query, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..db.models import Connector
 from ..deps import Db, Me, ProjectContext, ProjectCtx
 from ..errors import forbidden
 from ..rbac import Permission
 from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryReimport
 from ..services import effective_policy
+from ..services.memory_access import project_adapter, project_namespace
 from ..temporal import get_temporal
 
 router = APIRouter(tags=["memory"])
@@ -30,19 +29,10 @@ async def _adapter(ctx: ProjectContext, session: AsyncSession) -> Any:
     passée à la fabrique : sur PostgreSQL, la mémoire lexicale ne voit que ce que la RLS
     montre à cette organisation.
     """
-    from choregos_adapters import build
-
-    row = (
-        await session.execute(
-            select(Connector).where(Connector.project_id == ctx.id, Connector.kind == "memory")
-        )
-    ).scalar_one_or_none()
-    type_name = row.type if row is not None else "ecphoria"
-    config = dict(row.config or {}) if row is not None else {}
-    return build("memory", type_name, {**config, "tenant": ctx.slug, "org": ctx.org_slug})
+    return await project_adapter(session, ctx.id, ctx.slug, ctx.org_slug)
 
 
-def _dto(memory: Memory) -> MemoryDto:
+def to_dto(memory: Memory) -> MemoryDto:
     return MemoryDto(
         id=memory.id,
         kind=str(memory.kind),
@@ -64,35 +54,53 @@ async def search(
     q: Annotated[str, Query()],
     k: Annotated[int, Query(le=100)] = 10,
     kinds: Annotated[str | None, Query()] = None,
+    memory: Annotated[str | None, Query()] = None,
+    agent: Annotated[str | None, Query()] = None,
 ) -> list[MemoryDto]:
     policy = await effective_policy(session, ctx.id)
     if not policy.memory.enabled:
         return []
     adapter = await _adapter(ctx, session)
-    results = await adapter.search(ctx.slug, q, k)
+    results = await adapter.search(await project_namespace(session, ctx.project, memory, agent), q, k)
     wanted = {kind.strip() for kind in (kinds or "").split(",") if kind.strip()}
-    return [_dto(m) for m in results if not wanted or str(m.kind) in wanted]
+    return [to_dto(m) for m in results if not wanted or str(m.kind) in wanted]
 
 
 @router.get("/projects/{id}/memory/pending", response_model=list[MemoryDto], operation_id="listPendingMemory")
-async def pending(ctx: ProjectCtx, session: Db) -> list[MemoryDto]:
-    """Faits proposés par des agents, en attente de validation humaine (écriture gouvernée)."""
+async def pending(
+    ctx: ProjectCtx,
+    session: Db,
+    memory: Annotated[str | None, Query()] = None,
+    agent: Annotated[str | None, Query()] = None,
+) -> list[MemoryDto]:
+    """Faits proposés par des agents, en attente de validation humaine (écriture gouvernée).
+
+    `?memory=` (S40-11): `shared` (the default), `own` with `&agent=<slug>`, or a named memory of the project.
+    """
+    namespace = await project_namespace(session, ctx.project, memory, agent)
     adapter = await _adapter(ctx, session)
-    rows = getattr(adapter, "pending", {}).get(ctx.slug, []) if hasattr(adapter, "pending") else []
+    rows = getattr(adapter, "pending", {}).get(namespace, []) if hasattr(adapter, "pending") else []
     if hasattr(adapter, "list_pending"):
-        rows = await adapter.list_pending(ctx.slug)
-    return [_dto(m) for m in rows]
+        rows = await adapter.list_pending(namespace)
+    return [to_dto(m) for m in rows]
 
 
 @router.post("/projects/{id}/memory/pending", operation_id="decidePendingMemory")
-async def decide(ctx: ProjectCtx, body: MemoryDecision, session: Db) -> dict[str, str]:
+async def decide(
+    ctx: ProjectCtx,
+    body: MemoryDecision,
+    session: Db,
+    memory: Annotated[str | None, Query()] = None,
+    agent: Annotated[str | None, Query()] = None,
+) -> dict[str, str]:
     ctx.require(Permission.MEMORY_WRITE)
+    namespace = await project_namespace(session, ctx.project, memory, agent)
     adapter = await _adapter(ctx, session)
     if body.action == "accept":
-        accepted = await adapter.accept_pending(ctx.slug, body.id)
+        accepted = await adapter.accept_pending(namespace, body.id)
     else:
         accepted = (
-            await adapter.reject_pending(ctx.slug, body.id) if hasattr(adapter, "reject_pending") else True
+            await adapter.reject_pending(namespace, body.id) if hasattr(adapter, "reject_pending") else True
         )
     await record(
         session,

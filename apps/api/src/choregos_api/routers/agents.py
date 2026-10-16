@@ -94,6 +94,7 @@ from ..services.agents import (
     erreurs_d_une_version,
     resoudre_l_agent,
 )
+from ..services.memory_access import check_bindings_at_publish
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
 
@@ -277,6 +278,13 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     organisation = await _organisation(session, org)
     projet = await _projet(session, organisation, body.project) if body.project else None
     await _skills_usable(session, organisation, body.spec)
+    await check_bindings_at_publish(
+        session,
+        principal,
+        organisation,
+        body.spec,
+        project_slug=body.project if body.scope == "project" else None,
+    )
     existant = (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -375,6 +383,7 @@ async def publish_version(
     _exiger(decide(principal, org, sujet, Action.PUBLISH))
     erreurs_d_une_version(body)
     await _skills_usable(session, organisation, body)
+    await check_bindings_at_publish(session, principal, organisation, body, project_slug=sujet.project_slug)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":
@@ -737,6 +746,14 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
         copiee = next((v for v in versions if v.version == body.version), None)
     if copiee is None:
         raise not_found("Agent version", f"{slug}@{body.version or 'latest'}")
+    # The copy binds the same memories: the forker must see the global ones (S40-11).
+    await check_bindings_at_publish(
+        session,
+        principal,
+        organisation,
+        AgentSpec.model_validate(copiee.spec),
+        project_slug=body.project if body.scope == "project" else None,
+    )
     if (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -1112,6 +1129,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
         _, _, sujet = await _charger(session, principal, org, body.agent)
     _exiger(decide(principal, org, sujet, Action.TRIAL, project_slug=body.project))
     erreurs_d_une_version(body.spec)
+    await check_bindings_at_publish(session, principal, organisation, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:

@@ -6,7 +6,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    computed_field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from .base import Dto
 from .identite import ApiTokenCreated
@@ -50,6 +58,18 @@ class AgentKnowledgeRef(Dto):
     slug: str = Field(pattern=SLUG)
 
 
+class AgentMemoryBinding(Dto):
+    """A memory an agent version binds (S40-11, ADR 0075): global to the organisation, or a memory of
+    whichever project the run is in; read, or read and write (at most one write in a list)."""
+
+    scope: Literal["global", "project"]
+    slug: str = Field(pattern=SLUG)
+    mode: Literal["read", "write"] = "read"
+
+    def to_binding(self) -> Binding:
+        return Binding(self.scope, self.slug, self.mode)
+
+
 class AgentSampleInput(Dto):
     """A sample work item an agent is tried or evaluated on (S32-03)."""
 
@@ -91,6 +111,37 @@ class AgentSpec(Dto):
     #: Whose memory a run reads and writes (S32-02): `project` (shared, the default), `agent` (its
     #: own, within the project) or `none`.
     memory: Literal["none", "project", "agent"] = "project"
+    #: The memories a run reads and writes (S40-11, ADR 0075), in precedence order; at most 8, one
+    #: `write`. Absent, the legacy `memory` field decides (`project` -> the project's shared memory).
+    memories: list[AgentMemoryBinding] | None = Field(default=None, max_length=8)
+
+    @model_validator(mode="after")
+    def _memories_are_coherent(self) -> AgentSpec:
+        if self.memories is None:
+            return self
+        if self.memory != "project":
+            raise ValueError("`memory` is superseded by `memories`: send one of them, not both")
+        if problems := binding_problems([binding.to_binding() for binding in self.memories]):
+            raise ValueError("; ".join(problems))
+        return self
+
+    @model_serializer(mode="wrap")
+    def _leave_out_absent_memories(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """`memories` is left out while it is unset: a version published before the field existed keeps
+        its stored spec, its digest and its response byte for byte."""
+        data: dict[str, object] = handler(self)
+        if data.get("memories") is None:
+            data.pop("memories", None)
+        return data
+
+    def effective_memories(self) -> list[AgentMemoryBinding]:
+        """What a run binds: `memories`, or what the legacy `memory` means."""
+        return [
+            AgentMemoryBinding(scope=b.scope, slug=b.slug, mode=b.mode)
+            for b in effective_bindings(
+                None if self.memories is None else [m.to_binding() for m in self.memories], self.memory
+            )
+        ]
 
 
 class AgentTrialCreate(Dto):
@@ -285,6 +336,12 @@ class AgentVersionDto(Dto):
     checksum: str
     created_by: str | None = None
     created_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def effective_memories(self) -> list[AgentMemoryBinding]:
+        """The memories a run of this version binds, derived from `memory` when `memories` is absent."""
+        return self.spec.effective_memories()
 
 
 class AgentDto(Dto):

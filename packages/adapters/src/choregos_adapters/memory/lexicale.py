@@ -24,7 +24,7 @@ from typing import Any
 
 from choregos_contracts import ContextPack, MemoryItem
 from choregos_core.domain import Fact, Memory, Provenance, utcnow
-from choregos_core.memory_scope import split_namespace
+from choregos_core.memory_scope import parse_namespace
 from choregos_core.models import estimate_tokens
 
 from ..errors import ConfigurationError
@@ -69,6 +69,20 @@ class ModelesMemoire:
 
     Project: Any
     MemoryFact: Any
+    #: The two tables named memories need (S40-11); optional so a caller that only reads the
+    #: project's shared and own memories keeps working without them.
+    Organization: Any = None
+    MemoryStore: Any = None
+
+
+@dataclass(frozen=True)
+class Home:
+    """Where the facts of a namespace live (S40-11)."""
+
+    org_id: str
+    project_id: str | None
+    store_id: str | None
+    agent_slug: str | None
 
 
 class LexicalMemory:
@@ -97,24 +111,70 @@ class LexicalMemory:
         return self._modeles
 
     @staticmethod
-    def _scope(memory_fact: Any, project_id: str, namespace: str) -> Any:
-        """The facts of a namespace (S32-02): the project's own (no agent), or one agent's within it."""
+    def _scope(memory_fact: Any, home: Home) -> Any:
+        """The facts of a namespace: a named memory's (S40-11), the project's own (no agent, no
+        store), or one agent's within it (S32-02)."""
         from sqlalchemy import and_
 
-        agent = split_namespace(namespace)[1]
-        portee = memory_fact.agent_slug.is_(None) if agent is None else memory_fact.agent_slug == agent
-        return and_(memory_fact.project_id == project_id, portee)
+        if home.store_id is not None:
+            return memory_fact.memory_store_id == home.store_id
+        portee = (
+            memory_fact.agent_slug.is_(None)
+            if home.agent_slug is None
+            else memory_fact.agent_slug == home.agent_slug
+        )
+        return and_(memory_fact.project_id == home.project_id, memory_fact.memory_store_id.is_(None), portee)
 
-    async def _project_id(self, session: Any, project: str) -> str:
-        Project = self.modeles.Project  # noqa: N806 — c'est une classe
-        project = split_namespace(project)[0]
-
-        row = (await session.execute(_select(Project).where(Project.slug == project))).scalar_one_or_none()
+    async def _home(self, session: Any, namespace: str) -> Home:
+        parsed = parse_namespace(namespace)
+        modeles = self.modeles
+        if parsed.kind == "global_store":
+            if modeles.Organization is None or modeles.MemoryStore is None:
+                raise ConfigurationError("lexical memory: the organisation and store models are not injected")
+            organisation = (
+                await session.execute(
+                    _select(modeles.Organization).where(modeles.Organization.slug == parsed.org)
+                )
+            ).scalar_one_or_none()
+            if organisation is None:
+                raise ValueError(f"unknown organisation for the memory: {parsed.org}")
+            store = (
+                await session.execute(
+                    _select(modeles.MemoryStore).where(
+                        modeles.MemoryStore.org_id == organisation.id,
+                        modeles.MemoryStore.owner_key == "org",
+                        modeles.MemoryStore.slug == parsed.store,
+                    )
+                )
+            ).scalar_one_or_none()
+            if store is None:
+                raise ValueError(f"unknown global memory: {parsed.org}/{parsed.store}")
+            return Home(str(organisation.id), None, str(store.id), None)
+        Project = modeles.Project  # noqa: N806 — c'est une classe
+        row = (
+            await session.execute(_select(Project).where(Project.slug == parsed.project))
+        ).scalar_one_or_none()
         if row is None:
-            row = await session.get(Project, project)
+            row = await session.get(Project, parsed.project)
         if row is None:
-            raise ValueError(f"projet inconnu pour la mémoire : {project}")
-        return str(row.id)
+            raise ValueError(f"projet inconnu pour la mémoire : {parsed.project}")
+        store_id = None
+        if parsed.kind == "project_store":
+            if modeles.MemoryStore is None:
+                raise ConfigurationError("lexical memory: the store model is not injected")
+            store = (
+                await session.execute(
+                    _select(modeles.MemoryStore).where(
+                        modeles.MemoryStore.org_id == row.org_id,
+                        modeles.MemoryStore.owner_key == str(row.id),
+                        modeles.MemoryStore.slug == parsed.store,
+                    )
+                )
+            ).scalar_one_or_none()
+            if store is None:
+                raise ValueError(f"unknown project memory: {parsed.project}/{parsed.store}")
+            store_id = str(store.id)
+        return Home(str(row.org_id), str(row.id), store_id, parsed.agent)
 
     async def context_pack(
         self, project: str, query: str, paths: list[str], budget_tokens: int, kinds: list[str] | None = None
@@ -164,9 +224,9 @@ class LexicalMemory:
 
         vector = lexical_vector(query)
         async with self._sessions()() as session:
-            project_id = await self._project_id(session, project)
+            home = await self._home(session, project)
             statement = _select(MemoryFact).where(
-                self._scope(MemoryFact, project_id, project), MemoryFact.status == "active"
+                self._scope(MemoryFact, home), MemoryFact.status == "active"
             )
             if kinds:
                 statement = statement.where(MemoryFact.kind.in_(kinds))
@@ -180,12 +240,12 @@ class LexicalMemory:
         MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
-            project_id = await self._project_id(session, project)
+            home = await self._home(session, project)
             previous = (
                 (
                     await session.execute(
                         _select(MemoryFact).where(
-                            self._scope(MemoryFact, project_id, project),
+                            self._scope(MemoryFact, home),
                             MemoryFact.subject == fact.subject,
                             MemoryFact.status == "active",
                         )
@@ -200,8 +260,10 @@ class LexicalMemory:
                 row.status = "superseded"
                 row.valid_to = utcnow()
             created = MemoryFact(
-                project_id=project_id,
-                agent_slug=split_namespace(project)[1],
+                org_id=home.org_id,
+                project_id=home.project_id,
+                memory_store_id=home.store_id,
+                agent_slug=home.agent_slug,
                 kind=str(fact.kind),
                 subject=fact.subject,
                 content=fact.content,
@@ -222,10 +284,12 @@ class LexicalMemory:
         MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
-            project_id = await self._project_id(session, project)
+            home = await self._home(session, project)
             created = MemoryFact(
-                project_id=project_id,
-                agent_slug=split_namespace(project)[1],
+                org_id=home.org_id,
+                project_id=home.project_id,
+                memory_store_id=home.store_id,
+                agent_slug=home.agent_slug,
                 kind=str(fact.kind),
                 subject=fact.subject,
                 content=fact.content,
@@ -246,12 +310,12 @@ class LexicalMemory:
         MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
-            project_id = await self._project_id(session, project)
+            home = await self._home(session, project)
             rows = (
                 (
                     await session.execute(
                         _select(MemoryFact).where(
-                            self._scope(MemoryFact, project_id, project), MemoryFact.status == "pending"
+                            self._scope(MemoryFact, home), MemoryFact.status == "pending"
                         )
                     )
                 )
@@ -261,16 +325,22 @@ class LexicalMemory:
         return [_memory(row) for row in rows]
 
     async def accept_pending(self, project: str, memory_id: str) -> bool:
-        return await self._set_status(memory_id, "active")
+        return await self._set_status(project, memory_id, "active")
 
     async def reject_pending(self, project: str, memory_id: str) -> bool:
-        return await self._set_status(memory_id, "rejected")
+        return await self._set_status(project, memory_id, "rejected")
 
-    async def _set_status(self, memory_id: str, status: str) -> bool:
+    async def _set_status(self, namespace: str, memory_id: str, status: str) -> bool:
         MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
-            row = await session.get(MemoryFact, memory_id)
+            home = await self._home(session, namespace)
+            row = (
+                await session.execute(
+                    _select(MemoryFact).where(MemoryFact.id == memory_id, self._scope(MemoryFact, home))
+                )
+            ).scalar_one_or_none()
+            # A fact outside the namespace it is decided in does not exist for this decision.
             if row is None:
                 return False
             row.status = status

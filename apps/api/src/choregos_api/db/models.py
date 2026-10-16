@@ -435,6 +435,38 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class MemoryStore(Base, PkMixin, TimestampMixin):
+    """A named memory (S40-11, ADR 0075): `global` (the organisation's, curated by an administrator,
+    with a reach) or `project` (a project's, curated by its owners, read by its runs only).
+
+    The implicit memories of a project (`shared`, `own`) are never rows.
+    """
+
+    __tablename__ = "memory_stores"
+    __table_args__ = (
+        UniqueConstraint("org_id", "owner_key", "slug", name="uq_memory_stores_owner_slug"),
+        CheckConstraint("(scope = 'project') = (project_id IS NOT NULL)", name="ck_memory_stores_scope"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(64))
+    display_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: global | project
+    scope: Mapped[str] = mapped_column(String(16))
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: `org`, or the project's id: a unique key without NULLs.
+    owner_key: Mapped[str] = mapped_column(String(36))
+    #: For a global memory, whose runs may read it: `org` (every project) or `projects` (listed).
+    reach: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    projects: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: active | archived
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
 class MemoryFact(Base, PkMixin, TimestampMixin):
     """Repli lexical : mémoire stockée dans Choregos quand Ecphoria n'est pas déployé.
 
@@ -443,9 +475,25 @@ class MemoryFact(Base, PkMixin, TimestampMixin):
     autre chose."""
 
     __tablename__ = "memory_facts"
-    __table_args__ = (Index("ix_memory_facts_project_subject", "project_id", "subject"),)
+    __table_args__ = (
+        Index("ix_memory_facts_project_subject", "project_id", "subject"),
+        CheckConstraint(
+            "project_id IS NOT NULL OR memory_store_id IS NOT NULL", name="ck_memory_facts_has_a_home"
+        ),
+    )
 
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    #: The organisation the fact belongs to (S40-11): what the row-level security keys on, since a
+    #: global memory's facts belong to no project.
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    #: `None` for the facts of a global memory (they carry `memory_store_id` only).
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    #: The named memory the fact is in (S40-11); `None` for a project's shared memory and for an
+    #: agent's own memory.
+    memory_store_id: Mapped[str | None] = mapped_column(
+        ForeignKey("memory_stores.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     kind: Mapped[str] = mapped_column(String(32), index=True)
     subject: Mapped[str] = mapped_column(String(300))
     content: Mapped[str] = mapped_column(Text)
