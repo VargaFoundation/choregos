@@ -925,6 +925,27 @@ request. `GET /orgs/acme/agent-releases?status=pending_approval` is the approver
 you may see), and the agent carries its `pending_release`. Nobody is notified yet. Every step is audited
 (`agent.release.request`, `agent.release.decide`, `agent.release`).
 
+**In the console**, an agent's page has a **Lifecycle** tab (S40-02c) after Definition. Three cards
+side by side (stacked below 1024 px): **Revisions** (the latest revision that sits in no channel, its eval
+result, and *Send to testing* with a share slider and the projects that follow testing), **Testing** (the
+candidate, since when, who gets it, its finished runs beside production's, *Change share*, *Withdraw*,
+*Promote to production…*) and **Production** (the revision, since when and by whom, its runs, *Roll back
+to…* listing only revisions that were in production before). *Promote* opens the checklist the server
+returns (each check passes, fails or does not apply, with its detail), is disabled while a required check
+about the revision fails, and says beforehand that it needs a sign-in less than N minutes old and N
+approvals; a stale sign-in does not block the click, it sends you through the identity provider and back.
+A release waiting for approval shows who asked, the approvals so far and *Approve* (disabled for the
+requester, with the separation-of-duties sentence), *Reject* (reason required) and *Cancel request*. Below:
+the release history and the folded **Release policy** form. Every control is disabled with the server's own
+sentence (`cannot_reason`) when `can.release` is false. The agent's status (draft, active, deprecated,
+retired) moved to that tab, under "Agent status"; the overview keeps one line of badges and a link. The
+header, the registry (a "Production / Testing" column and an "Awaiting approval" filter) and the Versions
+table show where each revision is. A new organisation or project agent is created with *Release through
+testing (recommended)* ticked (a personal agent is released as it is saved). On a project's agents page,
+"This project runs: Production versions / Testing versions" switches the project, and a pin is "Follow
+production", "Follow testing" or "Fixed revision"; a process step says `v3 · production`, `v5 · testing`
+or `v3 · pinned`.
+
 Metrics (`GET …/metrics`) now carry `by_version` — runs, success rate and cost per revision — so
 testing can be read against production; the daily budget shown, the budget alert and the tools an
 external agent gets at the MCP door are those of the revision that runs, not the latest one saved.

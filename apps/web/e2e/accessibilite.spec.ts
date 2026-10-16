@@ -37,6 +37,7 @@ const PAGES = [
   "/agents/new",
   "/agents/onboarding-coordinator",
   "/agents/onboarding-coordinator?tab=versions",
+  "/agents/onboarding-coordinator?tab=lifecycle",
   "/agents/onboarding-coordinator?tab=runs",
   "/agents/leas-claude-code",
   "/skills",

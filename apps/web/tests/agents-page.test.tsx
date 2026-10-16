@@ -22,6 +22,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       agents: vi.fn(),
       agentMetricsList: vi.fn(),
       agentMetrics: vi.fn(),
+      orgAgentReleases: vi.fn().mockResolvedValue([]),
       agentCatalogue: vi.fn().mockResolvedValue([]),
       platformModels: vi.fn().mockResolvedValue([]),
       backends: vi.fn().mockResolvedValue([]),
@@ -136,3 +137,28 @@ describe("the AI clients' list", () => {
     expect(api.agentCredentials).not.toHaveBeenCalled();
   });
 });
+
+describe("the agents' channels (S40-02c)", () => {
+  it("shows production and testing per agent, and filters the agents awaiting approval", async () => {
+    vi.mocked(api.agents).mockResolvedValue([
+      { ...agent("redacteur"), stable_version: 1, candidate_version: 2, candidate_percent: 10 },
+      { ...agent("relecteur"), stable_version: 3 },
+    ]);
+    vi.mocked(api.agentMetricsList).mockResolvedValue([]);
+    vi.mocked(api.orgAgentReleases).mockResolvedValue([
+      { id: "r1", agent: "relecteur", channel: "stable", kind: "promote", status: "pending_approval", requested_at: "2026-10-16T09:00:00Z" },
+    ]);
+    wrap(<AgentsPage />);
+    const redacteur = await screen.findByTestId("agent-redacteur");
+    expect(redacteur).toHaveTextContent("Production v1");
+    expect(redacteur).toHaveTextContent("Testing v2 · 10 %");
+    const chip = await screen.findByTestId("awaiting-chip");
+    expect(chip).toHaveTextContent("Awaiting approval (1)");
+    expect(screen.getByTestId("agent-relecteur")).toHaveTextContent("Approval pending");
+    expect(api.orgAgentReleases).toHaveBeenCalledWith("acme", "pending_approval");
+    fireEvent.click(chip);
+    expect(screen.queryByTestId("agent-redacteur")).toBeNull();
+    expect(screen.getByTestId("agent-relecteur")).toBeInTheDocument();
+  });
+});
+

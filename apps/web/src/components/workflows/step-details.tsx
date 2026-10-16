@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from "next/link";
 import { ActorIcon, Badge, LEGENDE, PhraseDuMoteur } from "@/components/ui";
+import { canarySentence, sourceLabel } from "@/components/agents/registre";
 import { enClair } from "@/components/parcours/modele";
 import { cn } from "@/lib/cn";
 import type { AgentResolution, ArtifactFlow, ProcessStep } from "@/lib/types";
@@ -20,7 +21,8 @@ function Statut({ resolution }: { resolution: AgentResolution | undefined }) {
   if (resolution.status === "resolved")
     return (
       <Badge tone="succeeded" variant="soft" dot={false}>
-        v{resolution.version} · {resolution.pinned ? "pinned" : "latest"}
+        v{resolution.version} · {sourceLabel(resolution)}
+        {canarySentence(resolution) ? ` — ${canarySentence(resolution)}` : ""}
       </Badge>
     );
   if (resolution.status === "not_installed")
