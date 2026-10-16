@@ -193,6 +193,24 @@ def type_par_defaut(kind: str) -> str | None:
     return TYPES_PAR_DEFAUT.get(kind)
 
 
+def deployment_default_type(kind: str) -> str | None:
+    """The type a DEPLOYMENT really provides for a capability, or None (S40-05).
+
+    Only `runtime` (the deployment's executor), `gateway` (`CHOREGOS_GATEWAY_TYPE`) and `memory`
+    (`ecphoria` when `CHOREGOS_MEMORY_URL` is set, `lexical` otherwise) are provided by a
+    deployment. For every other kind, `type_par_defaut` names what the adapter factory would
+    build with an empty configuration, which is not something that works: `argocd` without a
+    GitOps repository and a token provides no CD. The console claims a platform default only
+    from this function."""
+    if kind == "runtime":
+        return default_executor_kind()
+    if kind == "gateway":
+        return default_gateway_type()
+    if kind == "memory":
+        return "ecphoria" if os.environ.get("CHOREGOS_MEMORY_URL", "") else "lexical"
+    return None
+
+
 def fakes_enabled() -> bool:
     return os.environ.get("CHOREGOS_FAKES", "") in {"1", "true", "yes"}
 

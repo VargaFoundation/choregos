@@ -30,7 +30,7 @@ describe("la mise en route d'un projet (S23-03)", () => {
     });
     expect(etapes.every((e) => e.etat === "fait")).toBe(true);
     // La capacité couverte par la plateforme le dit.
-    expect(etapes.find((e) => e.id === "connecteur-gateway")?.detail).toBe("platform default: litellm.");
+    expect(etapes.find((e) => e.id === "connecteur-gateway")?.detail).toBe("provided by the platform: litellm.");
   });
 
   it("un projet neuf dit ce qui manque, pourquoi, et où le régler", () => {
@@ -73,5 +73,18 @@ describe("la mise en route d'un projet (S23-03)", () => {
     });
     expect(etapes.map((e) => e.id)).toEqual(["provisioning", "workflow", "connecteur-cd", "premier-ticket"]);
     expect(etapes.find((e) => e.id === "connecteur-cd")?.detail).toBe("cd-type: its last test was degraded.");
+  });
+
+  it("a required cd without a connector is to do, not done", () => {
+    // The API no longer claims a platform default for cd (S40-05): default_type is null.
+    const etapes = etapesDeMiseEnRoute({
+      slug: "billing",
+      projet: { status: "active" },
+      exigences: [exigence("cd", { default_type: null })],
+      connecteurs: [],
+      workflows: [workflow],
+      tickets: [ticket],
+    });
+    expect(etapes.find((e) => e.id === "connecteur-cd")).toMatchObject({ etat: "a_faire" });
   });
 });

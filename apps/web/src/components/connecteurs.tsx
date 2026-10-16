@@ -13,9 +13,9 @@ import {
   problemOfDraft,
   type SecretDraft,
 } from "@/components/secret-field";
-import { Button, Card, ErrorNote, Select, StateBadge } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { shortDate } from "@/lib/format";
+import { connectorState } from "@/lib/connector-state";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ConnectorType, ProjectRequirement } from "@/lib/types";
 
@@ -49,15 +49,16 @@ export function Connecteurs({ slug }: { slug: string }) {
   if (exigences.error) return <ErrorNote>{String(exigences.error)}</ErrorNote>;
   const actuelDe = (sorte: string) => (connecteurs.data ?? []).find((c) => c.kind === sorte);
   const parSorte = new Map((exigences.data ?? []).map((e) => [e.capability, e]));
-  const lignes = [...lignesDeConnecteurs(exigences.data ?? [], connecteurs.data ?? []), ...ajoutees];
+  // A connector added by hand and then saved is a configured one: one row, not two.
+  const lignes = [...new Set([...lignesDeConnecteurs(exigences.data ?? [], connecteurs.data ?? []), ...ajoutees])];
   const autres = [...new Set((types.data ?? []).map((t) => t.kind))].filter((k) => !lignes.includes(k)).sort();
 
-  async function agir(action: () => Promise<unknown>, succes: string) {
+  async function agir(action: () => Promise<unknown>, succes: string | ((result: unknown) => string)) {
     setErreur(null);
     setMessage(null);
     try {
-      await action();
-      setMessage(succes);
+      const result = await action();
+      setMessage(typeof succes === "function" ? succes(result) : succes);
       await client.invalidateQueries({ queryKey: ["connectors", slug] });
       await client.invalidateQueries({ queryKey: ["requirements", slug] });
     } catch (cause) {
@@ -96,7 +97,16 @@ export function Connecteurs({ slug }: { slug: string }) {
               exigence={parSorte.get(sorte)}
               actuel={(connecteurs.data ?? []).find((c) => c.kind === sorte)}
               types={(types.data ?? []).filter((t) => t.kind === sorte)}
-              onSave={(corps) => agir(() => api.putConnector(slug, sorte, corps), `${sorte} connector saved`)}
+              onSave={(corps) =>
+                agir(
+                  () => api.putConnector(slug, sorte, corps),
+                  (saved) => {
+                    const { status, last_error } = saved as ConnectorDto;
+                    if (status === "ok") return `${sorte} connector saved: connected`;
+                    return `${sorte} connector saved: ${status === "error" ? `failing, ${last_error ?? "the test failed"}` : "not tested yet"}`;
+                  },
+                )
+              }
               onSecret={(field, draft) =>
                 agir(async () => {
                   if (draft.mode === "value") await api.setConnectorSecret(slug, sorte, field, draft.text);
@@ -180,6 +190,7 @@ function Ligne({
   onTest: () => Promise<void>;
 }) {
   const [ouvert, setOuvert] = useState(false);
+  const etat = connectorState({ connector: actuel, requirement: exigence, required: exigence !== undefined });
   return (
     <li className="rounded border border-line p-3" data-testid={`connecteur-${sorte}`}>
       <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -187,23 +198,20 @@ function Ligne({
           <span className="font-medium">{sorte}</span>
           {libelleDeSorte(sorte) !== sorte && <span className="ml-2 text-xs text-ink-muted">{libelleDeSorte(sorte)}</span>}
         </span>
-        <span className="font-mono text-xs">
-          {actuel ? (
-            actuel.type
-          ) : exigence?.default_type ? (
-            <span className="text-ink-muted">Platform default: {exigence.default_type}</span>
-          ) : (
-            <span className="text-ink-muted">— not configured</span>
-          )}
-        </span>
-        {actuel && (
-          <StateBadge
-            state={actuel.status}
-            display={actuel.status}
-            kind={actuel.status === "ok" ? "terminal" : actuel.status === "error" ? "blocked" : "wait"}
-          />
+        <span className="font-mono text-xs">{actuel ? actuel.type : null}</span>
+        {etat && (
+          <>
+            <Badge tone={etat.tone} data-testid={`etat-${sorte}`}>
+              {etat.label}
+            </Badge>
+            {etat.standIn && (
+              <Badge tone="warn" dot={false}>
+                Demo stand-in
+              </Badge>
+            )}
+            {etat.detail && etat.action !== "connect" && <span className="text-xs text-ink-muted">{etat.detail}</span>}
+          </>
         )}
-        {actuel?.last_check_at && <span className="text-xs text-ink-muted">Tested {shortDate(actuel.last_check_at)}</span>}
         <span className="ml-auto inline-flex gap-2">
           {actuel && (
             <Button size="sm" onClick={() => void onTest()}>

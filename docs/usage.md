@@ -52,6 +52,16 @@ and *add a connector* for the rest. `GET /connectors/types` reads the adapter re
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
 draws the form from it) and its **secret fields**.
 
+**A connector is tested when it is saved** (S40-05), and again when one of its secrets is set or
+cleared or when *Test* is pressed, within 10 seconds (`connector_test_timeout_s`). A failing test
+does not refuse the save: the configuration is kept and the card says why it fails. The state reads
+**Connected** (with when it was tested), **Failing** (with the error), **Degraded**, **Not tested yet**
+(only rows saved before this behaviour) or, for the `demo` and `fake` types, **Demo stand-in**: a
+simulation, nothing real is deployed. **Provided by the platform** is claimed only for what a
+deployment really provides: `runtime` (its executor), `gateway` and `memory`. Any other required
+capability with no connector reads **Not connected**, whatever adapter the factory would build
+with an empty configuration. Connectors of the organisation are not tested on save yet.
+
 **Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
@@ -64,8 +74,8 @@ holds no secrets key, typing a value answers 409 and says so ([deployment](deplo
 An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
 
 Until a project can run, its overview opens on a **getting started** list: provisioned, a workflow
-published, each required capability covered (by the project's connector, tested, or by the
-platform's default), no configured connector failing its last test, and a first request — each
+published, each required capability covered (by the project's connector, tested, or, for the runtime, the
+gateway and the memory only, by what the platform provides), no configured connector failing its last test, and a first request — each
 missing step says why and links to where it is fixed. The list disappears once every step is done.
 Human groups are not checked yet.
 
