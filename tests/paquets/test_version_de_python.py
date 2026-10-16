@@ -1,14 +1,14 @@
-"""Les images tournent-elles sur la version de Python que les paquets exigent ?
+"""Do the images run on the Python version the packages require?
 
-Le 2026-09-27, un robot a proposé de passer les Dockerfiles de `python:3.12-slim` à
-`python:3.14-slim`. Les dix `pyproject.toml` déclarent `requires-python = ">=3.12,<3.13"`, donc
-l'image aurait embarqué un interpréteur que `uv sync` refuse. L'échec existait — le job d'images
-rougissait — mais il parlait de résolution de dépendances, pas de la ligne `FROM` qui l'avait
-causé. Une heure pour comprendre, et la même heure à chaque proposition suivante.
+On 2026-09-27, a bot proposed moving the Dockerfiles from `python:3.12-slim` to
+`python:3.14-slim`. The ten `pyproject.toml` files declare `requires-python = ">=3.12,<3.13"`,
+so the image would have shipped an interpreter that `uv sync` refuses. The failure existed — the
+images job went red — but it talked about dependency resolution, not about the `FROM` line that
+had caused it. An hour to understand, and the same hour for every following proposal.
 
-Ce test attrape la dérive **dans les deux sens** : une image qui avance sans les paquets, comme
-des paquets qui avancent sans l'image — le second cas étant le plus sournois, parce que tout
-passe en local et que seule la production voit la différence.
+This test catches drift **in both directions**: an image that moves ahead of the packages, as
+well as packages that move ahead of the image — the second case being the sneakier, because
+everything passes locally and only production sees the difference.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ EXIGENCE = re.compile(r">=\s*(\d+\.\d+)")
 
 
 def _exigee() -> str:
-    """La version plancher qu'exigent les paquets, et la garantie qu'ils sont d'accord."""
+    """The floor version the packages require, and the guarantee that they agree."""
     fichiers = [
         RACINE / "pyproject.toml",
         *sorted(RACINE.glob("packages/*/pyproject.toml")),
@@ -35,18 +35,18 @@ def _exigee() -> str:
     versions: dict[str, list[str]] = {}
     for chemin in fichiers:
         contrainte = tomllib.loads(chemin.read_text(encoding="utf-8"))["project"].get("requires-python")
-        assert contrainte, f"{chemin.relative_to(RACINE)} ne déclare pas `requires-python`"
+        assert contrainte, f"{chemin.relative_to(RACINE)} does not declare `requires-python`"
         trouve = EXIGENCE.search(contrainte)
-        assert trouve, f"{chemin.relative_to(RACINE)} : `{contrainte}` sans plancher lisible"
+        assert trouve, f"{chemin.relative_to(RACINE)}: `{contrainte}` has no readable floor"
         versions.setdefault(trouve.group(1), []).append(str(chemin.relative_to(RACINE)))
-    assert len(versions) == 1, "les paquets n'exigent pas tous la même version de Python : " + " ; ".join(
+    assert len(versions) == 1, "the packages do not all require the same Python version: " + " ; ".join(
         f"{v} → {', '.join(f)}" for v, f in sorted(versions.items())
     )
     return next(iter(versions))
 
 
 def _images() -> dict[str, list[str]]:
-    """{version: fichiers} pour chaque `FROM python:` des Dockerfiles."""
+    """{version: files} for each `FROM python:` of the Dockerfiles."""
     trouves: dict[str, list[str]] = {}
     for chemin in sorted(DOCKER.glob("*.Dockerfile")):
         for version in IMAGE.findall(chemin.read_text(encoding="utf-8")):
@@ -55,16 +55,16 @@ def _images() -> dict[str, list[str]]:
 
 
 def test_il_y_a_bien_des_images_a_verifier() -> None:
-    """Sans cette garde, renommer les Dockerfiles rendrait la suite verte et vide."""
-    assert _images(), f"aucun `FROM python:` trouvé dans {DOCKER.relative_to(RACINE)}"
+    """Without this guard, renaming the Dockerfiles would leave the suite green and empty."""
+    assert _images(), f"no `FROM python:` found in {DOCKER.relative_to(RACINE)}"
 
 
 def test_les_images_utilisent_la_version_exigee_par_les_paquets() -> None:
     exigee = _exigee()
     ecarts = {v: f for v, f in _images().items() if v != exigee}
     assert not ecarts, (
-        f"les paquets exigent Python {exigee}, les images disent "
+        f"the packages require Python {exigee}, the images say "
         + " ; ".join(f"{v} ({', '.join(sorted(set(f)))})" for v, f in sorted(ecarts.items()))
-        + ". Monter l'un sans l'autre donne une image où `uv sync` refuse l'interpréteur — et "
-        "l'erreur parle de dépendances, pas de la ligne `FROM` qui l'a causée."
+        + ". Moving one without the other gives an image where `uv sync` refuses the interpreter — "
+        "and the error talks about dependencies, not about the `FROM` line that caused it."
     )

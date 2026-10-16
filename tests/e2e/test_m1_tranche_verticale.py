@@ -1,8 +1,8 @@
-"""M1 — la tranche verticale : d'une issue `agent-ready` à une PR verte, coût dans le ticket.
+"""M1 — the vertical slice: from an `agent-ready` issue to a green PR, cost in the ticket.
 
-Scénario du plan (§7.3) : une issue GitHub labellisée `agent-ready` démarre un
-`WorkflowInterpreter`, un stage tourne, une PR s'ouvre, le commentaire de coût est écrit
-dans l'issue, un finding provoqué devient un ticket lié.
+Plan scenario (§7.3): a GitHub issue labelled `agent-ready` starts a
+`WorkflowInterpreter`, a stage runs, a PR opens, the cost comment is written
+in the issue, a provoked finding becomes a linked ticket.
 """
 
 from __future__ import annotations
@@ -30,14 +30,14 @@ def evidence() -> Evidence:
 async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker: Any) -> None:
     await login(platform.client)
 
-    # ── 1. une issue est labellisée `agent-ready` sur GitHub ──
+    # ── 1. an issue is labelled `agent-ready` on GitHub ──
     payload = {
         "action": "labeled",
         "repository": {"full_name": "varga/billing-api"},
         "issue": {
             "number": 123,
-            "title": "Les avoirs ne sont pas déduits du total",
-            "body": "Le total affiché ignore l'avoir.",
+            "title": "Credit notes are not deducted from the total",
+            "body": "The displayed total ignores the credit note.",
             "labels": [{"name": "agent-ready"}],
         },
         "label": {"name": "agent-ready"},
@@ -57,10 +57,10 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
     assert response.json()["events"] == 1
 
     item = await platform.work_item("varga/billing-api#123")
-    assert item is not None, "le webhook a créé le ticket"
-    assert item.temporal_wf_id, "un WorkflowInterpreter a été démarré (ID déterministe)"
+    assert item is not None, "the webhook created the ticket"
+    assert item.temporal_wf_id, "a WorkflowInterpreter was started (deterministic ID)"
 
-    # ── 2. l'orchestrateur déroule le workflow, les agents produisent leurs résultats ──
+    # ── 2. the orchestrator runs the workflow, the agents produce their results ──
     platform.adapters.tracker.items.setdefault(
         "varga/billing-api#123", _fake_tracker_item("varga/billing-api#123", item.title)
     )
@@ -73,7 +73,7 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
     for result in (
         StageResult(
             status=StageStatus.DONE,
-            summary="spécification rédigée",
+            summary="specification written",
             outputs={
                 "size": "M",
                 "risk": "low",
@@ -84,12 +84,12 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
         ),
         StageResult(
             status=StageStatus.DONE,
-            summary="avoirs déduits du total",
-            artifacts={"branch": "choregos/123", "commits": ["fix(orders): avoirs"]},
+            summary="credit notes deducted from the total",
+            artifacts={"branch": "choregos/123", "commits": ["fix(orders): credit notes"]},
             evidence=evidence(),
             findings=[
                 {
-                    "title": "Requête N+1 sur le chargement des lignes",
+                    "title": "N+1 query when loading the lines",
                     "type": "perf",
                     "severity": "medium",
                     "evidence": "src/orders/repository.py:88",
@@ -97,7 +97,7 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
                 }
             ],
         ),
-        StageResult(status=StageStatus.DONE, summary="412 tests verts", evidence=evidence()),
+        StageResult(status=StageStatus.DONE, summary="412 tests green", evidence=evidence()),
     ):
         platform.adapters.executor.queue_result(result)
 
@@ -116,7 +116,7 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
         await _wait_state(handle, "awaiting_spec_approval")
         await _wait_pending_request(platform, item.id)
 
-        # ── 3. un humain valide la spécification depuis l'API ──
+        # ── 3. a human approves the specification from the API ──
         decision = await platform.client.post(
             f"/api/v1/work-items/{item.id}/decisions", json={"kind": "approve"}
         )
@@ -125,7 +125,7 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
             "human_decision", {"approved": True, "decided_by": "augustin@varga.dev", "kind": "approval"}
         )
 
-        # ── 4. la PR s'ouvre, la CI et la review arrivent ──
+        # ── 4. the PR opens, the CI and the review arrive ──
         await _wait_state(handle, "pr_open", timeout=90)
         ref = next(iter(platform.adapters.scm.prs.values())).ref
         platform.adapters.scm.set_checks(ref, "success")
@@ -141,7 +141,7 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
         )
         await _wait_state(handle, "merged", timeout=90)
 
-        # ── 5. le train déploie, Argo confirme ──
+        # ── 5. the train deploys, Argo confirms ──
         await handle.signal(
             "inbound",
             {
@@ -154,19 +154,19 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
         outcome = await handle.result()
         assert outcome["state"] == "deployed_prod"
 
-    # ── 6. ce que la plateforme doit avoir produit ──
+    # ── 6. what the platform must have produced ──
     comment = platform.adapters.tracker.status_comment("varga/billing-api#123")
     assert comment is not None
     assert "Choregos — progress" in comment
     assert "agent refine" in comment and "agent implement" in comment
-    assert "€" in comment, "le coût est écrit dans le ticket"
+    assert "€" in comment, "the cost is written in the ticket"
 
     runs = (await platform.client.get(f"/api/v1/work-items/{item.id}/runs")).json()
     assert len(runs) >= 3
-    assert all(run["cost_usd"] > 0 for run in runs), "chaque run a un coût compté au gateway"
+    assert all(run["cost_usd"] > 0 for run in runs), "every run has a cost counted at the gateway"
 
     findings = (await platform.client.get(f"/api/v1/projects/{platform.project_id}/findings")).json()
-    assert findings["items"], "le finding déposé par l'agent est enregistré"
+    assert findings["items"], "the finding filed by the agent is recorded"
     assert findings["items"][0]["severity"] == "medium"
 
     costs = (
@@ -177,9 +177,9 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
     assert {row["key"] for row in costs["rows"]} >= {"refine", "implement"}
 
     updated = await platform.work_item("varga/billing-api#123")
-    assert updated.pr_url, "une PR a été ouverte"
+    assert updated.pr_url, "a PR was opened"
     assert updated.state == "deployed_prod"
-    assert updated.closed_at is not None, "le ticket est clos une fois en production"
+    assert updated.closed_at is not None, "the ticket is closed once in production"
     assert platform.adapters.tracker.items["varga/billing-api#123"].state == "Done"
 
 
@@ -212,13 +212,13 @@ def _fake_tracker_item(key: str, title: str) -> Any:
 
 
 async def _wait_pending_request(platform: Platform, item_id: str, timeout: int = 30) -> None:
-    """Attend que la demande humaine soit créée : c'est elle que l'API tranche."""
+    """Wait for the human request to be created: it is the one the API decides."""
     for _ in range(timeout * 10):
         payload = (await platform.client.get(f"/api/v1/work-items/{item_id}")).json()
         if payload.get("pending_request"):
             return
         await asyncio.sleep(0.1)
-    raise AssertionError("aucune demande humaine créée")
+    raise AssertionError("no human request created")
 
 
 async def _wait_state(handle: Any, state: str, timeout: int = 60) -> None:
@@ -228,5 +228,5 @@ async def _wait_state(handle: Any, state: str, timeout: int = 60) -> None:
             return
         await asyncio.sleep(0.1)
     raise AssertionError(
-        f"état `{state}` jamais atteint (courant : {(await handle.query('status'))['state']})"
+        f"state `{state}` never reached (current: {(await handle.query('status'))['state']})"
     )

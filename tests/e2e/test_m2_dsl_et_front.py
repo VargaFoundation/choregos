@@ -1,4 +1,4 @@
-"""M2 — les trois workflows, la validation par le board, le wizard, l'estimation de coût."""
+"""M2 — the three workflows, validation by the board, the wizard, the cost estimate."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ async def test_les_trois_templates_sont_acceptes_par_l_api(platform: Platform, n
         await platform.client.post("/api/v1/workflows/validate", json={"yaml": template_yaml(name)})
     ).json()
     assert validation["valid"], validation["errors"]
-    assert validation["graph"]["nodes"], "le graphe est rendu pour le front"
+    assert validation["graph"]["nodes"], "the graph is rendered for the front"
 
     saved = await platform.client.put(
         f"/api/v1/projects/{platform.project_id}/workflow", json={"yaml": template_yaml(name)}
@@ -40,7 +40,7 @@ async def test_un_workflow_invalide_est_refuse_avec_la_ligne_fautive(platform: P
 
 
 async def test_carte_deplacee_sur_le_board_fait_avancer_le_ticket(platform: Platform) -> None:
-    """Un humain déplace une carte : c'est une décision, pas un simple changement d'étiquette."""
+    """A human moves a card: it is a decision, not a mere label change."""
     await login(platform.client)
     payload = {
         "action": "edited",
@@ -63,7 +63,7 @@ async def test_carte_deplacee_sur_le_board_fait_avancer_le_ticket(platform: Plat
             WorkItem(
                 project_id=platform.project_id,
                 tracker_key="varga/billing-api#200",
-                title="Ticket déplacé à la main",
+                title="Ticket moved by hand",
                 state="inbox",
             )
         )
@@ -80,8 +80,8 @@ async def test_carte_deplacee_sur_le_board_fait_avancer_le_ticket(platform: Plat
     assert response.status_code == 202
     from choregos_api.temporal import get_temporal
 
-    # Aucun workflow n'est démarré pour ce ticket dans ce scénario : la passerelle note
-    # la tentative de signal, ce qui prouve que le webhook a bien acheminé l'événement.
+    # No workflow is started for this ticket in this scenario: the gateway records
+    # the signal attempt, which proves that the webhook did route the event.
     attempts = get_temporal().missing  # type: ignore[attr-defined]
     assert any(name == "inbound" for name, _ in attempts), attempts
 
@@ -103,7 +103,7 @@ async def test_le_wizard_cree_un_projet_et_demarre_le_provisioning(platform: Pla
     )
     assert created.status_code == 201, created.text
     project = created.json()
-    assert project["workflow_name"] == "default-simple", "le workflow par défaut est épinglé (D14)"
+    assert project["workflow_name"] == "default-simple", "the default workflow is pinned (D14)"
 
     provision = await platform.client.post(f"/api/v1/projects/{project['id']}/provision", json={})
     assert provision.status_code == 202
@@ -116,7 +116,7 @@ async def test_le_wizard_cree_un_projet_et_demarre_le_provisioning(platform: Pla
 
 
 async def test_estimation_de_cout_affichee_sur_un_ticket(platform: Platform) -> None:
-    """L'estimation vient des tickets comparables déjà terminés, pas d'une formule."""
+    """The estimate comes from comparable tickets already finished, not from a formula."""
     await login(platform.client)
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
@@ -128,7 +128,7 @@ async def test_estimation_de_cout_affichee_sur_un_ticket(platform: Platform) -> 
                 WorkItem(
                     project_id=platform.project_id,
                     tracker_key=f"varga/billing-api#9{index}",
-                    title="ticket terminé",
+                    title="finished ticket",
                     state="deployed_prod",
                     size="M",
                     closed_at=utcnow(),
@@ -138,7 +138,7 @@ async def test_estimation_de_cout_affichee_sur_un_ticket(platform: Platform) -> 
         current = WorkItem(
             project_id=platform.project_id,
             tracker_key="varga/billing-api#300",
-            title="ticket en cours",
+            title="ticket in progress",
             state="in_progress",
             size="M",
             totals={"cost_usd": 12.0},
@@ -151,4 +151,4 @@ async def test_estimation_de_cout_affichee_sur_un_ticket(platform: Platform) -> 
     estimate = payload["estimate"]
     assert estimate["sample_size"] == 5
     assert estimate["median_usd"] == 7
-    assert estimate["over_p80"] is True, "le ticket dépasse le p80 : la plateforme le signale"
+    assert estimate["over_p80"] is True, "the ticket exceeds the p80: the platform flags it"

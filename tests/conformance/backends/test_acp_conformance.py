@@ -1,7 +1,7 @@
-"""Les sept vérifications de conformité d'un backend ACP (docs/plan/02 §2.2).
+"""The seven conformance checks of an ACP backend (docs/plan/02 §2.2).
 
-Un backend qui échoue est désactivé dans `platform/backends` jusqu'à correction : c'est
-la seule façon de faire vivre un écosystème d'agents inégal sans casser la plateforme.
+A backend that fails is disabled in `platform/backends` until fixed: it is the only way to
+keep an uneven agent ecosystem alive without breaking the platform.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ class ConformanceResult:
 
 
 def backend_available(name: str) -> bool:
-    """Le binaire du backend est-il installé dans cette image ?"""
+    """Is the backend binary installed in this image?"""
     return shutil.which(BACKEND_BINARIES.get(name, name)) is not None
 
 
@@ -81,7 +81,7 @@ def stage_input(tmp_path: Path) -> StageInput:
         run_id="conformance-1",
         attempt=1,
         project=ProjectRef(slug="conformance", org="varga"),
-        work_item=WorkItemRef(key="varga/conformance#1", title="créer hello.py et son test"),
+        work_item=WorkItemRef(key="varga/conformance#1", title="create hello.py and its test"),
         transition=TransitionRef(id="t-implement", role="implement", **{"from": "ready"}, to="in_progress"),
         repo=RepoRef(url=str(tmp_path), base_branch="main", work_branch="choregos/1"),
         agent=AgentRef(backend="claude-code", launch=LaunchSpec(command=[sys.executable, str(FAKE_AGENT)])),
@@ -91,19 +91,19 @@ def stage_input(tmp_path: Path) -> StageInput:
         gateway_key="sk-conformance",
         budget=Budget(usd=1, max_turns=3, max_minutes=2),
         allowed_paths=["hello.py", "test_hello.py"],
-        playbook=PlaybookRef(ref="implement@conformance", prompt="crée hello.py et un test"),
+        playbook=PlaybookRef(ref="implement@conformance", prompt="create hello.py and a test"),
         permissions=Permissions(write_paths=["hello.py", "test_hello.py"], max_findings=1),
         callbacks=Callbacks(api_url="http://localhost:0/internal", run_token="tok"),
     )
 
 
 async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path) -> ConformanceResult:
-    """Exécute les sept vérifications contre un backend donné."""
+    """Run the seven checks against a given backend."""
     result = ConformanceResult(backend=backend_name)
     backend = get_backend(backend_name)
     stage_input.agent.backend = backend_name
-    # Chaque backend reçoit un modèle qu'il accepte : la contrainte de famille de modèles
-    # fait partie du contrat (claude-code n'accepte que Claude).
+    # Each backend gets a model it accepts: the model-family constraint is part of the
+    # contract (claude-code only accepts Claude).
     if backend.model_constraint:
         stage_input.model.litellm_model = f"anthropic/{backend.model_constraint[0]}-sonnet-5"
     plan = backend.launch_plan(stage_input, workspace)
@@ -112,7 +112,7 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
     script = {
         "turns": [
             {
-                "messages": ["je crée le fichier"],
+                "messages": ["I create the file"],
                 "writes": [
                     {"path": "hello.py", "content": "def hello():\n    return 'bonjour'\n"},
                     {"path": "interdit.py", "content": "x = 1\n"},
@@ -120,7 +120,7 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
                 "result": {
                     "schema": "choregos/StageResult/v1",
                     "status": "done",
-                    "summary": "hello.py créé",
+                    "summary": "hello.py created",
                     "evidence": {"tests_passed": True, "tests_run": 1},
                 },
             }
@@ -138,8 +138,8 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
         target = str(((params.get("toolCall") or {}).get("rawInput") or {}).get("path", ""))
         if target not in stage_input.allowed_paths:
             denials.append(target)
-            return False, "hors périmètre"
-        return True, "autorisé"
+            return False, "out of scope"
+        return True, "allowed"
 
     client = AcpClient(plan.command, cwd=str(workspace), env=env, on_permission=on_permission)
     try:
@@ -149,48 +149,48 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
             if info:
                 result.passed.append("initialize")
             else:
-                result.failed["initialize"] = "réponse vide"
-            # 2. serveurs MCP acceptés
+                result.failed["initialize"] = "empty response"
+            # 2. MCP servers accepted
             session = await client.new_session(str(workspace), plan.mcp_servers)
             if session:
                 result.passed.append("mcp")
             else:
-                result.failed["mcp"] = "session/new refusée"
-            # 3. prompt trivial
-            outcome = await client.prompt("crée hello.py", timeout=60)
+                result.failed["mcp"] = "session/new refused"
+            # 3. trivial prompt
+            outcome = await client.prompt("create hello.py", timeout=60)
             if (workspace / "hello.py").exists():
                 result.passed.append("prompt_trivial")
             else:
-                result.failed["prompt_trivial"] = "le fichier demandé n'a pas été créé"
-            # 4. une permission refusée n'est pas contournée
+                result.failed["prompt_trivial"] = "the requested file was not created"
+            # 4. a denied permission is not bypassed
             if denials and not (workspace / "interdit.py").exists():
                 result.passed.append("permission_denied")
             else:
-                result.failed["permission_denied"] = "l'écriture refusée a eu lieu quand même"
-            # 5. résultat valide
+                result.failed["permission_denied"] = "the denied write happened anyway"
+            # 5. valid result
             load = load_result(workspace / ".choregos" / "result.json")
             if load.ok:
                 result.passed.append("result_valid")
             else:
-                result.failed["result_valid"] = load.error or "résultat illisible"
-            # 6. respect de max_turns
+                result.failed["result_valid"] = load.error or "unreadable result"
+            # 6. max_turns respected
             if outcome.turns <= stage_input.budget.max_turns:
                 result.passed.append("max_turns")
             else:
-                result.failed["max_turns"] = f"{outcome.turns} tours > {stage_input.budget.max_turns}"
-            # 7. le coût apparaît au gateway : vérifié par l'environnement du modèle
+                result.failed["max_turns"] = f"{outcome.turns} turns > {stage_input.budget.max_turns}"
+            # 7. the cost shows up at the gateway: checked through the model environment
             model_env = backend.model_env(stage_input.model, stage_input.gateway_key)
             if any(stage_input.gateway_key in value for value in model_env.values()):
                 result.passed.append("cost_at_gateway")
             else:
-                result.failed["cost_at_gateway"] = "la clé du run n'est pas passée au backend"
+                result.failed["cost_at_gateway"] = "the run key was not passed to the backend"
     except AgentUnreachableError as exc:
         result.failed["initialize"] = str(exc)
     return result
 
 
 async def test_default_backend_passes_all_checks(stage_input: StageInput, tmp_path: Path) -> None:
-    """Claude Code (agent par défaut) doit passer les sept vérifications."""
+    """Claude Code (the default agent) must pass the seven checks."""
     workspace = tmp_path / "ws"
     workspace.mkdir()
     result = await run_suite("claude-code", stage_input, workspace)
@@ -200,12 +200,12 @@ async def test_default_backend_passes_all_checks(stage_input: StageInput, tmp_pa
 
 @pytest.mark.parametrize("backend", [name for name in known_backends() if name != "claude-code"])
 async def test_other_backends(backend: str, stage_input: StageInput, tmp_path: Path) -> None:
-    """Les autres backends sont testés avec l'agent factice ; l'agent réel tourne la nuit."""
+    """The other backends are tested with the fake agent; the real agent runs nightly."""
     workspace = tmp_path / backend
     workspace.mkdir()
     result = await run_suite(backend, stage_input, workspace)
     if not result.ok:
-        pytest.fail(f"{backend} : {result.failed}")
+        pytest.fail(f"{backend}: {result.failed}")
 
 
 async def test_protocol_covers_the_seven_checks() -> None:
@@ -213,6 +213,6 @@ async def test_protocol_covers_the_seven_checks() -> None:
 
 
 def test_backends_declare_their_binary() -> None:
-    """Chaque backend connu sait quel binaire l'exécute (pour l'image et les versions)."""
+    """Every known backend knows which binary runs it (for the image and the versions)."""
     for name in known_backends():
         assert name in BACKEND_BINARIES, name

@@ -1,28 +1,29 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Une **vraie roue** d'édition entreprise porte-t-elle un point d'entrée que la plateforme trouve ?
+"""Does a **real** enterprise-edition wheel carry an entry point the platform finds?
 
-C'est la question de fabrication du jalon E4, et elle est distincte de celle des autres tests de
-greffons. `test_greffons.py` et `test_greffon_entreprise.py` écrivent un `.dist-info` **à la main** :
-ils prouvent que la découverte marche, pas que la roue qu'on publierait la porte. Or ce qui casse en
-silence, c'est la métadonnée — une faute dans `[project.entry-points."choregos.plugins"]` produit
-une roue qui s'installe parfaitement et ne s'enregistre jamais.
+This is the milestone E4 manufacturing question, and it is distinct from the other plugin
+tests. `test_greffons.py` and `test_greffon_entreprise.py` write a `.dist-info` **by hand**:
+they prove that discovery works, not that the wheel one would publish carries it. What breaks
+silently is the metadata — a mistake in `[project.entry-points."choregos.plugins"]` produces a
+wheel that installs perfectly and never registers.
 
-DEUX CONTRAINTES DE FABRICATION, vérifiées ici parce qu'elles décident de la forme du dépôt privé :
+TWO MANUFACTURING CONSTRAINTS, checked here because they decide the shape of the private repo:
 
-1. **Le cœur n'est pas une dépendance déclarée.** Ses roues sont des artefacts de release GitHub,
-   pas du PyPI (`release.yml` : « pas de PyPI tant que les noms ne sont pas réservés »). Une roue EE
-   qui déclarerait `choregos-api==0.8.3` ferait chercher un index qui ne l'a pas. Le plan prévoit
-   des images EE construites **FROM** les images CE, où les paquets du cœur sont déjà installés :
-   la roue EE s'y ajoute avec `--no-deps`, et ce test construit donc une roue sans dépendances.
-2. **Le point d'entrée suffit.** Aucun import du cœur au chargement du module : `brancher()` importe
-   à l'appel. Une roue EE importée trop tôt casserait sur un cœur absent, dans un banc de
-   construction par exemple.
+1. **The core is not a declared dependency.** Its wheels are GitHub release artifacts, not
+   PyPI ones (`release.yml`: no PyPI until the names are reserved). An EE wheel that declared
+   `choregos-api==0.8.3` would send pip looking in an index that does not have it. The plan
+   calls for EE images built **FROM** the CE images, where the core packages are already
+   installed: the EE wheel is added with `--no-deps`, so this test builds a wheel without
+   dependencies.
+2. **The entry point is enough.** No import of the core when the module loads: `brancher()`
+   imports on call. An EE wheel imported too early would break on a missing core, in a build
+   bench for example.
 
-Vérifié à la main le 2026-09-28 dans un environnement où le cœur est complet : la roue s'installe
-avec `--no-deps`, `charger_les_greffons()` la charge, l'édition devient `enterprise`, et la
-désinstallation rend `community`. Ce test garde la moitié qui peut se vérifier sans polluer
-l'environnement de la suite ; l'autre moitié — la roue posée dans une vraie image CE — est
-`test_image_ee.py`. La roue elle-même est construite dans `conftest.py`.
+Checked by hand on 2026-09-28 in an environment where the core is complete: the wheel installs
+with `--no-deps`, `charger_les_greffons()` loads it, the edition becomes `enterprise`, and
+uninstalling returns `community`. This test guards the half that can be checked without
+polluting the suite's environment; the other half — the wheel placed in a real CE image — is
+`test_image_ee.py`. The wheel itself is built in `conftest.py`.
 """
 
 from __future__ import annotations
@@ -37,20 +38,20 @@ import pytest
 
 pytestmark = [
     pytest.mark.slow,
-    pytest.mark.skipif(shutil.which("uv") is None, reason="uv absent"),
+    pytest.mark.skipif(shutil.which("uv") is None, reason="uv missing"),
 ]
 
 
 def test_la_roue_porte_son_point_d_entree(roue_ee: pathlib.Path) -> None:
-    """La métadonnée de la roue publiée, pas un `.dist-info` écrit à la main.
+    """The published wheel's metadata, not a hand-written `.dist-info`.
 
-    C'est ce qui casse en silence : une faute dans `[project.entry-points."choregos.plugins"]`
-    donne une roue qui s'installe parfaitement et ne s'enregistre jamais.
+    This is what breaks silently: a mistake in `[project.entry-points."choregos.plugins"]`
+    gives a wheel that installs perfectly and never registers.
     """
     with zipfile.ZipFile(roue_ee) as archive:
         noms = archive.namelist()
         chemin = next((n for n in noms if n.endswith("entry_points.txt")), None)
-        assert chemin is not None, f"aucun entry_points.txt dans la roue : {noms}"
+        assert chemin is not None, f"no entry_points.txt in the wheel: {noms}"
         contenu = archive.read(chemin).decode("utf-8")
 
     assert "[choregos.plugins]" in contenu, contenu
@@ -58,22 +59,22 @@ def test_la_roue_porte_son_point_d_entree(roue_ee: pathlib.Path) -> None:
 
 
 def test_la_roue_ne_depend_pas_du_coeur(roue_ee: pathlib.Path) -> None:
-    """Déclarer le cœur ferait chercher un index qui ne l'a pas : ses roues sont des artefacts
-    de release GitHub, pas du PyPI."""
+    """Declaring the core would send pip looking in an index that does not have it: its wheels
+    are GitHub release artifacts, not PyPI ones."""
     with zipfile.ZipFile(roue_ee) as archive:
         chemin = next(n for n in archive.namelist() if n.endswith("METADATA"))
         metadata = archive.read(chemin).decode("utf-8")
 
     requises = [ligne for ligne in metadata.splitlines() if ligne.startswith("Requires-Dist:")]
-    assert not requises, f"une roue EE ne déclare pas le cœur en dépendance : {requises}"
+    assert not requises, f"an EE wheel does not declare the core as a dependency: {requises}"
 
 
 def test_le_module_ne_touche_pas_au_coeur_a_l_import(roue_ee: pathlib.Path, tmp_path: pathlib.Path) -> None:
-    """Importable sans le cœur : un banc de construction n'a pas Choregos installé.
+    """Importable without the core: a build bench does not have Choregos installed.
 
-    On déplie la roue dans un répertoire isolé et on l'importe dans un interpréteur **sans** le
-    `sys.path` de cet espace de travail — le seul moyen de prouver qu'aucun import du cœur ne part
-    au chargement du module.
+    We unpack the wheel into an isolated directory and import it in an interpreter **without**
+    this workspace's `sys.path` — the only way to prove that no core import fires when the
+    module loads.
     """
     deplie = tmp_path / "deplie"
     with zipfile.ZipFile(roue_ee) as archive:
@@ -87,5 +88,5 @@ def test_le_module_ne_touche_pas_au_coeur_a_l_import(roue_ee: pathlib.Path, tmp_
         env={"PYTHONPATH": str(deplie), "PATH": "/usr/bin:/bin"},
         check=False,
     )
-    assert fait.returncode == 0, f"le module ne s'importe pas sans le cœur :\n{fait.stderr[-600:]}"
+    assert fait.returncode == 0, f"the module does not import without the core:\n{fait.stderr[-600:]}"
     assert fait.stdout.strip() == "brancher"

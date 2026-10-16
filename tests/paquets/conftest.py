@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""La roue d'édition entreprise en miniature, partagée par les tests du modèle de paquet et de l'image.
+"""The enterprise-edition wheel in miniature, shared by the package-model and image tests.
 
-Elle se construit avec `uv build`, comme le ferait la CI du dépôt privé : ce que ces tests éprouvent
-est la roue qu'on publierait, pas un `.dist-info` écrit à la main.
+It is built with `uv build`, as the private repository's CI would: what these tests exercise is
+the wheel that would be published, not a hand-written `.dist-info`.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ PYPROJECT = """\
 name = "choregos-ee"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-# Le cœur N'EST PAS une dépendance : l'image EE est construite FROM l'image CE.
+# The core is NOT a dependency: the EE image is built FROM the CE image.
 dependencies = []
 
 [project.entry-points."choregos.plugins"]
@@ -29,13 +29,13 @@ build-backend = "hatchling.build"
 """
 
 MODULE = '''\
-"""Édition entreprise, en miniature : elle se déclare, et rien d'autre."""
+"""Enterprise edition in miniature: it declares itself, and nothing else."""
 
 from __future__ import annotations
 
 
 def brancher() -> None:
-    # L'import est DANS la fonction : une roue EE importée trop tôt casserait sur un cœur absent.
+    # The import is INSIDE the function: an EE wheel imported too early would break on a missing core.
     from choregos_api.edition import ENTREPRISE, declarer
 
     declarer(ENTREPRISE, fonctions=frozenset({"multi_org"}))
@@ -44,7 +44,7 @@ def brancher() -> None:
 
 @pytest.fixture
 def roue_ee(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Construit une vraie roue avec `uv build`, comme le ferait la CI du dépôt privé."""
+    """Build a real wheel with `uv build`, as the private repository's CI would."""
     source = tmp_path / "src" / "choregos_ee"
     source.mkdir(parents=True)
     (source / "__init__.py").write_text(MODULE, encoding="utf-8")
@@ -57,7 +57,7 @@ def roue_ee(tmp_path: pathlib.Path) -> pathlib.Path:
         text=True,
         check=False,
     )
-    assert fait.returncode == 0, f"la roue ne se construit pas :\n{fait.stderr[-800:]}"
+    assert fait.returncode == 0, f"the wheel does not build:\n{fait.stderr[-800:]}"
     roues = list((tmp_path / "dist").glob("*.whl"))
     assert len(roues) == 1, roues
     return roues[0]
