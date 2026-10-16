@@ -27,6 +27,7 @@ const PAGES = [
   "/p/billing-api/actions/act-poste",
   "/p/billing-api/integrations",
   "/p/billing-api/settings",
+  "/p/dev/settings",
   "/p/billing-api/items/w1",
   "/p/billing-api/items/w2",
   "/p/billing-api/runs/r3",
