@@ -90,7 +90,7 @@ export function ReadinessPanel({ slug }: { slug: string }) {
     >
       <div className="space-y-4">
         {groups.map((group) => (
-          <section key={group.id} aria-label={group.label} data-testid={`readiness-${group.id}`}>
+          <section key={group.id} aria-label={`${group.label}, readiness`} data-testid={`readiness-${group.id}`}>
             <h3 className="mb-1 text-xs font-semibold text-ink-muted">{group.label}</h3>
             <ul className="divide-y divide-line">
               {group.items.map((item) => {
