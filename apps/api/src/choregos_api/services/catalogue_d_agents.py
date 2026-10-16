@@ -128,6 +128,7 @@ async def mettre_a_jour(
             spec=spec.model_dump(mode="json"),
             checksum=empreinte(spec),
             created_by=auteur(entree_),
+            message=f"Catalogue update to {entree_.slug}@{entree_.version}",
         )
     )
     await session.flush()

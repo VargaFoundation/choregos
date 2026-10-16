@@ -44,6 +44,16 @@ async def installer_ce_que_livre_le_gabarit(
     return installes
 
 
+def _install_message(auteur: str) -> str:
+    """The message of the version 1 the platform writes when it installs an agent (S40-12)."""
+    source, _, name = auteur.partition(":")
+    if source == "catalogue":
+        return f"Installed from the catalogue ({name})"
+    if source == "template":
+        return f"Installed from the template {name}"
+    return f"Installed by {auteur}"
+
+
 async def installer_skills_et_agents(
     session: AsyncSession,
     org_id: Any,
@@ -113,6 +123,7 @@ async def installer_skills_et_agents(
                 spec=corps.spec.model_dump(mode="json"),
                 checksum=empreinte_de_l_agent(corps.spec),
                 created_by=auteur,
+                message=_install_message(auteur),
             )
         )
         await record(session, SYSTEM, "agent.create", org_id=org_id, target_type="agent",
