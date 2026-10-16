@@ -1,4 +1,4 @@
-{{- if and .Values.enabled (eq .Values.runner.executor "agent_sandbox") }}
+{{- if and .Values.enabled (eq (include "choregos.executorKind" .) "agent_sandbox") }}
 {{- /*
 The `agent_sandbox` executor (ADR 0016, ADR 0053): a SandboxTemplate that describes the runner
 pod, and a SandboxWarmPool of sandboxes made from it that have NEVER run anything.
@@ -18,8 +18,19 @@ pool that warms for nothing.
 Requires the agent-sandbox operator (`infra/bootstrap/agent-sandbox.yaml`): its CRDs are
 cluster-scoped, so a tenant of a shared cluster asks its platform team.
 */ -}}
-{{- if contains "{slug}" .Values.runner.namespacePattern }}
-{{- fail (printf "runner.executor=agent_sandbox needs runner.namespacePattern to name the release namespace (%s), not a per-project pattern (%s): the SandboxTemplate and its warm pool are rendered in the release namespace only." .Release.Namespace .Values.runner.namespacePattern) }}
+{{- $pattern := include "choregos.runnerNamespacePattern" . }}
+{{- if contains "{slug}" $pattern }}
+{{- fail (printf "runner.executor=agent_sandbox needs runner.namespacePattern to name the release namespace (%s), not a per-project pattern (%s): the SandboxTemplate and its warm pool are rendered in the release namespace only. Leave namespacePattern empty." .Release.Namespace $pattern) }}
+{{- end }}
+{{- /*
+The operator is checked here, at render, not at the first run: without its CRDs the SandboxTemplate
+below is refused by the API server, or Argo CD syncs everything but it and the first run dies.
+Argo CD hands the cluster's API versions to `helm template`. Offline renderings (CI, previews)
+pass `--api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` or set
+`runner.skipOperatorCheck: true`.
+*/ -}}
+{{- if not (or .Values.runner.skipOperatorCheck (.Capabilities.APIVersions.Has "extensions.agents.x-k8s.io/v1beta1/SandboxTemplate")) }}
+{{- fail "runner.executor=agent_sandbox (the default) needs the kubernetes-sigs/agent-sandbox operator: its CRD extensions.agents.x-k8s.io/v1beta1 SandboxTemplate is not installed on this cluster. Ask your platform team to install it (docs/deployment.md, \"The agent_sandbox executor\"), or run agents as Jobs with `global.runner.executor: k8s_job`." }}
 {{- end }}
 {{- $sandbox := .Values.runner.sandbox | default dict }}
 {{- $port := int ($sandbox.assignmentPort | default 8765) }}

@@ -155,14 +155,18 @@ def test_the_executor_may_manage_claims_and_sandboxes() -> None:
 @needs_helm
 def test_a_per_project_namespace_pattern_is_refused() -> None:
     """The template lives in the release namespace; claims made elsewhere would find no pool."""
-    result = _render("choregos-orchestrator.runner.executor=agent_sandbox", check=False)
+    result = _render(
+        "choregos-orchestrator.runner.executor=agent_sandbox",
+        "choregos-orchestrator.runner.namespacePattern=proj-{slug}-runners",
+        check=False,
+    )
     assert result.returncode != 0
     assert "namespacePattern" in result.stderr
 
 
 @needs_helm
 def test_other_executors_render_no_sandbox() -> None:
-    rendered = _render().stdout
+    rendered = _render("global.runner.executor=tekton").stdout
     assert "SandboxTemplate" not in rendered and "agents.x-k8s.io" not in rendered
 
 

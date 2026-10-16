@@ -24,6 +24,16 @@ global:
   # healthy and refusing the second organization weeks later.
   edition: community
   fakes: false
+  # What runs agent stages (ADR 0072): one setting for the API and for the workers.
+  # `agent_sandbox` (kubernetes-sigs/agent-sandbox) is the default of a real deployment; the
+  # chart refuses to render without its operator. Every other executor is chosen here, by name:
+  # `k8s_job` (a Job per stage), `tekton` (a PipelineRun per stage, only where Tekton runs),
+  # `aca`, `local_docker`. Upgrading from <= 0.17, which defaulted to `tekton`: set `tekton`.
+  runner:
+    executor: agent_sandbox
+    # What the API lets a project choose as its `runtime` connector. Empty: only `executor`.
+    # Add `k8s_job` for the steps that name their own image.
+    allowedExecutors: []
   # Secrets by reference (ADR 0034). A connector's `env:NAME` reference reads only the variables
   # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
   # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are
@@ -300,12 +310,18 @@ choregos-orchestrator:
     # installation. It happened on 2026-09-27: a slightly broad cut removing a
     # neighboring setting, and `helm-unittest` caught it on `global.imageTag: 9.9.9` → `…-runner:1.0.0`.
     tag: ""
-    namespacePattern: "proj-{slug}-runners"
+    # Empty: follows the executor, the release namespace for `agent_sandbox` (its template
+    # lives there), `proj-{slug}-runners` for the others. A value here always wins.
+    namespacePattern: ""
     # Simultaneous runs per namespace. Beyond that, the Job waits WITHOUT a pod (`spec.suspend`),
     # in order of arrival: a spike of tickets no longer turns into a spike of
     # pods all pulling the same image. 0 = no ceiling.
     maxActive: 0
-    executor: tekton
+    # Leave empty: `global.runner.executor` decides. A different value is refused at render.
+    executor: ""
+    # Skip the render-time check that the agent-sandbox operator is installed, for an offline
+    # rendering (CI, a preview). Never needed under Argo CD or `helm install`.
+    skipOperatorCheck: false
     # What each agent pod receives in addition. `env` carries plain values (never a
     # secret); `envFromSecrets` lists the namespace's Secrets, mounted by reference —
     # this is how a backend token or git credentials get through.

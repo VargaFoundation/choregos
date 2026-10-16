@@ -43,6 +43,24 @@ def spec_du_type(kind: str, type_name: str) -> ConnectorTypeSpec:
     return spec
 
 
+def check_runtime_allowed(type_name: str) -> None:
+    """Refuse a `runtime` connector the deployment does not run (ADR 0072).
+
+    A project could pick `tekton` on a cluster without Tekton, and its first run died. The
+    deployment declares what it runs (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`);
+    when it declares nothing (a bare dev server) nothing is refused."""
+    from choregos_adapters.registry import allowed_executor_kinds, executors_declared
+
+    if not executors_declared():
+        return
+    allowed = allowed_executor_kinds()
+    if type_name not in allowed:
+        raise unprocessable(
+            f"this deployment runs agents on `{allowed[0]}`; allowed: {', '.join(allowed)}. "
+            f"Ask the platform operator to add `{type_name}` to `global.runner.allowedExecutors`."
+        )
+
+
 def verifier_les_secrets(
     spec: ConnectorTypeSpec,
     type_name: str,
