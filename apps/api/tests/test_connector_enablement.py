@@ -80,7 +80,8 @@ async def _prepare(
 async def _tools(client: AsyncClient, base: str, headers: dict[str, str]) -> list[str]:
     listed = await client.get(base, headers=headers)
     assert listed.status_code == 200, listed.text
-    return [t["name"] for t in listed.json()["tools"]]
+    # `web_fetch` is the platform's own built-in (S40-01f), not a connector's: not part of what is enabled.
+    return [t["name"] for t in listed.json()["tools"] if t["name"] != "web_fetch"]
 
 
 def _enablement(project: dict[str, Any]) -> str:
