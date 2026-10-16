@@ -26,6 +26,7 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [State of the project](plan/STATE-OF-THE-PROJECT-2026-09-24.md) | The critical assessment of 2026-09-24 and the P0 → P3 plan |
 | [Plan of 2026-10-12](plan/PLAN-2026-10-12.md) | Agent builder, cost control, specialist agents, a lighter console (S26–S38) |
 | [Plan of 2026-10-15](plan/PLAN-2026-10-15.md) | The enterprise edition in production, governed agents, catalogues, a project-first console (S39) |
+| [Plan of 2026-10-16](plan/PLAN-2026-10-16.md) | Governed network access, an agent's release lifecycle, a configurable project, catalogues with rights (S40) |
 
 ## What it is, in one paragraph
 
