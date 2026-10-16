@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
+from choregos_contracts import skill_file_bytes
 from choregos_core.egress import EgressRefusedError
 from fastapi import APIRouter, Path, Query, Request, status
 from sqlalchemy import func, select
@@ -424,7 +425,7 @@ async def preview_skills_from_git(
                 name=skill.name,
                 description=skill.description,
                 files=len(skill.files),
-                bytes=sum(len(texte.encode("utf-8")) for texte in skill.files.values()),
+                bytes=sum(len(skill_file_bytes(chemin, texte)) for chemin, texte in skill.files.items()),
                 licence=_licence(skill, snapshot),
                 problem=skill.problem,
                 existing_version=existantes.get(skill.name or ""),

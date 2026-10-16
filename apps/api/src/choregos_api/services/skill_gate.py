@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from choregos_contracts import is_inert_binary_path
+
 from .skill_sources import detect_licence
 
 Risk = Literal["low", "medium", "high"]
@@ -264,6 +266,8 @@ def assess(
     """The risk tier, the scan's findings and the licence of a version's files."""
     trouves: list[Finding] = []
     for chemin in sorted(files):
+        if is_inert_binary_path(chemin):
+            continue  # base64 of a font or an image: nothing a text scan could read
         trouves.extend(_scan_file(chemin, files[chemin]))
     for chemin in sorted(set(executables)):
         trouves.append(Finding("executable", "warning", "a file with an executable bit", chemin))

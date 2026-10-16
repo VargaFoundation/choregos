@@ -197,9 +197,12 @@ def empreinte_de_skill(fichiers: dict[str, str]) -> str:
     recalcule avant de poser les fichiers. Un seul calcul pour les deux côtés."""
     import hashlib
 
+    from .skill_files import skill_file_bytes
+
     condense = hashlib.sha256()
     for chemin in sorted(fichiers):
-        condense.update(chemin.encode("utf-8") + b"\0" + fichiers[chemin].encode("utf-8") + b"\0")
+        # The bytes of each file (decoded base64 for an inert binary): text digests are unchanged.
+        condense.update(chemin.encode("utf-8") + b"\0" + skill_file_bytes(chemin, fichiers[chemin]) + b"\0")
     return "sha256:" + condense.hexdigest()
 
 

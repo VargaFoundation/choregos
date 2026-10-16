@@ -8,6 +8,7 @@ import { UpdateCheck, VersionGate } from "@/components/skills/gate";
 import { Card, Empty, ErrorNote, Heading, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
+import { skillFileLabel } from "@/lib/skill-files";
 import { useSession } from "@/lib/session";
 
 /** Un skill : ses versions, les fichiers de chacune, et les agents qui le portent. */
@@ -112,7 +113,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
               </p>
               {montre && (
                 <pre aria-label={montre} className="whitespace-pre-wrap break-words rounded bg-surface-muted p-3 text-xs">
-                  {version.data.files?.[montre]}
+                  {skillFileLabel(montre, version.data.files?.[montre]) ?? version.data.files?.[montre]}
                 </pre>
               )}
             </div>

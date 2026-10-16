@@ -77,6 +77,14 @@ from .project import (
     RepoConfig,
     ScheduleConfig,
 )
+from .skill_files import (
+    INERT_BINARY_EXTENSIONS,
+    MAX_BINARY_BYTES,
+    check_inert_binary,
+    encode_binary,
+    is_inert_binary_path,
+    skill_file_bytes,
+)
 from .stage import (
     STAGE_INPUT_SCHEMA,
     STAGE_RESULT_SCHEMA,
@@ -195,6 +203,8 @@ def load_openapi() -> dict[str, Any]:
 __all__ = [
     "ARTIFACT_NAME_PATTERN",
     "ARTIFACT_TYPES",
+    "INERT_BINARY_EXTENSIONS",
+    "MAX_BINARY_BYTES",
     "RUN_ACTORS",
     "STAGE_INPUT_SCHEMA",
     "STAGE_RESULT_SCHEMA",
@@ -304,16 +314,20 @@ __all__ = [
     "WorkflowMetadata",
     "artifact_digest",
     "artifact_type",
+    "check_inert_binary",
     "contracts_dir",
     "empreinte_de_skill",
+    "encode_binary",
     "file_outputs",
     "inline_bytes",
+    "is_inert_binary_path",
     "knowledge_digest",
     "load_openapi",
     "load_schema",
     "missing_outputs",
     "openapi_path",
     "schemas_dir",
+    "skill_file_bytes",
     "type_of_filename",
     "type_of_value",
 ]
