@@ -160,6 +160,10 @@ class Settings(BaseSettings):
     github_webhook_secret: str = ""
     github_app_id: str = ""
     github_app_private_key: str = ""
+    #: The App's OAuth client (optional): only needed to prove, on an instance with several
+    #: organisations, that the person who installs the App manages that installation (ADR 0073).
+    github_app_client_id: str = ""
+    github_app_client_secret: str = ""
     #: Secret partagé des webhooks non signés (ArgoCD, Alertmanager, Jira, GitLab). VIDE par
     #: défaut : `verify_shared_secret` refuse alors tout, et c'est voulu — la valeur par
     #: défaut d'avant était publiée dans ce dépôt, et le chart ne l'injectait pas.

@@ -79,6 +79,14 @@ from .definitions import (
     WorkflowValidateRequest,
     WorkflowValidation,
 )
+from .github_app import (
+    GitHubAppStatus,
+    GitHubInstallationDto,
+    GitHubInstallLink,
+    GitHubInstallLinkRequest,
+    GitHubRepository,
+    GitHubRepositoryPage,
+)
 from .identite import (
     ApiTokenCreate,
     ApiTokenCreated,
@@ -161,6 +169,7 @@ from .projets import (
     TemplateSummary,
     TemplateUpsert,
 )
+from .readiness import ProjectReadiness, ReadinessFix, ReadinessItem, ReadinessSummary
 from .tickets import (
     ArtifactRef,
     CiLogs,
@@ -268,6 +277,12 @@ __all__ = [
     "FreezeRequest",
     "GatewayKeyInfo",
     "GatewayModelDto",
+    "GitHubAppStatus",
+    "GitHubInstallLink",
+    "GitHubInstallLinkRequest",
+    "GitHubInstallationDto",
+    "GitHubRepository",
+    "GitHubRepositoryPage",
     "GitToken",
     "HandOff",
     "HandOffEvent",
@@ -310,6 +325,7 @@ __all__ = [
     "ProjectOperationDto",
     "ProjectOperationPut",
     "ProjectPage",
+    "ProjectReadiness",
     "ProjectRequirement",
     "ProjectStats",
     "ProjectUpdate",
@@ -317,6 +333,9 @@ __all__ = [
     "ProvisionStatus",
     "ProvisionStep",
     "QuestionIn",
+    "ReadinessFix",
+    "ReadinessItem",
+    "ReadinessSummary",
     "ReleaseDto",
     "ReleaseItemDto",
     "ReleasePage",

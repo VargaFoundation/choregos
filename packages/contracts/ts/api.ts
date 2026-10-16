@@ -302,6 +302,56 @@ export type ConnectorTestResult = {
   }>;
 };
 
+export type GitHubInstallation = {
+  /** GitHub's installation id; discovered, never typed */
+  id: number;
+  account_login: string;
+  account_type: "Organization" | "User";
+  repository_selection: "all" | "selected";
+  suspended: boolean;
+  /** Claimed by the organisation asking */
+  claimed: boolean;
+  /** Where to change the installation's repositories on github.com */
+  settings_url: string;
+};
+
+export type GitHubAppStatus = {
+  /** The deployment has a GitHub App (`CHOREGOS_GITHUB_APP_ID` and key) */
+  configured: boolean;
+  /** Read from GitHub (`GET /app`), never configured */
+  app_slug?: string | null;
+  app_name?: string | null;
+  /** Installs the App on a GitHub account, without a state; use install-link to come back to the console */
+  install_url?: string | null;
+  /** How an installation is claimed: implicit (a single-organisation instance), oauth (several organisations, proof by GitHub user authorization), unavailable (several organisations and no OAuth client secret) */
+  multi_org_claim: "implicit" | "oauth" | "unavailable";
+  installations: Array<GitHubInstallation>;
+};
+
+export type GitHubRepository = {
+  /** owner/repo */
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  installation_id: number;
+};
+
+export type GitHubRepositoryPage = {
+  items: Array<GitHubRepository>;
+  meta: PageMeta;
+};
+
+export type GitHubInstallLinkRequest = {
+  /** Project slug the person came from */
+  project?: string | null;
+  /** A path of the console (starts with `/`), where the setup callback sends the person back */
+  return_to: string;
+};
+
+export type GitHubInstallLink = {
+  url: string;
+};
+
 export type ConnectorType = {
   kind: string;
   type: string;
@@ -498,6 +548,38 @@ export type Action = {
   created_at?: string | null;
   finished_at?: string | null;
   journal?: Array<ActionEffect>;
+};
+
+export type ReadinessFix = {
+  /** Where it is fixed: a console path, with an `#anchor` to the field */
+  href?: string | null;
+  /** Who can do it: the project's owner, the organisation's administrator, the platform's operator, or someone outside Choregos (an identity provider, a vendor) */
+  by: "project_owner" | "org_admin" | "platform_operator" | "external";
+};
+
+export type ReadinessItem = {
+  /** Stable, e.g. `provisioned`, `connector-cd`, `connector-cd-secrets`, `people-release-captain`, `notifications` */
+  id: string;
+  section: "general" | "connections" | "agents" | "guardrails" | "people" | "notifications" | "tools";
+  title: string;
+  /** done: nothing to do. check: works but deserves a look (a demo stand-in, a stale test, an unmeasured check). todo: the project cannot run as intended. not_needed: its workflows do not need it */
+  state: "done" | "check" | "todo" | "not_needed";
+  /** Why, in a sentence */
+  detail: string;
+  fix: ReadinessFix;
+};
+
+export type ReadinessSummary = {
+  done: number;
+  check: number;
+  todo: number;
+};
+
+export type ProjectReadiness = {
+  /** No item is `todo` */
+  ready: boolean;
+  summary: ReadinessSummary;
+  items: Array<ReadinessItem>;
 };
 
 /** A capability the project's workflows require, and why (ADR 0034). */
@@ -2230,6 +2312,7 @@ export interface Operations {
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
+  createGitHubInstallLink: { method: "POST"; path: "/orgs/{org}/github/install-link"; body: GitHubInstallLinkRequest; response: GitHubInstallLink };
   createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
   createKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources"; body: KnowledgeSourceCreate; response: KnowledgeSource };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
@@ -2273,6 +2356,7 @@ export interface Operations {
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
+  getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
@@ -2289,6 +2373,7 @@ export interface Operations {
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
   getProjectModels: { method: "GET"; path: "/projects/{id}/models"; body: never; response: ProjectModels };
+  getProjectReadiness: { method: "GET"; path: "/projects/{id}/readiness"; body: never; response: ProjectReadiness };
   getProjectTools: { method: "GET"; path: "/projects/{id}/tools"; body: never; response: {
   allows_all: boolean;
   tools: Array<{
@@ -2391,6 +2476,7 @@ export interface Operations {
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
+  githubAppSetup: { method: "GET"; path: "/github/setup"; body: never; response: void };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2419,6 +2505,7 @@ export interface Operations {
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
+  listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
@@ -2478,6 +2565,7 @@ export interface Operations {
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
+  refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };

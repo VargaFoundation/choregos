@@ -608,7 +608,9 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     import httpx
     from choregos_adapters.github import RUNNER_PERMISSIONS, GitHubAppAuth
 
-    run, _item, _project = await _run_and_item(session, id)
+    from ..services.github_app import claimed_installation_for, implicit_claim_enabled
+
+    run, _item, project_row = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("result already posted for this run")
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
@@ -617,7 +619,19 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     cle = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
     if depot is None or not app_id or not cle:
         return GitToken(token=None, repository=depot)
-    auth = GitHubAppAuth(app_id=app_id, private_key=cle)
+    # The installation THIS organisation claimed on the repository's owner, never another's (ADR 0073).
+    # Without a claim, a single-organisation instance still discovers it from the repository; with
+    # several organisations a repository outside the claims gets no token.
+    owner = depot.split("/", 1)[0]
+    claimed = await claimed_installation_for(session, project_row.org_id, owner)
+    if claimed is None and not await implicit_claim_enabled(session):
+        return GitToken(token=None, repository=depot)
+    auth = GitHubAppAuth(
+        app_id=app_id,
+        private_key=cle,
+        pinned_installation=claimed.id if claimed else None,
+        pinned_account=owner if claimed else None,
+    )
     async with httpx.AsyncClient(timeout=20) as client:
         # Cloner et pousser sa branche : `contents: write`, rien d'autre — la PR, la plateforme l'ouvre.
         jeton = await auth.token_for(client, depot, permissions=RUNNER_PERMISSIONS, ttl_s=3600)
