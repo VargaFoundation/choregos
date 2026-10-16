@@ -100,3 +100,33 @@ def test_the_proxy_and_the_network_policy_render_the_union() -> None:
     )
     for domain in policy.sandbox.network.allow_domains:
         assert f".{domain}" in conf(joined), "the project's own domains stay"
+
+
+@pytest.mark.asyncio
+async def test_a_remote_agents_admission_reads_the_union_not_the_project_alone(setup: Fixture) -> None:
+    """S39-08b: the host the card pins must be allowed; an administrator's `runners` rule is enough."""
+    from types import SimpleNamespace
+
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.remote import check_remote_agent
+    from temporalio.exceptions import ApplicationError
+
+    runtime = SimpleNamespace(
+        pinned_card=SimpleNamespace(url="https://a2a.example.test/v1/rpc"), credential=None
+    )
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        bundle = SimpleNamespace(
+            project=project, engine=SimpleNamespace(allow_domains=lambda: ["github.com"])
+        )
+        with pytest.raises(ApplicationError, match="allow_domains"):
+            await check_remote_agent(session, bundle, runtime)
+    await _rule(setup, "a2a.example.test", ["runners"])
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        bundle = SimpleNamespace(
+            project=project, engine=SimpleNamespace(allow_domains=lambda: ["github.com"])
+        )
+        await check_remote_agent(session, bundle, runtime)

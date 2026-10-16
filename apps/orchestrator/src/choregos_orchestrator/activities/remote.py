@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 from choregos_contracts import Budget, DeclaredCost, RemoteCall, StageInput
 from temporalio.exceptions import ApplicationError
 
+from ..org_egress import merged_domains, org_runner_hosts
+
 A2A_BACKEND = "a2a"
 #: What a remote agent's `Budget.usd` is when nothing is declared: the contract wants a positive
 #: figure, the reservation (`reserve_cap`) is what really counts and is zero.
@@ -146,5 +148,7 @@ async def check_remote_agent(session: Any, bundle: Any, runtime: Any) -> None:
     """The two admission checks of a remote agent; nothing for any other runtime."""
     if runtime is None:
         return
-    check_egress(runtime, list(bundle.engine.allow_domains()))
+    # The project's own allowlist, plus what the organisation opened for its runners (S39-22d).
+    org_hosts = await org_runner_hosts(session, bundle.project.org_id)
+    check_egress(runtime, merged_domains(bundle.engine.allow_domains(), org_hosts))
     await check_credential(session, bundle.project.org_id, runtime)
