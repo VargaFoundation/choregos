@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from choregos_contracts import StageInput, StageStatus
 from choregos_runner.exits import Exit
 from choregos_runner.runner import Runner
@@ -248,6 +250,23 @@ async def test_clone_failure_exits_20(stage_input: StageInput, runner_settings: 
     client = FakeInternalClient(stage_input)
     outcome = await Runner(runner_settings, client).execute(stage_input, client)  # type: ignore[arg-type]
     assert outcome.exit_code is Exit.CLONE_FAILED
+
+
+async def test_a_run_that_ends_early_stops_its_tool_server(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """A run that fails before its agent starts no longer leaves its tool server holding the port
+    (#474): the next run on that port finds it free."""
+    stage_input.repo.url = "/depot/inexistant"
+    client = FakeInternalClient(stage_input)
+    runner = Runner(runner_settings, client)
+    outcome = await runner.execute(stage_input, client)  # type: ignore[arg-type]
+    assert outcome.exit_code is Exit.CLONE_FAILED
+    assert runner.tools is not None, "nobody listened: the run served its tools itself"
+    assert runner.tools[1].done(), "the run ended, its tool server with it"
+    port = int(runner_settings.tools_url.rsplit(":", 1)[1].split("/")[0])
+    with pytest.raises(OSError):
+        await asyncio.open_connection("127.0.0.1", port)
 
 
 async def test_agent_failing_initialize_exits_30(stage_input: StageInput, runner_settings: Any) -> None:
