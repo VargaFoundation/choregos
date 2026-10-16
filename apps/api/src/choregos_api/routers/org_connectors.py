@@ -40,6 +40,13 @@ from ..services.connector_secrets import (
     refs_with_values,
     require_store,
 )
+from ..services.platform_network import (
+    PlatformNetworkRefused,
+    check_connector_declaration,
+    enforce_connector_call,
+    refusal_error,
+    with_identity,
+)
 
 router = APIRouter(tags=["connectors"])
 
@@ -176,6 +183,7 @@ async def declare_org_connector(
         store_prefix=prefix,
     )
     store = require_store(body.secret_values)
+    await check_connector_declaration(session, organisation.id, body.config, body.name)
     deja = (
         await session.execute(
             select(OrgConnector.id).where(OrgConnector.org_id == organisation.id, OrgConnector.name == name)
@@ -258,6 +266,7 @@ async def update_org_connector(
     refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
     verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
     store = require_store(values)
+    await check_connector_declaration(session, organisation.id, config, name)
     before = dict(instance.secret_refs or {})
     after = refs_with_values({**before, **refs_in}, prefix, values)
     metas = await put_values(session, store, organisation.id, prefix, values, principal.email)
@@ -455,8 +464,16 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
     try:
-        config = await resolved_configuration(
-            session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        await enforce_connector_call(session, instance, polite=False)
+    except PlatformNetworkRefused as refused:
+        raise refusal_error(refused) from refused
+    try:
+        config = await with_identity(
+            session,
+            instance.org_id,
+            await resolved_configuration(
+                session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+            ),
         )
         lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
         if lister is None:

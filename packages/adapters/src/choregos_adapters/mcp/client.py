@@ -82,6 +82,7 @@ class ClientMcp:
         auth_header: str = "Authorization",
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        user_agent: str = "",
     ) -> None:
         if auth_scheme not in {"bearer", "basic"}:
             raise ValueError(f"unknown MCP auth scheme `{auth_scheme}`: `bearer` or `basic`")
@@ -96,6 +97,8 @@ class ClientMcp:
         #: The header the token travels in. `Authorization` (the default) carries `Bearer <token>`;
         #: any other name carries the raw token, which is what `X-API-Key`-style servers expect.
         self._auth_header = auth_header
+        #: Sent on every request when given: who is calling, and how to reach them (ADR 0070).
+        self._user_agent = user_agent
         self._timeout = timeout_s
         self._transport = transport
         self._session: str | None = None
@@ -109,6 +112,8 @@ class ClientMcp:
             "Accept": "application/json, text/event-stream",
             "MCP-Protocol-Version": self._version,
         }
+        if self._user_agent:
+            entetes["User-Agent"] = self._user_agent
         if self._token and self._auth_scheme == "basic":
             pair = base64.b64encode(f"{self._username}:{self._token}".encode()).decode("ascii")
             entetes["Authorization"] = f"Basic {pair}"

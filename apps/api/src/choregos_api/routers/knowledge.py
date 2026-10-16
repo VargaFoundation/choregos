@@ -59,6 +59,7 @@ from ..schemas.knowledge import (
     KnowledgeSourcePatch,
     ProjectKnowledgeBaseCreate,
 )
+from ..services.platform_network import check_platform_host
 from ..temporal import get_temporal, knowledge_sync_id
 
 router = APIRouter(tags=["knowledge"])
@@ -794,6 +795,10 @@ async def _checked_source_config(
             raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
         await _documents_connector(session, organisation, connector, kind)
     checked = _SOURCE_VALIDATORS[kind](config)
+    if kind in {"web", "git"}:
+        # The organisation's network policy (ADR 0070): a site it refuses is not crawled, and the
+        # refusal comes now, naming the host, not at the first sync.
+        await check_platform_host(session, organisation.id, str(checked["url"]), f"{kind} source")
     if kind == "web" and not fakes_enabled():
         exclude = checked.get("exclude") or []
         assert isinstance(exclude, list)

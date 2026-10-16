@@ -840,23 +840,27 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         greffon = des_greffons[name][0]
         code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
         fournisseur, prix = f"greffon:{greffon}", 0.0
-    session.add(
-        CostLedger(
-            project_id=project.id,
-            work_item_id=item.id,
-            run_id=run.id,
-            # `ts` n'a pas de défaut côté modèle : la colonne est NOT NULL et l'oublier
-            # fait échouer l'INSERT, pas la lecture.
-            ts=utcnow(),
-            kind="tool",
-            provider=fournisseur,
-            model=name,
-            cost_eur=prix,
-            cost_usd=prix_usd,
-            stage_role=run.stage_role,
-            **await dimensions_of(session, run.id),
+    # A call the organisation's network policy stopped never reached the server: it is not counted
+    # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
+    refused_by_network = isinstance(corps, dict) and corps.get("type") in {"network_policy", "rate_limited"}
+    if not refused_by_network:
+        session.add(
+            CostLedger(
+                project_id=project.id,
+                work_item_id=item.id,
+                run_id=run.id,
+                # `ts` has no model-side default: the column is NOT NULL and forgetting it
+                # fails the INSERT, not the read.
+                ts=utcnow(),
+                kind="tool",
+                provider=fournisseur,
+                model=name,
+                cost_eur=prix,
+                cost_usd=prix_usd,
+                stage_role=run.stage_role,
+                **await dimensions_of(session, run.id),
+            )
         )
-    )
     await check_after_spend(session, run.id)
     await persist_event(
         session,
@@ -893,7 +897,7 @@ async def _par_le_courtier(
         verifier_les_arguments(outil, arguments)
     except ArgumentsRefuses as refus:
         raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
-    code, corps = await appeler(session, outil, arguments)
+    code, corps = await appeler(session, outil, arguments, run=run, project=project)
     return await _garde_contre_l_injection(session, run, project, outil, code, corps)
 
 
