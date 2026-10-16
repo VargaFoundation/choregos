@@ -388,13 +388,17 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   // (The placeholder and the demo's project-scoped base remain.)
   await expect(builder.getByLabel("Add a knowledge base").locator("option")).toHaveCount(2);
   await expect(builder.getByLabel("Add a knowledge base").locator("option[value='architecture-framework']")).toHaveCount(0);
-  await builder.getByLabel("Memory scope").selectOption("agent");
+  // Memory: its own memory in the project, instead of the project's shared one (S40-11).
+  await builder.getByRole("button", { name: "Remove project:shared" }).click();
+  await builder.getByLabel("Add a memory").selectOption("project:own");
+  await builder.getByRole("button", { name: "Add it" }).click();
+  await builder.getByTestId("memory-binding").getByLabel("Read and write").check();
   await page.getByRole("tab", { name: "What it costs and allows" }).click();
   const allows = page.getByTestId("ce-que-ca-permet");
   await expect(allows.getByTestId("connaissances-resolues")).toContainText(
     "architecture-framework — laid read-only in the workspace; served to every project of the organisation.",
   );
-  await expect(allows.getByTestId("memoire-resolue")).toContainText("Its own memory within each project");
+  await expect(allows.getByTestId("memoire-resolue")).toContainText("Its own memory in the project — read and written");
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/zoning-reviewer$/);
 
@@ -402,9 +406,10 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   await page.getByRole("link", { name: "Definition" }).click();
   const suivante = page.getByTestId("agent-builder");
   await expect(suivante.getByTestId("bases-de-la-version")).toContainText("architecture-framework");
-  await expect(suivante.getByLabel("Memory scope")).toHaveValue("agent");
+  await expect(suivante.getByTestId("memory-binding")).toHaveCount(1);
+  await expect(suivante.getByTestId("memory-binding")).toContainText("project:own");
   await suivante.getByRole("button", { name: "Remove architecture-framework" }).click();
-  await suivante.getByLabel("Memory scope").selectOption("none");
+  await suivante.getByRole("button", { name: "Remove project:own" }).click();
   await expect(page.getByTestId("connaissances-resolues")).toContainText("None.");
   await expect(page.getByTestId("memoire-resolue")).toContainText("No memory: a run neither reads nor writes");
 });

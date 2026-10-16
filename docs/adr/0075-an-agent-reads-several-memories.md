@@ -93,7 +93,9 @@ memories at the same time.
 - S40-11a ships the contract, the API and the storage; S40-11b the run (resolution and recall in
   `prepare_stage`, writes and proposals in the memory activities, the run-token search endpoint
   `POST /internal/runs/{id}/memory/search`, the sidecar and the runner's labels), with no change to a
-  workflow; S40-11c the console.
+  workflow; S40-11c the console (the registry and page of global memories, the project's memory selector, the builder's
+  ordered bindings editor). The definition view and the version diff of S40-12b show the effective bindings once
+  that story lands; S40-11c does not touch them.
 - Ecphoria's own MCP server is handed to a run only when its bindings are exactly the legacy
   `[project:shared write]`, because that server knows nothing of the other memories.
 - The automatic acceptance activity now reads `list_pending` of the real adapters (it only worked on

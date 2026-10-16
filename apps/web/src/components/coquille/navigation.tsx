@@ -42,6 +42,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/agents", label: "Agents", icone: Bot },
   { href: "/skills", label: "Skills", icone: BookOpen },
   { href: "/knowledge", label: "Knowledge", icone: Library },
+  { href: "/memories", label: "Memories", icone: Brain },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "AI clients", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
@@ -55,7 +56,7 @@ export function entreeActive(href: string, pathname: string): boolean {
 /** Les entrées, rangées : le travail, ce qu'on y branche, l'organisation. */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
   { titre: "Work", entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/integrations"] },
+  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/memories", "/integrations"] },
   { titre: "Organisation", entrees: ["/costs", "/admin"] },
 ];
 
