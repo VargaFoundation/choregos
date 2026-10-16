@@ -197,6 +197,20 @@ paths:
       tags: [projects]
       operationId: suspendProject
       responses: { "200": { description: Suspended, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } } }
+  /projects/{id}/readiness:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [projects]
+      operationId: getProjectReadiness
+      description: |
+        What the project still lacks to run, computed by the API from stored state (provisioning, workflow,
+        each required capability, secrets, the GitHub installation, repository and measured checks, backend,
+        model profiles, budgets, people and human groups, notifications, a first request), each item saying who
+        can fix it. It reads the last connector tests and makes no network call, so a read is fast. The settings
+        page, the overview, the CLI and the MCP door all show this one list. Needs `project:read`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectReadiness" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/connectors:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3082,6 +3096,44 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
         journal: { type: array, items: { $ref: "#/components/schemas/ActionEffect" } }
+    ReadinessFix:
+      type: object
+      required: [by]
+      properties:
+        href: { type: [string, "null"], description: "Where it is fixed: a console path, with an `#anchor` to the field" }
+        by:
+          type: string
+          enum: [project_owner, org_admin, platform_operator, external]
+          description: "Who can do it: the project's owner, the organisation's administrator, the platform's operator, or someone outside Choregos (an identity provider, a vendor)"
+    ReadinessItem:
+      type: object
+      required: [id, section, title, state, detail, fix]
+      properties:
+        id: { type: string, description: "Stable, e.g. `provisioned`, `connector-cd`, `connector-cd-secrets`, `people-release-captain`, `notifications`" }
+        section: { type: string, enum: [general, connections, agents, guardrails, people, notifications, tools] }
+        title: { type: string }
+        state:
+          type: string
+          enum: [done, check, todo, not_needed]
+          description: "done: nothing to do. check: works but deserves a look (a demo stand-in, a stale test, an unmeasured check). todo: the project cannot run as intended. not_needed: its workflows do not need it"
+        detail: { type: string, description: "Why, in a sentence" }
+        fix: { $ref: "#/components/schemas/ReadinessFix" }
+    ReadinessSummary:
+      type: object
+      required: [done, check, todo]
+      properties:
+        done: { type: integer, minimum: 0 }
+        check: { type: integer, minimum: 0 }
+        todo: { type: integer, minimum: 0 }
+    ProjectReadiness:
+      type: object
+      required: [ready, summary, items]
+      properties:
+        ready: { type: boolean, description: "No item is `todo`" }
+        summary: { $ref: "#/components/schemas/ReadinessSummary" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReadinessItem" }
     ProjectRequirement:
       type: object
       required: [capability, reasons]
