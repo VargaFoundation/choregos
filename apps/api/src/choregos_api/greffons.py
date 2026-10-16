@@ -240,6 +240,8 @@ GESTES = {
     "project.create": "slug du projet à créer",
     "workitem.decision": "ticket, transition, nature de la demande et de la décision",
     "release.approve": "release, environnement",
+    # Releasing an agent revision to production or to a canary share (S40-02, ADR 0071).
+    "agent.release": "agent, channel, version, kind",
 }
 
 

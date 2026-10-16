@@ -22,6 +22,7 @@ from ..errors import unprocessable
 from ..logging import get_logger
 from ..rbac import SYSTEM
 from ..schemas.agents import AgentCreate
+from .agent_releases import after_publish
 from .agents import empreinte as empreinte_de_l_agent
 from .agents import erreurs_d_une_version
 from .network import check_agent_network
@@ -128,6 +129,8 @@ async def installer_skills_et_agents(
                 message=_install_message(auteur),
             )
         )
+        await session.flush()
+        await after_publish(session, None, agent, 1, auteur)
         await record(session, SYSTEM, "agent.create", org_id=org_id, target_type="agent",
                      target_id=agent.id, via=auteur)  # fmt: skip
         installes["agents"].append(corps.slug)

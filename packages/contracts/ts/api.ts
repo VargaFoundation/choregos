@@ -1225,6 +1225,8 @@ export type AgentCreate = {
   tags?: AgentTags;
   /** why version 1 exists; absent, `Created` (S40-12) */
   message?: string | null;
+  /** what saving a revision does (ADR 0071); absent, the defaults: it goes to production */
+  release_policy?: AgentReleasePolicy | null;
 };
 
 export type AgentFork = {
@@ -1268,6 +1270,8 @@ export type AgentPermissions = {
   manage?: boolean;
   /** pin it on a project the caller owns */
   pin?: boolean;
+  /** send a revision to testing or production, roll back (ADR 0071) */
+  release?: boolean;
   fork_scopes?: Array<"org" | "project" | "personal">;
 };
 
@@ -1361,6 +1365,8 @@ export type AgentVersion = {
   pinned_by?: Array<string>;
   /** what a run of this version binds: `spec.memories`, or what the legacy `spec.memory` means (S40-11) */
   effective_memories?: Array<AgentMemoryBinding>;
+  /** the channels this revision sits on now (ADR 0071) */
+  channels?: Array<"stable" | "candidate">;
 };
 
 export type AgentVersionPublish = {
@@ -1406,6 +1412,106 @@ export type Agent = {
   can?: AgentPermissions;
   /** the server's sentence for what the caller may not do: shown as is, never guessed from roles */
   cannot_reason?: string | null;
+  /** the revision in production (ADR 0071) */
+  stable_version?: number | null;
+  /** the revision in testing */
+  candidate_version?: number | null;
+  /** the share of work items, of projects that follow production, served the candidate */
+  candidate_percent?: number;
+  candidate_since?: string | null;
+  release_policy?: AgentReleasePolicy;
+};
+
+/** What a revision must satisfy before it reaches production; a rollback skips them. */
+export type AgentStableGates = {
+  /** the revision must be the current candidate */
+  require_candidate?: boolean;
+  /** finished runs of the candidate since it became the candidate */
+  min_candidate_runs?: number;
+  min_success_rate?: number | null;
+  min_soak_hours?: number | null;
+  /** how recent the person's sign-in must be */
+  step_up_minutes?: number;
+};
+
+/** What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate. */
+export type AgentReleasePolicy = {
+  /** `stable`: a saved revision goes to production (the behaviour before channels); `candidate`: to testing; `none`: nowhere */
+  on_publish?: "stable" | "candidate" | "none";
+  stable?: AgentStableGates;
+};
+
+export type AgentReleaseCreate = {
+  channel: "candidate" | "stable";
+  /** `null` with `candidate` withdraws the candidate; `null` with `stable` releases the current candidate */
+  version?: number | null;
+  /** candidate only: the share of work items served the candidate; absent keeps the current share (0 for a new candidate) */
+  percent?: number | null;
+  reason?: string | null;
+};
+
+export type AgentReleaseCheck = {
+  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication */
+  name: string;
+  required?: boolean;
+  /** null: not applicable */
+  passed?: boolean | null;
+  detail?: string | null;
+};
+
+export type AgentRelease = {
+  id: string;
+  agent: string;
+  channel: "candidate" | "stable";
+  kind: "publish" | "promote" | "rollback" | "withdraw" | "baseline";
+  version?: number | null;
+  previous_version?: number | null;
+  percent?: number | null;
+  status: "done";
+  requested_by?: string | null;
+  requested_at: string;
+  done_at?: string | null;
+  reason?: string | null;
+  /** the checks as they were evaluated (a snapshot) */
+  checks?: Array<AgentReleaseCheck>;
+};
+
+export type AgentChannelStats = {
+  version: number;
+  /** finished runs */
+  runs?: number;
+  succeeded?: number;
+  failed?: number;
+  success_rate?: number | null;
+  since?: string | null;
+};
+
+export type AgentReleaseReadiness = {
+  version: number;
+  channel: "candidate" | "stable";
+  kind: "publish" | "promote" | "rollback" | "withdraw" | "baseline";
+  /** every required check passes */
+  ready: boolean;
+  checks?: Array<AgentReleaseCheck>;
+  candidate?: AgentChannelStats | null;
+  production?: AgentChannelStats | null;
+};
+
+export type AgentExposure = {
+  stable_version?: number | null;
+  candidate_version?: number | null;
+  candidate_percent?: number;
+  projects?: Array<{
+    project: string;
+    source: "pin" | "pin_channel" | "project_channel";
+    channel?: "stable" | "candidate" | null;
+    version: number;
+  }>;
+};
+
+export type ProjectAgentChannel = {
+  /** which channel of the agents the project runs when it pins nothing */
+  channel: "stable" | "candidate";
 };
 
 export type AgentLifecycleChange = {
@@ -1444,7 +1550,18 @@ export type AgentMetrics = {
     cost_usd: number;
   }>;
   spent_today_usd?: number;
+  /** production's daily budget */
   daily_budget_usd?: number | null;
+  by_version?: Array<AgentVersionMetrics>;
+};
+
+export type AgentVersionMetrics = {
+  version: number;
+  runs?: number;
+  succeeded?: number;
+  failed?: number;
+  success_rate?: number | null;
+  cost_usd?: number;
 };
 
 /** An agent's line in the registry over a period. */
@@ -1463,8 +1580,14 @@ export type AgentResolution = {
   /** `resolved`: a run would load `version`. `not_installed`: the organisation has no such agent (`in_catalogue` says whether publishing the workflow installs it, ADR 0040). `unavailable`: it exists but a run would not start (`reason`: draft, retired, expired, disabled, no such version). */
   status: "resolved" | "not_installed" | "unavailable";
   version?: number | null;
-  /** True when the version comes from the project's pin rather than from the reference or the latest. */
+  /** True when the version comes from the project's pin (fixed or by channel) rather than from the reference or from the agent's channels. */
   pinned: boolean;
+  /** why this revision (ADR 0071); `latest` only for an agent that has no production pointer */
+  source?: "explicit" | "pin" | "pin_channel" | "project_channel" | "canary" | "stable" | "latest" | null;
+  channel?: "stable" | "candidate" | null;
+  /** the revision in testing, if any: the console says `v4, 10 % of work items run v5` */
+  candidate_version?: number | null;
+  candidate_percent?: number | null;
   display_name?: string | null;
   lifecycle?: string | null;
   in_catalogue: boolean;
@@ -1513,14 +1636,19 @@ export type AgentOverrides = {
   tools?: Array<string> | null;
 };
 
+/** Exactly one of `version` (a fixed revision) and `channel` (follow production or testing); the server answers 422 otherwise. */
 export type ProjectAgentPut = {
-  version: number;
+  version?: number | null;
+  channel?: "stable" | "candidate" | null;
   overrides?: AgentOverrides;
 };
 
 export type ProjectAgent = {
   agent: string;
+  /** the revision served now (the channel's, for a channel pin) */
   version: number;
+  /** set when the pin follows a channel */
+  channel?: "stable" | "candidate" | null;
   overrides: AgentOverrides;
   effective: AgentSpec;
   /** said when the agent is deprecated */
@@ -2914,7 +3042,9 @@ export interface Operations {
 }; response: void };
   getAction: { method: "GET"; path: "/projects/{id}/actions/{action_id}"; body: never; response: Action };
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
+  getAgentExposure: { method: "GET"; path: "/orgs/{org}/agents/{slug}/exposure"; body: never; response: AgentExposure };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
+  getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
@@ -2932,6 +3062,7 @@ export interface Operations {
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
+  getProjectAgentChannel: { method: "GET"; path: "/projects/{id}/agent-channel"; body: never; response: ProjectAgentChannel };
   getProjectCosts: { method: "GET"; path: "/projects/{id}/costs"; body: never; response: CostReport };
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
@@ -3063,6 +3194,7 @@ export interface Operations {
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
+  listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
@@ -3152,6 +3284,7 @@ export interface Operations {
 }; response: void };
   reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
+  releaseAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases"; body: AgentReleaseCreate; response: AgentRelease };
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
@@ -3166,8 +3299,10 @@ export interface Operations {
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchRunMemory: { method: "POST"; path: "/internal/runs/{id}/memory/search"; body: RunMemorySearch; response: Array<RunMemoryHit> };
+  setAgentReleasePolicy: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/release-policy"; body: AgentReleasePolicy; response: Agent };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
+  setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };

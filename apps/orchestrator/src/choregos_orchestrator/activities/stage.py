@@ -776,9 +776,22 @@ async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:
     from temporalio.exceptions import ApplicationError
 
     try:
-        return await resoudre_l_agent(session, bundle.project.org_id, bundle.project.id, plan.agent)
+        # The work item decides a canary share, so every stage and retry of it gets one revision.
+        resolved = await resoudre_l_agent(
+            session, bundle.project.org_id, bundle.project.id, plan.agent, work_item_id=plan.work_item_id
+        )
     except AgentIndisponible as refus:
         raise ApplicationError(str(refus), type="AgentIndisponible", non_retryable=True) from refus
+    logger.info(
+        "agent resolved",
+        project=bundle.project.slug,
+        work_item=plan.work_item_id,
+        stage=plan.role,
+        agent=resolved.agent.slug,
+        agent_version=resolved.version,
+        agent_source=resolved.source,
+    )
+    return resolved
 
 
 async def _budget_du_jour(session: Any, bundle: Any, agent: Any) -> None:

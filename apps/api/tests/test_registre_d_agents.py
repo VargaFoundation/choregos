@@ -54,7 +54,10 @@ async def test_publier_ne_reecrit_jamais_une_version(client: AsyncClient, admin:
     v2 = await client.post("/api/v1/orgs/varga/agents/coordinateur-onboarding/versions", json=plus_strict)
     assert v2.status_code == 201 and v2.json()["version"] == 2, v2.text
     assert v2.json()["checksum"] != v1["checksum"]
-    assert (await client.get("/api/v1/orgs/varga/agents/coordinateur-onboarding/versions/1")).json() == v1
+    # Where a revision sits (`channels`) moves; what it IS never does (ADR 0071).
+    v1_after = (await client.get("/api/v1/orgs/varga/agents/coordinateur-onboarding/versions/1")).json()
+    assert v1_after.pop("channels") == [] and v1.pop("channels") == ["stable"]
+    assert v1_after == v1
     agent = (await client.get("/api/v1/orgs/varga/agents/coordinateur-onboarding")).json()
     assert [v["version"] for v in agent["versions"]] == [2, 1] and agent["latest_version"] == 2
 

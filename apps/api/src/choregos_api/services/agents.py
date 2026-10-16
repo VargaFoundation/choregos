@@ -15,11 +15,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..db.models import Agent, AgentVersion, ProjectAgent
+from ..db.models import Agent, AgentVersion, Project, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
 from ..schemas import AgentOverrides, AgentSpec, CodeRuntime
 from .agent_governance import usable_in_project
+from .agent_releases import served
 
 
 def empreinte(spec: AgentSpec) -> str:
@@ -98,8 +99,12 @@ def effective(spec: AgentSpec, surcharges: AgentOverrides) -> AgentSpec:
         cible = getattr(resultat, groupe)
         for champ in type(cible).model_fields:
             demande = getattr(getattr(surcharges, groupe), champ)
-            if demande is not None:
-                setattr(cible, champ, demande)
+            if demande is None:
+                continue
+            # The minimum, never an assignment: a pin that follows a channel meets revisions its
+            # override was not validated against (S40-02), and a looser one must not widen them.
+            plafond = getattr(cible, champ)
+            setattr(cible, champ, demande if plafond is None else min(plafond, demande))
     if surcharges.tools is not None:
         gardes = set(surcharges.tools)
         for serveur in resultat.mcp_servers:
@@ -116,15 +121,27 @@ class AgentResolu:
     agent: Agent
     version: int
     spec: AgentSpec
-    #: The version comes from the project's pin, not from the reference nor from the latest.
+    #: The version comes from the project's pin (fixed or by channel), not from the reference nor from
+    #: the agent's channels.
     pinned: bool = False
+    #: Why this revision (S40-02): `explicit`, `pin`, `pin_channel`, `project_channel`, `canary`,
+    #: `stable` (production) or `latest` (an agent with no production pointer).
+    source: str = "stable"
+    #: The channel the revision was read from, when it was one.
+    channel: str | None = None
 
 
 async def resoudre_l_agent(
-    session: AsyncSession, org_id: str, project_id: str, reference: str
+    session: AsyncSession,
+    org_id: str,
+    project_id: str,
+    reference: str,
+    *,
+    work_item_id: str | None = None,
 ) -> AgentResolu:
-    """`slug@N` : cette version ; `slug` : l'épinglée du projet, sinon la dernière. Les surcharges
-    du projet s'appliquent dans les deux cas : elles ne font que resserrer."""
+    """The revision a run loads, first match wins (ADR 0071): `slug@N`; the project's fixed pin; its
+    pin on a channel; the project's "follow testing" switch; the deterministic canary share of the
+    work item; production. The project's overrides apply in every case: they only tighten."""
     slug, _, demandee = reference.partition("@")
     agent = (
         await session.execute(select(Agent).where(Agent.org_id == org_id, Agent.slug == slug))
@@ -150,11 +167,19 @@ async def resoudre_l_agent(
             )
         )
     ).scalar_one_or_none()
+    channel: str | None
     if demandee:
-        version = int(demandee)
-    elif epingle is not None:
-        version = epingle.version
+        version: int | None = int(demandee)
+        source, channel = "explicit", None
     else:
+        project = await session.get(Project, project_id)
+        version, source, channel = served(
+            agent,
+            pin=epingle,
+            project_channel=(project.agent_channel if project is not None else "stable") or "stable",
+            work_item_id=work_item_id,
+        )
+    if version is None:
         version = (
             await session.execute(
                 select(AgentVersion.version)
@@ -178,7 +203,9 @@ async def resoudre_l_agent(
         agent=agent,
         version=version,
         spec=effective(spec, surcharges),
-        pinned=epingle is not None and not demandee,
+        pinned=source in {"pin", "pin_channel"},
+        source=source,
+        channel=channel,
     )
 
 
