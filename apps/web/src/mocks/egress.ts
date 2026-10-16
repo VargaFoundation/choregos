@@ -8,6 +8,7 @@
  */
 import { ApiError } from "@/lib/api";
 import type { EgressRule, EgressVerdict } from "@/lib/types";
+import mcpCatalogueFile from "./mcp-catalogue.json";
 
 const CEILING: Record<string, string[]> = {
   api: ["api.github.com", "github.com", "codeload.github.com"],
@@ -77,6 +78,12 @@ function needed(method: string, route: string, body: Record<string, unknown>): {
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors$/.test(route) && body.type === "mcp") {
     const host = urlHost((body.config as Record<string, unknown> | undefined)?.url);
     return host ? { origin: `org-connector:${String(body.name)}`, reason: `the mcp connector ${String(body.name)}`, hosts: [host] } : null;
+  }
+  const install = /^\/orgs\/[^/]+\/mcp-catalogue\/([^/]+)\/install$/.exec(route);
+  if (method === "POST" && install) {
+    const entry = (mcpCatalogueFile.entries as { id: string; egress_hosts?: string[] }[]).find((e) => e.id === install[1]);
+    const hosts = entry?.egress_hosts ?? [];
+    return hosts.length > 0 ? { origin: `mcp-catalogue:${install[1]}`, reason: `the ${install[1]} MCP server`, hosts } : null;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git(\/preview)?$/.test(route)) {
     const repo = String(body.repo_url ?? "");

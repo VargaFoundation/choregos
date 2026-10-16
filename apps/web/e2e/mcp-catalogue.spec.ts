@@ -23,8 +23,16 @@ test("browse, filter, install and land on the connector", async ({ page }) => {
   await page.getByTestId("entry-github").getByRole("button", { name: "Install" }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer).toContainText("Install GitHub");
+  // Both aids at this one gesture (S39-23 and S39-22): the setup procedure beside the form, and, because the
+  // organisation has not opened the server's host, the network access modal before the install goes through.
+  await expect(drawer.getByTestId("install-procedure")).toBeVisible();
   await drawer.getByLabel("Secret, by reference").fill("env:CONNECTOR_GITHUB");
   await drawer.getByRole("button", { name: "Install" }).click();
+  const modal = page.getByTestId("egress-modal");
+  await expect(modal).toBeVisible();
+  await expect(modal.getByTestId("org-api.githubcopilot.com")).toHaveText("not allowed");
+  await modal.getByRole("button", { name: "Allow and continue" }).click();
+  await expect(modal).toBeHidden();
 
   // It lands on the connector, which exists and offers its discovery.
   await expect(page).toHaveURL(/\/admin\/connectors\?name=github/);
