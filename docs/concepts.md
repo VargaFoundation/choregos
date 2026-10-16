@@ -112,6 +112,23 @@ a **global** memory they are only ever **proposals**, accepted by an administrat
 says nothing keeps its legacy `memory` field (`project`, `agent`, `none`), which means the same
 bindings as before; nothing already published changes.
 
+## Agent revisions and channels
+
+A **revision** is one numbered, immutable version of an agent
+([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md)). An agent has two
+**channels**, each a pointer to a revision:
+
+- **production** — what every project that pins nothing runs;
+- **testing** — served to the projects that chose to follow testing, and to a **canary share** (a
+  percentage of the work items of the other projects), picked by a hash of the work item so that all
+  its stages and retries run one revision.
+
+*Publish* saves a revision; *release* moves a channel. What saving does is the agent's policy (production,
+testing or nothing; production by default, as before). Reaching production checks the eval suite again,
+what testing measured (runs, success rate, time), and takes a person with a recent sign-in; a
+**rollback** to a revision that was in production before skips the measurements, not the person. Every
+move is kept in a history, and the run records the revision it used.
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,

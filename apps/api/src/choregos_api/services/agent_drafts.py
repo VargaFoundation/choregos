@@ -27,8 +27,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings, get_settings
 from ..db.models import (
-    Agent,
-    AgentVersion,
     ConnectorOperation,
     KnowledgeBase,
     Organization,
@@ -38,6 +36,7 @@ from ..db.models import (
 from ..limiteur import Limiteur
 from ..schemas import AgentDraft, AgentDraftRequest, AgentSampleInput, AgentSpec
 from ..schemas.agents import RESERVED_SLUGS, AgentSkillRef
+from .agent_releases import production_spec_of
 from .agents import erreurs_d_une_version
 from .skill_review import unusable_skills
 
@@ -206,15 +205,7 @@ async def instructions_for_drafter(session: AsyncSession, org_id: str) -> str:
     """The organisation's `agent-drafter` (latest version) if installed, else the catalogue's."""
     from choregos_core.catalogue_d_agents import entree
 
-    own = (
-        await session.execute(
-            select(AgentVersion.spec)
-            .join(Agent, Agent.id == AgentVersion.agent_id)
-            .where(Agent.org_id == org_id, Agent.slug == AGENT, Agent.status == "active")
-            .order_by(AgentVersion.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    own = await production_spec_of(session, org_id, AGENT, active_only=True)
     # Not rendered: the drafter's text quotes the template variables it teaches, as plain words.
     return str((own or {}).get("instructions") or entree(AGENT).document["spec"]["instructions"])  # type: ignore[union-attr]
 

@@ -83,6 +83,7 @@ tool call and every write through the runner's permission path; that path is the
 the user's code, makes the call. It is a convention the SDK keeps, not a wall: Python code in the pod
 can open a socket or run a command like any program, and is bounded by the sandbox, not by the SDK.
 Cosign verification of agent images is not built yet.
+
 ## What a run remembers
 
 A run reads only the memories its agent version binds **and** that reach its project
@@ -94,6 +95,20 @@ memory is a proposal: nothing it says becomes a fact the whole organisation read
 administrator accepts it. Publishing a version that binds a global memory needs to see it; a memory a
 caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
 Facts carry their organisation and sit under forced row-level security.
+
+## Decisions that need a fresh sign-in
+
+Some gestures are too consequential to be made from a browser left open: the session must have been
+authenticated recently (`step_up_minutes`; the API answers `401 step_up_required` and the console
+signs the person in again). They are made by a person in a session, never by an API token or an MCP
+client, which propose and do not decide:
+
+- deciding a governed action (approving one; [ADR 0035](adr/0035-governed-actions-in-the-core.md));
+- **releasing an agent revision to production, or to a canary share, and loosening the release
+  policy of an agent** ([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md);
+  default 10 minutes; a personal agent is exempt; an edition can add its own rule through the
+  `agent.release` gesture check). A release also runs the eval suite again and keeps a history of
+  every move.
 
 ## Injection through context
 

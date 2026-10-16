@@ -548,7 +548,8 @@ row outlines those boxes. Choosing a box shows the same card above its editor.
 `origin`, `context` (given to every agent stage) and `in_pull_request`.
 
 Which agent version a run would load for those references, through the runtime's own resolver
-(an explicit `@N`, else the project's pin, else the latest version), is read, without changing
+(an explicit `@N`, else the project's pin, else its channel, else production: see
+[Release an agent](#release-an-agent-eval-testing-production)), is read, without changing
 anything, with:
 
 ```bash
@@ -951,7 +952,9 @@ already installed at this version answers `409`. Nothing follows upstream by its
 newer catalogue release and a person clicking.
 
 A workflow actor **names** an agent — `{type: agent, role: implement, agent: onboarding-coordinator}`,
-or `…@2` for a given version. The run then takes the project's pinned version (else the latest),
+or `…@2` for a given version. The run then takes the project's pinned revision or channel, else the
+agent's production revision ([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md);
+the full order is in [Release an agent](#release-an-agent-eval-testing-production)),
 overrides applied: its model, its limits and its budget, which only tighten the actor's own. Its
 instructions **replace the playbook**: they are a Jinja template rendered in a **sandbox**
 (`{{ ''.__class__ }}` is refused, at publication already), with the playbook's variables
@@ -985,7 +988,7 @@ An agent has a **scope** ([ADR 0061](adr/0061-agent-ownership-scopes-and-forks.m
 | `personal` | someone's own agent: drafts, experiments | its owner, or an `org_admin` |
 
 The server decides — the console only shows its answer. Each agent carries `can`
-(`publish`, `manage`, `pin`, `fork_scopes`) and, when something is refused, `cannot_reason`, one
+(`publish`, `manage`, `pin`, `release`, `fork_scopes`) and, when something is refused, `cannot_reason`, one
 sentence saying why and what to do instead ("`developer` is a common agent: only an org_admin changes
 it; fork it into your project or your own agents to extend it"). The matrix, by who may:
 
@@ -994,6 +997,7 @@ it; fork it into your project or your own agents to extend it"). The matrix, by 
 | see | any member | any member | members of P, org_admin | U, org_admin |
 | create | org_admin (catalogue) | org_admin | P's project_owner, org_admin | any developer and above (becomes U) |
 | publish a version, edit, lifecycle | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
+| release to testing or production, roll back | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
 | suspend, revoke, transfer, clients | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
 | pin on project Q | Q's project_owner | Q's project_owner | only Q = P | refused (`422`): promote or fork first |
 | trial run | `item:control` on the trial project | same | trial project must be P | U only |
@@ -1188,6 +1192,100 @@ the agent builder, the **Memory** section is the ordered list of bindings: add a
 project's, whichever project the run is in, and the organisation's), choose read or read and write (choosing
 write on a row demotes the other), move rows up and down, remove them; its summary line says what it holds
 and where the run writes.
+
+### Release an agent: eval, testing, production
+
+Saving a revision and putting it to work are two gestures
+([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md)). A **revision** is a
+numbered version that never changes. An agent has two **channels**, each a pointer to a revision:
+**production** (`stable_version`) and **testing** (`candidate_version`, with a `candidate_percent`
+canary share). *Publish* saves the next revision; *release* points a channel at one.
+
+| Stage | What it is | To enter |
+| :-- | :-- | :-- |
+| **eval** | the revision's eval suite, run on its instructions (level 1) | saving it: the instructions render and the suite passes |
+| **testing** | served to the projects that follow testing, and to a share of the other projects' work items | the suite passes again, and the revision is newer than production |
+| **production** | what every project that pins nothing runs | the policy's gates, a person with a fresh sign-in, the plugin gesture |
+
+**What a run loads**, first match wins: `agent: slug@N` in the workflow; the project's fixed pin; the
+project's pin on a channel (`follow production` or `follow testing`); the project's "follow testing"
+switch, when the agent has a candidate; the **canary share** when the work item falls in it; production.
+The share is deterministic per work item — every stage and every retry of one work item runs the same
+revision — and `GET /projects/{id}/agent-resolution` says why (`source`: `explicit`, `pin`,
+`pin_channel`, `project_channel`, `canary`, `stable`) and how big the share is (`candidate_percent`;
+the endpoint has no work item, so it reports a canary without applying it). A project's overrides still
+only tighten, whatever channel supplies the revision.
+
+**What saving a revision does** is the agent's `release_policy.on_publish`: `stable` (the default —
+what happened before channels: a saved revision goes to production), `candidate` (it goes to testing)
+or `none` (nothing moves). Existing agents were migrated to production = their latest revision and
+the default policy: nothing changes until a policy is changed. The first revision of an agent, a fork,
+an installed template or catalogue agent is production.
+
+```bash
+# keep production steady: a saved revision goes to testing, and production takes only the candidate
+curl -X PUT $API/orgs/acme/agents/onboarding-coordinator/release-policy -d '{"on_publish": "candidate",
+  "stable": {"require_candidate": true, "min_candidate_runs": 5, "min_success_rate": 0.9,
+             "min_soak_hours": 24, "step_up_minutes": 10}}'
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/versions -d '{...}'      # v5: saved, in testing
+# send it to 10 % of the work items of the projects that follow production
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases \
+  -d '{"channel": "candidate", "version": 5, "percent": 10, "reason": "first week"}'
+# make a project run testing (`stable` to come back); or pin one agent on a channel
+curl -X PUT $API/projects/acme:dev/agent-channel -d '{"channel": "candidate"}'
+curl -X PUT $API/projects/acme:dev/agents/onboarding-coordinator -d '{"channel": "candidate"}'
+# what a release would check, without doing it
+curl "$API/orgs/acme/agents/onboarding-coordinator/versions/5/readiness?channel=stable"
+# production (the current candidate when `version` is left out)
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases -d '{"channel": "stable"}'
+# roll back to a revision that was in production before; withdraw the candidate
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases -d '{"channel": "stable", "version": 4}'
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/releases -d '{"channel": "candidate", "version": null}'
+curl $API/orgs/acme/agents/onboarding-coordinator/releases      # the history, newest first
+curl $API/orgs/acme/agents/onboarding-coordinator/exposure      # who is served what
+```
+
+**The gates of production** (`release_policy.stable`; each is a check the readiness endpoint lists, and
+a failing one is a `409` naming it in `errors`):
+
+| Check | Passes when |
+| :-- | :-- |
+| `eval_suite` | the suite (production's cases and the revision's) passes again |
+| `newer_than_production` | the revision is newer than production |
+| `is_candidate` | the revision is the current candidate (required with `require_candidate` or a threshold) |
+| `candidate_runs` | at least `min_candidate_runs` finished runs since it became the candidate |
+| `candidate_success_rate` | at least `min_success_rate` of them succeeded |
+| `soak` | it has been in testing at least `min_soak_hours` |
+| `human_session`, `fresh_authentication` | a person signed in less than `step_up_minutes` ago (below) |
+
+`on_publish: stable` cannot be combined with `require_candidate` or a threshold (`422`): a revision
+published straight to production is never a candidate.
+
+**A rollback** — a release to production of a revision older than the current one *that was in
+production before* — skips the suite, candidate and soak gates: it restores an approved state, and
+speed matters in an incident. It keeps the rights, the human session, the fresh sign-in and the
+gesture check. Any other move of production is a promotion with every gate. **Withdrawing** the
+candidate (`"version": null` on `candidate`) empties testing and needs no fresh sign-in. Two releases
+at once cannot both win: the second gets `409`.
+
+**Who may release.** The same people as publish (see the table above): an `org_admin` for common and
+organisation agents, the project owner for a project agent, the owner for a personal agent. A project
+owner switches *their project* to follow testing, or pins an agent on a channel, with the right to pin.
+**Releasing to production, or to a canary share above 0, is a person's decision**: it needs a human
+session (an API token gets `403`) with a sign-in less than `step_up_minutes` old (default 10; else
+`401 step_up_required`, and the console re-authenticates, as for governed actions), and the plugin
+gesture check `agent.release`, where an edition can add its own rule. A token may save revisions, send
+one to testing without a share and withdraw the candidate. A personal agent is exempt from the sign-in
+rule and the gesture; an agent whose policy is `on_publish: stable` (the organisation chose "publish is
+release") may be released by a token. Loosening a policy is itself such a gesture. Every move is a row
+of the history (`agent_releases`: channel, kind `publish | promote | rollback | withdraw | baseline`,
+revisions, share, who, why, the checks as evaluated) and an audit record (`agent.release`,
+`agent.release_policy`, `project.agent_channel`).
+
+Metrics (`GET …/metrics`) now carry `by_version` — runs, success rate and cost per revision — so
+testing can be read against production; the daily budget shown, the budget alert and the tools an
+external agent gets at the MCP door are those of the revision that runs, not the latest one saved.
+A stage logs `agent resolved` with the `agent_version` and `agent_source` it took.
 
 ### Knowledge bases
 
