@@ -2693,6 +2693,16 @@ stories:
     acceptance:
       - "A run that fails before its agent starts leaves no tool server listening"
       - "Run tests no longer share port 7777"
+  - id: S37-12
+    title: "headroom relays the gateway's budget refusal unchanged, proven at image build"
+    stream: S37
+    sprint: 20
+    priority: 8
+    size: S
+    depends_on: [S37-07]
+    acceptance:
+      - "The runner image does not build if headroom hides LiteLLM's budget_exceeded refusal from the runner's detector"
+      - "Both wires (Anthropic, OpenAI), streamed and not, are probed with no network"
   - id: S37-10
     title: "Real eval matrix on real models, and the default-on decision per backend"
     stream: S37

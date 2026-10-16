@@ -99,3 +99,27 @@ def test_the_runtime_image_runs_headroom_offline_and_off_the_path() -> None:
     assert re.search(r"\bHF_HOME=/opt/headroom/models\b", env.group(1))
     assert "/opt/headroom/bin" not in env.group(1), "its venv would shadow the runner's packages"
     assert re.search(r"^\s*timeout 60 headroom --version\b", runtime, re.M)
+
+
+def test_the_build_proves_headroom_relays_the_gateway_budget_refusal() -> None:
+    """A proxy that wrapped LiteLLM's `budget_exceeded` would make a spent key look like a silent
+    agent, retried with a fresh key (S37-12). The image's own headroom is checked at build, after
+    the runner is installed, with the runner's own detector."""
+    runtime = _stages()["runtime"]
+    copy = "COPY docker/headroom/relays_budget_refusal.py /tmp/relays_budget_refusal.py"
+    run = re.search(
+        r"^RUN timeout \d+ /app/\.venv/bin/python /tmp/relays_budget_refusal\.py\b", runtime, re.M
+    )
+    assert copy in runtime
+    assert run is not None
+    assert (
+        runtime.index("COPY --from=builder --chown=1000:1000 /app /app") < runtime.index(copy) < run.start()
+    )
+
+    probe = (ROOT / "docker/headroom/relays_budget_refusal.py").read_text(encoding="utf-8")
+    assert "from choregos_runner.budget import gateway_budget_refusal" in probe
+    assert '"type": "budget_exceeded"' in probe
+    # Both wires, each streamed and not.
+    assert "/v1/messages" in probe and "/v1/chat/completions" in probe
+    assert probe.count('"stream": True') == 2
+    assert "return 1 if failed else 0" in probe

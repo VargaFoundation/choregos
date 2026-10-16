@@ -185,6 +185,11 @@ RUN /app/.venv/bin/choregos-runner --help >/dev/null
 # Same for the deterministic backtest engine (a dependency of the runner package): a job stage
 # runs `choregos-quant` with no network, so it must be installed and start here.
 RUN /app/.venv/bin/choregos-quant --help >/dev/null
+# headroom must hand the gateway's budget refusal to the agent as the gateway wrote it, or a spent
+# key looks like a silent agent and is retried with a fresh one (S37-12): the image's headroom, a
+# fake gateway refusing for budget, and the runner's own detector, with no network.
+COPY docker/headroom/relays_budget_refusal.py /tmp/relays_budget_refusal.py
+RUN timeout 180 /app/.venv/bin/python /tmp/relays_budget_refusal.py && rm /tmp/relays_budget_refusal.py
 WORKDIR /workspace
 USER 1000
 ENTRYPOINT ["/usr/bin/tini", "--", "choregos-runner"]
