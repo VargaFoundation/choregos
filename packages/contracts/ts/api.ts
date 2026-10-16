@@ -883,6 +883,7 @@ export type AgentSpec = {
   memory?: "none" | "project" | "agent";
   /** The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422. */
   memories?: Array<AgentMemoryBinding> | null;
+  network?: AgentNetwork;
 };
 
 /** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
@@ -1072,6 +1073,91 @@ export type MemoryStorePatch = {
   reach?: "org" | "projects";
   projects?: Array<string>;
   status?: "active" | "archived";
+};
+
+/** What one agent version may reach (ADR 0070). It can only narrow the project's and the organisation's network: a host they do not allow refuses the publication (422) and the run. */
+export type AgentNetwork = {
+  /** null: the project's list; []: no internet; a list: only these hosts (`example.com` = it and its subdomains, `*.example.com` = subdomains only) */
+  domains?: Array<string> | null;
+  /** new connections a run may open to one host per minute */
+  per_host_per_minute?: number | null;
+  /** false switches the agent CLI's own WebFetch and WebSearch off; null or true: as the policy says */
+  builtin_web_tools?: boolean | null;
+};
+
+export type RunNetwork = {
+  run_id: string;
+  allow: Array<string>;
+  deny: Array<string>;
+  /** hosts the run needs to work at all (the project's repository host) */
+  implied: Array<string>;
+  per_host_per_minute?: number | null;
+  per_run_per_minute?: number | null;
+  /** the organisation's cap, counted across all its runs */
+  org_per_host_per_minute?: number | null;
+  builtin_web_tools: boolean;
+  /** always true today: an empty allow list means no internet */
+  listed: boolean;
+  org: string;
+  project: string;
+  agent?: string | null;
+};
+
+export type NetworkDecisionIn = {
+  layer: "proxy" | "runner";
+  host: string;
+  port?: number;
+  decision: "allowed" | "denied" | "rate_limited" | "unreachable";
+  reason?: string;
+  count?: number;
+  bytes_up?: number;
+  bytes_down?: number;
+  first_at?: string | null;
+  last_at?: string | null;
+};
+
+export type NetworkDecisionBatch = {
+  decisions: Array<NetworkDecisionIn>;
+};
+
+export type EffectiveNetwork = {
+  allow: Array<string>;
+  deny: Array<string>;
+  implied: Array<string>;
+  per_host_per_minute?: number | null;
+  per_run_per_minute?: number | null;
+  org_per_host_per_minute?: number | null;
+  builtin_web_tools: boolean;
+};
+
+export type ProjectNetwork = {
+  /** the project's `sandbox.network`, as stored */
+  policy: {
+    [key: string]: unknown;
+  };
+  /** the organisation's `network` ceiling, null when it sets none */
+  ceiling?: {
+    [key: string]: unknown;
+  } | null;
+  effective: EffectiveNetwork;
+  clamps: Array<string>;
+};
+
+export type NetworkActivityRow = {
+  host: string;
+  /** proxy, runner, broker or platform */
+  layer: string;
+  decision: string;
+  reason: string;
+  count: number;
+  runs: number;
+  projects: Array<string>;
+  agents: Array<string>;
+  last_at: string;
+};
+
+export type NetworkActivity = {
+  rows: Array<NetworkActivityRow>;
 };
 
 /** A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not. */
@@ -2840,6 +2926,7 @@ export interface Operations {
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
+  getNetworkActivity: { method: "GET"; path: "/orgs/{org}/network-activity"; body: never; response: NetworkActivity };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
@@ -2849,6 +2936,7 @@ export interface Operations {
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
   getProjectModels: { method: "GET"; path: "/projects/{id}/models"; body: never; response: ProjectModels };
+  getProjectNetwork: { method: "GET"; path: "/projects/{id}/network"; body: never; response: ProjectNetwork };
   getProjectReadiness: { method: "GET"; path: "/projects/{id}/readiness"; body: never; response: ProjectReadiness };
   getProjectTools: { method: "GET"; path: "/projects/{id}/tools"; body: never; response: {
   allows_all: boolean;
@@ -2920,6 +3008,7 @@ export interface Operations {
   }>;
 }> };
   getRunLogs: { method: "GET"; path: "/runs/{id}/logs"; body: never; response: RunLogs };
+  getRunNetwork: { method: "GET"; path: "/internal/runs/{id}/network"; body: never; response: RunNetwork };
   getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: Array<{
   slug: string;
   version: number;
@@ -3023,6 +3112,9 @@ export interface Operations {
 }; response: void };
   postRunFinding: { method: "POST"; path: "/internal/runs/{id}/findings"; body: Finding; response: FindingAck };
   postRunGitToken: { method: "POST"; path: "/internal/runs/{id}/git-token"; body: never; response: GitToken };
+  postRunNetworkDecisions: { method: "POST"; path: "/internal/runs/{id}/network/decisions"; body: NetworkDecisionBatch; response: {
+  accepted: number;
+} };
   postRunQuestion: { method: "POST"; path: "/internal/runs/{id}/question"; body: {
   text: string;
   options?: Array<string>;

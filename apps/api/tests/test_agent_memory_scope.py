@@ -19,6 +19,8 @@ def test_the_default_scope_leaves_the_digest_of_older_versions_unchanged() -> No
         avant.pop("knowledge", None)
     # And older than the runtime (ADR 0063): none named, it is left out as well.
     avant.pop("runtime")
+    # And older than the network field (ADR 0070): left out while every part of it is unset.
+    avant.pop("network", None)
     attendu = (
         "sha256:"
         + hashlib.sha256(

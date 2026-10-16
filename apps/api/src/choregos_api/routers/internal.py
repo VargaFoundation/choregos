@@ -48,6 +48,7 @@ from ..schemas import (
 )
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..schemas.memory import RunMemoryHit, RunMemorySearch
+from ..schemas.network import NetworkDecisionBatch, RunNetwork
 from ..services import effective_policy, persist_event, ranger_les_sorties
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -60,6 +61,7 @@ from ..services.artifacts import (
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
 from ..services.couts import dimensions_of
+from ..services.network import record_decisions, run_network
 from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner, record_digests
 from ..services.tickets import sorties_a_ranger
 from ..temporal import get_temporal, interpreter_id
@@ -124,6 +126,26 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
             last_seq=max(e.seq for e in body.events),
         )
     return {"accepted": written}
+
+
+@router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")
+async def get_run_network(id: str, session: Db, claims: RunAuth) -> RunNetwork:
+    """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token."""
+    run, _, _ = await _run_and_item(session, id)
+    return await run_network(session, run)
+
+
+@router.post(
+    "/runs/{id}/network/decisions",
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="postRunNetworkDecisions",
+)
+async def post_network_decisions(
+    id: str, body: NetworkDecisionBatch, session: Db, claims: RunAuth
+) -> dict[str, int]:
+    """What the proxy or the runner let through or refused: cumulative totals, replay-safe."""
+    run, _, project = await _run_and_item(session, id)
+    return {"accepted": await record_decisions(session, run, project, body)}
 
 
 @router.post("/runs/{id}/result", operation_id="postRunResult")

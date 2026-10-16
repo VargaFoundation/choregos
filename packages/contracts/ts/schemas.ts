@@ -79,7 +79,7 @@ export type Event = {
   id: string;
   /** /choregos/orchestrator, /choregos/api, /choregos/runner/<run_id>… */
   source: string;
-  type: "choregos.workitem.created" | "choregos.workitem.state_changed" | "choregos.workitem.closed" | "choregos.workitem.human_requested" | "choregos.workitem.human_decided" | "choregos.workitem.workflow_failed" | "choregos.workitem.migrated" | "choregos.workitem.migration_refused" | "choregos.run.queued" | "choregos.run.started" | "choregos.run.progress" | "choregos.run.finished" | "choregos.finding.reported" | "choregos.finding.created" | "choregos.finding.duplicate" | "choregos.finding.dismissed" | "choregos.release.collected" | "choregos.release.departed" | "choregos.release.staged" | "choregos.release.approval_requested" | "choregos.release.promoted" | "choregos.release.verified" | "choregos.release.rolled_back" | "choregos.release.frozen" | "choregos.cost.recorded" | "choregos.cost.alert" | "choregos.project.provisioning.step" | "choregos.project.provisioning.completed" | "choregos.project.provisioning.failed" | "choregos.security.injection_suspected" | "choregos.tool.called" | "choregos.action.proposed" | "choregos.action.decided" | "choregos.action.effect_done" | "choregos.action.effect_compensated" | "choregos.action.succeeded" | "choregos.action.failed";
+  type: "choregos.workitem.created" | "choregos.workitem.state_changed" | "choregos.workitem.closed" | "choregos.workitem.human_requested" | "choregos.workitem.human_decided" | "choregos.workitem.workflow_failed" | "choregos.workitem.migrated" | "choregos.workitem.migration_refused" | "choregos.run.queued" | "choregos.run.started" | "choregos.run.progress" | "choregos.run.finished" | "choregos.finding.reported" | "choregos.finding.created" | "choregos.finding.duplicate" | "choregos.finding.dismissed" | "choregos.release.collected" | "choregos.release.departed" | "choregos.release.staged" | "choregos.release.approval_requested" | "choregos.release.promoted" | "choregos.release.verified" | "choregos.release.rolled_back" | "choregos.release.frozen" | "choregos.cost.recorded" | "choregos.cost.alert" | "choregos.project.provisioning.step" | "choregos.project.provisioning.completed" | "choregos.project.provisioning.failed" | "choregos.security.injection_suspected" | "choregos.tool.called" | "choregos.network.denied" | "choregos.action.proposed" | "choregos.action.decided" | "choregos.action.effect_done" | "choregos.action.effect_compensated" | "choregos.action.succeeded" | "choregos.action.failed";
   subject?: string | null;
   time: string;
   datacontenttype?: string;
@@ -249,6 +249,10 @@ export type Policy = {
     network?: {
       allow_domains?: Array<string>;
       deny_by_default?: boolean;
+      deny_domains?: Array<string>;
+      per_host_per_minute?: number | null;
+      per_run_per_minute?: number | null;
+      builtin_web_tools?: "allow" | "deny";
     };
     llm_security_analyzer?: boolean;
     /** A permission request of an unknown kind: let through and logged (allow), or refused (reject) */
@@ -474,6 +478,9 @@ export type StageInput = {
     write_paths?: Array<string>;
     deny_commands?: Array<string>;
     allow_domains?: Array<string>;
+    deny_domains?: Array<string>;
+    egress?: "unlisted" | "listed";
+    builtin_web_tools?: boolean;
     dod_iterations?: number;
     unknown_requests?: "allow" | "reject";
     max_findings?: number;

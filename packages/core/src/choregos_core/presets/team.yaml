@@ -35,8 +35,10 @@ sandbox:
   runtime: gvisor
   deny_commands: [kubectl, "terraform apply", "git push --force", sudo, "helm upgrade"]
   network:
-    allow_domains: [github.com, pypi.org, registry.npmjs.org, proxy.golang.org]
+    allow_domains:
+      [github.com, githubusercontent.com, pypi.org, files.pythonhosted.org, registry.npmjs.org, proxy.golang.org]
     deny_by_default: true
+    builtin_web_tools: deny
   llm_security_analyzer: true
 findings:
   max_per_run: 5

@@ -15,7 +15,7 @@ organisations must assume **a member of one will try to read another**.
 | Threat | Mechanism | Where |
 | :-- | :-- | :-- |
 | writing outside the allowed paths | ACP permission refused → diff verified after the run → revert → gate `scope_respected` | `guardrails.py`, `scope.py`, `gates/` |
-| exfiltrating data | egress denied by default; the only way out is a **per-project Squid proxy** whose allowlist is the policy's `allow_domains`, non-root, read-only, `CONNECT` to 443 only; the agent's own guardrails refuse the same domains first | `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
+| exfiltrating data, or polluting the internet | egress is closed and bounded in three scopes that only narrow one another — organisation ceiling, project policy, agent version — with a deny list that always wins and IP literals refused (ADR 0070). **Enforced by layer**: a **per-run egress proxy** (S40-01c) is the wall for host, port and connection rate; the tool broker and the platform's own fetchers are a wall for what the platform requests (S40-01d); the runner's guardrails and the backend's settings are a net (S40-01b). Every decision is journaled per run (`network_decisions`), and `network` is part of an agent version's digest only when set. The per-project Squid of the GitOps provisioning (allowlist = `allow_domains`, `CONNECT` to 443 only) stays for per-project namespaces: host-level, project-level | `choregos_core/network.py`, `services/network.py`, `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
 | using credentials | there are none in the workspace; the run token only authenticates the agent **to us**, and never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py` |
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
 | leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
@@ -41,6 +41,17 @@ organisations must assume **a member of one will try to read another**.
   `sandbox.unknown_requests: reject` (the `regulated` preset) it is **refused**, with a
   message that names the legitimate tools (`report_finding`, `request_scope_change`). The
   hard mechanisms remain the sandbox and the diff check after the run.
+- **The network policy is a wall only where the layer is.** The egress proxy sees a TLS tunnel, not
+  what is inside it: **method, path, headers and User-Agent are invisible to it**, and one tunnel can
+  carry many HTTP/2 requests, so its rate limit is a *connection* rate, not a request rate. robots.txt
+  and method rules can hold only where the platform makes the request (the broker, the crawlers, the
+  governed `web_fetch` tool). Claude Code's own `WebSearch` runs **at the model provider**, outside
+  every Choregos network layer: the only lever is to deny the tool (`builtin_web_tools`), and that is
+  a setting in the pod, not a wall. The runner's guardrails are a **net**: the agent shares the pod,
+  and a `curl` from Bash is not a URL permission request. On the Diametral tenant the infra's FQDN
+  policy lets runner pods reach eight hosts directly and its baseline policy lets every pod of the
+  namespace reach every other one (PostgreSQL and Temporal included): until infra changes that, the
+  Choregos proxy is bypassable for those hosts.
 - **Row-level security needs a non-superuser role.** A PostgreSQL superuser ignores every
   policy. The API refuses to start as one in `staging` and `prod`; the embedded PostgreSQL
   creates `choregos_app` at initdb for that reason.

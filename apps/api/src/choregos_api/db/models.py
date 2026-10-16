@@ -704,6 +704,40 @@ class GitHubInstallation(Base, TimestampMixin):
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class NetworkDecision(Base, PkMixin, TimestampMixin):
+    """What reached or was refused at the network, aggregated per run (ADR 0070).
+
+    One row per (run, layer, host, port, decision, reason). The counters are CUMULATIVE totals sent
+    by the reporter (the egress proxy, the runner): a replayed batch replaces them, it never adds."""
+
+    __tablename__ = "network_decisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "layer", "host", "port", "decision", "reason", name="uq_network_decisions_key"
+        ),
+        Index("ix_network_decisions_org_last", "org_id", "last_at"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: `proxy`, `runner`, `broker` or `platform`
+    layer: Mapped[str] = mapped_column(String(16))
+    host: Mapped[str] = mapped_column(String(253))
+    port: Mapped[int] = mapped_column(Integer, default=0)
+    #: `allowed`, `denied`, `rate_limited` or `unreachable`
+    decision: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str] = mapped_column(String(200), default="")
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    bytes_up: Mapped[int] = mapped_column(BigInteger, default=0)
+    bytes_down: Mapped[int] = mapped_column(BigInteger, default=0)
+    first_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ConnectorOperation(Base, PkMixin, TimestampMixin):
     """Une opération d'une instance, et sa politique dans l'organisation : `allowed`, `approval`
     (une action gouvernée, ADR 0035) ou `forbidden` ; les groupes de projets qui y ont droit

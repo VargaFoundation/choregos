@@ -26,6 +26,7 @@ from ..schemas import AgentSpec
 from ..schemas.agents import MAX_TAGS
 from .agents import empreinte, erreurs_d_une_version
 from .installation import installer_skills_et_agents
+from .network import check_agent_network
 from .skill_gate import platform_columns
 from .skills import empreinte as empreinte_de_skill
 
@@ -102,6 +103,7 @@ async def mettre_a_jour(
     ).scalar_one()
     spec = spec_de(entree_)
     erreurs_d_une_version(spec)
+    await check_agent_network(session, org_id, spec)
     derniere = (
         (
             await session.execute(
