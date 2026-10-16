@@ -503,3 +503,138 @@ async def test_the_confluence_connector_type_is_listed_with_its_secret_field(
               "config": {"base_url": "https://x.atlassian.net", "email": "a@b.c", "api_token": "plain"}},
     )  # fmt: skip
     assert clear.status_code == 422
+
+
+async def test_a_crawl_that_suddenly_lists_nothing_deletes_nothing(client: AsyncClient, admin: str) -> None:
+    """The start redirects off the site: no page, and no mass deletion of what was indexed."""
+    import httpx
+    from choregos_adapters.documents.web import WebCrawlSource
+
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "web", "name": "Site", "config": {"url": "https://docs.example.com/"}},
+    )
+    assert created.status_code == 201, created.text
+    source_id = created.json()["id"]
+    state = {"up": True}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="")
+        if not state["up"]:
+            return httpx.Response(301, headers={"location": "https://other.example.com/"})
+        page = {"https://docs.example.com/": '<a href="a">a</a><a href="b">b</a>'}.get(url, f"<h1>{url}</h1>")
+        return httpx.Response(200, text=page, headers={"content-type": "text/html"})
+
+    async def public(host: str) -> list[str]:
+        return ["93.184.216.34"]
+
+    def crawl() -> WebCrawlSource:
+        return WebCrawlSource(
+            url="https://docs.example.com/", transport=httpx.MockTransport(handler), resolver=public
+        )
+
+    from choregos_api.knowledge.sync import sync_source
+
+    assert (await sync_source("varga", source_id, adapter=crawl()))["added"] == 3
+    state["up"] = False
+    second = await sync_source("varga", source_id, adapter=crawl())
+    assert second["deleted"] == 0, second
+    assert len((await client.get(f"{BASE}/framework")).json()["documents"]) == 3
+
+
+async def test_a_web_source_starting_on_a_redirect_is_refused(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import respx
+    from choregos_adapters.documents import web
+
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+
+    async def public(host: str) -> list[str]:
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(web, "resolve", public)
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://www.example.test/").respond(301, headers={"location": "https://example.test/"})
+        refused = await client.post(
+            f"{BASE}/framework/sources",
+            json={"kind": "web", "name": "w", "config": {"url": "https://www.example.test/"}},
+        )
+    assert refused.status_code == 422, refused.text
+    assert "redirects to `https://example.test/`" in refused.json()["detail"]
+
+
+async def test_a_web_source_keeps_its_exclusions_and_refuses_a_bad_one(
+    client: AsyncClient, admin: str
+) -> None:
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    url = {"url": "https://docs.example.com/"}
+    ok = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "web", "name": "w", "config": {**url, "exclude": ["/es", "/es/*"]}},
+    )
+    assert ok.status_code == 201 and ok.json()["config"]["exclude"] == ["/es", "/es/*"]
+    bad = await client.post(
+        f"{BASE}/framework/sources", json={"kind": "web", "name": "x", "config": {**url, "exclude": ["es"]}}
+    )
+    assert bad.status_code == 422 and "exclude" in bad.json()["detail"]
+
+
+async def _git_connector(client: AsyncClient, name: str = "diametral-github") -> None:
+    created = await client.post(
+        "/api/v1/orgs/varga/connectors",
+        json={"name": name, "kind": "documents", "type": "git", "config": {"host": "github.com"},
+              "secret_refs": {"token": "env:CONNECTOR_KB_GIT_TOKEN"}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+
+
+async def test_a_git_source_names_a_git_connector_for_a_private_repository(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_adapters.fakes.documents import fake_source
+
+    monkeypatch.setenv("CONNECTOR_KB_GIT_TOKEN", "t" + "ok-" + "x")
+
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    await _git_connector(client)
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "brand", "connector": "diametral-github",
+              "config": {"url": "https://github.com/acme/private.git"}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+    assert created.json()["connector"] == "diametral-github"
+    fake_source(created.json()["id"]).put("brand.md", "brand.md", b"# Brand\n")
+    assert (await _sync(created.json()["id"]))["added"] == 1, "through the connector, here its fake"
+
+
+async def test_a_git_source_refuses_another_kind_of_connector_and_still_works_without_one(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _sharepoint(client, monkeypatch)
+    refused = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "g", "connector": "sharepoint",
+              "config": {"url": "https://github.com/acme/private.git"}},
+    )  # fmt: skip
+    assert refused.status_code == 422 and "a git source needs git" in refused.json()["detail"]
+    missing = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "git",
+            "name": "g",
+            "connector": "nope",
+            "config": {"url": "https://github.com/a/b.git"},
+        },
+    )
+    assert missing.status_code == 422 and "no `documents` connector" in missing.json()["detail"]
+    public = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "pub", "config": {"url": "https://github.com/a/public.git"}},
+    )
+    assert public.status_code == 201 and public.json()["connector"] is None

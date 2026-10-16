@@ -152,6 +152,8 @@ class GatewayModelDto(Dto):
     supports_tool_calling: bool = True
     supports_vision: bool = False
     internal_price: bool = False
+    source: Literal["gateway", "manual"] = "gateway"
+    owned_by: str = ""
 
 
 class ProjectModelProfile(Dto):
@@ -187,3 +189,117 @@ class ModelMatrixEntry(Dto):
 class ModelMatrix(Dto):
     generated_at: datetime | None = None
     entries: list[ModelMatrixEntry] = Field(default_factory=list)
+
+
+# ───────────── the organisation's model catalogue (S39-07b, ADR 0060) ─────────────
+
+Usage = Literal["agent", "embed", "distill", "eval"]
+
+
+def _agent_usage() -> list[Usage]:
+    return ["agent"]
+
+
+class PriceOverride(Dto):
+    input_per_1k: float = Field(ge=0)
+    output_per_1k: float = Field(ge=0)
+
+
+class ModelGatewayFacts(Dto):
+    provider: str = ""
+    upstream_model: str = ""
+    input_cost_per_1k: float | None = None
+    output_cost_per_1k: float | None = None
+    max_input_tokens: int | None = None
+    supports_tool_calling: bool = True
+    supports_vision: bool = False
+
+
+class ModelCatalogueEntry(Dto):
+    id: str
+    model_name: str
+    display_name: str
+    source: Literal["gateway", "manual"]
+    enabled: bool
+    allowed_roles: list[str] = Field(default_factory=list)
+    usages: list[Usage] = Field(default_factory=list)
+    price_override: PriceOverride | None = None
+    gateway: ModelGatewayFacts | None = None
+    last_seen_at: datetime | None = None
+    missing_since: datetime | None = None
+    notes: str = ""
+    updated_by: str | None = None
+    updated_at: datetime | None = None
+
+
+class ModelCatalogueEntryCreate(Dto):
+    model_name: str = Field(min_length=1, max_length=200)
+    display_name: str | None = Field(default=None, max_length=200)
+    enabled: bool = True
+    allowed_roles: list[str] = Field(default_factory=list)
+    usages: list[Usage] = Field(default_factory=_agent_usage)
+    price_override: PriceOverride | None = None
+    notes: str = ""
+
+
+class ModelCataloguePatch(Dto):
+    display_name: str | None = Field(default=None, max_length=200)
+    enabled: bool | None = None
+    allowed_roles: list[str] | None = None
+    usages: list[Usage] | None = None
+    #: `null` is "no change"; to remove an override send `clear_price_override: true`.
+    price_override: PriceOverride | None = None
+    clear_price_override: bool = False
+    notes: str | None = None
+
+
+class ModelTiers(Dto):
+    cheap: str | None = None
+    standard: str | None = None
+    strong: str | None = None
+    aux: str | None = None
+    embed: str | None = None
+    local: str | None = None
+
+
+class ModelCatalogueGateway(Dto):
+    type: str
+    capabilities: list[str] = Field(default_factory=list)
+
+
+class ModelCatalogue(Dto):
+    mode: Literal["open", "curated"]
+    gateway: ModelCatalogueGateway
+    tiers: ModelTiers
+    entries: list[ModelCatalogueEntry]
+
+
+class ModelCatalogueSettings(Dto):
+    mode: Literal["open", "curated"]
+    tiers: ModelTiers = Field(default_factory=ModelTiers)
+
+
+class ModelCurationRefusal(Dto):
+    kind: Literal["agent", "project_profile"]
+    ref: str
+    model: str
+
+
+class ModelCuratePreview(Dto):
+    refused: list[ModelCurationRefusal] = Field(default_factory=list)
+
+
+class ModelSyncResult(Dto):
+    added: int
+    missing: int
+    seen: int
+
+
+class UsableModel(Dto):
+    model_name: str
+    display_name: str
+    provider: str = ""
+    input_cost_per_1k: float | None = None
+    output_cost_per_1k: float | None = None
+    priced_by: Literal["gateway", "override", "none"] = "none"
+    tiers: list[str] = Field(default_factory=list)

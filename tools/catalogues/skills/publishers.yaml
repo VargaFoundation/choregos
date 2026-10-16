@@ -1,0 +1,16 @@
+# Who may be in the skills catalogue (ADR 0065). A skill enters only from an owner listed here, and
+# only when the owner is a vendor, or its repository has at least `min_stars` stars and is not
+# archived. Install counts of skills.sh are not used: clones of a popular repository ride its name
+# with millions of "installs" and a handful of stars.
+min_stars: 1000
+publishers:
+  anthropics: { name: Anthropic, vendor: true }
+  getsentry: { name: Sentry, vendor: true }
+  cloudflare: { name: Cloudflare, vendor: true }
+  huggingface: { name: Hugging Face, vendor: true }
+  hashicorp: { name: HashiCorp, vendor: true }
+  obra: { name: obra, vendor: false }
+  addyosmani: { name: Addy Osmani, vendor: false }
+  mattpocock: { name: Matt Pocock, vendor: false }
+  coreyhaines31: { name: Corey Haines, vendor: false }
+  phuryn: { name: phuryn, vendor: false }

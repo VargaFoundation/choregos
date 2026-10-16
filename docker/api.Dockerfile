@@ -41,7 +41,9 @@ COPY templates templates
 # ("the argument '--package <PACKAGE>' cannot be used multiple times"). La cible `worker`
 # partage ce builder, donc il doit porter les deux applications — on synchronise l'espace de
 # travail entier, qui les contient et rien de plus lourd.
-RUN uv sync --frozen --no-dev --all-packages
+# The agent SDK (a package for agent authors: openai, the ACP SDK) is not something the API or the
+# workers run: it stays out of the image.
+RUN uv sync --frozen --no-dev --all-packages --no-install-package choregos-agent-sdk
 
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
 FROM python:3.12-slim-bookworm AS commun

@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import pytest
 from choregos_contracts import ProjectConfig, Size
-from choregos_core import GatewayModel, ModelResolutionError, ModelResolver, estimate_tokens
+from choregos_core import (
+    CatalogueEntry,
+    GatewayModel,
+    ModelPolicy,
+    ModelResolutionError,
+    ModelResolver,
+    estimate_tokens,
+)
 
 GATEWAY = [
     GatewayModel(model_name="platform/standard", litellm_model="anthropic/claude-sonnet-5"),
@@ -109,3 +116,65 @@ def test_to_ref_and_api_format_per_backend() -> None:
 def test_estimate_tokens() -> None:
     assert estimate_tokens("") == 1
     assert estimate_tokens("a" * 400) == 100
+
+
+# ───────────── the organisation's model catalogue (S39-07b, ADR 0060) ─────────────
+
+
+def policy(mode: str = "open", **entries: CatalogueEntry) -> ModelPolicy:
+    return ModelPolicy(mode=mode, entries=dict(entries))
+
+
+def test_catalogue_curated_refuses_a_disabled_model() -> None:
+    catalogue = policy("curated", **{"platform/standard": CatalogueEntry(enabled=False, disabled_by="ada")})
+    with pytest.raises(ModelResolutionError, match="disabled by ada"):
+        resolver(catalogue=catalogue).resolve("profile:standard")
+
+
+def test_catalogue_curated_refuses_a_model_without_entry() -> None:
+    catalogue = policy("curated", **{"platform/strong": CatalogueEntry()})
+    with pytest.raises(ModelResolutionError, match="not in the organisation's model catalogue"):
+        resolver(catalogue=catalogue).resolve("profile:cheap")
+    assert resolver(catalogue=catalogue).resolve("profile:strong").litellm_model == "platform/strong"
+
+
+def test_catalogue_open_accepts_what_has_no_entry() -> None:
+    assert resolver(catalogue=policy("open")).resolve("profile:standard").litellm_model == "platform/standard"
+
+
+def test_catalogue_allowed_roles_refuse_another_role() -> None:
+    catalogue = policy(**{"platform/strong": CatalogueEntry(allowed_roles=("review",))})
+    with pytest.raises(ModelResolutionError, match="not allowed for the role `implement`"):
+        resolver(catalogue=catalogue).resolve("profile:strong", role="implement")
+    assert resolver(catalogue=catalogue).resolve("profile:strong", role="review").profile == "strong"
+
+
+def test_catalogue_usage_is_checked() -> None:
+    catalogue = policy(**{"platform/standard": CatalogueEntry(usages=("embed",))})
+    with pytest.raises(ModelResolutionError, match="usage `agent`"):
+        resolver(catalogue=catalogue).resolve("profile:standard")
+
+
+def test_catalogue_checks_the_model_behind_an_alias() -> None:
+    catalogue = policy(**{"anthropic/claude-sonnet-5": CatalogueEntry(enabled=False)})
+    with pytest.raises(ModelResolutionError, match="anthropic/claude-sonnet-5"):
+        resolver(catalogue=catalogue).resolve("profile:standard")
+
+
+def test_catalogue_is_not_bypassed_by_allow_unvalidated() -> None:
+    catalogue = policy(**{"platform/standard": CatalogueEntry(enabled=False)})
+    with pytest.raises(ModelResolutionError, match="disabled"):
+        resolver(catalogue=catalogue).resolve("profile:standard", allow_unvalidated=True)
+
+
+def test_organisation_tier_wins_over_platform_and_loses_to_project() -> None:
+    catalogue = ModelPolicy(tiers={"standard": "anthropic/claude-sonnet-5", "strong": None})
+    assert resolver(catalogue=catalogue).resolve("profile:standard").litellm_model == (
+        "anthropic/claude-sonnet-5"
+    )
+    # a null tier keeps the platform alias
+    assert resolver(catalogue=catalogue).resolve("profile:strong").litellm_model == "platform/strong"
+    cfg = project(profiles={"standard": "anthropic/claude-opus-5"})
+    assert resolver(catalogue=catalogue).resolve("profile:standard", project=cfg).litellm_model == (
+        "anthropic/claude-opus-5"
+    )

@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "21f3960f5d7ae2cc95c40896545004dbbcbbd752ea65fc2d53962554d4174220"
+ },
+ "id": "debugging-and-error-recovery",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/debugging-and-error-recovery",
+ "repo": "https://github.com/addyosmani/agent-skills",
+ "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+}

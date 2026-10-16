@@ -137,7 +137,7 @@ organisation when a project is born from it, in version 1 (`catalogue:<slug>` na
 platform's catalogue) — never rewritten when they are already
 there, so what the organisation changed since stays. It can ship its own policy (`policy:
 ./policy.yaml`) instead of a preset. And it names the organisation connectors its
-workflows call (`requires.org_connectors`: `annuaire: identity`…), for the administrator to declare.
+workflows call (`requires.org_connectors`: `directory: identity`…), for the administrator to declare.
 
 What only a plugin understands, a template ships as an **extension** (`defaults.extensions`, a name →
 a folder of the template): `joiners-leavers` ships its ontology as `ontology: ./ontology`. When the

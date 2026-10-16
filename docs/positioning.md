@@ -59,6 +59,15 @@ Reading: OpenHands' injection detection and the mature HITL chat of the products
 Choregos' answer to injection today is mechanical (scope refused, diff reverted, secrets
 gated), not detective.
 
+## Frameworks live inside a step
+
+Choregos orchestrates; it is not an agent framework and does not ship one. A step may run a coding
+agent, a prompt agent or code written on LangGraph, the OpenAI Agents SDK, Pydantic AI or any other
+framework: the workflow (Temporal) owns durable state, retries and human gates, the step owns its own
+control flow. The only thing a code agent needs from Choregos is the run contract, through four
+standards: ACP to the runner, MCP for tools, an OpenAI-compatible endpoint for the model, and the
+result file. See [agents written in code](code-agents.md#why-no-choregos-framework).
+
 ## Against the tool brokers
 
 | | treg | Obot / Docker MCP Gateway | Choregos catalogue (ADR 0014) |
@@ -78,8 +87,10 @@ a PR a human merges.
 - **ACP**: adopted (ADR 0002); more than fifty agents speak it.
 - **MCP 2026-07-28**: the sidecar predates it (stateless core, `tasks`, elicitation,
   OAuth resource servers); conformance is a P3 item.
-- **A2A**: no surface. Choregos orchestrates agents through stages, not through agent-to-agent
-  messages; nothing prevents a stage from being an A2A client later.
+- **A2A**: a client surface ([ADR 0062](adr/0062-remote-agents-over-a2a.md)). A registry agent of kind
+  `remote` runs a workflow step over A2A (0.3 and 1.0), called from the runner pod, under the same
+  gates, budget and journal as any step. Choregos is not an A2A *server*: it cannot yet be called as
+  an agent by another platform (for example from Jira).
 - **OpenTelemetry GenAI**: not emitted yet; the attributes are still "Development".
 - **SLSA / AI authorship**: ADR 0015.
 

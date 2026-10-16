@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { Glossaire } from "@/components/glossaire";
 import { GitImport, RiskBadge } from "@/components/skills/gate";
+import { SkillTabs } from "@/components/skills/onglets";
 import { Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -50,6 +51,7 @@ export default function SkillsPage() {
           checks each one against its digest. A skill grants nothing — <code>allowed-tools</code> is refused.
         </p>
         <Glossaire ici="skills" />
+        <SkillTabs active="library" />
       </div>
       <Card title="Library">
         {skills.error ? (
@@ -57,7 +59,16 @@ export default function SkillsPage() {
         ) : !skills.data ? (
           <p className="text-sm text-ink-muted">Reading the library…</p>
         ) : skills.data.length === 0 ? (
-          <Empty title="No skill yet">Import a zip or a repository below.</Empty>
+          <Empty
+            title="No skill yet"
+            action={
+              <Link href="/skills/catalogue" className="text-sm underline">
+                Browse the catalogue
+              </Link>
+            }
+          >
+            Pick default skills from the catalogue, or import a zip or a repository below.
+          </Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="bibliotheque">

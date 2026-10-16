@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "2befe7fc55bcadaa3d97dd9e8efeb633d2561c0ebe74c5a8b17c4d9e7e4520b3"
+ },
+ "id": "verification-before-completion",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/verification-before-completion",
+ "repo": "https://github.com/obra/superpowers",
+ "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3"
+}

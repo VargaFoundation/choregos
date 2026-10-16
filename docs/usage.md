@@ -128,6 +128,42 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
+**The MCP catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) is a list
+of well-known MCP servers shipped in the image, so an administrator does not need to know a
+vendor's URL by heart: `choregos_core/mcp_catalogue/catalogue.yaml`, about a hundred entries,
+validated by a JSON Schema. **An entry is an offer, not a connector**: nothing is installed, no
+tool is open, no network call is made by listing it. Each entry says who publishes it, whether it is
+*official* (the registry namespace, the repository owner or the host belongs to the vendor, decided
+from a reviewed vendor map and never set by hand), its licence, its stars with their date, how it
+authenticates (`none`, `bearer`, `header:<Name>` or `oauth`) and the host the API must be able to
+reach (`egress_hosts`). What a release can do with an entry is computed, not stored:
+`installable` (a hosted Streamable HTTP server with a static key or none), `needs_oauth` (listed, not
+installable until a connector can carry a per-user authorisation) and `needs_hosting` (a server
+that runs as a local process: running a third party's code is the operator's decision, so it is
+listed with what to run and nothing more).
+
+**Installing an entry** is `POST /orgs/{org}/mcp-catalogue/{entry_id}/install` (the organisation's
+administrator only; *Administration → connectors → MCP catalogue* in the console: search, category, *official only*, *installable only*; an install opens a panel for the name and the secret reference, then discovers the tools and lands on the connector). It declares an
+ordinary `mcp` connector through the same door as `POST /orgs/{org}/connectors`: `{"name": "notion",
+"secret_refs": {"token": "env:CONNECTOR_NOTION"}}` (the name defaults to the entry id; the
+credential is a reference, never a value, and an entry that needs none refuses one). The connector
+remembers `catalogue_entry: "<id>@<catalogue_version>"`, so the catalogue shows which entries are
+installed and which have an update; it has **no operation** until *discover* runs, and each tool is
+born closed as for any MCP connector. An entry that is `needs_oauth` or `needs_hosting` answers
+`422` with the reason. `GET /orgs/{org}/mcp-catalogue` filters on `q`, `category`, `install` and
+`official`, and says per entry whether the deployment declares its host reachable from the API
+(`egress`, see [deployment](deployment.md#the-mcp-server-catalogue-egress-and-your-own-entries)). A
+server that wants its key in another header than `Authorization` (`X-API-Key`) takes `auth_header` in
+the connector's configuration.
+
+The file is **generated, not typed**: `make catalogues` replays recorded answers of the official
+MCP Registry and of GitHub over the reviewed seed in `tools/catalogues/mcp/seed.yaml`, drops
+what the rules refuse (archived, deleted, tunnel or relay hosts, anonymous hosting, aggregators,
+arbitrary command execution, a hosted process without an open licence) and writes the same bytes
+every time; `make catalogues-check` fails when the committed file differs. To propose a server, add
+a line to the seed and run `make catalogues-record` (network and `GITHUB_TOKEN`), then review the
+diff — see the [runbook](runbooks/refresh-catalogues.md).
+
 **A directory: `entra`** (Microsoft Entra ID through Graph, kind `identity`) is declared like any
 connector of the organisation — tenant, application, the **administrative unit** the platform may
 touch, and the application secret by reference. Its six operations come with their input schema:
@@ -517,6 +553,8 @@ prepares the access plan with its skills, a person from HR validates it, and eve
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated
 approval, the laptop ordered from the supplier's agent at D-7, the badge a **task** with its proof,
 the check at D+1; at departure, D0 cuts the account, its sessions and the badge in one gesture.
+Since 2.0.0 every identifier it ships is English (`onboarding-coordinator`, `directory`, `requested` …
+`ready`, `onboarding.accounts`); a project born from an older version keeps its own.
 See [§4 bis](#4-bis-governed-actions).
 
 ## 3 bis. Give agents tools they cannot misuse
@@ -693,6 +731,54 @@ owner (`skill:import`) imports new skills from the organisation's **allowlist**
 owners of your connected repositories); another source, or the next version of an existing skill,
 needs an administrator. Checking for an update never applies it: importing the proposed SHA does.
 
+**The skills catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) offers the
+most used skills of public repositories, so `/skills` is not empty on day one:
+`choregos_core/skill_catalogue/catalogue.yaml`, generated from a reviewed seed at **pinned commits**.
+An entry is an offer: nothing is installed by default and nothing follows upstream. Each says its
+publisher, repository, pinned SHA and folder, **licence** (`permissive` or `copyleft`), size, the
+supply-chain gate's **risk** at generation time, and its **delivery**:
+
+- `bundled`: the skill's files are vendored in the image under `bundled/<id>/`, with their licence
+  text and a `PROVENANCE.json` of sha256s, so installing needs no network. Only permissive licences
+  (MIT, Apache-2.0, BSD, ISC, CC0, CC-BY-4.0) and a low or medium risk are bundled; the image's
+  [third-party notices](https://github.com/VargaFoundation/choregos/blob/main/THIRD_PARTY_NOTICES.md)
+  list what it redistributes.
+- `git`: everything else (copyleft licences such as MPL-2.0, anything high risk — an outbound URL is
+  enough — and large skills): the entry holds the pin, and the install fetches that commit.
+
+What is **not** listed, on purpose: Anthropic's `docx`, `pdf`, `pptx` and `xlsx` (governed by an
+agreement with Anthropic, not an open licence), skills without a licence file, skills that declare
+`allowed-tools`, skills that carry binary files, repositories whose owner is not on the publisher list
+(`tools/catalogues/skills/publishers.yaml`: a vendor, or a maintainer with at least 1 000 stars and a
+repository that is not archived), and a few that only make sense inside one coding assistant. A
+person with the right to use a skill that is not listed can still import it by hand, above, where
+the gate flags its licence and a person decides.
+
+The file is **generated, not typed**: `make catalogues` replays the recorded commits over the seed in
+`tools/catalogues/skills/seed.yaml`, runs the platform's own reader, licence detection, gate and
+digest on each skill, and writes the catalogue, the bundled tree and `THIRD_PARTY_NOTICES.md`
+byte for byte; `make catalogues-check` fails when one differs. A line asking for `delivery: bundled`
+is a request: a skill that is not eligible is delivered by `git` and the generator says so.
+
+**Installing a catalogue skill** is `POST /orgs/{org}/skill-catalogue/{entry_id}/install` (*Skills →
+Catalogue* in the console), and `GET /orgs/{org}/skill-catalogue` shows what each entry means in your
+organisation: `available`, `installed`, `update` (the catalogue pins a newer version), `pending_review`
+(installed, waiting for a second administrator) or `blocked` with the reason (a skill of that name that
+does not come from the catalogue, or a permission you lack). An install publishes an ordinary skill
+version through the same door as an import, so **the gate runs again**: the `risk` the catalogue shows is
+what it said when the catalogue was generated, and a test asserts it equals what the install gets for
+every entry. A `bundled` entry is read from the image and checked against its sha256 provenance (a
+changed file is refused with `502`); a `git` entry is fetched at its pinned commit from
+`codeload.github.com` and must hash to the digest the catalogue carries. A `bundled` version is approved
+by `platform` like the agent catalogue's skills, and never when the gate calls it high risk; a `git`
+version is an ordinary import: a high-risk one waits for a second administrator, so an agent can neither
+pin nor carry it until then. An administrator installs any entry; a project owner (`skill:import`) a
+**new** skill from a repository in the organisation's allowlist
+(`GET|PUT /orgs/{org}/skill-sources`, [ADR 0050](adr/0050-skill-supply-chain-gate.md) unchanged). A skill
+of the same name that was not installed from the entry is **left untouched** (`409`), and an entry
+already installed at this version answers `409`. Nothing follows upstream by itself: an `update` is a
+newer catalogue release and a person clicking.
+
 A workflow actor **names** an agent — `{type: agent, role: implement, agent: onboarding-coordinator}`,
 or `…@2` for a given version. The run then takes the project's pinned version (else the latest),
 overrides applied: its model, its limits and its budget, which only tighten the actor's own. Its
@@ -818,6 +904,51 @@ is the library: import a zip or a repository (preview, pick, import at the resol
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).
 
+### Models
+
+`/admin/models` (the **Models** page of the administration) is the organisation's model catalogue
+([ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)), whatever the gateway is. **Sync from
+the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
+list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
+the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price per 1k tokens that
+replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
+a spend back leaves the line `unmeasured`).
+
+- **Modes**: `open` (the default; everything the gateway lists is usable, the catalogue only
+  restricts what it has an entry for) and `curated` (only enabled entries are usable; a model
+  discovered later arrives disabled). Switching to `curated` shows first the agents and project
+  profiles it would refuse.
+- **Tiers**: the model behind `cheap`, `standard`, `strong`, `aux`, `embed` and `local` for the
+  organisation. Resolution is project profile, then organisation tier, then the platform alias.
+- **Refusals**: a disabled model cannot be named by an agent version (publication and trial answer
+  422 naming it) nor mapped by a project profile, and a stage whose model was disabled after
+  publication stops without a key and goes to a person (not retried). Embedding and distillation
+  refuse a model that lost the `embed` / `distill` usage, and say to change it in `/admin/models`.
+  `allow_unvalidated` never bypasses the catalogue.
+- **Reading**: every member sees the page read-only and the agent builder offers only the usable
+  models (`GET /orgs/{org}/models/usable`); changes need the `org_admin` role.
+
+### Registering a remote agent (A2A)
+
+An agent that runs elsewhere — Atlassian's Rovo, or any A2A agent — is registered as kind `remote`
+([ADR 0062](adr/0062-remote-agents-over-a2a.md), set-up in [integrations](integrations.md)). Read its
+card first: `POST /orgs/acme/agents/discover {"card_url": "https://…/.well-known/agent.json"}` lists its
+skills, the credential types it accepts and suggests the entry (nothing is created). Then:
+
+```bash
+curl -X POST $API/orgs/acme/agents -d '{"slug": "rovo", "kind": "remote", "display_name": "Atlassian Rovo",
+  "spec": {"instructions": "Answer from the team'"'"'s Jira and Confluence.",
+           "runtime": {"kind": "a2a", "card_url": "https://a2a.atlassian.com/.well-known/agent.json",
+                       "skill": "work-in-jira", "credential": "atlassian-rovo", "timeout_minutes": 10,
+                       "declared_cost": {"per_task_usd": 0.05, "per_minute_usd": 0.0}}}}'
+```
+
+Publication reads the card and pins its digest; a skill the card does not have, or a credential of a
+type the card does not accept, is a 422. A step names the agent as any other (`agent: rovo`). Declare
+what the agent costs (`declared_cost`): the platform cannot measure it, so the ledger books your
+declaration, apart from model spend, and says `unmeasured` when you declared nothing. A project that
+uses it must allow the agent's host in `sandbox.network.allow_domains`.
+
 ### Knowledge bases
 
 A **knowledge base** is a corpus you curate — an architecture framework, a security policy,
@@ -906,9 +1037,23 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   refused until a `page_id` narrows it. Signing in per person (OAuth 2.0, 3LO) is a possible
   follow-up; today the service account is the identity.
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
-  `max_pages` ≤ 500; a host that resolves to a private address is refused.
+  `max_pages` ≤ 500; a host that resolves to a private address is refused. `exclude` is a list of
+  path globs (at most 50, each starting with `/`, for example `["/es", "/es/*"]`) that are neither
+  fetched nor followed. Redirects are followed inside the allow-list only; a start URL that
+  redirects off it (`www.example.com` to `example.com`) is refused when the source is created, with
+  the target to use instead. Pages are named by their whole path (`/en/about` is `en-about.html`).
+  A crawl that lists no page at all (a moved site, a wall) is reported as unreadable and **deletes
+  nothing**.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
-  (`*.md` by default).
+  (`*.md` by default). A document is named by its whole path (`docs-adr-0001.md`), so two
+  `README.md` do not collide; a repository where no file matches `paths` is reported unreadable and
+  deletes nothing. A **private** repository is read through a `documents` connector of type `git`
+  (`host`, default `github.com`, and `auth`): `auth: token` with a fine-grained access token
+  (`Contents: read`) in the `token` secret field, or `auth: github_app` with the App's `app_id`, its
+  `private_key` secret and optionally the `installation_id`, from which a one-hour installation
+  token limited to that repository and `contents: read` is minted at each read. The source names the
+  connector (`connector`); the repository's host must be the connector's host, so the credential is
+  never sent elsewhere, and it travels to git in the environment, never in a command line.
 
 **Refresh schedule.** A source refreshes in one of three modes (`refresh_mode`): `interval` (every
 `interval_minutes`, 5 minutes to 7 days; the default), `cron` (`refresh_cron` with five fields, for
@@ -917,6 +1062,21 @@ between two fires) or `manual` (only when someone syncs). The page shows `next s
 source (an estimate: a worker that is down at the cron minute syncs at its next pass), and **edit
 refresh** changes the mode, with **apply to all sources** to set the same schedule everywhere; the
 change takes effect at once, not at the end of the current wait. A manual sync always runs.
+
+#### A knowledge base as code
+
+`choregos knowledge apply -f kb.yaml [--org <slug>] [--dry-run] [--prune]` makes a base match a
+manifest: it creates or patches the base (name, description, scope, serving mode), its sources
+(matched by `name`), its uploaded files and its eval set, and prints the plan (`+` create, `~`
+change, `-` remove, `= n unchanged`). It is **idempotent**: a second run calls nothing that
+changes anything. Uploads are local globs relative to the manifest, or `url:` entries downloaded
+over https (at most 20 MiB); a file whose bytes changed replaces the previous document of the same
+name. Without `--prune`, sources and uploads the manifest does not declare are left alone (the plan
+says so). `--dry-run` reads and prints, changes nothing. An example about a fictitious company is in
+`essai/knowledge/`. `choregos knowledge sync <slug>` syncs every source now, and
+`choregos knowledge eval <slug>` runs the eval set and prints recall@5. The command needs an
+organisation administrator's token (`agent:manage`). Refresh schedules in the manifest are the
+source's `interval_minutes` today.
 
 A document deleted at the source leaves the base **and its index** at the next sync. Each source
 shows when it last synced, what it did (added, updated, deleted, skipped and why) and its last
@@ -1076,9 +1236,11 @@ tool returns **structured** (`structuredContent`) is its result, so a later effe
 `effects[0].serial` as it would for a typed connector. An `approval` operation runs here — the
 action was approved; one this **project** cannot use — the organisation forbids it, the project
 tightened it to `forbidden`, or its groups are not the project's — never does, and an action
-calling it is refused when it is proposed (`422`). `verifier` is a check that touches nothing
+calling it is refused when it is proposed (`422`). `check` is a check that touches nothing
 outside: a condition, rendered with the earlier effects' results, that must be true — otherwise the
-action fails, named by its `motif` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
+action fails, named by its `reason` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
+`verifier` (with `motif`) is the name it had before S39-11: it stays registered as an alias, so a
+workflow or an action written with it keeps running; write `check` and `reason` from now on.
 
 **An action at a date, from a workflow.** A system transition can propose the action itself. Its
 title, justification and parameters are rendered (sandboxed Jinja) with the item's `fields` and the

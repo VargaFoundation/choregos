@@ -1,0 +1,17 @@
+{
+ "files": {
+  "SKILL.md": "573bbe4f6e300e7fb75299e314f56e26382d284782caa2ae0e0f33eb2e646548",
+  "evals/evals.json": "c3b7d15b3008eeb493796e21affd6a0c6e7ce312f9cfeffcdef467857903c733"
+ },
+ "id": "marketing-psychology",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/marketing-psychology",
+ "repo": "https://github.com/coreyhaines31/marketingskills",
+ "sha": "365b412152b9542499ca1439426f7fc3cc92bb65"
+}

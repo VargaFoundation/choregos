@@ -50,12 +50,26 @@ from typing import Any
 
 import httpx
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, ExecStatus, StageJobSpec, utcnow
+from choregos_core.domain import (
+    RUN_GATEWAY_KEY_ENV,
+    RUN_REMOTE_TOKEN_ENV,
+    ExecRef,
+    ExecStatus,
+    StageJobSpec,
+    utcnow,
+)
 from choregos_core.sorties import explication
 
 from ..errors import ConfigurationError, UpstreamError
 from ..sealing import key_from_log, seal
-from .tekton import CORE_API, GATEWAY_KEY_FIELD, KubernetesClient, _parse_time, run_secret_data
+from .tekton import (
+    CORE_API,
+    GATEWAY_KEY_FIELD,
+    REMOTE_TOKEN_FIELD,
+    KubernetesClient,
+    _parse_time,
+    run_secret_data,
+)
 
 #: The operator release whose API this executor speaks. Upgrading it is a change here AND in
 #: `infra/operators/agent-sandbox/`, proved by `make test-cluster` on a cluster that has it.
@@ -368,6 +382,10 @@ class AgentSandboxExecutor:
         gateway_key = (secret.get("data") or {}).get(GATEWAY_KEY_FIELD)
         if gateway_key:
             env[RUN_GATEWAY_KEY_ENV] = base64.b64decode(gateway_key).decode()
+        # The access token of a remote agent (ADR 0062) travels the same sealed way.
+        remote_token = (secret.get("data") or {}).get(REMOTE_TOKEN_FIELD)
+        if remote_token:
+            env[RUN_REMOTE_TOKEN_ENV] = base64.b64decode(remote_token).decode()
         run_id = str(assignment.get("run_id") or ref.run_id)
         payload = {
             "run_id": run_id,

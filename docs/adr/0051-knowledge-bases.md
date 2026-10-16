@@ -116,6 +116,16 @@ there (D10), with full-text search built in and `pgvector` one extension away.
    (`agent:knowledge-distiller`), so the administrator who asked may approve it; the request and
    the documents used are recorded on the base (`distillation`).
 
+## Update — 2026-10-15: a crawl never empties its source (S39-18a)
+
+10. **An empty crawl is unreadable, not empty.** A full listing deletes what it does not list
+    (decision 7 of the sources update), which made a crawl that suddenly lists nothing (the start
+    URL now redirects, the site is behind a wall) a mass deletion of the source's documents. A web
+    crawl that lists no page reports its start URL as `unreadable`, so nothing is deleted and the
+    sync says why. A start URL that redirects off the allow-list is refused at creation.
+    Redirects inside the allow-list are followed; `exclude` path globs bound the crawl; page names
+    come from the whole path so two languages do not collide.
+
 ## Update — 2026-10-15: ownership, a project-owned base (S39-14)
 
 11. **Ownership is a fact apart from reach.** `knowledge_bases.owner_project` (nullable) names the
@@ -191,3 +201,12 @@ there (D10), with full-text search built in and `pgvector` one extension away.
     scope (org, projects, groups). Everything the account can read in the chosen space or tree
     becomes readable by everyone the base is open to; the service account should be given read on
     the spaces to index only.
+
+## Update — 2026-10-15: private git (S39-18b)
+
+23. **A git source reads a private repository through a `documents/git` connector.** The connector
+    holds a token or a GitHub App's credentials (secret fields, ADR 0058 once sealed). The
+    credential reaches `git fetch` as `GIT_CONFIG_COUNT/KEY_0/VALUE_0` (`http.<host>/.extraHeader`),
+    so it is in no argv, error message or `.git/config`, and it is pinned to the connector's host.
+    A git listing that matches no file is unreadable, not empty (decision 10). Documents are named
+    by their whole path.

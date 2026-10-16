@@ -355,7 +355,125 @@ export type OrgConnector = {
   last_check_at?: string | null;
   last_error?: string | null;
   created_by?: string | null;
+  /** `<id>@<catalogue_version>` when it was installed from the MCP catalogue (ADR 0065) */
+  catalogue_entry?: string | null;
   operations?: Array<ConnectorOperation>;
+};
+
+/** Provenance shared by the platform's catalogues (ADR 0065) — which file, built when, from what. */
+export type CatalogueMeta = {
+  /** CalVer, e.g. 2026.10.0 */
+  catalogue_version: string;
+  generated_at: string;
+  /** each source the generator read, with its snapshot date */
+  sources?: {
+    [key: string]: string;
+  };
+};
+
+export type McpCatalogue = {
+  meta: CatalogueMeta;
+  entries: Array<McpCatalogueEntry>;
+};
+
+export type McpCatalogueRemote = {
+  url: string;
+  protocol: "streamable-http" | "sse";
+};
+
+export type McpCatalogueEntry = {
+  id: string;
+  title: string;
+  description: string;
+  publisher: string;
+  /** the registry namespace or the repository owner is the vendor's own */
+  official: boolean;
+  /** one of the modelcontextprotocol reference servers */
+  reference: boolean;
+  /** the shipped catalogue, or the operator's own file (CHOREGOS_MCP_CATALOGUE_EXTRA) */
+  origin?: "catalogue" | "site";
+  registry_name?: string | null;
+  registry_version?: string | null;
+  repo?: string | null;
+  /** SPDX; null for a hosted service */
+  licence?: string | null;
+  terms_url?: string | null;
+  transport: "remote" | "stdio";
+  remote?: McpCatalogueRemote | null;
+  /** none, bearer, oauth or header:<Name> */
+  auth: string;
+  egress_hosts?: Array<string>;
+  categories: Array<string>;
+  stars?: number | null;
+  stars_as_of?: string | null;
+  /** computed from what this release can do, never stored in the file */
+  install: "installable" | "needs_oauth" | "needs_hosting";
+  /** for a stdio server, what an operator needs to host it */
+  hosting?: {
+    [key: string]: unknown;
+  } | null;
+  state: "available" | "installed" | "update";
+  /** names of the org connectors created from this entry */
+  installed_as?: Array<string>;
+  /** whether the deployment declares the host reachable from the API */
+  egress: "open" | "undeclared" | "unknown";
+};
+
+export type McpCatalogueInstall = {
+  /** defaults to the entry id */
+  name?: string | null;
+  /** by reference; a literal is refused */
+  secret_refs?: {
+    [key: string]: string;
+  };
+  /** the credential typed once, sealed at rest and never returned (ADR 0058); give this or `secret_refs.token` */
+  secret_values?: {
+    [key: string]: string;
+  };
+  /** for an entry whose auth is header:<Name>, the header's name; defaults to the entry's */
+  auth_header?: string | null;
+};
+
+export type SkillCatalogueSignals = {
+  stars: number | null;
+  stars_as_of: string | null;
+};
+
+export type SkillCatalogueEntry = {
+  /** the skill's name, as its SKILL.md says it */
+  id: string;
+  title: string;
+  description: string;
+  publisher: string;
+  repo: string;
+  /** the pinned commit */
+  sha: string;
+  path: string;
+  /** SPDX */
+  licence: string;
+  licence_class: "permissive" | "copyleft";
+  files: number;
+  bytes: number;
+  /** sha256 of the files, as the runner recomputes it */
+  digest: string;
+  /** the gate's answer when the catalogue was generated; the gate runs again at install */
+  risk: "low" | "medium" | "high";
+  findings_count: number;
+  categories: Array<string>;
+  signals: SkillCatalogueSignals;
+  /** vendored in the image, or fetched at its pinned commit */
+  delivery: "bundled" | "git";
+  state: "available" | "installed" | "update" | "pending_review" | "blocked";
+  /** the version of the organisation's skill, when there is one */
+  installed_version?: number | null;
+  blocked_reason?: string | null;
+  /** for a git entry, whether the deployment declares codeload.github.com reachable from the API */
+  egress: "open" | "undeclared" | "unknown";
+};
+
+export type SkillCatalogue = {
+  meta: CatalogueMeta;
+  entries: Array<SkillCatalogueEntry>;
 };
 
 export type OrgConnectorCreate = {
@@ -653,7 +771,10 @@ export type AgentBudget = {
 export type AgentSpec = {
   instructions?: string;
   model?: string | null;
+  /** the ACP coding agent that carries the version; set only with an `acp` runtime (or none) */
   backend?: string | null;
+  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). */
+  runtime?: AcpRuntime | CodeRuntime | A2aRuntime;
   limits?: AgentLimits;
   budget?: AgentBudget;
   skills?: Array<{
@@ -672,6 +793,125 @@ export type AgentSpec = {
   evals?: Array<AgentEvalCase>;
   /** whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none */
   memory?: "none" | "project" | "agent";
+};
+
+/** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
+export type AcpRuntime = {
+  kind: "acp";
+  backend?: string | null;
+};
+
+/** An agent written in code (ADR 0063) - an ACP agent in an image the operator named, built from the runner image. */
+export type CodeRuntime = {
+  kind: "code";
+  /** the NAME of an image of the operator's `CHOREGOS_AGENT_IMAGES` map, never an image reference */
+  image: string;
+  /** the argv the runner starts in the image; it speaks ACP on stdio */
+  command: Array<string>;
+  /** the model API the code calls through the gateway */
+  api_format?: "openai" | "anthropic";
+};
+
+/** An agent that runs elsewhere and is reached over A2A (ADR 0062), e.g. Atlassian's Rovo. The step runs in the runner pod. `model` and `backend` of the spec must be empty, and so must skills, knowledge and MCP servers. */
+export type A2aRuntime = {
+  kind: "a2a";
+  card_url: string;
+  /** one skill of the card the step asks for */
+  skill?: string | null;
+  /** the organisation's remote credential; absent only for a card that asks for none */
+  credential?: string | null;
+  timeout_minutes?: number;
+  declared_cost?: A2aDeclaredCost;
+  input?: "text" | "text+files";
+  /** filled by the API at publication: the card as it was read; the runner refuses a card that changed */
+  pinned_card?: A2aPinnedCard | null;
+};
+
+/** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */
+export type A2aDeclaredCost = {
+  per_task_usd?: number | null;
+  per_minute_usd?: number | null;
+};
+
+export type A2aPinnedCard = {
+  url: string;
+  protocol_version: string;
+  digest: string;
+  skills?: Array<string>;
+};
+
+/** What the organisation holds to call remote agents. No secret is ever returned - the refresh token lives sealed in the secret store. */
+export type RemoteCredential = {
+  name: string;
+  type: "oauth2_authorization_code" | "bearer" | "none";
+  status: "pending" | "connected" | "error" | "revoked";
+  /** whose permissions a remote agent acts with: the person who authorised it */
+  authorised_as?: string | null;
+  scopes?: Array<string>;
+  card_url?: string | null;
+  host?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  last_refresh_at?: string | null;
+  expires_at?: string | null;
+  last_error?: string | null;
+};
+
+export type RemoteCredentialCreate = {
+  name: string;
+  type: "oauth2_authorization_code" | "bearer" | "none";
+  /** OAuth: the card whose Dynamic Client Registration endpoint the platform registers itself at */
+  card_url?: string | null;
+  /** bearer: the token, write-only, sealed in the secret store */
+  token?: string | null;
+};
+
+export type RemoteCredentialAuthorization = {
+  /** where to send the administrator's browser (authorization code + PKCE) */
+  redirect_url: string;
+};
+
+export type RemoteAgentDiscover = {
+  card_url: string;
+};
+
+export type RemoteSkillInfo = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
+export type RemoteCardSummary = {
+  name: string;
+  description?: string;
+  endpoint: string;
+  host: string;
+  protocol_version: string;
+  digest: string;
+  skills?: Array<RemoteSkillInfo>;
+  /** oauth2_authorization_code, bearer, none: what the card accepts */
+  auth_types?: Array<string>;
+  scopes?: Array<string>;
+  streaming?: boolean;
+  /** the card advertises Dynamic Client Registration */
+  dcr_available?: boolean;
+};
+
+/** What a card says and the registry entry it suggests - nothing is created. */
+export type RemoteAgentDiscovery = {
+  card: RemoteCardSummary;
+  proposed: AgentCreate;
+  /** the organisation's credentials of a type the card accepts */
+  credentials?: Array<string>;
+  /** hosts the project policy must allow (sandbox.network.allow_domains) */
+  domains?: Array<string>;
+};
+
+/** An image an operator named for code agents. The reference itself is never returned. */
+export type AgentImageInfo = {
+  name: string;
+  /** the reference carries an `@sha256:` digest */
+  digest_pinned: boolean;
 };
 
 /** A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not. */
@@ -722,7 +962,8 @@ export type AgentTrial = {
 export type AgentCreate = {
   /** `new` is reserved: the console's `/agents/new` page would shadow it (422) */
   slug: string;
-  kind?: "internal" | "external";
+  /** `remote`: an agent the platform calls over A2A (ADR 0062); it needs an `a2a` runtime */
+  kind?: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
   spec?: AgentSpec;
@@ -798,7 +1039,7 @@ export type AgentDraft = {
 /** An agent the platform's catalogue offers (ADR 0040), and its state in the organisation. */
 export type AgentCatalogueEntry = {
   slug: string;
-  kind: "internal" | "external";
+  kind: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
   /** the package role it plays (`implement`, `review`…), or `external` for a client */
@@ -858,7 +1099,7 @@ export type AgentVersion = {
 
 export type Agent = {
   slug: string;
-  kind: "internal" | "external";
+  kind: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
   status: string;
@@ -1020,6 +1261,10 @@ export type SkillSource = {
   path: string;
   /** an SPDX identifier, LicenseRef-proprietary, LicenseRef-unknown, or null when none was found */
   licence?: string | null;
+  /** `<id>@<catalogue_version>` when installed from the skills catalogue (ADR 0065) */
+  catalogue?: string | null;
+  /** for a catalogue install, whether the files came from the image or from the pinned commit */
+  delivery?: "bundled" | "git" | null;
 };
 
 export type SkillVersion = {
@@ -1455,6 +1700,108 @@ export type GatewayModel = {
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
   internal_price?: boolean;
+  source?: "gateway" | "manual";
+  owned_by?: string;
+};
+
+export type PriceOverride = {
+  input_per_1k: number;
+  output_per_1k: number;
+};
+
+export type ModelGatewayFacts = {
+  provider?: string;
+  upstream_model?: string;
+  input_cost_per_1k?: number | null;
+  output_cost_per_1k?: number | null;
+  max_input_tokens?: number | null;
+  supports_tool_calling?: boolean;
+  supports_vision?: boolean;
+};
+
+export type ModelCatalogueEntry = {
+  id: string;
+  model_name: string;
+  display_name: string;
+  source: "gateway" | "manual";
+  enabled: boolean;
+  allowed_roles: Array<string>;
+  usages: Array<"agent" | "embed" | "distill" | "eval">;
+  price_override?: PriceOverride | null;
+  gateway?: ModelGatewayFacts | null;
+  last_seen_at?: string | null;
+  missing_since?: string | null;
+  notes?: string;
+  updated_by?: string | null;
+  updated_at?: string | null;
+};
+
+export type ModelCatalogueEntryCreate = {
+  model_name: string;
+  display_name?: string | null;
+  enabled?: boolean;
+  allowed_roles?: Array<string>;
+  usages?: Array<"agent" | "embed" | "distill" | "eval">;
+  price_override?: PriceOverride | null;
+  notes?: string;
+};
+
+export type ModelCataloguePatch = {
+  display_name?: string | null;
+  enabled?: boolean | null;
+  allowed_roles?: Array<string> | null;
+  usages?: Array<"agent" | "embed" | "distill" | "eval"> | null;
+  price_override?: PriceOverride | null;
+  clear_price_override?: boolean;
+  notes?: string | null;
+};
+
+export type ModelTiers = {
+  cheap?: string | null;
+  standard?: string | null;
+  strong?: string | null;
+  aux?: string | null;
+  embed?: string | null;
+  local?: string | null;
+};
+
+export type ModelCatalogue = {
+  mode: "open" | "curated";
+  gateway: {
+    type: string;
+    capabilities?: Array<string>;
+  };
+  tiers: ModelTiers;
+  entries: Array<ModelCatalogueEntry>;
+};
+
+export type ModelCatalogueSettings = {
+  mode: "open" | "curated";
+  tiers?: ModelTiers;
+};
+
+export type ModelCuratePreview = {
+  refused?: Array<{
+    kind: "agent" | "project_profile";
+    ref: string;
+    model: string;
+  }>;
+};
+
+export type ModelSyncResult = {
+  added: number;
+  missing: number;
+  seen: number;
+};
+
+export type UsableModel = {
+  model_name: string;
+  display_name: string;
+  provider?: string;
+  input_cost_per_1k?: number | null;
+  output_cost_per_1k?: number | null;
+  priced_by?: "gateway" | "override" | "none";
+  tiers?: Array<string>;
 };
 
 export type ProjectModels = {
@@ -1641,6 +1988,11 @@ export type Totals = {
   cost_eur?: number;
   duration_s?: number;
   runs?: number;
+  /** how the cost was priced (ADR 0060) */
+  priced_by?: "gateway" | "override" | "none" | null;
+  /** the gateway's own figure when an override replaced it */
+  gateway_cost_usd?: number | null;
+  unmeasured?: boolean;
 };
 
 export type CostEstimate = {
@@ -2201,6 +2553,7 @@ export interface Operations {
 }; response: void };
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
+  addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2215,6 +2568,7 @@ export interface Operations {
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
+  authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
   [key: string]: unknown;
 }; response: {
@@ -2237,6 +2591,7 @@ export interface Operations {
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
+  createRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials"; body: RemoteCredentialCreate; response: RemoteCredential };
   createSkill: { method: "POST"; path: "/orgs/{org}/skills"; body: SkillFiles; response: Skill };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
@@ -2245,11 +2600,13 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
+  deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
+  discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
   draftAgent: { method: "POST"; path: "/orgs/{org}/agent-drafts"; body: AgentDraftRequest; response: AgentDraft };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
@@ -2278,6 +2635,7 @@ export interface Operations {
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
+  getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
@@ -2401,6 +2759,8 @@ export interface Operations {
   importSkill: { method: "POST"; path: "/orgs/{org}/skills/import"; body: void; response: Skill };
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
+  installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
+  installSkillCatalogueEntry: { method: "POST"; path: "/orgs/{org}/skill-catalogue/{entry_id}/install"; body: never; response: Skill };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2408,6 +2768,7 @@ export interface Operations {
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
+  listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
@@ -2421,6 +2782,7 @@ export interface Operations {
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
+  listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -2434,9 +2796,12 @@ export interface Operations {
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
+  listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
+  listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
+  listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
@@ -2460,6 +2825,7 @@ export interface Operations {
   justification: string;
 }; response: ScopeChangeDecision };
   postWorkItemAction: { method: "POST"; path: "/work-items/{id}/actions"; body: WorkItemAction; response: void };
+  previewModelCuration: { method: "GET"; path: "/orgs/{org}/models/curate-preview"; body: never; response: ModelCuratePreview };
   previewSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git/preview"; body: SkillGitPreviewRequest; response: SkillGitPreview };
   proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
@@ -2469,6 +2835,7 @@ export interface Operations {
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
   putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
+  putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
   putPolicyCeiling: { method: "PUT"; path: "/orgs/{org}/policy-ceiling"; body: PolicyCeilingPut; response: PolicyCeilingState };
@@ -2483,10 +2850,12 @@ export interface Operations {
 }; response: void };
   reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
+  remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
+  revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
@@ -2498,6 +2867,7 @@ export interface Operations {
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
+  syncModelCatalogue: { method: "POST"; path: "/orgs/{org}/models/sync"; body: never; response: ModelSyncResult };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2511,6 +2881,7 @@ export interface Operations {
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
+  updateModelCatalogueEntry: { method: "PATCH"; path: "/orgs/{org}/models/{entry_id}"; body: ModelCataloguePatch; response: ModelCatalogueEntry };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };

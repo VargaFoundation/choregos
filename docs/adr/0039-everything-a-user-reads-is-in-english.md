@@ -56,3 +56,26 @@ product.
 - **Translating identifiers too**: a cleaner surface, at the price of a migration for every
   published workflow and installed agent, and of breaking every API client — for keys nobody reads
   as prose.
+
+## Amendment (2026-10, S39-11): the identifiers a user sees are English too
+
+Decision 2 left identifiers alone because renaming them breaks published workflows. They are
+visible all the same: a state id is on the map and in the YAML editor, a connector name in
+`/admin/connectors` and in the tool an agent calls (`directory__get_user`), an agent slug in
+`/agents/<slug>`, an action kind in `/actions`, an enum value in a task's dropdown. So, for what a
+template **ships**:
+
+- the `joiners-leavers` template is `2.0.0`, English from its slugs to its ontology; a project
+  created from it afterwards is English throughout;
+- nothing running is renamed in place: a work item is pinned to its workflow version, so a history
+  never sees a renamed state; the old agents and skills stay (deprecated, then retired) and the old
+  connectors stay until their workflows are gone; published versions are never rewritten;
+- an engine word follows the same rule as the Temporal names (ADR 0046): the DSL effect `verifier`
+  (parameter `motif`) is `check` (`reason`), the old pair kept as an alias;
+- `tools/rename_tenant_names.py` re-publishes a tenant's French names as new English versions
+  (`docs/runbooks/rename-tenant-names.md`); it never renames a project slug;
+- `tests/langue/test_template_identifiers.py` splits every key, value and path of every template
+  into words and refuses those of a lexicon of French identifier words (`tools/check_english.py`,
+  `IDENTIFIER_WORDS`); the lexicon is a net, not a dictionary: a French word it does not know is
+  added the day it is found.
+

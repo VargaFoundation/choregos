@@ -107,6 +107,30 @@ spec:
               value: {{ toJson . | quote }}
             {{- end }}
             {{- end }}
+            {{- with .Values.egressHosts }}
+            # The hosts the API may reach, for the MCP catalogue's egress hint (ADR 0065).
+            - name: CHOREGOS_API_EGRESS_HOSTS
+              value: {{ toJson . | quote }}
+            {{- end }}
+            {{- if .Values.mcpCatalogueExtra }}
+            - name: CHOREGOS_MCP_CATALOGUE_EXTRA
+              value: /etc/choregos/mcp-catalogue/catalogue.yaml
+            {{- end }}
+            {{- with $.Values.global.images }}
+            # The images an operator names for job steps and agents written in code (ADR 0056,
+            # ADR 0063): name -> reference. The API validates a version against the names, the
+            # orchestrator resolves them; a workflow or an agent never writes a reference.
+            {{- with .jobs }}
+            - name: CHOREGOS_JOB_IMAGES
+              value: {{ toJson . | quote }}
+            {{- end }}
+            {{- with .agents }}
+            - name: CHOREGOS_AGENT_IMAGES
+              value: {{ toJson . | quote }}
+            {{- end }}
+            - name: CHOREGOS_REQUIRE_IMAGE_DIGEST
+              value: {{ .requireDigest | default false | quote }}
+            {{- end }}
             {{- with (dig "mcp" "oauth" dict .Values.global) }}
             {{- if .enabled }}
             {{- range ($.Values.global.extraEnv | default list) }}
@@ -214,6 +238,9 @@ spec:
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+            {{- if .Values.mcpCatalogueExtra }}
+            - { name: mcp-catalogue, mountPath: /etc/choregos/mcp-catalogue, readOnly: true }
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
@@ -231,7 +258,7 @@ spec:
         {{- end }}
         {{- /* Volumes the chart owns: a name of `extraVolumes` that collides with one of them would
              give an invalid pod, or worse, silently replace a mount. */}}
-        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" }}
+        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" }}
         {{- range (.Values.extraVolumes | default list) }}
         {{- if has .name $owned }}
         {{- fail (printf "extraVolumes: %q is a volume of the chart; pick another name" .name) }}
@@ -239,6 +266,10 @@ spec:
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.mcpCatalogueExtra }}
+        - name: mcp-catalogue
+          configMap: { name: {{ .Values.mcpCatalogueExtra }} }
         {{- end }}
       topologySpreadConstraints:
         - maxSkew: 1

@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json\",\"name\":\"com.auth0/mcp\",\"description\":\"Auth0 MCP Server: Manage Auth0 applications, APIs, actions, logs, and forms using natural language\",\"title\":\"Auth0 MCP Server\",\"repository\":{\"url\":\"https://github.com/auth0/auth0-mcp-server\",\"source\":\"github\"},\"version\":\"0.1.0-beta.10\",\"websiteUrl\":\"https://github.com/auth0/auth0-mcp-server#readme\",\"packages\":[{\"registryType\":\"npm\",\"registryBaseUrl\":\"https://registry.npmjs.org\",\"identifier\":\"@auth0/auth0-mcp-server\",\"version\":\"0.1.0-beta.10\",\"runtimeHint\":\"npx\",\"transport\":{\"type\":\"stdio\"},\"runtimeArguments\":[{\"value\":\"-y\",\"type\":\"positional\"}],\"packageArguments\":[{\"value\":\"run\",\"type\":\"positional\"}]}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2026-03-26T15:32:18.592492Z\",\"publishedAt\":\"2026-03-26T15:32:18.592492Z\",\"updatedAt\":\"2026-03-26T15:32:18.592492Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/com.auth0%2Fmcp/versions/latest"
+}

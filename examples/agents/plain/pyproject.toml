@@ -1,0 +1,14 @@
+[project]
+name = "choregos-agent-example-plain"
+version = "0.17.15"
+description = "Example: a ticket triage agent in plain Python (choregos-agent-sdk)"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+dependencies = ["choregos-agent-sdk"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/choregos_agent_examples"]

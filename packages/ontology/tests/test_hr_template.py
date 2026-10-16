@@ -10,8 +10,8 @@ What these tests do not prove: that the template's workflows write to the regist
 on the directory, the device fleet and the badge readers, and nothing makes them do so yet (the daily
 reconciliation is to come).
 
-The template's ontology is in French (its object types, properties and actions are the template's
-data, read by its workflows): the names quoted here are that data.
+The template's ontology is in English since 2.0.0 (S39-11): its object types, properties and actions
+are the template's data, read by its workflows.
 """
 
 from __future__ import annotations
@@ -23,15 +23,15 @@ from httpx import AsyncClient
 
 from .helpers import stored_objects
 
-ARRIVAL = {  # lang: fr-ok - the fields of the template's French ontology
-    "matricule": "M-1042",
-    "nom": "Léa Martin",
+ARRIVAL = {
+    "employee_id": "M-1042",
+    "full_name": "Léa Martin",
     "email": "lea.martin@acme.test",
-    "poste": "Comptable",  # lang: fr-ok
+    "job": "Accountant",
     "manager": "paul.durand@acme.test",
-    "date_arrivee": "2026-11-02",
-    "contrat": "C-2026-118",
-    "nature": "cdi",
+    "start_date": "2026-11-02",
+    "contract": "C-2026-118",
+    "contract_type": "permanent",
 }
 
 
@@ -39,10 +39,10 @@ async def _hr_project(client: AsyncClient) -> dict[str, Any]:
     created = await client.post(
         "/api/v1/orgs/varga/projects",
         json={
-            "slug": "rh",
-            "name": "RH",
+            "slug": "hr",
+            "name": "HR",
             "template_ref": "joiners-leavers",
-            "config": {"slug": "rh", "org": "varga"},
+            "config": {"slug": "hr", "org": "varga"},
         },
     )
     assert created.status_code == 201, created.text
@@ -72,21 +72,21 @@ async def _until(
 async def test_an_hr_project_is_born_with_its_register(client: AsyncClient) -> None:
     project = await _hr_project(client)
     ontology = (await client.get(f"/api/v1/projects/{project['id']}/ontology")).json()
-    assert (ontology["name"], ontology["version"]) == ("rh-arrivees-departs", "1.0.0")  # lang: fr-ok
+    assert (ontology["name"], ontology["version"]) == ("hr-joiners-leavers", "2.0.0")
     assert set(ontology["object_types"]) == {
-        "collaborateur",
-        "contrat",
+        "employee",
+        "contract",
         "account",
         "group",
-        "materiel",
+        "device",
         "badge",
     }
-    tools = {"collaborateur_search", "badge_porteur", "action_constater_un_depart"}  # lang: fr-ok
+    tools = {"employee_search", "badge_holder", "action_record_leaver"}
     assert tools <= set(ontology["mcp_tools"])
     audit = (await client.get("/api/v1/audit")).json()["items"]
     (entry,) = [a for a in audit if a["action"] == "template.extension.install"]
     assert entry["payload"]["extension"] == "ontology"
-    assert entry["payload"]["result"]["name"] == "rh-arrivees-departs"  # lang: fr-ok
+    assert entry["payload"]["result"]["name"] == "hr-joiners-leavers"
     assert not [a for a in audit if a["action"] == "template.extension.skip"]
 
 
@@ -94,36 +94,34 @@ async def test_the_register_is_kept_through_actions_and_a_departure_waits_for_a_
     client: AsyncClient, temporal: Any
 ) -> None:
     project = await _hr_project(client)
-    arrival = await _propose(client, project, "consigner_une_arrivee", params=ARRIVAL)  # lang: fr-ok
+    arrival = await _propose(client, project, "record_joiner", params=ARRIVAL)
     file = await _until(client, project, arrival["proposal"], "succeeded", "failed")
     assert file["status"] == "succeeded", file.get("error")
-    (_, lea), *_ = (await stored_objects(project["id"], "collaborateur")).values()
-    assert (lea["nom"], lea["statut"]) == ("Léa Martin", "a_venir")
-    assert (await stored_objects(project["id"], "contrat"))["C-2026-118"][1]["nature"] == "cdi"
+    (_, lea), *_ = (await stored_objects(project["id"], "employee")).values()
+    assert (lea["full_name"], lea["status"]) == ("Léa Martin", "upcoming")
+    assert (await stored_objects(project["id"], "contract"))["C-2026-118"][1]["contract_type"] == "permanent"
 
-    badge = await _propose(
-        client, project, "consigner_le_badge", target=["M-1042"], params={"uid": "04:A2:19:7F"}
-    )
+    badge = await _propose(client, project, "record_badge", target=["M-1042"], params={"uid": "04:A2:19:7F"})
     file = await _until(client, project, badge["proposal"], "succeeded", "failed")
     assert file["status"] == "succeeded", file.get("error")
-    assert (await stored_objects(project["id"], "badge"))["04:A2:19:7F"][1]["actif"] is True
-    assert (await stored_objects(project["id"], "collaborateur"))["M-1042"][1]["statut"] == "present"
+    assert (await stored_objects(project["id"], "badge"))["04:A2:19:7F"][1]["active"] is True
+    assert (await stored_objects(project["id"], "employee"))["M-1042"][1]["status"] == "present"
 
     departure = await _propose(
         client,
         project,
-        "constater_un_depart",  # lang: fr-ok
+        "record_leaver",
         target=["M-1042"],
         params={
-            "date_depart": "2027-03-31",
+            "last_day": "2027-03-31",
             "upn": "lea.martin@acme.test",
             "badge": "04:A2:19:7F",
-            "numero_de_serie": "PF3K9Z",  # lang: fr-ok
+            "serial_number": "PF3K9Z",
         },
     )
     assert departure["status"] == "pending_approval", "a departure waits for a person"
     badges = await stored_objects(project["id"], "badge")
-    assert badges["04:A2:19:7F"][1]["actif"] is True, "nothing is closed before"
+    assert badges["04:A2:19:7F"][1]["active"] is True, "nothing is closed before"
 
 
 async def test_nothing_is_recorded_for_a_person_who_left(client: AsyncClient, temporal: Any) -> None:
@@ -131,24 +129,24 @@ async def test_nothing_is_recorded_for_a_person_who_left(client: AsyncClient, te
     from choregos_ontology.service.store import ManagedObject
 
     project = await _hr_project(client)
-    arrival = await _propose(client, project, "consigner_une_arrivee", params=ARRIVAL)  # lang: fr-ok
+    arrival = await _propose(client, project, "record_joiner", params=ARRIVAL)
     assert (await _until(client, project, arrival["proposal"], "succeeded", "failed"))[
         "status"
     ] == "succeeded"
     # The departure, already recorded: written here directly — a person's decision has its own test.
     async with session_scope() as session:
-        lea = await session.get(ManagedObject, (project["id"], "collaborateur", "M-1042"))
+        lea = await session.get(ManagedObject, (project["id"], "employee", "M-1042"))
         assert lea is not None
-        lea.properties = {**lea.properties, "statut": "parti"}
+        lea.properties = {**lea.properties, "status": "gone"}
     refusal = await client.post(
         f"/api/v1/projects/{project['id']}/proposals",
         json={
-            "action_type": "consigner_le_badge",
+            "action_type": "record_badge",
             "target": ["M-1042"],
             "params": {"uid": "04:FF:00:01"},
             "justification": "a badge for a person who left",
         },
     )
     assert refusal.status_code == 422, refusal.text
-    assert "pas_parti" in refusal.text
+    assert "not_gone" in refusal.text
     assert "04:FF:00:01" not in await stored_objects(project["id"], "badge")

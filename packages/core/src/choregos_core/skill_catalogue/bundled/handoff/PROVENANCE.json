@@ -1,0 +1,17 @@
+{
+ "files": {
+  "SKILL.md": "4cbb043950dad2ffd3662ff1a5a0b51ae676004b5cae10e3787e8ee7a4ee69d3",
+  "agents/openai.yaml": "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28"
+ },
+ "id": "handoff",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/productivity/handoff",
+ "repo": "https://github.com/mattpocock/skills",
+ "sha": "49dd158d1076134a641b33efb035946536778336"
+}

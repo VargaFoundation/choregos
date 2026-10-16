@@ -1,0 +1,20 @@
+{
+ "files": {
+  "EVAL.md": "12230c3aa3a8a8ca5a26a00b9b9113709f897bf9a85a32eb097390c6cdf879d3",
+  "SKILL.md": "785a2b1f084407e42f61661f83c7b0c621889865a483774f44c893c0cbcf57bc",
+  "SPEC.md": "e566e80684b4eec9433200816cf61dd1e93c7b6c1612f6271d076acf110969f6",
+  "evals/axis.config.json": "55bee95f6d59923b2a52765989324a0ed9af9762f7d860a101e9708f6ac8363d",
+  "evals/scenarios/concise-docs-pr.json": "ecc431edd40f4cd7541ce2f00a4821e8f6a4d8ed660e3d63551968cc372edeac"
+ },
+ "id": "pr-writer",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "96e78a9ce85795b117c8929887bdb78f88bf23f7b85a31f0872cde4dff7e92cd",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/pr-writer",
+ "repo": "https://github.com/getsentry/skills",
+ "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b"
+}

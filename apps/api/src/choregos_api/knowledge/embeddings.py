@@ -14,7 +14,7 @@ import hashlib
 import math
 import re
 import unicodedata
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 
@@ -102,3 +102,16 @@ def cosine(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=True))
     norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
     return dot / norm if norm else 0.0
+
+
+class ModelNotAllowedError(RuntimeError):
+    """The organisation's model catalogue does not allow this model for this usage (ADR 0060)."""
+
+
+async def check_model_usage(session: Any, org_id: str, model: str, usage: str) -> None:
+    """Refuse a model the organisation did not enable for `usage`, naming where to change it."""
+    from ..services.model_catalogue import load_policy
+
+    refusal = (await load_policy(session, org_id)).check(model, None, usage=usage)
+    if refusal is not None:
+        raise ModelNotAllowedError(f"{refusal} — change it in /admin/models")

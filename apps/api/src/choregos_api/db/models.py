@@ -538,6 +538,8 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: `<id>@<catalogue_version>` when installed from the MCP catalogue (ADR 0065); `NULL` otherwise.
+    catalogue_entry: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class OrgSecret(Base, PkMixin, TimestampMixin):
@@ -567,6 +569,60 @@ class OrgSecret(Base, PkMixin, TimestampMixin):
     updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     #: The time of the last set.
     rotated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ModelCatalogueRow(Base, PkMixin, TimestampMixin):
+    """One model of the organisation's catalogue (ADR 0060): what the organisation decided about a
+    model the gateway routes — enabled or not, for which stage roles and usages, at which price —
+    plus a snapshot of what the gateway said about it. Rows are never deleted by a sync: a model
+    that leaves the gateway keeps its settings and gets `missing_since`."""
+
+    __tablename__ = "model_catalogue"
+    __table_args__ = (UniqueConstraint("org_id", "model_name", name="uq_model_catalogue_org_model"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    model_name: Mapped[str] = mapped_column(String(200))
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    source: Mapped[str] = mapped_column(String(16), default="gateway")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    #: Stage roles allowed to use it; empty = all.
+    allowed_roles: Mapped[list[str]] = mapped_column(Json, default=list)
+    usages: Mapped[list[str]] = mapped_column(Json, default=lambda: ["agent"])
+    input_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
+    output_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gateway_facts: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class RemoteCredential(Base, PkMixin, TimestampMixin):
+    """What the organisation holds to call remote agents over A2A (ADR 0062).
+
+    No secret lives here: the refresh token (rotated at every refresh), the DCR client secret and a
+    bearer token are sealed values of the secret store (`remote/<name>/…`, ADR 0058); this row keeps
+    the reference, the public client registration and the state."""
+
+    __tablename__ = "remote_credentials"
+    __table_args__ = (UniqueConstraint("org_id", "name", name="uq_remote_credentials_org_name"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    #: `oauth2_authorization_code`, `bearer` or `none`.
+    type: Mapped[str] = mapped_column(String(32))
+    #: Public registration data: card URL, client id, token and authorisation endpoints, scopes,
+    #: redirect URI. Never a secret.
+    config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: `store:remote/<name>/refresh_token` (OAuth) or `store:remote/<name>/token` (bearer); None before
+    #: anyone authorised.
+    secret_ref: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    authorised_as: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ConnectorOperation(Base, PkMixin, TimestampMixin):

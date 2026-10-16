@@ -356,6 +356,22 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("api_token",),
     ),
+    # A private git repository as a knowledge source (S39-18b): a token, or a GitHub App's short-lived
+    # installation token. The credential is pinned to `host`.
+    ("documents", "git"): ConnectorTypeSpec(
+        "Git over https (token or GitHub App)",
+        ("documents",),
+        _objet(
+            {
+                "host": {"type": "string", "default": "github.com"},
+                "auth": {"type": "string", "enum": ["token", "github_app"], "default": "token"},
+                "app_id": _TEXTE,
+                "installation_id": {"type": "integer"},
+                "api_url": {"type": "string", "default": "https://api.github.com"},
+            }
+        ),
+        ("token", "private_key"),
+    ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
         ("identity",),
@@ -547,6 +563,12 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "description": "how the token is sent: Bearer, or Basic base64(username:token)",
                 },
                 "username": {"type": "string", "description": "the account, for `basic` (an email)"},
+                "auth_header": {
+                    "type": "string",
+                    "default": "Authorization",
+                    "description": "the header the token travels in: `Authorization` sends a Bearer, "
+                    "another name (`X-API-Key`) sends the raw token",
+                },
                 "timeout_s": {"type": "number", "default": 30},
             },
             ("url",),
@@ -578,6 +600,7 @@ def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
         token=cfg.get("token", ""),
         auth_scheme=cfg.get("auth_scheme", "bearer"),
         username=cfg.get("username", ""),
+        auth_header=cfg.get("auth_header", "Authorization"),
         transport=FAUX_MCP.transport(),
     )
 
@@ -1012,6 +1035,9 @@ def _register_builtins() -> None:
     register("documents", "confluence", _SPECS_LIVREES[("documents", "confluence")])(
         ConfluenceDocumentsConnector
     )
+    from .documents.git import GitDocumentsConnector
+
+    register("documents", "git", _SPECS_LIVREES[("documents", "git")])(GitDocumentsConnector)
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(
@@ -1045,6 +1071,7 @@ def _register_builtins() -> None:
             token=cfg.get("token", ""),
             auth_scheme=cfg.get("auth_scheme", "bearer"),
             username=cfg.get("username", ""),
+            auth_header=cfg.get("auth_header", "Authorization"),
             timeout_s=float(cfg.get("timeout_s", 30)),
         )
     )

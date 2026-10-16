@@ -47,6 +47,9 @@ class Permission(StrEnum):
     #: Create, publish and manage the agents that belong to ONE project (S39-09, ADR 0061), checked
     #: against that project. `agent:manage` keeps its meaning: organisation and common agents.
     AGENT_PROJECT_MANAGE = "agent:project_manage"
+    #: Enable, disable and price the models of the organisation's catalogue, choose its mode and
+    #: its tiers (S39-07, ADR 0060): what the organisation lets its agents use.
+    MODEL_CATALOGUE_MANAGE = "model:catalogue:manage"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {

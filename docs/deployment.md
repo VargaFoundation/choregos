@@ -156,6 +156,28 @@ choregos-orchestrator:
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
 
+### Images for jobs and for agents written in code
+
+A `job` step ([ADR 0056](adr/0056-a-deterministic-step.md)) and an agent written in code
+([ADR 0063](adr/0063-agents-written-in-code.md)) may run in their own image. Neither names a
+reference: they name an image, and the operator maps names to references.
+
+```yaml
+global:
+  images:
+    jobs:   { quant: harbor.example.com/choregos/quant@sha256:… }
+    agents: { ticket-triager: harbor.example.com/agents/ticket-triager@sha256:… }
+    requireDigest: true     # the default: a tag-only reference stops the API and the workers at start-up
+```
+
+The chart renders them as `CHOREGOS_JOB_IMAGES`, `CHOREGOS_AGENT_IMAGES` and
+`CHOREGOS_REQUIRE_IMAGE_DIGEST` on the API (which refuses a version naming an unknown image and lists
+the names at `GET /platform/agent-images`, never the references) and on every orchestrator worker
+(which resolves the name when the stage starts, and fails the step without a retry on an unknown one).
+Each image is built **from** the runner image: the runner is the entrypoint, the agent is a
+subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
+warm pool built from the runner image: use `k8s_job` for steps that name their own image.
+
 ### The `agent_sandbox` executor (opt-in)
 
 [ADR 0016](adr/0016-agent-sandbox-executor.md) adds an executor on
@@ -381,8 +403,38 @@ choregos-api:
   extraVolumeMounts: [{ name: theme, mountPath: /etc/choregos/theme, readOnly: true }]
 ```
 
-A volume named like one the chart owns (`tmp`, `catalogue`, `workflow-templates`, `playbooks`)
+A volume named like one the chart owns (`tmp`, `catalogue`, `workflow-templates`, `playbooks`, `mcp-catalogue`)
 fails at render.
+
+### The skills catalogue: egress for git delivery
+
+A `bundled` skill of the skills catalogue is in the image and needs no network. A `git` entry (a
+copyleft licence, a high-risk skill) is fetched at its pinned commit from **`codeload.github.com`**, as
+the existing *Import from a repository* is: the API pod's egress must allow that host (an egress rule
+in your network policy). `choregos-api.egressHosts` is only the hint the console shows (`egress:
+undeclared` on a `git` entry when the list is set and lacks `codeload.github.com`); it restricts
+nothing. Without the egress rule, installing a bundled skill still works and a git one answers `502`.
+
+### The MCP server catalogue: egress and your own entries
+
+The image ships a catalogue of well-known MCP servers ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md));
+an administrator installs an entry from *Administration → connectors → MCP catalogue*. Two chart values
+belong to the deployment:
+
+- `choregos-api.egressHosts` (a list, `*.` wildcards allowed) declares the hosts the API pod may
+  reach. It becomes `CHOREGOS_API_EGRESS_HOSTS` and **restricts nothing**: your network policy
+  does. The catalogue uses it to tell an administrator, before a silent timeout, that a server's host
+  (`mcp.notion.com`) is `undeclared`. Keep it equal to the egress allowlist of the namespace, and add
+  a host there (an egress rule, then here) before enabling a server that needs it. Empty: the
+  catalogue says `unknown` and warns about nothing.
+- `choregos-api.mcpCatalogueExtra` is the name of a ConfigMap holding a `catalogue.yaml`
+  (`entries: [...]`, the fields of the shipped catalogue) that lists **your own** MCP servers, merged
+  after the shipped ones and shown as `site` entries. An id already in the shipped catalogue is
+  refused, not shadowed, and a malformed file makes the catalogue answer `422` naming the entry.
+
+A server that authenticates per user with OAuth is listed but cannot be installed yet, and a server
+that runs as a local process (stdio) is listed with what to run: neither is something an install
+button can do.
 
 ## Multi-tenant installations
 
@@ -629,7 +681,7 @@ The migration job follows the API's image. An image from another registry is ano
 `demoFakes.enabled: true` deploys **one** pod — the API image, `python -m
 choregos_adapters.fakes.serveur` — serving the fakes of the HR scenario: MCP endpoints for the device
 manager, the carrier, the badge readers and the supplier's agent
-(`http://choregos-demo-fakes:8090/{mdm,shipping,access_control,fournisseur}/mcp`), and a fake
+(`http://choregos-demo-fakes:8090/{mdm,shipping,access_control,supplier}/mcp`), and a fake
 Microsoft Graph (`…/graph/v1.0`, `…/login`). One replica is the point: the API runs two and the
 orchestrator is apart, and in-memory fakes would show each process its own directory. The network
 policy opens that pod to the platform; `demoFakes.tokenSecret` (a secret reference) protects it
@@ -645,7 +697,7 @@ curl -s https://<api-host>/edition
 
 `version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:
 on the enterprise edition they say who publishes it and which version of the plugin runs
-(`"publisher":"graal.systems","edition_version":"0.2.0"`), and the admin page and the footer show
+(`"publisher":"GraalSystems","edition_version":"0.2.0"`), and the admin page and the footer show
 them. They are `null` on the community edition, and absent from an older core.
 
 This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
@@ -737,7 +789,7 @@ allowed domain answers 200 through the proxy, any other gets 403 from Squid).
 
 `/platform/models` and a project that declares no `gateway` connector use the deployment's gateway
 adapter (`global.gateway.type`, env `CHOREGOS_GATEWAY_TYPE`), not LiteLLM by default whatever was
-configured. Each adapter declares its `capabilities`:
+configured. The organisation's model catalogue (`/admin/models`, [ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)) is filled from the gateway of the organisation: an organisation connector of kind `gateway` if it has one, else this deployment default. Each adapter declares its `capabilities`:
 
 | Capability | Meaning | `litellm` | `openai-compatible` | `direct` |
 |---|---|---|---|---|

@@ -1,0 +1,33 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: record_badge
+  displayName: Record the badge
+  description: "Records the badge handed over in person and activated, under the UID the task captured."
+spec:
+  target: {objectType: employee, cardinality: one}
+  parameters:
+    uid: {type: string, required: true}
+  preconditions:
+    - {name: not_gone, expr: "target.status != 'gone'", message: "No badge is activated for a person who has left."}
+  permissions:
+    propose: [agent:onboarding-coordinator, role:contributor]
+    approve: policy:hr
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: badge
+        id: "${params.uid}"
+        properties:
+          uid: "${params.uid}"
+          employee_id: "${target.employee_id}"
+          active: true
+          handed_over_at: "${now}"
+    - type: object.update
+      with:
+        objectType: employee
+        id: "${target.employee_id}"
+        properties: {status: present}
+  idempotencyKey: "${params.uid}"

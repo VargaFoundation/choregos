@@ -11,7 +11,12 @@ import type {
   Action,
   Agent,
   AgentBackendInfo,
+  AgentImageInfo,
+  RemoteAgentDiscovery,
+  RemoteCredential,
   GatewayModel,
+  ModelCatalogue,
+  UsableModel,
   AgentCatalogueEntry,
   AgentCreate,
   AgentFork,
@@ -21,7 +26,12 @@ import type {
   AgentSpec,
   AgentTrialCreate,
   ConnectorType,
+  McpCatalogue,
+  McpCatalogueEntry,
+  McpCatalogueInstall,
   OrgConnector,
+  SkillCatalogue,
+  SkillCatalogueEntry,
   ProjectOperation,
   ProjectRequirement,
   AgentCredential,
@@ -64,6 +74,8 @@ import type {
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
+import mcpCatalogueFile from "./mcp-catalogue.json";
+import skillCatalogueFile from "./skill-catalogue.json";
 
 export { peopleOpsFixtures };
 
@@ -562,6 +574,40 @@ export const runDiff = {
 /** Une mise à jour ACP telle que le runner la journalise : les `params` bruts de `session/update`. */
 const maj = (update: Record<string, unknown>) => ({ sessionId: "sess-r3", update });
 const tache = (content: string, status: string, priority = "medium") => ({ content, priority, status });
+
+/** A run whose step a remote agent carried (S39-08): its task and its states, from the runner's journal. */
+export const remoteRun: Run = { ...run("r-remote", "ask-rovo", "succeeded", 0.05, "Three open issues"), backend: "a2a", model: "a2a:rovo" };
+/** The latest run of the remote agent: its card moved, nothing was sent. */
+export const remoteRunDrifted: Run = {
+  ...run("r-remote-drift", "ask-rovo", "failed", 0, "card changed"),
+  backend: "a2a",
+  model: "a2a:rovo",
+  result: { schema: "choregos/StageResult/v1", status: "failed", reason: "remote_card_changed", summary: "card changed" } as Run["result"],
+};
+const remoteEvents = (drift: boolean): RunEventDto[] =>
+  drift
+    ? [
+        { seq: 1, type: "run.started", ts: iso(40), payload: { role: "ask-rovo" } },
+        {
+          seq: 2,
+          type: "remote.card_changed",
+          ts: iso(40),
+          payload: { pinned: rovoDiscovery.card.digest, now: `sha256:${"0a1b2c3d4e5f".repeat(5)}0a1b`.slice(0, 71), endpoint: "https://a2a.atlassian.com/v1/rovo" },
+        },
+      ]
+    : [
+        { seq: 1, type: "run.started", ts: iso(40), payload: { role: "ask-rovo" } },
+        {
+          seq: 2,
+          type: "remote.started",
+          ts: iso(40),
+          payload: { endpoint: "https://a2a.atlassian.com/v1/rovo", skill: "work-in-jira", card_digest: rovoDiscovery.card.digest, protocol_version: "0.3.0" },
+        },
+        { seq: 3, type: "remote.update", ts: iso(39), payload: { state: "submitted", task_id: "task-7f3a" } },
+        { seq: 4, type: "remote.update", ts: iso(39), payload: { state: "working", task_id: "task-7f3a" } },
+        { seq: 5, type: "remote.update", ts: iso(38), payload: { state: "completed", task_id: "task-7f3a" } },
+        { seq: 6, type: "remote.finished", ts: iso(38), payload: { state: "completed", task_id: "task-7f3a", duration_s: 74, reason: null } },
+      ];
 
 export const runEvents: RunEventDto[] = [
   { seq: 1, type: "run.started", ts: iso(60), payload: { role: "implement" } },
@@ -1264,7 +1310,96 @@ function editionSimulee(yaml: string, operations: WorkflowOperation[]): Workflow
 }
 
 /** Le registre de démonstration (ADR 0033) : un agent interne qui porte une skill, et un Claude Code. */
+/** Atlassian's real card, summarised (S39-08): one agent, two skills, OAuth with Dynamic Client Registration. */
+export const rovoDiscovery: RemoteAgentDiscovery = {
+  card: {
+    name: "Atlassian Rovo",
+    description: "Chat with Rovo, Atlassian's AI teammate that helps you get things done across all your work tools.",
+    endpoint: "https://a2a.atlassian.com/v1/rovo",
+    host: "a2a.atlassian.com",
+    protocol_version: "0.3.0",
+    digest: `sha256:${"4f9c1e7a2b6d".repeat(5)}d8c3`.slice(0, 71),
+    skills: [
+      { id: "work-in-jira", name: "Work in Jira", description: "Get Jira context and update work items." },
+      { id: "work-in-confluence", name: "Work in Confluence", description: "Find answers and create pages." },
+    ],
+    auth_types: ["oauth2_authorization_code"],
+    scopes: ["read:me", "offline_access", "full_access:chat:rovo"],
+    streaming: true,
+    dcr_available: true,
+  },
+  proposed: {
+    slug: "atlassian-rovo",
+    kind: "remote",
+    display_name: "Atlassian Rovo",
+    description: "Chat with Rovo, Atlassian's AI teammate.",
+    lifecycle: "draft",
+    spec: { runtime: { kind: "a2a", card_url: "https://a2a.atlassian.com/.well-known/agent.json", credential: "atlassian-rovo" } },
+  },
+  credentials: ["atlassian-rovo"],
+  domains: ["a2a.atlassian.com"],
+};
+
+export const remoteCredentials: RemoteCredential[] = [
+  {
+    name: "atlassian-rovo",
+    type: "oauth2_authorization_code",
+    status: "connected",
+    authorised_as: "choregos-bot@acme.dev",
+    scopes: ["read:me", "offline_access", "full_access:chat:rovo"],
+    card_url: "https://a2a.atlassian.com/.well-known/agent.json",
+    host: "a2a.atlassian.com",
+    created_by: "lea@acme.dev",
+    last_refresh_at: iso(25),
+  },
+  {
+    name: "partner-agent",
+    type: "oauth2_authorization_code",
+    status: "pending",
+    scopes: ["chat"],
+    card_url: "https://agent.partner.example/.well-known/agent.json",
+    host: "agent.partner.example",
+    created_by: "lea@acme.dev",
+  },
+];
+
 export const agents: Agent[] = [
+  {
+    slug: "rovo",
+    kind: "remote",
+    display_name: "Atlassian Rovo",
+    description: "Answers from the team's Jira and Confluence, as the dedicated Atlassian account.",
+    status: "active",
+    owner: "lea@acme.dev",
+    latest_version: 1,
+    created_at: iso(60 * 24 * 3),
+    versions: [
+      {
+        version: 1,
+        spec: {
+          instructions: "Answer about the work item, in two paragraphs at most.",
+          runtime: {
+            kind: "a2a",
+            card_url: "https://a2a.atlassian.com/.well-known/agent.json",
+            skill: "work-in-jira",
+            credential: "atlassian-rovo",
+            timeout_minutes: 10,
+            declared_cost: { per_task_usd: 0.05, per_minute_usd: 0 },
+            input: "text",
+            pinned_card: {
+              url: "https://a2a.atlassian.com/v1/rovo",
+              protocol_version: "0.3.0",
+              digest: rovoDiscovery.card.digest,
+              skills: ["work-in-jira", "work-in-confluence"],
+            },
+          },
+        },
+        checksum: "sha256:77aa00bb11cc22dd33ee44ff55aa66bb",
+        created_by: "lea@acme.dev",
+        created_at: iso(60 * 24 * 3),
+      },
+    ],
+  },
   {
     slug: "onboarding-coordinator",
     kind: "internal",
@@ -1467,9 +1602,65 @@ export const platformModels: GatewayModel[] = [
   { model_name: "platform/cheap", litellm_model: "anthropic/claude-haiku-4-5", provider: "anthropic", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004 },
 ];
 
+/**
+ * The organisation's model catalogue (S39-07, ADR 0060), mutable for the length of the page: a model
+ * disabled on `/admin/models` leaves the agent builder's picker, as it does against the API.
+ */
+export const modelCatalogue: ModelCatalogue = {
+  mode: "open",
+  gateway: { type: "openai-compatible", capabilities: ["list_models"] },
+  tiers: { cheap: null, standard: null, strong: null, aux: null, embed: null, local: null },
+  entries: platformModels.map((m, i) => ({
+    id: `mc-${i + 1}`,
+    model_name: m.model_name,
+    display_name: m.model_name,
+    source: "gateway" as const,
+    enabled: true,
+    allowed_roles: [],
+    usages: ["agent" as const],
+    price_override: null,
+    gateway: {
+      provider: m.provider,
+      upstream_model: m.litellm_model,
+      input_cost_per_1k: m.input_cost_per_1k,
+      output_cost_per_1k: m.output_cost_per_1k,
+      supports_tool_calling: true,
+      supports_vision: false,
+    },
+    last_seen_at: iso(60),
+    missing_since: null,
+    notes: "",
+    updated_by: null,
+  })),
+};
+
+/** What an agent may be given: the enabled entries, for the role and usage asked. */
+export function usableModelsOf(path: string): UsableModel[] {
+  const query = new URLSearchParams(path.split("?")[1] ?? "");
+  const role = query.get("role");
+  const usage = query.get("usage") ?? "agent";
+  return modelCatalogue.entries
+    .filter((e) => e.enabled && (e.usages ?? []).includes(usage as "agent") && (!role || !(e.allowed_roles ?? []).length || (e.allowed_roles ?? []).includes(role)))
+    .map((e) => ({
+      model_name: e.model_name,
+      display_name: e.display_name,
+      provider: e.gateway?.provider ?? "",
+      input_cost_per_1k: e.price_override?.input_per_1k ?? e.gateway?.input_cost_per_1k ?? null,
+      output_cost_per_1k: e.price_override?.output_per_1k ?? e.gateway?.output_cost_per_1k ?? null,
+      priced_by: e.price_override ? ("override" as const) : e.gateway?.input_cost_per_1k != null ? ("gateway" as const) : ("none" as const),
+      tiers: [],
+    }));
+}
+
 export const platformBackends: AgentBackendInfo[] = [
   { name: "claude-code", enabled: true, version: "2.1.0", capabilities: ["mcp", "skills"] },
   { name: "codex", enabled: false, capabilities: ["mcp"], disabled_reason: "conformance below threshold" },
+];
+
+/** The images an operator named for agents written in code: names only, never references (ADR 0063). */
+export const platformAgentImages: AgentImageInfo[] = [
+  { name: "ticket-triager", digest_pinned: true },
+  { name: "scratch-bench", digest_pinned: false },
 ];
 
 /** The memberships the API returns: the organisation's, or one project's with `?project=` (S30-06). */
@@ -1677,6 +1868,45 @@ export const connectorTypes: ConnectorType[] = [
     secret_fields: ["client_secret"],
   },
 ];
+
+/**
+ * The MCP catalogue (ADR 0065): the real shipped entries, generated into `mcp-catalogue.json` by
+ * `make catalogues`, with the state this demo organisation gives them — an entry is installed once a
+ * connector of the demo carries it.
+ */
+export function mcpCatalogue(): McpCatalogue {
+  const file = mcpCatalogueFile as unknown as McpCatalogue;
+  return {
+    ...file,
+    entries: file.entries.map((entry: McpCatalogueEntry) => {
+      const installed = orgConnectors.filter((c) => c.catalogue_entry?.startsWith(`${entry.id}@`));
+      return installed.length
+        ? { ...entry, state: "installed" as const, installed_as: installed.map((c) => c.name) }
+        : entry;
+    }),
+  };
+}
+
+/** The skills this demo organisation installed from the catalogue, by name (ADR 0065). */
+const catalogueSkills = new Map<string, { skill: Skill; version: SkillVersion }>();
+
+/**
+ * The skills catalogue (ADR 0065): the real shipped entries, generated into `skill-catalogue.json` by
+ * `make catalogues`, with the state this demo organisation gives them. A high-risk skill fetched from
+ * git waits for a second administrator, as the API says.
+ */
+export function skillCatalogue(): SkillCatalogue {
+  const file = skillCatalogueFile as unknown as SkillCatalogue;
+  return {
+    ...file,
+    entries: file.entries.map((entry: SkillCatalogueEntry) => {
+      const installed = catalogueSkills.get(entry.id);
+      if (!installed) return entry;
+      const waiting = installed.skill.review_status === "pending_review";
+      return { ...entry, state: waiting ? ("pending_review" as const) : ("installed" as const), installed_version: 1 };
+    }),
+  };
+}
 
 /** Un annuaire de l'organisation (ADR 0034) : chaque opération porte sa politique. */
 export const orgConnectors: OrgConnector[] = [
@@ -2115,11 +2345,127 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       return structuredClone(cible) as T;
     }
   }
+  const skillInstall = /^\/orgs\/[^/]+\/skill-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
+  if (method === "POST" && skillInstall) {
+    // As the API does: the skill is published at version 1 with where it came from, and a high-risk
+    // one fetched from git waits for a second administrator.
+    const entry = skillCatalogue().entries.find((e) => e.id === skillInstall[1]);
+    if (!entry) throw new ApiError(404, { title: "Not found" });
+    const waiting = entry.risk === "high" && entry.delivery === "git";
+    const source = {
+      repo: entry.repo,
+      sha: entry.sha,
+      path: entry.path,
+      licence: entry.licence,
+      catalogue: `${entry.id}@${skillCatalogueFile.meta.catalogue_version}`,
+      delivery: entry.delivery,
+    };
+    const version: SkillVersion = {
+      version: 1,
+      digest: entry.digest,
+      created_by: me.email,
+      created_at: new Date().toISOString(),
+      files: { "SKILL.md": `---\nname: ${entry.id}\ndescription: ${entry.description}\n---\n` },
+      source,
+      risk: entry.risk,
+      review_status: waiting ? "pending_review" : "approved",
+      reviewed_by: waiting ? undefined : "platform",
+      findings: [],
+    };
+    const skill: Skill = {
+      slug: entry.id,
+      description: entry.description,
+      status: "active",
+      latest_version: 1,
+      used_by: [],
+      risk: entry.risk,
+      review_status: version.review_status,
+      versions: [version],
+    };
+    catalogueSkills.set(entry.id, { skill, version });
+    return skill as T;
+  }
+  const catalogueInstall = /^\/orgs\/[^/]+\/mcp-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
+  if (method === "POST" && catalogueInstall) {
+    // As the API does: a connector declared with the entry's URL, no operation until a discovery.
+    const entry = mcpCatalogue().entries.find((e) => e.id === catalogueInstall[1]);
+    const corps = JSON.parse(String(init.body ?? "{}")) as McpCatalogueInstall;
+    if (!entry || entry.install !== "installable") throw new ApiError(422, { title: "Unprocessable", detail: "not installable" });
+    const connector: OrgConnector = {
+      name: corps.name || entry.id,
+      kind: "mcp",
+      type: "mcp",
+      config: { url: entry.remote?.url },
+      secret_refs: corps.secret_refs ?? {},
+      status: "unknown",
+      created_by: me.email,
+      catalogue_entry: `${entry.id}@${mcpCatalogueFile.meta.catalogue_version}`,
+      operations: [],
+    };
+    orgConnectors.push(connector);
+    return connector as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
+  const catalogueEcrit = /^\/orgs\/[^/]+\/models(?:\/([^/?]+))?$/.exec(chemin ?? "");
+  if (method === "PUT" && catalogueEcrit?.[1] === "settings") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { mode: "open" | "curated"; tiers?: ModelCatalogue["tiers"] };
+    modelCatalogue.mode = corps.mode;
+    modelCatalogue.tiers = { ...modelCatalogue.tiers, ...(corps.tiers ?? {}) };
+    return { mode: modelCatalogue.mode, tiers: modelCatalogue.tiers } as T;
+  }
+  if (method === "POST" && catalogueEcrit?.[1] === "sync") return { added: 0, missing: 0, seen: modelCatalogue.entries.length } as T;
+  if (method === "POST" && catalogueEcrit && !catalogueEcrit[1]) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { model_name: string };
+    const entree: ModelCatalogue["entries"][number] = {
+      id: `mc-${modelCatalogue.entries.length + 1}`,
+      model_name: corps.model_name,
+      display_name: corps.model_name,
+      source: "manual",
+      enabled: true,
+      allowed_roles: [],
+      usages: ["agent"],
+      price_override: null,
+      gateway: null,
+      last_seen_at: null,
+      missing_since: null,
+      notes: "",
+      updated_by: me.email,
+    };
+    modelCatalogue.entries.push(entree);
+    return entree as T;
+  }
+  if (method === "PATCH" && catalogueEcrit?.[1]) {
+    const entree = modelCatalogue.entries.find((e) => e.id === catalogueEcrit[1]) ?? modelCatalogue.entries[0]!;
+    const corps = JSON.parse(String(init.body ?? "{}")) as { clear_price_override?: boolean } & Partial<ModelCatalogue["entries"][number]>;
+    const { clear_price_override: effacer, ...champs } = corps;
+    Object.assign(entree, champs);
+    if (effacer) entree.price_override = null;
+    return entree as T;
+  }
+  if (method === "DELETE" && catalogueEcrit?.[1]) {
+    modelCatalogue.entries = modelCatalogue.entries.filter((e) => e.id !== catalogueEcrit[1]);
+    return undefined as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/agents\/discover$/.test(chemin ?? "")) return rovoDiscovery as T;
+  if (method === "POST" && /^\/orgs\/[^/]+\/remote-credentials$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { name: string; type: RemoteCredential["type"]; card_url?: string };
+    return { name: corps.name, type: corps.type, status: corps.type === "oauth2_authorization_code" ? "pending" : "connected", card_url: corps.card_url ?? null, host: null, scopes: [] } as T;
+  }
+  const autorise = /^\/orgs\/[^/]+\/remote-credentials\/([^/]+)\/authorize$/.exec(chemin ?? "");
+  if (method === "POST" && autorise) return { redirect_url: `/admin/remote-agents?connected=${autorise[1]}` } as T;
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
+  if (/^\/orgs\/[^/]+\/models$/.test(route ?? "")) return modelCatalogue as T;
+  if (/^\/orgs\/[^/]+\/models\/usable$/.test(route ?? "")) return usableModelsOf(path) as T;
+  if (/^\/orgs\/[^/]+\/models\/curate-preview$/.test(route ?? "")) {
+    return { refused: [{ kind: "agent", ref: agents[0]?.slug ?? "an-agent", model: "platform/strong" }] } as T;
+  }
+  const installedVersion = /^\/orgs\/[^/]+\/skills\/([^/]+)\/versions\/1$/.exec(route ?? "");
+  if (installedVersion && catalogueSkills.has(installedVersion[1]!)) return catalogueSkills.get(installedVersion[1]!)!.version as T;
+  const installedSkill = /^\/orgs\/[^/]+\/skills\/([^/]+)$/.exec(route ?? "");
+  if (installedSkill && catalogueSkills.has(installedSkill[1]!)) return catalogueSkills.get(installedSkill[1]!)!.skill as T;
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
@@ -2141,6 +2487,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return agentCredentials.map((c) => ({ ...c, agent: "leas-claude-code" })) as T;
   }
   if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? "")) return agentMetricsList() as T;
+  if (/^\/orgs\/[^/]+\/agents\/rovo\/runs$/.test(route ?? "")) return [remoteRunDrifted, remoteRun] as T;
+  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return remoteCredentials as T;
+  if (/^\/runs\/r-remote\/events$/.test(route ?? "")) return remoteEvents(false) as T;
+  if (/^\/runs\/r-remote-drift\/events$/.test(route ?? "")) return remoteEvents(true) as T;
+  if (/^\/runs\/r-remote(-drift)?$/.test(route ?? "")) return (route?.endsWith("drift") ? remoteRunDrifted : remoteRun) as T;
   // The runs of an agent, newest first (S30-05).
   if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
   if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
@@ -2164,7 +2515,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, projectAgents],
-    [/^\/orgs\/[^/]+\/skills$/, skills],
+    [/^\/orgs\/[^/]+\/skills$/, [...skills, ...[...catalogueSkills.values()].map((c) => c.skill)]],
+    [/^\/orgs\/[^/]+\/skill-catalogue$/, skillCatalogue()],
     [/^\/orgs\/[^/]+\/knowledge$/, knowledgeBases.map((b) => ({ ...b, documents: null }))],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
     [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, projectKnowledgeBase],
@@ -2181,10 +2533,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/connectors\/types$/, connectorTypes],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
+    [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
     [/^\/projects\/[^/]+\/actions$/, actions],
     [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
+    [/^\/platform\/agent-images$/, platformAgentImages],
     [/^\/platform\/executors$/, []],
     [/^\/projects\/[^/]+\/models$/, { profiles: {}, allow_unvalidated: false, inherited: {} }],
     [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],

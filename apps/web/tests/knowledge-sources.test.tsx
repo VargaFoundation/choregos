@@ -40,6 +40,10 @@ describe("what a source says", () => {
     expect(syncSummary(null)).toBe("never synced");
     const fields = { site: "b!drive", folder: "Policies", url: "https://git.test/r.git", ref: "", paths: "docs/*.md, *.md" };
     expect(sourceConfig("sharepoint", fields)).toEqual({ drive_id: "b!drive", folder: "Policies" });
+    expect(sourceConfig("web", { ...fields, exclude: "/es/*, /pt/*" })).toEqual({
+      url: "https://git.test/r.git", max_depth: 2, max_pages: 50, exclude: ["/es/*", "/pt/*"],
+    });
+    expect(sourceConfig("web", fields)).toEqual({ url: "https://git.test/r.git", max_depth: 2, max_pages: 50 });
     expect(sourceConfig("git", fields)).toEqual({ url: "https://git.test/r.git", ref: "main", paths: ["docs/*.md", "*.md"] });
   });
 });
@@ -188,5 +192,23 @@ describe("the sources of a base (S33-04)", () => {
     const base = { site: "", folder: "", url: "", ref: "", paths: "" };
     expect(sourceConfig("confluence", { ...base, space: "ENG", pageId: "" })).toEqual({ space_key: "ENG", include_attachments: false });
     expect(sourceConfig("confluence", { ...base, space: "ENG", attachments: true })).toEqual({ space_key: "ENG", include_attachments: true });
+  });
+
+  it("adds a git source, through a git connector when the repository is private", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    vi.mocked(api.orgConnectors).mockResolvedValue([connector("acme-github", "documents", "git")]);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "git" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://github.com/acme/private.git" } });
+    await screen.findByRole("option", { name: "acme-github" });
+    fireEvent.change(screen.getByLabelText("git connector"), { target: { value: "acme-github" } });
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ kind: "git", connector: "acme-github" }),
+      ),
+    );
   });
 });

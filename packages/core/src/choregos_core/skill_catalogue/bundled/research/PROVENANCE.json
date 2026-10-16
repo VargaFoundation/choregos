@@ -1,0 +1,17 @@
+{
+ "files": {
+  "SKILL.md": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4",
+  "agents/openai.yaml": "9b4c470d63221c1f68f22df70b83e2f12401b317babe0d1b7b5f24a974474d0d"
+ },
+ "id": "research",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/engineering/research",
+ "repo": "https://github.com/mattpocock/skills",
+ "sha": "49dd158d1076134a641b33efb035946536778336"
+}

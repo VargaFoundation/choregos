@@ -5,6 +5,8 @@
  */
 export type {
   AgentBackendInfo,
+  AgentImageInfo,
+  CodeRuntime,
   ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
@@ -69,6 +71,12 @@ import type { Operations } from "@choregos/contracts/api";
 export type {
   Action,
   ActionEffect,
+  CatalogueMeta,
+  McpCatalogue,
+  McpCatalogueEntry,
+  McpCatalogueInstall,
+  SkillCatalogue,
+  SkillCatalogueEntry,
   ConnectorDiscovery,
   ConnectorOperation,
   ConnectorSecretState,
@@ -87,6 +95,12 @@ export type {
   AgentCatalogueConnection,
   AgentCatalogueEntry,
   AgentCreate,
+  A2aRuntime,
+  RemoteAgentDiscovery,
+  RemoteCardSummary,
+  RemoteCredential,
+  RemoteCredentialAuthorization,
+  RemoteCredentialCreate,
   AgentCredential,
   AgentDraft,
   AgentDraftRequest,
@@ -120,6 +134,19 @@ export type {
   SkillSources,
   SkillUpdate,
   SkillVersion,
+} from "@choregos/contracts/api";
+
+/** The organisation's model catalogue (ADR 0060). */
+export type {
+  ModelCatalogue,
+  ModelCatalogueEntry,
+  ModelCatalogueEntryCreate,
+  ModelCataloguePatch,
+  ModelCatalogueSettings,
+  ModelCuratePreview,
+  ModelSyncResult,
+  ModelTiers,
+  UsableModel,
 } from "@choregos/contracts/api";
 
 /** One revision of a named output of a work item (ADR 0049). */

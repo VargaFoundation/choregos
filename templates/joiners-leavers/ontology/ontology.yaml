@@ -1,6 +1,6 @@
 apiVersion: choregos.dev/v1alpha1
 kind: Ontology
-metadata: {name: rh-arrivees-departs, version: 1.0.0}
+metadata: {name: hr-joiners-leavers, version: 2.0.0}
 spec:
   description: >-
     The registry of what an onboarding opens and what an offboarding must close: the person and

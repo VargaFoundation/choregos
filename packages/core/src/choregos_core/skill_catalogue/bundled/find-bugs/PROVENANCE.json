@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "08664c3698f89116a4b04d12f699f95cff1aadb725da353b7f24f8ad73b02003"
+ },
+ "id": "find-bugs",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "96e78a9ce85795b117c8929887bdb78f88bf23f7b85a31f0872cde4dff7e92cd",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/find-bugs",
+ "repo": "https://github.com/getsentry/skills",
+ "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b"
+}

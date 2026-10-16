@@ -13,6 +13,11 @@ control (`github`), CI (`tekton`), CD (`argocd`), execution (`tekton`, `k8s_job`
 `local_docker`), model gateway (`litellm`, `direct`), memory (`ecphoria`, `lexical`) and
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
+A **catalogue** is what the platform *offers*; a **connector** is what an organisation has
+*enabled*. The image ships a catalogue of well-known MCP servers (and one of skills): listing an
+entry enables nothing, and installing one goes through the same governance as declaring it by hand
+([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)).
+
 `tracker: internal` means there is no outside tracker: Choregos' own database holds the
 tickets, assigns their keys and discovers them. Use it for work that exists nowhere else —
 an HR request, a file to process — or for a bench. A work item filed from the console or MCP on
@@ -51,7 +56,10 @@ pull request body carries. Only declared outputs and inputs count.
 
 Three kinds:
 
-- **`agent`** — a role and a playbook, a model profile, and budgets in turns and minutes.
+- **`agent`** — a role and a playbook, a model profile, and budgets in turns and minutes. A
+  registry agent version has a **runtime**: `acp` (the default — a coding agent the runner ships,
+  chosen by `backend`) or `code` (an ACP agent written in code, in an image the operator named and
+  built from the runner image, [ADR 0063](adr/0063-agents-written-in-code.md)).
 - **`human`** — a group, an SLA in hours, a reminder and an escalation.
 - **`system`** — a transition the platform performs itself, with no agent and no cost.
 
@@ -72,11 +80,19 @@ project (or forked into one) to reach a workflow. A **fork** is a new agent whos
 one version of its source and which remembers where it came from; it never follows the source on its
 own — it tells you when the source moved on.
 
+## Agent kinds and runtimes
+
+An agent of the registry has a **kind**: `internal` (the platform runs it), `external` (a client of the
+MCP door, ADR 0033) or `remote` (the platform calls it over A2A, ADR 0062 — for example Atlassian's
+Rovo). A version's **runtime** says how it runs: `acp` (a coding agent the runner ships), `code` (an
+agent written in code, ADR 0063) or `a2a` (a remote agent: the runner pod calls it, a declared cost
+is booked, the same gates read its outputs).
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,
 one short-lived token, one model key with a hard cap. The runner speaks
-**ACP** (Agent Client Protocol, JSON-RPC over stdio) to the agent, records every message, applies the
+**ACP** (Agent Client Protocol, from Zed — not IBM's Agent Communication Protocol, which merged into A2A; JSON-RPC over stdio) to the agent, records every message, applies the
 guardrails (scope, forbidden commands, network, sensitive files), loops on the definition of
 done, and publishes a `StageResult`.
 
@@ -168,6 +184,15 @@ During the soak, each canary step and the final check, the train listens to Argo
 applications rolls the departure back at once, without waiting for the next poll of the CD.
 Polling stays the safety net; an event received while the train was collecting describes the
 previous release and is dropped.
+
+## Which model a stage uses
+
+A stage asks for `profile:<tier>`, `profile:by_size` or a model name. The resolver looks in this order:
+the **project's** profiles, the **organisation's tier** (`/admin/models`), the **platform** aliases
+(`platform/<tier>`); then it checks the result against the gateway's list, the backend, the eval
+matrix and, last, the **organisation's model catalogue** for the stage's role (a disabled model, or a
+model without an entry in `curated` mode, is refused, and `allow_unvalidated` does not bypass it). See
+[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md).
 
 ## Where the money goes
 

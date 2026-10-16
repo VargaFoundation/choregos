@@ -8,6 +8,7 @@ Toutes idempotentes par `run_id` : `collect_spend` ne compte qu'une fois (`spend
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from choregos_api.db.models import Finding as FindingRow
 from choregos_api.db.models import Project, Run
@@ -16,8 +17,9 @@ from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_api.services.artifacts import record_inline_outputs
 from choregos_api.services.budget_alerts import unsent_month_alerts
 from choregos_api.services.budgets import ticket_budget, ticket_spent
+from choregos_api.services.model_catalogue import priced_spend
 from choregos_api.services.tickets import sorties_a_ranger
-from choregos_contracts import EventType, StageResult, StageStatus
+from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import Message, Spend, elapsed_seconds, utcnow
 from sqlalchemy import select
 from temporalio import activity
@@ -25,6 +27,7 @@ from temporalio import activity
 from ..config import get_settings
 from ..train_client import signal_findings
 from .base import db, load_work_item, project_bundle
+from .remote import declared_cost_usd
 from .run_key import release_run_key
 
 logger = get_logger("choregos.bilan")
@@ -73,6 +76,21 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         spend = Spend()
         if run.gateway_key_id:
             spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
+        # The organisation's price override (ADR 0060) replaces the gateway's figure when tokens are
+        # known; a gateway that cannot read a spend back leaves the line `unmeasured`.
+        spend, pricing = await priced_spend(
+            session,
+            bundle.project.org_id,
+            [run.model or "", *spend.models_used],
+            spend,
+            measured="spend_readback" in getattr(bundle.adapters.gateway, "capabilities", {"spend_readback"}),
+        )
+        # A remote agent reports no cost (ADR 0062): what its registry entry DECLARES is booked,
+        # as `external`, apart from the model spend.
+        remote = StageInput.model_validate(run.stage_input).remote if run.stage_input else None
+        if remote is not None:
+            wall = elapsed_seconds(run.started_at, run.ended_at or utcnow())
+            spend = Spend(cost_usd=declared_cost_usd(StageInput.model_validate(run.stage_input), wall))
         item = await load_work_item(session, run.work_item_id)
         segment = {
             "tokens_in": spend.tokens_in,
@@ -91,6 +109,7 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         for name in ("cost_usd", "cost_eur"):
             of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
         of_the_run["runs"] = 1
+        of_the_run.update(pricing)
         run.tokens = of_the_run
         run.cost_usd = float(of_the_run["cost_usd"])
         run.spend_collected = True
@@ -100,8 +119,13 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
             project_id=bundle.project.id,
             work_item_id=item.id,
             run_id=run.id,
-            provider=(spend.models_used[0].split("/")[0] if spend.models_used else ""),
-            model=run.model or "",
+            provider=(
+                (urlsplit(remote.endpoint).hostname or "")
+                if remote is not None
+                else (spend.models_used[0].split("/")[0] if spend.models_used else "")
+            ),
+            model=(run.model or "") + (" (unmeasured)" if remote is not None and spend.cost_usd == 0 else ""),
+            kind="external" if remote is not None else "model",
             backend=run.backend,
             stage_role=run.stage_role,
             size=item.size,

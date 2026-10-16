@@ -36,10 +36,13 @@ logger = get_logger("choregos.knowledge.sync")
 KINDS = ("sharepoint", "confluence", "web", "git")
 #: kinds opened through an organisation `documents` connector, which holds the credentials
 CONNECTED_KINDS = frozenset({"sharepoint", "confluence"})
+#: kinds that read public material without a connector, and a private one with it
+OPTIONALLY_CONNECTED = frozenset({"git"})
 #: the connector types a connected source kind may be served by
 SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {
     "sharepoint": frozenset({"sharepoint"}),
     "confluence": frozenset({"confluence"}),
+    "git": frozenset({"git"}),
 }
 
 
@@ -50,7 +53,7 @@ class SourceUnavailableError(RuntimeError):
 async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     """The adapter of a source: under `CHOREGOS_FAKES`, its scripted fake."""
     config = source.config or {}
-    if source.kind in CONNECTED_KINDS:
+    if source.kind in CONNECTED_KINDS or (source.kind in OPTIONALLY_CONNECTED and source.connector):
         connector = (
             await session.execute(
                 select(OrgConnector).where(
@@ -85,6 +88,7 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             url=str(config["url"]),
             max_depth=int(config.get("max_depth", 2)),
             max_pages=int(config.get("max_pages", 50)),
+            exclude=config.get("exclude"),
         )
     if source.kind == "git":
         from choregos_adapters.documents.git import GitSource

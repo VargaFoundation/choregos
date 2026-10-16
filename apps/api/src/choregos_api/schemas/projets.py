@@ -217,6 +217,7 @@ class OrgConnectorDto(Dto):
     last_check_at: datetime | None = None
     last_error: str | None = None
     created_by: str | None = None
+    catalogue_entry: str | None = None
     operations: list[OperationDto] = Field(default_factory=list)
 
     @field_validator("secret_refs", mode="before")

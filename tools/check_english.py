@@ -36,7 +36,18 @@ DEFAULT_RANGE = "origin/main...HEAD"
 ESCAPE = "lang: fr-ok"
 
 #: Where prose lives. Root-level Markdown (AGENTS.md, README.md) and the Makefile are read too.
-SCANNED_DIRS = ("packages/", "apps/", "tools/", "tests/", "docs/", ".github/", "charts/", "dev/", "demo/")
+SCANNED_DIRS = (
+    "packages/",
+    "apps/",
+    "tools/",
+    "tests/",
+    "docs/",
+    ".github/",
+    "charts/",
+    "dev/",
+    "demo/",
+    "templates/",  # S39-11: a shipped template is read by every user
+)
 #: `.tpl` and `.txt`: a Helm chart's helpers and its NOTES, read line by line as YAML is.
 SUFFIXES = {".py", ".ts", ".tsx", ".md", ".yaml", ".yml", ".tpl", ".txt"}
 #: Paths never read, and why. A line here is a decision, not an oversight.
@@ -44,6 +55,10 @@ EXCLUDED = (
     "docs/fr/",  # the archived French documentation, no longer maintained
     "docs/cli.md",  # generated from the CLI's help strings, which are read at their source
     "packages/contracts/ts/",  # generated from the schemas, which are read at their source
+    # Third-party skills, redistributed verbatim under their own licence (ADR 0065): their text is theirs.
+    "packages/core/src/choregos_core/skill_catalogue/bundled/",
+    # The 1.x joiners-leavers template, French on purpose: what S39-11c's script migrates (S39-11).
+    "apps/api/tests/fixtures/joiners-leavers-v1/",
     # The injection guard's patterns also recognise an injection written in French.
     "packages/core/src/choregos_core/injection.py",
 )
@@ -138,6 +153,35 @@ def french_reason(text: str) -> str | None:
 
 def looks_french(text: str) -> bool:
     return french_reason(text) is not None
+
+
+#: Words an identifier can carry that are French and not English (S39-11): the vocabulary a shipped
+#: template used before 2.0.0, and its near neighbours. A word that is also an English word
+#: (`plan`, `present`, `service`, `contract`, `group`, `date`, `badge`) is deliberately absent: the
+#: lexicon is a net for French identifiers, not a dictionary — what it does not know it does not
+#: flag, so a new French word is added here the day it is found.
+IDENTIFIER_WORDS = _lexicon(
+    "demande valide comptes compte sensible poste postes actif pret coupe",  # lang: fr-ok
+    "coupure reprise recu efface effacement clos coordinateur rh accueil",  # lang: fr-ok
+    "plateforme arrivee arrivees depart departs nom groupe groupes adresse",  # lang: fr-ok
+    "modele etat materiel materiels collaborateur collaborateurs contrat",  # lang: fr-ok
+    "contrats matricule statut parti venir deja consigner consigne",  # lang: fr-ok
+    "constater controle ouvert ouvre ferme remis remise suivi numero serie",  # lang: fr-ok
+    "porteur titulaire detenteur lecteurs annuaire parc transporteur",  # lang: fr-ok
+    "fournisseur commande commander expedie inscrit repris cdi cdd",  # lang: fr-ok
+    "alternance prestation debut fin paie ventes dossiers salaries profils",  # lang: fr-ok
+    "acces liens abime manquant revoir activer jour jours",  # lang: fr-ok
+)
+_IDENTIFIER_PART = re.compile(r"[A-Za-z]+")
+
+
+def french_identifier_words(identifier: str) -> list[str]:
+    """The French words an identifier (`date_arrivee`, `t-validation`, `depart.coupure`) is made of:
+    split on every non-letter, camelCase kept whole; empty when it is English as far as the lexicon
+    knows. Prose is read by `french_reason`; this reads the keys prose detection skips."""
+    return [
+        w for w in (m.group().lower() for m in _IDENTIFIER_PART.finditer(identifier)) if w in IDENTIFIER_WORDS
+    ]
 
 
 # ─────────────────────────────── what is prose, language by language ───────────────────────────────

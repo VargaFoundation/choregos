@@ -1,0 +1,16 @@
+# What never enters the skills catalogue, whatever the seed says (ADR 0065). Matched with fnmatch
+# against a skill's name and against its folder in the repository; each rule has a reason.
+names:
+  - { pattern: "docx", reason: "proprietary: Anthropic's document skills are governed by an agreement, not an open licence" }
+  - { pattern: "pdf", reason: "proprietary: Anthropic's document skills are governed by an agreement, not an open licence" }
+  - { pattern: "pptx", reason: "proprietary: Anthropic's document skills are governed by an agreement, not an open licence" }
+  - { pattern: "xlsx", reason: "proprietary: Anthropic's document skills are governed by an agreement, not an open licence" }
+  - { pattern: "setup-*", reason: "installs tooling or hooks of one coding assistant: nothing for a Choregos run to do" }
+  - { pattern: "*-plugin-*", reason: "plumbing of one assistant's plugin system" }
+  - { pattern: "skill-installer", reason: "installs skills outside the catalogue and its gate" }
+  - { pattern: "using-git-worktrees", reason: "manages worktrees of a developer's machine; a run has its own workspace" }
+  - { pattern: "dispatching-parallel-agents", reason: "spawns sub-agents of one assistant's runtime" }
+  - { pattern: "using-superpowers", reason: "bootstraps one skill collection into an assistant" }
+  - { pattern: "onboarding", reason: "reads as the HR onboarding procedure of the platform's own template (S39-11); an id cannot be renamed" }
+paths:
+  - { pattern: "*/human-resources/skills/onboarding", reason: "same as the `onboarding` name rule" }

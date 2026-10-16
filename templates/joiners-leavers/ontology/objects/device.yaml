@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: device, displayName: Laptop, description: "The laptop entrusted to a person, from the purchase order to the wipe.", owner: it}
+spec:
+  datasource: devices
+  primaryKey: serial_number
+  titleProperty: model
+  properties:
+    serial_number: {type: string, required: true}
+    employee_id: {type: string, required: true}
+    model: {type: string}
+    status: {type: string, enum: [ordered, shipped, enrolled, collected, wiped], required: true}
+    tracking: {type: string}

@@ -1,0 +1,2678 @@
+{
+ "meta": {
+  "catalogue_version": "2026.10.0",
+  "generated_at": "2026-10-15T00:00:00Z",
+  "sources": {
+   "github": "https://api.github.com (commits pinned 2026-10-15)",
+   "github_stars_as_of": "2026-10-15"
+  }
+ },
+ "entries": [
+  {
+   "id": "finishing-a-development-branch",
+   "title": "Finishing a development branch",
+   "description": "Use when implementation is complete, all tests pass, and you need to decide how to integrate the work",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/finishing-a-development-branch",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 7781,
+   "digest": "sha256:1da9182001d887c0fb8c62aeee35c8f65b438b32a30b79104baedcca9e0ebef6",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "receiving-code-review",
+   "title": "Receiving code review",
+   "description": "Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/receiving-code-review",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 6203,
+   "digest": "sha256:e5dd23be2d93f751c8b28d647c4b139754aedfe75648cd8e1100e47f5da0c3c5",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "review"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "requesting-code-review",
+   "title": "Requesting code review",
+   "description": "Use when completing tasks, implementing major features, or before merging to verify work meets requirements",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/requesting-code-review",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 9423,
+   "digest": "sha256:da21da5cdf7894945c3990bdea317b1be4e2cf553831d22027558ca45a6cc45b",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "review"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "verification-before-completion",
+   "title": "Verification before completion",
+   "description": "Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/verification-before-completion",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 3646,
+   "digest": "sha256:d8a53168f152b6163bd3447f7d4c20b6b4cddf6bd907f9aa5856b514c032db0e",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering",
+    "review"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "writing-plans",
+   "title": "Writing plans",
+   "description": "Use when you have a spec or requirements for a multi-step task, before touching code",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/writing-plans",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 10335,
+   "digest": "sha256:b96f84fcdd4fc87bf3264e960e7a423bf6d3612e2b3355b4d6cd5f61ef7fe45d",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "codebase-design",
+   "title": "Codebase design",
+   "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/codebase-design",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 11766,
+   "digest": "sha256:e91e18258598832efe27af7e3c423ab262c6f8b8ecb6262d8fbb80d626ef0e19",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "domain-modeling",
+   "title": "Domain modeling",
+   "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/domain-modeling",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 8480,
+   "digest": "sha256:18a9314d338b8135e4108d1d31d2fd57ad289cf8bf31d2acd6a6f3053ac22a38",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "grill-me",
+   "title": "Grill me",
+   "description": "A relentless interview to sharpen a plan or design.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/productivity/grill-me",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 294,
+   "digest": "sha256:14c292fe16c0aed833cbbabb0983515c8d665fb6061d9755b13dba870363323b",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "product"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "handoff",
+   "title": "Handoff",
+   "description": "Compact the current conversation into a handoff document for another agent to pick up.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/productivity/handoff",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 1081,
+   "digest": "sha256:77c2607c751b7c522e0208ab113ba4949f8267610d6061323c7ccd3ace21d7da",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "prototype",
+   "title": "Prototype",
+   "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/prototype",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 15980,
+   "digest": "sha256:c4efd5e0f1c302b6225be83e8e42abdb05e13fde900484e4e2240e90b4e83eb6",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "research",
+   "title": "Research",
+   "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/research",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 888,
+   "digest": "sha256:b1976e3b4a7cdcee2f7ade52c0cf072bafdbac9cf3284568cab1aa258e584e69",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "research"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "retro",
+   "title": "Retro",
+   "description": "Conduct a retrospective on a coding session.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/retro",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 4515,
+   "digest": "sha256:09c4f9fe72fc5bc8e486a2bbb32dd785ca6264c56a53dd1bf9a334af72586efd",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "tdd",
+   "title": "Tdd",
+   "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/tdd",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 7411,
+   "digest": "sha256:aaed5857190bc8088332725c9c8deecf560744f6f7ef0bdfccf4bdf3fe678c16",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "testing"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "to-spec",
+   "title": "To spec",
+   "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/to-spec",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 3178,
+   "digest": "sha256:f525dab8b9bd3961aa4813d8568ef6184f6e24aad5a020e129165ca6c220f836",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "product"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "triage",
+   "title": "Triage",
+   "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/triage",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 19302,
+   "digest": "sha256:9c6b69d13831d354c1a62eaa047e3160617f9b035d411555268a343b51e96a0c",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "engineering",
+    "support"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "api-and-interface-design",
+   "title": "Api and interface design",
+   "description": "Guides stable API and interface design. Use when designing APIs, module boundaries, or any public interface. Use when creating REST or GraphQL endpoints, defining type contracts between modules, or establishing boundaries between frontend and backend.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/api-and-interface-design",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 14886,
+   "digest": "sha256:ea74e4a37025ff30586b6af953f26543ce27eba2d63eed0e5106df459929d0fb",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "ci-cd-and-automation",
+   "title": "Ci cd and automation",
+   "description": "Automates CI/CD pipeline setup. Use when setting up or modifying build and deployment pipelines. Use when you need to automate quality gates, configure test runners in CI, or establish deployment strategies.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/ci-cd-and-automation",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11332,
+   "digest": "sha256:706d42c02e056cfd0509172fa294ecbdec8509aac9dc25862310800892709d9d",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering",
+    "operations"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "code-review-and-quality",
+   "title": "Code review and quality",
+   "description": "Conducts multi-axis code review. Use before merging any change. Use when reviewing code written by yourself, another agent, or a human. Use when you need to assess code quality across multiple dimensions before it enters the main branch. Use when asked to review a diff or a pull request, even when…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/code-review-and-quality",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 20976,
+   "digest": "sha256:e60dfee4a81d66a1d8b766516ba4cf7e0d53afbf7d9f82f0054c389e8a2c0d81",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "review"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "context-engineering",
+   "title": "Context engineering",
+   "description": "Optimizes agent context setup. Use when starting a new session, when agent output quality degrades, when switching between tasks, or when you need to configure rules files and context for a project.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/context-engineering",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 15486,
+   "digest": "sha256:0ce9bdcfee0821e72dee2aa44e0599bc28487f36e2b7f2b6ef5c14699f490450",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "debugging-and-error-recovery",
+   "title": "Debugging and error recovery",
+   "description": "Guides systematic root-cause debugging. Use when tests fail, builds break, something that worked yesterday broke, behavior doesn't match expectations, or you encounter any unexpected error. Use when you need to figure out what broke and why — a systematic approach to finding and fixing the root cau…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/debugging-and-error-recovery",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 10913,
+   "digest": "sha256:e5a35bfd5bf778a35554fad2294af5321512c14e596883170c546d88f4fd0074",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "deprecation-and-migration",
+   "title": "Deprecation and migration",
+   "description": "Manages deprecation and migration. Use when removing old systems, APIs, or features. Use when migrating users from one implementation to another. Use when migrating a database schema in production, such as renaming or dropping a column without downtime (expand/contract). Use when deciding whether t…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/deprecation-and-migration",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 12642,
+   "digest": "sha256:afdeb12863687806d0b72bf9ddba4bfc1aff759da233ef5b9aefa5241a895d4a",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "documentation-and-adrs",
+   "title": "Documentation and adrs",
+   "description": "Records decisions and documentation. Use when you need to document an architecture decision (ADR) or the reasoning behind a design choice, when changing public APIs, shipping features, or when you need to record context that future engineers and agents will need to understand the codebase.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/documentation-and-adrs",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 10910,
+   "digest": "sha256:7e0166ce8935fa8a13c22b1c463d4f1a816c539077406eb4c03f9909b96b8545",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "documentation"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "doubt-driven-development",
+   "title": "Doubt driven development",
+   "description": "Subjects every non-trivial decision to a fresh-context adversarial review before it stands. Use when you want every assumption cross-examined before proceeding, when stress-testing a plan for hidden failure modes, when correctness matters more than speed, when working in unfamiliar code, when stake…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/doubt-driven-development",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 16647,
+   "digest": "sha256:939cf884cb25b7669e00fa92502b8bb5d9fabcddba050e96c691e380168c6c7f",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "review"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "frontend-ui-engineering",
+   "title": "Frontend ui engineering",
+   "description": "Builds production-quality, accessible, responsive user-facing UIs. Use when building or modifying interfaces and pages, creating components, implementing layouts, meeting WCAG accessibility requirements, managing state, or when the output needs to look and feel production-quality rather than AI-gen…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/frontend-ui-engineering",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11721,
+   "digest": "sha256:657534f12775d9a679bb15a07ed3b3f1fc6f49a0a5244e05fa0ac21ee30aecd9",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "design",
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "git-workflow-and-versioning",
+   "title": "Git workflow and versioning",
+   "description": "Structures git workflow practices. Use when making any code change. Use when committing, branching, resolving conflicts, splitting uncommitted work in a messy working tree into clean atomic commits, opening or reviewing a pull request (PR), pushing to a remote, or when you need to organize work acr…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/git-workflow-and-versioning",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 14141,
+   "digest": "sha256:ecb9743ef86c45d117033f78b64f71bfe631d5a8e8e7198b7ac083fd91af7062",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "incremental-implementation",
+   "title": "Incremental implementation",
+   "description": "Delivers changes incrementally in thin, verifiable slices. Use when implementing any feature or change that touches more than one file, or when picking up the next task from a plan. Use when rolling a change out behind a feature flag, when you're about to write a large amount of code at once, or wh…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/incremental-implementation",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 9629,
+   "digest": "sha256:037857b2d81c5e709cccafa850d8a394f3d6441407cd77bf9c18548847a9dab5",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "interview-me",
+   "title": "Interview me",
+   "description": "Extracts what the user actually wants instead of what they think they should want. Achieves this through one-question-at-a-time interview until ~95% confidence about the underlying intent. Use when an ask is underspecified (\"build me X\" without \"for whom\" or \"why now\"), when the user explicitly inv…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/interview-me",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 15080,
+   "digest": "sha256:6b64430690d76fac95e23ef7c3945222a0f2f37b81d3a2daaa389459684a0f7c",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "product"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "observability-and-instrumentation",
+   "title": "Observability and instrumentation",
+   "description": "Instruments code so production behavior is visible and diagnosable. Use when adding logging, metrics, tracing, or alerting. Use when shipping any feature that runs in production and you need evidence it works. Use when production issues are reported but you can't tell what happened from the availab…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/observability-and-instrumentation",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 13948,
+   "digest": "sha256:3142826fae9514e544e9bc16508d2d5ee9f67d9cac62383c903949534b63411c",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "performance-optimization",
+   "title": "Performance optimization",
+   "description": "Optimizes application performance across frontend, backend, queries, and databases. Use when performance requirements exist, when you suspect performance regressions, when Core Web Vitals or load times need improvement, when N+1 query patterns need fixing, or when profiling reveals bottlenecks.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/performance-optimization",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 26390,
+   "digest": "sha256:341feba20dc59f22df9ca539f7a7a07e9bdc5252060fc250fb93f31542fc6c5b",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "planning-and-task-breakdown",
+   "title": "Planning and task breakdown",
+   "description": "Breaks work into ordered tasks. Use when you have a spec or clear requirements and need to break work into implementable tasks. Use when a task feels too large to start, when you need to estimate scope, or when parallel work is possible.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/planning-and-task-breakdown",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 10564,
+   "digest": "sha256:34768342dbf3b84e2440fc8dd11fed23f099c605fdfd7edf57317ec9159ce82d",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "shipping-and-launch",
+   "title": "Shipping and launch",
+   "description": "Prepares production launches. Use when preparing to deploy to production, or when asking what needs to be in place before shipping. Use when you need a pre-launch checklist, when setting up monitoring, when planning a staged rollout, or when you need a rollback strategy.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/shipping-and-launch",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11515,
+   "digest": "sha256:a9a85dffc7ba61d32f2888655aeeb8280d5dbfac254fcc5e2cf3278651692343",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "spec-driven-development",
+   "title": "Spec driven development",
+   "description": "Creates specs before coding. Use when starting a new project, feature, or significant change and no specification exists yet. Use when drafting a PRD or requirements document with objectives and scope, or when requirements are unclear, ambiguous, or only exist as a vague idea. Use when a single req…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/spec-driven-development",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 13096,
+   "digest": "sha256:3dfd09ad332308113a5a400ce059ec2362fd4fca4db863a85e00644ba198f106",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "documentation",
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "test-driven-development",
+   "title": "Test driven development",
+   "description": "Drives development with tests using the red-green-refactor loop. Use when implementing any logic, fixing any bug, or changing any behavior. Use when you need to prove that code works, when a bug report arrives, or when you're about to modify existing functionality. Use when asked to add tests to a…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/test-driven-development",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 16676,
+   "digest": "sha256:eddf28e11914b3309806d2f1c1e5fb794e636bb8747480d39ef0756ce9cda596",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "testing"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "marketing-ideas",
+   "title": "Marketing ideas",
+   "description": "When the user needs marketing ideas, inspiration, or strategies for their SaaS or software product. Also use when the user asks for 'marketing ideas,' 'growth ideas,' 'how to market,' 'marketing strategies,' 'marketing tactics,' 'ways to promote,' 'ideas to grow,' 'what else can I try,' 'I don't kn…",
+   "publisher": "Corey Haines",
+   "repo": "https://github.com/coreyhaines31/marketingskills",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "path": "skills/marketing-ideas",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 33712,
+   "digest": "sha256:18afffa4dffb3e92b0e8b56ba449459759127a774e0fc3a42425d9b7de925068",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "marketing"
+   ],
+   "signals": {
+    "stars": 54877,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "marketing-psychology",
+   "title": "Marketing psychology",
+   "description": "When the user wants to apply psychological principles, mental models, or behavioral science to marketing. Also use when the user mentions 'psychology,' 'mental models,' 'cognitive bias,' 'persuasion,' 'behavioral science,' 'why people buy,' 'decision-making,' 'consumer behavior,' 'anchoring,' 'soci…",
+   "publisher": "Corey Haines",
+   "repo": "https://github.com/coreyhaines31/marketingskills",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "path": "skills/marketing-psychology",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 27920,
+   "digest": "sha256:b555d59c727a1b05aa62bc3026ed5956d1c1d65fdb548f0d84459f334524bae9",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "marketing"
+   ],
+   "signals": {
+    "stars": 54877,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "offers",
+   "title": "Offers",
+   "description": "When the user wants to design, construct, or improve an offer — the thing they actually sell — including value framing, bonus stacking, guarantee design, scarcity/urgency, naming, and payment structure. Also use when the user mentions 'offer,' 'offer design,' 'build an offer,' 'grand slam offer,' '…",
+   "publisher": "Corey Haines",
+   "repo": "https://github.com/coreyhaines31/marketingskills",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "path": "skills/offers",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 10,
+   "bytes": 81737,
+   "digest": "sha256:62def0ff06220b5e7e53f34e850c22c8d9c5fa9815ea0706d275e07c66b22f22",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "marketing",
+    "sales"
+   ],
+   "signals": {
+    "stars": 54877,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "compliance-check",
+   "title": "Compliance check",
+   "description": "Run a compliance check on a proposed action, product feature, or business initiative, surfacing applicable regulations, required approvals, and risk areas. Use when launching a feature that touches personal data, when marketing or product proposes something with regulatory implications, or when you…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "legal/skills/compliance-check",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 14694,
+   "digest": "sha256:f220f74e33d21adf9fec8857cfd370b2ddfa18a9d27a6e1a9e40b2c38851c2ce",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "legal"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "customer-escalation",
+   "title": "Customer escalation",
+   "description": "Package an escalation for engineering, product, or leadership with full context. Use when a bug needs engineering attention beyond normal support, multiple customers report the same issue, a customer is threatening to churn, or an issue has sat unresolved past its SLA.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "customer-support/skills/customer-escalation",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11205,
+   "digest": "sha256:8952988d3100d792ed539ccf7012d2cee28ac1b139c1a77b6ea48f33deb9b460",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "support"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "design-critique",
+   "title": "Design critique",
+   "description": "Get structured design feedback on usability, hierarchy, and consistency. Trigger with \"review this design\", \"critique this mockup\", \"what do you think of this screen?\", or when sharing a Figma link or screenshot for feedback at any stage from exploration to final polish.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "design/skills/design-critique",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 3923,
+   "digest": "sha256:627193a77399d2dc32e3b9c495edd1a2c7609b1bf16ea24fdcae7463f8aab6ed",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "design"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "incident-response",
+   "title": "Incident response",
+   "description": "Run an incident response workflow — triage, communicate, and write postmortem. Trigger with \"we have an incident\", \"production is down\", an alert that needs severity assessment, a status update mid-incident, or when writing a blameless postmortem after resolution.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "engineering/skills/incident-response",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 5669,
+   "digest": "sha256:96fb38ab29648fa8c5e1e201a3769866ecdf6dbb11620c9596bcb0b4438f9273",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "interview-prep",
+   "title": "Interview prep",
+   "description": "Create structured interview plans with competency-based questions and scorecards. Trigger with \"interview plan for\", \"interview questions for\", \"how should we interview\", \"scorecard for\", or when the user is preparing to interview candidates.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "human-resources/skills/interview-prep",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 1436,
+   "digest": "sha256:b41c6fa7a95e84238cbcdf2ab2d196601dc89af87af563720ff4963c3967be41",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "hr"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "kb-article",
+   "title": "Kb article",
+   "description": "Draft a knowledge base article from a resolved issue or common question. Use when a ticket resolution is worth documenting for self-service, the same question keeps coming up, a workaround needs to be published, or a known issue should be communicated to customers.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "customer-support/skills/kb-article",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 12274,
+   "digest": "sha256:536300d8a92bb30fd48e0ac69426d287b851e960ea33b1366cd2ee36d6da556c",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "documentation",
+    "support"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "reconciliation",
+   "title": "Reconciliation",
+   "description": "Reconcile accounts by comparing GL balances to subledgers, bank statements, or third-party data. Use when performing bank reconciliations, GL-to-subledger recs, intercompany reconciliations, or identifying and categorizing reconciling items.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "finance/skills/reconciliation",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 8144,
+   "digest": "sha256:826b1c174c4ff299ccfd6adc0b26e6a6b8dabf0825401a6b4f8ba716a1b3e443",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "finance"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "review-contract",
+   "title": "Review contract",
+   "description": "Review a contract against your organization's negotiation playbook — flag deviations, generate redlines, provide business impact analysis. Use when reviewing vendor or customer agreements, when you need clause-by-clause analysis against standard positions, or when preparing a negotiation strategy w…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "legal/skills/review-contract",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 16708,
+   "digest": "sha256:6e3c198a19e6669fea164cfa9ec530e45d6e03b5d9f7622f3fac20c0c7882b71",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "legal"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "risk-assessment",
+   "title": "Risk assessment",
+   "description": "Identify, assess, and mitigate operational risks. Trigger with \"what are the risks\", \"risk assessment\", \"risk register\", \"what could go wrong\", or when the user is evaluating risks associated with a project, vendor, process, or decision.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "operations/skills/risk-assessment",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 1630,
+   "digest": "sha256:fcf1a56032d5a70999bb86587d22cdea0ab71477b67a49c07a467625ac346a04",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "runbook",
+   "title": "Runbook",
+   "description": "Create or update an operational runbook for a recurring task or procedure. Use when documenting a task that on-call or ops needs to run repeatably, turning tribal knowledge into exact step-by-step commands, adding troubleshooting and rollback steps to an existing procedure, or writing escalation pa…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "operations/skills/runbook",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 2519,
+   "digest": "sha256:816b8d818b5053ebc5e99160ada5b89adf7ec5dfcd922e15efa1b0ca07416cad",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "sprint-planning",
+   "title": "Sprint planning",
+   "description": "Plan a sprint — scope work, estimate capacity, set goals, and draft a sprint plan. Use when kicking off a new sprint, sizing a backlog against team availability (accounting for PTO and meetings), deciding what's P0 vs. stretch, or handling carryover from the last sprint.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "product-management/skills/sprint-planning",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 4144,
+   "digest": "sha256:f234c111afbd9e6fc6b540b69cd64fb5130649077034fa1e9975fdee06ee2944",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "product"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "sql-queries",
+   "title": "Sql queries",
+   "description": "Write correct, performant SQL across all major data warehouse dialects (Snowflake, BigQuery, Databricks, PostgreSQL, etc.). Use when writing queries, optimizing slow SQL, translating between dialects, or building complex analytical queries with CTEs, window functions, or aggregations.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "data/skills/sql-queries",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11126,
+   "digest": "sha256:704804855efc4186d8567c6db527fe8f14ceaeafba93028829e6aba318495365",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "data"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "status-report",
+   "title": "Status report",
+   "description": "Generate a status report with KPIs, risks, and action items. Use when writing a weekly or monthly update for leadership, summarizing project health with green/yellow/red status, surfacing risks and decisions that need stakeholder attention, or turning a pile of project tracker activity into a reada…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "operations/skills/status-report",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 2571,
+   "digest": "sha256:7d13b978523e401447753caf31176b52f3c2de5e126bc9d04f3d744e24931621",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "ticket-triage",
+   "title": "Ticket triage",
+   "description": "Triage and prioritize a support ticket or customer issue. Use when a new ticket comes in and needs categorization, assigning P1-P4 priority, deciding which team should handle it, or checking whether it's a duplicate or known issue before routing.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "customer-support/skills/ticket-triage",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11276,
+   "digest": "sha256:8c100bc8cc902902e6e7feb1cc56a6b594e97c3745b39a621b250f0b543166dc",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "support"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "triage-nda",
+   "title": "Triage nda",
+   "description": "Rapidly triage an incoming NDA and classify it as GREEN (standard approval), YELLOW (counsel review), or RED (full legal review). Use when a new NDA arrives from sales or business development, when screening for embedded non-solicits, non-competes, or missing carveouts, or when deciding whether an…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "legal/skills/triage-nda",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 14583,
+   "digest": "sha256:80ef33d9b3262e1d5c93dd623223e75406fb12fd4c17f0ba4f85179f4b3beee0",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "legal"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "user-research",
+   "title": "User research",
+   "description": "Plan, conduct, and synthesize user research. Trigger with \"user research plan\", \"interview guide\", \"usability test\", \"survey design\", \"research questions\", or when the user needs help with any aspect of understanding their users through research.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "design/skills/user-research",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 1751,
+   "digest": "sha256:8566dbb0172983382a499fa9e62e4d04cafb61fec8e1f33505b6278e598be178",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "design",
+    "product"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "variance-analysis",
+   "title": "Variance analysis",
+   "description": "Decompose financial variances into drivers with narrative explanations and waterfall analysis. Use when analyzing budget vs. actual, period-over-period changes, revenue or expense variances, or preparing variance commentary for leadership.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "finance/skills/variance-analysis",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11232,
+   "digest": "sha256:d697c3e790b1e624311a418688e68df1328d79aeb95151fce275a80d847651a3",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "finance"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "write-spec",
+   "title": "Write spec",
+   "description": "Write a feature spec or PRD from a problem statement or feature idea. Use when turning a vague idea or user request into a structured document, scoping a feature with goals and non-goals, defining success metrics and acceptance criteria, or breaking a big ask into a phased spec.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/knowledge-work-plugins",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "path": "product-management/skills/write-spec",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 12326,
+   "digest": "sha256:fec89633305f53b2bbb1c3bb492eebb9932cad3d371ca3f3e073905f97d9e273",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "product"
+   ],
+   "signals": {
+    "stars": 29775,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "grammar-check",
+   "title": "Grammar check",
+   "description": "Identify grammar, logical, and flow errors in text and suggest targeted fixes without rewriting the entire text. Use when proofreading content, checking writing quality, or reviewing a draft.",
+   "publisher": "phuryn",
+   "repo": "https://github.com/phuryn/pm-skills",
+   "sha": "c68487d721e419ec87af1ae6412a842978eab785",
+   "path": "pm-toolkit/skills/grammar-check",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 9673,
+   "digest": "sha256:57bc422e098d3fd07b2701499b2a17eb69b67b83cf8bda0b42fd4cae702ae951",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "documentation"
+   ],
+   "signals": {
+    "stars": 27083,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "release-notes",
+   "title": "Release notes",
+   "description": "Generate user-facing release notes from tickets, PRDs, or changelogs. Creates clear, engaging summaries organized by category (new features, improvements, fixes). Use when writing release notes, creating changelogs, announcing product updates, or summarizing what shipped.",
+   "publisher": "phuryn",
+   "repo": "https://github.com/phuryn/pm-skills",
+   "sha": "c68487d721e419ec87af1ae6412a842978eab785",
+   "path": "pm-execution/skills/release-notes",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 2569,
+   "digest": "sha256:3e6e9344adfb0482434a67e0d3e8f60b0000925805de49bdfff8dd57b8ccfbad",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "documentation",
+    "product"
+   ],
+   "signals": {
+    "stars": 27083,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "summarize-meeting",
+   "title": "Summarize meeting",
+   "description": "Summarize a meeting transcript into structured notes with date, participants, topic, key decisions, summary points, and action items. Use when processing meeting recordings, creating meeting notes, writing meeting minutes, or recapping discussions.",
+   "publisher": "phuryn",
+   "repo": "https://github.com/phuryn/pm-skills",
+   "sha": "c68487d721e419ec87af1ae6412a842978eab785",
+   "path": "pm-execution/skills/summarize-meeting",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 2997,
+   "digest": "sha256:4912c79bce9b9b474445d772a7c9a70e976115c250c8ad648ebd0a7f4c3281b3",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 27083,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "swot-analysis",
+   "title": "Swot analysis",
+   "description": "Perform a detailed SWOT analysis — strengths, weaknesses, opportunities, and threats with actionable recommendations. Use when doing strategic assessment, competitive analysis, or evaluating a product or business position.",
+   "publisher": "phuryn",
+   "repo": "https://github.com/phuryn/pm-skills",
+   "sha": "c68487d721e419ec87af1ae6412a842978eab785",
+   "path": "pm-product-strategy/skills/swot-analysis",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 3813,
+   "digest": "sha256:19e90f89a7ce04e2decb669aad479fa3704c371053866dfeaa40cd98fb587025",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "product"
+   ],
+   "signals": {
+    "stars": 27083,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "test-scenarios",
+   "title": "Test scenarios",
+   "description": "Create comprehensive test scenarios from user stories with test objectives, starting conditions, user roles, step-by-step actions, and expected outcomes. Use when writing QA test cases, creating test plans, defining acceptance tests, or preparing for feature validation.",
+   "publisher": "phuryn",
+   "repo": "https://github.com/phuryn/pm-skills",
+   "sha": "c68487d721e419ec87af1ae6412a842978eab785",
+   "path": "pm-execution/skills/test-scenarios",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 3472,
+   "digest": "sha256:2474d54ea8b0f430367a7a62240c04ff1614e6239748cca80f772c457dc16a10",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "product",
+    "testing"
+   ],
+   "signals": {
+    "stars": 27083,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "commit",
+   "title": "Commit",
+   "description": "Use for every request to commit changes or draft a commit message. Creates Sentry-style conventional commits with issue references.",
+   "publisher": "Sentry",
+   "repo": "https://github.com/getsentry/skills",
+   "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b",
+   "path": "skills/commit",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 1865,
+   "digest": "sha256:e5eae0d2b28f0b16c86e0fe78200be1b24ca9280f2de0fe80433d48a428afe60",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 1058,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "find-bugs",
+   "title": "Find bugs",
+   "description": "Find bugs, security vulnerabilities, and code quality issues in local branch changes. Use when asked to review changes, find bugs, security review, or audit code on the current branch.",
+   "publisher": "Sentry",
+   "repo": "https://github.com/getsentry/skills",
+   "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b",
+   "path": "skills/find-bugs",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 2830,
+   "digest": "sha256:56f36a36515224b8807e50963a841959c27b3b605ee41b8bb75190f97cb7fea6",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "review",
+    "security"
+   ],
+   "signals": {
+    "stars": 1058,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "pr-writer",
+   "title": "Pr writer",
+   "description": "Create or refresh reviewer-facing PR titles and descriptions. Use when opening a PR, updating its title or body, or preparing branch changes for review.",
+   "publisher": "Sentry",
+   "repo": "https://github.com/getsentry/skills",
+   "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b",
+   "path": "skills/pr-writer",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 5,
+   "bytes": 21546,
+   "digest": "sha256:490dfee4a21b1f12163fc359d494f1a78e33cd2514b449363dda6dce232aeeff",
+   "risk": "medium",
+   "findings_count": 0,
+   "categories": [
+    "documentation",
+    "engineering"
+   ],
+   "signals": {
+    "stars": 1058,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "bundled",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "brainstorming",
+   "title": "Brainstorming",
+   "description": "You MUST use this before any creative work - creating features, building components, adding functionality, modifying behavior, or planning anything new, in software or out of it (a talk, a business, a renovation).",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/brainstorming",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 8,
+   "bytes": 73946,
+   "digest": "sha256:01b66470352a1c04148a55f15ffc4450363f00713b1c46df05bb4bd80ad61b24",
+   "risk": "high",
+   "findings_count": 11,
+   "categories": [
+    "engineering",
+    "product"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "executing-plans",
+   "title": "Executing plans",
+   "description": "Use when executing an implementation plan in the current session as the implementer yourself — your human partner chose inline execution, or no subagent tool is available",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/executing-plans",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 3,
+   "bytes": 23060,
+   "digest": "sha256:6a78feadeb4fc5a41d751cc5ed01ccba53e55d01fe3e63031114cefd6b92b0ce",
+   "risk": "high",
+   "findings_count": 4,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "subagent-driven-development",
+   "title": "Subagent driven development",
+   "description": "Use when executing implementation plans with independent tasks in the current session",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/subagent-driven-development",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 7,
+   "bytes": 59739,
+   "digest": "sha256:7e4d873926af5e6b862214d334c0c03ce9d961553bd46bf524c9a0c4e86841fe",
+   "risk": "high",
+   "findings_count": 6,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "systematic-debugging",
+   "title": "Systematic debugging",
+   "description": "Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes",
+   "publisher": "obra",
+   "repo": "https://github.com/obra/superpowers",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "path": "skills/systematic-debugging",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 11,
+   "bytes": 40842,
+   "digest": "sha256:7c2628773e52f1687e74f9d802f2ea1c2cbae24ef5ca3fda0b8f21340f50d590",
+   "risk": "high",
+   "findings_count": 3,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 299721,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "improve-codebase-architecture",
+   "title": "Improve codebase architecture",
+   "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
+   "publisher": "Matt Pocock",
+   "repo": "https://github.com/mattpocock/skills",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "path": "skills/engineering/improve-codebase-architecture",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 3,
+   "bytes": 12807,
+   "digest": "sha256:21e81aed6d25a2b16ad0e6b9ec65b398145a110d11fd76951263d13372822e9d",
+   "risk": "high",
+   "findings_count": 2,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 292569,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "brand-guidelines",
+   "title": "Brand guidelines",
+   "description": "Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from having Anthropic's look-and-feel. Use it when brand colors or style guidelines, visual formatting, or company design standards apply.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/skills",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "path": "skills/brand-guidelines",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 13580,
+   "digest": "sha256:ddf22e788d6aa33e818ec59be85d4fba5aeda23075518dafc412bb90b7cc63ce",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "design"
+   ],
+   "signals": {
+    "stars": 181355,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "claude-api",
+   "title": "Claude api",
+   "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration. TRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any f…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/skills",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "path": "skills/claude-api",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 96,
+   "bytes": 2079868,
+   "digest": "sha256:fde28004c33b154afbffdb032db0ce41d4244fd3fdd12a779ae3f7a260413d61",
+   "risk": "high",
+   "findings_count": 134,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 181355,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "frontend-design",
+   "title": "Frontend design",
+   "description": "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/skills",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "path": "skills/frontend-design",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 19564,
+   "digest": "sha256:7e9c2af00fd5b3144f49ce6fb1b16037b392ab9c2f049423b0b6114d99381ba2",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "design"
+   ],
+   "signals": {
+    "stars": 181355,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "internal-comms",
+   "title": "Internal comms",
+   "description": "A set of resources to help me write all kinds of internal communications, using the formats that my company likes to use. Claude should use this skill whenever asked to write some sort of internal communications (status reports, leadership updates, 3P updates, company newsletters, FAQs, incident re…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/skills",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "path": "skills/internal-comms",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 6,
+   "bytes": 22393,
+   "digest": "sha256:9ad903576ebda039209c784708f8a69135aef47ce3532438d0870a00ca30d00d",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "operations"
+   ],
+   "signals": {
+    "stars": 181355,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "mcp-builder",
+   "title": "Mcp builder",
+   "description": "Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK).",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/skills",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "path": "skills/mcp-builder",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 10,
+   "bytes": 121756,
+   "digest": "sha256:5a904ea67e691bc7454cc2a631f24a52f3a95f397d76862cdfc6a9370d79363d",
+   "risk": "high",
+   "findings_count": 17,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 181355,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "skill-creator",
+   "title": "Skill creator",
+   "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better…",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/skills",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "path": "skills/skill-creator",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 18,
+   "bytes": 224992,
+   "digest": "sha256:4557d54c524c67984e4bab23fa436e90196292ae8df4d2093f0ce0e6951bfc1c",
+   "risk": "high",
+   "findings_count": 26,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 181355,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "webapp-testing",
+   "title": "Webapp testing",
+   "description": "Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.",
+   "publisher": "Anthropic",
+   "repo": "https://github.com/anthropics/skills",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "path": "skills/webapp-testing",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 6,
+   "bytes": 22394,
+   "digest": "sha256:abfaf4cc6cf572346e22fed42dc0cfaacd2f64c5d9667f44a94b02ea0d3b1342",
+   "risk": "high",
+   "findings_count": 9,
+   "categories": [
+    "testing"
+   ],
+   "signals": {
+    "stars": 181355,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "browser-testing-with-devtools",
+   "title": "Browser testing with devtools",
+   "description": "Tests in real browsers via Chrome DevTools MCP. Use when building or debugging anything that runs in a browser. Use when you need to inspect the DOM, capture console errors, analyze network requests, profile performance, or verify visual output with real runtime data. Requires the chrome-devtools M…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/browser-testing-with-devtools",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 14539,
+   "digest": "sha256:73640726c8afa212289ca2fb1dfaa2f73eec968d717b1f78448a4fd74d717272",
+   "risk": "high",
+   "findings_count": 3,
+   "categories": [
+    "testing"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "code-simplification",
+   "title": "Code simplification",
+   "description": "Simplifies code for clarity. Use when refactoring code for clarity without changing behavior. Use when code works but is harder to read, maintain, or extend than it should be. Use when reviewing code that has accumulated unnecessary complexity.",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/code-simplification",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 13545,
+   "digest": "sha256:a6d4aba8358a46634487e1c4b612cd021a41f3227fbe0b131270e2ebaaea8440",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "review"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "security-and-hardening",
+   "title": "Security and hardening",
+   "description": "Hardens code against vulnerabilities. Use when auditing an input handler for vulnerabilities, when handling user input, authentication, data storage, or external integrations, or when checking a login flow is safe against the OWASP Top Ten. Use when building any feature that accepts untrusted data,…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/security-and-hardening",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 30595,
+   "digest": "sha256:b8cd1febebf5d3d29952fb7e3d886227a90c5137ca1e4d8fe78858121aebd940",
+   "risk": "high",
+   "findings_count": 2,
+   "categories": [
+    "security"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "source-driven-development",
+   "title": "Source driven development",
+   "description": "Grounds every implementation decision in official documentation. Use when you want to verify an approach against the official docs before implementing it, or when you want authoritative, source-cited code free from outdated patterns. Use when building with any framework or library where correctness…",
+   "publisher": "Addy Osmani",
+   "repo": "https://github.com/addyosmani/agent-skills",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "path": "skills/source-driven-development",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 10038,
+   "digest": "sha256:fb7c9eaabb0e3254d0e945dbbd2dd766c0eb3ed96de8b76a6763d1a5968bee68",
+   "risk": "high",
+   "findings_count": 2,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 106974,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "cold-email",
+   "title": "Cold email",
+   "description": "Write and run B2B cold outbound that gets replies, from cold emails and follow-ups to sending setup, LinkedIn, multichannel cadences, and reply handling. Use when the user mentions \"cold email,\" \"cold outreach,\" \"outbound,\" \"prospecting email,\" \"SDR emails,\" \"follow-up sequence,\" \"nobody's replying…",
+   "publisher": "Corey Haines",
+   "repo": "https://github.com/coreyhaines31/marketingskills",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "path": "skills/cold-email",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 12,
+   "bytes": 76751,
+   "digest": "sha256:7a60d40c16747eaf419364056ac9e5caff74809f5f1db236d9a817b168a83d9e",
+   "risk": "high",
+   "findings_count": 2,
+   "categories": [
+    "marketing",
+    "sales"
+   ],
+   "signals": {
+    "stars": 54877,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "content-strategy",
+   "title": "Content strategy",
+   "description": "When the user wants to plan a content strategy, decide what content to create, or figure out what topics to cover. Also use when the user mentions \"content strategy,\" \"what should I write about,\" \"content ideas,\" \"blog strategy,\" \"topic clusters,\" \"content planning,\" \"editorial calendar,\" \"content…",
+   "publisher": "Corey Haines",
+   "repo": "https://github.com/coreyhaines31/marketingskills",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "path": "skills/content-strategy",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 43523,
+   "digest": "sha256:1512d2f1409ab644fde38354ed0f946ea46da95dde6ee579c504a629ca62c7eb",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "marketing"
+   ],
+   "signals": {
+    "stars": 54877,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "copywriting",
+   "title": "Copywriting",
+   "description": "When the user wants to write, rewrite, or improve marketing copy for any page, including homepage, landing pages, pricing pages, feature pages, about pages, or product pages. Also use when the user says \"write copy for,\" \"improve this copy,\" \"rewrite this page,\" \"marketing copy,\" \"headline help,\" \"…",
+   "publisher": "Corey Haines",
+   "repo": "https://github.com/coreyhaines31/marketingskills",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "path": "skills/copywriting",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 5,
+   "bytes": 69232,
+   "digest": "sha256:7a467bb8414224a545b3154ccdaaaf86dbc3da90bfc2bb2aebfadc2e3e4b867f",
+   "risk": "high",
+   "findings_count": 10,
+   "categories": [
+    "marketing"
+   ],
+   "signals": {
+    "stars": 54877,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "pricing",
+   "title": "Pricing",
+   "description": "When the user wants help with pricing decisions, packaging, or monetization strategy. Also use when the user mentions 'pricing,' 'pricing tiers,' 'freemium,' 'free trial,' 'packaging,' 'price increase,' 'value metric,' 'Van Westendorp,' 'willingness to pay,' 'monetization,' 'how much should I charg…",
+   "publisher": "Corey Haines",
+   "repo": "https://github.com/coreyhaines31/marketingskills",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "path": "skills/pricing",
+   "licence": "MIT",
+   "licence_class": "permissive",
+   "files": 6,
+   "bytes": 50614,
+   "digest": "sha256:2d7b18cfe9190920a5e36fd046f23e78affac1542fd634ba10d3539746beec71",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "marketing",
+    "product"
+   ],
+   "signals": {
+    "stars": 54877,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "huggingface-datasets",
+   "title": "Huggingface datasets",
+   "description": "Use this skill for Hugging Face Dataset Viewer API workflows that fetch subset/split metadata, paginate rows, search text, apply filters, download parquet URLs, and read size or statistics.",
+   "publisher": "Hugging Face",
+   "repo": "https://github.com/huggingface/skills",
+   "sha": "c3ff942be3e07116b475253f0a8fc4f54682c1a8",
+   "path": "skills/huggingface-datasets",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 4671,
+   "digest": "sha256:a4c7a02a81f5e19e03636c9616c574cb87dc6ec5ba5dbbe66decc1320a27e162",
+   "risk": "high",
+   "findings_count": 2,
+   "categories": [
+    "data"
+   ],
+   "signals": {
+    "stars": 11172,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "huggingface-gradio",
+   "title": "Huggingface gradio",
+   "description": "Build Gradio web UIs and demos in Python. Use when creating or editing Gradio apps, components, event listeners, layouts, or chatbots.",
+   "publisher": "Hugging Face",
+   "repo": "https://github.com/huggingface/skills",
+   "sha": "c3ff942be3e07116b475253f0a8fc4f54682c1a8",
+   "path": "skills/huggingface-gradio",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 2,
+   "bytes": 39222,
+   "digest": "sha256:4a61841a5d979b80f10ef83161fcb2c7cba2737b75ba5737f9dafcbbff652c8d",
+   "risk": "high",
+   "findings_count": 2,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 11172,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "huggingface-papers",
+   "title": "Huggingface papers",
+   "description": "Look up and read Hugging Face paper pages in markdown, and use the papers API for structured metadata such as authors, linked models/datasets/spaces, Github repo and project page. Use when the user shares a Hugging Face paper page URL, an arXiv URL or ID, or asks to summarize, explain, or analyze a…",
+   "publisher": "Hugging Face",
+   "repo": "https://github.com/huggingface/skills",
+   "sha": "c3ff942be3e07116b475253f0a8fc4f54682c1a8",
+   "path": "skills/huggingface-papers",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 9348,
+   "digest": "sha256:4a49169c04447a7eec73af9557987381f6016723acf46715dfee77d5c811add5",
+   "risk": "high",
+   "findings_count": 4,
+   "categories": [
+    "research"
+   ],
+   "signals": {
+    "stars": 11172,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "trl-training",
+   "title": "Trl training",
+   "description": "Post-train LLMs with TRL (Transformers Reinforcement Learning) — SFT, DPO, GRPO, KTO, and reward-model training. Use when writing or debugging training code with the TRL Python API or the trl CLI.",
+   "publisher": "Hugging Face",
+   "repo": "https://github.com/huggingface/skills",
+   "sha": "c3ff942be3e07116b475253f0a8fc4f54682c1a8",
+   "path": "skills/trl-training",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 4323,
+   "digest": "sha256:4d2fb48b9e7c153a60adc2c9213c01cc43a85839b2e641ebfef3dc3300590f2d",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "data",
+    "research"
+   ],
+   "signals": {
+    "stars": 11172,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "durable-objects",
+   "title": "Durable objects",
+   "description": "Build, debug, or review Cloudflare Durable Objects code for persistent state and coordination.",
+   "publisher": "Cloudflare",
+   "repo": "https://github.com/cloudflare/skills",
+   "sha": "be9f5e1e940fcf8567ff723cc03b8a8448c4082f",
+   "path": "skills/durable-objects",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 18955,
+   "digest": "sha256:5e3533ea47a76a5bd8306aca36e1043276d35a19ab70aa72d4d19023d356b424",
+   "risk": "high",
+   "findings_count": 3,
+   "categories": [
+    "cloud"
+   ],
+   "signals": {
+    "stars": 3066,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "web-perf",
+   "title": "Web perf",
+   "description": "Audit, diagnose, or optimize website loading and interaction performance, Core Web Vitals, and Lighthouse performance scores.",
+   "publisher": "Cloudflare",
+   "repo": "https://github.com/cloudflare/skills",
+   "sha": "be9f5e1e940fcf8567ff723cc03b8a8448c4082f",
+   "path": "skills/web-perf",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 8259,
+   "digest": "sha256:8f96cf1dd7d77f844c8547f0c0932e423d470a937911bedd291d7d7dff13be45",
+   "risk": "high",
+   "findings_count": 3,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 3066,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "workers-best-practices",
+   "title": "Workers best practices",
+   "description": "Cloudflare Workers best practices for production applications. Use when writing, reviewing, or configuring Workers.",
+   "publisher": "Cloudflare",
+   "repo": "https://github.com/cloudflare/skills",
+   "sha": "be9f5e1e940fcf8567ff723cc03b8a8448c4082f",
+   "path": "skills/workers-best-practices",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 4,
+   "bytes": 28786,
+   "digest": "sha256:5eed40ca017e6845d86dc08247f963695da6a15bce76509f4ae5774635c74658",
+   "risk": "high",
+   "findings_count": 10,
+   "categories": [
+    "cloud",
+    "engineering"
+   ],
+   "signals": {
+    "stars": 3066,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "workers-profiling",
+   "title": "Workers profiling",
+   "description": "Profile or debug CPU usage and memory allocation in deployed Cloudflare Workers and Durable Objects. Then use this information to optimize your code.",
+   "publisher": "Cloudflare",
+   "repo": "https://github.com/cloudflare/skills",
+   "sha": "be9f5e1e940fcf8567ff723cc03b8a8448c4082f",
+   "path": "skills/workers-profiling",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 1976,
+   "digest": "sha256:3a9c98ab8beddd82e030180321091d7dc4ffe1b4f641842253b44ae18c0c2f5c",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "cloud",
+    "engineering"
+   ],
+   "signals": {
+    "stars": 3066,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "wrangler",
+   "title": "Wrangler",
+   "description": "Run or troubleshoot Wrangler CLI commands in projects that have a wrangler.jsonc, wrangler.json, or wrangler.toml file, including local development, Previews, deployment, and resource management. For new projects and projects without a Wrangler configuration file, use the cf CLI instead.",
+   "publisher": "Cloudflare",
+   "repo": "https://github.com/cloudflare/skills",
+   "sha": "be9f5e1e940fcf8567ff723cc03b8a8448c4082f",
+   "path": "skills/wrangler",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 11626,
+   "digest": "sha256:e130f18347391c65128e09f3be07200b0ec2db541a35d649b37abe4ec2b9718e",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "cloud"
+   ],
+   "signals": {
+    "stars": 3066,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "code-simplifier",
+   "title": "Code simplifier",
+   "description": "Simplifies and refines code for clarity, consistency, and maintainability while preserving all functionality. Use when asked to \"simplify code\", \"clean up code\", \"refactor for clarity\", \"improve readability\", or review recently modified code for elegance. Focuses on project-specific best practices.",
+   "publisher": "Sentry",
+   "repo": "https://github.com/getsentry/skills",
+   "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b",
+   "path": "skills/code-simplifier",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 3963,
+   "digest": "sha256:5bea1f77cd2f6c178a6cd8fd128b5cd5bef905f61197d98eaf2915f5d8f8aa71",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "review"
+   ],
+   "signals": {
+    "stars": 1058,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "create-branch",
+   "title": "Create branch",
+   "description": "Create a git branch following Sentry naming conventions. Use when asked to \"create a branch\", \"new branch\", \"start a branch\", \"make a branch\", \"switch to a new branch\", or when starting new work on the default branch.",
+   "publisher": "Sentry",
+   "repo": "https://github.com/getsentry/skills",
+   "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b",
+   "path": "skills/create-branch",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 1,
+   "bytes": 2528,
+   "digest": "sha256:ee551cf9bde36393edd8cab8f9221d211650109d6c48d1869bc25b67f2d30ff6",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 1058,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "iterate-pr",
+   "title": "Iterate pr",
+   "description": "Iterate on a PR until actionable CI passes and high/medium review feedback is addressed. Use for PR CI failures, review feedback, or green-check loops; do not wait for human approval, draft status, or merge gates.",
+   "publisher": "Sentry",
+   "repo": "https://github.com/getsentry/skills",
+   "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b",
+   "path": "skills/iterate-pr",
+   "licence": "Apache-2.0",
+   "licence_class": "permissive",
+   "files": 7,
+   "bytes": 46635,
+   "digest": "sha256:e88245f28769fc08297b7542a3713e5f4fde73780cb43e82783d0f56799a1eb5",
+   "risk": "high",
+   "findings_count": 7,
+   "categories": [
+    "engineering"
+   ],
+   "signals": {
+    "stars": 1058,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "refactor-module",
+   "title": "Refactor module",
+   "description": "Transform monolithic Terraform configurations into reusable, maintainable modules following HashiCorp's module design principles and community best practices.",
+   "publisher": "HashiCorp",
+   "repo": "https://github.com/hashicorp/agent-skills",
+   "sha": "f706481af9b8fedb66de909f6243ad29601afa0c",
+   "path": "plugins/terraform/skills/refactor-module",
+   "licence": "MPL-2.0",
+   "licence_class": "copyleft",
+   "files": 1,
+   "bytes": 14729,
+   "digest": "sha256:530171285f46e03a839941c3eb6231fa0b9164ceb53e129357e80553552755c9",
+   "risk": "high",
+   "findings_count": 3,
+   "categories": [
+    "cloud"
+   ],
+   "signals": {
+    "stars": 898,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "run-acceptance-tests",
+   "title": "Run acceptance tests",
+   "description": "Guide for running acceptance tests for a Terraform provider. Use this when asked to run an acceptance test or to run a test with the prefix `TestAcc`, when a test fails with missing environment variables, or when diagnosing a failing or suspiciously passing acceptance test.",
+   "publisher": "HashiCorp",
+   "repo": "https://github.com/hashicorp/agent-skills",
+   "sha": "f706481af9b8fedb66de909f6243ad29601afa0c",
+   "path": "plugins/terraform/skills/run-acceptance-tests",
+   "licence": "MPL-2.0",
+   "licence_class": "copyleft",
+   "files": 1,
+   "bytes": 3059,
+   "digest": "sha256:7dee7a855af9b2cbb23179205a8614f0eb9a6b17c749426baba5574681367e86",
+   "risk": "low",
+   "findings_count": 0,
+   "categories": [
+    "cloud",
+    "testing"
+   ],
+   "signals": {
+    "stars": 898,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "terraform-style-guide",
+   "title": "Terraform style guide",
+   "description": "Generate Terraform HCL code following HashiCorp's official style conventions and best practices. Use when writing, reviewing, or generating Terraform configurations.",
+   "publisher": "HashiCorp",
+   "repo": "https://github.com/hashicorp/agent-skills",
+   "sha": "f706481af9b8fedb66de909f6243ad29601afa0c",
+   "path": "plugins/terraform/skills/terraform-style-guide",
+   "licence": "MPL-2.0",
+   "licence_class": "copyleft",
+   "files": 2,
+   "bytes": 11835,
+   "digest": "sha256:381763131997a8706ba7d34707ee739ba2099ca9a0964a474c51af93a340d49b",
+   "risk": "high",
+   "findings_count": 3,
+   "categories": [
+    "cloud"
+   ],
+   "signals": {
+    "stars": 898,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  },
+  {
+   "id": "terraform-test",
+   "title": "Terraform test",
+   "description": "Comprehensive guide for writing and running Terraform tests. Use when creating test files (.tftest.hcl), writing test scenarios with run blocks, validating infrastructure behavior with assertions, mocking providers and data sources, testing module outputs and resource configurations, or troubleshoo…",
+   "publisher": "HashiCorp",
+   "repo": "https://github.com/hashicorp/agent-skills",
+   "sha": "f706481af9b8fedb66de909f6243ad29601afa0c",
+   "path": "plugins/terraform/skills/terraform-test",
+   "licence": "MPL-2.0",
+   "licence_class": "copyleft",
+   "files": 4,
+   "bytes": 24207,
+   "digest": "sha256:f9ef9e192a101a63460d2c7b5c34208007a59c6fa623b3b759156857ef230998",
+   "risk": "high",
+   "findings_count": 1,
+   "categories": [
+    "cloud",
+    "testing"
+   ],
+   "signals": {
+    "stars": 898,
+    "stars_as_of": "2026-10-15"
+   },
+   "delivery": "git",
+   "state": "available",
+   "installed_version": null,
+   "blocked_reason": null
+  }
+ ]
+}

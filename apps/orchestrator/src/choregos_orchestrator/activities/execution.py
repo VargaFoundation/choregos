@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 from choregos_adapters.executor.log_archive import archive_run_logs
 from choregos_api.db.models import Run, RunEvent, WorkItem
+from choregos_api.db.session import limiter_aux_organisations
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
@@ -28,6 +29,7 @@ from ..config import get_settings
 from ..gitops import PLAGES_PRIVEES
 from .base import db, project_bundle, without_secrets
 from .bilan import close_run_spend
+from .remote import mint_remote_token
 from .run_key import mint_run_key
 
 
@@ -198,15 +200,28 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
                 ttl_minutes=stage_input.budget.max_minutes + 15,
             )
         gateway_key = await _gateway_key(session, bundle, run, stage_input)
+        # A remote agent's access token (ADR 0062): exchanged from the organisation's credential,
+        # short-lived, for the run's Secret only. The provider rotates the refresh token at every
+        # exchange: the new one is committed BEFORE the executor starts, so that a failure after
+        # this line cannot lose it.
+        remote_token = await mint_remote_token(session, bundle.project.org_id, stage_input)
+        if stage_input.remote is not None:
+            await session.commit()
+            # The scope of the transaction ended with the commit (RLS is transaction-local).
+            await limiter_aux_organisations(session, "*")
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
             namespace=_runner_namespace(settings, bundle.slug),
-            # A job names its image (ADR 0056); prepare_stage resolved it against `job_images`.
-            runner_image=(stage_input.job.image if stage_input.job else None) or settings.runner_image,
+            # A job names its image (ADR 0056), an agent written in code too (ADR 0063); prepare_stage
+            # resolved each against the operator's map. Neither names a free reference.
+            runner_image=(stage_input.job.image if stage_input.job else None)
+            or stage_input.agent.image
+            or settings.runner_image,
             api_url=stage_input.callbacks.api_url,
             run_token=run_token,
             gateway_key=gateway_key,
+            remote_token=remote_token,
             stage_input=stage_input.model_copy(update={"gateway_key": None}),
             timeout_minutes=stage_input.budget.max_minutes + 10,
             runtime_class=classe_d_execution(settings, bundle.policy),
@@ -260,9 +275,10 @@ async def _gateway_key(session: Any, bundle: Any, run: Run | None, stage_input: 
     history (before #519). That key is used, and the row's copy leaves the row — the runner reads
     it from its Secret now.
 
-    A job (ADR 0056) calls no model: it gets no key, minted or legacy.
+    A job (ADR 0056) calls no model: it gets no key, minted or legacy. Nor does a remote agent
+    (ADR 0062): it brings its own model.
     """
-    if stage_input.job is not None:
+    if stage_input.job is not None or stage_input.remote is not None:
         return None
     if run is None:
         return stage_input.gateway_key

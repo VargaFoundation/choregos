@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "726f3e546369db289160b8d42195590f00b6432887e17bf19070dcc9a347fe39"
+ },
+ "id": "shipping-and-launch",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/shipping-and-launch",
+ "repo": "https://github.com/addyosmani/agent-skills",
+ "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+}

@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ApprovalPolicy
+metadata: {name: hr}
+spec:
+  rules:
+    # Recording what a workflow has just opened changes nothing outside the registry: the policy decides.
+    - when: "action.risk == 'low'"
+      approve: auto
+    # Declaring someone gone closes their accesses in the registry: a person, re-authenticated.
+    - when: "true"
+      approvers: [{role: owner, min: 1}]
+      stepUp: {maxAgeMinutes: 10}
+      sla: {remindAfter: 4h, escalateAfter: 24h, expireAfter: 72h}

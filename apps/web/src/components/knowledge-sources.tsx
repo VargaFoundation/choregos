@@ -33,7 +33,7 @@ export function KnowledgeSources({
   onChange: () => void;
 }) {
   const [kind, setKind] = useState<Kind>("sharepoint");
-  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", ref: "main", paths: "*.md" });
+  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", exclude: "", ref: "main", paths: "*.md" });
   const [refresh, setRefresh] = useState<RefreshDraft>(draftOf());
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<RefreshDraft>(draftOf());
@@ -138,7 +138,7 @@ export function KnowledgeSources({
               api.createKnowledgeSource(org, slug, {
                 kind,
                 name: fields.name || KIND[kind],
-                connector: CONNECTED.includes(kind) ? fields.connector : null,
+                connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
                 config: sourceConfig(kind, { ...fields, attachments }),
                 ...refreshBody(refresh),
               }),
@@ -191,10 +191,21 @@ export function KnowledgeSources({
           ) : (
             <Input aria-label="url" placeholder="https://…" value={fields.url} onChange={set("url")} className="sm:col-span-2" />
           )}
+          {kind === "web" && (
+            <Input aria-label="excluded paths" placeholder="excluded paths, e.g. /es/*, /pt/*" value={fields.exclude} onChange={set("exclude")} className="sm:col-span-2" />
+          )}
           {kind === "git" && (
             <>
               <Input aria-label="ref" placeholder="branch or commit" value={fields.ref} onChange={set("ref")} />
               <Input aria-label="paths" placeholder="docs/*.md, *.md" value={fields.paths} onChange={set("paths")} />
+              <Select aria-label="git connector" value={fields.connector} onChange={set("connector")} className="sm:col-span-2">
+                <option value="">public repository (no connector)</option>
+                {pickable.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
             </>
           )}
           <div>

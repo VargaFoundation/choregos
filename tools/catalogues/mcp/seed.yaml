@@ -1,0 +1,925 @@
+# The reviewed list behind the MCP catalogue (ADR 0065). Adding a server is a line here, in a pull
+# request; `make catalogues` resolves it against the recorded registry and GitHub answers and
+# applies `exclusions.yaml`. A line that cannot be resolved is dropped with its reason.
+#
+# Fields: id, title, publisher, description (English, 300 characters at most), categories,
+# auth (none | bearer | oauth | header:<Name>), registry (official MCP Registry name, optional),
+# repo (owner/name of the server's own repository, optional), transport (stdio forces the
+# package even when a remote exists), package (the registry-style package of a stdio server when the
+# registry does not carry it), stars (false when the repository is a monorepo whose stars say
+# nothing about the MCP server), reference (a modelcontextprotocol reference server).
+# A hosted remote the registry does not list goes in `overrides.yaml`.
+
+# ----- source control and developer tools
+- id: github
+  title: "GitHub"
+  publisher: "GitHub"
+  description: "Repositories, issues, pull requests, Actions runs and code search on GitHub, through GitHub's hosted MCP server. Takes a personal access token as bearer."
+  categories: [source-control, developer-tools]
+  auth: bearer
+  registry: io.github.github/github-mcp-server
+  repo: github/github-mcp-server
+- id: gitlab
+  title: "GitLab"
+  publisher: "GitLab"
+  description: "Projects, merge requests, issues and pipelines on GitLab, through the MCP endpoint GitLab hosts itself."
+  categories: [source-control, developer-tools]
+  auth: oauth
+  registry: com.gitlab/mcp
+- id: atlassian
+  title: "Atlassian Rovo"
+  publisher: "Atlassian"
+  description: "Jira, Confluence and Compass through Atlassian's hosted Rovo MCP server."
+  categories: [project-management, documentation]
+  auth: oauth
+  registry: com.atlassian/atlassian-mcp-server
+  repo: atlassian/atlassian-mcp-server
+- id: mcp-atlassian
+  title: "Atlassian (community)"
+  publisher: "sooperset"
+  description: "Jira and Confluence over their REST APIs with an API token, a widely used community server. Runs as a local process."
+  categories: [project-management, documentation]
+  auth: bearer
+  repo: sooperset/mcp-atlassian
+  package: pypi:mcp-atlassian
+- id: linear
+  title: "Linear"
+  publisher: "Linear"
+  description: "Issues, projects and cycles in Linear. A Linear API key works as bearer."
+  categories: [project-management, developer-tools]
+  auth: bearer
+  registry: app.linear/linear
+- id: sentry
+  title: "Sentry"
+  publisher: "Sentry"
+  description: "Issues, events, releases and traces in Sentry, through Sentry's hosted MCP server."
+  categories: [observability, developer-tools]
+  auth: oauth
+  registry: io.github.getsentry/sentry-mcp
+  repo: getsentry/sentry-mcp
+- id: circleci
+  title: "CircleCI"
+  publisher: "CircleCI"
+  description: "Build failures, logs, test results and pipeline status on CircleCI."
+  categories: [developer-tools]
+  auth: oauth
+  registry: com.circleci/mcp
+- id: semgrep
+  title: "Semgrep"
+  publisher: "Semgrep"
+  description: "Static analysis of code with Semgrep rules, through Semgrep's hosted MCP server."
+  categories: [security, developer-tools]
+  auth: oauth
+- id: postman
+  title: "Postman"
+  publisher: "Postman"
+  description: "Collections, environments and API specifications in Postman workspaces. A Postman API key works as bearer."
+  categories: [developer-tools]
+  auth: bearer
+  registry: com.postman/postman-mcp-server
+  repo: postmanlabs/postman-mcp-server
+- id: context7
+  title: "Context7"
+  publisher: "Upstash"
+  description: "Up-to-date documentation and code examples of libraries, pulled into the prompt by library name. Works without a key at a low rate limit."
+  categories: [documentation, developer-tools]
+  auth: none
+  registry: io.github.upstash/context7
+  repo: upstash/context7
+- id: deepwiki
+  title: "DeepWiki"
+  publisher: "Cognition"
+  description: "Generated documentation and question answering over public GitHub repositories. No authentication."
+  categories: [documentation, developer-tools]
+  auth: none
+- id: microsoft-learn
+  title: "Microsoft Learn"
+  publisher: "Microsoft"
+  description: "Search and fetch Microsoft Learn documentation and code samples. No authentication."
+  categories: [documentation, cloud]
+  auth: none
+  registry: com.microsoft/microsoft-learn-mcp
+  repo: MicrosoftDocs/mcp
+- id: aws-knowledge
+  title: "AWS Knowledge"
+  publisher: "Amazon Web Services"
+  description: "AWS documentation, blog posts, architecture guidance and regional availability, through the hosted AWS Knowledge MCP server. No authentication."
+  categories: [documentation, cloud]
+  auth: none
+- id: aws-documentation
+  title: "AWS Documentation"
+  publisher: "Amazon Web Services"
+  description: "Search and read AWS documentation pages, as a local server from the awslabs collection."
+  categories: [documentation, cloud]
+  auth: none
+  repo: awslabs/mcp
+  package: pypi:awslabs.aws-documentation-mcp-server
+  stars: false
+- id: aws-cdk
+  title: "AWS CDK"
+  publisher: "Amazon Web Services"
+  description: "Guidance and patterns for building AWS infrastructure with the CDK, as a local server from the awslabs collection."
+  categories: [cloud, developer-tools]
+  auth: none
+  repo: awslabs/mcp
+  package: pypi:awslabs.cdk-mcp-server
+  stars: false
+- id: aws-terraform
+  title: "AWS Terraform"
+  publisher: "Amazon Web Services"
+  description: "Terraform best practices and provider documentation for AWS, as a local server from the awslabs collection."
+  categories: [cloud, developer-tools]
+  auth: none
+  repo: awslabs/mcp
+  package: pypi:awslabs.terraform-mcp-server
+  stars: false
+- id: aws-cost-analysis
+  title: "AWS Cost Analysis"
+  publisher: "Amazon Web Services"
+  description: "Cost estimates and pricing analysis for AWS services, as a local server from the awslabs collection."
+  categories: [cloud, finance]
+  auth: none
+  repo: awslabs/mcp
+  package: pypi:awslabs.cost-analysis-mcp-server
+  stars: false
+- id: chrome-devtools
+  title: "Chrome DevTools"
+  publisher: "Google"
+  description: "Drive and inspect a live Chrome browser: performance traces, network, console and DOM. Runs as a local process."
+  categories: [browser, developer-tools]
+  auth: none
+  registry: io.github.ChromeDevTools/chrome-devtools-mcp
+  repo: ChromeDevTools/chrome-devtools-mcp
+- id: playwright
+  title: "Playwright"
+  publisher: "Microsoft"
+  description: "Browser automation through accessibility snapshots rather than screenshots. Runs as a local process."
+  categories: [browser, developer-tools]
+  auth: none
+  repo: microsoft/playwright-mcp
+  package: npm:@playwright/mcp
+- id: terraform
+  title: "Terraform"
+  publisher: "HashiCorp"
+  description: "Terraform Registry providers, modules and policies, and HCP Terraform workspaces. Runs as a container the operator hosts."
+  categories: [cloud, developer-tools]
+  auth: bearer
+  registry: io.github.hashicorp/terraform-mcp-server
+  repo: hashicorp/terraform-mcp-server
+- id: kubernetes
+  title: "Kubernetes"
+  publisher: "Red Hat"
+  description: "Kubernetes and OpenShift resources, pods, logs and Helm releases, a native implementation without kubectl. Runs as a local process."
+  categories: [cloud, developer-tools]
+  auth: none
+  registry: io.github.containers/kubernetes-mcp-server
+  repo: containers/kubernetes-mcp-server
+- id: argocd
+  title: "Argo CD"
+  publisher: "Argo Project"
+  description: "Applications, sync status and resources managed by Argo CD."
+  categories: [cloud, developer-tools]
+  auth: bearer
+  repo: argoproj-labs/mcp-for-argocd
+  package: npm:argocd-mcp
+- id: docker-hub
+  title: "Docker Hub"
+  publisher: "Docker"
+  description: "Search and inspect images and repositories on Docker Hub."
+  categories: [developer-tools, cloud]
+  auth: bearer
+  repo: docker/hub-mcp
+  package: npm:@docker/hub-mcp
+- id: heroku
+  title: "Heroku"
+  publisher: "Heroku"
+  description: "Apps, dynos, add-ons and logs on the Heroku platform."
+  categories: [cloud]
+  auth: bearer
+  repo: heroku/heroku-mcp-server
+  package: npm:@heroku/mcp-server
+- id: vercel
+  title: "Vercel"
+  publisher: "Vercel"
+  description: "Projects, deployments and logs on Vercel, and Vercel documentation, through the hosted server."
+  categories: [cloud, developer-tools]
+  auth: oauth
+- id: cloudflare-docs
+  title: "Cloudflare Docs"
+  publisher: "Cloudflare"
+  description: "Search Cloudflare's developer documentation. No authentication."
+  categories: [documentation, cloud]
+  auth: none
+  registry: com.cloudflare.mcp/mcp
+  repo: cloudflare/mcp-server-cloudflare
+- id: cloudflare-observability
+  title: "Cloudflare Observability"
+  publisher: "Cloudflare"
+  description: "Debug Workers with logs and analytics from Cloudflare's hosted observability server."
+  categories: [observability, cloud]
+  auth: oauth
+  repo: cloudflare/mcp-server-cloudflare
+- id: cloudflare-radar
+  title: "Cloudflare Radar"
+  publisher: "Cloudflare"
+  description: "Internet traffic, attack and routing insights from Cloudflare Radar."
+  categories: [observability, security]
+  auth: oauth
+  repo: cloudflare/mcp-server-cloudflare
+- id: cloudflare-bindings
+  title: "Cloudflare Workers Bindings"
+  publisher: "Cloudflare"
+  description: "Build Workers with storage, AI and compute bindings (KV, R2, D1) on Cloudflare."
+  categories: [cloud, developer-tools]
+  auth: oauth
+  repo: cloudflare/mcp-server-cloudflare
+- id: supabase
+  title: "Supabase"
+  publisher: "Supabase"
+  description: "Manage Supabase projects, databases, migrations, edge functions and logs. A personal access token works as bearer."
+  categories: [databases, cloud]
+  auth: bearer
+  registry: com.supabase/mcp
+  repo: supabase-community/supabase-mcp
+- id: neon
+  title: "Neon"
+  publisher: "Neon"
+  description: "Manage Neon Postgres projects, branches and run SQL, including safe migrations on a temporary branch."
+  categories: [databases, cloud]
+  auth: bearer
+  registry: com.neon/mcp
+  repo: neondatabase/mcp-server-neon
+- id: planetscale
+  title: "PlanetScale"
+  publisher: "PlanetScale"
+  description: "PlanetScale databases, branches, schema and query insights, through the hosted server."
+  categories: [databases, cloud]
+  auth: oauth
+  registry: io.github.planetscale/mcp-server
+  repo: planetscale/mcp-server
+- id: firebase
+  title: "Firebase"
+  publisher: "Google"
+  description: "Firebase projects, Firestore, Auth, Cloud Functions and Hosting, as part of the Firebase CLI. Runs as a local process."
+  categories: [cloud, databases]
+  auth: none
+  registry: io.github.firebase/firebase-mcp
+  repo: firebase/firebase-tools
+  package: npm:firebase-tools
+  stars: false
+- id: azure
+  title: "Azure"
+  publisher: "Microsoft"
+  description: "Azure resources, storage, databases, monitoring and more, from Microsoft's Azure MCP server. Runs as a local process."
+  categories: [cloud]
+  auth: none
+  registry: com.microsoft/azure
+  repo: microsoft/mcp
+  stars: false
+- id: google-cloud-toolbox
+  title: "MCP Toolbox for Databases"
+  publisher: "Google"
+  description: "Query BigQuery, Cloud SQL, AlloyDB, Spanner and other databases through declarative tools. Runs as a container the operator hosts."
+  categories: [databases, cloud]
+  auth: none
+  registry: io.github.googleapis/mcp-toolbox
+  repo: googleapis/mcp-toolbox
+- id: dbt
+  title: "dbt"
+  publisher: "dbt Labs"
+  description: "dbt project metadata, lineage, model runs and the Semantic Layer, from dbt Labs. Runs as a local process."
+  categories: [data, developer-tools]
+  auth: bearer
+  repo: dbt-labs/dbt-mcp
+  package: pypi:dbt-mcp
+- id: trivy
+  title: "Trivy"
+  publisher: "Aqua Security"
+  description: "Scan code, images and infrastructure definitions for vulnerabilities and misconfigurations with Trivy."
+  categories: [security]
+  auth: none
+  repo: aquasecurity/trivy-mcp
+  package: oci:ghcr.io/aquasecurity/trivy-mcp
+- id: auth0
+  title: "Auth0"
+  publisher: "Okta"
+  description: "Applications, APIs, actions and logs of an Auth0 tenant."
+  categories: [security, developer-tools]
+  auth: oauth
+  registry: com.auth0/mcp
+  repo: auth0/auth0-mcp-server
+- id: launchdarkly
+  title: "LaunchDarkly"
+  publisher: "LaunchDarkly"
+  description: "Feature flags, environments and experiments in LaunchDarkly."
+  categories: [developer-tools]
+  auth: bearer
+  repo: launchdarkly/mcp-server
+  package: npm:@launchdarkly/mcp-server
+- id: socket
+  title: "Socket"
+  publisher: "Socket"
+  description: "Dependency security scores and supply chain alerts for npm, PyPI and other packages, through Socket's hosted server."
+  categories: [security, developer-tools]
+  auth: none
+- id: gitguardian
+  title: "GitGuardian"
+  publisher: "GitGuardian"
+  description: "Detect hard-coded secrets in code with GitGuardian."
+  categories: [security]
+  auth: bearer
+  repo: GitGuardian/ggmcp
+  package: pypi:ggmcp
+- id: n8n
+  title: "n8n"
+  publisher: "n8n community"
+  description: "Documentation and node data for n8n, so an agent can build workflows, and optionally manage an n8n instance."
+  categories: [productivity, developer-tools]
+  auth: bearer
+  repo: czlonkowski/n8n-mcp
+  package: npm:n8n-mcp
+
+# ----- data and databases
+- id: postgres
+  title: "Postgres"
+  publisher: "Crystal DBA"
+  description: "Index tuning, query plans, health checks and read-only SQL for Postgres."
+  categories: [databases]
+  auth: bearer
+  repo: crystaldba/postgres-mcp
+  package: pypi:postgres-mcp
+- id: mongodb
+  title: "MongoDB"
+  publisher: "MongoDB"
+  description: "Query and manage MongoDB deployments and Atlas clusters."
+  categories: [databases]
+  auth: bearer
+  registry: io.github.mongodb-js/mongodb-mcp-server
+  repo: mongodb-js/mongodb-mcp-server
+- id: redis
+  title: "Redis"
+  publisher: "Redis"
+  description: "Read and write Redis data structures, streams and search indexes."
+  categories: [databases]
+  auth: bearer
+  registry: io.github.redis/mcp-redis
+  repo: redis/mcp-redis
+- id: clickhouse
+  title: "ClickHouse"
+  publisher: "ClickHouse"
+  description: "Run read-only SQL against ClickHouse and browse its databases and tables."
+  categories: [databases, data]
+  auth: bearer
+  registry: io.github.ClickHouse/mcp-clickhouse
+  repo: ClickHouse/mcp-clickhouse
+- id: snowflake
+  title: "Snowflake"
+  publisher: "Snowflake"
+  description: "Cortex Search, Cortex Analyst and SQL over a Snowflake account."
+  categories: [data, databases]
+  auth: bearer
+  registry: io.github.Snowflake-Labs/mcp
+  repo: Snowflake-Labs/mcp
+- id: elasticsearch
+  title: "Elasticsearch"
+  publisher: "Elastic"
+  description: "Search and inspect Elasticsearch indices with Query DSL and ES|QL."
+  categories: [search, data]
+  auth: bearer
+  repo: elastic/mcp-server-elasticsearch
+  package: oci:docker.elastic.co/mcp/elasticsearch
+- id: opensearch
+  title: "OpenSearch"
+  publisher: "OpenSearch Project"
+  description: "Search and inspect OpenSearch clusters, indices and cluster health."
+  categories: [search, data]
+  auth: bearer
+  repo: opensearch-project/opensearch-mcp-server-py
+  package: pypi:opensearch-mcp-server-py
+- id: neo4j
+  title: "Neo4j"
+  publisher: "Neo4j"
+  description: "Run Cypher queries and inspect the schema of a Neo4j graph database."
+  categories: [databases]
+  auth: bearer
+  registry: io.github.neo4j-contrib/mcp-neo4j-cypher
+  repo: neo4j-contrib/mcp-neo4j
+- id: qdrant
+  title: "Qdrant"
+  publisher: "Qdrant"
+  description: "Store and retrieve semantic memories in a Qdrant vector database."
+  categories: [databases, ai-ml]
+  auth: bearer
+  repo: qdrant/mcp-server-qdrant
+  package: pypi:mcp-server-qdrant
+- id: chroma
+  title: "Chroma"
+  publisher: "Chroma"
+  description: "Create collections and query documents in a Chroma vector database."
+  categories: [databases, ai-ml]
+  auth: bearer
+  repo: chroma-core/chroma-mcp
+  package: pypi:chroma-mcp
+- id: milvus
+  title: "Milvus"
+  publisher: "Zilliz"
+  description: "Search and manage collections in a Milvus vector database."
+  categories: [databases, ai-ml]
+  auth: bearer
+  repo: zilliztech/mcp-server-milvus
+  package: pypi:mcp-server-milvus
+- id: pinecone
+  title: "Pinecone"
+  publisher: "Pinecone"
+  description: "Search Pinecone documentation and manage indexes and records."
+  categories: [databases, ai-ml]
+  auth: bearer
+  repo: pinecone-io/pinecone-mcp
+  package: npm:@pinecone-database/mcp
+- id: confluent
+  title: "Confluent"
+  publisher: "Confluent"
+  description: "Kafka topics, connectors, Flink SQL and schemas on Confluent Cloud."
+  categories: [data, cloud]
+  auth: bearer
+  repo: confluentinc/mcp-confluent
+  package: npm:@confluentinc/mcp-confluent
+- id: motherduck
+  title: "MotherDuck and DuckDB"
+  publisher: "MotherDuck"
+  description: "Run SQL on DuckDB files and MotherDuck databases."
+  categories: [databases, data]
+  auth: bearer
+  registry: io.github.motherduckdb/mcp-server-motherduck
+  repo: motherduckdb/mcp-server-motherduck
+- id: jupyter
+  title: "Jupyter"
+  publisher: "Datalayer"
+  description: "Read, edit and execute cells of Jupyter notebooks, locally or on a Jupyter server."
+  categories: [data, developer-tools]
+  auth: bearer
+  repo: datalayer/jupyter-mcp-server
+  package: pypi:jupyter-mcp-server
+
+# ----- observability
+- id: grafana
+  title: "Grafana"
+  publisher: "Grafana Labs"
+  description: "Dashboards, datasources, Prometheus and Loki queries, alerts and incidents in Grafana. Runs as a container the operator hosts."
+  categories: [observability]
+  auth: bearer
+  registry: io.github.grafana/mcp-grafana
+  repo: grafana/mcp-grafana
+- id: prometheus
+  title: "Prometheus"
+  publisher: "community"
+  description: "Run PromQL queries and browse metrics and targets of a Prometheus server."
+  categories: [observability]
+  auth: bearer
+  repo: pab1it0/prometheus-mcp-server
+  package: pypi:prometheus-mcp-server
+- id: victoriametrics
+  title: "VictoriaMetrics"
+  publisher: "VictoriaMetrics"
+  description: "Query metrics, alerts and cardinality in VictoriaMetrics. Runs as a container the operator hosts."
+  categories: [observability]
+  auth: bearer
+  registry: io.github.VictoriaMetrics/mcp-victoriametrics
+  repo: VictoriaMetrics/mcp-victoriametrics
+- id: logfire
+  title: "Pydantic Logfire"
+  publisher: "Pydantic"
+  description: "Query traces and logs and find exceptions in Pydantic Logfire."
+  categories: [observability]
+  auth: bearer
+  repo: pydantic/logfire-mcp
+  package: pypi:logfire-mcp
+- id: opik
+  title: "Opik"
+  publisher: "Comet"
+  description: "Prompts, traces and experiments of LLM applications in Opik."
+  categories: [observability, ai-ml]
+  auth: bearer
+  registry: io.github.comet-ml/opik-mcp
+  repo: comet-ml/opik-mcp
+- id: posthog
+  title: "PostHog"
+  publisher: "PostHog"
+  description: "Product analytics, feature flags, experiments and errors in PostHog, through the hosted server. A personal API key works as bearer."
+  categories: [observability, data]
+  auth: bearer
+  registry: io.github.PostHog/mcp
+
+# ----- work and knowledge
+- id: notion
+  title: "Notion"
+  publisher: "Notion Labs"
+  description: "Search, read and write Notion pages and databases, through Notion's hosted server."
+  categories: [knowledge, productivity]
+  auth: oauth
+  registry: com.notion/mcp
+  repo: makenotion/notion-mcp-server
+- id: asana
+  title: "Asana"
+  publisher: "Asana"
+  description: "Tasks, projects and goals in Asana, through Asana's hosted server."
+  categories: [project-management]
+  auth: oauth
+- id: monday
+  title: "monday.com"
+  publisher: "monday.com"
+  description: "Boards, items and updates in monday.com."
+  categories: [project-management]
+  auth: oauth
+  registry: com.monday/monday.com
+  repo: mondaycom/mcp
+- id: clickup
+  title: "ClickUp"
+  publisher: "ClickUp"
+  description: "Tasks, docs and time tracking in ClickUp, through ClickUp's hosted server."
+  categories: [project-management]
+  auth: oauth
+- id: todoist
+  title: "Todoist"
+  publisher: "Doist"
+  description: "Tasks and projects in Todoist, through the hosted server."
+  categories: [productivity, project-management]
+  auth: oauth
+- id: box
+  title: "Box"
+  publisher: "Box"
+  description: "Search, read and manage files in Box, through Box's hosted server."
+  categories: [documentation, productivity]
+  auth: oauth
+- id: google-workspace
+  title: "Google Workspace"
+  publisher: "community"
+  description: "Gmail, Drive, Docs, Sheets, Calendar and more over Google's APIs, a widely used community server. Runs as a local process."
+  categories: [productivity, communication]
+  auth: oauth
+  repo: taylorwilsdon/google_workspace_mcp
+  package: pypi:workspace-mcp
+- id: microsoft-365
+  title: "Microsoft 365"
+  publisher: "Softeria"
+  description: "Outlook, OneDrive, SharePoint, Teams and Planner through Microsoft Graph, a community server."
+  categories: [productivity, communication]
+  auth: oauth
+  registry: io.github.Softeria/ms-365-mcp-server
+  repo: Softeria/ms-365-mcp-server
+- id: slack
+  title: "Slack"
+  publisher: "community"
+  description: "Read channels and threads and post messages in Slack, a widely used community server."
+  categories: [communication]
+  auth: bearer
+  repo: korotovsky/slack-mcp-server
+  package: npm:slack-mcp-server
+- id: teams
+  title: "Microsoft Teams"
+  publisher: "Inditex Tech"
+  description: "Read and post messages in Microsoft Teams channels."
+  categories: [communication]
+  auth: oauth
+  repo: InditexTech/mcp-teams-server
+  package: pypi:mcp-teams-server
+- id: miro
+  title: "Miro"
+  publisher: "Miro"
+  description: "Read and create content on Miro boards, through Miro's hosted server."
+  categories: [design, productivity]
+  auth: oauth
+  registry: io.github.miroapp/mcp-server
+- id: airtable
+  title: "Airtable"
+  publisher: "Airtable"
+  description: "Bases, tables and records in Airtable, through Airtable's hosted server."
+  categories: [productivity, data]
+  auth: oauth
+  registry: com.airtable/mcp
+- id: zapier
+  title: "Zapier"
+  publisher: "Zapier"
+  description: "Run actions across thousands of apps through a Zapier MCP server."
+  categories: [productivity]
+  auth: oauth
+  registry: com.zapier/mcp
+  repo: zapier/zapier-mcp
+- id: make
+  title: "Make"
+  publisher: "Make"
+  description: "Run Make scenarios as tools, and manage them."
+  categories: [productivity]
+  auth: bearer
+  repo: integromat/make-mcp-server
+  package: npm:@makehq/mcp-server
+- id: intercom
+  title: "Intercom"
+  publisher: "Intercom"
+  description: "Conversations, contacts and help-center articles in Intercom, through Intercom's hosted server."
+  categories: [crm, communication]
+  auth: oauth
+- id: hubspot
+  title: "HubSpot"
+  publisher: "HubSpot"
+  description: "CRM contacts, companies, deals and tickets in HubSpot, through HubSpot's hosted server."
+  categories: [crm]
+  auth: oauth
+- id: salesforce
+  title: "Salesforce"
+  publisher: "Salesforce"
+  description: "Orgs, metadata, SOQL and Apex tooling from the Salesforce CLI team."
+  categories: [crm, developer-tools]
+  auth: oauth
+  repo: salesforcecli/mcp
+  package: npm:@salesforce/mcp
+- id: xero
+  title: "Xero"
+  publisher: "Xero"
+  description: "Contacts, invoices, payments and reports in Xero accounting."
+  categories: [finance]
+  auth: oauth
+  repo: XeroAPI/xero-mcp-server
+  package: npm:@xeroapi/xero-mcp-server
+- id: figma
+  title: "Figma"
+  publisher: "Figma"
+  description: "Design context, components and variables from Figma files, through Figma's hosted server."
+  categories: [design]
+  auth: oauth
+  registry: com.figma.mcp/mcp
+  repo: figma/mcp-server-guide
+- id: figma-context
+  title: "Figma Context"
+  publisher: "community"
+  description: "Simplified Figma layout data for code generation, a widely used community server."
+  categories: [design, developer-tools]
+  auth: bearer
+  repo: GLips/Figma-Context-MCP
+  package: npm:figma-developer-mcp
+- id: canva
+  title: "Canva"
+  publisher: "Canva"
+  description: "Create and edit Canva designs, through Canva's hosted server."
+  categories: [design]
+  auth: oauth
+  registry: com.canva.mcp/mcp
+- id: webflow
+  title: "Webflow"
+  publisher: "Webflow"
+  description: "Sites, CMS collections and pages in Webflow, through Webflow's hosted server."
+  categories: [commerce, design]
+  auth: oauth
+  registry: com.webflow/mcp
+  repo: webflow/mcp-server
+- id: contentful
+  title: "Contentful"
+  publisher: "Contentful"
+  description: "Content types, entries and assets in Contentful."
+  categories: [documentation, commerce]
+  auth: bearer
+  repo: contentful/contentful-mcp-server
+  package: npm:@contentful/mcp-server
+- id: sanity
+  title: "Sanity"
+  publisher: "Sanity"
+  description: "Content, schemas and GROQ queries in Sanity projects, through Sanity's hosted server."
+  categories: [documentation]
+  auth: oauth
+- id: obsidian
+  title: "Obsidian"
+  publisher: "community"
+  description: "Read and search an Obsidian vault through its Local REST API plugin."
+  categories: [knowledge, productivity]
+  auth: bearer
+  repo: MarkusPfundstein/mcp-obsidian
+  package: pypi:mcp-obsidian
+
+# ----- commerce and finance
+- id: stripe
+  title: "Stripe"
+  publisher: "Stripe"
+  description: "Customers, payments, subscriptions and Stripe documentation. A restricted API key works as bearer."
+  categories: [finance, commerce]
+  auth: bearer
+  registry: com.stripe/mcp
+  repo: stripe/agent-toolkit
+- id: paypal
+  title: "PayPal"
+  publisher: "PayPal"
+  description: "Invoices, orders and transactions on PayPal."
+  categories: [finance, commerce]
+  auth: bearer
+  registry: com.paypal.mcp/mcp
+  repo: paypal/paypal-mcp-server
+- id: square
+  title: "Square"
+  publisher: "Square"
+  description: "Payments, orders, customers and catalog on Square."
+  categories: [finance, commerce]
+  auth: bearer
+  repo: square/square-mcp-server
+  package: npm:square-mcp-server
+
+# ----- search and web
+- id: brave-search
+  title: "Brave Search"
+  publisher: "Brave"
+  description: "Web, news, image, video and local search with Brave Search's API."
+  categories: [search]
+  auth: bearer
+  registry: io.github.brave/brave-search-mcp-server
+  repo: brave/brave-search-mcp-server
+- id: exa
+  title: "Exa"
+  publisher: "Exa"
+  description: "Neural web search and page contents with Exa, through the hosted server."
+  categories: [search]
+  auth: none
+  registry: ai.exa/exa
+  repo: exa-labs/exa-mcp-server
+- id: tavily
+  title: "Tavily"
+  publisher: "Tavily"
+  description: "Web search, extraction and crawling built for agents."
+  categories: [search]
+  auth: bearer
+  registry: io.github.tavily-ai/tavily-mcp
+  repo: tavily-ai/tavily-mcp
+- id: firecrawl
+  title: "Firecrawl"
+  publisher: "Firecrawl"
+  description: "Scrape, crawl and extract structured data from web pages with Firecrawl."
+  categories: [search, browser]
+  auth: bearer
+  registry: io.github.firecrawl/firecrawl-mcp-server
+  repo: firecrawl/firecrawl-mcp-server
+  transport: stdio
+  package: npm:firecrawl-mcp
+- id: apify
+  title: "Apify"
+  publisher: "Apify"
+  description: "Run thousands of Apify Actors to scrape and extract data, through Apify's hosted server. An Apify token works as bearer."
+  categories: [search, data]
+  auth: bearer
+  registry: com.apify/apify-mcp-server
+  repo: apify/apify-mcp-server
+- id: brightdata
+  title: "Bright Data"
+  publisher: "Bright Data"
+  description: "Web search, scraping and browser access through Bright Data's unblocking network."
+  categories: [search, browser]
+  auth: bearer
+  registry: io.github.brightdata/brightdata-mcp
+  repo: brightdata/brightdata-mcp
+- id: kagi
+  title: "Kagi"
+  publisher: "Kagi"
+  description: "Web search and summarisation with Kagi."
+  categories: [search]
+  auth: bearer
+  repo: kagisearch/kagimcp
+  package: pypi:kagimcp
+- id: serpapi
+  title: "SerpApi"
+  publisher: "SerpApi"
+  description: "Search engine results from Google, Bing and others through SerpApi's hosted server."
+  categories: [search]
+  auth: bearer
+  registry: io.github.serpapi/serpapi-mcp
+  repo: serpapi/serpapi-mcp
+- id: perplexity
+  title: "Perplexity"
+  publisher: "Perplexity"
+  description: "Web search, reasoning and research with Perplexity's Sonar API."
+  categories: [search, ai-ml]
+  auth: bearer
+  registry: io.github.perplexityai/mcp-server
+  repo: perplexityai/modelcontextprotocol
+- id: jina
+  title: "Jina AI"
+  publisher: "Jina AI"
+  description: "Read web pages, search the web and rerank, through Jina's hosted server."
+  categories: [search, ai-ml]
+  auth: bearer
+- id: arxiv
+  title: "arXiv"
+  publisher: "community"
+  description: "Search and read papers on arXiv, a community server."
+  categories: [search, knowledge]
+  auth: none
+  repo: blazickjp/arxiv-mcp-server
+  package: pypi:arxiv-mcp-server
+- id: hugging-face
+  title: "Hugging Face"
+  publisher: "Hugging Face"
+  description: "Search models, datasets, Spaces and papers on the Hugging Face Hub. A Hugging Face token works as bearer."
+  categories: [ai-ml, search]
+  auth: bearer
+  registry: co.huggingface/hf-mcp-server
+  repo: huggingface/hf-mcp-server
+- id: markitdown
+  title: "MarkItDown"
+  publisher: "Microsoft"
+  description: "Convert PDF, Office and other documents to Markdown. Runs as a local process."
+  categories: [documentation, ai-ml]
+  auth: none
+  repo: microsoft/markitdown
+  package: pypi:markitdown-mcp
+  stars: false
+- id: mapbox
+  title: "Mapbox"
+  publisher: "Mapbox"
+  description: "Geocoding, directions, isochrones and map matching with Mapbox, through the hosted server."
+  categories: [search, data]
+  auth: bearer
+  registry: io.github.mapbox/mcp-server
+  repo: mapbox/mcp-server
+
+# ----- communication
+- id: twilio
+  title: "Twilio"
+  publisher: "Twilio"
+  description: "Send messages and calls and manage numbers through Twilio's APIs."
+  categories: [communication]
+  auth: bearer
+  repo: twilio-labs/mcp
+  package: npm:@twilio-alpha/mcp
+- id: mailgun
+  title: "Mailgun"
+  publisher: "Mailgun"
+  description: "Send email and read delivery stats and logs with Mailgun."
+  categories: [communication]
+  auth: bearer
+  repo: mailgun/mailgun-mcp-server
+  package: npm:@mailgun/mcp-server
+- id: resend
+  title: "Resend"
+  publisher: "Resend"
+  description: "Send and manage email with Resend."
+  categories: [communication]
+  auth: bearer
+  repo: resend/mcp-send-email
+  package: npm:resend-mcp
+
+# ----- reference servers of the modelcontextprotocol organisation
+- id: fetch
+  title: "Fetch"
+  publisher: "Model Context Protocol"
+  description: "Fetch a web page and convert it to Markdown. A Choregos run already has a shell, git and files; this is usually unnecessary."
+  categories: [search]
+  auth: none
+  reference: true
+  repo: modelcontextprotocol/servers
+  package: pypi:mcp-server-fetch
+  stars: false
+- id: filesystem
+  title: "Filesystem"
+  publisher: "Model Context Protocol"
+  description: "Read and write files in allowed directories. A Choregos run already has a workspace; this is usually unnecessary."
+  categories: [developer-tools]
+  auth: none
+  reference: true
+  repo: modelcontextprotocol/servers
+  package: npm:@modelcontextprotocol/server-filesystem
+  stars: false
+- id: git
+  title: "Git"
+  publisher: "Model Context Protocol"
+  description: "Read, search and modify Git repositories. A Choregos run already has git; this is usually unnecessary."
+  categories: [source-control]
+  auth: none
+  reference: true
+  repo: modelcontextprotocol/servers
+  package: pypi:mcp-server-git
+  stars: false
+- id: memory
+  title: "Memory"
+  publisher: "Model Context Protocol"
+  description: "A knowledge-graph memory. Choregos has its own governed memory; this is usually unnecessary."
+  categories: [knowledge, ai-ml]
+  auth: none
+  reference: true
+  repo: modelcontextprotocol/servers
+  package: npm:@modelcontextprotocol/server-memory
+  stars: false
+- id: sequential-thinking
+  title: "Sequential Thinking"
+  publisher: "Model Context Protocol"
+  description: "Structured step-by-step problem solving through a thought-sequence tool."
+  categories: [ai-ml]
+  auth: none
+  reference: true
+  repo: modelcontextprotocol/servers
+  package: npm:@modelcontextprotocol/server-sequential-thinking
+  stars: false
+- id: time
+  title: "Time"
+  publisher: "Model Context Protocol"
+  description: "Current time and time zone conversions."
+  categories: [productivity]
+  auth: none
+  reference: true
+  repo: modelcontextprotocol/servers
+  package: pypi:mcp-server-time
+  stars: false

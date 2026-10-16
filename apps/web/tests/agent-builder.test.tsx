@@ -6,14 +6,16 @@ import {
   cleanSpec,
   openByDefault,
   reachedOperations,
+  runtimeKind,
   sectionSummaries,
   servedTo,
   skillUsable,
   slugFromName,
   toolMatches,
 } from "@/components/agents/builder";
+import { resumeDeLaVersion } from "@/components/agents/registre";
 import { api } from "@/lib/api";
-import type { KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
+import type { AgentSpec, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
 
 /** The agent builder (S32-01): every field of a version is editable, with what it costs and allows. */
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
@@ -26,12 +28,21 @@ vi.mock("@/lib/api", async (importOriginal) => {
       createAgent: vi.fn().mockResolvedValue({ slug: "triage", display_name: "Triage", latest_version: 1 }),
       publishAgentVersion: vi.fn(),
       projects: vi.fn().mockResolvedValue({ items: [{ slug: "billing-api", name: "Billing API" }], meta: { has_more: false } }),
+      // The picker lists what the organisation lets an agent use (ADR 0060), not the gateway's list.
+      usableModels: vi.fn().mockResolvedValue([
+        { model_name: "platform/cheap", display_name: "platform/cheap", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004, priced_by: "gateway" },
+      ]),
       platformModels: vi.fn().mockResolvedValue([
-        { model_name: "platform/cheap", litellm_model: "x", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004 },
+        { model_name: "platform/cheap", litellm_model: "x" },
+        { model_name: "platform/disabled-here", litellm_model: "y" },
       ]),
       backends: vi.fn().mockResolvedValue([
         { name: "claude-code", enabled: true, capabilities: [] },
         { name: "codex", enabled: false, capabilities: [] },
+      ]),
+      agentImages: vi.fn().mockResolvedValue([
+        { name: "ticket-triager", digest_pinned: true },
+        { name: "scratch-bench", digest_pinned: false },
       ]),
       orgConnectors: vi.fn(),
       skills: vi.fn(),
@@ -239,5 +250,83 @@ describe("the builder", () => {
     const open = screen.getByTestId("agent-builder").querySelectorAll("details[open]");
     expect(open).toHaveLength(1);
     expect(open[0]).toHaveTextContent("Add a skill");
+  });
+
+  it("offers only the models the organisation lets an agent use", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder org="acme" mode={{ kind: "create" }} />
+      </QueryClientProvider>,
+    );
+    const model = screen.getByLabelText("Model");
+    await within(model).findByRole("option", { name: "platform/cheap" });
+    expect(api.usableModels).toHaveBeenCalledWith("acme", { usage: "agent" });
+    // The gateway lists it, the catalogue does not enable it: the picker does not offer it.
+    expect(within(model).queryByRole("option", { name: "platform/disabled-here" })).toBeNull();
+  });
+
+  it("says that a saved model the organisation disabled since is no longer usable", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder org="acme" mode={{ kind: "create" }} start={{ model: "platform/disabled-here" }} />
+      </QueryClientProvider>,
+    );
+    const model = screen.getByLabelText("Model");
+    await within(model).findByRole("option", { name: "platform/cheap" });
+    expect(within(model).getByRole("option", { name: "platform/disabled-here (disabled by the organisation)" })).toBeInTheDocument();
+    expect(await screen.findByTestId("ce-que-ca-permet")).toHaveTextContent("disabled by the organisation");
+  });
+
+  it("a code agent: the runtime selector swaps the backend for an image, a command and an API", async () => {
+    vi.mocked(api.createAgent).mockClear();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder org="acme" mode={{ kind: "create" }} onDone={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    const builder = screen.getByTestId("agent-builder");
+    fireEvent.change(within(builder).getByLabelText("Slug"), { target: { value: "ticket-triager" } });
+    // A coding agent by default: the backend picker is there, the image fields are not.
+    expect(await within(builder).findByRole("combobox", { name: "Backend" })).toBeInTheDocument();
+    expect(within(builder).queryByLabelText("Image")).toBeNull();
+
+    fireEvent.change(within(builder).getByLabelText("Runtime"), { target: { value: "code" } });
+    expect(within(builder).queryByRole("combobox", { name: "Backend" })).toBeNull();
+    const image = within(builder).getByLabelText("Image");
+    await within(image).findByRole("option", { name: "ticket-triager" });
+    expect(within(image).getByRole("option", { name: "scratch-bench (not pinned by digest)" })).toBeInTheDocument();
+
+    // Neither an image nor a command: refused before any call.
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
+    expect(await within(builder).findByText("A code agent needs an image and a command.")).toBeInTheDocument();
+    expect(api.createAgent).not.toHaveBeenCalled();
+
+    fireEvent.change(image, { target: { value: "ticket-triager" } });
+    fireEvent.change(within(builder).getByLabelText("Command"), { target: { value: "python\n-m\nticket_triager\n" } });
+    fireEvent.change(within(builder).getByLabelText("Model API"), { target: { value: "anthropic" } });
+    expect(screen.getByTestId("runtime-resolu")).toHaveTextContent("Your code runs in the image ticket-triager");
+
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
+    const sent = vi.mocked(api.createAgent).mock.calls[0]![1];
+    expect(sent.spec?.runtime).toEqual({
+      kind: "code",
+      image: "ticket-triager",
+      command: ["python", "-m", "ticket_triager"],
+      api_format: "anthropic",
+    });
+    expect(sent.spec?.backend).toBeNull();
+  });
+
+  it("switching back to a coding agent drops the runtime", () => {
+    const code: AgentSpec = {
+      backend: null,
+      runtime: { kind: "code", image: "ticket-triager", command: ["python"], api_format: "openai" },
+    };
+    expect(runtimeKind(code)).toBe("code");
+    expect(cleanSpec(code).runtime).toMatchObject({ kind: "code", image: "ticket-triager" });
+    expect(cleanSpec({ backend: "codex" })).not.toHaveProperty("runtime");
+    expect(runtimeKind({ backend: "codex" })).toBe("acp");
+    expect(resumeDeLaVersion(code)).toBe("code · ticket-triager");
   });
 });

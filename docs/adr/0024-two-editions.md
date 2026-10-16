@@ -33,7 +33,7 @@ surface that only matters with it, belong to a separate enterprise edition.**
 
 1. **Licence.** The core stays **Apache-2.0**, published by the Varga Foundation. The enterprise
    edition is proprietary, lives in a **separate private repository**, and is published by
-   Diametral (see the amendment below: since 2026-10-15, by graal.systems). Apache-2.0 allows this without reservation: it has no copyleft.
+   Diametral (see the amendment below: since 2026-10-15, by GraalSystems, a DiametralGroup subsidiary). Apache-2.0 allows this without reservation: it has no copyleft.
 2. **What the community edition keeps.** Everything that works today except a second
    organisation: the DSL and its static validation, the Temporal interpreter, the fourteen
    gates, evidence, the cost ledger with its per-run cap, the tool catalogue, ACP and its
@@ -47,7 +47,7 @@ surface that only matters with it, belong to a separate enterprise edition.**
    from the data layer, and shipping a knowingly weaker security posture to the community would
    be indefensible.
 5. **No licence key in the first enterprise version.** The enterprise edition is run by
-   Diametral, for Diametral and its tenants (amended: published by graal.systems, operated by Diametral); access control is the image pull secret. A signed
+   Diametral, for Diametral and its tenants (amended: published by GraalSystems, operated by DiametralGroup companies); access control is the image pull secret. A signed
    offline key is a question for the day a customer self-hosts it.
 6. **The chart stays in the community edition.** Tenants vendor the published chart, which
    overwrites everything but their values file, so any change the enterprise edition needs is
@@ -73,7 +73,7 @@ surface that only matters with it, belong to a separate enterprise edition.**
 ## Amendment, 2026-10-15 (S39-01): who publishes the enterprise edition, and how it says so
 
 Decisions 1 and 5 said the enterprise edition is published by Diametral. It is now **published by
-graal.systems**, and **operated by Diametral** under an agreement between the two; the private
+GraalSystems**, a subsidiary of DiametralGroup, and **operated by the DiametralGroup companies** under an agreement; the private
 repository moved to the `DiametralGroup` GitHub organisation and its images to
 `ghcr.io/diametralgroup`. Nothing else in the decision changes (same boundary, same seams, no
 licence key).
@@ -86,6 +86,8 @@ optional, nullable fields, `publisher` and `edition_version` (the plugin's own v
 stays the core's). Both are `null` in the community edition, which refuses to declare them, and a
 core without the seam simply never serves them. The console shows them in the admin card and in the
 footer. This is not a new decision, only the record of who publishes and of the seam that says it.
+
+2026-10-16: the publisher name is normalised to `GraalSystems` (one word, no dot).
 
 ## Alternatives discarded
 

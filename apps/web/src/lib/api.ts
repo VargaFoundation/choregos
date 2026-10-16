@@ -11,6 +11,9 @@ import type {
   ConnectorDiscovery,
   ConnectorOperation,
   OperationPatch,
+  McpCatalogue,
+  McpCatalogueInstall,
+  SkillCatalogue,
   OrgConnector,
   OrgConnectorCreate,
   OrgConnectorUpdate,
@@ -23,6 +26,10 @@ import type {
   AgentDraftRequest,
   AgentFork,
   AgentScopeChange,
+  RemoteAgentDiscovery,
+  RemoteCredential,
+  RemoteCredentialAuthorization,
+  RemoteCredentialCreate,
   AgentCredential,
   AgentLifecycleChange,
   AgentLifecycleResult,
@@ -55,6 +62,7 @@ import type {
   KnowledgeSourceCreate,
   KnowledgeSourcePatch,
   AgentBackendInfo,
+  AgentImageInfo,
   ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
@@ -65,6 +73,14 @@ import type {
   ConnectorType,
   ExecutorInfo,
   GatewayModel,
+  ModelCatalogue,
+  ModelCatalogueEntry,
+  ModelCatalogueEntryCreate,
+  ModelCataloguePatch,
+  ModelCatalogueSettings,
+  ModelCuratePreview,
+  ModelSyncResult,
+  UsableModel,
   HandOff,
   Membership,
   MembershipUpsert,
@@ -315,6 +331,19 @@ export const api = {
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
+  /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
+  remoteCredentials: (org: string) => request<RemoteCredential[]>(`/orgs/${org}/remote-credentials`),
+  createRemoteCredential: (org: string, body: RemoteCredentialCreate) =>
+    request<RemoteCredential>(`/orgs/${org}/remote-credentials`, { method: "POST", body: JSON.stringify(body) }),
+  authorizeRemoteCredential: (org: string, name: string) =>
+    request<RemoteCredentialAuthorization>(`/orgs/${org}/remote-credentials/${name}/authorize`, { method: "POST" }),
+  revokeRemoteCredential: (org: string, name: string) =>
+    request<void>(`/orgs/${org}/remote-credentials/${name}`, { method: "DELETE" }),
+  discoverRemoteAgent: (org: string, cardUrl: string) =>
+    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover`, {
+      method: "POST",
+      body: JSON.stringify({ card_url: cardUrl }),
+    }),
   /** Le catalogue de la plateforme (ADR 0040) : ce qu'il propose, ce qui en est installé. */
   agentCatalogue: (org: string) => request<AgentCatalogueEntry[]>(`/orgs/${org}/agent-catalogue`),
   installCatalogueAgent: (org: string, slug: string, upgrade = false) =>
@@ -360,6 +389,10 @@ export const api = {
     request<void>(`/projects/${qualify(id)}/agents/${slug}`, { method: "DELETE" }),
   /** La bibliothèque de skills : un dossier, importé en zip, versionné, jamais réécrit. */
   skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
+  /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
+  skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
+  installSkillCatalogueEntry: (org: string, id: string) =>
+    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, { method: "POST" }),
   skill: (org: string, slug: string) => request<Skill>(`/orgs/${org}/skills/${slug}`),
   skillVersion: (org: string, slug: string, version: number) =>
     request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}`),
@@ -430,7 +463,28 @@ export const api = {
   templates: () => request<TemplateSummary[]>("/templates"),
   connectorTypes: () => request<ConnectorType[]>("/connectors/types"),
   platformModels: () => request<GatewayModel[]>("/platform/models"),
+  /** The organisation's model catalogue and what an agent may use of it (ADR 0060). */
+  modelCatalogue: (org: string) => request<ModelCatalogue>(`/orgs/${org}/models`),
+  usableModels: (org: string, query: { role?: string; usage?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (query.role) params.set("role", query.role);
+    if (query.usage) params.set("usage", query.usage);
+    const suffix = params.toString();
+    return request<UsableModel[]>(`/orgs/${org}/models/usable${suffix ? `?${suffix}` : ""}`);
+  },
+  putModelCatalogueSettings: (org: string, body: ModelCatalogueSettings) =>
+    request<ModelCatalogueSettings>(`/orgs/${org}/models/settings`, { method: "PUT", body: JSON.stringify(body) }),
+  syncModelCatalogue: (org: string) => request<ModelSyncResult>(`/orgs/${org}/models/sync`, { method: "POST" }),
+  addModelCatalogueEntry: (org: string, body: ModelCatalogueEntryCreate) =>
+    request<ModelCatalogueEntry>(`/orgs/${org}/models`, { method: "POST", body: JSON.stringify(body) }),
+  updateModelCatalogueEntry: (org: string, id: string, body: ModelCataloguePatch) =>
+    request<ModelCatalogueEntry>(`/orgs/${org}/models/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteModelCatalogueEntry: (org: string, id: string) =>
+    request<void>(`/orgs/${org}/models/${id}`, { method: "DELETE" }),
+  previewModelCuration: (org: string) => request<ModelCuratePreview>(`/orgs/${org}/models/curate-preview`),
   backends: () => request<AgentBackendInfo[]>("/platform/backends"),
+  /** The images an operator named for agents written in code: names only (ADR 0063). */
+  agentImages: () => request<AgentImageInfo[]>("/platform/agent-images"),
   executors: () => request<ExecutorInfo[]>("/platform/executors"),
   models: (id: string) => request<ProjectModels>(`/projects/${qualify(id)}/models`),
   putModels: (id: string, body: ProjectModels) =>
@@ -508,6 +562,13 @@ export const api = {
   updateConnectorOperation: (org: string, name: string, operation: string, body: OperationPatch) =>
     request<ConnectorOperation>(`/orgs/${org}/connectors/${name}/operations/${encodeURIComponent(operation)}`, {
       method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  /** The catalogue of well-known MCP servers and what each means in this organisation (ADR 0065). */
+  mcpCatalogue: (org: string) => request<McpCatalogue>(`/orgs/${org}/mcp-catalogue`),
+  installMcpCatalogueEntry: (org: string, id: string, body: McpCatalogueInstall) =>
+    request<OrgConnector>(`/orgs/${org}/mcp-catalogue/${encodeURIComponent(id)}/install`, {
+      method: "POST",
       body: JSON.stringify(body),
     }),
   /** Un serveur MCP dit ses outils ; un nouveau naît fermé, un schéma qui dérive le referme. */

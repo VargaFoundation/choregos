@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from choregos_core.images import check_image_map
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 QUEUE_ORCHESTRATOR = "orchestrator"
@@ -48,6 +49,11 @@ class OrchestratorSettings(BaseSettings):
     #: pinned by digest. A workflow names an image, never pulls one: the operator decides what runs.
     #: Each is built FROM the runner image — the runner is what runs the job's command.
     job_images: dict[str, str] = {}
+    #: The images an agent written in code may name (ADR 0063), as JSON in `CHOREGOS_AGENT_IMAGES`:
+    #: same rules as `job_images`, and the same variable the API validates a version against.
+    agent_images: dict[str, str] = {}
+    #: A reference without `@sha256:` stops the worker at start-up (`CHOREGOS_REQUIRE_IMAGE_DIGEST`).
+    require_image_digest: bool = False
     executor_kind: str = "tekton"
     # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
     # secret n'a rien à faire ici : `CHOREGOS_RUNNER_ENV_SECRETS` liste des secrets, que
@@ -74,6 +80,12 @@ class OrchestratorSettings(BaseSettings):
     #: off for every run, whatever a policy asks. `on` (the default) lets the policy decide, and a
     #: policy without `context` reduces nothing.
     context_reduction: bool = True
+
+    @model_validator(mode="after")
+    def _images_named_by_the_operator(self) -> OrchestratorSettings:
+        check_image_map("CHOREGOS_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
+        check_image_map("CHOREGOS_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
+        return self
 
     @property
     def callback_url(self) -> str:

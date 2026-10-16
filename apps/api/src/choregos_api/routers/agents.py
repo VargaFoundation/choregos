@@ -65,6 +65,7 @@ from ..schemas import (
     ProjectAgentPut,
     RunDto,
 )
+from ..schemas.agents import check_remote_kind
 from ..services.agent_evals import evaluate, gate, suite_for
 from ..services.agent_governance import (
     Action,
@@ -94,6 +95,7 @@ from ..services.agents import (
     erreurs_d_une_version,
     resoudre_l_agent,
 )
+from ..services.remote_agents import pin_remote_runtime
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
 
@@ -198,6 +200,15 @@ async def _skills_usable(session: AsyncSession, organisation: Organization, spec
         raise unprocessable("; ".join(problemes))
 
 
+async def _model_allowed(session: AsyncSession, organisation: Organization, spec: AgentSpec) -> None:
+    """A version may not name a model the organisation's catalogue does not allow (ADR 0060)."""
+    from ..services.model_catalogue import load_policy, refusal_for_spec
+
+    refusal = refusal_for_spec(await load_policy(session, organisation.id), spec)
+    if refusal is not None:
+        raise unprocessable(refusal, [{"loc": ["spec", "model"], "msg": refusal}])
+
+
 def _lire(principal: Me, org: str) -> None:
     if not is_member(principal, org):
         raise forbidden(f"reading the agents of {org} requires being a member of it")
@@ -276,7 +287,10 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     gate(body.spec, None)
     organisation = await _organisation(session, org)
     projet = await _projet(session, organisation, body.project) if body.project else None
+    # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
+    body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
+    await _model_allowed(session, organisation, body.spec)
     existant = (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -375,6 +389,12 @@ async def publish_version(
     _exiger(decide(principal, org, sujet, Action.PUBLISH))
     erreurs_d_une_version(body)
     await _skills_usable(session, organisation, body)
+    await _model_allowed(session, organisation, body)
+    try:
+        check_remote_kind(agent.kind, body)
+    except ValueError as erreur:
+        raise unprocessable(str(erreur)) from erreur
+    body = await pin_remote_runtime(session, organisation.id, body)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":
@@ -1112,6 +1132,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
         _, _, sujet = await _charger(session, principal, org, body.agent)
     _exiger(decide(principal, org, sujet, Action.TRIAL, project_slug=body.project))
     erreurs_d_une_version(body.spec)
+    await _model_allowed(session, organisation, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:

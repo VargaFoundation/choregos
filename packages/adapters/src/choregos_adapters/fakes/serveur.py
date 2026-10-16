@@ -7,7 +7,7 @@ poste (l'orchestrateur) et le courtier qui relit son état (l'API) verraient deu
 ils n'en voient qu'un. L'application est un appelable ASGI nu — le paquet des adaptateurs ne dépend
 d'aucun cadriciel — que `uvicorn` sert : `python -m choregos_adapters.fakes.serveur`.
 
-- `/{mdm,shipping,access_control,fournisseur,cd}/mcp` : chaque faux en serveur MCP (`serveur_mcp`),
+- `/{mdm,shipping,access_control,supplier,fournisseur,cd}/mcp` : each fake as an MCP server (`serveur_mcp`),
   ce que joint un connecteur `demo` qui porte une `url`, ou un connecteur `mcp` — `cd` est
   l'environnement que promeut le train d'un projet de démonstration (S21-24) ;
 - `/graph/v1.0/…` et `/login/{tenant}/oauth2/v2.0/token` : le faux Microsoft Graph, ce que joint un
@@ -46,6 +46,9 @@ class ApplicationDeDemo:
         self.serveurs: dict[str, FakeMcpServer] = {
             nom: serveur_mcp(faux, jeton=jeton) for nom, faux in self.faux.items()
         }
+        # S39-11: the supplier is reached at `/supplier/mcp`; `/fournisseur/mcp` (what a tenant
+        # configured before) answers the same server, so both see one state.
+        self.serveurs["supplier"] = self.serveurs["fournisseur"]
 
     def repondre(self, requete: httpx.Request) -> httpx.Response:
         chemin = requete.url.path

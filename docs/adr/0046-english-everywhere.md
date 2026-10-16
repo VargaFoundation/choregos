@@ -40,6 +40,8 @@ Decision D2 (Vincent Devillers, 2026-10-12): everything is in English, identifie
      request, the old names accepted for one release (S34-03, ADR 0001).
    - **Workflow template keys** (joiners-leavers: `a_revoir`, `clos`, `date_depart`…) change in a
      new template version; installed workflows move by the existing workflow migration path.
+     Done for `joiners-leavers` 2.0.0 (S39-11); `templates/` is now read by `tools/check_english.py`
+     like the other directories, and its identifiers by `tests/langue/test_template_identifiers.py`.
    - **Log event names** change together with the alerts that query them.
    - **ADR and plan file names** are renamed with redirects, links checked by the docs test (S34-05).
 4. **Git history is not rewritten.** Past commit messages stay as they are.

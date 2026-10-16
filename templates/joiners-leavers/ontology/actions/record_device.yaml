@@ -1,0 +1,32 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: record_device
+  displayName: Record the laptop
+  description: "Records the laptop entrusted to the person, under the serial number the supplier assigned."
+spec:
+  target: {objectType: employee, cardinality: one}
+  parameters:
+    serial_number: {type: string, required: true}
+    model: {type: string}
+    status: {type: string, enum: [ordered, shipped, enrolled], required: true}
+    tracking: {type: string, description: "The carrier's tracking number."}
+  preconditions:
+    - {name: not_gone, expr: "target.status != 'gone'", message: "No laptop is entrusted to a person who has left."}
+  permissions:
+    propose: [agent:onboarding-coordinator, role:contributor]
+    approve: policy:hr
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: device
+        id: "${params.serial_number}"
+        properties:
+          serial_number: "${params.serial_number}"
+          employee_id: "${target.employee_id}"
+          model: "${has(params.model) ? params.model : null}"
+          status: "${params.status}"
+          tracking: "${has(params.tracking) ? params.tracking : null}"
+  idempotencyKey: "${params.serial_number}"

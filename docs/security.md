@@ -58,6 +58,17 @@ archive it, but cannot widen it to the organisation, to other projects or to gro
 never decides what *other* projects' runs read. An administrator who widens it makes it the
 organisation's: the owner stops curating. Another project's owners, and developers, read at most.
 
+## Agents written in code
+
+A code agent ([ADR 0063](adr/0063-agents-written-in-code.md)) runs in the run's pod, in the sandbox,
+with the run's token and the run's own gateway key, and no secret an ordinary agent would not have.
+Its image is **named by the operator and pinned by digest** (a workflow or an agent version names an
+image, never a reference; a tag-only reference stops the platform at start-up). The SDK sends every
+tool call and every write through the runner's permission path; that path is the reason the SDK, not
+the user's code, makes the call. It is a convention the SDK keeps, not a wall: Python code in the pod
+can open a socket or run a command like any program, and is bounded by the sandbox, not by the SDK.
+Cosign verification of agent images is not built yet.
+
 ## Injection through context
 
 Context packs and tickets contain text written by third parties. Two rules:
@@ -70,6 +81,18 @@ Drafting an agent from a description (S39-05) sends the description and the **na
 descriptions** of the organisation's skills, knowledge bases and connector operations to the
 gateway's model, never documents, files or secrets. The description is marked as data; the answer is
 filtered to names that exist, and a draft is never saved or run.
+
+## Remote agents: who they act as
+
+A remote agent (A2A, [ADR 0062](adr/0062-remote-agents-over-a2a.md)) runs outside the platform, with the
+rights of **the person who authorised its credential** — Atlassian's Rovo has no service account. Treat
+that authorisation as granting that person's access to the agent, use a dedicated least-privileged
+account, and read `authorised as` on the credential. The refresh token is a sealed value of the secret
+store (ADR 0058): never returned, rewritten at every refresh, deleted on revocation. A run receives only
+a short-lived access token, in its Secret (`CHOREGOS_RUN_REMOTE_TOKEN`), never in a payload or a journal.
+The agent card is pinned at publication and read again by the pod: a card that changed stops the step
+before anything is sent. The runner pod may reach only the hosts the project's policy allows. The
+project's memory is not sent to a remote agent.
 
 ## Secrets
 
@@ -87,6 +110,10 @@ filtered to names that exist, and a draft is never saved or run.
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while
   the run waits for a slot. Minted by `start_run` for the run's Secret only: never stored in
   `runs.stage_input`, never carried by a Temporal payload (#519).
+- The organisation's model catalogue (ADR 0060) limits which models an agent may name; it is a
+  governance control in front of the gateway, not a replacement for the key's own model list. With an
+  OpenAI-compatible gateway the `run_key` is shared by runs: scope it at the gateway (a consumer with
+  a token rate limit), since Choregos cannot cap it.
 - Gateway key: one per run, capped. `prepare_stage` reserves its cap (a `gateway_keys` row named
   `reserved:<run_id>`); `start_run` mints it and the executor puts it in the run's Secret next to
   the run token (`k8s_job`, `tekton`: Secret key `gateway-key`; `agent_sandbox`: sealed in the
@@ -131,6 +158,19 @@ Images signed with cosign (keyless, GitHub OIDC), **SBOM and SLSA provenance att
 signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRun`s.
 Renovate proposes bumps; every agent bump goes through conformance. A nightly CRITICAL in
 the dependency scan fails the night and opens an issue.
+
+## Default skills and MCP servers
+
+The platform ships two catalogues ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)):
+well-known MCP servers and default skills. They are files in the image, generated from a reviewed seed
+and recorded sources; **an entry enables nothing**. Installing one goes through the gate that already
+exists: an MCP entry becomes an ordinary organisation connector (administrator only, secret by
+reference, tools born closed); a skill is assessed by the supply-chain gate again at install, a
+high-risk one waits for a second administrator, and a bundled one is checked against its sha256
+provenance. A skill enters the catalogue only from a listed publisher, under an open licence, at a pinned
+commit; Anthropic's proprietary document skills and anything unlicensed are never listed or bundled.
+A changed upstream reaches an organisation only when a catalogue release is merged **and** an
+administrator updates the skill: two people, as ADR 0050 asks against bait-and-switch.
 
 ## Reporting a vulnerability
 

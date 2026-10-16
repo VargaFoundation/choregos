@@ -23,3 +23,4 @@ original names — alerts and other pages point at them.
 | `temporal-backup.md` | what Temporal holds, how to back it up, what a loss costs and how to reconcile after a restore |
 | `keycloak-mcp.md` | claude.ai or Claude Code over OAuth cannot connect to the MCP door |
 | `live-eval-matrix.md` | measuring rtk and headroom on real models before a default-on decision |
+| `refresh-catalogues.md` | refreshing the shipped MCP server and skills catalogues from their sources |

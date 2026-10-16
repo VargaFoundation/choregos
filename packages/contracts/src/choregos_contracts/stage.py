@@ -102,6 +102,9 @@ class LaunchSpec(Strict):
 class AgentRef(Strict):
     backend: str
     launch: LaunchSpec = Field(default_factory=LaunchSpec)
+    image: str | None = Field(default=None, min_length=1)
+    """The image of the run's pod when an agent written in code names its own (ADR 0063): the
+    reference the operator mapped the agent's image name to, never a name a workflow wrote."""
 
 
 class ModelRef(Strict):
@@ -238,6 +241,42 @@ class JobSpec(Strict):
     tools: dict[str, list[str]] = Field(default_factory=dict)
 
 
+class DeclaredCost(Strict):
+    """What an external agent costs, as its registry entry DECLARES it (ADR 0062): the protocol
+    reports no figure. Booked in the ledger as `external`, never as a measurement."""
+
+    per_task_usd: float | None = Field(default=None, ge=0)
+    per_minute_usd: float | None = Field(default=None, ge=0)
+
+
+class RemoteCall(Strict):
+    """A step run by a remote agent over A2A (ADR 0062): the runner calls `endpoint` from the pod.
+
+    `agent` is a placeholder and no gateway key exists: the remote agent brings its own model. The
+    access token the runner presents is NOT here: it travels in the run's Secret
+    (`CHOREGOS_RUN_REMOTE_TOKEN`), like the run key (#523)."""
+
+    protocol: Literal["a2a"] = "a2a"
+    #: The JSON-RPC endpoint messages are posted to (the card's `url`, pinned at publication).
+    endpoint: str = Field(min_length=1)
+    #: Where the card lives; the runner fetches it again and refuses on drift.
+    card_url: str = Field(min_length=1)
+    protocol_version: str = Field(min_length=1)
+    #: The skill the message asks for, when the card has several.
+    skill: str | None = None
+    #: `sha256:<hex>` of the card as it was when the version was published.
+    card_digest: str = Field(min_length=1)
+    timeout_s: int = Field(ge=1)
+    #: `text`: instructions and task as one text part. `text+files`: the declared inputs too.
+    input: Literal["text", "text+files"] = "text"
+    declared_cost: DeclaredCost = Field(default_factory=DeclaredCost)
+    #: The registry agent's slug, for provenance (`remote:<slug>`) and the ledger.
+    agent_slug: str = Field(min_length=1)
+    #: The NAME of the organisation credential the access token comes from (never the token). The
+    #: orchestrator reads it to mint the token; the runner does not need it.
+    credential: str | None = None
+
+
 class StageInput(Strict):
     """Ce que l'orchestrateur remet au runner (docs/plan/01 §1.5)."""
 
@@ -272,6 +311,8 @@ class StageInput(Strict):
     callbacks: Callbacks
     #: Set for a job step (ADR 0056): `agent`, `model` and `playbook` are then placeholders.
     job: JobSpec | None = None
+    #: Set for a step a remote agent carries over A2A (ADR 0062): `agent.backend` is `a2a`.
+    remote: RemoteCall | None = None
 
     model_config = Strict.model_config | {"populate_by_name": True}
 

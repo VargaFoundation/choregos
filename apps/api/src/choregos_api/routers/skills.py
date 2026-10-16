@@ -34,7 +34,6 @@ from ..schemas import (
     SkillVersionDto,
 )
 from ..services.skill_gate import assess
-from ..services.skill_gate import columns as gate_columns
 from ..services.skill_sources import (
     DEFAULT_SOURCES,
     SHA,
@@ -52,7 +51,7 @@ from ..services.skill_sources import (
     parse_repo_url,
     read_tarball,
 )
-from ..services.skills import SkillRefusee, empreinte, read_zip, valider
+from ..services.skills import SkillRefusee, empreinte, publish_version, read_zip, valider
 
 router = APIRouter(tags=["agents"])
 
@@ -144,61 +143,6 @@ async def _dto(
     )
 
 
-async def _publier(
-    session: AsyncSession,
-    principal: Me,
-    organisation: Organization,
-    fichiers: dict[str, str],
-    slug: str | None,
-    source: dict[str, object] | None = None,
-    *,
-    executables: list[str] | None = None,
-    repo_licences: dict[str, str] | None = None,
-) -> tuple[Skill, SkillVersion]:
-    """Creates the skill (version 1) or publishes its next version, never a rewrite. The version
-    goes through the gate (S32-06): its risk, what the scan finds; `high` waits for a second reviewer."""
-    try:
-        tete = valider(fichiers, slug)
-    except SkillRefusee as refus:
-        raise unprocessable(str(refus)) from refus
-    skill = (
-        await session.execute(select(Skill).where(Skill.org_id == organisation.id, Skill.slug == tete.name))
-    ).scalar_one_or_none()
-    if skill is None:
-        skill = Skill(org_id=organisation.id, slug=tete.name, description=tete.description, status="active")
-        session.add(skill)
-        await session.flush()
-    skill.description = tete.description
-    derniere = (
-        await session.execute(select(func.max(SkillVersion.version)).where(SkillVersion.skill_id == skill.id))
-    ).scalar() or 0
-    version = SkillVersion(
-        skill_id=skill.id,
-        org_id=organisation.id,
-        version=derniere + 1,
-        files=dict(fichiers),
-        digest=empreinte(fichiers),
-        created_by=principal.email,
-        source=source,
-        **gate_columns(assess(fichiers, executables=executables or [], repo_licences=repo_licences)),
-    )
-    session.add(version)
-    await session.flush()
-    await record(
-        session,
-        principal,
-        "skill.publish",
-        org_id=organisation.id,
-        target_type="skill",
-        target_id=skill.id,
-        version=version.version,
-        risk=version.risk,
-        review_status=version.review_status,
-        **({"source": source} if source else {}),
-    )
-    return skill, version
-
-
 @router.get("/orgs/{org}/skills", response_model=list[SkillDto], operation_id="listSkills")
 async def list_skills(org: str, session: Db, principal: Me) -> list[SkillDto]:
     _lire(principal, org)
@@ -227,7 +171,7 @@ async def create_skill(org: str, body: SkillFiles, session: Db, principal: Me) -
         await session.execute(select(Skill.id).where(Skill.org_id == organisation.id, Skill.slug == nom))
     ).first():
         raise conflict(f"skill `{nom}` already exists: publish its next version instead")
-    skill, _ = await _publier(session, principal, organisation, body.files, None)
+    skill, _ = await publish_version(session, principal, organisation, body.files, None)
     return await _dto(session, organisation, skill, avec_versions=True)
 
 
@@ -248,7 +192,9 @@ async def import_skill(org: str, request: Request, session: Db, principal: Me) -
         fichiers, executables = read_zip(contenu)
     except SkillRefusee as refus:
         raise unprocessable(str(refus)) from refus
-    skill, _ = await _publier(session, principal, organisation, fichiers, None, executables=executables)
+    skill, _ = await publish_version(
+        session, principal, organisation, fichiers, None, executables=executables
+    )
     return await _dto(session, organisation, skill, avec_versions=True)
 
 
@@ -271,7 +217,7 @@ async def publish_skill_version(
     _gerer(principal, org)
     organisation = await _organisation(session, org)
     await _skill(session, organisation, slug)
-    _, version = await _publier(session, principal, organisation, body.files, slug)
+    _, version = await publish_version(session, principal, organisation, body.files, slug)
     return _version_dto(version)
 
 
@@ -498,7 +444,7 @@ async def import_skills_from_git(
             "path": skill.path,
             "licence": _licence(skill, snapshot),
         }
-        publiee, _ = await _publier(
+        publiee, _ = await publish_version(
             session,
             principal,
             organisation,

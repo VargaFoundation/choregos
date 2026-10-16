@@ -7,10 +7,11 @@ après une panne : créer un compte le cherche d'abord, ajouter à un groupe tie
 pour un succès. Il ne s'exécute jamais dans la requête qui approuve l'action : l'`ActionWorkflow`
 le joue, sous sa clé, et le compense à rebours si une suite échoue.
 
-Le cœur livre `connector.call` — une opération d'un connecteur de l'organisation (ADR 0034) — et
-`verifier`, un contrôle sans effet au-dehors ; un greffon déclare les siens. Les paramètres d'un
-effet se rendent en Jinja isolé, avec ceux de l'action (`params`) et les résultats des effets déjà
-faits (`effects`) : le second effet d'une arrivée ajoute aux groupes le compte que le premier a créé.
+The core ships `connector.call` — an operation of an organisation connector (ADR 0034) — and
+`check` (alias `verifier`), a control with no effect outside; a plugin declares its own. An
+effect's parameters are rendered in isolated Jinja, with those of the action (`params`) and the
+results of the effects already done (`effects`): an onboarding's second effect adds to the groups
+the account the first one created.
 """
 
 from __future__ import annotations
@@ -208,15 +209,18 @@ async def _arguments_de_la_plateforme(
     return filled
 
 
-async def _verifier(_ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, Any]:
-    """`verifier` : une condition, rendue avec les résultats des effets précédents, qui doit être
-    VRAIE — sinon l'action échoue, nommée par son `motif`, et ce qu'elle avait fait se compense.
-    Aucun système tiers n'est touché : c'est un contrôle (un J+1, une clôture), permis par défaut."""
+async def _check(_ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, Any]:
+    """`check`: a condition, rendered with the results of the previous effects, that must be TRUE;
+    otherwise the action fails, named by its `reason`, and what it had done is compensated. No third
+    party system is touched: it is a control (a D+1 check, a closing), allowed by default.
+
+    `verifier` (with `motif`) is the same effect under the name it had before S39-11: actions and
+    workflows written with it keep running."""
     condition = str(params.get("condition", "")).strip().lower()
-    motif = str(params.get("motif") or params.get("condition") or "")
-    if condition not in {"true", "1", "yes", "oui"}:
-        raise EffetRefuse(f"check failed: {motif}")
-    return {"ok": True, "motif": motif}
+    reason = str(params.get("reason") or params.get("motif") or params.get("condition") or "")
+    if condition not in {"true", "1", "yes", "oui"}:  # lang: fr-ok - `oui` kept for old workflows
+        raise EffetRefuse(f"check failed: {reason}")
+    return {"ok": True, "reason": reason, "motif": reason}  # lang: fr-ok - `motif` kept one release
 
 
 def reinitialiser() -> None:
@@ -224,8 +228,10 @@ def reinitialiser() -> None:
     _EFFETS.clear()
     _POLITIQUES.clear()
     _EFFETS["connector.call"] = _appel_de_connecteur
-    _EFFETS["verifier"] = _verifier
-    _POLITIQUES["verifier"] = "allowed"
+    _EFFETS["check"] = _check
+    _POLITIQUES["check"] = "allowed"
+    _EFFETS["verifier"] = _check  # lang: fr-ok - alias for actions written before S39-11
+    _POLITIQUES["verifier"] = "allowed"  # lang: fr-ok - alias for actions written before S39-11
 
 
 reinitialiser()

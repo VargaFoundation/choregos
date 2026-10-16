@@ -214,6 +214,58 @@ Options:
   --help  Show this message and exit.
 ```
 
+## `choregos knowledge`
+
+Knowledge bases as code
+
+### `choregos knowledge apply`
+
+```text
+Usage: choregos knowledge apply [OPTIONS]
+
+  Make a knowledge base match its manifest: create or patch the base, its
+  sources, its uploads and its eval set. Idempotent: a second run changes
+  nothing.
+
+Options:
+  -f, --file <path>  The manifest (YAML).  [required]
+  --org <str>        The organisation (default: the profile's).
+  --dry-run          Print the plan, change nothing.
+  --prune            Also remove the sources and uploads the manifest does not
+                     declare.
+  --help             Show this message and exit.
+```
+
+### `choregos knowledge eval`
+
+```text
+Usage: choregos knowledge eval [OPTIONS] {slug}
+
+  Run the base's eval set against its index and print recall@5.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>
+  --help       Show this message and exit.
+```
+
+### `choregos knowledge sync`
+
+```text
+Usage: choregos knowledge sync [OPTIONS] {slug}
+
+  Sync every source of a base now.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>
+  --help       Show this message and exit.
+```
+
 ### `choregos login`
 
 ```text

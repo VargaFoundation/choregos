@@ -1,0 +1,30 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: record_account
+  displayName: Record the account
+  description: "Records the account the onboarding workflow created in the directory, and its groups."
+spec:
+  target: {objectType: employee, cardinality: one}
+  parameters:
+    upn: {type: string, required: true}
+    groups: {type: "array<string>"}
+  preconditions:
+    - {name: not_gone, expr: "target.status != 'gone'", message: "Nothing is opened in the registry for a person who has left."}
+  permissions:
+    propose: [agent:onboarding-coordinator, role:contributor]
+    approve: policy:hr
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: account
+        id: "${params.upn}"
+        properties:
+          upn: "${params.upn}"
+          employee_id: "${target.employee_id}"
+          active: true
+          groups: "${has(params.groups) ? params.groups : null}"
+          opened_at: "${now}"
+  idempotencyKey: "${params.upn}"

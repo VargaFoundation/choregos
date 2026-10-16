@@ -10,6 +10,8 @@ import { OperationsDuProjet } from "@/components/operations-du-projet";
 import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur } from "@/lib/format";
+import { useSession } from "@/lib/session";
+import { usableModels } from "@/lib/usable-models";
 import type { ProjectModels } from "@/lib/types";
 
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
@@ -32,11 +34,13 @@ const PROFILS = ["standard", "strong", "cheap", "by_size"];
 export default function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const queryClient = useQueryClient();
+  const { org } = useSession();
   const policy = useQuery({ queryKey: ["policy", slug], queryFn: () => api.policy(slug) });
   const matrix = useQuery({ queryKey: ["matrix", slug], queryFn: () => api.modelMatrix(slug) });
   const tools = useQuery({ queryKey: ["project-tools", slug], queryFn: () => api.projectTools(slug) });
   const models = useQuery({ queryKey: ["models", slug], queryFn: () => api.models(slug) });
-  const platformModels = useQuery({ queryKey: ["platform-models"], queryFn: () => api.platformModels() });
+  // The models the organisation lets agents use (`/admin/models`, ADR 0060), the gateway's list when it has none.
+  const platformModels = useQuery({ queryKey: ["usable-models", org], queryFn: () => usableModels(org, { usage: "agent" }) });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

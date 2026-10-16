@@ -420,6 +420,8 @@ export type StageInput = {
   };
   agent: {
     backend: string;
+    /** The image the run's pod uses instead of the runner image (ADR 0063): the reference the operator's `CHOREGOS_AGENT_IMAGES` maps the agent's image name to, built from the runner image. */
+    image?: string;
     launch?: {
       command?: Array<string>;
       env?: {
@@ -510,6 +512,28 @@ export type StageInput = {
     tools?: {
       [key: string]: Array<string>;
     };
+  } | null;
+  /** Set for a step a remote agent carries over A2A (ADR 0062): `agent.backend` is `a2a`, `model` a placeholder, no gateway key exists. The access token is NOT here: it travels in the run's Secret. */
+  remote?: {
+    protocol?: "a2a";
+    /** the JSON-RPC endpoint messages are posted to (pinned at publication) */
+    endpoint: string;
+    /** where the card lives; the runner fetches it again and refuses on drift */
+    card_url: string;
+    protocol_version: string;
+    skill?: string | null;
+    /** sha256:<hex> of the card as it was when the version was published */
+    card_digest: string;
+    timeout_s: number;
+    input?: "text" | "text+files";
+    /** what the registry entry declares: A2A reports no figure */
+    declared_cost?: {
+      per_task_usd?: number | null;
+      per_minute_usd?: number | null;
+    };
+    agent_slug: string;
+    /** the name of the organisation credential the access token comes from (never the token) */
+    credential?: string | null;
   } | null;
 };
 
