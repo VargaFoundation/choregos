@@ -1823,8 +1823,6 @@ const filedOnTheMock: WorkItemDto[] = [];
 /** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
 let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string; updated_at?: string } = {
   ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
-  updated_by: "augustin@acme.dev",
-  updated_at: "2026-10-14T09:00:00",
 };
 
 /** The hosts the demo project's own policy allows. */
