@@ -261,6 +261,85 @@ paths:
       description: What the project's active workflows require of its connectors, and why; the connector that covers each capability, otherwise the platform's default type (ADR 0034).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectRequirement" } } } } }
+  /orgs/{org}/github:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [connectors]
+      operationId: getGitHubAppStatus
+      description: |
+        The Choregos GitHub App as this organisation sees it (ADR 0073): whether the deployment has an App,
+        the link that installs it, and the installations this organisation has claimed. An installation
+        another organisation claimed is never listed. Nobody types an installation id: it is discovered.
+        Needs `connector:write` on a project of the organisation, or the organisation's administrator.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppStatus" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/github/refresh:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [connectors]
+      operationId: refreshGitHubInstallations
+      description: Resync the App's installations from GitHub (`GET /app/installations`), then answer the status. Same permission as the status.
+      responses:
+        "200": { description: Resynced, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppStatus" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { description: "GitHub did not answer, or refused the App's credentials" }
+  /orgs/{org}/github/repositories:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: q, in: query, description: "Substring of the repository's full name", schema: { type: string } }
+      - { name: installation, in: query, description: "Restrict to one installation id", schema: { type: integer } }
+      - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    get:
+      tags: [connectors]
+      operationId: listGitHubRepositories
+      description: The repositories the organisation's claimed installations can see. It feeds the repository picker of a connector form. Same permission as the status.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubRepositoryPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/github/install-link:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [connectors]
+      operationId: createGitHubInstallLink
+      description: |
+        The URL that installs the App on a GitHub account. It carries a short-lived signed `state`
+        (organisation, project, user, `return_to`) that GitHub hands back to the Setup URL
+        (`GET /github/setup`). Same permission as the status. 409 when the deployment has no App.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/GitHubInstallLinkRequest" } } }
+      responses:
+        "200": { description: The link, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubInstallLink" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /github/setup:
+    get:
+      tags: [connectors]
+      operationId: githubAppSetup
+      description: |
+        The GitHub App's Setup URL: a browser redirect after an installation. GitHub sends
+        `installation_id`, `setup_action`, our `state` and, when the App requests user authorization,
+        `code`. The API checks the state (signature, expiry, the session's user), upserts the
+        installation, claims it for the organisation in the state (ADR 0073), and redirects to the
+        state's `return_to`. Not a JSON endpoint.
+      security:
+        - session: []
+      parameters:
+        - { name: installation_id, in: query, required: true, schema: { type: integer } }
+        - { name: setup_action, in: query, schema: { type: string, enum: [install, update, request] } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, description: "OAuth code, present when the App requests user authorization during installation", schema: { type: string } }
+      responses:
+        "302": { description: "Redirect to the state's `return_to` (the claim's outcome is carried in the `github` query parameter)" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -3017,6 +3096,60 @@ components:
               name: { type: string }
               ok: { type: boolean }
               detail: { type: [string, "null"] }
+    GitHubInstallation:
+      type: object
+      required: [id, account_login, account_type, repository_selection, suspended, claimed, settings_url]
+      properties:
+        id: { type: integer, description: "GitHub's installation id; discovered, never typed" }
+        account_login: { type: string }
+        account_type: { type: string, enum: [Organization, User] }
+        repository_selection: { type: string, enum: [all, selected] }
+        suspended: { type: boolean }
+        claimed: { type: boolean, description: "Claimed by the organisation asking" }
+        settings_url: { type: string, description: "Where to change the installation's repositories on github.com" }
+    GitHubAppStatus:
+      type: object
+      required: [configured, multi_org_claim, installations]
+      properties:
+        configured: { type: boolean, description: "The deployment has a GitHub App (`CHOREGOS_GITHUB_APP_ID` and key)" }
+        app_slug: { type: [string, "null"], description: "Read from GitHub (`GET /app`), never configured" }
+        app_name: { type: [string, "null"] }
+        install_url: { type: [string, "null"], description: "Installs the App on a GitHub account, without a state; use install-link to come back to the console" }
+        multi_org_claim:
+          type: string
+          enum: [implicit, oauth, unavailable]
+          description: "How an installation is claimed: implicit (a single-organisation instance), oauth (several organisations, proof by GitHub user authorization), unavailable (several organisations and no OAuth client secret)"
+        installations:
+          type: array
+          items: { $ref: "#/components/schemas/GitHubInstallation" }
+    GitHubRepository:
+      type: object
+      required: [full_name, private, default_branch, installation_id]
+      properties:
+        full_name: { type: string, description: "owner/repo" }
+        private: { type: boolean }
+        default_branch: { type: string }
+        installation_id: { type: integer }
+    GitHubRepositoryPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/GitHubRepository" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    GitHubInstallLinkRequest:
+      type: object
+      required: [return_to]
+      additionalProperties: false
+      properties:
+        project: { type: [string, "null"], description: "Project slug the person came from" }
+        return_to: { type: string, description: "A path of the console (starts with `/`), where the setup callback sends the person back" }
+    GitHubInstallLink:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
     ConnectorType:
       type: object
       required: [kind, type, display, config_schema]
