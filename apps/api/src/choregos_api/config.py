@@ -131,6 +131,7 @@ class Settings(BaseSettings):
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
     #: instead of `undeclared` (ADR 0065). It restricts nothing; the network policy does.
+    #: Deprecated (S39-22): read as `CHOREGOS_EGRESS_CEILING` `{"api": …}` when that names no API family.
     api_egress_hosts: list[str] = Field(default_factory=list)
     #: The operator's own MCP catalogue entries, merged after the shipped catalogue (ADR 0065).
     mcp_catalogue_extra: str | None = None

@@ -13,7 +13,7 @@ from choregos_api.config import get_settings
 from sqlalchemy import create_engine, text
 
 API = pathlib.Path(__file__).resolve().parents[1]
-BEFORE = "b2c4d6e8f0a1"
+BEFORE = "a4c6e8b0d2f4"
 
 
 def _config(url: str) -> Config:

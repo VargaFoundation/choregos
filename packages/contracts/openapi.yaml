@@ -377,7 +377,7 @@ paths:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors/{name}/operations/{operation}:
     parameters:
@@ -1511,6 +1511,8 @@ paths:
     post:
       tags: [agents]
       operationId: createAgent
+      parameters:
+        - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open a remote agent's card host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
       description: "Create an agent and its version 1, in the scope asked (ADR 0061): an `org` agent needs `agent:manage` (org_admin), a `project` agent the project's owner (`agent:project_manage`), a `personal` agent `agent:create_personal` (developer and above). The 403 carries the reason."
       requestBody:
         required: true
@@ -1518,7 +1520,7 @@ paths:
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
   /orgs/{org}/agent-drafts:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     post:
@@ -1792,13 +1794,15 @@ paths:
     post:
       tags: [agents]
       operationId: publishAgentVersion
+      parameters:
+        - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open a remote agent's card host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
       description: Publish the next version; none is ever rewritten.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSpec" } } }
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
-        "409": { description: "A case of the agent's eval suite fails (S32-03): `errors` names each failing case", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "409": { description: "A case of the agent's eval suite fails (S32-03): `errors` names each failing case; or, for a remote agent, `code: egress_required` when its card host is not yet allowed", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /orgs/{org}/agents/{slug}/versions/{version}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1952,12 +1956,15 @@ paths:
     post:
       tags: [agents]
       operationId: installSkillCatalogueEntry
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillCatalogueInstall" } } }
       description: Publishes the entry as a skill, or its next version when the catalogue pins a newer one. A bundled entry is read from the image and checked against its provenance; a git entry is fetched at its pinned commit. Both go through the supply-chain gate again (ADR 0050) — a high-risk version waits for a second administrator. `agent:manage` may install any entry; `skill:import` an entry whose repository is in the organisation's allowlist, as a new skill only.
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository did not answer, or the image's bundled skill does not match its provenance" }
   /orgs/{org}/skills/{slug}:
@@ -3221,6 +3228,11 @@ components:
         secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a literal is refused" }
         secret_values: { type: object, additionalProperties: { type: string }, description: "the credential typed once, sealed at rest and never returned (ADR 0058); give this or `secret_refs.token`" }
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
+    SkillCatalogueInstall:
+      type: object
+      properties:
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     SkillCatalogueSignals:
       type: object
       required: [stars, stars_as_of]

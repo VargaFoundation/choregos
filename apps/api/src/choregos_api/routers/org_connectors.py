@@ -178,7 +178,15 @@ async def declare_org_connector(
     )
     store = require_store(body.secret_values)
     await egress_gate_for_connector(
-        session, principal, organisation, kind, body.type, body.config, body.name, body.allow_egress
+        session,
+        principal,
+        organisation,
+        kind,
+        body.type,
+        body.config,
+        body.name,
+        body.allow_egress,
+        origin=f"mcp-catalogue:{catalogue_entry}" if catalogue_entry else None,
     )
     deja = (
         await session.execute(

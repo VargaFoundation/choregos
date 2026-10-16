@@ -74,7 +74,13 @@ def mode_of(settings: Settings) -> Mode:
 
 
 def ceiling_of(settings: Settings) -> dict[str, tuple[str, ...]]:
-    return ceiling_from(settings.egress_ceiling)
+    """The deployment's ceiling. `CHOREGOS_API_EGRESS_HOSTS` (the catalogue's older declaration) is
+    read as `{"api": <hosts>}` when the ceiling does not name the API family: deprecated, one minor
+    version."""
+    declared = dict(settings.egress_ceiling)
+    if settings.api_egress_hosts and not declared.get("api"):
+        declared["api"] = list(settings.api_egress_hosts)
+    return ceiling_from(declared)
 
 
 def to_rule(row: OrgEgressRule) -> AllowedRule:
@@ -454,13 +460,45 @@ def knowledge_source_targets(kind: str, config: dict[str, Any]) -> list[Target]:
     return targets_of_hosts(hosts, "api") + targets_of_hosts(hosts, "workers")
 
 
+def remote_agent_targets(card_url: str) -> list[Target]:
+    """A remote agent's card host: read by the API now, called by the runner pods during a step. The
+    endpoint and token hosts the card names are only known once it is read."""
+    hp = host_port_of(card_url)
+    if hp is None:
+        return []
+    return targets_of_hosts([hp], "api") + targets_of_hosts([hp], "runners")
+
+
+async def egress_gate_for_remote_agent(
+    session: AsyncSession,
+    principal: Principal,
+    organisation: Organization,
+    spec: Any,
+    allow_egress: bool,
+) -> None:
+    """Registering or publishing a remote (`a2a`) agent opens its card host first (S39-22)."""
+    runtime = getattr(spec, "runtime", None)
+    card_url = getattr(runtime, "card_url", None)
+    if not card_url:
+        return
+    await ensure_or_409(
+        session,
+        principal,
+        organisation,
+        remote_agent_targets(card_url),
+        allow_egress=allow_egress,
+        origin=f"remote-agent:{card_url}",
+        reason=f"the remote agent at {card_url}",
+    )
+
+
 #: The connector kinds whose hosts are gated today. The REST connectors (Jira, GitLab, Slack...)
 #: join in phase 2, first in `warn`: their hosts are seeded by the migration, and a wrong seed would
 #: break trackers.
 GATED_CONNECTOR_KINDS = frozenset({"mcp"})
 
 
-async def egress_gate_for_connector(
+async def egress_gate_for_connector(  # noqa: PLR0913 - the connector's identity, then the gesture
     session: AsyncSession,
     principal: Principal,
     organisation: Organization,
@@ -469,6 +507,7 @@ async def egress_gate_for_connector(
     config: dict[str, Any],
     name: str,
     allow_egress: bool,
+    origin: str | None = None,
 ) -> None:
     if kind not in GATED_CONNECTOR_KINDS:
         return
@@ -478,6 +517,6 @@ async def egress_gate_for_connector(
         organisation,
         targets_of_connector(kind, type_name, config),
         allow_egress=allow_egress,
-        origin=f"org-connector:{name}",
+        origin=origin or f"org-connector:{name}",
         reason=f"the {type_name} connector `{name}`",
     )
