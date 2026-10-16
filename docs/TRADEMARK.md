@@ -6,7 +6,7 @@ this name ([ADR 0024](adr/0024-two-editions.md)) and an unwritten policy is one 
 by the first person who disagrees with it.
 
 "Choregos" and the Varga Foundation name are the marks of the Varga Foundation. The enterprise
-edition is published by graal.systems, and operated by Diametral, under the same product name,
+edition is published by a third party, GraalSystems (a DiametralGroup company), and operated by DiametralGroup companies, under the same product name,
 by agreement. The edition announces its own publisher (`GET /edition`, fields `publisher` and
 `edition_version`) and the console shows it; the community edition announces none.
 

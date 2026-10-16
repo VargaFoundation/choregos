@@ -11,8 +11,8 @@ Editions
 
 This repository is the **community edition**, and all of it is Apache-2.0.
 
-A separate **enterprise edition**, published by Diametral, builds on this one and
-is proprietary. It is not distributed here, and no file in this repository is
+A separate **enterprise edition**, published by a third party
+(GraalSystems, a DiametralGroup company), builds on this one and is proprietary. It is not distributed here, and no file in this repository is
 subject to its terms. See docs/adr/0024-two-editions.md.
 
 Neither the name "Choregos" nor the Varga Foundation name may be used to endorse

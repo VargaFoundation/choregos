@@ -692,7 +692,7 @@ curl -s https://<api-host>/edition
 
 `version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:
 on the enterprise edition they say who publishes it and which version of the plugin runs
-(`"publisher":"graal.systems","edition_version":"0.2.0"`), and the admin page and the footer show
+(`"publisher":"GraalSystems","edition_version":"0.2.0"`), and the admin page and the footer show
 them. They are `null` on the community edition, and absent from an older core.
 
 This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
