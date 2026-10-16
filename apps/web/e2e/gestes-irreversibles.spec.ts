@@ -84,5 +84,5 @@ test("assouplir la politique d'une opération se confirme, la resserrer non", as
 test("désépingler un agent dit ce qui se perd", async ({ page }) => {
   await page.goto("/p/billing-api/agents");
   await page.getByTestId("epingles").getByRole("button", { name: "Unpin" }).first().click();
-  await expect(page.getByTestId("confirmation")).toContainText("Its workflows run its latest version from now on");
+  await expect(page.getByTestId("confirmation")).toContainText("Its workflows run its production version from now on");
 });
