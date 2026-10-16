@@ -668,6 +668,38 @@ export type Action = {
   journal?: Array<ActionEffect>;
 };
 
+export type ReadinessFix = {
+  /** Where it is fixed: a console path, with an `#anchor` to the field */
+  href?: string | null;
+  /** Who can do it: the project's owner, the organisation's administrator, the platform's operator, or someone outside Choregos (an identity provider, a vendor) */
+  by: "project_owner" | "org_admin" | "platform_operator" | "external";
+};
+
+export type ReadinessItem = {
+  /** Stable, e.g. `provisioned`, `connector-cd`, `connector-cd-secrets`, `people-release-captain`, `notifications` */
+  id: string;
+  section: "general" | "connections" | "agents" | "guardrails" | "people" | "notifications" | "tools";
+  title: string;
+  /** done: nothing to do. check: works but deserves a look (a demo stand-in, a stale test, an unmeasured check). todo: the project cannot run as intended. not_needed: its workflows do not need it */
+  state: "done" | "check" | "todo" | "not_needed";
+  /** Why, in a sentence */
+  detail: string;
+  fix: ReadinessFix;
+};
+
+export type ReadinessSummary = {
+  done: number;
+  check: number;
+  todo: number;
+};
+
+export type ProjectReadiness = {
+  /** No item is `todo` */
+  ready: boolean;
+  summary: ReadinessSummary;
+  items: Array<ReadinessItem>;
+};
+
 /** A capability the project's workflows require, and why (ADR 0034). */
 export type ProjectRequirement = {
   capability: string;
@@ -2699,6 +2731,7 @@ export interface Operations {
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
   getProjectModels: { method: "GET"; path: "/projects/{id}/models"; body: never; response: ProjectModels };
+  getProjectReadiness: { method: "GET"; path: "/projects/{id}/readiness"; body: never; response: ProjectReadiness };
   getProjectTools: { method: "GET"; path: "/projects/{id}/tools"; body: never; response: {
   allows_all: boolean;
   tools: Array<{
