@@ -19,10 +19,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
 import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
+import { type CeilingNetwork, flaggedByCeiling, isDefaultNetwork, networkMode, networkSummary, parseHosts } from "@/lib/network";
 import { scopeHint, scopeLabel } from "./registre";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usd } from "@/lib/format";
-import type { Agent, AgentSpec, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
+import type { Agent, AgentNetwork, AgentSpec, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
 
 /** The model profiles a project maps to models (its settings, `models.yaml`). */
 export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as const;
@@ -92,6 +93,8 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     knowledge: spec.knowledge ?? [],
     memory: spec.memory ?? "project",
     evals: (spec.evals ?? []).filter((c) => c.name.trim()),
+    // Nothing written is the default: the API keeps the version's digest as it was.
+    network: isDefaultNetwork(spec.network) ? undefined : spec.network,
   };
 }
 
@@ -124,7 +127,7 @@ export function slugProblem(slug: string): string | null {
   return null;
 }
 
-export type SectionId = "model" | "limits" | "skills" | "tools" | "knowledge" | "memory" | "evals";
+export type SectionId = "model" | "limits" | "skills" | "tools" | "network" | "knowledge" | "memory" | "evals";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -146,6 +149,7 @@ export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
     limits: limits.length ? limits.join(" · ") : "the role's defaults",
     skills: skills ? `${skills} attached` : "none",
     tools: servers ? plural(servers, "MCP server", "MCP servers") : "none",
+    network: networkSummary(spec.network),
     knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
     memory: MEMORY_SCOPES[spec.memory ?? "project"].toLowerCase(),
     evals: plural(cases, "case", "cases"),
@@ -160,6 +164,7 @@ export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
     limits: spent.some((v) => v != null),
     skills: (spec.skills ?? []).length > 0,
     tools: (spec.mcp_servers ?? []).length > 0,
+    network: !isDefaultNetwork(spec.network),
     knowledge: (spec.knowledge ?? []).length > 0,
     memory: Boolean(spec.memory && spec.memory !== "project"),
     evals: (spec.evals ?? []).length > 0,
@@ -226,6 +231,8 @@ export function AgentBuilder({
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
   const library = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
+  // The organisation's network ceiling flags a host before the API refuses it; a member who cannot read it sees no flag.
+  const ceiling = useQuery({ queryKey: ["policy-ceiling", org], queryFn: () => api.policyCeiling(org), retry: false });
   const bases = useQuery({ queryKey: ["knowledge", org], queryFn: () => api.knowledgeBases(org), retry: false });
 
   const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
@@ -406,6 +413,14 @@ export function AgentBuilder({
         <SkillsSection library={library.data ?? []} spec={spec} set={set} summary={summaries.skills} defaultOpen={opened.skills} />
 
         <McpSection connectors={mcpConnectors} spec={spec} set={set} summary={summaries.tools} defaultOpen={opened.tools} />
+
+        <NetworkSection
+          spec={spec}
+          set={set}
+          ceiling={((ceiling.data?.ceiling ?? {}) as { network?: CeilingNetwork }).network}
+          summary={summaries.network}
+          defaultOpen={opened.network}
+        />
 
         <KnowledgeSection bases={bases.data ?? []} spec={spec} set={set} summary={summaries.knowledge} defaultOpen={opened.knowledge} />
 
@@ -796,6 +811,123 @@ function McpSection({
       {connectors.length === 0 && (
         <p className="text-xs text-ink-muted">No MCP connector in the organisation yet: an administrator declares one.</p>
       )}
+    </Disclosure>
+  );
+}
+
+/**
+ * What the agent may reach on the internet (ADR 0070). It can only narrow the project's and the
+ * organisation's network: a host they do not allow refuses the publication (422) and the run.
+ */
+function NetworkSection({
+  spec,
+  set,
+  ceiling,
+  summary,
+  defaultOpen,
+}: {
+  spec: AgentSpec;
+  set: (patch: Partial<AgentSpec>) => void;
+  ceiling: CeilingNetwork | undefined;
+  summary: string;
+  defaultOpen: boolean;
+}) {
+  const network = spec.network ?? {};
+  // "Only these hosts" with nothing typed yet is `[]` on the wire, which reads as "No internet": the radio
+  // remembers the choice until a host is named.
+  const [listing, setListing] = useState(false);
+  const mode = listing && (network.domains ?? []).length === 0 ? "listed" : networkMode(spec.network);
+  const [text, setText] = useState(() => (network.domains ?? []).join("\n"));
+  const patch = (next: AgentNetwork) => set({ network: { ...network, ...next } });
+  const typed = parseHosts(text);
+  const flagged = mode === "listed" ? flaggedByCeiling(typed.hosts, ceiling) : [];
+  const choose = (value: "project" | "none" | "listed") => {
+    setListing(value === "listed");
+    if (value === "project") patch({ domains: null });
+    else if (value === "none") patch({ domains: [] });
+    else patch({ domains: typed.hosts });
+  };
+  return (
+    <Disclosure title="Network access" summary={summary} defaultOpen={defaultOpen}>
+      <p className="text-xs text-ink-muted">
+        Which hosts a run of this agent may reach. It can only narrow the project&apos;s policy and the organisation&apos;s
+        network access, never widen them.
+      </p>
+      <fieldset className="space-y-1.5" data-testid="agent-network-mode">
+        <legend className="text-xs font-medium text-ink-muted">Hosts</legend>
+        {(
+          [
+            ["project", "Same as the project's policy"],
+            ["none", "No internet"],
+            ["listed", "Only these hosts"],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value} className="flex items-center gap-2 text-sm">
+            <input type="radio" name="agent-network" checked={mode === value} onChange={() => choose(value)} />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+      {mode === "listed" && (
+        <Field label="Allowed hosts" hint="One per line. A host name covers its subdomains; *.example.com covers the subdomains only.">
+          {(id) => (
+            <Textarea
+              id={id}
+              rows={4}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                patch({ domains: parseHosts(e.target.value).hosts });
+              }}
+              placeholder={"pypi.org\napi.github.com"}
+            />
+          )}
+        </Field>
+      )}
+      {mode === "listed" && typed.hosts.length === 0 && typed.problems.length === 0 && (
+        <p className="text-xs text-ink-muted">Name at least one host: with none, the agent has no internet.</p>
+      )}
+      {mode === "listed" && typed.problems.length > 0 && (
+        <ul className="list-disc pl-5 text-xs text-danger" data-testid="agent-network-problems">
+          {typed.problems.map((problem) => (
+            <li key={problem}>{problem}</li>
+          ))}
+        </ul>
+      )}
+      {flagged.length > 0 && (
+        <ul className="list-disc pl-5 text-xs text-failed-ink" data-testid="agent-network-flagged">
+          {flagged.map((f) => (
+            <li key={f.host}>
+              <span className="font-mono">{f.host}</span>: {f.reason} — the publication would be refused.
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Requests per minute, per host" hint="Politeness: new connections a run opens to one host. Empty: the project's.">
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              min={1}
+              value={network.per_host_per_minute ?? ""}
+              onChange={(e) => patch({ per_host_per_minute: e.target.value ? Number(e.target.value) : null })}
+            />
+          )}
+        </Field>
+        <Field label="Built-in web tools" hint="The agent CLI's own WebFetch and WebSearch. They only ever narrow: off here, off for this agent.">
+          {(id) => (
+            <Select
+              id={id}
+              value={network.builtin_web_tools === false ? "off" : ""}
+              onChange={(e) => patch({ builtin_web_tools: e.target.value === "off" ? false : null })}
+            >
+              <option value="">As the policy says</option>
+              <option value="off">Off</option>
+            </Select>
+          )}
+        </Field>
+      </div>
     </Disclosure>
   );
 }

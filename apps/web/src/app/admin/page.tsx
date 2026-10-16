@@ -8,6 +8,8 @@ import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/componen
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { NetworkActivityCard } from "@/components/admin/network-activity";
+import { NetworkCeilingCard } from "@/components/admin/network-ceiling";
 import { PolicyCeilingCard } from "@/components/admin/policy-ceiling";
 import { GesteConfirme } from "@/components/geste-confirme";
 
@@ -122,6 +124,8 @@ export default function AdminPage() {
           {tokens.data?.length === 0 && <Empty>No token</Empty>}
         </Card>
         <PolicyCeilingCard org={org} canEdit={orgAdmin} />
+        <NetworkCeilingCard org={org} canEdit={orgAdmin} />
+        {orgAdmin && <NetworkActivityCard org={org} />}
       </div>
     </div>
   );

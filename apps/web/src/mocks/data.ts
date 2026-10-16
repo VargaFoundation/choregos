@@ -40,6 +40,8 @@ import type {
   DoraReport,
   FindingPage,
   MeDto,
+  NetworkActivity,
+  ProjectNetwork,
   Membership,
   Memory,
   ProjectPage,
@@ -1286,6 +1288,7 @@ export const agents: Agent[] = [
           budget: { run_usd: 1.5, daily_usd: 5 },
           skills: [{ slug: "onboarding-procedure", version: 1 }],
           mcp_servers: [],
+          network: { domains: ["pypi.org", "api.github.com"], per_host_per_minute: 10 },
         },
         checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
         created_by: "lea@acme.dev",
@@ -1817,6 +1820,52 @@ function recordWrite(method: string, path: string, body: unknown): void {
 const filedOnTheMock: WorkItemDto[] = [];
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
+/** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
+let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string; updated_at?: string } = {
+  ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
+  updated_by: "augustin@acme.dev",
+  updated_at: "2026-10-14T09:00:00",
+};
+
+/** The hosts the demo project's own policy allows. */
+const PROJECT_ALLOW = ["github.com", "pypi.org", "files.pythonhosted.org", "registry.npmjs.org"];
+
+/** The demo project's effective network: its policy under the ceiling, plus the repository host (ADR 0070). */
+function mockProjectNetwork(): ProjectNetwork {
+  const net = ((mockCeiling.ceiling ?? {}) as { network?: { allow_domains?: string[] | null; deny_domains?: string[]; per_host_per_minute?: number | null; per_run_per_minute?: number | null; builtin_web_tools?: string | null } }).network ?? {};
+  const within = (host: string, outer: string) => outer === "*" || host === outer || host.endsWith(`.${outer}`);
+  const cap = net.allow_domains;
+  const outside = cap == null ? [] : PROJECT_ALLOW.filter((h) => !cap.some((o) => within(h, o)));
+  const deny = net.deny_domains ?? [];
+  const denied = (h: string) => deny.some((d) => within(h, d));
+  return {
+    policy: { allow_domains: PROJECT_ALLOW, deny_domains: [], builtin_web_tools: "allow" },
+    ceiling: (mockCeiling.ceiling as { network?: Record<string, unknown> } | null)?.network ?? null,
+    effective: {
+      allow: PROJECT_ALLOW.filter((h) => !outside.includes(h) && !denied(h)),
+      deny,
+      implied: denied("github.com") ? [] : ["github.com"],
+      per_host_per_minute: net.per_host_per_minute ?? null,
+      per_run_per_minute: net.per_run_per_minute ?? null,
+      org_per_host_per_minute: net.per_host_per_minute ?? null,
+      builtin_web_tools: net.builtin_web_tools !== "deny",
+    },
+    clamps: [
+      ...outside.map((h) => `network.allow_domains: \`${h}\` is outside the organisation's allowed hosts`),
+      ...PROJECT_ALLOW.filter(denied).map((h) => `network.allow_domains: \`${h}\` is denied by the organisation`),
+    ],
+  };
+}
+
+const mockNetworkActivity: NetworkActivity = {
+  rows: [
+    { host: "api.stripe.com", layer: "proxy", decision: "denied", reason: "not_allowed", count: 14, runs: 3, projects: ["billing-api"], agents: ["architect"], last_at: iso(35) },
+    { host: "news.ycombinator.com", layer: "runner", decision: "denied", reason: "denied:news.ycombinator.com", count: 2, runs: 1, projects: ["checkout-web"], agents: [], last_at: iso(190) },
+    { host: "vendor.example.com", layer: "broker", decision: "rate_limited", reason: "per_host_per_minute:60", count: 6, runs: 2, projects: ["billing-api"], agents: ["coordinator"], last_at: iso(75) },
+    { host: "github.com", layer: "proxy", decision: "allowed", reason: "allowed:github.com", count: 412, runs: 38, projects: ["billing-api", "checkout-web"], agents: ["architect"], last_at: iso(2) },
+  ],
+};
+
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -1824,6 +1873,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method !== "GET") recordWrite(method, path, body);
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
+  const bare = path.split("?")[0] ?? path;
+  if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
+    if (method === "PUT") {
+      mockCeiling = { ceiling: (body as { ceiling: Record<string, unknown> | null }).ceiling, updated_by: me.email, updated_at: new Date().toISOString() };
+    }
+    return structuredClone(mockCeiling) as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]+\/network$/.test(bare)) return mockProjectNetwork() as T;
+  if (method === "GET" && /^\/orgs\/[^/]+\/network-activity$/.test(bare)) return structuredClone(mockNetworkActivity) as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).

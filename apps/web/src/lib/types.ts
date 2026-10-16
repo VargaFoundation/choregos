@@ -5,6 +5,10 @@
  */
 export type {
   AgentBackendInfo,
+  AgentNetwork,
+  NetworkActivity,
+  NetworkActivityRow,
+  ProjectNetwork,
   ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
