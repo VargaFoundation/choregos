@@ -19,9 +19,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
+import { diffSpecs } from "@/lib/agent-diff";
 import { ApiError, api } from "@/lib/api";
 import { scopeHint, scopeLabel } from "./registre";
+import { refusalSentence, MAX_MESSAGE } from "./history";
+import { ChangeList } from "./spec-changes";
 import { TagEditor } from "./tags";
+import { MEMORY_SCOPES, openByDefault, sectionSummaries, type SectionId } from "./spec-summary";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
@@ -33,12 +37,7 @@ export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as cons
 /** Statuses of a skill that cannot be carried: archived, or not yet approved (S32-06). */
 const SKILL_UNUSABLE = new Set(["archived", "pending_review", "rejected", "quarantined"]);
 
-/** Whose memory a run reads and writes (S32-02); the API's default is the project's. */
-export const MEMORY_SCOPES = {
-  project: "The project's shared memory",
-  agent: "Its own, within the project",
-  none: "None",
-} as const;
+export { MEMORY_SCOPES, openByDefault, sectionSummaries, type SectionId };
 
 /** Who a knowledge base is served to: an agent reading it runs only in those projects. */
 export function servedTo(base: KnowledgeBase): string {
@@ -152,47 +151,6 @@ export function slugProblem(slug: string): string | null {
   return null;
 }
 
-export type SectionId = "model" | "limits" | "skills" | "tools" | "knowledge" | "memory" | "evals";
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-/** One line per folded section: what it holds now, so a closed section still tells. */
-export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
-  const limits = [
-    spec.limits?.max_turns != null ? plural(spec.limits.max_turns, "turn", "turns") : null,
-    spec.limits?.max_minutes != null ? `${spec.limits.max_minutes} min` : null,
-    spec.budget?.run_usd != null ? `${usd(spec.budget.run_usd)} a run` : null,
-    spec.budget?.daily_usd != null ? `${usd(spec.budget.daily_usd)} a day` : null,
-    spec.budget?.monthly_usd != null ? `${usd(spec.budget.monthly_usd)} a month` : null,
-  ].filter((part): part is string => part !== null);
-  const skills = (spec.skills ?? []).length;
-  const servers = (spec.mcp_servers ?? []).filter((s) => s.connector).length;
-  const bases = (spec.knowledge ?? []).length;
-  const cases = (spec.evals ?? []).length;
-  return {
-    model: `${spec.model || "the project's profile"} · ${spec.backend || "the project's backend"}`,
-    limits: limits.length ? limits.join(" · ") : "the role's defaults",
-    skills: skills ? `${skills} attached` : "none",
-    tools: servers ? plural(servers, "MCP server", "MCP servers") : "none",
-    knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
-    memory: MEMORY_SCOPES[spec.memory ?? "project"].toLowerCase(),
-    evals: plural(cases, "case", "cases"),
-  };
-}
-
-/** A section starts open when it holds something other than the default. */
-export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
-  const spent = [spec.budget?.run_usd, spec.budget?.daily_usd, spec.budget?.monthly_usd, spec.limits?.max_turns, spec.limits?.max_minutes];
-  return {
-    model: Boolean(spec.model || spec.backend),
-    limits: spent.some((v) => v != null),
-    skills: (spec.skills ?? []).length > 0,
-    tools: (spec.mcp_servers ?? []).length > 0,
-    knowledge: (spec.knowledge ?? []).length > 0,
-    memory: Boolean(spec.memory && spec.memory !== "project"),
-    evals: (spec.evals ?? []).length > 0,
-  };
-}
 
 type Mode = { kind: "create" } | { kind: "version"; agent: Agent };
 
@@ -206,6 +164,7 @@ export function AgentBuilder({
   onDone,
   onCreated,
   onBack,
+  onCancel,
 }: {
   org: string;
   mode: Mode;
@@ -225,6 +184,8 @@ export function AgentBuilder({
   onCreated?: (agent: Agent) => void;
   /** Create mode: the way back to the first step. */
   onBack?: () => void;
+  /** Version mode: leave the editor without publishing (S40-12). */
+  onCancel?: () => void;
 }) {
   const client = useQueryClient();
   const [name, setName] = useState(initial?.display_name ?? "");
@@ -249,7 +210,13 @@ export function AgentBuilder({
   const [error, setError] = useState<string | null>(null);
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState<"try" | "costs">("try");
+  const [panel, setPanel] = useState<"try" | "costs" | "changes">("try");
+  // Version mode (S40-12): the version the author started from is what `base_version` names, kept until
+  // they publish on top of a newer one on purpose; the message is required.
+  const [base, setBase] = useState(mode.kind === "version" ? mode.agent.latest_version : 0);
+  const [message, setMessage] = useState("");
+  const [stale, setStale] = useState<{ latest: number; author: string | null } | null>(null);
+  const [discarding, setDiscarding] = useState(false);
 
   // Only the models the organisation lets an agent use (`/admin/models`, ADR 0060).
   const models = useQuery({ queryKey: ["usable-models", org], queryFn: () => usableModels(org, { usage: "agent" }), retry: false });
@@ -283,13 +250,16 @@ export function AgentBuilder({
         : rest;
     });
 
-  async function submit(lifecycle: "active" | "draft" = "active") {
+  const changes = mode.kind === "version" ? diffSpecs(start, cleanSpec(spec)) : [];
+
+  async function submit(lifecycle: "active" | "draft" = "active", onTopOf?: number) {
     setError(null);
     setFailing([]);
     if (kind === "code" && (!code?.image || !(code.command ?? []).some((a) => a.trim()))) {
       setError("A code agent needs an image and a command.");
       return;
     }
+    setStale(null);
     setBusy(true);
     try {
       if (mode.kind === "create") {
@@ -307,12 +277,22 @@ export function AgentBuilder({
         onDone?.(`${agent.display_name} registered as v${agent.latest_version}${lifecycle === "draft" ? ", as a draft" : ""}`);
         onCreated?.(agent);
       } else {
-        const published = await api.publishAgentVersion(org, mode.agent.slug, cleanSpec(spec));
+        const published = await api.publishAgentVersionWithMessage(org, mode.agent.slug, {
+          spec: cleanSpec(spec),
+          message: message.trim(),
+          base_version: onTopOf ?? base,
+        });
         onDone?.(`v${published.version} published: projects keep the version they pinned`);
         await client.invalidateQueries({ queryKey: ["agent", org, mode.agent.slug] });
+        await client.invalidateQueries({ queryKey: ["agents", org] });
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Refused");
+      if (cause instanceof ApiError && cause.problem.code === "stale_base" && cause.problem.latest_version != null) {
+        // The form keeps its content: the author compares, then publishes on top on purpose.
+        setStale({ latest: cause.problem.latest_version, author: cause.problem.latest_author ?? null });
+        return;
+      }
+      setError(refusalSentence(cause));
       // A failing eval names its case (S32-03): the publication is refused, the case said.
       const errors = cause instanceof ApiError ? ((cause.problem.errors ?? []) as { loc?: unknown[]; msg?: string }[]) : [];
       setFailing(
@@ -332,7 +312,7 @@ export function AgentBuilder({
         aria-label={creating ? "New agent" : `New version of ${mode.agent.display_name}`}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy && !(creating && (!slug || problem))) void submit("active");
+          if (!busy && !(creating && (!slug || problem)) && (creating || message.trim())) void submit("active");
         }}
       >
         {creating && (
@@ -639,11 +619,71 @@ export function AgentBuilder({
               )}
             </>
           ) : (
-            <Button type="submit" tone="primary" disabled={busy}>
-              {`Publish v${mode.agent.latest_version + 1}`}
-            </Button>
+            <>
+              <div className="min-w-[16rem] flex-1">
+                <label htmlFor="revision-message" className="block text-xs text-ink-muted">
+                  What changed and why
+                </label>
+                <Input
+                  id="revision-message"
+                  value={message}
+                  maxLength={MAX_MESSAGE}
+                  placeholder="Tighten the run budget"
+                  aria-describedby="revision-message-count"
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                <span id="revision-message-count" className="text-xs text-ink-muted">
+                  {message.length} of {MAX_MESSAGE}
+                </span>
+              </div>
+              <Button type="submit" tone="primary" disabled={busy || !message.trim()}>
+                {`Publish v${mode.agent.latest_version + 1}`}
+              </Button>
+              {onCancel &&
+                (discarding ? (
+                  <span className="inline-flex items-center gap-2 text-sm">
+                    Discard {changes.length} change{changes.length === 1 ? "" : "s"}?
+                    <Button size="sm" tone="danger" onClick={onCancel}>
+                      Discard
+                    </Button>
+                    <Button size="sm" onClick={() => setDiscarding(false)}>
+                      Keep editing
+                    </Button>
+                  </span>
+                ) : (
+                  <Button onClick={() => (changes.length > 0 ? setDiscarding(true) : onCancel())}>Discard</Button>
+                ))}
+            </>
           )}
         </div>
+        {stale && mode.kind === "version" && (
+          <div role="alert" className="space-y-2 rounded-md border border-line p-3 text-sm" data-testid="stale-base">
+            <p>
+              v{stale.latest} was published{stale.author ? ` by ${stale.author}` : ""} since you started from v{base}.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={`/agents/${mode.agent.slug}?tab=history&compare=${base}..${stale.latest}`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                {`Compare v${base} \u2192 v${stale.latest}`}
+                <span className="sr-only"> (opens in a new tab: your changes stay here)</span>
+              </a>
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setBase(stale.latest);
+                  void submit("active", stale.latest);
+                }}
+              >
+                {`Publish on top of v${stale.latest}`}
+              </Button>
+            </div>
+          </div>
+        )}
       </form>
 
       <aside
@@ -657,7 +697,8 @@ export function AgentBuilder({
             [
               ["try", "Try it"],
               ["costs", "What it costs and allows"],
-            ] as const
+              ...(creating ? [] : ([["changes", `Changes (${changes.length})`]] as const)),
+            ] as ReadonlyArray<readonly [typeof panel, string]>
           ).map(([id, label]) => (
             <button
               key={id}
@@ -681,6 +722,11 @@ export function AgentBuilder({
             initialSample={initialSample}
           />
         </div>
+        {!creating && (
+          <div role="tabpanel" id="builder-panel-changes" aria-labelledby="builder-tab-changes" hidden={panel !== "changes"}>
+            <ChangeList changes={changes} empty="Nothing changed yet: edit a field and it shows here, against the version you started from." />
+          </div>
+        )}
         <div role="tabpanel" id="builder-panel-costs" aria-labelledby="builder-tab-costs" hidden={panel !== "costs"}>
           <BuilderSummary
             spec={spec}

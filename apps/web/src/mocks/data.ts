@@ -72,6 +72,7 @@ import type {
   WorkItemDto,
   WorkItemPage,
 } from "@/lib/types";
+import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
@@ -1427,6 +1428,7 @@ export const agents: Agent[] = [
         checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
         created_by: "lea@acme.dev",
         created_at: iso(60 * 24 * 2),
+        message: "Cite the access profile and add the laptop step",
       },
       {
         version: 1,
@@ -1514,6 +1516,7 @@ export const agents: Agent[] = [
         checksum: "sha256:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
         created_by: "augustin@acme.dev",
         created_at: iso(60 * 24),
+        message: "Tighten the run budget and ask for the acceptance step",
       },
       {
         version: 2,
@@ -1526,6 +1529,7 @@ export const agents: Agent[] = [
         checksum: "sha256:2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
         created_by: "catalogue:architect@2",
         created_at: iso(60 * 24 * 12),
+        message: "Catalogue update to architect@2",
       },
       {
         version: 1,
@@ -1533,6 +1537,8 @@ export const agents: Agent[] = [
         checksum: "sha256:1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d",
         created_by: "catalogue:architect@1",
         created_at: iso(60 * 24 * 30),
+        message: "Installed from the catalogue (architect@1)",
+        pinned_by: ["billing-api"],
       },
     ],
   },
@@ -2355,6 +2361,38 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       token: { id: "tok-catalogue", name: entree.display_name, created_at: iso(0), scopes: [lecture ? "mcp:read" : "mcp:write"], token: "chg_demo_shown_once" },
       oauth_client_id: null,
     } as T;
+  }
+  // Publish with a message, from a base; restore as a new version (S40-12). The same refusals as the API.
+  const versionsEcrit = /^\/orgs\/[^/]+\/agents\/([^/]+)\/versions\/(?:publish|(\d+)\/restore)$/.exec(chemin ?? "");
+  if (method === "POST" && versionsEcrit) {
+    const agent = agents.find((a) => a.slug === versionsEcrit[1]) ?? agents[0]!;
+    const body = JSON.parse(String(init.body ?? "{}")) as { spec?: AgentSpec; message?: string | null; base_version: number };
+    const latest = agent.versions?.find((v) => v.version === agent.latest_version);
+    const source = versionsEcrit[2] ? agent.versions?.find((v) => v.version === Number(versionsEcrit[2])) : undefined;
+    if (versionsEcrit[2] && !source) throw new ApiError(404, { detail: `Agent version \`${agent.slug}@${versionsEcrit[2]}\` does not exist` });
+    if (body.base_version !== agent.latest_version)
+      throw new ApiError(409, {
+        detail: `v${agent.latest_version} was published since you started from v${body.base_version}`,
+        code: "stale_base",
+        latest_version: agent.latest_version,
+        latest_author: latest?.created_by ?? null,
+      });
+    const spec = (source ? source.spec : body.spec) ?? {};
+    if (JSON.stringify(normalizeSpec(spec)) === JSON.stringify(normalizeSpec(latest?.spec)))
+      throw new ApiError(409, { detail: `nothing changed since v${agent.latest_version}`, code: "no_change", latest_version: agent.latest_version });
+    evalGate(spec, latest?.spec);
+    const version = {
+      version: agent.latest_version + 1,
+      spec: structuredClone(spec),
+      checksum: source ? source.checksum : `sha256:${agent.latest_version + 1}`.padEnd(40, "0"),
+      created_by: me.email,
+      created_at: iso(0),
+      message: (body.message ?? "").trim() || (source ? `Restore v${source.version}` : null),
+      restored_from: source?.version ?? null,
+    };
+    agent.latest_version = version.version;
+    agent.versions = [version, ...(agent.versions ?? [])];
+    return structuredClone(version) as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
     // La version publiée s'ajoute à l'agent, le temps de la page : sa fiche la relit (S23-13).

@@ -119,6 +119,8 @@ export type {
   AgentTrial,
   AgentTrialCreate,
   AgentVersion,
+  AgentVersionPublish,
+  AgentVersionRestore,
   AgentResolution,
   ArtifactFlow,
   ImplicitAgent,
