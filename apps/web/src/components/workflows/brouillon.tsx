@@ -184,6 +184,9 @@ function useBrouillonInterne(slug: string, name: string) {
     setOccupe(true);
     try {
       const resultat = await api.editWorkflow(texteCourant.current, ops);
+      // The next gesture may start before React renders this one (a double click, or a caller that
+      // chains two edits): it must graft onto this text, not the one the last render saw (#678).
+      texteCourant.current = resultat.yaml;
       // Le verdict de l'édition vaut validation : une validation de frappe encore en vol est périmée.
       arreterLaValidation();
       setValidationDuTexte({ etat: "a_jour" });
@@ -223,6 +226,7 @@ function useBrouillonInterne(slug: string, name: string) {
     setOccupe(true);
     try {
       const resultat = await api.editWorkflow(etat.yaml, dernier.inverse);
+      texteCourant.current = restants.length === 0 ? base : resultat.yaml;
       arreterLaValidation();
       setValidationDuTexte({ etat: "a_jour" });
       setEtat(
