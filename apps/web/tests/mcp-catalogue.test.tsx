@@ -1,19 +1,23 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import McpCataloguePage from "@/app/admin/connectors/catalogue/page";
+import McpCataloguePage from "@/app/catalogue/mcp-servers/page";
 import { categoriesOf, matchesText, NO_FILTERS, stars, withToggle } from "@/lib/catalogue";
 import { filterMcpEntries, suggestedReference, whyNotInstallable } from "@/lib/mcp-catalogue";
-import type { McpCatalogue } from "@/lib/types";
+import type { McpCatalogue, McpCatalogueEntry } from "@/lib/types";
 import file from "../src/mocks/mcp-catalogue.json";
 
-const { push, install, discover } = vi.hoisted(() => ({
+const { push, install, discover, enable, disable, overrides } = vi.hoisted(() => ({
   push: vi.fn(),
   install: vi.fn(),
   discover: vi.fn(),
+  enable: vi.fn(),
+  disable: vi.fn(),
+  // Per entry id: what the server decided for the caller (ADR 0074); the default is an administrator.
+  overrides: new Map<string, Record<string, unknown>>(),
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors/catalogue", useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/catalogue/mcp-servers", useRouter: () => ({ push }) }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -21,12 +25,26 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
-      mcpCatalogue: vi.fn(async () => structuredClone(file) as unknown as McpCatalogue),
+      mcpCatalogue: vi.fn(async () => withRights()),
+      enableOrgConnector: enable,
+      disableOrgConnector: disable,
       installMcpCatalogueEntry: install,
       discoverConnectorOperations: discover,
     },
   };
 });
+
+/** The shipped file, as the API would answer an administrator: install where the entry allows it. */
+function withRights(): McpCatalogue {
+  const entries = (file.entries as unknown as McpCatalogueEntry[]).map((entry) => ({
+    ...structuredClone(entry),
+    can: { install: entry.install === "installable", configure_projects: [], enable_projects: [] },
+    cannot_reason: null,
+    enablement: [],
+    ...overrides.get(entry.id),
+  }));
+  return { ...structuredClone(file), entries } as unknown as McpCatalogue;
+}
 
 const catalogue = file as unknown as McpCatalogue;
 
@@ -127,7 +145,11 @@ describe("the catalogue page", () => {
     fireEvent.click(submit);
 
     await waitFor(() => expect(push).toHaveBeenCalled());
-    expect(install).toHaveBeenCalledWith("acme", "github", { name: "gh", secret_refs: { token: "env:CONNECTOR_GITHUB" } });
+    expect(install).toHaveBeenCalledWith("acme", "github", {
+      name: "gh",
+      secret_refs: { token: "env:CONNECTOR_GITHUB" },
+      availability: "selected_projects",
+    });
     expect(discover).toHaveBeenCalledWith("acme", "gh");
     expect(push.mock.calls[0]![0]).toMatch(/^\/admin\/connectors\?name=gh&discovery=/);
   });
@@ -142,7 +164,7 @@ describe("the catalogue page", () => {
     expect(drawer).toHaveTextContent("takes no credential");
     fireEvent.click(within(drawer).getByRole("button", { name: "Install" }));
     expect(await within(drawer).findByText(/already exists/)).toBeInTheDocument();
-    expect(install).toHaveBeenCalledWith("acme", "exa", { name: "exa", secret_refs: {} });
+    expect(install).toHaveBeenCalledWith("acme", "exa", { name: "exa", secret_refs: {}, availability: "selected_projects" });
     expect(push).not.toHaveBeenCalledWith(expect.stringContaining("name=exa"));
   });
 
@@ -152,5 +174,77 @@ describe("the catalogue page", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("rights and per-project enablement (ADR 0074)", () => {
+  it("an entry the caller cannot install has a disabled button and the server's reason", async () => {
+    overrides.set("github", { can: { install: false, configure_projects: [], enable_projects: [] }, cannot_reason: "connectors of acme are installed by its administrator" });
+    page();
+    const github = await screen.findByTestId("entry-github");
+    expect(within(github).getByRole("button", { name: "Install" })).toBeDisabled();
+    expect(github).toHaveTextContent("installed by its administrator");
+    overrides.clear();
+  });
+
+  it("the install form offers selected projects by default and posts every project when chosen", async () => {
+    install.mockReset();
+    install.mockResolvedValue({ name: "github", kind: "mcp", type: "mcp", operations: [] });
+    discover.mockResolvedValue({ added: [], changed: [], removed: [], unchanged: 0 });
+    page();
+    fireEvent.click(within(await screen.findByTestId("entry-github")).getByRole("button", { name: "Install" }));
+    const drawer = screen.getByRole("dialog");
+    expect(within(drawer).getByLabelText(/Selected projects/)).toBeChecked();
+    fireEvent.click(within(drawer).getByLabelText("Every project"));
+    fireEvent.change(within(drawer).getByLabelText("Secret, by reference"), { target: { value: "env:CONNECTOR_GITHUB" } });
+    fireEvent.click(within(drawer).getByRole("button", { name: "Install" }));
+    await waitFor(() => expect(install).toHaveBeenCalled());
+    expect(install.mock.calls[0]![2]).toMatchObject({ availability: "all_projects" });
+  });
+
+  it("an installed entry says where it is on, and Projects… toggles a project through the API", async () => {
+    enable.mockResolvedValue({});
+    overrides.set("github", {
+      state: "installed",
+      installed_as: ["github"],
+      can: { install: true, configure_projects: [], enable_projects: ["billing-api", "checkout-web"] },
+      enablement: [{ connector: "github", availability: "selected_projects", enabled_projects: [] }],
+    });
+    page();
+    const github = await screen.findByTestId("entry-github");
+    expect(github).toHaveTextContent("on in no project yet");
+    fireEvent.click(within(github).getByRole("button", { name: "Projects…" }));
+    const drawer = screen.getByRole("dialog");
+    fireEvent.click(within(drawer).getByLabelText("billing-api"));
+    await waitFor(() => expect(enable).toHaveBeenCalledWith("billing-api", "github"));
+    fireEvent.click(within(drawer).getByLabelText("billing-api"));
+    await waitFor(() => expect(disable).toHaveBeenCalledWith("billing-api", "github"));
+    overrides.clear();
+  });
+
+  it("a refusal stays in the drawer, and an entry with no project to enable has no Projects…", async () => {
+    enable.mockRejectedValue(new Error("only the owner of billing-api may"));
+    overrides.set("github", {
+      state: "installed",
+      can: { install: true, configure_projects: [], enable_projects: ["billing-api"] },
+      enablement: [{ connector: "github", availability: "selected_projects", enabled_projects: [] }],
+    });
+    overrides.set("exa", {
+      state: "installed",
+      enablement: [{ connector: "exa", availability: "selected_projects", enabled_projects: [] }],
+    });
+    page();
+    expect(within(await screen.findByTestId("entry-exa")).queryByRole("button", { name: "Projects…" })).toBeNull();
+    fireEvent.click(within(screen.getByTestId("entry-github")).getByRole("button", { name: "Projects…" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByLabelText("billing-api"));
+    expect(await within(screen.getByRole("dialog")).findByText(/only the owner/)).toBeInTheDocument();
+    overrides.clear();
+  });
+
+  it("an entry on for every project says so", async () => {
+    overrides.set("github", { state: "installed", enablement: [{ connector: "github", availability: "all_projects", enabled_projects: [] }] });
+    page();
+    expect(await screen.findByTestId("enablement-github")).toHaveTextContent("on for every project");
+    overrides.clear();
   });
 });

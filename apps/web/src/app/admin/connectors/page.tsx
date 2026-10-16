@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
-import { ConnectorTabs } from "@/components/connecteurs-onglets";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { Glossaire } from "@/components/glossaire";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
@@ -49,7 +48,12 @@ export default function OrgConnectorsPage() {
   ) : null;
   return (
     <div className="space-y-6">
-      <ConnectorTabs active="connectors" />
+      <p className="text-sm text-ink-muted">
+        Catalogue:{" "}
+        <Link href="/catalogue/mcp-servers" className="underline">
+          MCP servers
+        </Link>
+      </p>
       {arrivee && (
         <p className="max-w-3xl text-sm" role="status" data-testid="installed-from-catalogue">
           Installed <strong data-donnee>{arrivee.name}</strong> from the catalogue.
@@ -97,7 +101,7 @@ export default function OrgConnectorsPage() {
             <Empty
               title="No MCP server yet"
               action={
-                <Link href="/admin/connectors/catalogue" className="text-sm underline">
+                <Link href="/catalogue/mcp-servers" className="text-sm underline">
                   Browse the MCP catalogue
                 </Link>
               }
@@ -167,6 +171,7 @@ function Instance({ org, instance, highlighted }: { org: string; instance: OrgCo
       aria-current={highlighted ? "true" : undefined}
       data-testid={`connector-${instance.name}`}
     >
+      <Availability org={org} instance={instance} />
       {diff && (
         <p className="mb-2 text-sm" role="status">
           {diff}
@@ -536,5 +541,60 @@ function Declarer({ org }: { org: string }) {
         </form>
       )}
     </Card>
+  );
+}
+
+/**
+ * Which projects reach the connector (ADR 0074). Restricting it turns it off for every project until
+ * each is enabled, so the switch asks first; going back to every project deletes nothing.
+ */
+function Availability({ org, instance }: { org: string; instance: OrgConnector }) {
+  const client = useQueryClient();
+  const current = instance.availability ?? "all_projects";
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function set(next: "all_projects" | "selected_projects") {
+    await api.updateOrgConnector(org, instance.name, { availability: next });
+    await client.invalidateQueries({ queryKey: ["org-connectors", org] });
+    await client.invalidateQueries({ queryKey: ["mcp-catalogue", org] });
+  }
+  return (
+    <div className="mb-3 space-y-2 text-sm">
+      <label className="flex items-center gap-2">
+        <span className="text-xs text-ink-muted">Available to</span>
+        <Select
+          value={current}
+          onChange={(event) => {
+            setError(null);
+            if (event.target.value === "selected_projects") setAsking(true);
+            else void set("all_projects").catch((cause) => setError(cause instanceof Error ? cause.message : "refused"));
+          }}
+        >
+          <option value="all_projects">Every project</option>
+          <option value="selected_projects">Selected projects</option>
+        </Select>
+        {current === "selected_projects" && (
+          <span className="text-xs text-ink-muted" data-testid={`on-in-${instance.name}`}>
+            {(instance.enabled_projects ?? []).length === 0
+              ? "on in no project yet"
+              : `on in ${(instance.enabled_projects ?? []).join(", ")}`}
+          </span>
+        )}
+      </label>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {asking && (
+        <Confirmation
+          question={
+            <>
+              Every project loses <strong data-donnee>{instance.name}</strong> until it is enabled for it.
+            </>
+          }
+          confirmer="Restrict to selected projects"
+          action={() => set("selected_projects")}
+          onFait={() => setAsking(false)}
+          onAnnuler={() => setAsking(false)}
+        />
+      )}
+    </div>
   );
 }

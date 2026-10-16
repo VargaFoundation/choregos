@@ -12,11 +12,14 @@ export function InstallDrawer({
   title,
   onClose,
   children,
+  verb = "Install",
 }: {
   /** Names what is being installed; data keeps its case. */
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** What the panel does to `title`: install by default, "Projects for" when it enables per project. */
+  verb?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   // The latest `onClose`, read at the key press: the effect runs once, so typing in a field of the
@@ -56,7 +59,7 @@ export function InstallDrawer({
       >
         <header className="flex items-start justify-between gap-4">
           <h2 id="install-drawer-title" className="text-base font-semibold text-ink">
-            Install <span data-donnee>{title}</span>
+            {verb} <span data-donnee>{title}</span>
           </h2>
           <button
             type="button"

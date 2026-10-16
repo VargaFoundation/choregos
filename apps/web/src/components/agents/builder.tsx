@@ -1015,7 +1015,7 @@ function McpSection({
       {connectors.length === 0 && (
         <p className="text-xs text-ink-muted">
           No MCP connector in the organisation yet: an administrator declares one, or installs one from{" "}
-          <Link href="/admin/connectors/catalogue" className="underline">
+          <Link href="/catalogue/mcp-servers" className="underline">
             the MCP catalogue
           </Link>
           .
