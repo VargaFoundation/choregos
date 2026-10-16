@@ -122,6 +122,9 @@ def test_existing_hosts_are_seeded_and_the_table_goes_away_on_downgrade(
     }
     assert seeded[("varga", "mcp.x.test")] == ([8443], ["api", "workers"])
     assert seeded[("varga", "graph.microsoft.com")] == ([443], ["api", "workers"])
+    # a SharePoint connector also opens where a download is redirected to
+    assert seeded[("varga", "login.microsoftonline.com")] == ([443], ["api", "workers"])
+    assert seeded[("varga", "*.sharepoint.com")] == ([443], ["api", "workers"])
     assert seeded[("varga", "docs.x.test")] == ([443], ["api", "workers"])
     # the default skill source is github.com/anthropics/skills: GitHub's hosts are open
     assert {h for (s, h) in seeded if s == "varga"} >= {"github.com", "api.github.com", "codeload.github.com"}

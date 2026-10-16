@@ -75,14 +75,33 @@ def _seed() -> None:
         entry[0].add(port)
         entry[1].update(used_by)
 
-    for org_id, name, config in bind.execute(sa.text("SELECT org_id, name, config FROM org_connectors")):
-        for host, port in _urls_of(config):
-            want(org_id, host, port, ("api", "workers"), f"seeded from the connector {name}")
-    for org_id, kind, config in bind.execute(
-        sa.text("SELECT org_id, kind, config FROM knowledge_sources WHERE kind IN ('web', 'git')")
+    both = ("api", "workers")
+    for org_id, name, ctype, config in bind.execute(
+        sa.text("SELECT org_id, name, type, config FROM org_connectors")
     ):
+        reason = f"seeded from the connector {name}"
         for host, port in _urls_of(config):
-            want(org_id, host, port, ("api", "workers"), f"seeded from a {kind} knowledge source")
+            want(org_id, host, port, both, reason)
+        parsed = _json(config)
+        if ctype == "sharepoint":
+            # Graph defaults, and where a download is redirected to
+            for host in ("graph.microsoft.com", "login.microsoftonline.com", "*.sharepoint.com"):
+                want(org_id, host, 443, both, reason)
+        if ctype == "entra":
+            for host in ("graph.microsoft.com", "login.microsoftonline.com"):
+                want(org_id, host, 443, both, reason)
+        if ctype == "confluence" and isinstance(parsed, dict) and parsed.get("auth") == "scoped":
+            want(org_id, "api.atlassian.com", 443, both, reason)
+    for org_id, kind, config in bind.execute(sa.text("SELECT org_id, kind, config FROM knowledge_sources")):
+        reason = f"seeded from a {kind} knowledge source"
+        parsed = _json(config)
+        if kind in ("web", "git"):
+            for host, port in _urls_of(config):
+                want(org_id, host, port, both, reason)
+        elif kind == "sharepoint":
+            want(org_id, "*.sharepoint.com", 443, both, reason)
+        elif kind == "confluence" and isinstance(parsed, dict) and parsed.get("include_attachments"):
+            want(org_id, "api.media.atlassian.com", 443, both, reason)
     for org_id, settings in bind.execute(sa.text("SELECT id, settings FROM organizations")):
         settings = _json(settings) or {}
         written = settings.get("skill_sources") if isinstance(settings, dict) else None
