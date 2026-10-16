@@ -2386,6 +2386,8 @@ const mockReadiness = (slug: string): ProjectReadiness => {
     { id: "tools", section: "tools", title: "Tools", state: "done", detail: "No catalogue tool opened.", fix: { by: "project_owner" } },
     { id: "first-item", section: "general", title: "A first request", state: "check", detail: "File one to see the workflow run end to end.", fix: { href: `/p/${bare}/board`, by: "project_owner" } },
   ];
+  // A project that runs (the demo's billing-api) has nothing left to do: the overview shows no list (S23-03).
+  if (bare === "billing-api") for (const item of items) item.state = "done";
   const count = (state: ReadinessItem["state"]) => items.filter((i) => i.state === state).length;
   return { ready: count("todo") === 0, summary: { done: count("done"), check: count("check"), todo: count("todo") }, items };
 };
@@ -2749,6 +2751,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (JSON.stringify(normalizeSpec(spec)) === JSON.stringify(normalizeSpec(latest?.spec)))
       throw new ApiError(409, { detail: `nothing changed since v${agent.latest_version}`, code: "no_change", latest_version: agent.latest_version });
     evalGate(spec, latest?.spec);
+    touchAgent(agent);
     const version = {
       version: agent.latest_version + 1,
       spec: structuredClone(spec),
@@ -2760,7 +2763,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     };
     agent.latest_version = version.version;
     agent.versions = [version, ...(agent.versions ?? [])];
-    return structuredClone(version) as T;
+    // What saving does to the channels is the agent's policy (S40-02), for a restore too.
+    return { ...structuredClone(version), channels: savedRevision(agent, version.version) } as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
     // La version publiée s'ajoute à l'agent, le temps de la page : sa fiche la relit (S23-13).
