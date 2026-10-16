@@ -49,11 +49,13 @@ vi.mock("@/lib/api", async (importOriginal) => {
       projectTools: vi.fn(async () => ({ tools: [], allows_all: false })),
       models: vi.fn(async () => ({ profiles: {}, allow_unvalidated: false, inherited: {} })),
       platformModels: vi.fn(async () => []),
+      usableModels: vi.fn(async () => []),
       projectOperations: vi.fn(async () => []),
       orgConnectors: vi.fn(async () => []),
     },
   };
 });
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 vi.mock("@/components/operations-du-projet", () => ({ OperationsDuProjet: () => null }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
 
