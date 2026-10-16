@@ -5,7 +5,7 @@ What the egress proxy and the runner let through or refused, aggregated per run,
 like the rest of the registry.
 
 Revision ID: d7f0a2c4e6b8
-Revises: b2c4d6e8f0a1
+Revises: f2a4c6e8b0d1
 Create Date: 2026-10-17 09:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d7f0a2c4e6b8"
-down_revision: str | None = "b2c4d6e8f0a1"
+down_revision: str | None = "f2a4c6e8b0d1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
