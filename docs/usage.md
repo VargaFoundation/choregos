@@ -281,6 +281,25 @@ Home and End jump to the ends, Enter opens the state for editing. The state unde
 described below the map, with its outgoing transitions, actors and gates — that sentence is what
 a screen reader announces.
 
+### Project settings
+
+`/p/<project>/settings` reads as sections, with an in-page navigation (a strip on small screens, a sticky
+list from `lg` up): **Connections**, **Agents & models**, **Guardrails**, **Tools**. A slot above them is
+kept for the project's readiness panel (S40-06).
+
+- **Connections** is a card per connector: an icon (the product's mark when simple-icons has one, vendored
+  as CC0 paths in `components/brand-icon-paths.ts`; a capability icon otherwise, including Slack and the
+  Microsoft products, which simple-icons does not carry), a title that says what the system is for ("Work
+  tracker", "Source code", "Deployment (CD)", "Agent runtime"...), the implementation and where it points
+  (`owner/repo`, a GitOps repository), its state (see above), the workflows that need it, and *Test* and
+  *Configure*. *Configure* opens the form in a drawer. A required connector that nothing provides comes
+  first. The *Agent runtime* card says "Provided by the platform" when the deployment runs its own
+  executor, and lists only the executors the deployment runs (`GET /platform/executors`).
+- **Agents & models** holds the model profiles; the evaluated combinations are behind a disclosure.
+- **Guardrails** holds the project's policy (YAML behind a disclosure, with a one-line summary of the
+  budget and release trains) and the operations of the organisation's connectors.
+- **Tools** is the tool catalogue.
+
 ### Several workflows in one project
 
 A project runs as many workflows as it needs — onboarding and offboarding in an HR project, a
