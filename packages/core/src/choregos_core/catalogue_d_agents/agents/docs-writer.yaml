@@ -6,6 +6,7 @@ catalogue:
   tools: ["repo:docs paths"]
 agent:
   slug: docs-writer
+  tags: [documentation, changelog, software]
   display_name: Docs writer
   description: Reads the branch's diff and updates the user documentation, the changelog and the API reference; reports, change by change, which page documents it. It writes documentation only.
   spec:

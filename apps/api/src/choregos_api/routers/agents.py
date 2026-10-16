@@ -179,6 +179,7 @@ async def _dto(
         kind=agent.kind,
         display_name=agent.display_name,
         description=agent.description,
+        tags=list(agent.tags or []),
         status=agent.status,
         owner=proprietaire.email if proprietaire else None,
         expires_at=agent.expires_at,
@@ -257,8 +258,10 @@ async def list_agents(
     principal: Me,
     scope: Annotated[Literal["platform", "org", "project", "personal"] | None, Query()] = None,
     project: Annotated[str | None, Query()] = None,
+    tag: Annotated[list[str] | None, Query(description="every tag given (AND)")] = None,
 ) -> list[AgentDto]:
-    """The agents the caller may see (ADR 0061), optionally of one scope or one project."""
+    """The agents the caller may see (ADR 0061), optionally of one scope or one project, and carrying
+    every tag given (S40-10; applied after visibility, so a tag never reveals an invisible agent)."""
     _lire(principal, org)
     organisation = await _organisation(session, org)
     requete = select(Agent).where(
@@ -269,7 +272,8 @@ async def list_agents(
     if project is not None:
         requete = requete.where(Agent.project_id == (await _projet(session, organisation, project)).id)
     agents = (await session.execute(requete.order_by(Agent.slug))).scalars()
-    return [await _dto(session, agent, principal, org) for agent in agents]
+    wanted = set(tag or [])
+    return [await _dto(session, agent, principal, org) for agent in agents if wanted <= set(agent.tags or [])]
 
 
 @router.post(
@@ -304,6 +308,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         kind=body.kind,
         display_name=body.display_name,
         description=body.description,
+        tags=list(body.tags),
         owner_id=principal.user_id,
         status="active",
         lifecycle=body.lifecycle,
@@ -332,6 +337,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         target_id=agent.id,
         scope=agent.scope,
         project=body.project,
+        tags=agent.tags,
     )
     return await _dto(session, agent, principal, org, avec_versions=True)
 
@@ -611,6 +617,8 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
     for champ in ("display_name", "description", "expires_at"):
         if champ in body.model_fields_set:
             setattr(agent, champ, getattr(body, champ))
+    if body.tags is not None:
+        agent.tags = list(body.tags)
     if body.status is not None and body.status != agent.status:
         agent.status = body.status
         if body.status == "revoked":
@@ -623,6 +631,7 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
         target_type="agent",
         target_id=agent.id,
         status=agent.status,
+        tags=agent.tags,
     )
     return await _dto(session, agent, principal, org)
 
@@ -769,6 +778,7 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
         kind=source.kind,
         display_name=body.display_name or f"{source.display_name} (fork)",
         description=source.description,
+        tags=list(source.tags or []),
         owner_id=principal.user_id,
         status="active",
         scope=body.scope,
@@ -1350,6 +1360,7 @@ async def list_agent_catalogue(
                 summary=proposition.resume,
                 version=proposition.version,
                 skills=list(proposition.skills),
+                tags=list(proposition.tags),
                 client=proposition.client,
                 reach=proposition.portee,
                 installed=etat.installe,

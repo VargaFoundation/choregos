@@ -6,6 +6,7 @@ catalogue:
   tools: ["skill:design system (the organisation's)", "knowledge", "runner:playwright + axe (when the project has them)"]
 agent:
   slug: ux-designer
+  tags: [ux, accessibility, design-system]
   display_name: UX designer
   description: Reviews the screens a change touches against the organisation's design system and WCAG 2.2 AA, running an automated accessibility check when the project allows it. It changes nothing.
   spec:

@@ -4,6 +4,7 @@ catalogue:
   summary: Researches a question in the code, the existing decisions and memory; lists options with evidence; changes nothing.
 agent:
   slug: researcher
+  tags: [research, analysis, architecture]
   display_name: Researcher
   description: Researches the question of a study — the repository, its decision records, the project's memory — and lists the options with evidence, constraints and unknowns. It changes nothing.
   spec:

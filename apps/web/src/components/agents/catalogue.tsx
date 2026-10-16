@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
+import { TagList } from "@/components/agents/tags";
 import { estClient, extrait, urlDeLaPorte } from "@/lib/integrations";
 import type { AgentCatalogueConnection, AgentCatalogueEntry } from "@/lib/types";
 
@@ -119,6 +120,7 @@ function LigneDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogue
         {entree.skills && entree.skills.length > 0 && (
           <span className="block text-xs text-ink-muted">Carries {entree.skills.join(", ")}</span>
         )}
+        <TagList tags={entree.tags} />
       </td>
       <td className="py-2 pr-2">
         <Badge tone="neutral">{entree.role}</Badge>

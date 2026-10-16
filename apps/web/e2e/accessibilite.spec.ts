@@ -35,6 +35,7 @@ const PAGES = [
   "/p/billing-api/actions/act-poste",
   "/p/billing-api/actions/act-comptes",
   "/agents",
+  "/agents?tag=madr",
   "/agents/new",
   "/agents/onboarding-coordinator",
   "/agents/onboarding-coordinator?tab=versions",

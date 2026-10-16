@@ -4,6 +4,7 @@ catalogue:
   summary: Answers every review remark — fixes it or says why not — and refactors nothing else.
 agent:
   slug: review-responder
+  tags: [code-review, software]
   display_name: Review responder
   description: Fixes each review remark, or says in one sentence why not; touches nothing the review did not ask for.
   spec:

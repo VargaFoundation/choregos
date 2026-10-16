@@ -68,3 +68,9 @@ and nothing listed the AI clients that can act through the MCP gate.
   fill with agents nobody chose, and a playbook change would rewrite them silently.
 - **Listing third-party autonomous agents** (Devin, Jules, GitHub Copilot's coding agent): each needs
   its own delegation adapter; listing them before it exists would show agents that do not work.
+
+## Update — 2026-10-16 (S40-10)
+
+A catalogue entry's `agent:` document carries `tags` (labels, ADR-free metadata outside the version).
+Installing sets them; an upgrade **adds** the tags the agent lacks, even when the spec did not change,
+and **never removes** one: an organisation's own tags are not silently rewritten, the rule of §4.
