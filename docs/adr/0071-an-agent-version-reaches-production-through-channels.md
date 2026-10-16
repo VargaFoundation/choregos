@@ -115,6 +115,25 @@ follow a channel whose revision changes.
     revision; the metrics page shows production's budget and a breakdown by revision; the organisation's
     own distiller and drafter agents run their production revision.
 
+12. **Approvals (S40-02b).** `release_policy.stable.approvals` (0-3, default 0) makes a promotion wait
+    for other people. The request passes the checks and the requester's step-up, then is stored as
+    `pending_approval` (`approvals_required`, `decisions`) and production does not move; at most one
+    request waits per agent. `POST …/releases/{id}/decision` takes `approve`, `reject` or `cancel`.
+    Approving needs the right to release the agent, a **human session with a fresh sign-in**, and — with
+    `separation_of_duties` (default true) — being neither the requester nor the revision's author
+    (`created_by`); nobody approves twice; the plugin gesture check sees each approval
+    (`decision: approve`). When `approvals` different people have approved, the request re-runs the
+    checks and moves production with a compare-and-set from the revision it saw: production moved
+    meanwhile makes it `superseded` (`409`; the status is committed before the refusal is raised).
+    Rejecting needs a reason; the requester or an org_admin cancels. A rollback never waits (speed in an
+    incident, and it restores an approved state). `on_publish: stable` with approvals saves the
+    revision and opens the same request, and a newer revision supersedes an older request; retiring the
+    agent cancels it. Lowering `approvals` or switching separation off is a loosening. Audited:
+    `agent.release.request`, `agent.release.decide`, then `agent.release` when applied. The rules are
+    those of a governed action's decision (ADR 0035); its table is not reused (decision above). The
+    approvers' inbox is `GET /orgs/{org}/agent-releases?status=pending_approval`, limited to the agents
+    the caller may see; nobody is notified yet.
+
 ## Alternatives rejected
 
 - **A state per revision** (`status = draft | testing | prod`): mutable state on immutable rows, and
@@ -150,5 +169,6 @@ follow a channel whose revision changes.
   policy is changed. Downgrading removes channel pins, which have no fixed revision to fall back to.
 - An edition can add an organisation-wide rule on production releases through the `agent.release`
   gesture, as it does for `release.approve`.
-- Not decided here, planned next in the same stream: approvals by other people before production
-  (S40-02b) and the live evaluation of a revision (S40-02d); both extend this file.
+- Approvers are not notified: they find the request in the inbox or on the agent's page.
+- Not decided here, planned next in the same stream: the live evaluation of a revision (S40-02d), which
+  extends this file.

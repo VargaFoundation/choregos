@@ -21,7 +21,7 @@ from choregos_core import utcnow
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Agent, AgentCredential, Project, ProjectAgent, Run, WorkItem
+from ..db.models import Agent, AgentCredential, AgentRelease, Project, ProjectAgent, Run, WorkItem
 from ..deps import _aware
 
 LIFECYCLES = ("draft", "active", "deprecated", "retired")
@@ -111,6 +111,15 @@ async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
     agent.retired_at = maintenant
     # Nothing stays in testing for an agent that will never run again (ADR 0071).
     agent.candidate_version, agent.candidate_percent, agent.candidate_since = None, 0, None
+    # ... nor a release that waits for approval to put a revision in production.
+    for waiting in (
+        await session.execute(
+            select(AgentRelease).where(
+                AgentRelease.agent_id == agent.id, AgentRelease.status == "pending_approval"
+            )
+        )
+    ).scalars():
+        waiting.status = "cancelled"
     await session.flush()
     return {"revoked_credentials": len(accreditations), "unpinned_projects": projets}
 

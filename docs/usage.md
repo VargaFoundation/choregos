@@ -1282,6 +1282,20 @@ of the history (`agent_releases`: channel, kind `publish | promote | rollback | 
 revisions, share, who, why, the checks as evaluated) and an audit record (`agent.release`,
 `agent.release_policy`, `project.agent_channel`).
 
+**Approvals.** With `"stable": {"approvals": 1}` (up to 3) in the policy, a promotion to production does
+not move it: `POST …/releases` answers `201` with `status: "pending_approval"`, `approvals_required` and
+no `done_at`, and production stays where it was. Other people decide with
+`POST …/releases/{id}/decision {"decision": "approve"}`; each needs the right to release the agent, a
+human session with a sign-in younger than `step_up_minutes`, and — unless `separation_of_duties` is
+switched off — to be neither the requester nor the author of the revision (`422`). Nobody approves
+twice (`409`); with `approvals: 2`, two different people. The last approval re-checks the revision and
+moves production; if production moved meanwhile (a rollback, say) the request is `superseded` and the
+approval gets `409`. `reject` needs a `reason`; the requester or an `org_admin` can `cancel`. A rollback
+never waits. An agent with `on_publish: stable` and approvals saves the revision and opens the same
+request. `GET /orgs/acme/agent-releases?status=pending_approval` is the approvers' inbox (only agents
+you may see), and the agent carries its `pending_release`. Nobody is notified yet. Every step is audited
+(`agent.release.request`, `agent.release.decide`, `agent.release`).
+
 Metrics (`GET …/metrics`) now carry `by_version` — runs, success rate and cost per revision — so
 testing can be read against production; the daily budget shown, the budget alert and the tools an
 external agent gets at the MCP door are those of the revision that runs, not the latest one saved.
