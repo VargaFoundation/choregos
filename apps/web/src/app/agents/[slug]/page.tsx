@@ -38,6 +38,7 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
+import { networkSummary } from "@/lib/network";
 import { useSession } from "@/lib/session";
 import type { Agent, AgentSpec } from "@/lib/types";
 
@@ -458,6 +459,8 @@ function Specification({ spec }: { spec: AgentSpec }) {
         </dd>
         <dt className="text-ink-muted">Tools</dt>
         <dd>{outils.length === 0 ? "Those of the platform (or of its human)" : outils.join(", ")}</dd>
+        <dt className="text-ink-muted">Network</dt>
+        <dd data-testid="agent-network-line">{networkSummary(spec.network)}</dd>
       </dl>
       {spec.instructions ? (
         <pre aria-label="Instructions" className="whitespace-pre-wrap break-words rounded bg-surface-muted p-3 text-xs">

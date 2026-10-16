@@ -7,6 +7,7 @@ import { use, useState } from "react";
 import { Connecteurs } from "@/components/connecteurs";
 import { EvalMatrixTable } from "@/components/eval-matrix";
 import { OperationsDuProjet } from "@/components/operations-du-projet";
+import { ProjectNetworkCard } from "@/components/project/network-card";
 import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur } from "@/lib/format";
@@ -63,6 +64,8 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
 
       <Connecteurs slug={slug} />
       <OperationsDuProjet slug={slug} />
+
+      <ProjectNetworkCard slug={slug} />
 
       <Card title="Policy" className="lg:col-span-2">
         {(policy.data?.clamps ?? []).length > 0 && (
