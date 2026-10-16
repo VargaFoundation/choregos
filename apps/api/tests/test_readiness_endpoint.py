@@ -37,6 +37,20 @@ async def _activate(project_id: str) -> None:
         row.status = "active"
 
 
+async def _forget_the_tests(project_id: str) -> None:
+    """Saving a connector tests it (S40-05): put the cards back to "never tested" to read that state."""
+    from choregos_api.db.models import Connector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        for row in (
+            await session.execute(select(Connector).where(Connector.project_id == project_id))
+        ).scalars():
+            row.status = "unknown"
+            row.last_check_at = None
+
+
 async def _readiness(client: AsyncClient, project_id: str) -> dict[str, Any]:
     response = await client.get(f"/api/v1/projects/{project_id}/readiness")
     assert response.status_code == 200, response.text
@@ -60,6 +74,7 @@ async def test_a_project_with_only_a_tracker_and_a_repository_is_not_ready(
             f"/api/v1/projects/{project['id']}/connectors/{kind}", json={"type": type_, "config": config}
         )
         assert put.status_code == 200, put.text
+    await _forget_the_tests(project["id"])
     body = await _readiness(client, project["id"])
     assert body["ready"] is False
     assert _by_state(body, "todo") == {"connector-cd", "notifications", "people-release-captain"}, body[
