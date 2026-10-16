@@ -253,3 +253,94 @@ async def test_un_client_qui_appelle_depuis_le_cloud_n_est_pas_propose_sans_oaut
     assert (connecte.json()["token"], connecte.json()["oauth_client_id"]) == (None, "choregos-chatgpt")
     rattache = (await client.get(f"{ORG}/agents/chatgpt/credentials")).json()
     assert [(r["kind"], r["client_id"]) for r in rattache] == [("oauth_client", "choregos-chatgpt")]
+
+
+# ──── a catalogue agent installed by a template upgrades like a direct one (S39-25, #674) ────
+
+
+def _le_catalogue_passe_a_la_version_deux(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    from choregos_core import catalogue_d_agents
+
+    ancien = entree(slug)
+    assert ancien is not None
+    document = {**ancien.document, "spec": {**ancien.document["spec"], "instructions": "Review it, v2."}}
+    nouveau = dataclasses.replace(ancien, version=2, document=document)
+    autres = tuple(e for e in entrees() if e.slug != slug)
+    monkeypatch.setattr(catalogue_d_agents, "entrees", lambda: (*autres, nouveau))
+    monkeypatch.setattr(
+        catalogue_d_agents,
+        "entree",
+        lambda s: nouveau if s == slug else next(e for e in autres if e.slug == s),
+    )
+
+
+async def _projet_du_gabarit(client: AsyncClient, gabarits: pathlib.Path) -> None:
+    (gabarits / "manifest.yaml").write_text(
+        (gabarits / "manifest.yaml").read_text(encoding="utf-8").replace(", catalogue:nobody-knows", ""),
+        encoding="utf-8",
+    )
+    corps = {
+        "slug": "rh",
+        "name": "rh",
+        "template_ref": "essai-catalogue",
+        "config": {"slug": "rh", "org": "varga"},
+    }
+    assert (await client.post(f"{ORG}/projects", json=corps)).status_code == 201
+
+
+async def test_un_agent_du_catalogue_installe_par_un_gabarit_porte_la_meme_provenance_qu_en_direct(
+    client: AsyncClient, admin: str, gabarits: pathlib.Path
+) -> None:
+    await _projet_du_gabarit(client, gabarits)
+    agent = (await client.get(f"{ORG}/agents/reviewer")).json()
+    assert agent["versions"][0]["created_by"] == "catalogue:reviewer@1"
+    assert agent["scope"] == "platform"
+    listee = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "reviewer")
+    assert listee["own_agent"] is False
+
+
+async def test_un_agent_du_catalogue_installe_par_un_gabarit_se_met_a_jour_depuis_le_catalogue(
+    client: AsyncClient, admin: str, gabarits: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _projet_du_gabarit(client, gabarits)
+    _le_catalogue_passe_a_la_version_deux(monkeypatch, "reviewer")
+    publie = await client.post(f"{ORG}/agent-catalogue/reviewer/install", json={"upgrade": True})
+    assert publie.status_code == 200, publie.text
+    assert [v["version"] for v in publie.json()["versions"]] == [2, 1]
+    assert publie.json()["versions"][0]["spec"]["instructions"] == "Review it, v2."
+
+
+async def test_un_agent_diverge_n_est_pas_ecrase_par_la_mise_a_jour(
+    client: AsyncClient, admin: str, gabarits: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.db.models import Agent, AgentVersion
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _projet_du_gabarit(client, gabarits)
+    async with session_scope() as session:
+        agent = (await session.execute(select(Agent).where(Agent.slug == "reviewer"))).scalar_one()
+        premiere = (
+            await session.execute(select(AgentVersion).where(AgentVersion.agent_id == agent.id))
+        ).scalar_one()
+        premiere.created_by += "!diverged"
+        session.add(
+            AgentVersion(agent_id=agent.id, org_id=agent.org_id, version=2, spec=premiere.spec,
+                         checksum="sha256:by-hand", created_by="alice@varga.dev")
+        )  # fmt: skip
+        await session.commit()
+    _le_catalogue_passe_a_la_version_deux(monkeypatch, "reviewer")
+    refuse = await client.post(f"{ORG}/agent-catalogue/reviewer/install", json={"upgrade": True})
+    assert refuse.status_code == 409 and "published its own text" in refuse.text, refuse.text
+    assert (await client.get(f"{ORG}/agents/reviewer")).json()["latest_version"] == 2
+
+
+def test_a_manifest_names_the_catalogue_provenance_of_the_agents_it_takes_from_it() -> None:
+    from choregos_api.services.gabarits import livraison
+
+    reviewer = entree("reviewer")
+    assert reviewer is not None
+    manifest = {"defaults": {"workflows": ["template:default-simple@1"], "agents": ["catalogue:reviewer"]}}
+    assert livraison(manifest, None).agents_du_catalogue == {
+        "reviewer": f"catalogue:reviewer@{reviewer.version}"
+    }

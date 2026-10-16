@@ -68,7 +68,8 @@ def test_the_migration_sorts_catalogue_agents_from_the_organisations_own(
             _agent(connection, "a-template", "reviewer", "template:software-delivery", None)
             # `catalogue:` on a LATER version only: the organisation's own agent
             _agent(connection, "a-late", "planner", "bob@varga.dev", "catalogue:planner@2")
-        command.upgrade(_config(url), "head")
+        # this revision only: the later backfill of S39-25 moves template-installed catalogue agents
+        command.upgrade(_config(url), AFTER)
         with engine.connect() as connection:
             rows = {
                 row.slug: row
@@ -94,3 +95,86 @@ def test_the_migration_sorts_catalogue_agents_from_the_organisations_own(
     assert all(row.project_id is None and row.forked_from_agent_id is None for row in rows.values())
     assert not {"scope", "project_id", "forked_from_agent_id", "forked_from_version"} & columns
     assert AFTER  # the revision the tests above are written for
+
+
+# ───────────── the backfill of the catalogue provenance of template-installed agents (S39-25) ─────────────
+
+TEMPLATE_BEFORE = "d4f6a8c0e2b4"
+
+
+def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    from choregos_api.schemas import AgentSpec
+    from choregos_api.services.agents import empreinte
+    from choregos_core.catalogue_d_agents import entree
+
+    reviewer, triager = entree("reviewer"), entree("triager")
+    assert reviewer is not None and triager is not None
+    spec = AgentSpec.model_validate(reviewer.document["spec"])
+    database = tmp_path / "backfill.db"
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    get_settings.cache_clear()
+    url = f"sqlite:///{database}"
+
+    def agent(connection: object, ident: str, slug: str, versions: list[tuple[str, str, str]]) -> None:
+        run = connection.execute  # type: ignore[attr-defined]
+        run(
+            text(
+                "INSERT INTO agents (id, org_id, slug, kind, display_name, status, lifecycle, scope) "
+                "VALUES (:id, 'org', :slug, 'internal', :slug, 'active', 'active', 'org')"
+            ),
+            {"id": ident, "slug": slug},
+        )
+        for number, (author, checksum, body) in enumerate(versions, start=1):
+            run(
+                text(
+                    "INSERT INTO agent_versions (id, agent_id, org_id, version, spec, checksum, created_by) "
+                    "VALUES (:id, :agent, 'org', :version, :spec, :checksum, :author)"
+                ),
+                {"id": f"{ident}-v{number}", "agent": ident, "version": number, "spec": body,
+                 "checksum": checksum, "author": author},
+            )  # fmt: skip
+
+    same = json.dumps(spec.model_dump(mode="json"))
+    try:
+        command.upgrade(_config(url), TEMPLATE_BEFORE)
+        engine = create_engine(url)
+        with engine.begin() as connection:
+            # in step with the catalogue
+            agent(
+                connection,
+                "a-sync",
+                "reviewer",
+                [("template:github-software-delivery@1.0.0", empreinte(spec), same)],
+            )
+            # a hand-published v2 on top of the catalogue's text
+            agent(connection, "a-edited", "triager",
+                  [("template:x@1", empreinte(AgentSpec.model_validate(triager.document["spec"])), "{}"),
+                   ("alice@varga.dev", "sha256:by-hand", "{}")])  # fmt: skip
+            # an agent outside the catalogue, and a catalogue name that a person wrote
+            agent(connection, "a-own", "my-own", [("template:x@1", "sha256:x", "{}")])
+            agent(connection, "a-written", "developer", [("alice@varga.dev", "sha256:x", "{}")])
+        command.upgrade(_config(url), "head")
+        command.upgrade(_config(url), "head")  # idempotent
+        with engine.connect() as connection:
+            rows = {
+                row.slug: row
+                for row in connection.execute(
+                    text(
+                        "SELECT a.slug, a.scope, v.created_by FROM agents a "
+                        "JOIN agent_versions v ON v.agent_id = a.id AND v.version = 1"
+                    )
+                ).all()
+            }
+    finally:
+        get_settings.cache_clear()
+
+    assert rows["reviewer"].created_by == f"catalogue:reviewer@{reviewer.version}"
+    assert rows["reviewer"].scope == "platform"
+    assert rows["triager"].created_by == f"catalogue:triager@{triager.version}!diverged"
+    assert rows["triager"].scope == "platform"
+    assert (rows["my-own"].created_by, rows["my-own"].scope) == ("template:x@1", "org")
+    assert (rows["developer"].created_by, rows["developer"].scope) == ("alice@varga.dev", "org")
