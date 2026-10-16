@@ -131,6 +131,13 @@ class InternalClient:
             )
         )
 
+    async def search_memory(self, query: str, k: int = 5, memory: str | None = None) -> list[dict[str, Any]]:
+        """Search the memories the run reads (S40-11): hits, each with the label of its memory."""
+        return list(
+            await self._request("POST", "/memory/search", json={"query": query, "k": k, "memory": memory})
+            or []
+        )
+
     async def fetch_ticket(self) -> dict[str, Any]:
         return dict(await self._request("GET", "/ticket"))
 

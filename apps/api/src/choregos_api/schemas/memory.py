@@ -69,3 +69,20 @@ class MemoryStorePatch(Dto):
     reach: Reach | None = None
     projects: list[str] | None = Field(default=None, max_length=200)
     status: Literal["active", "archived"] | None = None
+
+
+class RunMemorySearch(Dto):
+    """The sidecar's live search of the memories a run reads (S40-11)."""
+
+    query: str = Field(min_length=1, max_length=2000)
+    k: int = Field(default=5, ge=1, le=20)
+    #: One memory of the run, by label (`global:security-lessons`); absent, all of them.
+    memory: str | None = None
+
+
+class RunMemoryHit(Dto):
+    memory: str
+    kind: str
+    subject: str
+    content: str
+    score: float | None = None

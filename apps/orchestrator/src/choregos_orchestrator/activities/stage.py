@@ -10,6 +10,7 @@ de les lire ici.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
@@ -32,6 +33,7 @@ from choregos_contracts import (
     RepoRef,
     SkillRef,
     StageInput,
+    StageMemory,
     StageRole,
     ToolsRef,
     TransitionRef,
@@ -39,13 +41,14 @@ from choregos_contracts import (
     WorkItemRef,
 )
 from choregos_core import KNOWN_BACKEND_NAMES, ModelResolutionError, ModelResolver, utcnow
+from choregos_core.memory_bindings import Binding, legacy_scope, merge_context_packs
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
 from ..context_reduction import forced_context, resolve_context, stage_input_payload
-from .base import db, load_work_item, project_bundle, without_secrets
+from .base import db, load_work_item, org_memory, project_bundle, without_secrets
 from .bilan import collect_spend, record_run_outcome
 from .execution import (
     FILE_MAX_MINUTES,
@@ -89,8 +92,9 @@ def _serveurs_mcp(settings: Any, memory_scope: str = "project") -> dict[str, Mcp
     serveurs: dict[str, McpServerRef] = {}
     if url := settings.url_du_sidecar_d_outils:
         serveurs["choregos"] = McpServerRef(url=url)
-    # The memory server serves the PROJECT's memory: an agent whose scope is its own (or none) does
-    # not get it — it would read and write past its scope (S32-02).
+    # The memory server serves the PROJECT's shared memory: a run whose bindings are anything else (its
+    # own memory, none, several, a global one) does not get it — it would read and write past its
+    # bindings (S32-02, S40-11).
     if settings.memory_url and memory_scope == "project":
         serveurs["memory"] = McpServerRef(url=f"{settings.memory_url.rstrip('/')}/mcp")
     return serveurs
@@ -185,8 +189,11 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # into the key's. Replayable: the row is found again by its run (ADR 0008).
         await reserve_key(session, bundle, run_id, budget)
 
-        memory_scope = _memory_scope(agent)
-        context_pack = await _context_pack(bundle, item, plan, memory_scope, agent)
+        resolved_memories = await _memory_bindings(session, bundle, agent)
+        memory_scope = resolved_memories.legacy_scope or "none"
+        context_pack = await _context_pack(
+            bundle, item, plan, resolved_memories, await org_memory(session, bundle)
+        )
         await garde_contre_l_injection(session, bundle, item, run_id, plan, context_pack)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
         digest = sha256(playbook_prompt.encode()).hexdigest()[:12]
@@ -257,6 +264,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
             tools=ToolsRef(mcp=_serveurs_mcp(settings, memory_scope)),
             memory_scope=memory_scope,
+            memories=resolved_memories.memories,
             skills=await _skills_de_l_agent(session, bundle, agent),
             knowledge=await _knowledge_of_agent(session, bundle, agent),
             permissions=Permissions(
@@ -301,6 +309,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         run.started_at = utcnow()
         if existing is None:
             session.add(run)
+        await session.flush()
+        await _journal_skipped_memories(session, run_id, resolved_memories.skipped)
         # Ce que le prompt de ce run embarque des étapes d'avant, sous l'empreinte de la révision
         # embarquée (S25-04). Rejouable : un reçu existant ne se réécrit pas (ADR 0008).
         await consigner(
@@ -469,22 +479,118 @@ def _run_id(plan: StagePlan) -> str:
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
 
 
-def _memory_scope(agent: Any) -> str:
-    """The agent version's memory scope (S32-02); `project` for a playbook, as before."""
-    return str(getattr(getattr(agent, "spec", None), "memory", None) or "project")
+@dataclass(slots=True)
+class ResolvedMemories:
+    """The memories a run reads and writes, resolved for its project (S40-11, ADR 0075)."""
+
+    memories: list[StageMemory]
+    #: Bindings that did not resolve: `{memory, reason}`; the run starts without them (ADR 0007).
+    skipped: list[dict[str, str]]
+
+    @property
+    def legacy_scope(self) -> str | None:
+        return legacy_scope([Binding(m.scope, m.slug, m.mode) for m in self.memories])
+
+
+async def _memory_bindings(session: Any, bundle: Any, agent: Any) -> ResolvedMemories:
+    """Turn the agent version's effective bindings into the memories THIS run reads and writes.
+
+    A global memory must exist, be active and reach the run's project; a named project memory must
+    exist and be active in the run's project; `shared` and `own` always resolve (`own` needs an agent).
+    What does not resolve is skipped with its reason, never fatal: memory never blocks a stage
+    (ADR 0007). A playbook run, with no agent, is `[project:shared write]`, as before.
+    """
+    from choregos_api.db.models import MemoryStore
+    from choregos_api.services.memory_access import reaches_project
+    from choregos_core.memory_bindings import OWN, SHARED, effective_bindings, namespace_of_binding
+    from sqlalchemy import select
+
+    spec = getattr(agent, "spec", None)
+    bindings = (
+        effective_bindings(None, "project")
+        if spec is None
+        else [Binding(b.scope, b.slug, b.mode) for b in spec.effective_memories()]
+    )
+    agent_slug = agent.agent.slug if agent is not None else None
+    stores = {
+        (store.scope, store.owner_key, store.slug): store
+        for store in (
+            await session.execute(select(MemoryStore).where(MemoryStore.org_id == bundle.project.org_id))
+        ).scalars()
+    }
+    resolved: list[StageMemory] = []
+    skipped: list[dict[str, str]] = []
+    for binding in bindings:
+        reason: str | None = None
+        if binding.scope == "global":
+            store = stores.get(("global", "org", binding.slug))
+            if store is None:
+                reason = "the memory does not exist"
+            elif store.status != "active":
+                reason = "the memory is archived"
+            elif not reaches_project(store, bundle.slug):
+                reason = f"the memory does not reach project {bundle.slug}"
+        elif binding.slug == OWN and not agent_slug:
+            reason = "a playbook run has no agent, so no memory of its own"
+        elif binding.slug not in (SHARED, OWN):
+            store = stores.get(("project", str(bundle.project.id), binding.slug))
+            if store is None:
+                reason = f"the project has no memory `{binding.slug}`"
+            elif store.status != "active":
+                reason = "the memory is archived"
+        if reason is not None:
+            skipped.append({"memory": binding.label, "reason": reason})
+            continue
+        namespace = namespace_of_binding(bundle.org_slug, bundle.slug, agent_slug, binding)
+        if namespace is None:  # unreachable: `own` without an agent is refused above
+            continue
+        resolved.append(
+            StageMemory(
+                label=binding.label,
+                scope=binding.scope,
+                slug=binding.slug,
+                mode=binding.mode,
+                namespace=namespace,
+            )
+        )
+    return ResolvedMemories(resolved, skipped)
+
+
+async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dict[str, str]]) -> None:
+    """One `memory.skipped` event per unresolved binding, on the run page; once, even if replayed."""
+    if not skipped:
+        return
+    from choregos_api.db.models import RunEvent
+    from sqlalchemy import func, select
+
+    rows = (
+        await session.execute(
+            select(RunEvent.payload).where(RunEvent.run_id == run_id, RunEvent.type == "memory.skipped")
+        )
+    ).scalars()
+    already = {str(payload.get("memory")) for payload in rows}
+    seq = int(
+        (await session.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run_id))).scalar() or 0
+    )
+    for entry in skipped:
+        if entry["memory"] in already:
+            continue
+        seq += 1
+        session.add(RunEvent(run_id=run_id, seq=seq, type="memory.skipped", payload=dict(entry), ts=utcnow()))
 
 
 async def _context_pack(
-    bundle: Any, item: Any, plan: StagePlan, memory_scope: str = "project", agent: Any = None
+    bundle: Any, item: Any, plan: StagePlan, resolved: ResolvedMemories, org_adapter: Any = None
 ) -> ContextPack:
-    """Memory bounded by role; a failure yields an empty pack rather than blocking the stage. Read
-    within the agent's scope (S32-02): the project's, its own, or none."""
-    from choregos_core import memory_namespace
+    """Memory bounded by role; a failure yields an empty pack rather than blocking the stage.
 
+    Every memory the run reads is queried concurrently (a failing one contributes nothing, the others
+    still do) and the packs are merged by precedence (S40-11); a run with the single legacy memory
+    gets its pack unmerged, as before.
+    """
     engine = bundle.engine
     budget_tokens = engine.memory_budget(plan.role)
-    espace = memory_namespace(bundle.slug, memory_scope, agent.agent.slug if agent is not None else None)
-    if budget_tokens <= 0 or espace is None:
+    if budget_tokens <= 0 or not resolved.memories:
         return ContextPack.empty(item.title)
     kinds_by_role = {
         "refine": ["decision", "incident", "ticket_summary"],
@@ -494,19 +600,32 @@ async def _context_pack(
         "verify": ["flaky_test", "run_lesson"],
     }
     query = f"{item.title}\n{(item.documents or {}).get('spec_markdown', '')}"[:2000]
-    try:
-        return await asyncio.wait_for(
-            bundle.adapters.memory.context_pack(
-                espace,
-                query,
-                list(item.allowed_paths or []),
-                budget_tokens,
-                kinds_by_role.get(plan.role),
-            ),
-            timeout=bundle.policy.memory.read_timeout_ms / 1000 * 10,
+    timeout = bundle.policy.memory.read_timeout_ms / 1000 * 10
+
+    async def read(memory: StageMemory) -> ContextPack:
+        adapter = (
+            (org_adapter or bundle.adapters.memory) if memory.scope == "global" else bundle.adapters.memory
         )
-    except (TimeoutError, Exception):
-        return ContextPack.empty(query)
+        try:
+            return await asyncio.wait_for(
+                adapter.context_pack(
+                    memory.namespace,
+                    query,
+                    list(item.allowed_paths or []),
+                    budget_tokens,
+                    kinds_by_role.get(plan.role),
+                ),
+                timeout=timeout,
+            )
+        except (TimeoutError, Exception):
+            return ContextPack.empty(query)
+
+    packs = await asyncio.gather(*(read(memory) for memory in resolved.memories))
+    if len(packs) == 1 and resolved.legacy_scope is not None:
+        return packs[0]
+    return merge_context_packs(
+        [(m.label, pack) for m, pack in zip(resolved.memories, packs, strict=True)], budget_tokens, query
+    )
 
 
 def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None) -> str:

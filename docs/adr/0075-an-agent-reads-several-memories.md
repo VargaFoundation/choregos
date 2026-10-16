@@ -90,7 +90,13 @@ memories at the same time.
 
 ## Consequences
 
-- Stage S40-11a (this record's first PR) ships the contract, the API and the storage; running the
-  bindings is S40-11b, the console S40-11c.
+- S40-11a ships the contract, the API and the storage; S40-11b the run (resolution and recall in
+  `prepare_stage`, writes and proposals in the memory activities, the run-token search endpoint
+  `POST /internal/runs/{id}/memory/search`, the sidecar and the runner's labels), with no change to a
+  workflow; S40-11c the console.
+- Ecphoria's own MCP server is handed to a run only when its bindings are exactly the legacy
+  `[project:shared write]`, because that server knows nothing of the other memories.
+- The automatic acceptance activity now reads `list_pending` of the real adapters (it only worked on
+  the fake before) and covers the project's shared, own and named memories, never a global one.
 - Ecphoria's acceptance of the `org:<org>` tenant and of the namespace header is untested against a
   real Ecphoria (as for S32-02).

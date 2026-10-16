@@ -29,7 +29,7 @@ from sqlalchemy import func, select
 from ..catalogue import appeler as appeler_outil
 from ..catalogue import outils_du_projet
 from ..config import get_settings
-from ..db.models import CostLedger, HumanRequest, Project, Run, RunEvent, WorkItem
+from ..db.models import CostLedger, HumanRequest, Organization, Project, Run, RunEvent, WorkItem
 from ..db.models import Finding as FindingRow
 from ..deps import Db, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
@@ -47,6 +47,7 @@ from ..schemas import (
     ScopeChangeRequestIn,
 )
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
+from ..schemas.memory import RunMemoryHit, RunMemorySearch
 from ..services import effective_policy, persist_event, ranger_les_sorties
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -554,6 +555,38 @@ async def search_knowledge(
     return KnowledgeSearchResult.model_validate(
         {"mode": result.mode, "hits": [asdict(h) for h in result.hits]}
     )
+
+
+@router.post(
+    "/runs/{id}/memory/search",
+    response_model=list[RunMemoryHit],
+    operation_id="searchRunMemory",
+)
+async def search_memory(id: str, body: RunMemorySearch, session: Db, claims: RunAuth) -> list[RunMemoryHit]:
+    """`search_memory` of the sidecar (S40-11): the memories the run's `StageInput` names, and no others.
+
+    The run token proves the run; what it may read is what its `StageInput` resolved when it was
+    prepared. A label that is not one of them is 404. Each memory is searched under the read timeout.
+    """
+    from ..services.memory_access import search_run_memories
+
+    run, _, project = await _run_and_item(session, id)
+    policy = await effective_policy(session, project.id)
+    if not policy.memory.enabled:
+        return []
+    organisation = await session.get(Organization, project.org_id)
+    org_slug = organisation.slug if organisation is not None else ""
+    hits = await search_run_memories(
+        session,
+        run,
+        project,
+        org_slug,
+        body.query,
+        body.k,
+        body.memory,
+        policy.memory.read_timeout_ms / 1000 * 10,
+    )
+    return [RunMemoryHit.model_validate(hit) for hit in hits]
 
 
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
