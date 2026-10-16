@@ -370,8 +370,29 @@ a screen reader announces.
 ### Project settings
 
 `/p/<project>/settings` reads as sections, with an in-page navigation (a strip on small screens, a sticky
-list from `lg` up): **Connections**, **Agents & models**, **Guardrails**, **Tools**. A slot above them is
-kept for the project's readiness panel (S40-06).
+list from `lg` up): **Readiness** (on top), **General**, **Connections**, **Agents & models**, **Guardrails**,
+**Notifications**, **Tools**, **People**, **Knowledge & memory**, **Danger zone**.
+
+- **Readiness** is the list above, drawn from `GET /projects/{id}/readiness`: a summary ("9 of 13 ready, 3
+  to check"), the items grouped by section, and a *Fix* link to the section or page that fixes each open
+  one. When the viewer cannot fix an item it says whom to ask (a project owner, the organisation admin, the
+  platform operator, or "done outside Choregos") instead of the link. The overview's *Getting started* card
+  is the same list and disappears when nothing is to do.
+- **General**: name, template (read-only, with "a newer version exists" when the manifest has one),
+  environments, labels, the repository (URL, default branch, language, branch prefix, clone depth), the
+  measured checks (test, lint, typecheck commands) and definition-of-done facts (a fact name and the command
+  that proves it). One Save for the section.
+- **Notifications**: the notify connector's state (it is configured in Connections), the Slack channel and
+  the e-mail addresses (`notify.slack_channel`, `notify.emails`).
+- **Agents & models** also holds the default backend (a select over the backends the deployment runs) and
+  the allowed backends. **Tools** has a checkbox per catalogue tool and an explicit *open the whole catalogue*
+  (`*`); the groups a tool is open to are read-only (only `tools:grant` changes `groups`).
+- **People** and **Knowledge & memory** count and link to Members, Knowledge and Memory; nothing is
+  duplicated. **Danger zone** suspends or archives the project, each after a confirmation.
+
+Every section saves on its own through `PATCH /projects/{id}`. The console re-reads the project right before
+writing and sends the whole configuration with only that section's keys changed, so a section never drops
+what another one wrote and `groups` is sent untouched.
 
 - **Connections** is a card per connector: an icon (the product's mark when simple-icons has one, vendored
   as CC0 paths in `components/brand-icon-paths.ts`; a capability icon otherwise, including Slack and the
