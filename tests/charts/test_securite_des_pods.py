@@ -1,11 +1,11 @@
-"""Nos pods satisfont la règle Kyverno stricte — vérifié sur le rendu du chart.
+"""Our pods satisfy the strict Kyverno rule -- checked on the rendered chart.
 
-`infra/policies/pod-security.yaml` exige, pour tout pod d'un namespace `choregos-*` ou
-`proj-*` : `runAsNonRoot`, un profil seccomp au niveau du pod, et pour chaque conteneur
-`allowPrivilegeEscalation: false` et `capabilities.drop: [ALL]`. Une règle stricte qui
-refuserait nos propres pods serait un chart qui ne s'installe pas : ce test rend le chart
-pour chaque environnement et applique la règle à chaque modèle de pod. Sans `helm`, il
-s'ignore et le dit.
+`infra/policies/pod-security.yaml` requires, for every pod in a `choregos-*` or
+`proj-*` namespace: `runAsNonRoot`, a seccomp profile at pod level, and for each container
+`allowPrivilegeEscalation: false` and `capabilities.drop: [ALL]`. A strict rule that
+would refuse our own pods would be a chart that does not install: this test renders the chart
+for each environment and applies the rule to each pod template. Without `helm`, it
+skips and says so.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _modeles_de_pod(documents: list[dict[str, Any]]) -> list[tuple[str, dict[str
 
 
 def manquements(spec: dict[str, Any]) -> list[str]:
-    """Ce que la règle `non-root` reprocherait à ce pod ; vide s'il passe."""
+    """What the `non-root` rule would fault this pod for; empty if it passes."""
     fautes: list[str] = []
     pod = spec.get("securityContext") or {}
     if pod.get("runAsNonRoot") is not True:
@@ -69,11 +69,13 @@ def manquements(spec: dict[str, Any]) -> list[str]:
 @pytest.mark.parametrize("env", ENVIRONNEMENTS)
 def test_chaque_pod_du_chart_passe_la_regle_non_root(env: str) -> None:
     fautifs = {nom: manquements(spec) for nom, spec in _modeles_de_pod(_rendu(env))}
-    assert {nom: f for nom, f in fautifs.items() if f} == {}, f"{env} : la règle Kyverno refuserait ces pods"
+    assert {nom: f for nom, f in fautifs.items() if f} == {}, (
+        f"{env}: the Kyverno rule would refuse these pods"
+    )
 
 
 def test_la_regle_kyverno_est_bien_stricte() -> None:
-    """Le fichier lui-même : plus d'ancre conditionnelle sur les champs qui comptent."""
+    """The file itself: no more conditional anchor on the fields that matter."""
     politique = yaml.safe_load((RACINE / "infra" / "policies" / "pod-security.yaml").read_text())
     regle = next(r for r in politique["spec"]["rules"] if r["name"] == "non-root")
     motif = regle["validate"]["pattern"]["spec"]

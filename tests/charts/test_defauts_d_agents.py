@@ -1,7 +1,7 @@
-"""Le déploiement dit ce qu'il sait faire tourner, et l'API le reçoit (#245).
+"""The deployment says what it knows how to run, and the API receives it (#245).
 
-`global.agents` devient trois variables de l'API : le backend et les profils de modèle dont un
-projet neuf hérite. Vide, rien n'est posé — le contrat décide.
+`global.agents` becomes three API variables: the backend and the model profiles a new
+project inherits. Empty, nothing is set -- the contract decides.
 """
 
 from __future__ import annotations

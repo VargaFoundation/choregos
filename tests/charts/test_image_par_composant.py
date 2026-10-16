@@ -1,8 +1,8 @@
-"""Une image par composant (S17-03) : l'édition entreprise sert son API et son orchestrateur depuis
-un projet privé ; la console, la base, Temporal et le reste viennent du cœur.
+"""One image per component (S17-03): the enterprise edition serves its API and its orchestrator from
+a private project; the console, the database, Temporal and the rest come from the core.
 
-Le chart ne savait composer qu'un registre : `global.imageRegistry` pour toutes les images. Servir
-les images `-ee` voulait donc tout servir depuis le projet privé — ou forker le chart.
+The chart only knew how to compose one registry: `global.imageRegistry` for all images. Serving
+the `-ee` images therefore meant serving everything from the private project -- or forking the chart.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def test_l_api_et_l_orchestrateur_viennent_du_projet_prive_le_reste_du_coeur() -
     images = _images(*EE)
     prives = {nom for nom, refs in images.items() if any(r.startswith(PRIVE) for r in refs)}
     assert any("api" in nom for nom in prives) and any("orchestrator" in nom for nom in prives), prives
-    # Le job de migration lance l'image de l'API : il suit son registre.
+    # The migration job runs the API image: it follows its registry.
     assert any(nom.startswith("Job/") for nom in prives), prives
     for nom, refs in images.items():
         if nom not in prives:
@@ -62,9 +62,9 @@ def test_le_digest_global_ne_designe_pas_une_image_d_un_autre_registre() -> None
     for nom, refs in images.items():
         for ref in refs:
             if ref.startswith(PRIVE):
-                assert "@sha256" not in ref, f"{nom} : le digest du cœur posé sur une image de l'EE"
+                assert "@sha256" not in ref, f"{nom}: the core digest set on an EE image"
             elif ref.startswith("ghcr.io/vargafoundation/choregos-"):
-                assert "@sha256:" in ref, f"{nom} : le cœur garde son digest"
+                assert "@sha256:" in ref, f"{nom}: the core keeps its digest"
 
 
 def test_sans_surcharge_rien_ne_change() -> None:
