@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import ConnectorOperation, OrgConnector, Project, ProjectOperationPolicy
 from ..errors import unprocessable
+from .catalogue_rights import connector_enabled_for
 
 #: Le rang de chaque politique : un projet ne peut que monter (ADR 0034).
 RANG = {politique: rang for rang, politique in enumerate(POLITIQUES)}
@@ -131,6 +132,8 @@ async def politique_pour_le_projet(
     if ligne is None:
         return "forbidden"
     trouvee, instance = ligne
+    if not await connector_enabled_for(session, instance, projet):
+        return "forbidden"
     groupes = {str(g) for g in ((projet.config or {}).get("groups") or [])}
     if trouvee.groups and not groupes & set(trouvee.groups):
         return "forbidden"

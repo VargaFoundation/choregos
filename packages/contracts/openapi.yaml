@@ -354,7 +354,7 @@ paths:
     get:
       tags: [connectors]
       operationId: listMcpCatalogue
-      description: The catalogue of well-known MCP servers shipped with the platform (ADR 0065) and, for each, what it means in this organisation — available, installed (the connectors that carry it) or updatable. Listing enables nothing. Its members can read it.
+      description: The catalogue of well-known MCP servers shipped with the platform (ADR 0065) and, for each, what it means in this organisation — available, installed (the connectors that carry it) or updatable. Listing enables nothing. Any member of the organisation can read it (an organisation role or only a project role); each entry says what the caller may do (ADR 0074).
       parameters:
         - { name: q, in: query, required: false, schema: { type: string }, description: "free text over the id, the title, the publisher and the description" }
         - { name: category, in: query, required: false, schema: { type: string } }
@@ -379,6 +379,49 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/connector-catalogue:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [connectors]
+      operationId: listConnectorCatalogue
+      description: The connector types the platform knows (the adapter registry, platform plumbing and test fakes left out), by family, with where each is installed or configured in this organisation and what the caller may do with it (ADR 0074). Any member of the organisation can read it; it holds no secret.
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: "free text over the kind, the type, the display name and the family" }
+        - { name: family, in: query, required: false, schema: { type: string } }
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [organisation, project] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorCatalogue" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /projects/{id}/org-connectors:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [connectors]
+      operationId: listProjectOrgConnectors
+      description: The organisation's connectors and whether each is on for this project, with what the caller may switch (ADR 0074). The project's members can read it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectOrgConnector" } } } } }
+  /projects/{id}/org-connectors/{connector}/enablement:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: connector, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [connectors]
+      operationId: enableOrgConnector
+      description: Turns an organisation connector on for this project (idempotent). Only for a connector whose availability is `selected_projects` (409 otherwise). The project's owner or the organisation's administrator (ADR 0074).
+      responses:
+        "200": { description: On, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectOrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [connectors]
+      operationId: disableOrgConnector
+      description: Turns it off for this project; turning off one that is not on changes nothing (204). 409 when the connector is available to every project.
+      responses:
+        "204": { description: Off }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/connectors/{name}/operations/{operation}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3064,6 +3107,60 @@ components:
         created_by: { type: [string, "null"] }
         catalogue_entry: { type: [string, "null"], description: "`<id>@<catalogue_version>` when it was installed from the MCP catalogue (ADR 0065)" }
         operations: { type: array, items: { $ref: "#/components/schemas/ConnectorOperation" } }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
+        enabled_projects: { type: array, items: { type: string }, description: "the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074)" }
+    ConnectorAvailability:
+      type: string
+      enum: [all_projects, selected_projects]
+      description: "`all_projects`: every project whose groups match reaches it (the default). `selected_projects`: only the projects it is enabled for (ADR 0074)."
+    CataloguePermissions:
+      type: object
+      description: What the caller may do with a catalogue entry, decided by the server (ADR 0074). The console never derives it from a role.
+      required: [install, configure_projects, enable_projects]
+      properties:
+        install: { type: boolean, description: "declare it in the organisation" }
+        configure_projects: { type: array, items: { type: string }, description: "project-scope types: the projects whose settings the caller may set" }
+        enable_projects: { type: array, items: { type: string }, description: "the projects where the caller may turn an installed organisation connector on or off" }
+    ConnectorEnablement:
+      type: object
+      required: [connector, availability, enabled_projects]
+      properties:
+        connector: { type: string }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
+        enabled_projects: { type: array, items: { type: string }, description: "among the projects the caller sees; empty with all_projects" }
+    ConnectorCatalogueEntry:
+      type: object
+      required: [kind, type, display, family, scope, capabilities, secret_fields, operations, installed_as, configured_in, enablement, can]
+      properties:
+        kind: { type: string }
+        type: { type: string }
+        display: { type: string }
+        family: { type: string, description: "Source code, Work trackers, CI, Deployment, Documents, Directory, Network operations, Notifications, MCP servers, or Other" }
+        scope: { type: string, enum: [organisation, project], description: "an organisation connector is installed by the administrator; a project connector is configured in the project's settings" }
+        capabilities: { type: array, items: { type: string } }
+        secret_fields: { type: array, items: { type: string }, description: "field names only, never values" }
+        operations: { type: integer, description: "operations the type declares; an MCP server discovers its own (0)" }
+        installed_as: { type: array, items: { type: string }, description: "names of the organisation connectors of this type" }
+        configured_in: { type: array, items: { type: string }, description: "slugs of the projects, among those the caller sees, that configure this type" }
+        enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" } }
+        can: { $ref: "#/components/schemas/CataloguePermissions" }
+        cannot_reason: { type: [string, "null"], description: "the server's sentence when the caller may do nothing here" }
+    ConnectorCatalogue:
+      type: object
+      required: [entries]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/ConnectorCatalogueEntry" } }
+    ProjectOrgConnector:
+      type: object
+      required: [name, kind, type, availability, enabled, can_toggle]
+      properties:
+        name: { type: string }
+        kind: { type: string }
+        type: { type: string }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
+        enabled: { type: boolean }
+        can_toggle: { type: boolean, description: "the caller may turn it on or off here: availability is selected_projects and the caller owns the project or administers the organisation" }
+        cannot_reason: { type: [string, "null"] }
     CatalogueMeta:
       type: object
       description: Provenance shared by the platform's catalogues (ADR 0065) — which file, built when, from what.
@@ -3086,7 +3183,7 @@ components:
         protocol: { type: string, enum: [streamable-http, sse] }
     McpCatalogueEntry:
       type: object
-      required: [id, title, description, publisher, official, reference, transport, auth, install, categories, state, egress]
+      required: [id, title, description, publisher, official, reference, transport, auth, install, categories, state, egress, can]
       properties:
         id: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
         title: { type: string }
@@ -3112,6 +3209,9 @@ components:
         state: { type: string, enum: [available, installed, update] }
         installed_as: { type: array, items: { type: string }, description: "names of the org connectors created from this entry" }
         egress: { type: string, enum: [open, undeclared, unknown], description: "whether the deployment declares the host reachable from the API" }
+        can: { $ref: "#/components/schemas/CataloguePermissions" }
+        cannot_reason: { type: [string, "null"], description: "why the entry cannot be installed by the caller: the server's sentence" }
+        enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" }, description: "one per installed instance of this entry" }
     McpCatalogueInstall:
       type: object
       properties:
@@ -3119,6 +3219,7 @@ components:
         secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a literal is refused" }
         secret_values: { type: object, additionalProperties: { type: string }, description: "the credential typed once, sealed at rest and never returned (ADR 0058); give this or `secret_refs.token`" }
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability", description: "defaults to all_projects through the API; the console proposes selected_projects (ADR 0074)" }
     SkillCatalogueSignals:
       type: object
       required: [stars, stars_as_of]
@@ -3166,6 +3267,7 @@ components:
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
         secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058)" }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
     OrgConnectorUpdate:
       type: object
       description: Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's.
@@ -3173,6 +3275,7 @@ components:
         config: { type: [object, "null"], additionalProperties: true }
         secret_refs: { type: [object, "null"], additionalProperties: { type: string } }
         secret_values: { type: [object, "null"], additionalProperties: { type: string }, writeOnly: true }
+        availability: { oneOf: [{ $ref: "#/components/schemas/ConnectorAvailability" }, { type: "null" }], description: "the organisation's administrator only; switching to selected_projects turns it on for no project (ADR 0074)" }
     OperationPatch:
       type: object
       properties:

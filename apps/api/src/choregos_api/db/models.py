@@ -540,6 +540,24 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     #: `<id>@<catalogue_version>` when installed from the MCP catalogue (ADR 0065); `NULL` otherwise.
     catalogue_entry: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    #: `all_projects` (before ADR 0074: every project whose groups match) or `selected_projects`
+    #: (only the projects with a row in `org_connector_projects`).
+    availability: Mapped[str] = mapped_column(
+        String(24), default="all_projects", server_default="all_projects"
+    )
+
+
+class OrgConnectorProject(Base, PkMixin, TimestampMixin):
+    """A project an organisation connector is turned on for (ADR 0074): the project's own lock,
+    read only when the connector's availability is `selected_projects`."""
+
+    __tablename__ = "org_connector_projects"
+    __table_args__ = (UniqueConstraint("connector_id", "project_id", name="uq_org_connector_projects"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    connector_id: Mapped[str] = mapped_column(ForeignKey("org_connectors.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    enabled_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class OrgSecret(Base, PkMixin, TimestampMixin):
