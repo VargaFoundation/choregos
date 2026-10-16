@@ -45,6 +45,7 @@ import {
 import { canEdit, currentVersion, parseCompare, versionOf } from "@/lib/agent-versions";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
+import { networkSummary } from "@/lib/network";
 import { useSession } from "@/lib/session";
 import type { Agent } from "@/lib/types";
 

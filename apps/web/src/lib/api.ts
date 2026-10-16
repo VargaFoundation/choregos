@@ -112,6 +112,8 @@ import type {
   ModelMatrix,
   PolicyDef,
   PolicyCeilingState,
+  NetworkActivity,
+  ProjectNetwork,
   ProjectDto,
   ProjectPage,
   ProvisionStatus,
@@ -668,6 +670,12 @@ export const api = {
   policyCeiling: (org: string) => request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`),
   putPolicyCeiling: (org: string, ceiling: Record<string, unknown> | null) =>
     request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`, { method: "PUT", body: JSON.stringify({ ceiling }) }),
+
+  /** What a project's runs really get (ADR 0070): its policy under the organisation's ceiling, and what was clamped. */
+  projectNetwork: (id: string) => request<ProjectNetwork>(`/projects/${qualify(id)}/network`),
+  /** Refusals and traffic per host, for the organisation's administrators. */
+  networkActivity: (org: string, params?: Record<string, string>) =>
+    request<NetworkActivity>(`/orgs/${org}/network-activity${query(params)}`),
 
   workItems: (id: string, params?: Record<string, string>) =>
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),

@@ -98,15 +98,16 @@ describe("the new agent's page", () => {
     expect(within(builder).getByLabelText("Description")).toHaveValue(DESCRIPTION);
   });
 
-  it("folds the seven advanced sections, each saying its value", async () => {
+  it("folds the eight advanced sections, each saying its value", async () => {
     const builder = await toTheForm();
-    // Seven sections, and the help on template variables, are `<details>` left closed.
-    expect(builder.querySelectorAll("details:not([open])")).toHaveLength(8);
+    // Eight sections, and the help on template variables, are `<details>` left closed.
+    expect(builder.querySelectorAll("details:not([open])")).toHaveLength(9);
     expect(builder.querySelectorAll("details[open]")).toHaveLength(0);
     const summary = (title: string) =>
       Array.from(builder.querySelectorAll("summary")).find((el) => el.textContent?.includes(title));
     expect(summary("Skills")).toHaveTextContent("Skillsnone");
     expect(summary("Eval suite")).toHaveTextContent("0 cases");
+    expect(summary("Network access")).toHaveTextContent("the project's hosts");
     expect(summary("Model and runtime")).toHaveTextContent("the project's profile · the project's backend");
   });
 

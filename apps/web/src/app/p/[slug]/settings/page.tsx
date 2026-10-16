@@ -4,6 +4,8 @@
 import { use } from "react";
 import { AgentsModelsSection } from "@/components/project-settings/agents-models-section";
 import { ConnectionsSection } from "@/components/project-settings/connections-section";
+import { ProjectNetworkCard } from "@/components/project/network-card";
+import { SettingsSection } from "@/components/project-settings/section";
 import { GuardrailsSection } from "@/components/project-settings/guardrails-section";
 import { SettingsNav } from "@/components/project-settings/settings-nav";
 import { ToolsSection } from "@/components/project-settings/tools-section";
@@ -13,6 +15,7 @@ const SECTIONS = [
   { id: "connections", label: "Connections" },
   { id: "agents-models", label: "Agents & models" },
   { id: "guardrails", label: "Guardrails" },
+  { id: "network", label: "Network" },
   { id: "tools", label: "Tools" },
 ];
 
@@ -35,6 +38,13 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         <ConnectionsSection slug={slug} />
         <AgentsModelsSection slug={slug} />
         <GuardrailsSection slug={slug} />
+        <SettingsSection
+          id="network"
+          title="Network"
+          lead="The hosts this project's runs may reach, under the organisation's ceiling (ADR 0070)."
+        >
+          <ProjectNetworkCard slug={slug} />
+        </SettingsSection>
         <ToolsSection slug={slug} />
       </div>
     </div>

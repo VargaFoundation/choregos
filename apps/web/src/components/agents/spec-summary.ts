@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { usd } from "@/lib/format";
+import { isDefaultNetwork, networkSummary } from "@/lib/network";
 import { effectiveBindings, isLegacyDefault, summaryOf } from "@/lib/memories";
 import type { AgentSpec } from "@/lib/types";
 
@@ -8,7 +9,7 @@ import type { AgentSpec } from "@/lib/types";
  * version (S40-12) can say the same words without loading the whole form.
  */
 
-export type SectionId = "model" | "limits" | "skills" | "tools" | "knowledge" | "memory" | "evals";
+export type SectionId = "model" | "limits" | "skills" | "tools" | "network" | "knowledge" | "memory" | "evals";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -30,6 +31,7 @@ export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
     limits: limits.length ? limits.join(" · ") : "the role's defaults",
     skills: skills ? `${skills} attached` : "none",
     tools: servers ? plural(servers, "MCP server", "MCP servers") : "none",
+    network: networkSummary(spec.network),
     knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
     memory: summaryOf(effectiveBindings(spec)),
     evals: plural(cases, "case", "cases"),
@@ -44,6 +46,7 @@ export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
     limits: spent.some((v) => v != null),
     skills: (spec.skills ?? []).length > 0,
     tools: (spec.mcp_servers ?? []).length > 0,
+    network: !isDefaultNetwork(spec.network),
     knowledge: (spec.knowledge ?? []).length > 0,
     memory: !isLegacyDefault(effectiveBindings(spec)),
     evals: (spec.evals ?? []).length > 0,
