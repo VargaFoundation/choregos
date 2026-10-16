@@ -54,7 +54,7 @@ class OrchestratorSettings(BaseSettings):
     agent_images: dict[str, str] = {}
     #: A reference without `@sha256:` stops the worker at start-up (`CHOREGOS_REQUIRE_IMAGE_DIGEST`).
     require_image_digest: bool = False
-    executor_kind: str = "tekton"
+    executor_kind: str = "agent_sandbox"
     # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
     # secret n'a rien à faire ici : `CHOREGOS_RUNNER_ENV_SECRETS` liste des secrets, que
     # l'exécuteur monte par référence.

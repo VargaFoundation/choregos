@@ -138,6 +138,7 @@ def test_the_chart_template_and_pool_are_accepted(namespace: str) -> None:
         [
             "helm", "template", "choregos", "charts/choregos", "--namespace", namespace,
             "--set", "choregos-orchestrator.runner.executor=agent_sandbox",
+            "--set", "choregos-orchestrator.runner.skipOperatorCheck=true",
             "--set", f"choregos-orchestrator.runner.namespacePattern={namespace}",
             "--show-only", "charts/choregos-orchestrator/templates/sandbox.yaml",
         ],

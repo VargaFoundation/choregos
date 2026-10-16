@@ -1,4 +1,4 @@
-{{- if and .Values.enabled .Values.publishTask }}
+{{- if and .Values.enabled .Values.publishTask (eq (include "choregos.executorKind" .) "tekton") }}
 # The Task is published here for reference; it is **copied into each project namespace**
 # by the provisioning (Kustomize), because Tekton no longer shares ClusterTasks.
 apiVersion: v1

@@ -67,7 +67,23 @@ def test_un_projet_sans_runtime_prend_l_executeur_du_deploiement(monkeypatch: py
     monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
     assert default_executor_kind() == "k8s_job"
     monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND")
-    assert default_executor_kind() == "tekton"
+    assert default_executor_kind() == "agent_sandbox", "ADR 0072: Tekton is no longer assumed"
+
+
+def test_the_allowed_executors_default_to_the_deployment_s(monkeypatch: pytest.MonkeyPatch) -> None:
+    from choregos_adapters.registry import allowed_executor_kinds, executors_declared
+
+    monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND", raising=False)
+    monkeypatch.delenv("CHOREGOS_EXECUTORS_ALLOWED", raising=False)
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    assert allowed_executor_kinds() == ["agent_sandbox"]
+    assert executors_declared() is False
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    monkeypatch.setenv("CHOREGOS_EXECUTORS_ALLOWED", "agent_sandbox, k8s_job,")
+    assert allowed_executor_kinds() == ["k8s_job", "agent_sandbox"], "the default comes first, no duplicate"
+    assert executors_declared() is True
+    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    assert allowed_executor_kinds()[-1] == "fake"
 
 
 def test_la_memoire_prend_l_url_et_le_jeton_du_deploiement(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -114,7 +114,7 @@ platform itself (hot reload, a development cluster), see [development](developme
 | A **GitOps repository** — *for a templated stack* | provisioning writes the project's manifests there, Argo CD applies them |
 | A **board** (GitHub Projects v2, Jira) — *or nothing* | with `tracker: internal` the requests are filed in Choregos itself |
 | A **GitHub App** installed on the organisation — *for GitHub* | scoped installation tokens, webhooks; never a broad PAT |
-| A **cluster** (or an Azure subscription) | depending on the template: Tekton runners, or Container Apps jobs |
+| A **cluster** (or an Azure subscription) | agents run in `agent-sandbox` sandboxes by default (the platform team installs the operator, [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)); Tekton or Jobs only where the deployment says so; or Container Apps jobs |
 | The **platform secrets** | `session-secret`, the run-token key pair, the webhook secrets, the App ID and its private key — in the vault, read by External Secrets (`charts/choregos/charts/api/templates/externalsecret.yaml`) |
 
 Models go through the platform's LiteLLM gateway: a project has no provider key of its own,
