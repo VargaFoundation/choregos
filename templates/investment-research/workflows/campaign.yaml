@@ -11,7 +11,7 @@ kind: Workflow
 metadata:
   name: campaign
   version: 1
-  description: A research campaign over a universe of listed products — snapshot, profile, strategies, backtest, memo, decision.
+  description: A research campaign over a universe of listed products — snapshot, profile, strategies, backtest, one memo and decision per relevant product, final decision.
   inputs:
     type: object
     required: [symbols, start, end, oos_start]
@@ -39,7 +39,6 @@ actors:
   profiler: { type: job, role: profile, command: [choregos-quant, profile], max_minutes: 10 }
   strategist: { type: agent, role: strategize, agent: quant-strategist, max_turns: 20, max_minutes: 15 }
   engine: { type: job, role: backtest, command: [choregos-quant, backtest], max_minutes: 60 }
-  analyst: { type: agent, role: memo, agent: quant-analyst, max_turns: 20, max_minutes: 15 }
   platform: { type: system }
   owner: { type: human, group: owner, sla_hours: 72 }
 states:
@@ -49,11 +48,12 @@ states:
   strategized: { display: Strategies proposed }
   backtested: { display: Backtest computed }
   relevant: { display: A product passed }
-  memo_written: { display: Memo to decide, kind: wait }
+  products_settled: { display: Every relevant product decided, kind: wait }
   to_review: { display: To review, kind: wait }
   adopted: { display: Adopted for follow-up, terminal: true }
   rejected: { display: Rejected, terminal: true }
   not_relevant: { display: Nothing relevant, terminal: true }
+  not_adopted: { display: No product adopted, terminal: true }
 transitions:
   # The only network access of the campaign: the connector, through the platform, with the run's
   # token. The bars are stored and hashed; every later step reads that file, never the provider.
@@ -200,30 +200,43 @@ transitions:
         params: { keys: [relevant_count, trials], min: { relevant_count: 1 }, measured_only: true }
     on_fail: { to: backtested, max_attempts: 1, escalate_to: not_relevant }
 
-  - id: t-memo
+  # One child work item per product the backtest MEASURED relevant (`metrics.relevant`), in
+  # `product-memo`: its memo (numbers measured for that product only) and its attested decision.
+  # The platform copies the product's measured metrics into the child's fields; the campaign
+  # resumes once every child is settled, and only if an owner adopted at least one product.
+  - id: t-fan-out
     from: relevant
-    to: memo_written
-    by: analyst
-    inputs: [metrics]
-    outputs: [memo_markdown]
-    gates:
-      - name: numbers_measured
-        params: { sources: [metrics, fields], outputs: [memo_markdown] }
-    on_fail: { to: relevant, max_attempts: 2, escalate_to: to_review }
+    to: products_settled
+    by: platform
+    spawn:
+      workflow: product-memo
+      for_each: outputs.metrics.relevant
+      title: "Memo and decision: {{ item }} ({{ parent.key }})"
+      fields:
+        symbol: "{{ item }}"
+        product: "{{ outputs.metrics.products[item] }}"
+        facts: "{{ outputs.metrics.facts }}"
+        start: "{{ fields.start }}"
+        oos_start: "{{ fields.oos_start }}"
+        end: "{{ fields.end }}"
+      max_children: 50
+      succeeded: [adopted]
+      min_succeeded: 1
+    on_fail: { to: relevant, max_attempts: 1, escalate_to: not_adopted }
 
   - id: t-decide
-    from: memo_written
+    from: products_settled
     to: adopted
     by: owner
     task:
       title: Decide on the campaign
-      instructions: Read the memo and the report. Adopting means following the products on paper, not trading them.
+      instructions: Read what the owner decided on each product (the children of this campaign) and the report. Adopting means following the adopted products on paper, not trading them.
       form:
         type: object
         required: [decision_note]
         properties:
           decision_note: { type: string, title: Why }
-      attest: I read the memo and the backtest report; this is an internal research decision, not advice
+      attest: I read the product memos and the backtest report; this is an internal research decision, not advice
     on_reject: rejected
 
   - id: t-relaunch

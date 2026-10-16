@@ -1,7 +1,10 @@
-# Evals of the two agents of the campaign (S38-10): outputs an agent could write, and whether the
-# campaign's own guarantees must accept them. `tests/conformance/templates/test_investment_research_evals.py`
-# scores every case with the gates of `workflows/campaign.yaml` — not a copy of them — and with the
-# one check no gate makes: a strategy that names a product of the campaign.
+# Evals of the two agents of the template (S38-10): outputs an agent could write, and whether the
+# workflows' own guarantees must accept them. `tests/conformance/templates/test_investment_research_evals.py`
+# scores every strategist case with the gates of `workflows/campaign.yaml`, and every analyst case
+# with those of `workflows/product-memo.yaml` — not a copy of them — and, for the strategist, with the
+# one check no gate makes: a strategy that names a product of the campaign. The analyst writes the
+# memo of ONE product (S38-15): it is scored on the fields the campaign hands that child — the
+# product's own measured metrics (`product`), the campaign's facts, the dates — and nothing else.
 #
 # A case that should be refused and is accepted means a guarantee was loosened: the suite turns red.
 # Recorded outputs, no model: what a live model writes is scored the same way in S38-13.
@@ -86,12 +89,14 @@ strategist:
         - { id: s9, hypothesis: t, family: ema_trend, params: { span: 100 } }
 
 analyst:
+  # `product:` names the product the memo is about (default P01): its entry of `metrics.products`
+  # is the child's `product` field.
   - id: rounded-measured-numbers
     expect: accept
     memo: |
       # Campaign memo
       P01 passed: out of sample (from 2022-01-01) a CAGR of 12.3%, a Sharpe ratio of 1.07, a
-      deflated Sharpe of 0.97 after 9 trials, a 15.6% drawdown over 14 trades, at 10 bps a change.
+      deflated Sharpe of 0.97 after 9 trials, a 15.6% drawdown over 14 trades.
 
   - id: an-invented-forecast
     expect: refuse
@@ -103,6 +108,6 @@ analyst:
     memo: "P01 shows a Sharpe ratio of 1.85 out of sample."
 
   - id: a-number-from-another-product
-    expect: accept
-    why: P02's drawdown is measured; quoting it to explain a rejection is honest
+    expect: refuse
+    why: the memo of P01 is checked against P01's own measured metrics; P02's drawdown is not among them
     memo: "P02 was rejected: a 33% drawdown and a deflated Sharpe of 0.12."
