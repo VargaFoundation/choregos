@@ -1,4 +1,4 @@
-"""S40-06a: the project readiness contract is declared and served (501 until S40-06b)."""
+"""S40-06a: the project readiness contract is declared and served."""
 
 from __future__ import annotations
 
@@ -35,6 +35,8 @@ def test_a_readiness_item_says_who_can_fix_it() -> None:
     }
 
 
-async def test_the_stub_answers_501(client: Any, project: dict[str, Any]) -> None:
+async def test_the_route_needs_a_signed_in_person(client: Any, project: dict[str, Any]) -> None:
+    """The stub of S40-06a became a real route in S40-06b: it answers, and it needs a session."""
+    client.cookies.clear()
     response = await client.get(f"/api/v1/projects/{project['id']}/readiness")
-    assert response.status_code == 501
+    assert response.status_code == 401

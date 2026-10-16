@@ -199,6 +199,7 @@ from .projets import (
     TemplateSummary,
     TemplateUpsert,
 )
+from .readiness import ProjectReadiness, ReadinessFix, ReadinessItem, ReadinessSummary
 from .remote import (
     RemoteAgentDiscover,
     RemoteAgentDiscovery,
@@ -388,6 +389,7 @@ __all__ = [
     "ProjectOperationDto",
     "ProjectOperationPut",
     "ProjectPage",
+    "ProjectReadiness",
     "ProjectRequirement",
     "ProjectStats",
     "ProjectUpdate",
@@ -395,6 +397,9 @@ __all__ = [
     "ProvisionStatus",
     "ProvisionStep",
     "QuestionIn",
+    "ReadinessFix",
+    "ReadinessItem",
+    "ReadinessSummary",
     "ReleaseDto",
     "ReleaseItemDto",
     "ReleasePage",
