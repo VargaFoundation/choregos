@@ -48,6 +48,9 @@ def upgrade() -> None:
         )
         batch.create_index(op.f("ix_agents_scope"), ["scope"])
         batch.create_index(op.f("ix_agents_project_id"), ["project_id"])
+    # Forced RLS: the application role sees no row without this (S39-27).
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     op.execute(BACKFILL)
     with op.batch_alter_table("agents") as batch:
         batch.create_check_constraint(op.f("ck_agents_scope_project"), "(scope = 'project') = (project_id IS NOT NULL)")

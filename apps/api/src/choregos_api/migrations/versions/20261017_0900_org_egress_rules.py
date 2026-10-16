@@ -65,8 +65,13 @@ def _urls_of(config: Any) -> list[tuple[str, int]]:
     return [hp for hp in found if hp]
 
 
-def _seed() -> None:
+def _seed(*, skip_existing: bool = False) -> None:
+    """The hosts already in use, allowed. `skip_existing`: leave alone an (organisation, host) that already
+    has a live rule (the replay of S39-27, after people may have allowed or requested hosts)."""
     bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        # Forced RLS: the application role sees no row without this (S39-27).
+        bind.execute(sa.text("SELECT set_config('app.current_orgs', '*', true)"))
     # (org_id, host) -> [ports, used_by, reason]
     wanted: dict[tuple[str, str], list[Any]] = {}
 
@@ -130,6 +135,14 @@ def _seed() -> None:
         sa.column("decided_by"),
         sa.column("decided_at", sa.DateTime(timezone=True)),
     )
+    if skip_existing:
+        live = {
+            (org_id, host)
+            for org_id, host in bind.execute(
+                sa.text("SELECT org_id, host FROM org_egress_rules WHERE status IN ('requested', 'allowed')")
+            )
+        }
+        wanted = {key: value for key, value in wanted.items() if key not in live}
     now = datetime.now(UTC)
     rows = [
         {

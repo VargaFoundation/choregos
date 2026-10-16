@@ -39,6 +39,9 @@ def upgrade() -> None:
     from choregos_core.catalogue_d_agents import entrees
 
     connection = op.get_bind()
+    if connection.dialect.name == "postgresql":
+        # Forced RLS: the application role sees no row without this (S39-27).
+        connection.execute(sa.text("SELECT set_config('app.current_orgs', '*', true)"))
     for entry in entrees():
         checksum = empreinte(AgentSpec.model_validate(entry.document.get("spec") or {}))
         rows = connection.execute(
