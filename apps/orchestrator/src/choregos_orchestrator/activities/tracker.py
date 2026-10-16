@@ -9,8 +9,9 @@ from typing import Any
 from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.services import Naissance, nouveau_ticket, persist_event
-from choregos_contracts import EventType
+from choregos_contracts import EventType, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
+from choregos_core.gates import ALREADY_FIXED_GATE
 from sqlalchemy import select
 from temporalio import activity
 
@@ -30,6 +31,8 @@ logger = get_logger("choregos.tracker")
 #: The delivery comment: one per work item, rewritten if needed, so a replayed close_out does not
 #: post a second one.
 DELIVERED_MARKER = "<!-- choregos:delivered -->"
+#: The comment that closes a work item already fixed on the default branch (S22-47): one, upserted.
+ALREADY_FIXED_MARKER = "<!-- choregos:already-fixed -->"
 
 
 @activity.defn(name="mirror_state")
@@ -375,7 +378,9 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
                     provenance=Provenance(source="orchestrator", work_item_key=item.tracker_key),
                 ),
             )
-        tracker_closed = await _close_delivered_item(session, bundle, item)
+        tracker_closed = await _close_delivered_item(
+            session, bundle, item
+        ) or await _close_already_fixed_item(session, bundle, item)
         state = item.state
     if settled is not None:
         await notify_parent(settled)
@@ -410,6 +415,62 @@ async def _close_delivered_item(session: Any, bundle: Any, item: WorkItem) -> bo
     # Deliberately broad: no tracker failure may kill a work item that is already delivered.
     except Exception as exc:
         logger.warning("delivered work item NOT closed in the tracker", key=item.tracker_key, error=str(exc))
+        return False
+    return True
+
+
+async def _close_already_fixed_item(session: Any, bundle: Any, item: WorkItem) -> bool:
+    """A work item whose fix was already on the default branch closes its tracker issue as completed,
+    with a comment citing the measured evidence (S22-47, #539).
+
+    It ended in the target of the workflow's "already fixed" exit — a `system` transition guarded by
+    `already_fixed_proven`, which the interpreter takes only on that evidence. The comment cites the
+    evidence of the work item's last run, the one the guarantee judged. As for a delivery, the
+    tracker is a courtesy: a failure is logged and never fails the end of the work item."""
+    workflow = await workflow_du_ticket(session, item)
+    state = workflow.states.get(item.state)
+    exits = [
+        t
+        for t in workflow.transitions
+        if t.to == item.state and any(g.name == ALREADY_FIXED_GATE for g in t.gates)
+    ]
+    if state is None or not state.terminal or not exits:
+        return False
+    run = (
+        (
+            await session.execute(
+                select(Run)
+                .where(Run.work_item_id == item.id, Run.result.is_not(None))
+                .order_by(Run.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    evidence = StageResult.model_validate(run.result).evidence if run is not None else None
+    tests = (
+        f"- tests on the default branch: {evidence.tests_run} run, {evidence.tests_failed or 0} failed;\n"
+        if evidence is not None
+        else ""
+    )
+    text = (
+        f"{ALREADY_FIXED_MARKER}\n### Choregos — already fixed\n"
+        "The implementation changed nothing: the fix is already on the default branch. "
+        "Evidence measured by the platform, not reported by the agent:\n"
+        "- change: 0 files, 0 lines, no commit, no branch pushed;\n"
+        f"{tests}"
+        f"- run: `{run.id if run is not None else '?'}`.\n\n"
+        f"Closed as **{state.display}**, with no pull request."
+    )
+    try:
+        await bundle.adapters.tracker.upsert_status_comment(item.tracker_key, text, ALREADY_FIXED_MARKER)
+        await bundle.adapters.tracker.close_item(item.tracker_key)
+    # Deliberately broad: no tracker failure may kill a work item that is already settled.
+    except Exception as exc:
+        logger.warning(
+            "already fixed work item NOT closed in the tracker", key=item.tracker_key, error=str(exc)
+        )
         return False
     return True
 

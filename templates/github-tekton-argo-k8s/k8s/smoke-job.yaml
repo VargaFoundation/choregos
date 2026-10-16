@@ -1,4 +1,4 @@
-# Smoke tests joués juste après une promotion, avant le soak.
+# Smoke tests run right after a promotion, before the soak.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:

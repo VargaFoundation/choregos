@@ -1,8 +1,8 @@
-"""La porte MCP (ADR 0030) sort par l'API, sous les deux formes d'entrée du chart.
+"""The MCP gate (ADR 0030) exits through the API, under both of the chart's entry forms.
 
-Sans le chemin `/mcp`, l'Ingress envoie la requête d'un client MCP à la console, qui rend sa page
-404 : le client affiche « Couldn't reach the MCP server » sans dire pourquoi. Sans celui des
-métadonnées OAuth (RFC 9728), claude.ai ne trouve pas l'IdP et ne propose pas de se connecter.
+Without the `/mcp` path, the Ingress sends an MCP client's request to the console, which renders its 404
+page: the client shows "Couldn't reach the MCP server" without saying why. Without the OAuth
+metadata path (RFC 9728), claude.ai does not find the IdP and does not offer to sign in.
 """
 
 from __future__ import annotations

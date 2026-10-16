@@ -49,6 +49,24 @@ ENGLISH = (
     "tests/e2e/test_m4_multibackend_memoire.py",  # S34-04j
     "tests/e2e/test_m5_durci.py",  # S34-04j
     "tests/conformance/report.py",  # S34-04j
+    "templates/",  # S34-04k
+    "tests/e2e/test_m6_rh.py",  # S34-04k
+    "tests/conformance/templates/",  # S34-04k
+    "tests/charts/test_annotations_d_ingress.py",  # S34-04l
+    "tests/charts/test_app_github_des_workers.py",  # S34-04l
+    "tests/charts/test_dashboards.py",  # S34-04l
+    "tests/charts/test_defauts_d_agents.py",  # S34-04l
+    "tests/charts/test_edition_annoncee.py",  # S34-04l
+    "tests/charts/test_faux_de_demo.py",  # S34-04l
+    "tests/charts/test_hook_de_migration.py",  # S34-04l
+    "tests/charts/test_image_par_composant.py",  # S34-04l
+    "tests/charts/test_images_privees.py",  # S34-04l
+    "tests/charts/test_porte_mcp_oauth.py",  # S34-04l
+    "tests/charts/test_porte_mcp_routee.py",  # S34-04l
+    "tests/charts/test_saveur_d_observabilite.py",  # S34-04l
+    "tests/charts/test_securite_des_pods.py",  # S34-04l
+    "tests/charts/test_templates_de_workflow_montes.py",  # S34-04l
+    "tests/charts/test_variables_supplementaires.py",  # S34-04l
 )
 
 #: (file, start of the line) — French that stays, each with its reason.

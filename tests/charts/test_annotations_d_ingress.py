@@ -1,10 +1,10 @@
-"""Les Ingress de l'API et de la console portent les annotations demandées.
+"""The API and console Ingresses carry the requested annotations.
 
-Sur le locataire dev de Diametral, le contrôleur NGINX Inc. refusait l'Ingress de la console : l'API
-avait pris l'hôte, et ce contrôleur n'admet pas deux Ingress sur un même hôte (« All hosts are taken
-by other resources »). La console répondait 404 depuis son installation. Le remède de ce contrôleur
-est l'Ingress fusionnable : un maître porte l'hôte, l'API et la console s'y déclarent en minions —
-ce qui exige de pouvoir annoter les deux.
+On Diametral's dev tenant, the NGINX Inc. controller rejected the console Ingress: the API
+had taken the host, and this controller does not allow two Ingresses on the same host ("All hosts
+are taken by other resources"). The console had answered 404 since its installation. This
+controller's remedy is the mergeable Ingress: a master holds the host, the API and the console
+declare themselves as minions -- which requires being able to annotate both.
 """
 
 from __future__ import annotations

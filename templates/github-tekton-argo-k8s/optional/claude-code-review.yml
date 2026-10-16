@@ -1,4 +1,4 @@
-# Optionnel, désactivé par défaut (voir README.md de ce dossier).
+# Optional, disabled by default (see this folder's README.md).
 name: claude-code-review
 on:
   pull_request:
@@ -8,7 +8,7 @@ permissions:
   pull-requests: write
 jobs:
   review:
-    if: ${{ false }} # activez explicitement si vous voulez une revue hors plateforme
+    if: ${{ false }} # enable explicitly if you want a review outside the platform
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

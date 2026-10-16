@@ -27,6 +27,8 @@ VARIABLES_D_EXEMPLE: dict[str, Any] = {
     "allowed_paths": [],
     "context": None,
     "project": None,
+    #: The production indicator sources the run can read (S22-48); empty = none configured.
+    "production_indicators": [],
 }
 
 _ENVIRONNEMENT = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False, keep_trailing_newline=True)

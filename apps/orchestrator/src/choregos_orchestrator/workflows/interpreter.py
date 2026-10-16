@@ -34,7 +34,7 @@ with workflow.unsafe.imports_passed_through():
     from choregos_core import Decision, WorkflowEngine
     from choregos_core.dsl.dates import DateIllisible, echeance
     from choregos_core.dsl.trains import approbation_du_train, env_du_train
-    from choregos_core.gates import ACTION_REGLEE, GateOutcome
+    from choregos_core.gates import ACTION_REGLEE, GateOutcome, unchanged_run
 
     from ..activities import actions as action_activities
     from ..activities import children as children_activities
@@ -151,6 +151,10 @@ ATTEMPTS_FROM_RUNS = "attempts-from-runs"
 #: so nothing was pushed — escalates the work item with that reason (S22-46, #539). Before this
 #: marker GitHub answered 422 `head invalid` and the interpreter failed.
 OPEN_PR_WITHOUT_BRANCH_ESCALATES = "open-pr-without-branch-escalates"
+#: An agent step that measured no change takes its state's "already fixed" exit (S22-47, #539): the
+#: work item ends there when the exit's guarantees prove the fix is already on the default branch, and
+#: escalates at once otherwise. Before this marker it went on to test, review, and the pull request.
+ALREADY_FIXED_ON_EVIDENCE = "already-fixed-on-evidence"
 #: The non-retryable error types `prepare_stage` raises for a configuration an operator can fix.
 #: Any other failure — a bug, an unreachable database once its retries are spent, an admission rule,
 #: a suspected prompt injection — still fails the interpreter, as before.
@@ -611,6 +615,7 @@ class WorkflowInterpreter:
                 ceiling=_attempts_ceiling(context, engine.agent_of(transition)),
             )
             decision = self._identical_failure(engine, transition, result, decision)
+            decision = await self._already_fixed(params, engine, transition, result, run_id, decision)
         if decision.next_state == engine.question_state() and result.status is StageStatus.NEEDS_HUMAN:
             await self._create_request(
                 params,
@@ -630,6 +635,43 @@ class WorkflowInterpreter:
             ):
                 await self._suspend(params, run_id, key)
         return decision
+
+    async def _already_fixed(
+        self,
+        params: InterpreterInput,
+        engine: WorkflowEngine,
+        transition: Any,
+        result: Any,
+        run_id: str,
+        decision: Any,
+    ) -> Any:
+        """A step that succeeded without changing anything (S22-47, #539): when its state declares an
+        "already fixed" exit, that exit's guarantees are read on this run. Proven, the work item ends
+        there — no test, review or pull request on an empty change; unproven, the step escalates
+        with what the evidence lacks, and a person decides. Any other step keeps its decision."""
+        if decision.next_state != transition.to or decision.escalated or decision.retried:
+            return decision
+        exit_ = engine.already_fixed_exit(transition.from_)
+        # The condition first, `patched` next: a history without such an exit never asks.
+        if exit_ is None or not unchanged_run(result) or not workflow.patched(ALREADY_FIXED_ON_EVIDENCE):
+            return decision
+        outcomes = await self._gates(params, exit_, run_id)
+        decided = engine.after_unchanged_stage(transition, exit_, outcomes)
+        if decided.escalated and decided.next_state == engine.question_state():
+            await self._create_request(
+                params,
+                transition,
+                kind="approval",
+                payload={
+                    "question": f"`{transition.key}` changed nothing: {decided.reason}. Close the work "
+                    "item if it is already fixed, or replay the implementation.",
+                    "options": [],
+                    "summary": result.summary,
+                    "run_id": run_id,
+                    "reason": "no_change_unproven",
+                },
+            )
+        return decided
 
     # ──────────────────── a sandbox kept across an answer (S35-03) ────────────────────
 

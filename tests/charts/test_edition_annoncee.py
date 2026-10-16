@@ -1,15 +1,14 @@
-"""Le déploiement et l'image parlent-ils de la même édition ?
+"""Do the deployment and the image speak of the same edition?
 
-Choregos existe en deux éditions ([ADR 0024](../../docs/adr/0024-deux-editions.md)) et l'édition
-qui tourne n'est **pas** une valeur du chart : c'est le greffon entreprise qui la déclare en se
-chargeant. Rien ne reliait les deux. Un exploitant qui écrit `global.edition: enterprise` sur des
-images communautaires obtenait une plateforme qui démarre, paraît saine, et refuse la seconde
-organisation — le symptôme arrivant des semaines après la cause, sur une action sans rapport
-apparent.
+Choregos exists in two editions ([ADR 0024](../../docs/adr/0024-deux-editions.md)) and the edition
+that runs is **not** a chart value: it is the enterprise plugin that declares it when
+loading. Nothing linked the two. An operator who writes `global.edition: enterprise` on
+community images got a platform that starts, looks healthy, and refuses the second
+organization -- the symptom arriving weeks after the cause, on an apparently unrelated action.
 
-Deux gardes, aux deux endroits où l'écart peut naître : le rendu du chart refuse une édition
-entreprise sans secret de tirage (le registre est privé, c'est tout le contrôle d'accès de la
-phase 1), et l'API refuse de démarrer si ce qui est annoncé n'est pas ce qui est chargé.
+Two guards, at the two places where the gap can arise: the chart render refuses an enterprise
+edition without a pull secret (the registry is private, that is all of phase 1's access
+control), and the API refuses to start if what is announced is not what is loaded.
 """
 
 from __future__ import annotations
@@ -35,33 +34,33 @@ def _rendre(*surcharges: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_une_edition_entreprise_sans_secret_de_tirage_est_refusee() -> None:
-    """Sans le secret, les pods resteraient en `ImagePullBackOff` sans jamais nommer la cause."""
+    """Without the secret, the pods would stay in `ImagePullBackOff` without ever naming the cause."""
     rendu = _rendre("global.edition=enterprise")
-    assert rendu.returncode != 0, "le chart a rendu une édition entreprise sans secret de tirage"
+    assert rendu.returncode != 0, "the chart rendered an enterprise edition without a pull secret"
     assert "global.imagePullSecrets" in rendu.stderr, (
-        f"le refus ne nomme pas la valeur qui manque : {rendu.stderr[-400:]}"
+        f"the refusal does not name the missing value: {rendu.stderr[-400:]}"
     )
 
 
 def test_une_edition_inconnue_est_refusee() -> None:
-    """`pro`, `pricey`, `Enterprise` : une faute de frappe ne doit pas donner un déploiement muet."""
+    """`pro`, `pricey`, `Enterprise`: a typo must not yield a silent deployment."""
     rendu = _rendre("global.edition=pro")
     assert rendu.returncode != 0
     assert "community" in rendu.stderr and "enterprise" in rendu.stderr
 
 
 def test_l_edition_entreprise_avec_son_secret_se_rend() -> None:
-    """La garde ne doit pas interdire l'édition entreprise — seulement l'annoncer à moitié."""
+    """The guard must not forbid the enterprise edition -- only announcing it halfway."""
     rendu = _rendre("global.edition=enterprise", "global.imagePullSecrets[0].name=harbor-prive")
     assert rendu.returncode == 0, rendu.stderr[-400:]
     assert 'value: "enterprise"' in rendu.stdout
 
 
 def test_chaque_processus_recoit_l_edition_annoncee() -> None:
-    """L'API et les workers doivent la recevoir : c'est là que le refus au démarrage a lieu.
+    """The API and the workers must receive it: that is where the startup refusal happens.
 
-    Un Deployment ajouté demain sans l'aide `commonEnv` ne saurait pas quelle édition on annonce,
-    et démarrerait en communautaire sans le dire.
+    A Deployment added tomorrow without the `commonEnv` helper would not know which edition is announced,
+    and would start as community without saying so.
     """
     rendu = _rendre()
     assert rendu.returncode == 0, rendu.stderr[-400:]
@@ -70,10 +69,10 @@ def test_chaque_processus_recoit_l_edition_annoncee() -> None:
         if not doc or doc.get("kind") not in {"Deployment", "StatefulSet", "DaemonSet"}:
             continue
         nom = doc["metadata"]["name"]
-        if "choregos-web" in nom:  # le front ne lit aucun réglage de plateforme
+        if "choregos-web" in nom:  # the front end reads no platform setting
             continue
         conteneurs = doc["spec"]["template"]["spec"].get("containers", [])
         noms = {v["name"] for c in conteneurs for v in (c.get("env") or [])}
         if "CHOREGOS_EDITION" not in noms:
             sans.append(nom)
-    assert not sans, f"ces processus ne savent pas quelle édition on annonce : {sans}"
+    assert not sans, f"these processes do not know which edition is announced: {sans}"

@@ -28,6 +28,17 @@ promise is no human unless something goes wrong, and most fixes change nothing d
 strict gate would escalate many of them. A fix that changes behaviour visibly carries the `feature`
 label and goes through `dev-complex`.
 
+A ticket whose fix is **already on `main`** (version 2, #539) does not reach a pull request. When the
+implementation changes nothing — `diff_files` and `diff_lines` measured by git at 0, no commit — the
+platform takes `t-already-fixed` instead of the tests, under `already_fixed_proven`: no work branch
+was pushed (read from GitHub), and the runner ran the tests on that unchanged checkout, which is
+`main`, with at least one run and none failed. Every part is measured; the agent's word counts for
+nothing. Proven, the work item ends **Already fixed** (`already_fixed`, *Done*) and its issue is closed
+as completed with a comment citing the evidence. Unproven — the tests were not run or fail, or a branch
+exists — the implementation escalates at once to a person ("the implementation changed nothing and
+the evidence does not prove the fix already exists", then what is missing); replaying the stage runs
+the implementation again. `dev-complex` has no such exit yet.
+
 **study** — the spec writer frames the question and the decision criteria, the researcher gathers
 options with `path:line` evidence, the architect writes **one** ADR in `docs/adr/` with the `madr-4`
 skill. The guarantee `markdown_sections` reads what the branch adds — context, considered options,
@@ -72,6 +83,12 @@ No agent deploys: the release train does, under the project's policy. A batch th
    exits 0 when production is healthy (for instance `curl -fsS https://app.example.com/health`), and
    add the domain to the policy's `sandbox.network.allow_domains`. The production verifier fails
    without it.
+   The verifier judges what the project can measure. Without a production indicator source (a
+   catalogue tool filed under `observability` in the project's `tools`, or an MCP server of the
+   agent named after Grafana, Prometheus, Loki, Datadog, Sentry, New Relic or Honeycomb), a
+   measured `smoke_ok: true` is enough for a go, and its summary says that only the smoke test
+   was available. With a source, it compares errors, latency and business errors before and after
+   the release, and answers no-go when in doubt.
 6. Label an issue `agent-ready` (plus `bug`, `adr` or `feature`) to start it.
 
 The policy (`policy.yaml`) sets the budgets (10 / 30 / 80 / 160 USD per work item by size, 150 USD per
