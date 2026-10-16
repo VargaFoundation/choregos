@@ -109,6 +109,14 @@ from .definitions import (
     WorkflowValidateRequest,
     WorkflowValidation,
 )
+from .github_app import (
+    GitHubAppStatus,
+    GitHubInstallationDto,
+    GitHubInstallLink,
+    GitHubInstallLinkRequest,
+    GitHubRepository,
+    GitHubRepositoryPage,
+)
 from .identite import (
     ApiTokenCreate,
     ApiTokenCreated,
@@ -316,6 +324,12 @@ __all__ = [
     "FreezeRequest",
     "GatewayKeyInfo",
     "GatewayModelDto",
+    "GitHubAppStatus",
+    "GitHubInstallLink",
+    "GitHubInstallLinkRequest",
+    "GitHubInstallationDto",
+    "GitHubRepository",
+    "GitHubRepositoryPage",
     "GitToken",
     "HandOff",
     "HandOffEvent",

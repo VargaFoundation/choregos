@@ -113,7 +113,7 @@ platform itself (hot reload, a development cluster), see [development](developme
 | The **application repository** (GitHub, GitLab) — *if the work is code* | it is what agents modify, on a branch, through a PR. A business project has none |
 | A **GitOps repository** — *for a templated stack* | provisioning writes the project's manifests there, Argo CD applies them |
 | A **board** (GitHub Projects v2, Jira) — *or nothing* | with `tracker: internal` the requests are filed in Choregos itself |
-| A **GitHub App** installed on the organisation — *for GitHub* | scoped installation tokens, webhooks; never a broad PAT |
+| A **GitHub App** installed on the organisation — *for GitHub* | scoped installation tokens, webhooks; never a broad PAT. Install it from the console (*Settings → Connections → Install on GitHub*): the installation is discovered and claimed by your organisation, and you never type an installation id ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). For companies other than the App's owner the App must be public ([deployment](deployment.md#the-github-app)) |
 | A **cluster** (or an Azure subscription) | agents run in `agent-sandbox` sandboxes by default (the platform team installs the operator, [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)); Tekton or Jobs only where the deployment says so; or Container Apps jobs |
 | The **platform secrets** | `session-secret`, the run-token key pair, the webhook secrets, the App ID and its private key — in the vault, read by External Secrets (`charts/choregos/charts/api/templates/externalsecret.yaml`) |
 
@@ -174,7 +174,7 @@ choregos items create staffing --title "Data PM for a 6-month mission" --size M
 
 ### What provisioning does
 
-Installs the GitHub App, labels, a Projects v2 board with its fields, an issue template,
+Checks the GitHub App is installed (it is installed from the console, not by provisioning), labels, a Projects v2 board with its fields, an issue template,
 manifests written to the GitOps repository then synchronised by Argo CD, webhooks, the
 project's memory tenant with an initial import (README, docs, ADRs, the year's issues and
 PRs), a team and a budget at the gateway, and a test message on the notification channel.

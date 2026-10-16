@@ -147,6 +147,13 @@ project's memory is not sent to a remote agent.
   adapter (values it resolved are masked in logs and error texts). A `store:` reference is derived by
   the platform and refused when written by hand, so a connector cannot point at another's secret.
   A database dump or backup alone reveals nothing; losing the KEK loses the values.
+- GitHub App installations are tenant boundaries ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
+  one App serves the deployment, so a token for `owner/repo` is minted only through an installation
+  **claimed** by the organisation of the connector or run. With several organisations the claim needs
+  GitHub user authorization (the person must manage the installation, checked with the App's OAuth
+  client); without it, typing another company's repository name yields no token, for a connector or
+  for a runner's clone. The callback's `installation_id` is never trusted alone, and the install
+  `state` is HMAC-signed, short-lived and bound to the signed-in person.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
 - Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).
