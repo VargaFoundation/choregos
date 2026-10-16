@@ -435,7 +435,10 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
-**Total** : 280 livrées, 127 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+
+| S39-22d | S39 | 🟡 | #… | the hosts an organisation opens for its runners (rules whose pod family is `runners`) join every run's `allow_domains` (`prepare_stage` and job steps) and the egress proxy and network-policy annotation the provisioning renders; activities only, nothing under `workflows/` changed. Proved by `test_org_runner_hosts.py` (a `runners` rule appears in the StageInput and in the rendered Squid configuration, an `api`, revoked or requested rule does not, another organisation's rules are not read; killed mutant: dropping the union in the render turns it red). Does not prove: the admission check of a remote agent (S39-08b is not in main), a runner on a cluster reaching the host through the cluster's own network policy, nor that an already rendered proxy follows a later rule without a new provisioning render. |
+
+**Total** : 280 livrées, 128 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
