@@ -819,6 +819,11 @@ class AgentVersion(Base, PkMixin, TimestampMixin):
     spec: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     checksum: Mapped[str] = mapped_column(String(80))
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Why this version exists, in the author's words (S40-12, ADR 0076); null for a version published
+    #: before messages existed or through the original bare-spec endpoint.
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The version this one copies, when it is a restore (S40-12): the spec and checksum are the same bytes.
+    restored_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ProjectAgent(Base, PkMixin, TimestampMixin):

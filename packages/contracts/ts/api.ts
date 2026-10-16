@@ -132,6 +132,12 @@ export type Problem = {
     column?: number;
   }>;
   retry_after?: number;
+  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12) */
+  code?: string;
+  /** On `stale_base` and `no_change`: the agent's latest version */
+  latest_version?: number;
+  /** On `stale_base`: who published the latest version */
+  latest_author?: string | null;
 };
 
 export type PageMeta = {
@@ -736,6 +742,8 @@ export type AgentCreate = {
   /** the project's slug: required for, and only for, a `project` agent */
   project?: string | null;
   tags?: AgentTags;
+  /** why version 1 exists; absent, `Created` (S40-12) */
+  message?: string | null;
 };
 
 export type AgentFork = {
@@ -747,6 +755,8 @@ export type AgentFork = {
   project?: string | null;
   /** the source version to copy; absent, its latest */
   version?: number | null;
+  /** why version 1 exists; absent, `Forked from <slug>@<version>` (S40-12) */
+  message?: string | null;
 };
 
 export type AgentScopeChange = {
@@ -862,6 +872,27 @@ export type AgentVersion = {
   checksum: string;
   created_by?: string | null;
   created_at?: string | null;
+  /** why the version exists, in its author's words (S40-12); null for a version published before messages or through the bare-spec endpoint */
+  message?: string | null;
+  /** the version this one copies, when it is a restore */
+  restored_from?: number | null;
+  /** the slugs of the projects the caller may see that pin this version */
+  pinned_by?: Array<string>;
+};
+
+export type AgentVersionPublish = {
+  spec: AgentSpec;
+  /** what changed and why */
+  message: string;
+  /** the latest version the author started from (0 for an agent with none) */
+  base_version: number;
+};
+
+export type AgentVersionRestore = {
+  /** absent, `Restore vN` */
+  message?: string | null;
+  /** the latest version the author saw */
+  base_version: number;
 };
 
 export type Agent = {
@@ -2473,6 +2504,7 @@ export interface Operations {
   proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
   publishAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions"; body: AgentSpec; response: AgentVersion };
+  publishAgentVersionWithMessage: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/publish"; body: AgentVersionPublish; response: AgentVersion };
   publishSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions"; body: SkillFiles; response: SkillVersion };
   putBackend: { method: "PUT"; path: "/platform/backends"; body: AgentBackendUpdate; response: AgentBackendInfo };
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
@@ -2494,6 +2526,7 @@ export interface Operations {
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
+  restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
