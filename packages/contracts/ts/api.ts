@@ -2445,7 +2445,7 @@ export type EgressDecision = {
 };
 
 export type EgressOverview = {
-  mode: "enforce" | "warn" | false;
+  mode: "enforce" | "warn" | "off";
   /** family -> host patterns the deployment declares open; an absent family is unknown */
   ceiling: {
     [key: string]: Array<string>;

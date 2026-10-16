@@ -5215,7 +5215,7 @@ components:
       type: object
       required: [mode, ceiling, rules, requests]
       properties:
-        mode: { type: string, enum: [enforce, warn, off] }
+        mode: { type: string, enum: [enforce, warn, "off"] }
         ceiling: { type: object, additionalProperties: { type: array, items: { type: string } }, description: "family -> host patterns the deployment declares open; an absent family is unknown" }
         rules: { type: array, items: { $ref: "#/components/schemas/EgressRule" } }
         requests: { type: array, items: { $ref: "#/components/schemas/EgressRule" } }
