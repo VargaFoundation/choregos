@@ -20,6 +20,7 @@ organisations must assume **a member of one will try to read another**.
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
 | leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
 | spending without limit | one virtual key per run with a hard cap, a budget per ticket, tool calls in the same ledger | ADR 0004, ADR 0014 |
+| a connector reaching a project that did not ask for it | an organisation connector is `all_projects` or `selected_projects`; a selected one reaches only the projects an owner or an administrator enabled, enforced in the broker, in the project policy behind governed actions and in the project's operations list (ADR 0074) | `services/catalogue_rights.py`, `tests/test_connector_enablement.py` |
 | touching production | `prod.requires_train` in the DSL, release train, Argo windows, GitHub Environment | ADR 0006 |
 | changing what an agent does | an agent has a scope — common, organisation, project or personal — and one server-side function decides who may publish, suspend or pin it, with the reason for every refusal: common and organisation agents are an `org_admin`'s, a project's agent its `project_owner`'s, a personal agent its owner's (and an `org_admin`'s); an agent you may not see is a 404; a personal agent or another project's agent can neither be pinned nor named in a workflow nor run in one (ADR 0061) | `services/agent_governance.py`, `routers/agents.py`, `services/agents.py`, `tests/test_agent_governance_matrix.py` |
 | changing its own configuration | `.choregos/**` refused for writing (except `result.json`) | `guardrails.py` |
@@ -169,6 +170,7 @@ reference, tools born closed); a skill is assessed by the supply-chain gate agai
 high-risk one waits for a second administrator, and a bundled one is checked against its sha256
 provenance. A skill enters the catalogue only from a listed publisher, under an open licence, at a pinned
 commit; Anthropic's proprietary document skills and anything unlicensed are never listed or bundled.
+Who sees, installs and enables is decided by one server function (ADR 0074): every member sees a catalogue, only the organisation's administrator installs, and a project owner or the administrator enables an installed connector for a project.
 A changed upstream reaches an organisation only when a catalogue release is merged **and** an
 administrator updates the skill: two people, as ADR 0050 asks against bait-and-switch.
 

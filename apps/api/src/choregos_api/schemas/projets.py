@@ -219,6 +219,9 @@ class OrgConnectorDto(Dto):
     created_by: str | None = None
     catalogue_entry: str | None = None
     operations: list[OperationDto] = Field(default_factory=list)
+    availability: Literal["all_projects", "selected_projects"] = "all_projects"
+    #: the projects it is on for, among those the caller sees; empty with `all_projects`
+    enabled_projects: list[str] = Field(default_factory=list)
 
     @field_validator("secret_refs", mode="before")
     @classmethod
@@ -235,6 +238,7 @@ class OrgConnectorCreate(Dto):
     secret_refs: dict[str, str] = Field(default_factory=dict)
     #: Secret values typed in the console, field -> value: write-only (ADR 0058).
     secret_values: dict[str, str] = Field(default_factory=dict, repr=False)
+    availability: Literal["all_projects", "selected_projects"] = "all_projects"
 
 
 class OrgConnectorUpdate(Dto):
@@ -244,6 +248,20 @@ class OrgConnectorUpdate(Dto):
     config: dict[str, Any] | None = None
     secret_refs: dict[str, str] | None = None
     secret_values: dict[str, str] | None = Field(default=None, repr=False)
+    #: the organisation's administrator only (ADR 0074)
+    availability: Literal["all_projects", "selected_projects"] | None = None
+
+
+class ProjectOrgConnectorDto(Dto):
+    """An organisation connector, as a project sees it: is it on here, may the caller switch it."""
+
+    name: str
+    kind: str
+    type: str
+    availability: Literal["all_projects", "selected_projects"]
+    enabled: bool
+    can_toggle: bool
+    cannot_reason: str | None = None
 
 
 class OperationPatch(Dto):

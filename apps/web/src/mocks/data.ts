@@ -1874,15 +1874,32 @@ export const connectorTypes: ConnectorType[] = [
  * `make catalogues`, with the state this demo organisation gives them — an entry is installed once a
  * connector of the demo carries it.
  */
+const mockProjectSlugs = ["billing-api", "checkout-web"];
+
 export function mcpCatalogue(): McpCatalogue {
   const file = mcpCatalogueFile as unknown as McpCatalogue;
   return {
     ...file,
     entries: file.entries.map((entry: McpCatalogueEntry) => {
       const installed = orgConnectors.filter((c) => c.catalogue_entry?.startsWith(`${entry.id}@`));
+      const selected = installed.some((c) => c.availability === "selected_projects");
+      const base = {
+        ...entry,
+        can: {
+          install: entry.install === "installable",
+          configure_projects: [],
+          enable_projects: selected ? mockProjectSlugs : [],
+        },
+        cannot_reason: entry.install === "installable" ? null : (entry.cannot_reason ?? null),
+        enablement: installed.map((c) => ({
+          connector: c.name,
+          availability: c.availability ?? ("all_projects" as const),
+          enabled_projects: c.enabled_projects ?? [],
+        })),
+      };
       return installed.length
-        ? { ...entry, state: "installed" as const, installed_as: installed.map((c) => c.name) }
-        : entry;
+        ? { ...base, state: "installed" as const, installed_as: installed.map((c) => c.name) }
+        : base;
     }),
   };
 }
@@ -1920,6 +1937,8 @@ export const orgConnectors: OrgConnector[] = [
     secrets: [{ field: "client_secret", source: "reference", reference: "env:CONNECTOR_ENTRA_CLIENT_SECRET" }],
     status: "ok",
     created_by: "lea@acme.dev",
+    availability: "all_projects",
+    enabled_projects: [],
     operations: [
       { name: "read_user", access: "read", policy: "allowed", groups: [] },
       { name: "create_account", access: "write", policy: "approval", groups: ["hr"], description: "creates an account" },
@@ -1937,6 +1956,8 @@ orgConnectors.push({
   // A value typed in the console: the console only knows it is set, when and by whom.
   secrets: [{ field: "token", source: "store", version: 2, rotated_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), rotated_by: "lea@acme.dev" }],
   status: "ok",
+  availability: "all_projects",
+  enabled_projects: [],
   operations: [
     { name: "track_order", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
     { name: "order_laptop", access: "write", policy: "forbidden", groups: [], schema_digest: "sha256:a07c", description: "orders a laptop" },
@@ -2400,6 +2421,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       status: "unknown",
       created_by: me.email,
       catalogue_entry: `${entry.id}@${mcpCatalogueFile.meta.catalogue_version}`,
+      availability: corps.availability ?? "all_projects",
+      enabled_projects: [],
       operations: [],
     };
     orgConnectors.push(connector);
