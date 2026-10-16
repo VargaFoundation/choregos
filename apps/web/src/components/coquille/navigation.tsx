@@ -10,6 +10,7 @@ import {
   ChevronsUpDown,
   FolderKanban,
   Inbox,
+  Cable,
   ServerCog,
   Library,
   LayoutDashboard,
@@ -45,6 +46,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/skills", label: "Skills", icone: BookOpen },
   { href: "/knowledge", label: "Knowledge", icone: Library },
   { href: "/catalogue/mcp-servers", label: "MCP servers", icone: ServerCog },
+  { href: "/catalogue/connectors", label: "Connectors", icone: Cable },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "AI clients", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
@@ -58,7 +60,7 @@ export function entreeActive(href: string, pathname: string): boolean {
 /** Les entrées, rangées : le travail, ce qu'on y branche, l'organisation. */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
   { titre: "Work", entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/catalogue/mcp-servers", "/integrations"] },
+  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/catalogue/mcp-servers", "/catalogue/connectors", "/integrations"] },
   { titre: "Organisation", entrees: ["/costs", "/admin"] },
 ];
 
