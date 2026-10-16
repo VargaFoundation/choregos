@@ -433,6 +433,8 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 | S39-22a | S39 | 🟡 | #… | an organisation's egress allowlist in the database (`org_egress_rules`: host, ports, pod family, reason, origin, who and when), requests and decisions audited, a deployment ceiling and mode (`global.egress`), and the adds that exist on main (an `mcp` connector create/edit, a git skill preview/import, a knowledge source create/edit) answering 409 `egress_required` until the host is allowed, or opening it in the same transaction for an administrator (`allow_egress`); a seed migration for the hosts already called. Proved by `test_egress_rules.py`, `test_egress_install_gate.py` (killed mutant: the gate returning early turns six tests red), `test_egress_seed_migration.py`, `test_rls_postgres.py::test_org_egress_rules_are_isolated` (run on PostgreSQL 16), `packages/core/tests/test_egress.py` and `tests/charts/test_egress_values.py`. Does not prove: the guard itself (S39-22b), the console (22c), the runner union (22d), the MCP catalogue, skill catalogue and remote-agent adds (they land with the integration branch), the REST connectors (phase 2), nor any cluster policy change (outside the app). |
 
+
+
 **Total** : 280 livrées, 127 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est

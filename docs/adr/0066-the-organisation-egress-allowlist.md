@@ -6,7 +6,7 @@
   chart (`global.egress`), the console's "add" gestures; amends
   [ADR 0050](0050-skill-supply-chain-gate.md) §4 (the skill-source allowlist stays a trust list of
   repositories; the network is this list) and, once the MCP catalogue lands,
-  [ADR 0065](0065-the-mcp-catalogue.md) (its `egress` field reads this list and the ceiling)
+  ADR 0065 (its `egress` field reads this list and the ceiling)
 
 ## Context
 
