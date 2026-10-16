@@ -20,6 +20,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     },
   };
 });
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
 vi.mock("@/components/connecteurs", () => ({ Connecteurs: () => null }));
 vi.mock("@/components/operations-du-projet", () => ({ OperationsDuProjet: () => null }));
 vi.mock("next/dynamic", () => ({

@@ -96,6 +96,8 @@ import type {
   PolicyCeilingState,
   ProjectDto,
   ProjectPage,
+  ProjectReadiness,
+  ProjectUpdate,
   ProvisionStatus,
   ReleasePage,
   Run,
@@ -453,6 +455,11 @@ export const api = {
 
   projects: (org: string = DEFAULT_ORG) => request<ProjectPage>(`/orgs/${org}/projects`),
   project: (id: string) => request<ProjectDto>(`/projects/${qualify(id)}`),
+  /** What the project still lacks to run, computed by the API from stored state (S40-06). */
+  projectReadiness: (id: string) => request<ProjectReadiness>(`/projects/${qualify(id)}/readiness`),
+  /** `PATCH /projects/{id}`: the name and/or the WHOLE configuration (the API validates it as a `ProjectConfig`). */
+  updateProject: (id: string, body: ProjectUpdate) =>
+    request<ProjectDto>(`/projects/${qualify(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   createProject: (org: string, body: unknown) =>
     request<ProjectDto>(`/orgs/${org}/projects`, { method: "POST", body: JSON.stringify(body) }),
   provision: (id: string) => request<ProvisionStatus>(`/projects/${qualify(id)}/provision`, { method: "POST", body: "{}" }),

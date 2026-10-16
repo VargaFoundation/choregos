@@ -5,9 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { EvalMatrixTable } from "@/components/eval-matrix";
 import { SettingsSection, useSectionWrites } from "@/components/project-settings/section";
-import { Button, Card, Disclosure, Empty, EtatDeLecture, Input } from "@/components/ui";
+import { Button, Card, Disclosure, Empty, ErrorNote, EtatDeLecture, Field, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { ProjectModels } from "@/lib/types";
+import { useProjectConfigPatch, type ProjectConfigValue } from "@/lib/project-config";
+import type { AgentBackendInfo, ProjectDto, ProjectModels } from "@/lib/types";
 
 const PROFILS = ["standard", "strong", "cheap", "by_size"];
 
@@ -24,6 +25,7 @@ export function AgentsModelsSection({ slug }: { slug: string }) {
       lead="Which model each profile calls. The agent runtime itself is a connector, in Connections."
     >
       {notice}
+      <BackendCard slug={slug} />
       <Card title="Model profiles">
         <ModelsEditor
           models={models.data}
@@ -108,5 +110,107 @@ function ModelsEditor({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The backends this deployment runs: a project picks its default among them, never outside them. */
+export function usableBackends(backends: AgentBackendInfo[]): string[] {
+  return backends.filter((b) => b.enabled).map((b) => b.name);
+}
+
+/** Why a default/allowed pair cannot be saved, or null. */
+export function backendProblem(defaultBackend: string, allowed: string[]): string | null {
+  if (allowed.length > 0 && !allowed.includes(defaultBackend)) return "The default backend must be one of the allowed ones.";
+  return null;
+}
+
+function BackendCard({ slug }: { slug: string }) {
+  const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
+  const backends = useQuery({ queryKey: ["backends"], queryFn: () => api.backends() });
+  if (!project.data) return null;
+  return (
+    <BackendForm
+      key={JSON.stringify((project.data.config as ProjectConfigValue).agent ?? {})}
+      slug={slug}
+      project={project.data}
+      backends={backends.data ?? []}
+      loading={backends.isLoading}
+      failed={backends.error ? String(backends.error) : null}
+    />
+  );
+}
+
+function BackendForm({
+  slug,
+  project,
+  backends,
+  loading,
+  failed,
+}: {
+  slug: string;
+  project: ProjectDto;
+  backends: AgentBackendInfo[];
+  loading: boolean;
+  failed: string | null;
+}) {
+  const agent = (project.config as ProjectConfigValue).agent ?? {};
+  const { patch, pending, message, error } = useProjectConfigPatch(slug);
+  const [defaultBackend, setDefaultBackend] = useState(agent.default_backend ?? "claude-code");
+  const [allowed, setAllowed] = useState<string[]>(agent.allowed_backends ?? []);
+  const usable = usableBackends(backends);
+  const options = Array.from(new Set([...usable, defaultBackend]));
+  const problem = backendProblem(defaultBackend, allowed);
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void patch((latest) => ({ agent: { ...latest.agent, default_backend: defaultBackend, allowed_backends: allowed } }), {
+          saved: "Backend saved",
+        });
+      }}
+    >
+      <Card title="Agent backend">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Default backend" hint="The backends this deployment runs. The runtime itself is a connector.">
+            {(p) => (
+              <Select {...p} value={defaultBackend} onChange={(e) => setDefaultBackend(e.target.value)}>
+                {options.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                    {usable.includes(name) || loading ? "" : " (not run by this deployment)"}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <fieldset className="space-y-1">
+            <legend className="text-xs text-ink-muted">Allowed backends (none ticked: the deployment&apos;s list)</legend>
+            {usable.map((name) => (
+              <label key={name} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={allowed.includes(name)}
+                  onChange={(e) => setAllowed(e.target.checked ? [...allowed, name] : allowed.filter((n) => n !== name))}
+                />
+                {name}
+              </label>
+            ))}
+          </fieldset>
+        </div>
+        {failed && <ErrorNote>{failed}</ErrorNote>}
+        {problem && <p className="mt-2 text-xs text-danger">{problem}</p>}
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
+          {message && (
+            <p className="text-sm text-ok" role="status">
+              {message}
+            </p>
+          )}
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <Button tone="primary" type="submit" disabled={pending || problem !== null}>
+            Save backend
+          </Button>
+        </div>
+      </Card>
+    </form>
   );
 }
