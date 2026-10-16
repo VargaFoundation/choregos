@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Badge, Button, ErrorNote, Field, Input, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Skill, SkillCandidate, SkillFinding, SkillGitPreview, SkillUpdate, SkillVersion } from "@/lib/types";
@@ -89,13 +90,20 @@ export function GitImport({ org, onImported }: { org: string; onImported?: (skil
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const guard = useEgressGuard();
 
   async function look() {
     setError(null);
     setDone(null);
     setBusy(true);
     try {
-      setPreview(await api.previewSkillsFromGit(org, { repo_url: repo, ref, path }));
+      setPreview(
+        await guard((allow) => api.previewSkillsFromGit(org, { repo_url: repo, ref, path, ...egressFlag(allow) }), {
+          gesture: `Import skills from ${repo}`,
+          origin: `skill-import:${repo.replace(/^https:\/\//, "").replace(/\.git$/, "")}`,
+          reason: `importing skills from ${repo}`,
+        }),
+      );
       setChosen([]);
     } catch (cause) {
       setPreview(null);
@@ -110,12 +118,21 @@ export function GitImport({ org, onImported }: { org: string; onImported?: (skil
     setError(null);
     setBusy(true);
     try {
-      const skills = await api.importSkillsFromGit(org, {
-        repo_url: preview.repo,
-        sha: preview.sha,
-        path: preview.path,
-        skills: chosen,
-      });
+      const skills = await guard(
+        (allow) =>
+          api.importSkillsFromGit(org, {
+            repo_url: preview.repo,
+            sha: preview.sha,
+            path: preview.path,
+            skills: chosen,
+            ...egressFlag(allow),
+          }),
+        {
+          gesture: `Import ${chosen.join(", ")} from ${preview.repo}`,
+          origin: `skill-import:${preview.repo.replace(/^https:\/\//, "")}`,
+          reason: `importing skills from ${preview.repo}`,
+        },
+      );
       const pending = skills.filter((s) => s.review_status === "pending_review").map((s) => s.slug);
       setDone(
         `${skills.map((s) => `${s.slug} v${s.latest_version}`).join(", ")} imported at ${preview.sha.slice(0, 12)}` +

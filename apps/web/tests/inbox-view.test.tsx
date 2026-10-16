@@ -21,6 +21,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
         { id: "a2", title: "Order a checkout laptop", project_slug: "checkout-web", status: "pending_approval", proposed_by: "agent:x" },
       ]),
       budgetAlerts: vi.fn().mockResolvedValue([]),
+      orgEgress: vi.fn().mockResolvedValue({ mode: "enforce", ceiling: {}, rules: [], requests: [], can_decide: false }),
     },
   };
 });

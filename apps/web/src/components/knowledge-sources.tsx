@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Badge, Card, ErrorNote, Input, Select, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
@@ -40,6 +41,7 @@ export function KnowledgeSources({
   const [applyAll, setApplyAll] = useState(false);
   const [attachments, setAttachments] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const guard = useEgressGuard();
   // A connected source picks one of the organisation's `documents/<kind>` connectors: never typed.
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
   const pickable = (connectors.data ?? []).filter((c) => c.kind === "documents" && c.type === kind);
@@ -135,13 +137,22 @@ export function KnowledgeSources({
           onSubmit={(event) => {
             event.preventDefault();
             void act(() =>
-              api.createKnowledgeSource(org, slug, {
-                kind,
-                name: fields.name || KIND[kind],
-                connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
-                config: sourceConfig(kind, { ...fields, attachments }),
-                ...refreshBody(refresh),
-              }),
+              guard(
+                (allow) =>
+                  api.createKnowledgeSource(org, slug, {
+                    kind,
+                    name: fields.name || KIND[kind],
+                    connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
+                    config: sourceConfig(kind, { ...fields, attachments }),
+                    ...refreshBody(refresh),
+                    ...egressFlag(allow),
+                  }),
+                {
+                  gesture: `Add the ${KIND[kind]} source ${fields.name || KIND[kind]}`,
+                  origin: `knowledge-source:${fields.name || KIND[kind]}`,
+                  reason: `the ${KIND[kind]} knowledge source ${fields.name || KIND[kind]}`,
+                },
+              ),
             );
           }}
         >

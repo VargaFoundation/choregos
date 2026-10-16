@@ -15,7 +15,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { scopeOf } from "@/components/coquille/navigation";
 import { api } from "./api";
-import type { Action, BudgetAlert, HumanRequest, WorkItemDto } from "./types";
+import type { Action, BudgetAlert, EgressRule, HumanRequest, WorkItemDto } from "./types";
 
 export interface Attente {
   item: WorkItemDto;
@@ -112,20 +112,38 @@ export function useADecider(org: string, project?: string) {
     queryFn: () => api.budgetAlerts(org),
     staleTime: 30_000,
   });
+  // Network access someone asked for (S39-22): organisation-level, so never in a project's inbox.
+  const egress = useQuery({
+    queryKey: ["egress", org],
+    queryFn: () => api.orgEgress(org),
+    staleTime: 30_000,
+    enabled: !project,
+  });
   const lus = tickets.flatMap((lecture) => lecture.data?.items ?? []);
   const enAttente = ticketsEnAttente(lus);
   const narrowed = project
     ? waitingInProject(actions.data ?? [], budgets.data ?? [], project)
     : { actions: actions.data ?? [], budgets: budgets.data ?? [] };
+  const egressRequests: EgressRule[] = project ? [] : (egress.data?.requests ?? []);
+  const canDecideEgress = !project && !!egress.data?.can_decide;
   return {
     tickets: enAttente,
     actions: narrowed.actions,
     budgets: narrowed.budgets,
+    /** The requests for network access that wait for an administrator (S39-22). */
+    egressRequests,
+    canDecideEgress,
     /** Les projets dont les tickets n'ont pas pu se lire : ils ne sont pas comptés, et on le dit. */
     projetsIllisibles: slugs.filter((_, index) => tickets[index]?.error),
-    erreur: projets.error ?? actions.error ?? budgets.error ?? null,
-    pret: (!!project || !!projets.data) && tickets.every((lecture) => !lecture.isPending) && !!actions.data && !!budgets.data,
-    total: enAttente.length + narrowed.actions.length + narrowed.budgets.length,
+    erreur: projets.error ?? actions.error ?? budgets.error ?? egress.error ?? null,
+    pret:
+      (!!project || !!projets.data) &&
+      tickets.every((lecture) => !lecture.isPending) &&
+      !!actions.data &&
+      !!budgets.data &&
+      (!!project || !!egress.data || !!egress.error),
+    // Only those who can decide are told: a request someone else must answer is not their inbox.
+    total: enAttente.length + narrowed.actions.length + narrowed.budgets.length + (canDecideEgress ? egressRequests.length : 0),
   };
 }
 

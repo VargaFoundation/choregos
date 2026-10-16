@@ -8,6 +8,7 @@ import { Suspense, useState, useSyncExternalStore } from "react";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { ConnectorTabs } from "@/components/connecteurs-onglets";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
+import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Glossaire } from "@/components/glossaire";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import { EMPTY_DRAFT, SecretField, bodyOfDrafts, problemOfDraft, type SecretDraft } from "@/components/secret-field";
@@ -221,6 +222,7 @@ function Secrets({
   schema?: unknown;
 }) {
   const client = useQueryClient();
+  const guard = useEgressGuard();
   const [editing, setEditing] = useState(false);
   const [config, setConfig] = useState<Record<string, unknown>>(instance.config ?? {});
   const [erreur, setErreur] = useState<string | null>(null);
@@ -231,7 +233,11 @@ function Secrets({
   async function saveConfig() {
     setErreur(null);
     try {
-      await api.updateOrgConnector(org, instance.name, { config });
+      await guard((allow) => api.updateOrgConnector(org, instance.name, { config, ...egressFlag(allow) }), {
+        gesture: `Change the settings of ${instance.name}`,
+        origin: `org-connector:${instance.name}`,
+        reason: `the ${instance.type} connector ${instance.name}`,
+      });
       setEditing(false);
       await refresh();
     } catch (cause) {
@@ -432,6 +438,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
 /** Déclarer une instance : son type (ceux qui exposent des opérations d'abord), sa configuration, ses secrets. */
 function Declarer({ org }: { org: string }) {
   const client = useQueryClient();
+  const guard = useEgressGuard();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const [nom, setNom] = useState("");
   // `?type=documents/sharepoint` preselects the type (the knowledge form links here).
@@ -452,13 +459,22 @@ function Declarer({ org }: { org: string }) {
     if (!type) return;
     setErreur(null);
     try {
-      await api.createOrgConnector(org, {
-        name: nom,
-        type: type.type,
-        kind: type.kind,
-        config,
-        ...bodyOfDrafts(secrets),
-      });
+      await guard(
+        (allow) =>
+          api.createOrgConnector(org, {
+            name: nom,
+            type: type.type,
+            kind: type.kind,
+            config,
+            ...bodyOfDrafts(secrets),
+            ...egressFlag(allow),
+          }),
+        {
+          gesture: `Declare the ${type.type} connector ${nom}`,
+          origin: `org-connector:${nom}`,
+          reason: `the ${type.type} connector ${nom}`,
+        },
+      );
       setNom("");
       setChoix("");
       setConfig({});

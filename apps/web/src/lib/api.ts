@@ -96,6 +96,14 @@ import type {
   ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
+  EgressCheck,
+  EgressCheckResult,
+  EgressDecision,
+  EgressOverview,
+  EgressRequestCreate,
+  EgressRule,
+  EgressRuleCreate,
+  EgressVerdict,
   CostReport,
   DoraReport,
   Edition,
@@ -156,7 +164,15 @@ export function qualify(id: string): string {
 }
 
 /** An RFC 9457 problem as the API answers it; `correlation_id` ties a 500 to the API's logs (S26-02). */
-export type Problem = { title?: string; detail?: string; errors?: unknown[]; correlation_id?: string };
+export type Problem = {
+  title?: string;
+  detail?: string;
+  errors?: unknown[];
+  correlation_id?: string;
+  /** `egress_required` on the 409 of a governed "add" whose host the organisation has not opened (S39-22). */
+  code?: string;
+  verdicts?: EgressVerdict[];
+};
 
 export class ApiError extends Error {
   constructor(
@@ -702,6 +718,20 @@ export const api = {
   /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
   budgetAlerts: (org: string, status: "open" | "acknowledged" | "all" = "open") =>
     request<BudgetAlert[]>(`/orgs/${org}/budget-alerts${query({ status })}`),
+  /** The organisation's egress allowlist: rules, requests, the deployment's ceiling (S39-22, ADR 0066). */
+  orgEgress: (org: string) => request<EgressOverview>(`/orgs/${org}/egress`),
+  checkOrgEgress: (org: string, body: EgressCheck) =>
+    request<EgressCheckResult>(`/orgs/${org}/egress/check`, { method: "POST", body: JSON.stringify(body) }),
+  createOrgEgressRule: (org: string, body: EgressRuleCreate) =>
+    request<EgressRule>(`/orgs/${org}/egress/rules`, { method: "POST", body: JSON.stringify(body) }),
+  revokeOrgEgressRule: (org: string, id: string) =>
+    request<EgressRule>(`/orgs/${org}/egress/rules/${id}`, { method: "DELETE" }),
+  requestOrgEgress: (org: string, body: EgressRequestCreate) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests`, { method: "POST", body: JSON.stringify(body) }),
+  approveOrgEgressRequest: (org: string, id: string, body: EgressDecision = {}) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests/${id}/approve`, { method: "POST", body: JSON.stringify(body) }),
+  refuseOrgEgressRequest: (org: string, id: string, body: EgressDecision = {}) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests/${id}/refuse`, { method: "POST", body: JSON.stringify(body) }),
   acknowledgeBudgetAlert: (org: string, id: string) =>
     request<BudgetAlert>(`/orgs/${org}/budget-alerts/${id}/acknowledge`, { method: "POST" }),
   orgCostsCsvUrl: (org: string, groupBy = "day", filtre: CostFilter = {}) =>

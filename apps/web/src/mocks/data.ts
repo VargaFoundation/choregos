@@ -73,6 +73,7 @@ import type {
 } from "@/lib/types";
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
+import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
 import skillCatalogueFile from "./skill-catalogue.json";
@@ -1867,6 +1868,7 @@ export const connectorTypes: ConnectorType[] = [
     capabilities: ["documents"],
     secret_fields: ["client_secret"],
   },
+  { kind: "mcp", type: "mcp", display: "MCP server (Streamable HTTP)", config_schema: objet({ url: { type: "string" } }, ["url"]), capabilities: ["mcp"], secret_fields: ["token"] },
 ];
 
 /**
@@ -2054,6 +2056,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method !== "GET") recordWrite(method, path, body);
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
+  const network = egressApi(method, path.split("?")[0] ?? path, body);
+  if (network !== undefined) return network as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
