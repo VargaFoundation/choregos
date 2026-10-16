@@ -4641,6 +4641,9 @@ components:
         cost_eur: { type: number, default: 0 }
         duration_s: { type: number, default: 0 }
         runs: { type: integer, default: 0 }
+        priced_by: { type: [string, "null"], enum: [gateway, override, none, null], description: "how the cost was priced (ADR 0060)" }
+        gateway_cost_usd: { type: [number, "null"], description: "the gateway's own figure when an override replaced it" }
+        unmeasured: { type: boolean, default: false }
     CostEstimate:
       type: object
       properties:

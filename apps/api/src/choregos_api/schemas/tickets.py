@@ -48,6 +48,11 @@ class Totals(Dto):
     cost_eur: float = 0.0
     duration_s: float = 0.0
     runs: int = 0
+    #: How the cost was priced (ADR 0060): the gateway's figure, the organisation's override, or not at all.
+    priced_by: Literal["gateway", "override", "none"] | None = None
+    #: The gateway's own figure when an override replaced it.
+    gateway_cost_usd: float | None = None
+    unmeasured: bool = False
 
 
 class CostEstimate(Dto):
