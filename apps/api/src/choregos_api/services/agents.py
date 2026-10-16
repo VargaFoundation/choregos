@@ -31,6 +31,9 @@ def empreinte(spec: AgentSpec) -> str:
     # keeps its digest, and the catalogue does not see every agent as changed.
     if contenu.get("memory") == "project":
         del contenu["memory"]
+    # The default network (ADR 0070): every field unset, as in a version published before it existed.
+    if not any(value is not None for value in (contenu.get("network") or {}).values()):
+        contenu.pop("network", None)
     blob = json.dumps(contenu, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 

@@ -24,6 +24,7 @@ from ..rbac import SYSTEM
 from ..schemas.agents import AgentCreate
 from .agents import empreinte as empreinte_de_l_agent
 from .agents import erreurs_d_une_version
+from .network import check_agent_network
 from .skill_gate import platform_columns
 from .skills import SkillRefusee, empreinte, valider
 
@@ -86,6 +87,7 @@ async def installer_skills_et_agents(
     for document in agents:
         corps = AgentCreate.model_validate(document)
         erreurs_d_une_version(corps.spec)
+        await check_agent_network(session, org_id, corps.spec)
         if (
             await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == corps.slug))
         ).first():

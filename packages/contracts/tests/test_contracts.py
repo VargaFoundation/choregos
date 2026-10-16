@@ -292,3 +292,69 @@ def test_the_edition_schema_refuses_a_malformed_publisher_or_version(extra: dict
 
     with pytest.raises(ValidationError):
         _edition_validator().validate({"edition": "community", "features": [], "version": "1", **extra})
+
+
+def test_the_network_fields_exist_in_the_models_and_the_schemas_with_the_same_defaults() -> None:
+    """ADR 0070: `NetworkPolicy` grew a deny list, rates and a built-in web tools switch; `Permissions`
+    carries them to the runner. A default that differs between model and schema would make the two
+    disagree on what an old file means."""
+    from choregos_contracts import Permissions
+    from choregos_contracts.policy import NetworkPolicy
+
+    policy_props = contracts.load_schema("policy.schema.json")["properties"]["sandbox"]["properties"][
+        "network"
+    ]["properties"]
+    assert set(policy_props) == set(NetworkPolicy.model_fields)
+    defaults = NetworkPolicy()
+    assert defaults.deny_domains == [] and defaults.builtin_web_tools == "allow"
+    assert defaults.per_host_per_minute is None and defaults.per_run_per_minute is None
+    assert policy_props["builtin_web_tools"]["default"] == defaults.builtin_web_tools
+
+    perms = contracts.load_schema("stage-input.schema.json")["properties"]["permissions"]["properties"]
+    for name in ("deny_domains", "egress", "builtin_web_tools"):
+        assert name in perms and name in Permissions.model_fields
+    fresh = Permissions()
+    assert fresh.egress == "unlisted" and fresh.builtin_web_tools is True and fresh.deny_domains == []
+    assert perms["egress"]["default"] == "unlisted" and perms["builtin_web_tools"]["default"] is True
+
+
+def test_the_policy_and_a_stage_input_with_the_new_network_keys_validate_against_the_schemas() -> None:
+    policy = _load("policy.solo.json")
+    policy["sandbox"]["network"].update(
+        {"deny_domains": ["x.example"], "per_host_per_minute": 30, "builtin_web_tools": "deny"}
+    )
+    assert not list(_validator("policy.schema.json").iter_errors(policy))
+    Policy.model_validate(policy)
+    policy["sandbox"]["network"]["per_host_per_minute"] = 0
+    assert list(_validator("policy.schema.json").iter_errors(policy))
+
+    stage = _load("stage-input.example.json")
+    stage["permissions"].update(
+        {"deny_domains": ["x.example"], "egress": "listed", "builtin_web_tools": False}
+    )
+    assert not list(_validator("stage-input.schema.json").iter_errors(stage))
+    StageInput.model_validate(stage)
+
+
+def test_the_network_denied_event_is_declared_and_the_openapi_names_the_four_operations() -> None:
+    from choregos_contracts.enums import EventType
+
+    assert EventType.NETWORK_DENIED.value == "choregos.network.denied"
+    assert (
+        "choregos.network.denied" in contracts.load_schema("event.schema.json")["properties"]["type"]["enum"]
+    )
+    spec = contracts.load_openapi()
+    operations = {
+        op["operationId"]
+        for path in spec["paths"].values()
+        for verb, op in path.items()
+        if verb in {"get", "post"}
+    }
+    assert {
+        "getRunNetwork",
+        "postRunNetworkDecisions",
+        "getProjectNetwork",
+        "getNetworkActivity",
+    } <= operations
+    agent = spec["components"]["schemas"]["AgentSpec"]["properties"]["network"]
+    assert agent == {"$ref": "#/components/schemas/AgentNetwork"}

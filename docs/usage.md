@@ -971,6 +971,51 @@ ceiling of 20`). A policy saved before the ceiling was set is not refused: what 
 ceiling, the policy keeps what was written, and `GET /projects/{id}/policy` (and the project's
 settings page) lists each clamp.
 
+**The ceiling's `network` section bounds what projects and agents may reach**
+([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
+
+```json
+{"network": {"allow_domains": ["github.com", "pypi.org", "files.pythonhosted.org", "githubusercontent.com"],
+             "deny_domains": ["x.com", "tiktok.com"], "per_host_per_minute": 60, "per_run_per_minute": 600,
+             "builtin_web_tools": "deny", "user_agent_contact": "security@example.com"}}
+```
+
+`allow_domains` is the widest set a project may allow (leave it out for no cap, write `["*"]` for any
+public host); `deny_domains` always wins, for projects, agents and every run; the rates are connections
+a run may open per minute (per host, and in all); `builtin_web_tools: deny` switches the agent CLI's
+own `WebFetch` and `WebSearch` off; `user_agent_contact` is written into the User-Agent of what the
+platform fetches for the organisation. Patterns: `example.com` (the host and its subdomains),
+`*.example.com` (subdomains only), `*`; no scheme, port, path or IP address (a bad one is a 422 naming
+it). A project policy above it is refused (`network.allow_domains: `api.stripe.com` is outside the
+organisation's allowed hosts`), a stored one is clamped when it runs, and the ceiling's deny list is
+merged into every project's.
+
+A project's own side is `sandbox.network` in its policy: `allow_domains`, `deny_domains`,
+`per_host_per_minute`, `per_run_per_minute` and `builtin_web_tools: allow | deny`. An empty list means
+no internet; `deny_by_default: false` is accepted for old files and **ignored** (a
+`policy.network_deny_by_default_not_enforced` warning says so): write `allow_domains: ['*']` to open
+every public host. `GET /projects/{id}/network` returns what the project's runs really get: the
+effective allowed hosts (the repository host is implied), the deny list, the rates, and what the
+ceiling clamped.
+
+An agent version may carry its own `network`:
+
+```json
+{"instructions": "...", "network": {"domains": ["pypi.org", "api.github.com"], "per_host_per_minute": 10,
+                                    "builtin_web_tools": false}}
+```
+
+`domains` absent (or `null`) means the project's list, `[]` no internet, a list only these hosts. Every
+host must be allowed by the organisation or the version is refused when created, published or tried
+(422, one line per host); the project's own list is checked when a run is admitted. The next stages
+carry it to the pod (S40-01b) and make it a wall (S40-01c).
+
+**Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
+`GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
+it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `unreachable`) for the last
+24 hours, or since `since`, optionally for one `decision` or `project`. The first refusal of a host for a
+run is also an event on the work item (`choregos.network.denied`).
+
 **Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
 the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session
 and the stage fails with `reason: max_turns`. The same tool with the same arguments

@@ -94,6 +94,7 @@ from ..services.agents import (
     erreurs_d_une_version,
     resoudre_l_agent,
 )
+from ..services.network import check_agent_network
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
 
@@ -275,6 +276,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
     organisation = await _organisation(session, org)
+    await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project) if body.project else None
     await _skills_usable(session, organisation, body.spec)
     existant = (
@@ -374,6 +376,7 @@ async def publish_version(
     organisation, agent, sujet = await _charger(session, principal, org, slug)
     _exiger(decide(principal, org, sujet, Action.PUBLISH))
     erreurs_d_une_version(body)
+    await check_agent_network(session, organisation.id, body)
     await _skills_usable(session, organisation, body)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
@@ -1112,6 +1115,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
         _, _, sujet = await _charger(session, principal, org, body.agent)
     _exiger(decide(principal, org, sujet, Action.TRIAL, project_slug=body.project))
     erreurs_d_une_version(body.spec)
+    await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:

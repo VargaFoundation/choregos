@@ -78,6 +78,8 @@ sandbox:
     allow_domains:
     - github.com
     - pypi.org
+    - files.pythonhosted.org
+    - githubusercontent.com
     - registry.npmjs.org
     deny_by_default: true
   llm_security_analyzer: false
