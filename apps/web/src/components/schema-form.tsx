@@ -2,6 +2,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { GitHubRepoField } from "@/components/github-repo-field";
 import { Input, Select, Textarea } from "@/components/ui";
 
 /**
@@ -150,6 +151,17 @@ function Champ({
           </option>
         ))}
       </Select>
+    );
+  } else if (propriete.format === "github-repo") {
+    // A repository picked from what the Choregos GitHub App sees, never an installation id (ADR 0073).
+    controle = (
+      <GitHubRepoField
+        id={id}
+        value={typeof valeur === "string" ? valeur : ""}
+        disabled={disabled}
+        describedBy={aide}
+        onChange={onChange}
+      />
     );
   } else if (propriete.type === "object") {
     controle = <Correspondance id={id} valeur={valeur} disabled={disabled} aide={aide} onChange={onChange} />;

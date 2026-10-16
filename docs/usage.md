@@ -83,6 +83,14 @@ and says how a claim works on this instance; `POST /orgs/{org}/github/refresh` r
 A legacy `installation_id` in a request is ignored. The installation used by a connector and by a run's
 git token is always the one the organisation claimed.
 
+In the console, the repository field of a GitHub connector (Settings, Connections) is a searchable list of
+the repositories the App can see, each marked private or public. When the organisation has no installation
+yet, the field says so and offers *Install on GitHub* (it opens GitHub in the same tab and returns to the
+settings page) and *Refresh*. *Type it instead* switches to a text input for a repository the App cannot
+list; an owner without an installation is warned about on the spot, with the same install action. A GitHub
+card reads "via the Choregos App on `<account>`", and a save refused with `422` shows *Install on GitHub*
+under the error. No screen asks for an installation id.
+
 Until a project can run, its overview opens on a **getting started** list, which is the project's
 readiness (below): one list, computed by the API, that the settings page, the CLI and the MCP door share.
 

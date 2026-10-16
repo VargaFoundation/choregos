@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { ConnectorIcon } from "@/components/connector-icon";
+import { hasInstallationOn, InstallOnGitHub, ownerOf, useGitHubStatus } from "@/components/github-repo-field";
 import { ConnectorForm, type ConnectorBody } from "@/components/project-settings/connector-form";
 import type { SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Drawer } from "@/components/ui";
@@ -29,6 +30,33 @@ export function configurationEnClair(config: Record<string, unknown> | undefined
 export function workflowsQuiExigent(reasons: string[]): string[] {
   const noms = reasons.map((raison) => /^([\w.-]+): /.exec(raison)?.[1]).filter((nom): nom is string => !!nom);
   return [...new Set(noms)];
+}
+
+const GITHUB_TYPES = new Set(["github", "github-issues"]);
+
+/**
+ * The GitHub subtitle of a card: which account's installation the connector goes through, or the way to
+ * install the App when its repository's owner has none (ADR 0073). Never an installation id.
+ */
+function GitHubVia({ repo }: { repo: string }) {
+  const status = useGitHubStatus();
+  const owner = ownerOf(repo);
+  if (!status.data?.configured || !owner) return null;
+  const installation = status.data.installations.find((i) => i.claimed && !i.suspended && i.account_login.toLowerCase() === owner);
+  if (installation) {
+    return (
+      <p className="text-xs text-ink-muted" data-testid="github-via">
+        via the Choregos App on {installation.account_login}
+      </p>
+    );
+  }
+  if (hasInstallationOn(status.data, owner)) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-warn" data-testid="github-via">
+      <span>The Choregos App is not installed on {owner}.</span>
+      <InstallOnGitHub />
+    </div>
+  );
 }
 
 export function ConnectorCard({
@@ -77,6 +105,9 @@ export function ConnectorCard({
           </h3>
           {nomDuType && <p className="text-xs break-words text-ink-muted" data-donnee>{nomDuType}</p>}
           {reglage && <p className="font-mono text-xs break-all text-ink-muted">{reglage}</p>}
+          {actuel && GITHUB_TYPES.has(actuel.type) && typeof actuel.config?.repo === "string" && (
+            <GitHubVia repo={actuel.config.repo} />
+          )}
         </div>
       </div>
       {etat && (

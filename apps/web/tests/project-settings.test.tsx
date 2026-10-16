@@ -51,6 +51,13 @@ vi.mock("@/lib/api", async (importOriginal) => {
       platformModels: vi.fn(async () => []),
       projectOperations: vi.fn(async () => []),
       orgConnectors: vi.fn(async () => []),
+      githubStatus: vi.fn(async () => ({
+        configured: true,
+        multi_org_claim: "implicit",
+        installations: [
+          { id: 7, account_login: "acme", account_type: "Organization", repository_selection: "all", suspended: false, claimed: true, settings_url: "https://github.com/x" },
+        ],
+      })),
     },
   };
 });
@@ -97,6 +104,13 @@ describe("the project settings page (S40-03b)", () => {
     expect(within(cd).getByText("Not tested yet")).toBeTruthy();
     const runtime = screen.getByTestId("connecteur-runtime");
     expect(within(runtime).getByText("Provided by the platform")).toBeTruthy();
+  });
+
+  it("a GitHub card says which account's installation it goes through (no installation id)", async () => {
+    await renderPage();
+    const card = await screen.findByTestId("connecteur-tracker");
+    expect(await within(card).findByText("via the Choregos App on acme")).toBeTruthy();
+    expect(card.textContent).not.toMatch(/installation id/i);
   });
 
   it("opens a drawer to configure a connector", async () => {
