@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -623,6 +624,36 @@ class RemoteCredential(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GitHubInstallation(Base, TimestampMixin):
+    """An installation of the deployment's GitHub App on a GitHub account (ADR 0073).
+
+    The primary key is GitHub's installation id, which nobody types: it is discovered by polling
+    `GET /app/installations`, by the Setup URL redirect after an install, and by webhooks. `org_id`
+    is the Choregos organisation that CLAIMED it; a token for `owner/repo` is only minted through an
+    installation claimed by the project's organisation. Unclaimed rows are visible to the platform
+    scope only."""
+
+    __tablename__ = "github_installations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    account_login: Mapped[str] = mapped_column(String(200))
+    #: `account_login` lower-cased: GitHub logins are case-insensitive, the lookups use this one.
+    account_key: Mapped[str] = mapped_column(String(200), index=True)
+    account_id: Mapped[int] = mapped_column(BigInteger)
+    #: `Organization` or `User`
+    account_type: Mapped[str] = mapped_column(String(32))
+    app_id: Mapped[str] = mapped_column(String(32), default="")
+    #: `all` or `selected`
+    repository_selection: Mapped[str] = mapped_column(String(16), default="selected")
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    org_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    claimed_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ConnectorOperation(Base, PkMixin, TimestampMixin):

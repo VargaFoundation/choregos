@@ -101,3 +101,13 @@ def test_le_type_par_defaut_est_celui_que_prend_un_projet(monkeypatch: pytest.Mo
     assert type_par_defaut("runtime") == "k8s_job"
     assert type_par_defaut("scm") == "github"
     assert type_par_defaut("identity") is None
+
+
+def test_github_types_never_ask_an_installation_id() -> None:
+    """The installation is discovered and claimed by the platform (ADR 0073): a form that asks for
+    its id asks for something nobody knows and that another company cannot fill in."""
+    types = {(k, t): spec for k, t, spec in connector_types()}
+    for key in (("tracker", "github-issues"), ("scm", "github")):
+        properties = types[key].config_schema["properties"]
+        assert "installation_id" not in properties, f"{key} still asks for an installation id"
+        assert properties["repo"]["format"] == "github-repo", f"{key}: the repository is a picker"

@@ -124,9 +124,13 @@ async def put_connector(
             "enforces no cap. Use `litellm`."
         )
     from ..services.connecteurs import check_runtime_allowed, spec_du_type, verifier_les_secrets
+    from ..services.github_app import checked_config
 
     if kind == "runtime":
         check_runtime_allowed(body.type)
+    body = body.model_copy(
+        update={"config": await checked_config(session, ctx.project.org_id, kind, body.type, body.config)}
+    )
     prefix = _prefix(ctx, kind)
     verifier_les_secrets(
         spec_du_type(kind, body.type),
