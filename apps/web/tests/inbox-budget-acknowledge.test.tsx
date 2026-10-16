@@ -14,6 +14,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       projects: vi.fn().mockResolvedValue({ items: [{ slug: "billing-api" }], meta: { has_more: false } }),
       workItems: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       orgActions: vi.fn().mockResolvedValue([]),
+      orgEgress: vi.fn().mockResolvedValue({ mode: "enforce", ceiling: {}, rules: [], requests: [], can_decide: false }),
       budgetAlerts: vi.fn().mockResolvedValue([
         {
           id: "b1",
