@@ -175,5 +175,7 @@ def test_the_proxy_takes_traffic_from_runners_only_and_reaches_the_internet_minu
 
 def test_network_policies_off_renders_none_of_them() -> None:
     docs = _docs("global.egress.enabled=true", "networkPolicies.enabled=false")
-    assert not [k for k in docs if k[0] == "NetworkPolicy"]
+    # `choregos-runner-assignment` (ADR 0053) is the sandbox executor's own, rendered whatever
+    # `networkPolicies.enabled` says; agent-sandbox is the default since ADR 0072.
+    assert not [k for k in docs if k[0] == "NetworkPolicy" and k[1] != "choregos-runner-assignment"]
     assert ("Deployment", "choregos-egress") in docs

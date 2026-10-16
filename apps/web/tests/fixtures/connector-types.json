@@ -21,6 +21,10 @@
  },
  {
   "kind": "documents",
+  "type": "git"
+ },
+ {
+  "kind": "documents",
   "type": "sharepoint"
  },
  {
