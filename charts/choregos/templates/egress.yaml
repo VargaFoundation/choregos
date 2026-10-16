@@ -1,0 +1,96 @@
+{{- $e := .Values.global.egress | default dict }}
+{{- if $e.enabled }}
+{{- /*
+`choregos-egress` (ADR 0070): the per-run egress proxy, in the release namespace, from the API image.
+A runner presents its run id and token as proxy credentials; the proxy asks the API (`GET
+/internal/runs/{id}/network`) what THAT run may reach, and lets a tunnel through or refuses. It holds
+no secret, no database access and no service account token.
+
+What it enforces: host, port and CONNECTION rate. What it cannot see: anything inside TLS (method,
+path, headers, User-Agent). It is a wall only where the network forces traffic through it: the chart's
+NetworkPolicies do (`networkPolicies.enabled`); on a platform that owns egress (Cilium FQDN rules) the
+platform must stop letting runner pods out directly.
+*/ -}}
+{{- $api := index .Values "choregos-api" | default dict }}
+{{- $apiUrl := printf "%s/api/v1" (.Values.global.internalApiUrl | default "http://choregos-api:8000") }}
+{{- $port := int ($e.port | default 3128) }}
+{{- $health := int ($e.healthPort | default 8081) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: choregos-egress
+  labels:
+    app.kubernetes.io/name: choregos-egress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: egress
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ $e.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-egress
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-egress
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: egress
+        # NOT `part-of: choregos`: `choregos-allow-ingress` admits every pod of the namespace to the pods
+        # that carry it, and NetworkPolicies add up. The proxy takes traffic from runner pods only.
+      annotations:
+        checksum/config: {{ toJson $e | sha256sum }}
+    spec:
+      # No service account token: the proxy talks to the API with the run's own token, never its own.
+      automountServiceAccountToken: false
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: egress
+          image: {{ include "choregos.image" (dict "global" .Values.global "image" ($api.image | default dict)) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["python", "-m", "choregos_api.egress"]
+          securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
+          ports:
+            - { name: proxy, containerPort: {{ $port }} }
+            - { name: health, containerPort: {{ $health }} }
+          env:
+            - { name: CHOREGOS_EGRESS_API_URL, value: {{ $apiUrl | quote }} }
+            - { name: CHOREGOS_EGRESS_PORT, value: {{ $port | quote }} }
+            - { name: CHOREGOS_EGRESS_HEALTH_PORT, value: {{ $health | quote }} }
+            - { name: CHOREGOS_EGRESS_PORTS, value: {{ toJson ($e.ports | default (list 443 80)) | quote }} }
+            - { name: CHOREGOS_EGRESS_DENY_DOMAINS, value: {{ toJson ($e.denyDomains | default list) | quote }} }
+            - { name: CHOREGOS_EGRESS_CACHE_SECONDS, value: {{ $e.cacheSeconds | default 60 | quote }} }
+          readinessProbe:
+            httpGet: { path: /healthz, port: health }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: health }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources: {{- toYaml ($e.resources | default dict) | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: choregos-egress
+  labels:
+    app.kubernetes.io/name: choregos-egress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: egress
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - { name: proxy, port: {{ $port }}, targetPort: proxy }
+  selector:
+    app.kubernetes.io/name: choregos-egress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

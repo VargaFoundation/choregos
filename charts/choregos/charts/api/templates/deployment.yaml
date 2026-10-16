@@ -137,6 +137,12 @@ spec:
             {{- end }}
             {{- end }}
             {{- include "choregos.commonEnv" . | nindent 12 }}
+            {{- with (.Values.global.egress | default dict).denyDomains }}
+            # Hosts no run of this deployment may reach (ADR 0070): the effective network of a run
+            # always carries them, so the console and the egress proxy agree.
+            - name: CHOREGOS_NETWORK_INSTANCE_DENY
+              value: {{ join "," . | quote }}
+            {{- end }}
             - name: CHOREGOS_OIDC_ISSUER
               value: {{ .Values.global.oidc.issuer | quote }}
             - name: CHOREGOS_OIDC_CLIENT_ID
