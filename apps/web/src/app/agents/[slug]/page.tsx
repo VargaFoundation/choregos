@@ -16,6 +16,7 @@ import {
   UpstreamBanner,
 } from "@/components/agents/governance";
 import { DefinitionView } from "@/components/agents/definition-view";
+import { AgentDetailsCard } from "@/components/agents/details";
 import { History } from "@/components/agents/history";
 import { TagList } from "@/components/agents/tags";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
