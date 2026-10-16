@@ -27,7 +27,7 @@ import { ChangeList } from "./spec-changes";
 import { TagEditor } from "./tags";
 import { openByDefault, sectionSummaries, type SectionId } from "./spec-summary";
 import { MemoryBindingsEditor } from "./memory-bindings";
-import { describe, effectiveBindings, isLegacyDefault, summaryOf, writesTo, labelOf, type Binding } from "@/lib/memories";
+import { describe, effectiveBindings, writesTo, labelOf, type Binding } from "@/lib/memories";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
