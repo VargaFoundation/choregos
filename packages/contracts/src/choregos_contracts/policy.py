@@ -64,8 +64,19 @@ class ScopePolicy(Strict):
 
 
 class NetworkPolicy(Strict):
+    """What a project lets its runs reach (ADR 0070). Egress is always closed: `deny_by_default` is
+    kept for old files and read by nothing (`policy_warnings` says so)."""
+
     allow_domains: list[str] = Field(default_factory=list)
     deny_by_default: bool = True
+    #: Hosts the project refuses whatever `allow_domains` says: a deny always wins.
+    deny_domains: list[str] = Field(default_factory=list)
+    #: New connections a run may open to one host per minute (`None`: the organisation's cap, if any).
+    per_host_per_minute: int | None = Field(default=None, ge=1)
+    #: New connections a run may open per minute, all hosts together.
+    per_run_per_minute: int | None = Field(default=None, ge=1)
+    #: The agent CLI's own web tools (`WebFetch`, `WebSearch`): `deny` switches them off.
+    builtin_web_tools: Literal["allow", "deny"] = "allow"
 
 
 class SandboxPolicy(Strict):

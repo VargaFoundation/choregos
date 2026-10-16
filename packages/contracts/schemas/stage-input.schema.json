@@ -396,6 +396,24 @@
             "type": "string"
           }
         },
+        "deny_domains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "egress": {
+          "type": "string",
+          "enum": [
+            "unlisted",
+            "listed"
+          ],
+          "default": "unlisted"
+        },
+        "builtin_web_tools": {
+          "type": "boolean",
+          "default": true
+        },
         "dod_iterations": {
           "type": "integer",
           "minimum": 0,

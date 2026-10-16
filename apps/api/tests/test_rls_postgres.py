@@ -8,6 +8,7 @@ vrai PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`) : la CI en lance un, en local
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -735,3 +736,37 @@ async def test_github_installations_are_isolated(deux_organisations: dict[str, s
         assert (await session.execute(select(GitHubInstallation))).scalars().all() == [], "no scope, nothing"
     async with session_scope(orgs="*") as session:
         assert len((await session.execute(select(GitHubInstallation))).scalars().all()) == 3
+
+
+async def test_network_decisions_stay_in_their_organisation(deux_organisations: dict[str, str]) -> None:
+    """Network decisions (ADR 0070): what org `b`'s runs reached is invisible to `a`, and a session
+    scoped to `a` cannot write a decision into `b`."""
+    from choregos_api.db.models import NetworkDecision, Organization
+    from choregos_api.db.session import session_scope
+    from sqlalchemy.exc import DBAPIError
+
+    def row(org_id: str, project_id: str, host: str) -> NetworkDecision:
+        now = datetime.now(UTC)
+        return NetworkDecision(
+            org_id=org_id,
+            project_id=project_id,
+            layer="proxy",
+            host=host,
+            port=443,
+            decision="denied",
+            reason="not_allowed",
+            first_at=now,
+            last_at=now,
+        )
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for slug in ("a", "b"):
+            session.add(row(ids[slug], deux_organisations[slug], f"host-of-{slug}.example"))
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(NetworkDecision.host))).scalars().all() == ["host-of-a.example"]
+    with pytest.raises(DBAPIError):  # a write INTO b from a's session is refused by the policy
+        async with session_scope(orgs=["a"]) as session:
+            session.add(row(ids["b"], deux_organisations["b"], "stolen.example"))
+    async with session_scope() as session:
+        assert (await session.execute(select(NetworkDecision))).scalars().all() == [], "no scope, nothing"

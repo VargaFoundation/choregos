@@ -99,7 +99,11 @@
           "additionalProperties": false,
           "properties": {
             "allow_domains": { "type": "array", "items": { "type": "string" } },
-            "deny_by_default": { "type": "boolean", "default": true }
+            "deny_by_default": { "type": "boolean", "default": true },
+            "deny_domains": { "type": "array", "items": { "type": "string" } },
+            "per_host_per_minute": { "type": ["integer", "null"], "minimum": 1 },
+            "per_run_per_minute": { "type": ["integer", "null"], "minimum": 1 },
+            "builtin_web_tools": { "type": "string", "enum": ["allow", "deny"], "default": "allow" }
           }
         },
         "llm_security_analyzer": { "type": "boolean", "default": false },

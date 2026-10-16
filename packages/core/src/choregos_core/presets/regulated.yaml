@@ -34,6 +34,8 @@ sandbox:
   network:
     allow_domains: []
     deny_by_default: true
+    per_host_per_minute: 60
+    builtin_web_tools: deny
   llm_security_analyzer: true
   unknown_requests: reject
   prompt_injection: block

@@ -27,6 +27,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from .errors import Issue, ValidationError
 from .gates import matches_any
+from .network import validate_pattern
 
 PRESETS_DIR = Path(__file__).parent / "presets"
 PRESET_NAMES = ("solo", "team", "regulated")
@@ -234,6 +235,28 @@ def policy_warnings(policy: Policy) -> list[Issue]:
                 "review.require_human_for_risk",
             )
         )
+    net = policy.sandbox.network
+    if "deny_by_default" in net.model_fields_set and not net.deny_by_default:
+        issues.append(
+            Issue(
+                "policy.network_deny_by_default_not_enforced",
+                "`sandbox.network.deny_by_default: false` is not enforced: egress is always closed. "
+                "Write `allow_domains: ['*']` to open every public host.",
+                "sandbox.network.deny_by_default",
+            )
+        )
+    for name in ("allow_domains", "deny_domains"):
+        for entry in getattr(net, name):
+            try:
+                validate_pattern(entry)
+            except ValueError as error:
+                issues.append(
+                    Issue(
+                        "policy.network_pattern_ignored",
+                        f"`sandbox.network.{name}`: {error}; the entry is ignored.",
+                        f"sandbox.network.{name}",
+                    )
+                )
     return issues
 
 

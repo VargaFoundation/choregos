@@ -191,6 +191,19 @@ a project both declares what it uses and belongs to the groups that entitle it.
 The list is written and reviewed like code. Choregos does not ask a remote server what it
 offers: an inventory that updates itself is not an access control.
 
+## Network access
+
+What a run may reach is bounded in three scopes that only ever narrow one another
+([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)): the **organisation**
+(`network` in its policy ceiling: the widest allowed set, a deny list, rate caps), the **project**
+(`sandbox.network` in its policy) and the **agent** (`network` in each published version). The
+network of a run is their intersection, plus the host of the project's repository, minus every deny
+list. Egress is always closed: an empty list means no internet. A host pattern `example.com` covers
+that host and its subdomains, `*.example.com` only its subdomains, `*` any public host name; IP
+addresses are never allowed. An agent that asks for a host its project or organisation does not allow
+is refused when published, and its run is refused at admission. What each layer can and cannot stop is
+in [security](security.md).
+
 ## Findings and trains
 
 An agent that spots a problem **outside its scope** does not fix it: it reports a *finding*,

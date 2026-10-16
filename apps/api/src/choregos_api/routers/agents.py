@@ -98,6 +98,7 @@ from ..services.agents import (
     resoudre_l_agent,
 )
 from ..services.memory_access import check_bindings_at_publish
+from ..services.network import check_agent_network
 from ..services.remote_agents import pin_remote_runtime
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
@@ -312,6 +313,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
     organisation = await _organisation(session, org)
+    await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project) if body.project else None
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
     body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
@@ -430,6 +432,7 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     (`no_change`). A restore carries the source's exact spec and checksum. Nothing is ever rewritten."""
     _exiger(decide(principal, org, sujet, Action.PUBLISH))
     erreurs_d_une_version(spec)
+    await check_agent_network(session, organisation.id, spec)
     await _skills_usable(session, organisation, spec)
     await _model_allowed(session, organisation, spec)
     try:
@@ -1286,6 +1289,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     erreurs_d_une_version(body.spec)
     await _model_allowed(session, organisation, body.spec)
     await check_bindings_at_publish(session, principal, organisation, body.spec)
+    await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:

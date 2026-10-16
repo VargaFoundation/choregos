@@ -742,6 +742,18 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyDef" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/network:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [workflows]
+      operationId: getProjectNetwork
+      description: >-
+        What the project's runs may reach (ADR 0070): the project's own `sandbox.network`, the organisation's network
+        ceiling, and the effective allow and deny lists (the repository host is implied) after the ceiling is applied.
+        `clamps` lists what the ceiling brought down.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectNetwork" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /platform/models:
     get:
       tags: [models]
@@ -1587,6 +1599,22 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyCeilingState" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/network-activity:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getNetworkActivity
+      description: >-
+        Which hosts the organisation's runs reached or were refused (ADR 0070), grouped by host, layer, decision and
+        reason. `org_admin` or `audit:read`.
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time }, description: "defaults to the last 24 hours" }
+        - { name: decision, in: query, schema: { type: string, enum: [allowed, denied, rate_limited, unreachable] } }
+        - { name: project, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/NetworkActivity" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /orgs/{org}/members:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -2804,6 +2832,37 @@ paths:
                     version: { type: integer }
                     digest: { type: string }
                     files: { type: object, additionalProperties: { type: string } }
+  /internal/runs/{id}/network:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunNetwork
+      description: >-
+        The network THIS run may use (ADR 0070): the agent's hosts narrowed by the project's and the organisation's,
+        plus the repository host. Read by the egress proxy with the run's own token; a token of another run is refused.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunNetwork" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /internal/runs/{id}/network/decisions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunNetworkDecisions
+      description: >-
+        What the egress proxy or the runner let through or refused for this run. Counters are CUMULATIVE per
+        (layer, host, decision, reason): a replayed batch replaces the totals and never adds twice. The first
+        `denied` of a host for the run is journaled as `choregos.network.denied`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/NetworkDecisionBatch" } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { type: object, required: [accepted], properties: { accepted: { type: integer } } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /internal/runs/{id}/inputs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3811,6 +3870,7 @@ components:
             - { type: array, maxItems: 8, items: { $ref: "#/components/schemas/AgentMemoryBinding" } }
             - { type: "null" }
           description: "The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422."
+        network: { $ref: "#/components/schemas/AgentNetwork" }
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
@@ -3997,6 +4057,87 @@ components:
         reach: { type: string, enum: [org, projects] }
         projects: { type: array, items: { type: string } }
         status: { type: string, enum: [active, archived] }
+    AgentNetwork:
+      type: object
+      description: >-
+        What one agent version may reach (ADR 0070). It can only narrow the project's and the organisation's network:
+        a host they do not allow refuses the publication (422) and the run.
+      properties:
+        domains: { type: [array, "null"], items: { type: string }, description: "null: the project's list; []: no internet; a list: only these hosts (`example.com` = it and its subdomains, `*.example.com` = subdomains only)" }
+        per_host_per_minute: { type: [integer, "null"], minimum: 1, description: "new connections a run may open to one host per minute" }
+        builtin_web_tools: { type: [boolean, "null"], description: "false switches the agent CLI's own WebFetch and WebSearch off; null or true: as the policy says" }
+    RunNetwork:
+      type: object
+      required: [run_id, allow, deny, implied, builtin_web_tools, listed, org, project]
+      properties:
+        run_id: { type: string }
+        allow: { type: array, items: { type: string } }
+        deny: { type: array, items: { type: string } }
+        implied: { type: array, items: { type: string }, description: "hosts the run needs to work at all (the project's repository host)" }
+        per_host_per_minute: { type: [integer, "null"] }
+        per_run_per_minute: { type: [integer, "null"] }
+        org_per_host_per_minute: { type: [integer, "null"], description: "the organisation's cap, counted across all its runs" }
+        builtin_web_tools: { type: boolean }
+        listed: { type: boolean, description: "always true today: an empty allow list means no internet" }
+        org: { type: string }
+        project: { type: string }
+        agent: { type: [string, "null"] }
+    NetworkDecisionIn:
+      type: object
+      required: [layer, host, decision]
+      properties:
+        layer: { type: string, enum: [proxy, runner] }
+        host: { type: string, maxLength: 253 }
+        port: { type: integer, minimum: 0, maximum: 65535, default: 0 }
+        decision: { type: string, enum: [allowed, denied, rate_limited, unreachable] }
+        reason: { type: string, maxLength: 200, default: "" }
+        count: { type: integer, minimum: 1, default: 1 }
+        bytes_up: { type: integer, minimum: 0, default: 0 }
+        bytes_down: { type: integer, minimum: 0, default: 0 }
+        first_at: { type: [string, "null"], format: date-time }
+        last_at: { type: [string, "null"], format: date-time }
+    NetworkDecisionBatch:
+      type: object
+      required: [decisions]
+      properties:
+        decisions: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/NetworkDecisionIn" } }
+    EffectiveNetwork:
+      type: object
+      required: [allow, deny, implied, builtin_web_tools]
+      properties:
+        allow: { type: array, items: { type: string } }
+        deny: { type: array, items: { type: string } }
+        implied: { type: array, items: { type: string } }
+        per_host_per_minute: { type: [integer, "null"] }
+        per_run_per_minute: { type: [integer, "null"] }
+        org_per_host_per_minute: { type: [integer, "null"] }
+        builtin_web_tools: { type: boolean }
+    ProjectNetwork:
+      type: object
+      required: [policy, effective, clamps]
+      properties:
+        policy: { type: object, additionalProperties: true, description: "the project's `sandbox.network`, as stored" }
+        ceiling: { type: [object, "null"], additionalProperties: true, description: "the organisation's `network` ceiling, null when it sets none" }
+        effective: { $ref: "#/components/schemas/EffectiveNetwork" }
+        clamps: { type: array, items: { type: string } }
+    NetworkActivityRow:
+      type: object
+      required: [host, layer, decision, reason, count, runs, projects, agents, last_at]
+      properties:
+        host: { type: string }
+        layer: { type: string, description: "proxy, runner, broker or platform" }
+        decision: { type: string }
+        reason: { type: string }
+        count: { type: integer }
+        runs: { type: integer }
+        projects: { type: array, items: { type: string } }
+        agents: { type: array, items: { type: string } }
+        last_at: { type: string, format: date-time }
+    NetworkActivity:
+      type: object
+      required: [rows]
+      properties:
+        rows: { type: array, items: { $ref: "#/components/schemas/NetworkActivityRow" } }
     AgentEvalCase:
       type: object
       description: A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not.
