@@ -57,6 +57,10 @@ def page_name(url: str) -> str:
     return name if name.endswith((".html", ".htm")) else f"{name}.html"
 
 
+#: Public name of the predicate: `web_fetch` (S40-01f) refuses the same addresses a crawl does.
+is_private_address = _private
+
+
 class _Links(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
