@@ -872,6 +872,10 @@ class AgentRelease(Base, PkMixin, TimestampMixin):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: The checks as they were evaluated, a snapshot (`AgentReleaseCheck[]`).
     checks: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    #: People other than the requester who must approve (S40-02b); 0 for a release that did not wait.
+    approvals_required: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    #: What each approver answered (`AgentReleaseVote[]`), oldest first.
+    decisions: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

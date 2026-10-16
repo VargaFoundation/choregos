@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "b2c4d6e8f0a1"
 AFTER = "d4f6a8c0e2b4"
+APPROVALS = "f6b8d0a2c4e6"
 
 
 def _config(url: str) -> Config:
@@ -93,6 +94,11 @@ def test_every_agent_starts_in_production_at_its_latest_version(
         ]
         assert channel == "stable"
         assert tuple(pin) == (2, None), "the pin is kept as a fixed revision"
+        with engine.connect() as connection:
+            waited = connection.execute(
+                text("SELECT approvals_required, decisions FROM agent_releases")
+            ).all()
+        assert all(row[0] == 0 and str(row[1]) in {"[]", "[]\n"} for row in waited), "no one waited so far"
 
         for version, chan in ((2, "stable"), (None, None)):
             with pytest.raises(IntegrityError), engine.begin() as connection:
@@ -104,6 +110,11 @@ def test_every_agent_starts_in_production_at_its_latest_version(
 
         with engine.begin() as connection:
             connection.execute(text("UPDATE project_agents SET version = NULL, channel = 'candidate'"))
+        command.downgrade(_config(url), AFTER)
+        with engine.connect() as connection:
+            released = {row[1] for row in connection.execute(text("PRAGMA table_info(agent_releases)")).all()}
+        assert not {"approvals_required", "decisions"} & released and "channel" in released
+        command.upgrade(_config(url), APPROVALS)
         command.downgrade(_config(url), BEFORE)
         with engine.connect() as connection:
             columns = {row[1] for row in connection.execute(text("PRAGMA table_info(agents)")).all()}

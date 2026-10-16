@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query, status
 
 from ..audit import record
-from ..db.models import Organization
+from ..db.models import Agent, Organization
 from ..deps import Db, Me, ProjectCtx
 from ..errors import forbidden
 from ..fraicheur import exiger_une_authentification_fraiche
@@ -18,14 +18,15 @@ from ..schemas import (
     AgentDto,
     AgentExposure,
     AgentReleaseCreate,
+    AgentReleaseDecision,
     AgentReleaseDto,
     AgentReleasePolicy,
     AgentReleaseReadiness,
     ProjectAgentChannel,
 )
 from ..services import agent_releases
-from ..services.agent_governance import PERSONAL, Action, decide
-from .agents import Slug, _charger, _dto, _exiger
+from ..services.agent_governance import PERSONAL, Action, decide, visible_clause
+from .agents import Slug, _charger, _dto, _exiger, _lire, _organisation
 
 router = APIRouter(tags=["agents"])
 
@@ -64,6 +65,49 @@ async def release_agent_version(
     _exiger(decide(principal, org, subject, Action.RELEASE))
     row = await agent_releases.release(session, principal, organisation, agent, body)
     return agent_releases.release_dto(row, agent.slug)
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/releases/{release_id}/decision",
+    response_model=AgentReleaseDto,
+    operation_id="decideAgentRelease",
+)
+async def decide_agent_release(
+    org: str, slug: Slug, release_id: str, body: AgentReleaseDecision, session: Db, principal: Me
+) -> AgentReleaseDto:
+    """Approve, reject or cancel a release that waits for approval. Approving needs the right to release,
+    a human session with a fresh sign-in, and — with `separation_of_duties` — to be neither the requester
+    nor the revision's author; the last approval moves production. Rejecting needs a reason; the requester
+    or an org_admin cancels."""
+    organisation, agent, subject = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, subject, Action.RELEASE))
+    row = await agent_releases.decide_release(session, principal, organisation, agent, release_id, body)
+    return agent_releases.release_dto(row, agent.slug)
+
+
+@router.get(
+    "/orgs/{org}/agent-releases",
+    response_model=list[AgentReleaseDto],
+    operation_id="listOrgAgentReleases",
+)
+async def list_org_agent_releases(
+    org: str,
+    session: Db,
+    principal: Me,
+    status_: Annotated[
+        Literal["done", "pending_approval", "rejected", "cancelled", "superseded"] | None,
+        Query(alias="status"),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[AgentReleaseDto]:
+    """Releases of the agents the caller may see, newest first; `status=pending_approval` is the
+    approver's inbox."""
+    _lire(principal, org)
+    organisation = await _organisation(session, org)
+    visible = Agent.org_id == organisation.id
+    visible = visible & await visible_clause(session, principal, organisation)
+    rows = await agent_releases.list_releases(session, visible, status_, limit)
+    return [agent_releases.release_dto(row, slug) for row, slug in rows]
 
 
 @router.get(

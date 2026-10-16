@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..db.models import Agent, AgentRelease, AgentVersion, Organization, Project, ProjectAgent, Run
 from ..deps import _aware
-from ..errors import ApiError, conflict, forbidden, not_found
+from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..fraicheur import age_de_l_authentification, exiger_une_authentification_fraiche
 from ..greffons import DemandeDeGeste, controler
 from ..rbac import Permission, Principal
@@ -30,15 +30,18 @@ from ..schemas import (
     AgentExposure,
     AgentReleaseCheck,
     AgentReleaseCreate,
+    AgentReleaseDecision,
     AgentReleaseDto,
     AgentReleasePolicy,
     AgentReleaseReadiness,
+    AgentReleaseVote,
     AgentSpec,
 )
 from .agent_evals import evaluate, suite_for
-from .agent_governance import PERSONAL
+from .agent_governance import PERSONAL, is_admin
 
 FINISHED = ("succeeded", "failed", "timed_out", "cancelled")
+PENDING = "pending_approval"
 PRODUCTION_WINDOW_DAYS = 30
 #: Checks about the caller, not about the revision: enforced as 403 / 401, not as a 409.
 CALLER_CHECKS = frozenset({"human_session", "fresh_authentication"})
@@ -123,6 +126,8 @@ def loosens(before: AgentReleasePolicy, after: AgentReleasePolicy) -> bool:
     if old.require_candidate and not new.require_candidate:
         return True
     if new.min_candidate_runs < old.min_candidate_runs or new.step_up_minutes > old.step_up_minutes:
+        return True
+    if new.approvals < old.approvals or (old.separation_of_duties and not new.separation_of_duties):
         return True
     if old.min_success_rate is not None and (
         new.min_success_rate is None or new.min_success_rate < old.min_success_rate
@@ -281,6 +286,15 @@ async def checks_for(
             )
         if channel == "stable":
             checks += await _candidate_gate_checks(session, agent, version, gates)
+            if gates.approvals > 0:
+                checks.append(
+                    _check(
+                        "approvals",
+                        None,
+                        f"needs {gates.approvals} approval(s) from other people before production moves",
+                        required=False,
+                    )
+                )
     if _gated(agent, channel, kind, percent):
         human = is_human_session(principal)
         session_required = policy.on_publish != "stable"
@@ -442,7 +456,9 @@ def _dto(row: AgentRelease, slug: str) -> AgentReleaseDto:
         version=row.version,
         previous_version=row.previous_version,
         percent=row.percent,
-        status="done",
+        status=row.status,
+        approvals_required=row.approvals_required or 0,
+        decisions=[AgentReleaseVote.model_validate(d) for d in row.decisions or []],
         requested_by=row.requested_by,
         requested_at=row.created_at,
         done_at=row.done_at,
@@ -507,6 +523,21 @@ async def release(
             ),
         )
     now = utcnow()
+    approvals = policy.stable.approvals
+    if body.channel == "stable" and kind == "promote" and approvals > 0:
+        assert version is not None
+        await _refuse_a_second_request(session, agent)
+        return await _open_request(
+            session,
+            principal,
+            agent,
+            version,
+            previous=agent.stable_version,
+            requested_by=principal.email,
+            reason=body.reason,
+            checks=checks,
+            approvals=approvals,
+        )
     if body.channel == "stable":
         assert version is not None
         values: dict[str, Any] = {"stable_version": version}
@@ -576,6 +607,251 @@ async def release(
     return row
 
 
+async def pending_release(session: AsyncSession, agent: Agent) -> AgentRelease | None:
+    """The release waiting for approval, if any (at most one per agent)."""
+    return (
+        await session.execute(
+            select(AgentRelease).where(AgentRelease.agent_id == agent.id, AgentRelease.status == PENDING)
+        )
+    ).scalar_one_or_none()
+
+
+async def _refuse_a_second_request(session: AsyncSession, agent: Agent) -> None:
+    waiting = await pending_release(session, agent)
+    if waiting is not None:
+        raise conflict(
+            f"v{waiting.version} already waits for approval to go to production: "
+            "approve, reject or cancel it first"
+        )
+
+
+async def _open_request(  # noqa: PLR0913 - one request row, field by field, keyword-only
+    session: AsyncSession,
+    principal: Principal | None,
+    agent: Agent,
+    version: int,
+    *,
+    previous: int | None,
+    requested_by: str | None,
+    reason: str | None,
+    checks: list[AgentReleaseCheck],
+    approvals: int,
+) -> AgentRelease:
+    """A promotion that waits for other people: production does not move until enough approve."""
+    row = AgentRelease(
+        org_id=agent.org_id,
+        agent_id=agent.id,
+        channel="stable",
+        kind="promote",
+        version=version,
+        previous_version=previous,
+        status=PENDING,
+        approvals_required=approvals,
+        decisions=[],
+        requested_by=requested_by,
+        reason=reason,
+        checks=[c.model_dump(mode="json") for c in checks],
+    )
+    session.add(row)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "agent.release.request",
+        org_id=agent.org_id,
+        target_type="agent",
+        target_id=agent.id,
+        release_id=row.id,
+        version=version,
+        previous_version=previous,
+        approvals_required=approvals,
+        reason=reason,
+    )
+    return row
+
+
+async def decide_release(
+    session: AsyncSession,
+    principal: Principal,
+    organisation: Organization,
+    agent: Agent,
+    release_id: str,
+    body: AgentReleaseDecision,
+) -> AgentRelease:
+    """Approve, reject or cancel a release that waits (the caller holds the release right).
+
+    The rules are those of a governed action's decision (ADR 0035): a person in a session, a fresh sign-in
+    to approve, neither the requester nor the revision's author when `separation_of_duties`, never twice,
+    and a compare-and-set on the pointer that production moves from."""
+    policy = policy_of(agent)
+    gates = policy.stable
+    row = (
+        await session.execute(
+            select(AgentRelease)
+            .where(AgentRelease.id == release_id, AgentRelease.agent_id == agent.id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise not_found("Agent release", release_id)
+    if not is_human_session(principal):
+        raise forbidden("a decision is made in a human session, not with an API token")
+    if row.status != PENDING:
+        raise conflict(f"the release is already {row.status}")
+    me = principal.email.lower()
+    now = utcnow()
+    decisions = list(row.decisions or [])
+    if body.decision == "cancel":
+        if (row.requested_by or "").lower() != me and not is_admin(principal, organisation.slug):
+            raise forbidden("only the requester or an org_admin cancels a release request")
+        age: int | None = age_de_l_authentification(principal)
+    elif body.decision == "reject":
+        if not (body.reason or "").strip():
+            raise unprocessable("a rejection must say why")
+        age = age_de_l_authentification(principal)
+    else:
+        age = exiger_une_authentification_fraiche(principal, gates.step_up_minutes)
+        if gates.separation_of_duties:
+            author = (
+                await session.execute(
+                    select(AgentVersion.created_by).where(
+                        AgentVersion.agent_id == agent.id, AgentVersion.version == row.version
+                    )
+                )
+            ).scalar_one_or_none()
+            if me in {(row.requested_by or "").lower(), (author or "").lower()}:
+                raise unprocessable(
+                    "separation of duties: neither the person who asked for this release nor the author "
+                    "of the revision approves it"
+                )
+        if any(d.get("by", "").lower() == me and d.get("decision") == "approve" for d in decisions):
+            raise conflict("you have already approved this release")
+        await controler(
+            session,
+            DemandeDeGeste(
+                "agent.release",
+                organisation.slug,
+                principal,
+                {
+                    "agent": agent.slug,
+                    "channel": "stable",
+                    "version": row.version,
+                    "kind": row.kind,
+                    "decision": "approve",
+                },
+            ),
+        )
+    decisions.append(
+        AgentReleaseVote(
+            by=principal.email, decision=body.decision, reason=body.reason, at=now, auth_age_seconds=age
+        ).model_dump(mode="json")
+    )
+    row.decisions = decisions
+    approved = {d["by"].lower() for d in decisions if d.get("decision") == "approve"}
+    if body.decision != "approve":
+        row.status = "rejected" if body.decision == "reject" else "cancelled"
+    elif len(approved) >= row.approvals_required:
+        await _apply(session, agent, row, principal, now)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "agent.release.decide",
+        org_id=agent.org_id,
+        target_type="agent",
+        target_id=agent.id,
+        release_id=row.id,
+        decision=body.decision,
+        reason=body.reason,
+        status=row.status,
+        auth_age_seconds=age,
+    )
+    return row
+
+
+async def _apply(
+    session: AsyncSession, agent: Agent, row: AgentRelease, principal: Principal, now: Any
+) -> None:
+    """The last approval is in: re-check, then move production from where the request saw it."""
+    await session.refresh(agent)
+    assert row.version is not None
+    if agent.stable_version != row.previous_version:
+        # Production moved meanwhile (a rollback, another release): the request is stale. The status
+        # must survive the refusal, so it is committed before the 409 is raised.
+        row.status = "superseded"
+        await session.flush()
+        await session.commit()
+        raise conflict(
+            f"production moved meanwhile (v{agent.stable_version}, not v{row.previous_version}): "
+            "this request is superseded; ask again"
+        )
+    checks = await checks_for(
+        session,
+        agent,
+        channel="stable",
+        version=row.version,
+        kind="promote",
+        percent=0,
+        principal=principal,
+    )
+    failing = failed_checks(checks)
+    if failing:
+        raise ApiError(
+            409,
+            "Release checks failed",
+            f"v{row.version} no longer passes {len(failing)} check(s): it cannot go to production",
+            errors=[
+                {"loc": ["checks", c.name], "msg": c.detail or c.name, "type": "release_check_failed"}
+                for c in failing
+            ],
+        )
+    values: dict[str, Any] = {"stable_version": row.version}
+    if agent.candidate_version is not None and agent.candidate_version <= row.version:
+        values |= {"candidate_version": None, "candidate_percent": 0, "candidate_since": None}
+    moved = await session.execute(
+        update(Agent)
+        .where(Agent.id == agent.id, Agent.stable_version.is_not_distinct_from(row.previous_version))
+        .values(**values)
+        .execution_options(synchronize_session=False)
+    )
+    if moved.rowcount != 1:  # type: ignore[attr-defined]
+        raise conflict("another release has just been made: reload and try again")
+    row.status = "done"
+    row.done_at = now
+    await session.refresh(agent)
+    await record(
+        session,
+        principal,
+        "agent.release",
+        org_id=agent.org_id,
+        target_type="agent",
+        target_id=agent.id,
+        channel="stable",
+        version=row.version,
+        previous_version=row.previous_version,
+        kind=row.kind,
+        release_id=row.id,
+        approved_by=[d["by"] for d in row.decisions if d.get("decision") == "approve"],
+    )
+
+
+async def list_releases(
+    session: AsyncSession, visible: Any, status: str | None, limit: int
+) -> list[tuple[AgentRelease, str]]:
+    """Releases of the agents the caller may see (`visible`: the SQL clause of the agents' list), with
+    their agent's slug, newest first — the approver's inbox with `status=pending_approval`."""
+    query = (
+        select(AgentRelease, Agent.slug)
+        .join(Agent, Agent.id == AgentRelease.agent_id)
+        .where(visible)
+        .order_by(AgentRelease.created_at.desc(), AgentRelease.id.desc())
+        .limit(limit)
+    )
+    if status is not None:
+        query = query.where(AgentRelease.status == status)
+    return [(row, slug) for row, slug in (await session.execute(query)).tuples()]
+
+
 async def after_publish(
     session: AsyncSession, principal: Principal | None, agent: Agent, version: int, author: str | None
 ) -> None:
@@ -603,6 +879,24 @@ async def after_publish(
                 done_at=now,
             )
         )
+    if target == "stable" and version > 1 and policy.stable.approvals > 0:
+        # The organisation wants people to approve what reaches production, publication included:
+        # the revision is saved, production does not move until enough of them approve.
+        waiting = await pending_release(session, agent)
+        if waiting is not None:  # a newer revision replaces the request of an older one
+            waiting.status = "superseded"
+        await _open_request(
+            session,
+            principal,
+            agent,
+            version,
+            previous=agent.stable_version,
+            requested_by=author,
+            reason="saved with on_publish: stable",
+            checks=[],
+            approvals=policy.stable.approvals,
+        )
+        return
     if target == "stable":
         previous = agent.stable_version
         agent.stable_version = version
@@ -738,13 +1032,16 @@ __all__ = [
     "canary_bucket",
     "candidate_stats",
     "checks_for",
+    "decide_release",
     "exposure",
     "failed_checks",
     "history",
     "in_canary",
     "is_human_session",
     "kind_for",
+    "list_releases",
     "loosens",
+    "pending_release",
     "policy_of",
     "previously_in_production",
     "production_spec",

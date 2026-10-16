@@ -1537,7 +1537,10 @@ paths:
         sign-in younger than the policy's `step_up_minutes` (not for a personal agent), and the plugin
         gesture `agent.release`. Rolling back to a revision that was in production skips the gates. 409
         lists the failing checks in `errors` (`type: release_check_failed`); 401 `step_up_required` asks
-        for a fresh sign-in. Audited (`agent.release`). Needs the right to release the agent.
+        for a fresh sign-in. With `release_policy.stable.approvals` above 0, a promotion (not a rollback)
+        is stored as `pending_approval` and production does not move until enough people approve
+        (`409` if one already waits). Audited (`agent.release`, or `agent.release.request`). Needs the
+        right to release the agent.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseCreate" } } }
@@ -1547,6 +1550,43 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/releases/{release_id}/decision:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: release_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: decideAgentRelease
+      description: >-
+        Approve, reject or cancel a release that waits for approval (ADR 0071). Needs the right to release
+        the agent and a human session. Approving also needs a sign-in younger than `step_up_minutes` and,
+        with `separation_of_duties`, being neither the requester nor the revision's author (`422`); a
+        person approves once (`409`). The last approval re-checks the revision and moves production from
+        the revision the request saw: production moved meanwhile gives `409` and the request becomes
+        `superseded`. A rejection needs a reason; the requester or an org_admin cancels. Audited
+        (`agent.release.decide`, then `agent.release`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseDecision" } } }
+      responses:
+        "200": { description: The release after the decision, content: { application/json: { schema: { $ref: "#/components/schemas/AgentRelease" } } } }
+        "401": { description: A fresh authentication is needed (`step_up_required`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agent-releases:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listOrgAgentReleases
+      description: Releases of the agents the caller may see, newest first; `status=pending_approval` is the approver's inbox.
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [done, pending_approval, rejected, cancelled, superseded] } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200": { description: The releases, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentRelease" } } } } }
   /orgs/{org}/agents/{slug}/versions/{version}/readiness:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3399,6 +3439,13 @@ components:
         candidate_percent: { type: integer, minimum: 0, maximum: 100, default: 0, description: "the share of work items, of projects that follow production, served the candidate" }
         candidate_since: { type: [string, "null"], format: date-time }
         release_policy: { $ref: "#/components/schemas/AgentReleasePolicy" }
+        pending_release: { oneOf: [{ $ref: "#/components/schemas/AgentRelease" }, { type: "null" }], description: the release waiting for approval, if any }
+    AgentReleaseDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject, cancel] }
+        reason: { type: [string, "null"], maxLength: 500, description: required for a rejection }
     AgentStableGates:
       type: object
       description: What a revision must satisfy before it reaches production; a rollback skips them.
@@ -3408,6 +3455,8 @@ components:
         min_success_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
         min_soak_hours: { type: [integer, "null"], minimum: 0, maximum: 720 }
         step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10, description: how recent the person's sign-in must be }
+        approvals: { type: integer, minimum: 0, maximum: 3, default: 0, description: "people other than the requester who must approve a promotion before production moves; a rollback never waits (ADR 0071)" }
+        separation_of_duties: { type: boolean, default: true, description: "neither the requester nor the revision's author may approve" }
     AgentReleasePolicy:
       type: object
       description: "What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate."
@@ -3426,7 +3475,7 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication" }
+        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, approvals (informational: how many people must approve)" }
         required: { type: boolean, default: true }
         passed: { type: [boolean, "null"], description: "null: not applicable" }
         detail: { type: [string, "null"] }
@@ -3441,7 +3490,19 @@ components:
         version: { type: [integer, "null"] }
         previous_version: { type: [integer, "null"] }
         percent: { type: [integer, "null"] }
-        status: { type: string, enum: [done] }
+        status: { type: string, enum: [done, pending_approval, rejected, cancelled, superseded], description: "`pending_approval`: waits for `approvals_required` people; `superseded`: production moved meanwhile" }
+        approvals_required: { type: integer, description: "how many other people must approve before production moves; 0 for a release that did not wait" }
+        decisions:
+          type: array
+          items:
+            type: object
+            required: [by, decision, at]
+            properties:
+              by: { type: string }
+              decision: { type: string, enum: [approve, reject, cancel] }
+              reason: { type: [string, "null"] }
+              at: { type: string, format: date-time }
+              auth_age_seconds: { type: [integer, "null"], description: how old the person's sign-in was when they decided }
         requested_by: { type: [string, "null"] }
         requested_at: { type: string, format: date-time }
         done_at: { type: [string, "null"], format: date-time }
