@@ -925,6 +925,20 @@ request. `GET /orgs/acme/agent-releases?status=pending_approval` is the approver
 you may see), and the agent carries its `pending_release`. Nobody is notified yet. Every step is audited
 (`agent.release.request`, `agent.release.decide`, `agent.release`).
 
+**Live evaluation.** The level-1 suite checks the *instructions*; a case marked `live` checks what a run
+*produces*. `POST $API/orgs/acme/agents/reviewer/versions/5/evaluations -d '{"project": "dev"}'` runs each
+live case of the revision (at most 10) as a capped trial in that project (the right to try the agent there
+is needed): `{"name": "asks when the ticket is empty", "live": true, "expect_status": "blocked",
+"max_cost_usd": 0.3, "input": {...}, "must_contain": [...], "must_not_contain": [...]}`. A case spends at most
+its `max_cost_usd` (0.25 $ by default, 0.50 $ at most) and the evaluation at most the policy's `max_eval_usd`
+(2 $ by default): above it, `409`. A case passes when its run succeeded, its result has the expected status
+and its summary holds what it must. `GET` the same path for the score, read from the runs as they stand
+(`running`, `passed`, `failed`). Without a model to call it says `not_run` — never `passed`. Set
+`"stable": {"min_live_score": 0.9}` (and/or `"candidate": {...}`) in the release policy and a release needs
+the newest finished evaluation of that revision to reach it (`live_eval` check; a rollback skips it). In the
+console, the Revisions and Testing cards offer **Run live evaluation** with a project and the most it may
+cost, and show the score and the failing cases; the builder's eval suite has a *Live* tick per case.
+
 **In the console**, an agent's page has a **Lifecycle** tab (S40-02c) after Definition. Three cards
 side by side (stacked below 1024 px): **Revisions** (the latest revision that sits in no channel, its eval
 result, and *Send to testing* with a share slider and the projects that follow testing), **Testing** (the

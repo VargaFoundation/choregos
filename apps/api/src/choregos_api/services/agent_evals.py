@@ -25,6 +25,8 @@ def evaluate(spec: AgentSpec, cases: Iterable[AgentEvalCase]) -> list[AgentEvalR
     """Each case, played on the version's instructions."""
     results: list[AgentEvalResult] = []
     for case in cases:
+        if case.live:  # asserts on what a run produced: `agent_live_evals` scores it
+            continue
         sample = case.input
         ticket = {"key": "EVAL-1", "title": sample.title, "body": sample.body}
         try:

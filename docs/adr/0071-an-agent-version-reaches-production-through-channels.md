@@ -134,6 +134,25 @@ follow a channel whose revision changes.
     approvers' inbox is `GET /orgs/{org}/agent-releases?status=pending_approval`, limited to the agents
     the caller may see; nobody is notified yet.
 
+13. **Live evaluation (S40-02d).** An eval case may be `live` (with `expect_status` and `max_cost_usd`, at most
+    0.50 $). The level-1 gate leaves live cases out: they assert on what a run produced, and there is no
+    output before a run. `POST …/versions/{v}/evaluations {project}` starts, for each live case (at most 10),
+    the **existing** `AgentTrial` workflow with the revision's own spec and the case's budget — no new
+    workflow, no change under `workflows/`, no replay history. It needs the right to try the agent in that
+    project and refuses (409) when the cases could together spend more than the policy's `max_eval_usd`
+    (2.0 $ by default, 10 $ at most). Nothing about the outcome is stored: it is read from the trial runs.
+    A case passes when its run succeeded, the result has the status the case expects, and its summary
+    contains every `must_contain` and none of `must_not_contain`. The score is passed cases over live cases;
+    the evaluation is `passed` when every case has finished and the score reaches the policy's minimum
+    (every case when none is set). Without a model to call (no gateway key, not fakes) the evaluation is
+    `not_run` and starts nothing: **never `passed`**, as ADR 0020 requires. `min_live_score` in
+    `release_policy.stable` and `release_policy.candidate` adds a `live_eval` check — the newest finished
+    evaluation of the revision, none or `not_run` failing it — to a release to production or to testing by
+    hand; a rollback skips it, saving to testing under `on_publish: candidate` is not gated (the owner's
+    stated policy, and no evaluation can exist yet), and `on_publish: stable` cannot carry it. Lowering it
+    is a loosening. This is the first measured level of ADR 0020 for one revision; trajectory predicates
+    remain unimplemented.
+
 ## Alternatives rejected
 
 - **A state per revision** (`status = draft | testing | prod`): mutable state on immutable rows, and
@@ -170,5 +189,5 @@ follow a channel whose revision changes.
 - An edition can add an organisation-wide rule on production releases through the `agent.release`
   gesture, as it does for `release.approve`.
 - Approvers are not notified: they find the request in the inbox or on the agent's page.
-- Not decided here, planned next in the same stream: the live evaluation of a revision (S40-02d), which
-  extends this file.
+- A live evaluation costs real money (bounded by `max_eval_usd` and by each case's cap) and takes as long
+  as its trials; the console polls while it runs.

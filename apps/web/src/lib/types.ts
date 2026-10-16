@@ -92,6 +92,8 @@ export type {
   AgentDraftRequest,
   AgentFork,
   AgentPermissions,
+  AgentEvaluation,
+  AgentEvaluationCreate,
   AgentChannelStats,
   AgentExposure,
   AgentRelease,

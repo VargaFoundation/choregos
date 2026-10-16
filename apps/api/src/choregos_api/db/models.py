@@ -851,6 +851,26 @@ class ProjectAgent(Base, PkMixin, TimestampMixin):
     overrides: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
 
 
+class AgentEvaluation(Base, PkMixin, TimestampMixin):
+    """A live evaluation of one revision (S40-02d): its live cases, started as capped trials. The outcome
+    is read from the trial runs; this row says what was started, where, by whom and for how much."""
+
+    __tablename__ = "agent_evaluations"
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    #: `not_run` when the deployment had no model to call; else read from the runs.
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    budget_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    started_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: `[{name, work_item_id, run_id, budget_usd}]`, in the order of the suite.
+    cases: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AgentRelease(Base, PkMixin, TimestampMixin):
     """One move of an agent's channels (S40-02, ADR 0071): the release history, the timeline of the
     lifecycle tab and the rollback oracle."""
