@@ -1,4 +1,4 @@
-"""S40-03c: `start_run` reports what the executor that took THIS run can do (activity code, no workflow change)."""
+"""S40-03c: `start_run` reports what the executor that took THIS run can do (activity code only)."""
 
 from __future__ import annotations
 
