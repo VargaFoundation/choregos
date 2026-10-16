@@ -413,7 +413,7 @@ nothing. Without the egress rule, installing a bundled skill still works and a g
 ### The MCP server catalogue: egress and your own entries
 
 The image ships a catalogue of well-known MCP servers ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md));
-an administrator installs an entry from *Administration → connectors → MCP catalogue*. Two chart values
+an administrator installs an entry from *Catalogue → MCP servers*. Two chart values
 belong to the deployment:
 
 - `choregos-api.egressHosts` (a list, `*.` wildcards allowed) declares the hosts the API pod may

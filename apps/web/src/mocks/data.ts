@@ -2322,6 +2322,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       config?: Record<string, unknown>;
       secret_refs?: Record<string, string>;
       secret_values?: Record<string, string>;
+      availability?: "all_projects" | "selected_projects";
     };
     const maintenant = new Date().toISOString();
     const etat = (field: string, version = 1): NonNullable<OrgConnector["secrets"]>[number] => ({
@@ -2363,8 +2364,28 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     }
     if (cible && method === "PATCH") {
       cible.config = corps.config ?? cible.config;
+      if (corps.availability && corps.availability !== cible.availability) {
+        // As the API does: restricting turns it on for no project.
+        cible.availability = corps.availability;
+        cible.enabled_projects = [];
+      }
       return structuredClone(cible) as T;
     }
+  }
+  const enablement = /^\/projects\/([^/]+)\/org-connectors\/([^/]+)\/enablement$/.exec(chemin ?? "");
+  if (enablement && (method === "PUT" || method === "DELETE")) {
+    const slug = decodeURIComponent(enablement[1]!).replace(/^[^:/]+[:/]/, "");
+    const cible = orgConnectors.find((c) => c.name === enablement[2]);
+    if (!cible) throw new ApiError(404, { title: "Not found" });
+    if (cible.availability !== "selected_projects") {
+      throw new ApiError(409, { title: "Conflict", detail: `${cible.name} is on for every project: its administrator restricts it first` });
+    }
+    const on = new Set(cible.enabled_projects ?? []);
+    if (method === "PUT") on.add(slug);
+    else on.delete(slug);
+    cible.enabled_projects = [...on].sort();
+    if (method === "DELETE") return undefined as T;
+    return { name: cible.name, kind: cible.kind, type: cible.type, availability: cible.availability, enabled: true, can_toggle: true } as T;
   }
   const skillInstall = /^\/orgs\/[^/]+\/skill-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
   if (method === "POST" && skillInstall) {
@@ -2498,6 +2519,18 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
   // would be seen by the query cache as unchanged.
   if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
+  const projectOrg = /^\/projects\/([^/]+)\/org-connectors$/.exec(route ?? "");
+  if (projectOrg) {
+    const slug = decodeURIComponent(projectOrg[1]!).replace(/^[^:/]+[:/]/, "");
+    return orgConnectors.map((c) => ({
+      name: c.name,
+      kind: c.kind,
+      type: c.type,
+      availability: c.availability ?? "all_projects",
+      enabled: c.availability !== "selected_projects" || (c.enabled_projects ?? []).includes(slug),
+      can_toggle: c.availability === "selected_projects",
+    })) as T;
+  }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
   if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
