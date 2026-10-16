@@ -27,7 +27,13 @@ TIMEOUT_S = 300.0
 
 class GitSource:
     def __init__(
-        self, *, url: str, ref: str = "main", paths: list[str] | None = None, allow_file: bool = False
+        self,
+        *,
+        url: str,
+        ref: str = "main",
+        paths: list[str] | None = None,
+        allow_file: bool = False,
+        user_agent: str = "",
     ) -> None:
         scheme = urlsplit(url).scheme
         if scheme != "https" and not (allow_file and scheme == "file"):
@@ -37,6 +43,8 @@ class GitSource:
         self.url = url
         self.ref = ref
         self.paths = tuple(paths or DEFAULT_PATHS)
+        #: Sent as the HTTP User-Agent of the fetch when given (ADR 0070).
+        self.user_agent = user_agent
         self._checkout: Path | None = None
 
     async def _git(self, cwd: Path, *args: str) -> str:
@@ -65,7 +73,8 @@ class GitSource:
         self.close()
         self._checkout = Path(tempfile.mkdtemp(prefix="choregos-kb-git-"))
         await self._git(self._checkout, "init", "-q")
-        await self._git(self._checkout, "fetch", "-q", "--depth", "1", "--", self.url, self.ref)
+        agent = ["-c", f"http.userAgent={self.user_agent}"] if self.user_agent else []
+        await self._git(self._checkout, *agent, "fetch", "-q", "--depth", "1", "--", self.url, self.ref)
         commit = (await self._git(self._checkout, "rev-parse", "FETCH_HEAD")).strip()
         if (cursor or {}).get("commit") == commit:
             return Changes(cursor={"commit": commit})

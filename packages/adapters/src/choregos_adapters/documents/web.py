@@ -25,11 +25,15 @@ import httpx
 from .base import Changes, SourceItem, SourceRefusedError
 
 USER_AGENT = "ChoregosKnowledge/1.0 (+https://choregos.dev)"
+#: The names a site's `robots.txt` may address the crawler by: its historical one, and the platform's
+#: (ADR 0070). A page either of them is refused is not read; the longer `Crawl-delay` wins.
+ROBOTS_TOKENS = ("ChoregosKnowledge", "Choregos")
 MAX_DEPTH = 5
 MAX_PAGES = 500
 MAX_PAGE_BYTES = 5 * 1024 * 1024
 
 Resolver = Callable[[str], Awaitable[list[str]]]
+Sleep = Callable[[float], Awaitable[None]]
 
 
 async def resolve(host: str) -> list[str]:
@@ -40,6 +44,10 @@ async def resolve(host: str) -> list[str]:
 def _private(address: str) -> bool:
     ip = ipaddress.ip_address(address)
     return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
+
+
+#: Public name of the predicate: `web_fetch` (S40-01f) refuses the same addresses a crawl does.
+is_private_address = _private
 
 
 class _Links(HTMLParser):
@@ -55,7 +63,7 @@ class _Links(HTMLParser):
 
 
 class WebCrawlSource:
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one crawler, each knob a keyword
         self,
         *,
         url: str,
@@ -64,6 +72,9 @@ class WebCrawlSource:
         transport: httpx.AsyncBaseTransport | None = None,
         resolver: Resolver = resolve,
         allow_http: bool = False,
+        user_agent: str = USER_AGENT,
+        per_host_per_minute: int | None = None,
+        sleep: Sleep = asyncio.sleep,
     ) -> None:
         parts = urlsplit(url)
         if parts.scheme != "https" and not (allow_http and parts.scheme == "http"):
@@ -77,8 +88,12 @@ class WebCrawlSource:
         self.max_depth = max(0, min(max_depth, MAX_DEPTH))
         self.max_pages = max(1, min(max_pages, MAX_PAGES))
         self._resolver = resolver
+        self.user_agent = user_agent
+        #: The wait between two page fetches that the organisation's rate imposes (ADR 0070).
+        self._rate_delay = 60.0 / per_host_per_minute if per_host_per_minute else 0.0
+        self._sleep = sleep
         self._http = httpx.AsyncClient(
-            timeout=20.0, transport=transport, follow_redirects=False, headers={"User-Agent": USER_AGENT}
+            timeout=20.0, transport=transport, follow_redirects=False, headers={"User-Agent": user_agent}
         )
         self._pages: dict[str, bytes] = {}
 
@@ -102,24 +117,44 @@ class WebCrawlSource:
         robots.parse(response.text.splitlines() if response.status_code == 200 else [])
         return robots
 
+    @staticmethod
+    def _can_fetch(robots: RobotFileParser, url: str) -> bool:
+        return all(robots.can_fetch(token, url) for token in ROBOTS_TOKENS)
+
+    def _delay(self, robots: RobotFileParser) -> float:
+        """Seconds to wait between two pages: the site's `Crawl-delay` or the organisation's rate,
+        whichever is longer."""
+        asked = max((float(robots.crawl_delay(token) or 0) for token in ROBOTS_TOKENS), default=0.0)
+        return max(asked, self._rate_delay)
+
     async def changes(self, cursor: dict[str, Any] | None) -> Changes:
         await self._check_host()
         robots = await self._robots()
+        delay = self._delay(robots)
         seen: set[str] = set()
         frontier = [(self.start, 0)]
         items: list[SourceItem] = []
         unreadable: list[str] = []
         while frontier and len(items) < self.max_pages:
             url, depth = frontier.pop(0)
-            if url in seen or not self._inside(url) or not robots.can_fetch(USER_AGENT, url):
+            if url in seen or not self._inside(url) or not self._can_fetch(robots, url):
                 continue
+            if seen and delay:
+                await self._sleep(delay)
             seen.add(url)
             try:
                 response = await self._http.get(url)
             except httpx.HTTPError:
                 unreadable.append(url)
                 continue
-            if response.status_code >= 500 or response.status_code == 429:
+            if response.status_code == 429 or (
+                response.status_code == 503 and "retry-after" in response.headers
+            ):
+                # The site asks us to slow down: stop here, whatever is unread keeps its place
+                # (an `unreadable` page forbids every deletion of this pass) and the next pass retries.
+                unreadable.append(url)
+                break
+            if response.status_code >= 500:
                 # A server error is not a deletion: the page keeps its place until it reads again.
                 unreadable.append(url)
                 continue

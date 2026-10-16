@@ -239,7 +239,8 @@ async def test_the_run_sees_the_generated_tools_the_trial_can_serve(
 ) -> None:
     response = await client.get("/api/v1/internal/runs/run-infra-1/tools", headers=infra_run)
     assert response.status_code == 200, response.text
-    names = sorted(t["name"] for t in response.json()["tools"])
+    # `web_fetch` is the platform's own tool (S40-01f): offered to any run whose network allows a host.
+    names = sorted(t["name"] for t in response.json()["tools"] if t["name"] != "web_fetch")
     assert names == [
         "action_list",
         "action_status",

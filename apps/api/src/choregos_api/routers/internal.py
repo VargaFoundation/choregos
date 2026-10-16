@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from types import SimpleNamespace
 from typing import Annotated, Any
 
 from choregos_adapters.storage import ObjectStoreError
@@ -48,7 +49,7 @@ from ..schemas import (
 )
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..schemas.network import NetworkDecisionBatch, RunNetwork
-from ..services import effective_policy, persist_event, ranger_les_sorties
+from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch
 from ..services.artifacts import (
     ArtifactCorruptedError,
     filename_of,
@@ -717,11 +718,21 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     # sélectionne et que la politique permet. Leur nom (`connecteur__opération`) ne peut pas
     # rencontrer celui d'un outil du catalogue.
     du_courtier = await outils_du_courtier(session, run, project)
+    # The governed way to read the web (S40-01f, ADR 0070): offered when the run's network allows a host.
+    # Its name cannot be taken by another tool: a masked tool is an agent calling the wrong one.
+    web = [web_fetch.announcement()] if await web_fetch.offered(session, run) else []
+    if web and (
+        web_fetch.TOOL_NAME in du_courtier
+        or web_fetch.TOOL_NAME in des_greffons
+        or any(o.name == web_fetch.TOOL_NAME for o in outils)
+    ):
+        raise conflict(f"tool `{web_fetch.TOOL_NAME}` is built in: another tool cannot take its name")
     return {
         "tools": [
             *({"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils),
             *(outil for _, outil in des_greffons.values()),
             *(outil.annonce() for outil in du_courtier.values()),
+            *web,
         ]
     }
 
@@ -738,7 +749,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     outil = next((o for o in du_catalogue if o.name == name), None)
     des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
     du_courtier = await outils_du_courtier(session, run, project)
-    if outil is None and name not in des_greffons and name not in du_courtier:
+    is_web = name == web_fetch.TOOL_NAME and await web_fetch.offered(session, run)
+    if is_web and (outil is not None or name in des_greffons or name in du_courtier):
+        raise conflict(f"tool `{name}` is built in: another tool cannot take its name")
+    if outil is None and name not in des_greffons and name not in du_courtier and not is_web:
         # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
         # le catalogue du déploiement en essayant des noms.
         raise not_found("Tool", name)
@@ -761,7 +775,13 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
 
     suspicions: list[dict[str, str]] = []
     prix_usd = 0.0
-    if outil is not None:
+    if is_web:
+        code, corps, fournisseur = await _web_fetch(session, run, project, body or {})
+        prix = 0.0
+        code, corps, suspicions = await _garde_contre_l_injection(
+            session, run, project, SimpleNamespace(nom=name), code, corps
+        )
+    elif outil is not None:
         code, corps = await appeler_outil(outil, body or {})
         fournisseur, prix = outil.provider, outil.price_eur
     elif name in du_courtier and du_courtier[name].sous_validation:
@@ -793,23 +813,27 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         greffon = des_greffons[name][0]
         code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
         fournisseur, prix = f"greffon:{greffon}", 0.0
-    session.add(
-        CostLedger(
-            project_id=project.id,
-            work_item_id=item.id,
-            run_id=run.id,
-            # `ts` n'a pas de défaut côté modèle : la colonne est NOT NULL et l'oublier
-            # fait échouer l'INSERT, pas la lecture.
-            ts=utcnow(),
-            kind="tool",
-            provider=fournisseur,
-            model=name,
-            cost_eur=prix,
-            cost_usd=prix_usd,
-            stage_role=run.stage_role,
-            **await dimensions_of(session, run.id),
+    # A call the organisation's network policy stopped never reached the server: it is not counted
+    # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
+    refused_by_network = isinstance(corps, dict) and corps.get("type") in {"network_policy", "rate_limited"}
+    if not refused_by_network:
+        session.add(
+            CostLedger(
+                project_id=project.id,
+                work_item_id=item.id,
+                run_id=run.id,
+                # `ts` has no model-side default: the column is NOT NULL and forgetting it
+                # fails the INSERT, not the read.
+                ts=utcnow(),
+                kind="tool",
+                provider=fournisseur,
+                model=name,
+                cost_eur=prix,
+                cost_usd=prix_usd,
+                stage_role=run.stage_role,
+                **await dimensions_of(session, run.id),
+            )
         )
-    )
     await check_after_spend(session, run.id)
     await persist_event(
         session,
@@ -834,6 +858,25 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     }
 
 
+async def _web_fetch(
+    session: Any, run: Run, project: Project, arguments: dict[str, Any]
+) -> tuple[int, Any, str]:
+    """`web_fetch` (S40-01f): arguments checked against the announced schema BEFORE anything is read
+    (400, nothing counted by the schema), then the governed read (`services/web_fetch.py`)."""
+    import jsonschema
+
+    try:
+        jsonschema.validate(arguments, web_fetch.INPUT_SCHEMA)
+    except jsonschema.ValidationError as exc:
+        where = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            "Arguments refused",
+            f"argument refused by the schema of web_fetch at {where}: {exc.message}",
+        ) from exc
+    return await web_fetch.fetch(session, run, project, arguments, fakes=get_settings().fakes)
+
+
 async def _par_le_courtier(
     session: Any, run: Run, project: Project, outil: Any, arguments: dict[str, Any]
 ) -> tuple[int, Any, list[dict[str, str]]]:
@@ -846,7 +889,7 @@ async def _par_le_courtier(
         verifier_les_arguments(outil, arguments)
     except ArgumentsRefuses as refus:
         raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
-    code, corps = await appeler(session, outil, arguments)
+    code, corps = await appeler(session, outil, arguments, run=run, project=project)
     return await _garde_contre_l_injection(session, run, project, outil, code, corps)
 
 

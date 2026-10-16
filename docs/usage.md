@@ -1016,6 +1016,65 @@ it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `un
 24 hours, or since `since`, optionally for one `decision` or `project`. The first refusal of a host for a
 run is also an event on the work item (`choregos.network.denied`).
 
+**Calls the platform makes for an agent obey the same ceiling.** An MCP connector, a knowledge source
+(web or git) and a git skill source are fetched by the API, which sees the whole request, so the
+organisation's `network` section applies to them twice:
+
+- *when it is declared* (create or update of a connector, a knowledge source, a skill import or
+  preview): a host outside `allow_domains`, or matched by `deny_domains`, is a 422 naming the host and
+  the rule (`not_allowed`, `denied:<pattern>`);
+- *when it is called*: the broker (a run's tool call), a governed write, a connector's discovery and
+  every knowledge sync read the ceiling again, because it may have been tightened since. A refused
+  tool call answers 403 `network_policy` (the server is never reached) and is journaled under Network
+  activity with layer `broker`; a refused knowledge sync fails with the reason in the source's
+  `last_error`.
+
+Hosts that are not on the internet (an IP address, a single-label name such as `pfsense`) are not held
+to `allow_domains`: the cap bounds the internet, not the organisation's own appliances; the deny list
+still applies to a name. A connector whose configuration holds no address (`url`, `base_url`,
+`api_url`, `endpoint`, `server_url` or `host`) is not checked.
+
+`per_host_per_minute` throttles the organisation's calls to one host: it counts the tool calls of the
+last 60 seconds to that host over every project and every replica (from the cost ledger) and answers
+429 `rate_limited` past the cap. A throttled or refused call is not counted, so an agent that keeps
+retrying recovers one minute after it stops. Governed writes are checked against the allowed set only
+(they are played by a workflow, which retries).
+
+Every request carries `User-Agent: Choregos/<version> (+<contact>)`: the ceiling's `user_agent_contact`,
+else the deployment's `CHOREGOS_USER_AGENT_CONTACT`, else the project's page. It is sent on MCP calls,
+web crawls, git knowledge fetches and skill downloads. A web crawl also waits between two pages for the
+longer of the site's `Crawl-delay` (read under the names `ChoregosKnowledge` and `Choregos`) and
+`60 / per_host_per_minute` seconds, and stops, keeping every page it did not reach, when the site
+answers 429 (or 503 with `Retry-After`).
+
+**`web_fetch`: how an agent should read the web.** A run whose effective network allows at least one host
+(its own list, the project's, the organisation's, plus the repository host) is offered a built-in tool,
+`web_fetch`, with no connector and no key. The agent names a URL (`GET` or `HEAD`, `max_bytes` up to
+2 MiB); the platform makes the request:
+
+- the host must be in the run's network and not denied; `https`, or `http` on the default port, never
+  another port, never credentials; an IP address, or a name that resolves to a private address, is
+  refused, and the connection is pinned to the address that was checked;
+- the site's `robots.txt` is read (cached for an hour) for the `Choregos` token: a disallowed path, or a
+  `robots.txt` that cannot be read, is a refusal (`robots_disallowed`) and the page is not requested;
+- a host is never called faster than allowed: the effective requests per minute per host (counted
+  across the organisation), the run's own rate, and the site's `Crawl-delay` give a `429` with
+  `retry_after_s` — the agent is told to wait, and a refused call is not counted;
+- the request carries `User-Agent: Choregos/<version> (+<contact>)`;
+- at most three redirects, each target going through every check above (a redirect to a host the run may
+  not reach stops there);
+- the answer is text, HTML (returned as text, scripts and styles dropped), JSON or markdown, cut at
+  `max_bytes`; anything else is a `415`. What comes back is third-party text: it goes through the
+  prompt-injection guard like a connector's answer.
+
+Every fetch is a tool call: it counts in `tool_calls_per_run`, writes a ledger row (`provider:
+web:<host>`) and a `choregos.tool.called` event, and is journaled under Network activity with layer
+`broker`. `web_fetch` is the only place where method and robots.txt can hold for what an agent reads:
+the egress proxy cannot see inside TLS. An agent that is still allowed its built-in `WebFetch`
+(`builtin_web_tools`) can bypass it, so organisations that want every read governed set the ceiling's
+`builtin_web_tools` to `deny` and tell their agents to use `web_fetch`. Its name is reserved: a tool of
+the catalogue or of a plugin with the same name makes the tool list answer 409.
+
 **Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
 the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session
 and the stage fails with `reason: max_turns`. The same tool with the same arguments
