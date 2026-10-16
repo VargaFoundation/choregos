@@ -664,7 +664,14 @@ def _rendre_le_playbook(
 
     documents = item.documents or {}
     variables = {
-        "ticket": {"key": item.tracker_key, "title": item.title, "body": item.body_snapshot or ""},
+        # `fields`: what the work item was born with (ADR 0031) — a child opened by a fan-out holds
+        # there what its parent measured for it (ADR 0057, S38-15).
+        "ticket": {
+            "key": item.tracker_key,
+            "title": item.title,
+            "body": item.body_snapshot or "",
+            "fields": dict(item.fields or {}),
+        },
         "spec": documents.get("spec_markdown", ""),
         "plan_markdown": documents.get("plan_markdown", ""),
         # Les entrées que la transition déclare (`inputs: [profils]`), lues sous leur nom :

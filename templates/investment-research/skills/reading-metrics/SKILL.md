@@ -5,7 +5,8 @@ description: What the backtest's metrics mean, which ones decide, and how to quo
 
 # Reading the metrics
 
-`metrics.products.<symbol>`: `best_in_sample` (the strategy chosen on the in-sample Sharpe),
+`metrics.products.<symbol>` (in a product's memo, the work item's field `product` is that one entry,
+and `facts` is `metrics.facts`): `best_in_sample` (the strategy chosen on the in-sample Sharpe),
 `relevant` (the engine's verdict) and, per strategy, `in_sample` and `oos` statistics:
 
 | Metric | Meaning |
