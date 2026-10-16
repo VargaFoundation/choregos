@@ -26,6 +26,14 @@ therefore accepts **two** verification keys during the rotation window.
 kubectl -n choregos-system logs deploy/choregos-api | grep -c "github.*401"   # must stay 0
 ```
 
+### The App's OAuth client secret
+
+Needed only when the instance has several organisations ([ADR 0073](../adr/0073-github-app-installations-are-discovered-not-typed.md)).
+Generate a new client secret in the App settings (GitHub allows two at once), write it into the vault
+(`choregos/api` → `github-app-client-secret`), let External Secrets sync, restart the API, then delete
+the old secret on GitHub. A wrong secret shows as `403` on `GET /github/setup` ("GitHub refused the
+authorization code").
+
 ## LiteLLM `master_key`
 
 1. Create the new key in LiteLLM (`/key/generate` with the admin role).

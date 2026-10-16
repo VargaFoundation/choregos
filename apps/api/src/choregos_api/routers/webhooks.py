@@ -214,6 +214,13 @@ async def github_webhook(
     if await _already_seen(session, "github", x_github_delivery or body_digest(body), x_github_event, body):
         return WebhookAck(accepted=True, duplicate=True)
 
+    if x_github_event in {"installation", "installation_repositories"}:
+        # The App's own events (ADR 0073): they keep `github_installations` in step and are no work item.
+        from ..services.github_app import apply_installation_event
+
+        await apply_installation_event(session, x_github_event, json.loads(body or b"{}"))
+        return WebhookAck(accepted=True)
+
     from choregos_adapters.tracker.github_events import parse_github_event
 
     events = parse_github_event(x_github_event, x_github_delivery, json.loads(body or b"{}"))

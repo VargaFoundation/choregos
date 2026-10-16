@@ -639,3 +639,44 @@ async def test_org_secrets_are_isolated(deux_organisations: dict[str, str]) -> N
     async with session_scope(orgs="*") as session:
         rows = (await session.execute(select(OrgSecret))).scalars().all()
         assert sorted(r.kek_id for r in rows) == ["k1", "k1"]
+
+
+async def test_github_installations_are_isolated(deux_organisations: dict[str, str]) -> None:
+    """GitHub App installations (ADR 0073): a claimed row is its organisation's, an unclaimed one is
+    the platform's, and an organisation cannot claim into another by writing the row."""
+    from choregos_api.db.models import GitHubInstallation, Organization
+    from choregos_api.db.session import session_scope
+    from sqlalchemy.exc import DBAPIError
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for number, (login, org) in enumerate([("a-inc", "a"), ("b-inc", "b"), ("free-co", None)], start=1):
+            session.add(
+                GitHubInstallation(
+                    id=number,
+                    account_login=login,
+                    account_key=login,
+                    account_id=number,
+                    account_type="Organization",
+                    org_id=ids[org] if org else None,
+                )
+            )
+    async with session_scope(orgs=["a"]) as session:
+        seen = (await session.execute(select(GitHubInstallation.account_login))).scalars().all()
+        assert seen == ["a-inc"], "a sees its own claim, neither b's nor the unclaimed one"
+    with pytest.raises(DBAPIError):  # a claim INTO b from a's session is refused by the policy
+        async with session_scope(orgs=["a"]) as session:
+            session.add(
+                GitHubInstallation(
+                    id=9,
+                    account_login="x",
+                    account_key="x",
+                    account_id=9,
+                    account_type="User",
+                    org_id=ids["b"],
+                )
+            )
+    async with session_scope() as session:
+        assert (await session.execute(select(GitHubInstallation))).scalars().all() == [], "no scope, nothing"
+    async with session_scope(orgs="*") as session:
+        assert len((await session.execute(select(GitHubInstallation))).scalars().all()) == 3

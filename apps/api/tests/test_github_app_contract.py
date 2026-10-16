@@ -1,4 +1,4 @@
-"""S40-04a: the GitHub App contract is declared and served (501 until S40-04b)."""
+"""S40-04a: the GitHub App contract is declared and served."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def test_no_installation_id_is_ever_a_request_field() -> None:
     assert "installation_id" not in schemas["GitHubInstallLinkRequest"]["properties"]
 
 
-async def test_the_stubs_answer_501(client: Any) -> None:
+async def test_the_routes_need_a_signed_in_person(client: Any) -> None:
+    """The stubs of S40-04a became real routes in S40-04b: they answer, and they need a session."""
     response = await client.get("/api/v1/orgs/varga/github")
-    assert response.status_code == 501
+    assert response.status_code == 401

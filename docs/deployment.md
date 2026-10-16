@@ -77,6 +77,7 @@ The chart never writes production secrets. It expects them to exist:
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
 | `global.apiSecretRef` (default `choregos-api-secrets`) | `session-secret`, `run-token-private-key`, `run-token-public-key`, `github-app-id`, `github-app-private-key`, `github-webhook-secret` | API **and** orchestrator |
+| `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
 | `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
@@ -124,6 +125,26 @@ set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CH
 `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*` and `TEMPORAL_*` stay refused whatever it says. After
 an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
 rename its variable or widen the pattern.
+
+## The GitHub App
+
+One App serves the deployment (`github-app-id`, `github-app-private-key`). Its settings on github.com
+decide whether other companies can use it and whether a console install finds its way back:
+
+| Setting | Value |
+| :-- | :-- |
+| Permissions | Repository: Contents, Issues, Pull requests, Checks: read and write; Metadata: read |
+| Events | Issues, Issue comment, Pull request, Pull request review, Check suite, **Installation**, **Installation repositories** |
+| Setup URL | `<public url>/api/v1/github/setup`, with **Redirect on update** ticked. A browser redirect: it works over a VPN |
+| Webhook URL | `<public url>/api/v1/webhooks/github` (needs a host GitHub can reach; discovery does not depend on it) |
+| Where can this GitHub App be installed? | **Any account** if companies other than the App's owner use the deployment (a private App installs only on its owner's account) |
+| Request user authorization (OAuth) during installation | **Tick it before a second organisation exists**, generate a client secret, and give `github-app-client-id` / `github-app-client-secret` to the API |
+
+Nobody types an installation id ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
+the console lists what the App sees, *Install on GitHub* sends the person to github.com and back through
+the Setup URL, and the installation is **claimed** by the organisation that started the flow. On an
+instance with one organisation every installation is claimed implicitly; with several, a claim is
+refused (403, naming `CHOREGOS_GITHUB_APP_CLIENT_SECRET`) until the OAuth client is configured.
 
 ## Running agent stages
 

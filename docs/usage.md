@@ -63,6 +63,16 @@ operator who prefers a vault can instead give a **reference** (`env:NAME`, or a 
 holds no secrets key, typing a value answers 409 and says so ([deployment](deployment.md#secrets)).
 An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
 
+**GitHub: no installation id.** A GitHub connector asks for a repository, not for an installation
+([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). The Choregos GitHub App is
+installed from the console (*Install on GitHub*, which returns to the settings page); the platform
+discovers the installation and your organisation claims it. The repository field is a picker over the
+repositories the App sees (`GET /orgs/{org}/github/repositories?q=`); an owner the App is not installed
+on is refused with `422` and the install link. `GET /orgs/{org}/github` lists the claimed installations
+and says how a claim works on this instance; `POST /orgs/{org}/github/refresh` resyncs them from GitHub.
+A legacy `installation_id` in a request is ignored. The installation used by a connector and by a run's
+git token is always the one the organisation claimed.
+
 Until a project can run, its overview opens on a **getting started** list: provisioned, a workflow
 published, each required capability covered (by the project's connector, tested, or by the
 platform's default), no configured connector failing its last test, and a first request — each

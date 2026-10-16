@@ -446,6 +446,10 @@ async def resolved_configuration(
     remembered by the redaction, so that a log line or an error text cannot carry it out."""
     from choregos_adapters.registry import configuration_resolue, references_de_secret
 
+    from .services.github_app import pin_installation
+
+    # A GitHub connector builds with the installation its organisation claimed (ADR 0073).
+    config = await pin_installation(session, org_id, kind, type_name, dict(config or {}))
     preresolved = await resolve_store_fields(session, org_id, kind, type_name, secret_refs, secret_ref, store)
     resolved = configuration_resolue(
         kind, type_name, config, dict(secret_refs or {}), secret_ref, preresolved=preresolved

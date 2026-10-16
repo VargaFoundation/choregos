@@ -13,6 +13,7 @@ from .cd import FakeCd
 from .ci import FakeCi
 from .executor import FakeExecutor
 from .gateway import BudgetExceeded, BudgetExceededError, FakeGateway
+from .github_app import FakeGitHubApp
 from .memory import FakeMemory
 from .notify import FakeNotifier
 from .scm import FakeScm
@@ -26,6 +27,7 @@ __all__ = [
     "FakeCi",
     "FakeExecutor",
     "FakeGateway",
+    "FakeGitHubApp",
     "FakeMemory",
     "FakeNotifier",
     "FakeObjectStore",

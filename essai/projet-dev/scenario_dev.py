@@ -19,7 +19,8 @@ Variables :
     CHOREGOS_DEV_TOKEN     jeton d'API d'un administrateur (`chg_…`) ; jamais écrit ici
     CHOREGOS_DEV_ORG       l'organisation du locataire
     ESSAI_DEPOT            (défaut DiametralGroup/choregos-sandbox-dev) le dépôt bac à sable
-    ESSAI_INSTALLATION     l'identifiant d'installation de l'App GitHub de Choregos sur ce dépôt
+    The Choregos GitHub App must be installed on the repository (Settings, Connections): the
+    installation is discovered and claimed by the organisation, nobody types its id (ADR 0073).
     ESSAI_FAUX_URL         (défaut http://choregos-demo-fakes:8090) les faux, vus depuis le cluster
     ESSAI_JETON_REF        (facultatif) la référence du jeton des faux, ex. `env:CONNECTOR_DEMO_JETON`
     ESSAI_BACKEND          (défaut opencode) le backend que le dev fait tourner
@@ -101,7 +102,6 @@ def _projet(http: httpx.Client) -> dict[str, Any]:
 def preparer() -> None:
     """Le geste de l'administrateur : le projet né du gabarit, ses connecteurs, ses réglages."""
     org = exiger("CHOREGOS_DEV_ORG")
-    installation = int(exiger("ESSAI_INSTALLATION"))
     with client() as http:
         projets = {p["slug"] for p in lire(http.get(f"/orgs/{org}/projects"), 200)["items"]}
         if PROJET not in projets:
@@ -116,11 +116,11 @@ def preparer() -> None:
         pid = projet["id"]
         reference = os.environ.get("ESSAI_JETON_REF", "")
         connecteurs = {
-            "tracker": {"type": "github-issues", "config": {"repo": DEPOT, "installation_id": installation}},
+            "tracker": {"type": "github-issues", "config": {"repo": DEPOT}},
             # Pas de file de fusion sur le bac à sable : la plateforme fusionne directement.
             "scm": {
                 "type": "github",
-                "config": {"repo": DEPOT, "installation_id": installation, "merge_queue": False},
+                "config": {"repo": DEPOT, "merge_queue": False},
             },
             "cd": {
                 "type": "demo",
