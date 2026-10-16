@@ -95,6 +95,7 @@ from ..services.agents import (
     erreurs_d_une_version,
     resoudre_l_agent,
 )
+from ..services.egress import egress_gate_for_remote_agent
 from ..services.remote_agents import pin_remote_runtime
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
@@ -278,7 +279,9 @@ async def list_agents(
     status_code=status.HTTP_201_CREATED,
     operation_id="createAgent",
 )
-async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) -> AgentDto:
+async def create_agent(
+    org: str, body: AgentCreate, session: Db, principal: Me, allow_egress: bool = False
+) -> AgentDto:
     _exiger(decide(principal, org, None, Action.CREATE, project_slug=body.project, target_scope=body.scope))
     if body.kind == "external" and body.scope != "org":
         raise unprocessable("an external agent carries an organisation credential: it is an `org` agent")
@@ -288,6 +291,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     organisation = await _organisation(session, org)
     projet = await _projet(session, organisation, body.project) if body.project else None
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
+    await egress_gate_for_remote_agent(session, principal, organisation, body.spec, allow_egress)
     body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
@@ -382,7 +386,7 @@ async def get_agent(org: str, slug: Slug, session: Db, principal: Me) -> AgentDt
     operation_id="publishAgentVersion",
 )
 async def publish_version(
-    org: str, slug: Slug, body: AgentSpec, session: Db, principal: Me
+    org: str, slug: Slug, body: AgentSpec, session: Db, principal: Me, allow_egress: bool = False
 ) -> AgentVersionDto:
     """La version suivante ; aucune n'est jamais réécrite."""
     organisation, agent, sujet = await _charger(session, principal, org, slug)
@@ -394,6 +398,7 @@ async def publish_version(
         check_remote_kind(agent.kind, body)
     except ValueError as erreur:
         raise unprocessable(str(erreur)) from erreur
+    await egress_gate_for_remote_agent(session, principal, organisation, body, allow_egress)
     body = await pin_remote_runtime(session, organisation.id, body)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")

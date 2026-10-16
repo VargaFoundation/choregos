@@ -279,7 +279,7 @@ paths:
       responses:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors/{name}:
     parameters:
@@ -302,7 +302,7 @@ paths:
         "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
     delete:
       tags: [connectors]
@@ -377,7 +377,7 @@ paths:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors/{name}/operations/{operation}:
     parameters:
@@ -1239,6 +1239,100 @@ paths:
         - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
+  /orgs/{org}/egress:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [egress]
+      operationId: getOrgEgress
+      description: The organisation's egress allowlist (S39-22, ADR 0066) — rules live and decided, the requests waiting for a decision — with the deployment's ceiling per pod family and the enforcement mode. Its members can read it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EgressOverview" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/egress/check:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [egress]
+      operationId: checkOrgEgress
+      description: Where each host stands, in this organisation's list and against the deployment's ceiling, with who can allow it and what the platform must still open. The hosts come from `targets`, or are derived by the server from an `origin`, so the console never asks a person for one. Writes nothing.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EgressCheck" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EgressCheckResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/egress/rules:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [egress]
+      operationId: createOrgEgressRule
+      description: Open a host to the platform's outbound calls for this organisation. `tools:grant` (the organisation's administrator). Audited (`egress.rule.create`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EgressRuleCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/EgressRule" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/egress/rules/{rule_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: rule_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [egress]
+      operationId: revokeOrgEgressRule
+      description: Close an allowed host; the platform's clients refuse it from the next call. `tools:grant`. Audited (`egress.rule.revoke`).
+      responses:
+        "200": { description: Revoked, content: { application/json: { schema: { $ref: "#/components/schemas/EgressRule" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/egress/requests:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [egress]
+      operationId: requestOrgEgress
+      description: A member asks an administrator to open a host. It waits in the inbox of those who can decide; asking again for the same host answers with the request already waiting. At most 20 open requests per person. Audited (`egress.request.create`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EgressRequestCreate" } } }
+      responses:
+        "201": { description: Requested, content: { application/json: { schema: { $ref: "#/components/schemas/EgressRule" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: Too many requests waiting }
+  /orgs/{org}/egress/requests/{rule_id}/approve:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: rule_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [egress]
+      operationId: approveOrgEgressRequest
+      description: Allow a requested host. `tools:grant`. Audited (`egress.request.approve`).
+      requestBody:
+        content: { application/json: { schema: { $ref: "#/components/schemas/EgressDecision" } } }
+      responses:
+        "200": { description: Allowed, content: { application/json: { schema: { $ref: "#/components/schemas/EgressRule" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/egress/requests/{rule_id}/refuse:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: rule_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [egress]
+      operationId: refuseOrgEgressRequest
+      description: Refuse a requested host. `tools:grant`. Audited (`egress.request.refuse`).
+      requestBody:
+        content: { application/json: { schema: { $ref: "#/components/schemas/EgressDecision" } } }
+      responses:
+        "200": { description: Refused, content: { application/json: { schema: { $ref: "#/components/schemas/EgressRule" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/budget-alerts:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1417,6 +1511,8 @@ paths:
     post:
       tags: [agents]
       operationId: createAgent
+      parameters:
+        - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open a remote agent's card host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
       description: "Create an agent and its version 1, in the scope asked (ADR 0061): an `org` agent needs `agent:manage` (org_admin), a `project` agent the project's owner (`agent:project_manage`), a `personal` agent `agent:create_personal` (developer and above). The 403 carries the reason."
       requestBody:
         required: true
@@ -1424,7 +1520,7 @@ paths:
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
   /orgs/{org}/agent-drafts:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     post:
@@ -1450,6 +1546,8 @@ paths:
     post:
       tags: [agents]
       operationId: discoverRemoteAgent
+      parameters:
+        - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open the card's host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
       description: Reads an A2A Agent Card (https only, no redirect to another host) and suggests the registry entry; creates nothing. `agent:manage`.
       requestBody:
         required: true
@@ -1457,6 +1555,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RemoteAgentDiscovery" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { description: The card cannot be used, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /orgs/{org}/remote-credentials:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -1698,13 +1797,15 @@ paths:
     post:
       tags: [agents]
       operationId: publishAgentVersion
+      parameters:
+        - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open a remote agent's card host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
       description: Publish the next version; none is ever rewritten.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSpec" } } }
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
-        "409": { description: "A case of the agent's eval suite fails (S32-03): `errors` names each failing case", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "409": { description: "A case of the agent's eval suite fails (S32-03): `errors` names each failing case; or, for a remote agent, `code: egress_required` when its card host is not yet allowed", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /orgs/{org}/agents/{slug}/versions/{version}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1821,6 +1922,7 @@ paths:
       responses:
         "200": { description: The commit and its skills, content: { application/json: { schema: { $ref: "#/components/schemas/SkillGitPreview" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository's host did not answer, or not usefully" }
   /orgs/{org}/skills/import-git:
@@ -1835,6 +1937,7 @@ paths:
       responses:
         "201": { description: Published, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skill" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository's host did not answer, or not usefully" }
   /orgs/{org}/skill-catalogue:
@@ -1856,12 +1959,15 @@ paths:
     post:
       tags: [agents]
       operationId: installSkillCatalogueEntry
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillCatalogueInstall" } } }
       description: Publishes the entry as a skill, or its next version when the catalogue pins a newer one. A bundled entry is read from the image and checked against its provenance; a git entry is fetched at its pinned commit. Both go through the supply-chain gate again (ADR 0050) — a high-risk version waits for a second administrator. `agent:manage` may install any entry; `skill:import` an entry whose repository is in the organisation's allowlist, as a new skill only.
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository did not answer, or the image's bundled skill does not match its provenance" }
   /orgs/{org}/skills/{slug}:
@@ -2140,6 +2246,7 @@ paths:
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSource" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/knowledge/{slug}/sources/{source_id}:
     parameters:
@@ -2155,7 +2262,9 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSourcePatch" } } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSource" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
     delete:
       tags: [knowledge]
@@ -2746,6 +2855,9 @@ components:
     Conflict:
       description: State conflict
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    EgressRequired:
+      description: "State conflict. When `code` is `egress_required`, a host the call needs is not yet in the organisation's egress allowlist: `verdicts` says where each stands, and the console opens its network-access modal (S39-22)."
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/EgressRequired" } } }
     ValidationError:
       description: Unprocessable entity
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
@@ -3162,6 +3274,11 @@ components:
         secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a literal is refused" }
         secret_values: { type: object, additionalProperties: { type: string }, description: "the credential typed once, sealed at rest and never returned (ADR 0058); give this or `secret_refs.token`" }
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
+    SkillCatalogueInstall:
+      type: object
+      properties:
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     SkillCatalogueSignals:
       type: object
       required: [stars, stars_as_of]
@@ -3209,6 +3326,7 @@ components:
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
         secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058)" }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     OrgConnectorUpdate:
       type: object
       description: Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's.
@@ -3216,6 +3334,7 @@ components:
         config: { type: [object, "null"], additionalProperties: true }
         secret_refs: { type: [object, "null"], additionalProperties: { type: string } }
         secret_values: { type: [object, "null"], additionalProperties: { type: string }, writeOnly: true }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     OperationPatch:
       type: object
       properties:
@@ -3963,6 +4082,7 @@ components:
         repo_url: { type: string, description: "https://github.com/<owner>/<repo> or https://gitlab.com/<group>/…/<project>" }
         path: { type: string, default: "", description: a folder holding one skill, or several skill folders }
         ref: { type: string, description: a branch, a tag or a commit }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     SkillGitImport:
       type: object
       required: [repo_url, sha, skills]
@@ -3971,6 +4091,7 @@ components:
         path: { type: string, default: "" }
         sha: { type: string, description: a full commit SHA; a branch or a tag is refused }
         skills: { type: array, items: { type: string }, minItems: 1, maxItems: 100 }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     SkillCandidate:
       type: object
       required: [path, files, bytes]
@@ -4136,6 +4257,7 @@ components:
         refresh_mode: { type: string, enum: [interval, cron, manual], default: interval, description: "`interval`: every `interval_minutes`; `cron`: `refresh_cron` in `refresh_timezone`; `manual`: only on demand (S39-19)" }
         refresh_cron: { type: [string, "null"], maxLength: 100, description: "five fields (minute hour day month weekday); at least 5 minutes between two fires" }
         refresh_timezone: { type: string, maxLength: 64, default: UTC, description: IANA name, for example `Europe/Paris` }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     KnowledgeSourcePatch:
       type: object
       additionalProperties: false
@@ -4146,6 +4268,7 @@ components:
         refresh_mode: { type: [string, "null"], enum: [interval, cron, manual, null] }
         refresh_cron: { type: [string, "null"], maxLength: 100 }
         refresh_timezone: { type: [string, "null"], maxLength: 64 }
+        allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     KnowledgeSource:
       type: object
       required: [id, kind, name, interval_minutes, status]
@@ -5092,6 +5215,117 @@ components:
         id: { type: string }
         action: { type: string, enum: [accept, reject] }
         reason: { type: [string, "null"] }
+    EgressRule:
+      type: object
+      required: [id, host, ports, used_by, status]
+      properties:
+        id: { type: string }
+        host: { type: string, description: "exact, or `*.` as the leftmost label only; lowercased, IDNA-encoded" }
+        ports: { type: array, items: { type: integer } }
+        used_by: { type: array, items: { type: string, enum: [api, workers, runners] }, description: the pod families that make the call }
+        status: { type: string, enum: [requested, allowed, refused, revoked] }
+        reason: { type: string, maxLength: 500 }
+        origin: { type: string, description: "`mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `manual`, `migration`" }
+        requested_by: { type: [string, "null"] }
+        requested_at: { type: [string, "null"], format: date-time }
+        decided_by: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+        decision_note: { type: [string, "null"] }
+    EgressTarget:
+      type: object
+      description: A host to check — a `url` (its host and port are read) or a `host` and `port`.
+      properties:
+        url: { type: [string, "null"], maxLength: 2000 }
+        host: { type: [string, "null"], maxLength: 255 }
+        port: { type: [integer, "null"], minimum: 1, maximum: 65535 }
+        used_by: { type: array, minItems: 1, items: { type: string, enum: [api, workers, runners] }, default: [api] }
+    EgressOrigin:
+      type: object
+      required: [kind]
+      description: What the server derives the hosts from.
+      properties:
+        kind: { type: string, enum: [org-connector, skill-import, knowledge-source, mcp-catalogue, remote-agent] }
+        type: { type: [string, "null"], description: "`org-connector`: the connector type; `knowledge-source`: the source kind" }
+        config: { type: object, additionalProperties: true }
+        repo_url: { type: [string, "null"] }
+        name: { type: [string, "null"] }
+    EgressCheck:
+      type: object
+      properties:
+        targets: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/EgressTarget" } }
+        origin: { oneOf: [{ $ref: "#/components/schemas/EgressOrigin" }, { type: "null" }] }
+        reason: { type: string, maxLength: 500 }
+    Approver:
+      type: object
+      required: [display_name, email]
+      properties:
+        display_name: { type: string }
+        email: { type: string }
+    PlatformChange:
+      type: object
+      required: [needed]
+      description: "What the platform must still do: Choregos cannot change the cluster's network policy, it only shows the change."
+      properties:
+        needed: { type: boolean }
+        format: { type: string, enum: [cilium-fqdn, kubernetes-networkpolicy, text] }
+        snippet: { type: [string, "null"] }
+        issue_url: { type: [string, "null"], description: a prefilled issue on the platform's repository, when the deployment configures one }
+        owner: { type: [string, "null"], description: "who applies it, for example `the platform team`" }
+    EgressVerdict:
+      type: object
+      required: [host, port, used_by, org, ceiling, can_allow, platform_change]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        used_by: { type: string, enum: [api, workers, runners] }
+        org: { type: string, enum: [allowed, requested, absent], description: this organisation's list }
+        ceiling: { type: string, enum: [open, outside, unknown], description: the platform's network as the deployment declares it }
+        can_allow: { type: boolean, description: whether the caller holds `tools:grant` }
+        approvers: { type: array, items: { $ref: "#/components/schemas/Approver" } }
+        platform_change: { $ref: "#/components/schemas/PlatformChange" }
+        requested_by: { type: [string, "null"] }
+        requested_at: { type: [string, "null"], format: date-time }
+    EgressCheckResult:
+      type: object
+      required: [verdicts, ok]
+      properties:
+        verdicts: { type: array, items: { $ref: "#/components/schemas/EgressVerdict" } }
+        ok: { type: boolean }
+    EgressRequired:
+      type: object
+      description: "The 409 body of every governed \"add\" while a host is missing: an RFC 9457 problem with `code` and `verdicts`."
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string, enum: [egress_required] }
+        verdicts: { type: array, items: { $ref: "#/components/schemas/EgressVerdict" } }
+    EgressRuleCreate:
+      type: object
+      required: [host]
+      properties:
+        host: { type: string, minLength: 1, maxLength: 255 }
+        ports: { type: array, minItems: 1, maxItems: 10, items: { type: integer }, default: [443] }
+        used_by: { type: array, minItems: 1, items: { type: string, enum: [api, workers, runners] }, default: [api] }
+        reason: { type: string, maxLength: 500 }
+        origin: { type: string, maxLength: 200, default: manual }
+    EgressRequestCreate:
+      allOf: [{ $ref: "#/components/schemas/EgressRuleCreate" }]
+    EgressDecision:
+      type: object
+      properties:
+        note: { type: [string, "null"], maxLength: 500 }
+    EgressOverview:
+      type: object
+      required: [mode, ceiling, rules, requests]
+      properties:
+        mode: { type: string, enum: [enforce, warn, "off"] }
+        ceiling: { type: object, additionalProperties: { type: array, items: { type: string } }, description: "family -> host patterns the deployment declares open; an absent family is unknown" }
+        rules: { type: array, items: { $ref: "#/components/schemas/EgressRule" } }
+        requests: { type: array, items: { $ref: "#/components/schemas/EgressRule" } }
+        can_decide: { type: boolean }
     BudgetAlert:
       type: object
       required: [id, scope, subject, period, period_key, threshold, spent_usd, budget_usd, status]

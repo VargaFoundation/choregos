@@ -183,6 +183,7 @@ async def install_mcp_catalogue_entry(
         config=config,
         secret_refs=secret_refs,
         secret_values=body.secret_values,
+        allow_egress=body.allow_egress,
     )
     return await declare_org_connector(
         session,

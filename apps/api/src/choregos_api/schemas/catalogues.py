@@ -64,6 +64,15 @@ class McpCatalogueInstall(Dto):
     #: The credential typed once: sealed at rest, never returned (ADR 0058).
     secret_values: dict[str, str] = Field(default_factory=dict, repr=False)
     auth_header: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{1,64}$")
+    #: Open the server's host in the organisation's egress allowlist in the same call (S39-22);
+    #: without it a missing host is a 409 `egress_required`. Needs `tools:grant`.
+    allow_egress: bool = False
+
+
+class SkillCatalogueInstall(Dto):
+    #: Open the repository's hosts in the organisation's egress allowlist in the same call (S39-22),
+    #: for an entry delivered from git; without it a missing host is a 409 `egress_required`.
+    allow_egress: bool = False
 
 
 class SkillCatalogueSignalsDto(Dto):

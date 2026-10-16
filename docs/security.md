@@ -23,6 +23,7 @@ organisations must assume **a member of one will try to read another**.
 | touching production | `prod.requires_train` in the DSL, release train, Argo windows, GitHub Environment | ADR 0006 |
 | changing what an agent does | an agent has a scope — common, organisation, project or personal — and one server-side function decides who may publish, suspend or pin it, with the reason for every refusal: common and organisation agents are an `org_admin`'s, a project's agent its `project_owner`'s, a personal agent its owner's (and an `org_admin`'s); an agent you may not see is a 404; a personal agent or another project's agent can neither be pinned nor named in a workflow nor run in one (ADR 0061) | `services/agent_governance.py`, `routers/agents.py`, `services/agents.py`, `tests/test_agent_governance_matrix.py` |
 | changing its own configuration | `.choregos/**` refused for writing (except `result.json`) | `guardrails.py` |
+| the platform calling a host nobody opened | an **organisation egress allowlist** (`org_egress_rules`), decided in the console by the organisation's administrator and enforced by the platform's own outbound clients on every request, redirects included, **failing closed** when a call has no policy in context; a deployment **ceiling** per pod family refuses, before sending, a host the cluster's network does not open; every governed "add" opens its host first (ADR 0066) | `choregos_core/egress.py`, `choregos_adapters/http/egress.py`, `services/egress.py`, `routers/egress.py` |
 | escaping the container | non-root, no capabilities, seccomp — **required** by a strict Kyverno rule on every pod of a `choregos-*` or `proj-*` namespace (a pod with no security context is refused, not tolerated); no service-account token; `RuntimeClass gvisor` where the policy requires it, `runner.runtimeClass` (gVisor, Kata) for every agent pod where the deployment chooses it | `infra/policies/pod-security.yaml`, `tests/charts/test_securite_des_pods.py`, `k8s_job.py`, `tekton.py` |
 | prompt injection through what the agent reads | lexical detection over the ticket, its documents and the memory pack **before** the run: `sandbox.prompt_injection: warn` journals a security event on the ticket, `block` (the `regulated` preset) stops the stage before any run with the reason — a net against the crude cases, not an understanding; the walls remain the ones below | `choregos_core/injection.py`, `activities/stage.py` |
 | lying about evidence | the runner **runs** the tests and overwrites declared evidence; gates read the diff, not the prose | `dod.py`, `result.py`, `gates/` |
@@ -46,6 +47,30 @@ organisations must assume **a member of one will try to read another**.
   creates `choregos_app` at initdb for that reason.
 - **Development login opens the API** to anyone who can reach it. It exists for benches
   without an identity provider (`values/local.yaml`), nowhere else.
+
+## Egress: three layers, and what is not guarded
+
+The platform makes outbound calls for a tenant (the MCP broker and discovery, the git skill fetch,
+the knowledge sources, a remote agent's card). Three layers decide whether one may leave
+([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)):
+
+1. **The organisation's list** (`/admin/egress`): hosts, ports and the pod family that calls them,
+   decided by the organisation's administrator (`tools:grant`), requested by anyone, audited.
+2. **The deployment ceiling** (`global.egress.ceiling`): what the operator says the cluster's
+   network lets through, per family. A host the organisation allowed but the ceiling excludes is
+   refused before it is sent, with a message naming the platform change.
+3. **The cluster's own network policy**, which the application cannot see and **cannot change**: it
+   holds no credential to the platform's repository and must not hold one. The console shows the
+   change to make (a snippet from the operator's template, an optional prefilled issue); the
+   platform team applies it.
+
+`CHOREGOS_EGRESS_MODE` is `enforce` (the default), `warn` (log `egress.would_refuse` and pass; the
+default under `CHOREGOS_FAKES=1`) or `off`. In `enforce`, a guarded call with no policy in context
+is refused: a forgotten call site fails loudly. **Guarded**: the MCP client, the web, Confluence and
+Graph knowledge sources, the git skill fetch; a `git` source checks its host up front and forbids
+redirects, because a subprocess cannot be wrapped. **Not guarded**: the deployment's own
+dependencies (gateway, Temporal, memory, object store, OIDC issuer, the platform's GitHub App) and,
+until phase 2, the REST connectors (Jira, GitLab, Slack…).
 
 ## Who curates a knowledge base
 

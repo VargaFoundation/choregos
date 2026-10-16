@@ -59,6 +59,7 @@ from ..schemas.knowledge import (
     KnowledgeSourcePatch,
     ProjectKnowledgeBaseCreate,
 )
+from ..services.egress import ensure_or_409, knowledge_source_targets, targets_of_connector
 from ..temporal import get_temporal, knowledge_sync_id
 
 router = APIRouter(tags=["knowledge"])
@@ -821,6 +822,41 @@ async def _check_web_start(url: str, exclude: list[str]) -> None:
         raise unprocessable(f"`{url}` is not reachable: {exc}") from exc
 
 
+async def _egress_gate(
+    session: AsyncSession,
+    principal: Me,
+    organisation: Organization,
+    kind: str,
+    connector: str | None,
+    config: dict[str, object],
+    name: str,
+    allow_egress: bool,
+) -> None:
+    """A source's hosts must be in the organisation's egress allowlist (S39-22): the modal's 409,
+    or, for an administrator who says so, opened in this same transaction. A connected source
+    (`sharepoint`, `confluence`) calls the hosts its connector declares."""
+    targets = knowledge_source_targets(kind, dict(config))
+    if connector and kind in CONNECTED_KINDS:
+        found = (
+            await session.execute(
+                select(OrgConnector).where(
+                    OrgConnector.org_id == organisation.id, OrgConnector.name == connector
+                )
+            )
+        ).scalar_one_or_none()
+        if found is not None:
+            targets += targets_of_connector(found.kind, found.type, dict(found.config or {}))
+    await ensure_or_409(
+        session,
+        principal,
+        organisation,
+        targets,
+        allow_egress=allow_egress,
+        origin=f"knowledge-source:{name}",
+        reason=f"the {kind} knowledge source `{name}`",
+    )
+
+
 async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) -> KnowledgeSource:
     source = (
         await session.execute(
@@ -886,6 +922,9 @@ async def create_knowledge_source(
     _curate(principal, org, base)
     organisation = await _organisation(session, org)
     config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
+    await _egress_gate(
+        session, principal, organisation, body.kind, body.connector, config, body.name, body.allow_egress
+    )
     refresh_cron, refresh_timezone = _checked_refresh(
         body.refresh_mode, body.refresh_cron, body.refresh_timezone
     )
@@ -954,8 +993,19 @@ async def update_knowledge_source(
             else refresh.next_sync_after(source, now if mode == "cron" else source.last_synced_at)
         )
     if body.config is not None:
+        organisation = await _organisation(session, org)
         source.config = await _checked_source_config(
-            session, await _organisation(session, org), source.kind, source.connector, body.config
+            session, organisation, source.kind, source.connector, body.config
+        )
+        await _egress_gate(
+            session,
+            principal,
+            organisation,
+            source.kind,
+            source.connector,
+            source.config,
+            source.name,
+            body.allow_egress,
         )
         # Another site, URL or ref: the next sync starts from scratch.
         source.cursor = None
