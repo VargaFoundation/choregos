@@ -123,3 +123,19 @@ default, like `knowledge` and `memory`: versions published before this ADR keep 
 - The enterprise edition needs nothing: each tenant organisation has its own ceiling, set by its
   `org_admin`; the instance-wide bound is the deployment's. A follow-up could let a platform
   administrator lock a tenant's network ceiling.
+
+## As built (S40-01c)
+
+- The proxy is `apps/api/src/choregos_api/egress/` (`python -m choregos_api.egress`, an asyncio server on
+  the API image, no new dependency). Sources and sinks are protocols with fakes
+  (`FakeRunNetworkSource`, `FakeDecisionSink`); the resolver and the "is this address public" predicate
+  are injectable and the default predicate refuses loopback, private, link-local, reserved, multicast and
+  IPv4-mapped forms of those. It never adds `Via` or `X-Forwarded-For`, strips `Proxy-Authorization`
+  before forwarding plain HTTP, and refuses with one plain-text line naming the host, the reason and where
+  to change it.
+- Rates are token buckets (per run and host, per run, per organisation and host), counted per replica.
+  A refusal is `429` with `Retry-After`; a run holds at most 64 tunnels.
+- The chart renders it from `global.egress` (not a top-level `egress` key: the API and the orchestrator
+  read the same values) in the release namespace, and refuses `global.egress.enabled` with an empty
+  `runner.egressProxy`. With `networkPolicies.enabled` the runner pods get their own policy and the
+  platform policy no longer selects them.

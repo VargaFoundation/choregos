@@ -84,6 +84,28 @@ global:
     allowedBackends: []
     # profile → gateway model: `{ standard: platform/standard }`
     modelProfiles: {}
+  # The per-run egress proxy `choregos-egress` (ADR 0070), in the release namespace, from the API image.
+  # A runner presents its run id and token as proxy credentials; the proxy asks the API what THAT run
+  # may reach and lets a tunnel through or refuses. Off by default: nothing changes for an existing
+  # install. When on, `choregos-orchestrator.runner.egressProxy` MUST name it (the chart refuses
+  # otherwise) and the orchestrator tells runners to authenticate (`CHOREGOS_RUNNER_EGRESS_AUTH=run`).
+  # It lives under `global` because the API and the orchestrator read it too.
+  egress:
+    enabled: false
+    # Rates are counted per replica: keep one replica unless a rate that is N times looser is fine.
+    replicas: 1
+    port: 3128
+    healthPort: 8081
+    # Destination ports a tunnel may open (CONNECT 443 and plain HTTP 80).
+    ports: [443, 80]
+    # Hosts no run may reach, for the whole deployment, whatever an organisation or a project says.
+    # The API reads the same list (`CHOREGOS_NETWORK_INSTANCE_DENY`).
+    denyDomains: []
+    # How long a run's network is cached before the API is asked again.
+    cacheSeconds: 60
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { cpu: 500m, memory: 256Mi }
   logLevel: INFO
   # Anti-affinity between the replicas of a same component: `soft` (preferred), `hard`
   # (one replica per node, otherwise no pod) or `none`.
@@ -335,9 +357,11 @@ choregos-orchestrator:
     contextReduction:
       enabled: true
     # The egress proxy through which EACH agent pod gets out (`HTTP_PROXY`/`HTTPS_PROXY`),
-    # `{namespace}` = the runners'. The provisioning deploys a Squid there whose
-    # allowlist is `policy.sandbox.network.allow_domains`; without an allowed domain,
-    # no proxy and no egress. Empty: no proxy (local bench).
+    # `{namespace}` = the runners'. In per-project runner namespaces the provisioning deploys a Squid
+    # there whose allowlist is `policy.sandbox.network.allow_domains` (project-level, host-level);
+    # without an allowed domain, no proxy and no egress. With `global.egress.enabled` the per-run proxy
+    # `choregos-egress` serves the RELEASE namespace (the `agent_sandbox` executor's), and this value
+    # must name it: `http://choregos-egress.<release-namespace>.svc:3128`. Empty: no proxy (local bench).
     egressProxy: "http://choregos-egress.{namespace}.svc:3128"
     # Its image, to be pinned by digest where Kyverno requires it. Empty: the one from `gitops.py`.
     egressImage: ""
