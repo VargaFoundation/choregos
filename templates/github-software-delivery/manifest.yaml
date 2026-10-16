@@ -12,8 +12,8 @@ metadata:
     maintainer on the pull request, a release captain on production (dev-complex). Checks run in
     GitHub Actions; the release train deploys.
 requires:
-  # Les checks de la PR se lisent par le dépôt : GitHub Actions suffit, pas de connecteur `ci`.
-  # Sur un locataire de démonstration, le `cd` peut être le type `demo` ; en vrai, Argo CD.
+  # The PR's checks are read through the repository: GitHub Actions is enough, no `ci` connector.
+  # On a demonstration tenant, `cd` can be the `demo` type; for real, Argo CD.
   connectors:
     tracker: github-issues
     scm: github
@@ -21,7 +21,7 @@ requires:
 defaults:
   workflows: [./workflows/dev-simple.yaml, ./workflows/study.yaml, ./workflows/dev-complex.yaml]
   default_workflow: dev-simple
-  # La première règle qui correspond l'emporte : une étude d'abord, une fonctionnalité ensuite.
+  # The first matching rule wins: a study first, a feature next.
   routing:
     - when: { labels_any: [study, adr, spike] }
       workflow: study
@@ -30,8 +30,8 @@ defaults:
     - when: { labels_any: [bug, fix, chore] }
       workflow: dev-simple
   policy: ./policy.yaml
-  # Les agents que les workflows nomment s'installent d'eux-mêmes (ADR 0040) ; la liste dit ce que le
-  # gabarit apporte à l'organisation.
+  # The agents the workflows name install themselves (ADR 0040); the list says what the
+  # template brings to the organisation.
   skills: [catalogue:madr-4]
   agents:
     - catalogue:triager

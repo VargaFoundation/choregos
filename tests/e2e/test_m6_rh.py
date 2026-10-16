@@ -1,16 +1,16 @@
-"""M6 — le scénario RH de bout en bout (S20-07), sur des faux, en temps accéléré.
+"""M6 — the HR scenario end to end (S20-07), on fakes, in accelerated time.
 
-Arrivée : le Claude d'une RH dépose la demande par la porte MCP ; l'agent du registre prépare le
-plan d'accès ; une RH le valide ; à J-10 le compte et son groupe naissent dans l'annuaire — la
-politique de l'organisation a décidé ; le groupe sensible attend une personne ré-authentifiée ; à
-J-7 le poste est commandé à l'agent du fournisseur (MCP, sous validation), inscrit au parc sous le
-numéro qu'il a attribué et expédié ; l'accueil remet le badge — une tâche, attestée — et la
-plateforme l'active ; à J+1 elle vérifie que tout tient.
+Joiner: an HR person's Claude files the request through the MCP door; the registry agent prepares
+the access plan; an HR person validates it; at D-10 the account and its group are born in the
+directory — the organisation's policy has decided; the sensitive group waits for a re-authenticated
+person; at D-7 the laptop is ordered from the supplier's agent (MCP, under approval), enrolled in
+the device fleet under the serial number the supplier assigned, and shipped; reception hands over
+the badge — a task, attested — and the platform activates it; at D+1 it checks that everything holds.
 
-Départ : à J0 le compte, ses sessions et le badge sont coupés d'un geste ; le poste est repris,
-reçu — une tâche — et effacé ; la plateforme vérifie.
+Leaver: at D0 the account, its sessions and the badge are cut in one gesture; the laptop is taken
+back, received — a task — and wiped; the platform checks.
 
-Chaque brique est éprouvée sur son faux : en retirer une fait rougir le scénario.
+Each building block is proven on its fake: removing one turns the scenario red.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ ATTESTATION_RECEPTION = "I received this laptop and checked its serial number"
 
 
 class Faux:
-    """Les systèmes que le scénario RH touche, chacun avec la clé qu'il attend."""
+    """The systems the HR scenario touches, each with the key it expects."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import choregos_adapters
@@ -74,8 +74,8 @@ def faux(monkeypatch: pytest.MonkeyPatch) -> Faux:
 
 
 async def _organisation(client: AsyncClient) -> None:
-    """Le geste de l'administrateur : les cinq connecteurs que le gabarit annonce, leurs clés en
-    référence, et ce que l'organisation permet sans décision humaine."""
+    """The administrator's gesture: the five connectors the template announces, their keys by
+    reference, and what the organisation allows without a human decision."""
     for corps in (
         {"name": "directory", "kind": "identity", "type": "entra",
          "config": {"tenant_id": "acme", "client_id": "choregos"},
@@ -91,14 +91,14 @@ async def _organisation(client: AsyncClient) -> None:
     ):  # fmt: skip
         cree = await client.post(f"{ORG}/connectors", json=corps)
         assert cree.status_code == 201, cree.text
-    # Les outils du fournisseur se DÉCOUVRENT, et naissent fermés.
+    # The supplier's tools are DISCOVERED, and are born closed.
     decouverte = await client.post(f"{ORG}/connectors/supplier/discover")
     assert decouverte.status_code == 200, decouverte.text
     operations = {
         o["name"]: o["policy"] for o in (await client.get(f"{ORG}/connectors/supplier")).json()["operations"]
     }
     assert operations == {"order_laptop": "forbidden", "order_status": "forbidden"}, (
-        "un outil découvert naît fermé"
+        "a discovered tool is born closed"
     )
     permises = {
         "directory": ["create_user", "add_to_group", "remove_from_group", "disable_user", "revoke_sessions"],
@@ -112,7 +112,7 @@ async def _organisation(client: AsyncClient) -> None:
                 f"{ORG}/connectors/{connecteur}/operations/{nom}", json={"policy": "allowed"}
             )
             assert ouverte.status_code == 200, ouverte.text
-    # Un achat se décide : la commande du poste reste sous validation.
+    # A purchase is decided: the laptop order stays under approval.
     sous_validation = await client.patch(
         f"{ORG}/connectors/supplier/operations/order_laptop", json={"policy": "approval"}
     )
@@ -139,7 +139,7 @@ async def _projet_rh(client: AsyncClient) -> dict[str, Any]:
 
 
 async def _par_claude(platform: Platform, client: AsyncClient, champs: dict[str, Any]) -> dict[str, Any]:
-    """La demande, déposée par le Claude d'une RH : un jeton `mcp:write`, la porte du projet."""
+    """The request, filed by an HR person's Claude: an `mcp:write` token, the project's door."""
     jeton = (
         await client.post("/api/v1/me/tokens", json={"name": "claude-de-la-rh", "scopes": ["mcp:write"]})
     ).json()
@@ -162,7 +162,7 @@ async def _par_claude(platform: Platform, client: AsyncClient, champs: dict[str,
 
 
 async def _demarrer(platform: Platform, projet: dict[str, Any], ticket: dict[str, Any]) -> Any:
-    """Le scénario démarre l'interpréteur sur la file des workers, sous l'identifiant de l'API."""
+    """The scenario starts the interpreter on the workers' queue, under the API's identifier."""
     from choregos_api.temporal import interpreter_id
     from choregos_core.domain import WorkItemData
 
@@ -184,17 +184,17 @@ async def _etat(client: AsyncClient, ticket_id: str, attendu: str, quoi: str) ->
         if lu["state"] == attendu:
             return dict(lu)
         await asyncio.sleep(0.05)
-    raise AssertionError(f"{quoi} : le ticket est en `{lu['state']}`, pas en `{attendu}`")
+    raise AssertionError(f"{quoi}: the ticket is in `{lu['state']}`, not in `{attendu}`")
 
 
 async def _demande(client: AsyncClient, ticket_id: str) -> dict[str, Any]:
-    """La demande humaine que l'interpréteur vient d'ouvrir sur le ticket."""
+    """The human request the interpreter has just opened on the ticket."""
     for _ in range(400):
         lu = (await client.get(f"/api/v1/work-items/{ticket_id}")).json()
         if lu.get("pending_request"):
             return dict(lu["pending_request"])
         await asyncio.sleep(0.05)
-    raise AssertionError("aucune demande humaine ouverte")
+    raise AssertionError("no human request open")
 
 
 async def _attendre(handle: Any, predicat: Any, quoi: str) -> dict[str, Any]:
@@ -203,11 +203,11 @@ async def _attendre(handle: Any, predicat: Any, quoi: str) -> dict[str, Any]:
         if predicat(statut):
             return dict(statut)
         await asyncio.sleep(0.05)
-    raise AssertionError(f"{quoi} : jamais vrai ({await handle.query('status')})")
+    raise AssertionError(f"{quoi}: never true ({await handle.query('status')})")
 
 
 async def _approuver_l_action(client: AsyncClient, projet: dict[str, Any], genre: str) -> dict[str, Any]:
-    """L'action en attente de ce genre, approuvée par une personne ré-authentifiée."""
+    """The pending action of this kind, approved by a re-authenticated person."""
     for _ in range(400):
         attente = (
             await client.get(
@@ -219,7 +219,7 @@ async def _approuver_l_action(client: AsyncClient, projet: dict[str, Any], genre
             break
         await asyncio.sleep(0.05)
     else:
-        raise AssertionError(f"aucune action `{genre}` en attente")
+        raise AssertionError(f"no `{genre}` action pending")
     decidee = await client.post(
         f"/api/v1/projects/{projet['id']}/actions/{trouvees[0]['id']}/decision", json={"decision": "approve"}
     )
@@ -233,7 +233,7 @@ async def _actions(client: AsyncClient, projet: dict[str, Any]) -> dict[str, dic
 
 def _plan(nom: str) -> StageResult:
     return StageResult(
-        status=StageStatus.DONE, summary="plan prêt", outputs={nom: f"## {nom}\n- rien d'anormal"}
+        status=StageStatus.DONE, summary="plan ready", outputs={nom: f"## {nom}\n- nothing unusual"}
     )
 
 
@@ -266,10 +266,10 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
             await client.post(f"/api/v1/work-items/{ticket['work_item']}/decisions", json={"kind": "approve"})
         ).status_code == 202
 
-        # J-10 : la politique a permis le compte et son groupe — l'action naît approuvée et se joue.
-        statut = await _attendre(interprete, lambda s: s.get("waiting_until"), "J-10 attendu")
+        # D-10: the policy allowed the account and its group — the action is born approved and plays.
+        statut = await _attendre(interprete, lambda s: s.get("waiting_until"), "D-10 awaited")
         assert statut["waiting_until"].startswith((arrivee - timedelta(days=10)).isoformat())
-        assert faux.annuaire.comptes == {}, "rien avant J-10"
+        assert faux.annuaire.comptes == {}, "nothing before D-10"
         await platform.env.sleep(timedelta(days=5, hours=1))
         await _etat(client, ticket["work_item"], "accounts_created", "the account is created at D-10")
         (compte,) = faux.annuaire.comptes.values()
@@ -279,13 +279,13 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
         )
         assert compte["id"] in faux.annuaire.groupes["devs"]
 
-        # Le groupe sensible : une personne ré-authentifiée.
+        # The sensitive group: a re-authenticated person.
         await _approuver_l_action(client, projet, "onboarding.sensitive_group")
         await _etat(client, ticket["work_item"], "sensitive_granted", "the sensitive group is decided")
         assert compte["id"] in faux.annuaire.groupes["prod-read"]
 
-        # J-7 : la commande au fournisseur se décide ; le parc et l'envoi suivent son numéro de série.
-        await _attendre(interprete, lambda s: s.get("waiting_until"), "J-7 attendu")
+        # D-7: the supplier order is decided; the fleet and the shipment follow its serial number.
+        await _attendre(interprete, lambda s: s.get("waiting_until"), "D-7 awaited")
         assert faux.fournisseur.commandes == {}
         await platform.env.sleep(timedelta(days=3))
         await _approuver_l_action(client, projet, "onboarding.laptop")
@@ -297,7 +297,7 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
         assert (envoi["items"], envoi["address"]) == ([serie], champs["address"])
         assert {e["authorization"] for _, e, _ in faux.serveur.recues} == {f"Bearer {CLE_FOURNISSEUR}"}
 
-        # Le badge : une tâche, sa preuve ; puis la plateforme l'active.
+        # The badge: a task, its proof; then the platform activates it.
         demande = await _demande(client, ticket["work_item"])
         assert (demande["kind"], demande["payload"]["attest"]) == ("task", ATTESTATION_BADGE)
         tache = await client.post(
@@ -312,7 +312,7 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
             "active": True,
         }
 
-        # J+1 : la plateforme relit et vérifie.
+        # D+1: the platform re-reads and checks.
         await platform.env.sleep(timedelta(days=12))
         resultat = await interprete.result()
     assert resultat["state"] == "ready"
@@ -329,7 +329,7 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
     assert actions["onboarding.sensitive_group"]["decisions"][0]["by"] == "admin@varga.dev"
     assert actions["onboarding.sensitive_group"]["decisions"][0]["auth_age_seconds"] is not None
     chronologie = (await client.get(f"/api/v1/work-items/{ticket['work_item']}/timeline")).text
-    assert ATTESTATION_BADGE in chronologie, "la preuve de la remise se lit dans le dossier"
+    assert ATTESTATION_BADGE in chronologie, "the proof of the handover can be read in the case file"
 
 
 async def test_un_depart_a_j0_tout_coupe_le_poste_repris_recu_efface(
@@ -362,8 +362,8 @@ async def test_un_depart_a_j0_tout_coupe_le_poste_repris_recu_efface(
         assert (
             await client.post(f"/api/v1/work-items/{ticket['work_item']}/decisions", json={"kind": "approve"})
         ).status_code == 202
-        await _attendre(interprete, lambda s: s.get("waiting_until"), "J0 attendu")
-        assert faux.annuaire.comptes[identifiant]["accountEnabled"] is True, "rien avant J0"
+        await _attendre(interprete, lambda s: s.get("waiting_until"), "D0 awaited")
+        assert faux.annuaire.comptes[identifiant]["accountEnabled"] is True, "nothing before D0"
         await platform.env.sleep(timedelta(days=3, hours=1))
         await _etat(
             client, ticket["work_item"], "pickup_scheduled", "the access is cut and the pickup scheduled"

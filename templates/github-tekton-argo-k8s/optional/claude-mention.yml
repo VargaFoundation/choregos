@@ -1,4 +1,4 @@
-# Optionnel, désactivé par défaut (voir README.md de ce dossier).
+# Optional, disabled by default (see this folder's README.md).
 name: claude-mention
 on:
   issue_comment:
@@ -11,7 +11,7 @@ permissions:
   pull-requests: write
 jobs:
   respond:
-    if: ${{ false }} # activez en remplaçant par contains(github.event.comment.body, '@claude')
+    if: ${{ false }} # enable by replacing with contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
