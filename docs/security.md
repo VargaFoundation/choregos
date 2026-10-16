@@ -72,6 +72,14 @@ redirects, because a subprocess cannot be wrapped. **Not guarded**: the deployme
 dependencies (gateway, Temporal, memory, object store, OIDC issuer, the platform's GitHub App) and,
 until phase 2, the REST connectors (Jira, GitLab, Slack…).
 
+**Runners.** A rule whose pod family is `runners` joins the project policy's `sandbox.network.allow_domains`
+for every run of the organisation (the runner's own guard, from the stage input) and for the egress
+proxy the provisioning renders, so an administrator's "allow this host for agent pods" works in every
+project without editing each policy. A wildcard rule (`*.x.test`) becomes the domain `x.test`, which the
+guard and the proxy read as the name and its subdomains. The proxy is rendered when a project is
+provisioned: a host opened later reaches the guard at the next run and the proxy at the next
+provisioning render. A project whose own list is empty gets exactly what its organisation opened.
+
 ## Who curates a knowledge base
 
 A knowledge base is what agents read as reference: whoever feeds it steers them, so curating is

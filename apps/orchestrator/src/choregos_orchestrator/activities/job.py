@@ -34,6 +34,7 @@ from choregos_core import utcnow
 from choregos_core.redaction import REDACTED
 from temporalio.exceptions import ApplicationError
 
+from ..org_egress import merged_domains, org_runner_hosts
 from .base import without_secrets
 from .images import named_image
 from .plan import StagePlan
@@ -131,7 +132,9 @@ async def prepare_job(
         permissions=Permissions(
             write_paths=allowed_paths,
             deny_commands=engine.deny_commands(),
-            allow_domains=engine.allow_domains(),
+            allow_domains=merged_domains(
+                engine.allow_domains(), await org_runner_hosts(session, bundle.project.org_id)
+            ),
             dod_iterations=0,
             max_findings=engine.max_findings_per_run(),
             unknown_requests=bundle.policy.sandbox.unknown_requests,
