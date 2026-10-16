@@ -289,6 +289,9 @@ async def test_a_project_connector_stores_its_secret_and_the_test_resolves_it(
     assert VALUE_1 not in (await client.get(f"/api/v1/projects/{pid}/connectors")).text
     assert VALUE_1 not in (await client.get(f"/api/v1/projects/{pid}/requirements")).text
 
+    # saving already tested it (S40-05), with the resolved value: the test button does the same
+    assert probe == [{"api_token": VALUE_1}]
+    probe.clear()
     result = await client.post(f"/api/v1/projects/{pid}/connectors/tracker/test")
     assert result.json()["ok"] is True, result.text
     assert probe == [{"api_token": VALUE_1}] and VALUE_1 not in result.text
