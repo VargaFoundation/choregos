@@ -52,6 +52,7 @@ from ..schemas import (
 )
 from ..secret_store import SecretStoreUnavailable, get_secret_store
 from ..security import read_session, sign_session
+from ..services.egress import ensure_or_409, remote_agent_targets
 from ..services.remote_agents import a2a_transport, credential_named, read_card
 from ..services.remote_tokens import secret_name, store_refresh_token
 
@@ -471,11 +472,21 @@ def card_summary(card: AgentCard) -> RemoteCardSummary:
     operation_id="discoverRemoteAgent",
 )
 async def discover_remote_agent(
-    org: str, body: RemoteAgentDiscover, session: Db, principal: Me
+    org: str, body: RemoteAgentDiscover, session: Db, principal: Me, allow_egress: bool = False
 ) -> RemoteAgentDiscovery:
-    """Reads a card and suggests the registry entry; creates nothing."""
+    """Reads a card and suggests the registry entry; creates nothing. The card's host must be open
+    in the organisation's egress allowlist first (S39-22): 409 `egress_required`, or `allow_egress`."""
     _manage(principal, org)
     organisation = await _organisation(session, org)
+    await ensure_or_409(
+        session,
+        principal,
+        organisation,
+        remote_agent_targets(body.card_url),
+        allow_egress=allow_egress,
+        origin=f"remote-agent:{body.card_url}",
+        reason=f"the remote agent at {body.card_url}",
+    )
     card = await read_card(body.card_url)
     rows = (
         await session.execute(select(RemoteCredential).where(RemoteCredential.org_id == organisation.id))

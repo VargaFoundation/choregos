@@ -96,3 +96,13 @@ def test_the_deprecated_api_hosts_fold_into_the_api_ceiling() -> None:
     assert ceiling_of(Settings(api_egress_hosts=["*.notion.com"])) == {"api": ("*.notion.com",)}
     both = Settings(api_egress_hosts=["a.test"], egress_ceiling={"api": ["b.test"]})
     assert ceiling_of(both) == {"api": ("b.test",)}, "the ceiling wins"
+
+
+async def test_reading_a_card_asks_for_its_host_first(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent, enforce: None
+) -> None:
+    url = f"{ORG}/agents/discover"
+    asked = await client.post(url, json={"card_url": remote.card_url})
+    assert asked.status_code == 409 and asked.json()["code"] == "egress_required", asked.text
+    done = await client.post(f"{url}?allow_egress=true", json={"card_url": remote.card_url})
+    assert done.status_code == 200, done.text

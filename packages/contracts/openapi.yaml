@@ -1546,6 +1546,8 @@ paths:
     post:
       tags: [agents]
       operationId: discoverRemoteAgent
+      parameters:
+        - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open the card's host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
       description: Reads an A2A Agent Card (https only, no redirect to another host) and suggests the registry entry; creates nothing. `agent:manage`.
       requestBody:
         required: true
@@ -1553,6 +1555,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RemoteAgentDiscovery" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { description: The card cannot be used, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /orgs/{org}/remote-credentials:
     parameters: [{ $ref: "#/components/parameters/Org" }]
