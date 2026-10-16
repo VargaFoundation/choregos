@@ -135,7 +135,7 @@ def refusal_error(refused: PlatformNetworkRefused) -> ApiError:
     )
 
 
-async def journal(
+async def journal(  # noqa: PLR0913 - one row, each column a keyword
     session: AsyncSession,
     project: Project | None,
     host: str,
@@ -145,6 +145,7 @@ async def journal(
     *,
     run_id: str | None = None,
     agent_slug: str | None = None,
+    bytes_down: int = 0,
 ) -> None:
     """One `network_decisions` row per (run, layer, host, decision, reason), counted up. Without a
     project (an organisation-level knowledge source) there is no row: the audit log carries it."""
@@ -178,12 +179,14 @@ async def journal(
                 decision=decision,
                 reason=reason[:200],
                 count=1,
+                bytes_down=bytes_down,
                 first_at=now,
                 last_at=now,
             )
         )
     else:
         row.count += 1
+        row.bytes_down += bytes_down
         row.last_at = now
     await session.flush()
 

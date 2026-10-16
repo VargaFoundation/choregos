@@ -46,6 +46,10 @@ def _private(address: str) -> bool:
     return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
 
 
+#: Public name of the predicate: `web_fetch` (S40-01f) refuses the same addresses a crawl does.
+is_private_address = _private
+
+
 class _Links(HTMLParser):
     def __init__(self) -> None:
         super().__init__()

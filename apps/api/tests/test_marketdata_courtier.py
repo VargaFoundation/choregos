@@ -82,7 +82,10 @@ async def test_a_run_reads_prices_through_the_platform_metered_with_a_digest(
 
     base, entetes = await _preparer(client, project)
     annonces = (await client.get(base, headers=entetes)).json()["tools"]
-    assert {o["name"] for o in annonces} == {"cours__get_bars", "cours__get_instrument"}
+    assert {o["name"] for o in annonces if o["name"] != "web_fetch"} == {
+        "cours__get_bars",
+        "cours__get_instrument",
+    }
 
     arguments = {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-12"}
     reponse = await client.post(f"{base}/cours__get_bars", headers=entetes, json=arguments)

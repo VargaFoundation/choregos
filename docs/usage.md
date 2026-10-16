@@ -1047,6 +1047,34 @@ longer of the site's `Crawl-delay` (read under the names `ChoregosKnowledge` and
 `60 / per_host_per_minute` seconds, and stops, keeping every page it did not reach, when the site
 answers 429 (or 503 with `Retry-After`).
 
+**`web_fetch`: how an agent should read the web.** A run whose effective network allows at least one host
+(its own list, the project's, the organisation's, plus the repository host) is offered a built-in tool,
+`web_fetch`, with no connector and no key. The agent names a URL (`GET` or `HEAD`, `max_bytes` up to
+2 MiB); the platform makes the request:
+
+- the host must be in the run's network and not denied; `https`, or `http` on the default port, never
+  another port, never credentials; an IP address, or a name that resolves to a private address, is
+  refused, and the connection is pinned to the address that was checked;
+- the site's `robots.txt` is read (cached for an hour) for the `Choregos` token: a disallowed path, or a
+  `robots.txt` that cannot be read, is a refusal (`robots_disallowed`) and the page is not requested;
+- a host is never called faster than allowed: the effective requests per minute per host (counted
+  across the organisation), the run's own rate, and the site's `Crawl-delay` give a `429` with
+  `retry_after_s` — the agent is told to wait, and a refused call is not counted;
+- the request carries `User-Agent: Choregos/<version> (+<contact>)`;
+- at most three redirects, each target going through every check above (a redirect to a host the run may
+  not reach stops there);
+- the answer is text, HTML (returned as text, scripts and styles dropped), JSON or markdown, cut at
+  `max_bytes`; anything else is a `415`. What comes back is third-party text: it goes through the
+  prompt-injection guard like a connector's answer.
+
+Every fetch is a tool call: it counts in `tool_calls_per_run`, writes a ledger row (`provider:
+web:<host>`) and a `choregos.tool.called` event, and is journaled under Network activity with layer
+`broker`. `web_fetch` is the only place where method and robots.txt can hold for what an agent reads:
+the egress proxy cannot see inside TLS. An agent that is still allowed its built-in `WebFetch`
+(`builtin_web_tools`) can bypass it, so organisations that want every read governed set the ceiling's
+`builtin_web_tools` to `deny` and tell their agents to use `web_fetch`. Its name is reserved: a tool of
+the catalogue or of a plugin with the same name makes the tool list answer 409.
+
 **Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
 the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session
 and the stage fails with `reason: max_turns`. The same tool with the same arguments
