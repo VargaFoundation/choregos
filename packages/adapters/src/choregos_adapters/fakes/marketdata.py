@@ -7,7 +7,9 @@ starts at the same anchor day, so a date has the same bar whatever window is ask
 processes, two machines give the same numbers.
 
 Scripting: `fixtures[symbol]` replaces the synthetic bars of a symbol, `instruments[symbol]` its
-description, `errors[symbol]` makes it raise; `calls` records every call (name and arguments).
+description, `errors[symbol]` makes it raise, `cross_checks[symbol]` adds the cross-check a
+`composite` would report (`{source, common_days, max_rel_diff, diverging_days}`); `calls` records
+every call (name and arguments).
 Used under `CHOREGOS_FAKES=1`, by the tests, the e2e and the demo.
 """
 
@@ -77,6 +79,7 @@ class FakeMarketData(MarketDataProvider):
     fixtures: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     instruments: dict[str, dict[str, Any]] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
+    cross_checks: dict[str, dict[str, Any]] = field(default_factory=dict)
     calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
 
     def __post_init__(self) -> None:  # no HTTP client: nothing to open
@@ -103,7 +106,10 @@ class FakeMarketData(MarketDataProvider):
             bars = finish_bars([dict(b) for b in self.fixtures[symbol]], debut, fin)
         else:
             bars = synthetic_bars(symbol, debut, fin)
-        return answer(symbol, self.name, bars, currency="USD", adjusted=True)
+        reponse = answer(symbol, self.name, bars, currency="USD", adjusted=True)
+        if symbol in self.cross_checks:
+            reponse["cross_check"] = dict(self.cross_checks[symbol])
+        return reponse
 
     async def get_instrument(self, symbol: str) -> dict[str, Any]:
         self._enter("get_instrument", symbol)
