@@ -11,6 +11,7 @@ import { canEdit, currentVersion, previousVersion, sortedVersions, versionOf } f
 import { ApiError, api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import type { Agent } from "@/lib/types";
+import { RevisionChannels } from "./channels";
 import { ChangeList } from "./spec-changes";
 
 /**
@@ -166,6 +167,7 @@ export function History({ org, agent, compare }: { org: string; agent: Agent; co
                     <span className="sr-only">Compare</span>
                   </label>
                   {v.version === current && <Badge tone="ok">Current</Badge>}
+                  <RevisionChannels channels={v.channels} />
                   {v.restored_from != null && <Badge tone="accent">{`Restored from v${v.restored_from}`}</Badge>}
                   {(v.pinned_by ?? []).length > 0 && <Badge tone="neutral">{`Pinned by ${(v.pinned_by ?? []).join(", ")}`}</Badge>}
                   <span className="text-xs text-ink-muted">

@@ -179,7 +179,9 @@ export function Lead({ className, ...props }: HTMLAttributes<HTMLParagraphElemen
 /** A dense table: 13 px, rows of about 32 px, headers in a small sans caption. */
 export function Table({ className, ...props }: HTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto">
+    // Focusable, so that a keyboard can scroll a table that is wider than its screen (axe: scrollable-region-focusable).
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scroller must be reachable by keyboard
+    <div className="w-full overflow-x-auto" tabIndex={0}>
       <table className={cn("w-full border-collapse text-left text-[13px] tabular-nums", className)} {...props} />
     </div>
   );
