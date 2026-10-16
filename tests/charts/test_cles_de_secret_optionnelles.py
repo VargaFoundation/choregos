@@ -40,6 +40,9 @@ DE_FONCTIONNALITE = {
     "generic-webhook-secret",
     "github-app-id",
     "github-app-private-key",
+    # The App's OAuth client (ADR 0073): absent, a multi-organisation claim is refused.
+    "github-app-client-id",
+    "github-app-client-secret",
     # The key sealing the connector secrets (ADR 0058): absent, typing a secret answers 409.
     "secrets-keks",
 }
