@@ -90,6 +90,12 @@ organisation's administrator writes a reference: a project owner's `PUT` of a co
 refused. **Breaking:** a reference written before this rule that is outside the pattern stops
 resolving; rename the variable (or widen the pattern) and rewrite the reference.
 
+**Every type has its procedure**, in the app and here. Choosing a type in a form opens a side panel with
+what to create at the vendor, which permissions to give, where to paste each value, how to test it and what
+the usual failures mean, with this platform's webhook and callback addresses filled in. The same text is in
+[`docs/procedures/`](procedures/README.md), generated from the same files
+([ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)); `GET /procedures` serves it.
+
 **The organisation's connectors.** A directory, a device manager, an MCP server is declared once
 by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
 named, and shared by its projects. It is born with the operations its type declares — a read

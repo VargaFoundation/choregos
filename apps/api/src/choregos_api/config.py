@@ -151,6 +151,9 @@ class Settings(BaseSettings):
     knowledge_conversion_concurrency: int = 2
     #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.
     knowledge_embedding_model: str = "platform/embed"
+    #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the
+    #: setup procedures that ship with the platform (ADR 0067). Empty: none.
+    procedures_extra: str = ""
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
 

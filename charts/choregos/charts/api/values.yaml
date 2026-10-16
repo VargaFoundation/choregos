@@ -12,6 +12,10 @@ image:
 # chart owns (tmp, catalogue, workflow-templates, playbooks) fails at render.
 extraVolumes: []
 extraVolumeMounts: []
+# The name of a ConfigMap whose keys are Markdown files: `<id>.site.md` adds an "On this platform"
+# section to a setup procedure, `<new-id>.md` adds a procedure (ADR 0067). Empty: the procedures
+# that ship with the platform, unchanged. Mounted read-only at /etc/choregos/procedures.
+proceduresExtra: ""
 service:
   port: 8000
 resources:

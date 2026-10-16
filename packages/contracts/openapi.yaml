@@ -2387,6 +2387,48 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Integrations" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /procedures:
+    get:
+      tags: [session]
+      operationId: listProcedures
+      summary: The setup procedures (one per connector type, source kind, MCP client and external agent kind), or the best one for a target (ADR 0067)
+      parameters:
+        - name: for
+          in: query
+          required: false
+          description: >-
+            `connector:documents/sharepoint`, `source:web`, `agent:remote.a2a` or `door_client:cursor`.
+            Answers the one best procedure for it, or an empty list.
+          schema: { type: string }
+        - name: card_host
+          in: query
+          required: false
+          description: The host of an agent card; selects a preset (`a2a.atlassian.com`).
+          schema: { type: string }
+        - name: preset
+          in: query
+          required: false
+          description: A catalogue preset, e.g. `atlassian-rovo`.
+          schema: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProcedureSummary" } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /procedures/{procedure_id}:
+    get:
+      tags: [session]
+      operationId: getProcedure
+      summary: One setup procedure, with this deployment's webhook and callback URLs filled in
+      parameters:
+        - { name: procedure_id, in: path, required: true, schema: { type: string } }
+        - name: org
+          in: query
+          required: false
+          description: Fills `{{org}}`; by default the caller's only organisation.
+          schema: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Procedure" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /healthz:
     get: { tags: [session], security: [], operationId: healthz, responses: { "200": { description: OK } } }
   /edition:
@@ -3989,6 +4031,54 @@ components:
                     type: [integer, "null"]
                     description: "The port of the local redirect `http://localhost:PORT/callback` registered with the IdP."
         version: { type: string }
+    ProcedureSummary:
+      type: object
+      required: [id, title, version, audience, applies_to]
+      properties:
+        id: { type: string, description: "`connector.documents.sharepoint`, `source.web`, `agent.remote.a2a`, `agent.door.cursor`…" }
+        title: { type: string }
+        version: { type: integer, description: "+1 on any change of substance" }
+        audience: { type: string, enum: [org_admin, project_owner, operator, everyone] }
+        applies_to:
+          type: object
+          description: >-
+            One of `connector`, `source`, `agent`, `door_client` (what it is for), plus `card_host`
+            or `preset` when it is a preset.
+          additionalProperties: { type: string }
+        link: { type: [string, "null"], description: "An in-app route that IS the procedure (the MCP-door clients' page)." }
+    Procedure:
+      allOf:
+        - $ref: "#/components/schemas/ProcedureSummary"
+        - type: object
+          required: [reviewed, sections, values, egress, fields, vendor_docs, origin]
+          properties:
+            reviewed: { type: string, format: date, description: "The day it was last compared with the vendor's own pages." }
+            sections:
+              type: array
+              items:
+                type: object
+                required: [key, title, markdown]
+                properties:
+                  key: { type: string, enum: [before, at, permissions, in_choregos, test, fails, site] }
+                  title: { type: string }
+                  markdown: { type: string }
+            values:
+              type: object
+              description: The copy boxes with this deployment's URLs, e.g. `webhook_url:jira`.
+              additionalProperties: { type: string }
+            egress: { type: array, items: { type: string }, description: "Hosts the setup needs to reach." }
+            fields:
+              type: object
+              description: The form fields the procedure talks about, with what to paste in each.
+              additionalProperties: { type: string }
+            vendor_docs:
+              type: array
+              description: The only links the sections may carry.
+              items:
+                type: object
+                required: [title, url]
+                properties: { title: { type: string }, url: { type: string } }
+            origin: { type: string, description: "`shipped`, `extra` or `plugin:<name>`" }
     TokenScope:
       type: string
       enum: ["*", "mcp:read", "mcp:write"]

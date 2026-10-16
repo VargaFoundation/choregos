@@ -24,7 +24,7 @@ setup:  ## Installe les dépendances (Python + web)
 	@[ -d apps/web ] && $(PNPM) -C apps/web install --prefer-offline || true
 
 .PHONY: ci
-ci: lint typecheck test contracts-check charts-lint  ## Tout ce qui bloque une PR
+ci: lint typecheck test contracts-check procedures-check charts-lint  ## Everything that blocks a PR
 
 .PHONY: lint
 lint:  ## ruff check + format --check + no French in lines added since origin/main (ADR 0046)
@@ -61,6 +61,14 @@ docs-cli:  ## Régénère docs/cli.md depuis la CLI (à committer)
 headroom-lock:  ## Recompile docker/headroom/requirements.txt (hashes, releases at least 14 days old)
 	$(UV) pip compile docker/headroom/requirements.in --universal --python-version 3.12 \
 	  --generate-hashes --exclude-newer P14D -o docker/headroom/requirements.txt
+
+.PHONY: procedures
+procedures:  ## Regenerates docs/procedures/ from the setup procedures (to commit)
+	$(UV) run python tools/procedures/export_docs.py
+
+.PHONY: procedures-check
+procedures-check:  ## Fails if docs/procedures/ differs from the setup procedures
+	$(UV) run python tools/procedures/export_docs.py --check
 
 .PHONY: contracts-check
 contracts-check:  ## Vérifie que les types générés sont à jour

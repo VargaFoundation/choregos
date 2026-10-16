@@ -177,6 +177,9 @@ address for `/mcp` and `/.well-known/oauth-protected-resource`, or Anthropic's M
 
 ## Any other MCP client
 
+Each client above also has a short procedure, shown in the console and listed in
+[the procedures](procedures/README.md).
+
 Point it at `https://<console-host>/mcp` with the header `Authorization: Bearer <token>`, transport
 Streamable HTTP. The door has no SSE stream and no session: a `GET` answers 405, which the protocol
 allows.
@@ -200,6 +203,11 @@ call (patterns allowed); a person without a right gives an agent without it. The
 read on **every call**: revoked, suspended or expired, the next call answers `401`.
 
 ## Atlassian's Rovo MCP Server, as a connector
+
+The step-by-step setup (what to enable in Atlassian Administration, which credential goes with which
+authentication scheme, the scopes) is the procedure
+[Connect Atlassian's Rovo MCP Server](procedures/connector.mcp.mcp.atlassian-rovo.md), also shown in the
+console when you add an MCP server. What follows keeps the concepts.
 
 The other direction: an internal agent calling **Rovo's tools** (search, Jira, Confluence, JSM,
 Bitbucket, Compass) through an `mcp` connector. This gives the agents Atlassian's tools under the
