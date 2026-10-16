@@ -236,6 +236,22 @@ def projects_provision(project: str, follow: Annotated[bool, typer.Option("--fol
         console.print(f"· {data.get('step', '?')} — {data.get('status', '')}")
 
 
+@projects_app.command("readiness")
+def projects_readiness(project: str) -> None:
+    """What the project still lacks to run, and who can fix each item. Exits 1 while something is to do."""
+    report = client().get(f"/projects/{project}/readiness")
+    summary = report["summary"]
+    table = Table("state", "item", "detail", "fixed by")
+    for item in report["items"]:
+        if item["state"] == "not_needed":
+            continue
+        table.add_row(item["state"], item["title"], item["detail"], item["fix"]["by"])
+    console.print(table)
+    console.print(f"{summary['done']} done, {summary['check']} to check, {summary['todo']} to do")
+    if not report["ready"]:
+        raise typer.Exit(1)
+
+
 # ───────────────────────────── work items ─────────────────────────────
 
 
