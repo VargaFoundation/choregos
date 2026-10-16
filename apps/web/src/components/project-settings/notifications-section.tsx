@@ -39,7 +39,7 @@ export function NotificationsSection({ slug }: { slug: string }) {
         </p>
       </Card>
       {project.data && (
-        <NotifyForm key={JSON.stringify((project.data.config as ProjectConfigValue).notify ?? {})} slug={slug} project={project.data} />
+        <NotifyForm key={project.data.id} slug={slug} project={project.data} />
       )}
     </SettingsSection>
   );
@@ -64,6 +64,9 @@ function NotifyForm({ slug, project }: { slug: string; project: ProjectDto }) {
       onSubmit={(event) => {
         event.preventDefault();
         const list = parseEmails(emails);
+        // The form is not remounted by the save (that would drop its "saved" status): show what was kept.
+        setChannel(channel.trim());
+        setEmails(list.join(", "));
         void patch(
           (latest) => ({
             notify: {

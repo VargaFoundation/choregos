@@ -161,15 +161,25 @@ async def test_onto0003_copies_the_proposals_under_forced_rls(
     try:
         await asyncio.to_thread(command.upgrade, configuration(), "f8a0b2c4d6e9")
         await asyncio.to_thread(command.upgrade, configuration(), "onto0002")
-        from choregos_api.db.models import Organization, Project
         from choregos_api.db.session import session_scope
         from choregos_ontology.service.store import OntologyVersion
         from sqlalchemy import text
 
         async with session_scope(orgs="*") as session:
-            session.add(Organization(id="o1", slug="varga", name="Varga"))
-            session.add(Project(id="p1", org_id="o1", slug="infra", name="Infra", status="active", config={}))
-            await session.flush()
+            # Raw SQL, not the ORM: the database stands at `onto0002`, and the models describe the
+            # CURRENT schema (every core column added since would make the INSERT fail).
+            await session.execute(
+                text(
+                    "INSERT INTO organizations (id, slug, name, settings) "
+                    "VALUES ('o1', 'varga', 'Varga', '{}')"
+                )
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO projects (id, org_id, slug, name, status, config, provision_state) "
+                    "VALUES ('p1', 'o1', 'infra', 'Infra', 'active', '{}', '{}')"
+                )
+            )
             session.add(
                 OntologyVersion(
                     id="v1",
