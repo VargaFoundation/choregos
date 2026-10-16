@@ -1,7 +1,7 @@
-"""Rapport de conformité : `python -m tests.conformance.report --output conformance.json`.
+"""Conformance report: `python -m tests.conformance.report --output conformance.json`.
 
-Le rapport sert à deux choses : publier l'état des backends dans le front (`platform/backends`)
-et **désactiver automatiquement** un backend qui ne respecte plus le contrat.
+The report serves two purposes: publishing the backends' state in the front (`platform/backends`)
+and **automatically disabling** a backend that no longer respects the contract.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ async def build_report(backends: list[str]) -> dict[str, Any]:
                 run_id="conformance",
                 attempt=1,
                 project=ProjectRef(slug="conformance", org="varga"),
-                work_item=WorkItemRef(key="varga/conformance#1", title="créer hello.py"),
+                work_item=WorkItemRef(key="varga/conformance#1", title="create hello.py"),
                 transition=TransitionRef(id="t", role="implement", **{"from": "ready"}, to="in_progress"),
                 repo=RepoRef(url=str(workspace), base_branch="main", work_branch="choregos/1"),
                 agent=AgentRef(backend=name, launch=LaunchSpec(command=[sys.executable, str(FAKE_AGENT)])),
@@ -53,7 +53,7 @@ async def build_report(backends: list[str]) -> dict[str, Any]:
                 gateway_key="sk-conformance",
                 budget=Budget(usd=1, max_turns=3, max_minutes=2),
                 allowed_paths=["hello.py", "test_hello.py"],
-                playbook=PlaybookRef(ref="implement@conformance", prompt="crée hello.py"),
+                playbook=PlaybookRef(ref="implement@conformance", prompt="create hello.py"),
                 permissions=Permissions(write_paths=["hello.py", "test_hello.py"]),
                 callbacks=Callbacks(api_url="http://localhost:0/internal", run_token="tok"),
             )
@@ -66,7 +66,7 @@ async def build_report(backends: list[str]) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Rapport de conformité des backends ACP")
+    parser = argparse.ArgumentParser(description="Conformance report of the ACP backends")
     parser.add_argument("--output", type=Path, default=Path("conformance.json"))
     parser.add_argument("--backends", default=",".join(known_backends()))
     args = parser.parse_args()
@@ -79,7 +79,7 @@ def main() -> int:
             f"{status} {entry['backend']:<14} {len(entry['passed'])}/{entry['total']} {entry['failed'] or ''}"
         )
     if report["disabled"]:
-        print(f"\nbackends à désactiver : {', '.join(report['disabled'])}")
+        print(f"\nbackends to disable: {', '.join(report['disabled'])}")
     return 0
 
 

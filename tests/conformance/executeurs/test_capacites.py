@@ -1,11 +1,11 @@
-"""Un exécuteur annonce ses capacités, et ne peut pas en annoncer une qu'il n'a pas.
+"""An executor announces its capabilities, and cannot announce one it does not have.
 
-C'est la **couture** par laquelle un bac à sable plus capable entrera : Agent Substrate,
-un runtime à instantané, ou autre chose. Elle est posée maintenant, alors qu'un seul
-exécuteur remplit une seule capacité, pour que ce jour-là rien d'autre ne bouge —
-l'orchestrateur demandera ce que le runtime sait faire au lieu de le supposer.
+This is the **seam** through which a more capable sandbox will come in: Agent Substrate,
+a snapshot runtime, or something else. It is laid down now, while a single executor fills a
+single capability, so that on that day nothing else moves — the orchestrator will ask what
+the runtime can do instead of assuming it.
 
-Une capacité annoncée et absente est pire qu'absente : l'appelant s'y fie.
+A capability announced and absent is worse than absent: the caller relies on it.
 """
 
 from __future__ import annotations
@@ -18,15 +18,15 @@ from choregos_adapters.base import CAPACITES_EXECUTEUR
 
 pytestmark = pytest.mark.conformance
 
-#: La méthode que chaque capacité oblige à implémenter. `queue` n'en impose aucune : elle
-#: se joue dans `start` et `status`, et son comportement est vérifié par les tests de
-#: l'exécuteur concerné (plafond atteint, file dans l'ordre d'arrivée).
+#: The method each capability obliges to implement. `queue` imposes none: it plays out in
+#: `start` and `status`, and its behaviour is checked by the tests of the executor
+#: concerned (ceiling reached, queue in arrival order).
 #: `snapshot` imposes none either since ADR 0053: it is a property of `start` (every run gets a
 #: sandbox made from the template, never a used one), proved by the executor's own tests.
 METHODE_ATTENDUE = {"renew": "renew", "suspend": "suspend", "resume": "resume"}
 
-# Construire un exécuteur hors cluster : sans `token`, le client Kubernetes va lire le
-# jeton du compte de service monté dans un pod, et ce fichier n'existe pas ici.
+# Building an executor outside a cluster: without `token`, the Kubernetes client goes and reads
+# the service-account token mounted in a pod, and that file does not exist here.
 KUBE = {"kubernetes": {"base_url": "https://exemple.invalid", "token": "hors-cluster", "verify": False}}
 CONFIGS = {
     "k8s_job": KUBE,
@@ -43,7 +43,7 @@ def _executeurs() -> list[str]:
 
 
 def test_le_vocabulaire_reste_ferme() -> None:
-    """Une capacité inventée au fil de l'eau ne veut rien dire pour l'appelant."""
+    """A capability invented on the fly means nothing to the caller."""
     assert frozenset({"queue", "renew", "suspend", "resume", "snapshot"}) == CAPACITES_EXECUTEUR
 
 
@@ -51,9 +51,9 @@ def test_le_vocabulaire_reste_ferme() -> None:
 def test_chaque_executeur_declare_ses_capacites(nom: str) -> None:
     executeur = build("runtime", nom, CONFIGS.get(nom, {}))
     capacites = getattr(executeur, "capabilities", None)
-    assert isinstance(capacites, frozenset), f"{nom} n'annonce rien : un appelant devrait deviner"
+    assert isinstance(capacites, frozenset), f"{nom} announces nothing: a caller would have to guess"
     inconnues = capacites - CAPACITES_EXECUTEUR
-    assert not inconnues, f"{nom} annonce des capacités hors vocabulaire : {sorted(inconnues)}"
+    assert not inconnues, f"{nom} announces capabilities outside the vocabulary: {sorted(inconnues)}"
 
 
 @pytest.mark.parametrize("nom", _executeurs())
@@ -64,8 +64,8 @@ def test_ce_qui_est_annonce_est_implemente(nom: str) -> None:
         if methode is None:
             continue
         fonction = getattr(executeur, methode, None)
-        assert callable(fonction), f"{nom} annonce `{capacite}` sans `{methode}()`"
-        assert inspect.iscoroutinefunction(fonction), f"{nom}.{methode}() doit être asynchrone"
+        assert callable(fonction), f"{nom} announces `{capacite}` without `{methode}()`"
+        assert inspect.iscoroutinefunction(fonction), f"{nom}.{methode}() must be asynchronous"
 
 
 def test_only_agent_sandbox_starts_every_run_from_a_clean_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:

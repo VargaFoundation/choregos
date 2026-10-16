@@ -1,1 +1,1 @@
-"""Conformité des backends ACP."""
+"""Conformance of the ACP backends."""

@@ -1,8 +1,8 @@
-"""Décor des scénarios e2e : plateforme complète en mémoire, serveur Temporal de test.
+"""Setting for the e2e scenarios: full in-memory platform, test Temporal server.
 
-Ces scénarios tournent **sans cluster** : ils exercent l'API, l'orchestrateur, les gates,
-le train et les findings, avec les connecteurs simulés. Les variantes sur kind (provisioning
-réel, Tekton, Argo) sont marquées `integration` et tournent la nuit.
+These scenarios run **without a cluster**: they exercise the API, the orchestrator, the gates,
+the train and the findings, with simulated connectors. The variants on kind (real
+provisioning, Tekton, Argo) are marked `integration` and run nightly.
 """
 
 from __future__ import annotations
@@ -15,29 +15,29 @@ from typing import Any
 
 import pytest
 
-#: L'environnement du banc de bout en bout. Il n'est PLUS posé à l'import (#259) : une session qui
-#: collectait `tests/e2e` avec un autre répertoire lui imposait ces variables — un test de l'API qui
-#: supposait un secret de webhook vide recevait 401. Seule la fixture `environnement_e2e` les pose,
-#: le temps des tests de ce paquet, et rend l'environnement tel qu'elle l'a trouvé.
+#: The end-to-end bench environment. It is NO LONGER set at import (#259): a session that
+#: collected `tests/e2e` with another directory had these variables imposed on it — an API test
+#: that assumed an empty webhook secret got 401. Only the `environnement_e2e` fixture sets them,
+#: for the duration of this package's tests, and gives the environment back as it found it.
 ENVIRONNEMENT_E2E: dict[str, str] = {
     "CHOREGOS_FAKES": "1",
     "CHOREGOS_ENV": "test",
-    # La connexion de développement est ÉTEINTE par défaut depuis le 2026-09-24 : un test
-    # qui s'en sert doit le dire, et nommer qui est admin.
+    # The development login is OFF by default since 2026-09-24: a test that uses it
+    # must say so, and name who is admin.
     "CHOREGOS_DEV_LOGIN_ENABLED": "true",
     "CHOREGOS_DEV_ADMIN_EMAILS": "admin@varga.dev",
-    # Les webhooks refusent un secret vide depuis P0-3 : le banc de bout en bout en pose un.
+    # Webhooks refuse an empty secret since P0-3: the end-to-end bench sets one.
     "CHOREGOS_GENERIC_WEBHOOK_SECRET": "e2e-webhook-secret",
 }
 
 
 @contextlib.contextmanager
 def environnement_pose(variables: dict[str, str]) -> Iterator[None]:
-    """Pose `variables` là où l'environnement ne dit rien (une valeur déjà posée l'emporte, comme
-    `setdefault`), puis rend chaque variable telle qu'elle était — absente redevient absente.
+    """Set `variables` where the environment says nothing (a value already set wins, like
+    `setdefault`), then give each variable back as it was — absent becomes absent again.
 
-    Les réglages de l'API sont mis en cache : on le vide à l'entrée et à la sortie, pour que ni ce
-    paquet ni le suivant ne lise des réglages calculés sous l'autre environnement.
+    The API settings are cached: the cache is cleared on entry and on exit, so that neither this
+    package nor the next reads settings computed under the other environment.
     """
     from choregos_api.config import reset_settings_cache
 
@@ -58,22 +58,22 @@ def environnement_pose(variables: dict[str, str]) -> Iterator[None]:
 
 @pytest.fixture(scope="package", autouse=True)
 def environnement_e2e() -> Iterator[None]:
-    """L'environnement du banc, le temps des tests de `tests/e2e` et pas au-delà.
+    """The bench environment, for the duration of the `tests/e2e` tests and no longer.
 
-    Portée `package` plutôt que `session` : une fixture de session ne se démonte qu'à la fin de la
-    session, donc APRÈS les tests d'un autre répertoire collecté dans la même session ; celle-ci se
-    démonte au dernier test du paquet.
+    `package` scope rather than `session`: a session fixture is only torn down at the end of the
+    session, hence AFTER the tests of another directory collected in the same session; this one
+    is torn down at the package's last test.
     """
     with environnement_pose(ENVIRONNEMENT_E2E):
         yield
 
 
 class BridgedTemporal:
-    """Passerelle Temporal de l'API branchée sur le serveur de test.
+    """The API's Temporal gateway wired to the test server.
 
-    Les scénarios e2e doivent exercer le **vrai** chemin : l'API interroge et signale les
-    workflows réellement en cours. Les appels vers un workflow absent sont tolérés (le
-    scénario ne l'a pas démarré), mais jamais silencieusement inventés.
+    The e2e scenarios must exercise the **real** path: the API queries and signals the
+    workflows actually running. Calls to an absent workflow are tolerated (the scenario did
+    not start it), but never silently invented.
     """
 
     def __init__(self, client: Any) -> None:
@@ -90,8 +90,8 @@ class BridgedTemporal:
         return await self._start("ProjectProvisioning", workflow_id, payload)
 
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
-        """Une action approuvée part VRAIMENT (ADR 0035) : c'est l'API qui la démarre quand une
-        personne la décide, pas le scénario — sur la file des workers du banc."""
+        """An approved action REALLY starts (ADR 0035): it is the API that starts it when a
+        person decides, not the scenario — on the bench workers' queue."""
         import contextlib
 
         from temporalio.exceptions import WorkflowAlreadyStartedError
@@ -104,8 +104,8 @@ class BridgedTemporal:
         return None
 
     async def _start(self, workflow: str, workflow_id: str, payload: dict[str, Any]) -> str:
-        # Les scénarios démarrent eux-mêmes leurs workflows sur leur task queue ; ici on
-        # se contente de noter l'intention, comme le ferait un worker non encore démarré.
+        # The scenarios start their own workflows on their task queue; here we merely
+        # note the intent, as a worker not yet started would.
         self.missing.append(("start", workflow_id))
         return workflow_id
 
@@ -130,7 +130,7 @@ class BridgedTemporal:
 
 @dataclass
 class Platform:
-    """Tout ce qu'un scénario manipule : l'API, la base, les adaptateurs, Temporal."""
+    """Everything a scenario handles: the API, the database, the adapters, Temporal."""
 
     client: Any
     project_id: str
@@ -151,7 +151,7 @@ class Platform:
 
 @pytest.fixture
 async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Platform]:
-    # Par `monkeypatch` : la base d'un scénario ne survit pas à son test (#259).
+    # Through `monkeypatch`: a scenario's database does not outlive its test (#259).
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/e2e.db")
     from choregos_adapters import AdapterSet
     from choregos_api.config import reset_settings_cache
