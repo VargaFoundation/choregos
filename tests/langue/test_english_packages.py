@@ -49,6 +49,9 @@ ENGLISH = (
     "tests/e2e/test_m4_multibackend_memoire.py",  # S34-04j
     "tests/e2e/test_m5_durci.py",  # S34-04j
     "tests/conformance/report.py",  # S34-04j
+    "templates/",  # S34-04k
+    "tests/e2e/test_m6_rh.py",  # S34-04k
+    "tests/conformance/templates/",  # S34-04k
 )
 
 #: (file, start of the line) — French that stays, each with its reason.

@@ -1,7 +1,7 @@
-"""Conformité des templates : ce qu'un template promet doit exister.
+"""Template conformance: what a template promises must exist.
 
-Un template qui déclare un connecteur inexistant ou une étape que personne n'implémente
-échoue au provisioning, chez un client, au pire moment. Cette suite le dit avant.
+A template that declares a nonexistent connector or a step nobody implements fails at
+provisioning, at a customer's, at the worst moment. This suite says so beforehand.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ pytestmark = pytest.mark.conformance
 TEMPLATES = Path(__file__).resolve().parents[3] / "templates"
 MANIFESTS = sorted(TEMPLATES.glob("*/manifest.yaml"))
 
-# Étapes connues de `provisioning._execute`, plus celles explicitement ignorées.
+# Steps known to `provisioning._execute`, plus those explicitly ignored.
 KNOWN_STEPS = {
     "github.install_app",
     "github.ensure_labels",
@@ -42,7 +42,7 @@ def manifest(path: Path) -> dict[str, Any]:
 
 
 def test_il_y_a_des_templates() -> None:
-    assert MANIFESTS, "aucun template livré"
+    assert MANIFESTS, "no template shipped"
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
@@ -50,13 +50,13 @@ def test_le_manifeste_est_bien_forme(path: Path) -> None:
     doc = manifest(path)
     assert doc["apiVersion"] == "choregos/v1" and doc["kind"] == "Template"
     metadata = doc["metadata"]
-    assert metadata["name"] == path.parent.name, "le nom du template est celui du dossier"
+    assert metadata["name"] == path.parent.name, "the template name is the folder name"
     assert metadata["version"] and metadata["display"] and metadata["description"].strip()
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_les_connecteurs_declares_existent(path: Path) -> None:
-    """Un template ne promet que des adaptateurs enregistrés."""
+    """A template only promises registered adapters."""
     import os
 
     from choregos_adapters import available
@@ -76,11 +76,11 @@ def test_les_connecteurs_declares_existent(path: Path) -> None:
 def test_les_etapes_sont_implementees(path: Path) -> None:
     for step in manifest(path).get("steps", []):
         name = step if isinstance(step, str) else next(iter(step))
-        assert name in KNOWN_STEPS, f"étape inconnue dans {path.parent.name} : {name}"
+        assert name in KNOWN_STEPS, f"unknown step in {path.parent.name}: {name}"
 
 
 def _workflows(path: Path) -> list[Any]:
-    """Les workflows que livre le gabarit, lus et validés comme à la naissance d'un projet."""
+    """The workflows the template ships, read and validated as at a project's birth."""
     from choregos_core.dsl import load_template, parse_workflow
 
     defaults = manifest(path)["defaults"]
@@ -91,7 +91,7 @@ def _workflows(path: Path) -> list[Any]:
             livres.append(load_template(str(ref).removeprefix("template:").split("@")[0]))
             continue
         chemin = (path.parent / str(ref)).resolve()
-        assert chemin.is_relative_to(path.parent.resolve()), f"{ref} sort du dossier du gabarit"
+        assert chemin.is_relative_to(path.parent.resolve()), f"{ref} leaves the template folder"
         workflow, rapport = parse_workflow(chemin.read_text(encoding="utf-8"), strict=False)
         assert rapport.valid, f"{path.parent.name}/{ref} : {rapport.as_dict()['errors']}"
         assert not rapport.warnings, f"{path.parent.name}/{ref} : {rapport.as_dict()['warnings']}"
@@ -105,22 +105,22 @@ def test_les_workflows_le_defaut_le_routage_et_la_politique_existent(path: Path)
 
     defaults = manifest(path)["defaults"]
     noms = [w.metadata.name for w in _workflows(path)]
-    assert len(set(noms)) == len(noms), f"deux workflows du même nom : {noms}"
+    assert len(set(noms)) == len(noms), f"two workflows with the same name: {noms}"
     assert defaults.get("default_workflow", noms[0]) in noms
     for regle in defaults.get("routing") or []:
         assert regle["workflow"] in noms, (
-            f"le routage vise `{regle['workflow']}`, que le gabarit ne livre pas"
+            f"the routing targets `{regle['workflow']}`, which the template does not ship"
         )
 
     policy_ref = str(defaults["policy"])
     if policy_ref.startswith("preset:"):
         assert load_preset(policy_ref.removeprefix("preset:")) is not None
         return
-    # Une politique propre au gabarit (S21-22) : dans son dossier, et lisible.
+    # A policy of the template's own (S21-22): in its folder, and readable.
     from choregos_core.policy import parse_policy
 
     chemin = (path.parent / policy_ref).resolve()
-    assert chemin.is_relative_to(path.parent.resolve()), f"{policy_ref} sort du dossier du gabarit"
+    assert chemin.is_relative_to(path.parent.resolve()), f"{policy_ref} leaves the template folder"
     assert parse_policy(chemin.read_text(encoding="utf-8")).metadata.name
 
 
@@ -132,20 +132,20 @@ def test_le_scaffold_existe_et_contient_ce_que_le_manifeste_annonce(path: Path) 
         if isinstance(step, dict) and "repo.scaffold_pr" in step:
             annonces = list((step["repo.scaffold_pr"] or {}).get("files", []))
     if not annonces and "scaffold" not in doc:
-        return  # un gabarit sans dépôt n'échafaude rien
+        return  # a template without a repository scaffolds nothing
     scaffold = (path.parent / str(doc.get("scaffold", "./scaffold")).lstrip("./")).resolve()
     assert scaffold.is_dir(), f"dossier de scaffold absent : {scaffold}"
     for fichier in annonces:
         candidats = [scaffold / fichier, scaffold / f"{fichier}.j2"]
-        assert any(c.exists() for c in candidats), f"{fichier} annoncé mais absent du scaffold"
+        assert any(c.exists() for c in candidats), f"{fichier} announced but missing from the scaffold"
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_les_actions_n_appellent_que_ce_que_le_gabarit_annonce(path: Path) -> None:
-    """Chaque `connector.call` nomme un connecteur que le manifeste annonce (`org_connectors`), une
-    opération que sa capacité déclare, avec les arguments que son schéma exige — et rien d'autre. Un
-    serveur `mcp` découvre ses outils : on n'en juge que le nom du connecteur. Un gabarit n'appelle
-    que des effets du cœur : ceux d'un greffon ne sont pas chez tous."""
+    """Every `connector.call` names a connector the manifest announces (`org_connectors`), an
+    operation its capability declares, with the arguments its schema requires — and nothing else. An
+    `mcp` server discovers its tools: only the connector name is judged. A template only calls
+    core effects: a plugin's are not everywhere."""
     from choregos_adapters import connector_types
 
     annonces = dict(manifest(path)["requires"].get("org_connectors") or {})
@@ -162,14 +162,14 @@ def test_les_actions_n_appellent_que_ce_que_le_gabarit_annonce(path: Path) -> No
                 for spec in specs:
                     nom = str(spec["effect"])
                     assert nom in {"connector.call", "check", "verifier"}, (
-                        f"{transition.key} : effet `{nom}` hors du cœur"
+                        f"{transition.key}: effect `{nom}` outside the core"
                     )
                     if nom != "connector.call":
                         continue
                     appel = dict(spec.get("with") or {})
                     connecteur = appel["connector"]
                     ou = f"{workflow.metadata.name}/{transition.key} : {connecteur}"
-                    assert connecteur in annonces, f"{ou} n'est pas annoncé dans `requires.org_connectors`"
+                    assert connecteur in annonces, f"{ou} is not announced in `requires.org_connectors`"
                     capacite = annonces[connecteur]
                     if capacite == "mcp":
                         continue
@@ -182,7 +182,7 @@ def test_les_actions_n_appellent_que_ce_que_le_gabarit_annonce(path: Path) -> No
                     manquants = set(schema.get("required", [])) - arguments
                     assert not manquants, f"{ou}/{appel['operation']} : il manque {sorted(manquants)}"
                     en_trop = arguments - set(schema.get("properties", {}))
-                    assert not en_trop, f"{ou}/{appel['operation']} : {sorted(en_trop)} hors du schéma"
+                    assert not en_trop, f"{ou}/{appel['operation']}: {sorted(en_trop)} outside the schema"
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
@@ -201,36 +201,34 @@ def test_les_agents_et_les_skills_du_gabarit_sont_installables(path: Path) -> No
         erreurs_d_une_version(agent.spec)
         agents.add(agent.slug)
         orphelines = {s.slug for s in agent.spec.skills} - skills
-        assert not orphelines, (
-            f"{agent.slug} nomme des skills que le gabarit ne livre pas : {sorted(orphelines)}"
-        )
+        assert not orphelines, f"{agent.slug} names skills the template does not ship: {sorted(orphelines)}"
     for workflow in _workflows(path):
         for nom, acteur in workflow.actors.items():
             reference = getattr(acteur, "agent", None)
             if reference:
                 slug = reference.split("@")[0]
                 assert slug in agents, (
-                    f"{workflow.metadata.name}/{nom} nomme l'agent `{slug}`, que le gabarit ne livre pas"
+                    f"{workflow.metadata.name}/{nom} names agent `{slug}`, which the template does not ship"
                 )
 
 
-#: Les extensions qu'un gabarit peut livrer (S20-09) : une autre n'aurait personne pour la valider
-#: avant un client — ni, sans doute, pour l'installer.
+#: The extensions a template may ship (S20-09): any other would have nobody to validate it
+#: before a customer — nor, probably, to install it.
 EXTENSIONS_CONNUES = {"ontology"}
-#: Ce qu'une preuve de l'ontologie sait collecter hors du SCM (`connector.query` ne lit que ses PR).
+#: What an ontology proof can collect outside the SCM (`connector.query` only reads its PRs).
 PREUVES_SERVIES = {"object.reread", "collector.rerun"}
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_les_extensions_du_gabarit_sont_valides_pour_leur_greffon(path: Path, tmp_path: Path) -> None:
-    """Une ontologie livrée compile sans erreur NI avertissement avec ce que le greffon sait jouer ; ses
-    effets et ses preuves sont servis ; un agent qu'elle autorise à proposer est livré par le gabarit."""
+    """A shipped ontology compiles with no error NOR warning against what the plugin can play; its
+    effects and proofs are served; an agent it authorises to propose is shipped by the template."""
     from choregos_api.schemas.agents import AgentCreate
     from choregos_api.services.gabarits import livraison
 
     livree = livraison(manifest(path), path.parent)
     inconnues = set(livree.extensions) - EXTENSIONS_CONNUES
-    assert not inconnues, f"extensions que personne ne valide : {sorted(inconnues)}"
+    assert not inconnues, f"extensions nobody validates: {sorted(inconnues)}"
     if "ontology" not in livree.extensions:
         return
     from choregos_ontology.compiler import compile_directory
@@ -246,11 +244,11 @@ def test_les_extensions_du_gabarit_sont_valides_pour_leur_greffon(path: Path, tm
     agents = {AgentCreate.model_validate(document).slug for document in livree.agents}
     for action in compilee.to_dict()["action_types"]:
         effets = {e["type"] for e in action["effects"]} - SERVED_EFFECTS
-        assert not effets, f"{action['name']} : effets que le greffon n'exécute pas : {sorted(effets)}"
+        assert not effets, f"{action['name']}: effects the plugin does not execute: {sorted(effets)}"
         preuves = {p["collect"]["type"] for p in action["evidence"]} - PREUVES_SERVIES
-        assert not preuves, f"{action['name']} : preuves que le greffon ne collecte pas : {sorted(preuves)}"
+        assert not preuves, f"{action['name']}: proofs the plugin does not collect: {sorted(preuves)}"
         absents = {p.removeprefix("agent:") for p in action["propose"] if p.startswith("agent:")} - agents
-        assert not absents, f"{action['name']} : agents que le gabarit ne livre pas : {sorted(absents)}"
+        assert not absents, f"{action['name']}: agents the template does not ship: {sorted(absents)}"
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
