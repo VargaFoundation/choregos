@@ -157,9 +157,8 @@ class LexicalMemory:
         if row is None:
             row = await session.get(Project, parsed.project)
         if row is None:
-            raise ValueError(
-                f"projet inconnu pour la mémoire : {parsed.project}"
-            )  # lang: fr-ok (pinned by a test)
+            unknown = f"projet inconnu pour la mémoire : {parsed.project}"  # lang: fr-ok (pinned by a test)
+            raise ValueError(unknown)
         store_id = None
         if parsed.kind == "project_store":
             if modeles.MemoryStore is None:
