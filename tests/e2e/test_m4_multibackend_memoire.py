@@ -1,4 +1,4 @@
-"""M4 — review croisée, context pack, A/B mémoire, matrice d'évals, changement de modèle."""
+"""M4 — cross review, context pack, memory A/B, evals matrix, model change."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
 
 async def test_review_croisee_impose_un_backend_different(platform: Platform) -> None:
-    """La politique `review.cross_backend` exige que le relecteur ne soit pas l'implémenteur."""
+    """The `review.cross_backend` policy requires that the reviewer not be the implementer."""
     await login(platform.client)
     from choregos_core import PolicyEngine, load_preset
 
@@ -31,14 +31,14 @@ async def test_review_croisee_impose_un_backend_different(platform: Platform) ->
             GatewayModel(model_name="platform/aux", litellm_model="vertex_ai/gemini-flash"),
         ],
     )
-    # Claude Code n'accepte que des modèles Claude : c'est une contrainte dure, pas un réglage.
+    # Claude Code only accepts Claude models: it is a hard constraint, not a setting.
     assert resolver.resolve("profile:standard", backend=review_backend).api_format == "anthropic"
     with pytest.raises(ModelResolutionError):
         resolver.resolve("profile:aux", backend=review_backend)
 
 
 async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
-    """La mémoire arrive dans le stage, bornée, et reste consultable depuis le run."""
+    """The memory reaches the stage, bounded, and stays consultable from the run."""
     await login(platform.client)
     memory = platform.adapters.memory
     await memory.write_fact(
@@ -46,7 +46,7 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
         Fact(
             kind="decision",
             subject="decision:billing:arrondis",
-            content="Les totaux sont arrondis au centime à l'émission (ADR-0007).",
+            content="Rounded totals: amounts are rounded to the cent at issuance (ADR-0007).",
             provenance=Provenance(source="scm", ref="docs/adr/0007-arrondis.md"),
         ),
     )
@@ -59,7 +59,7 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
         item = WorkItem(
             project_id=platform.project_id,
             tracker_key="varga/billing-api#400",
-            title="Arrondis et avoirs sur les totaux",
+            title="Rounded totals and credit notes",
             state="ready",
             size="M",
             allowed_paths=["src/orders/**"],
@@ -68,8 +68,8 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
         await session.flush()
         item_id = item.id
 
-    # Le rôle `refine` reçoit les décisions et les incidents ; `implement` reçoit les
-    # conventions et les leçons de run. Les kinds par rôle font partie du contrat (§4.4).
+    # The `refine` role receives the decisions and the incidents; `implement` receives the
+    # conventions and the run lessons. The kinds per role are part of the contract (§4.4).
     prepared = await stage_activities.prepare_stage(
         {
             "project_id": platform.project_id,
@@ -84,20 +84,20 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
         }
     )
     stage_input = prepared["stage_input"]
-    assert stage_input["context_pack_url"], "le pack est archivé avec le run"
+    assert stage_input["context_pack_url"], "the pack is archived with the run"
 
     from choregos_api.db.models import Run
 
     async with session_scope() as session:
         run = await session.get(Run, prepared["run_id"])
         pack = run.context_pack
-    assert pack["tokens_estimated"] <= 4000, "le pack respecte le budget de tokens du rôle"
+    assert pack["tokens_estimated"] <= 4000, "the pack respects the role's token budget"
     contents = [memory_item["content"] for memory_item in pack["memories"]]
-    assert any("arrondis" in content.lower() for content in contents), pack
+    assert any("rounded" in content.lower() for content in contents), pack
 
 
 async def test_une_panne_memoire_ne_bloque_pas_un_stage(platform: Platform) -> None:
-    """Preuve avant dépendance : sans mémoire, la plateforme continue avec un pack vide."""
+    """Proof before dependency: without memory, the platform carries on with an empty pack."""
     await login(platform.client)
     platform.adapters.memory.fail = True
 
@@ -109,7 +109,7 @@ async def test_une_panne_memoire_ne_bloque_pas_un_stage(platform: Platform) -> N
         item = WorkItem(
             project_id=platform.project_id,
             tracker_key="varga/billing-api#401",
-            title="Ticket sans mémoire",
+            title="Ticket without memory",
             state="ready",
             size="S",
         )
@@ -133,11 +133,11 @@ async def test_une_panne_memoire_ne_bloque_pas_un_stage(platform: Platform) -> N
     async with session_scope() as session:
         run = await session.get(Run, prepared["run_id"])
         assert run.context_pack["memories"] == []
-        assert run.stage_input is not None, "le stage est prêt malgré la panne mémoire"
+        assert run.stage_input is not None, "the stage is ready despite the memory outage"
 
 
 async def test_matrice_d_evals_publiee_et_opposable(platform: Platform) -> None:
-    """Une combinaison non validée est refusée à l'enregistrement, avec un message clair."""
+    """An unvalidated combination is refused at registration, with a clear message."""
     await login(platform.client)
     from choregos_orchestrator.activities import evals as eval_activities
 
@@ -213,7 +213,7 @@ async def test_the_matrix_shows_the_four_context_cells_with_their_tokens(platfor
 
 
 async def test_changement_de_modele_sans_redeploiement(platform: Platform) -> None:
-    """Un projet change de profil par l'API : aucun redéploiement, la résolution suit."""
+    """A project changes profile through the API: no redeployment, the resolution follows."""
     await login(platform.client)
     response = await platform.client.put(
         f"/api/v1/projects/{platform.project_id}/models",

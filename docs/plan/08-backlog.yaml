@@ -2683,6 +2683,16 @@ stories:
     acceptance:
       - "EvalMatrix(live=true) seeds the toy repository and an eval work item, runs prepare_stage, start_run, await_run, record_run_outcome and collect_spend, and judges the run by its facts and its ledger row"
       - "A run that did not get the cell's reduction is skipped, never counted"
+  - id: S37-11
+    title: "A run stops its tool server whatever way it ends, and run tests each get their own port (finding #474)"
+    stream: S37
+    sprint: 20
+    priority: 8
+    size: S
+    depends_on: [S37-07]
+    acceptance:
+      - "A run that fails before its agent starts leaves no tool server listening"
+      - "Run tests no longer share port 7777"
   - id: S37-10
     title: "Real eval matrix on real models, and the default-on decision per backend"
     stream: S37

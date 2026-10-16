@@ -1,14 +1,14 @@
-"""Chaque image applique-t-elle les correctifs de sécurité de Debian à sa construction ?
+"""Does every image apply Debian's security fixes when it is built?
 
-Les images partent d'étiquettes (`python:3.12-slim-bookworm`, `node:24-bookworm-slim`) que leurs
-mainteneurs reconstruisent à leur rythme. Le 2026-10-06, `perl-base` 5.36.0-7+deb12u3 y portait
-trois CRITICAL déjà corrigés dans `bookworm-security` : le scan Trivy de la release a refusé quatre
-images sur cinq, et la 0.16.0 n'est pas sortie. Le runner passait — par chance : `build-essential`
-tirait `perl`, et avec lui le `perl-base` corrigé.
+The images start from tags (`python:3.12-slim-bookworm`, `node:24-bookworm-slim`) that their
+maintainers rebuild at their own pace. On 2026-10-06, `perl-base` 5.36.0-7+deb12u3 carried
+three CRITICALs already fixed in `bookworm-security`: the release's Trivy scan rejected four
+images out of five, and 0.16.0 did not ship. The runner passed — by luck: `build-essential`
+pulled in `perl`, and with it the fixed `perl-base`.
 
-La règle : toute étape qui finit dans une image — elle part d'une image extérieure et n'est pas
-seulement la source d'un `COPY --from` — fait `apt-get upgrade`. Une étape qui part d'une autre
-étape du même fichier en hérite.
+The rule: every stage that ends up in an image — it starts from an external image and is not
+merely the source of a `COPY --from` — runs `apt-get upgrade`. A stage that starts from another
+stage of the same file inherits it.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ MISE_A_JOUR = re.compile(r"apt-get\s+upgrade\s+-y")
 
 
 def _etapes_finales() -> list[tuple[str, str, str]]:
-    """(fichier, étape, corps) de chaque étape qui finit dans une image et part d'une image extérieure."""
+    """(file, stage, body) of every stage that ends up in an image and starts from an external one."""
     finales: list[tuple[str, str, str]] = []
     for chemin in sorted(DOCKER.glob("*.Dockerfile")):
         texte = chemin.read_text(encoding="utf-8")
@@ -38,15 +38,15 @@ def _etapes_finales() -> list[tuple[str, str, str]]:
         sources = set(SOURCE.findall(texte))
         for nom, base, corps in etapes:
             if base in noms:
-                continue  # elle hérite de l'étape dont elle part
+                continue  # it inherits from the stage it starts from
             if nom in sources and nom not in bases_internes:
-                continue  # une étape de construction : on n'en garde que ce qu'on copie
+                continue  # a build stage: only what is copied from it is kept
             finales.append((chemin.name, nom, corps))
     return finales
 
 
 def test_il_y_a_bien_des_images_a_verifier() -> None:
-    """Sans cette garde, renommer les étapes rendrait la suite verte et vide."""
+    """Without this guard, renaming the stages would leave the suite green and empty."""
     vues = {(fichier, etape) for fichier, etape, _ in _etapes_finales()}
     assert {
         ("api.Dockerfile", "commun"),
@@ -60,4 +60,4 @@ def test_il_y_a_bien_des_images_a_verifier() -> None:
 def test_chaque_image_applique_les_correctifs_de_debian() -> None:
     finales = _etapes_finales()
     sans = [f"{fichier} / {etape}" for fichier, etape, corps in finales if not MISE_A_JOUR.search(corps)]
-    assert not sans, f"étapes finales sans `apt-get upgrade -y` : {sans}"
+    assert not sans, f"final stages without `apt-get upgrade -y`: {sans}"

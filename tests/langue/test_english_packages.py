@@ -36,6 +36,19 @@ ENGLISH = (
     "tests/dev/",  # S34-04i
     "tests/integrations/",  # S34-04i
     "tests/README.md",  # S34-04i
+    "tests/paquets/",  # S34-04j
+    "tests/replay/",  # S34-04j
+    "tests/conformance/backends/",  # S34-04j
+    "tests/conformance/connecteurs/",  # S34-04j
+    "tests/conformance/executeurs/",  # S34-04j
+    "tests/e2e/conftest.py",  # S34-04j
+    "tests/e2e/test_ecriture_gouvernee.py",  # S34-04j
+    "tests/e2e/test_m1_tranche_verticale.py",  # S34-04j
+    "tests/e2e/test_m2_dsl_et_front.py",  # S34-04j
+    "tests/e2e/test_m3_prod_maitrisee.py",  # S34-04j
+    "tests/e2e/test_m4_multibackend_memoire.py",  # S34-04j
+    "tests/e2e/test_m5_durci.py",  # S34-04j
+    "tests/conformance/report.py",  # S34-04j
 )
 
 #: (file, start of the line) — French that stays, each with its reason.

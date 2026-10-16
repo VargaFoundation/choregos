@@ -1,29 +1,30 @@
 # SPDX-License-Identifier: Apache-2.0
-"""L'image de l'édition entreprise, construite FROM l'image CE, tourne-t-elle en `enterprise` ?
+"""Does the enterprise-edition image, built FROM the CE image, run as `enterprise`?
 
-Le plan (ADR 0024, jalon E4) construit les images EE **FROM** les images CE : le cœur y est déjà
-installé, la roue EE s'ajoute avec `--no-deps` (`test_le_modele_de_paquet_ee.py` dit pourquoi elle
-ne déclare pas le cœur). Le geste que tout le monde écrira est donc :
+The plan (ADR 0024, milestone E4) builds the EE images **FROM** the CE images: the core is
+already installed, and the EE wheel is added with `--no-deps` (`test_le_modele_de_paquet_ee.py`
+says why it does not declare the core). The gesture everybody will write is therefore:
 
     FROM ghcr.io/vargafoundation/choregos-api:<version>
     RUN pip install --no-deps choregos_ee-*.whl
 
-Essayé sur `choregos-api:0.8.3` le 2026-09-28 : **l'image se construit, démarre, et tourne en
-`community`**. Le venv (`/app/.venv`) est créé par uv et n'a pas de `pip` ; celui du PATH est le
-`pip` du système, qui pose la roue dans `~/.local` — hors du venv, donc invisible. Seule la garde
-de démarrage l'attrape, et seulement si l'exploitant a écrit `global.edition: enterprise`.
+Tried on `choregos-api:0.8.3` on 2026-09-28: **the image builds, starts, and runs as
+`community`**. The venv (`/app/.venv`) is created by uv and has no `pip`; the one on the PATH is
+the system `pip`, which puts the wheel in `~/.local` — outside the venv, hence invisible. Only
+the startup guard catches it, and only if the operator wrote `global.edition: enterprise`.
 
-L'image CE déclare donc `PIP_PYTHON` vers le python du venv : le geste évident devient le geste
-juste, et le dépôt privé n'a pas à connaître la disposition interne de l'image.
+The CE image therefore points `PIP_PYTHON` at the venv's python: the obvious gesture becomes the
+right one, and the private repository need not know the image's internal layout.
 
-Deux niveaux, parce que la CI ne peut pas faire le second : sur `main`, elle construit les images
-en multi-plateforme et les pousse sans les charger.
+Two levels, because the CI cannot do the second: on `main`, it builds the images multi-platform
+and pushes them without loading them.
 
-- `test_le_socle_commun_*` lit le Dockerfile — rapide, dans `make ci`, et il rougit sans la ligne.
-- `test_la_roue_ee_*` construit une vraie image FROM une image CE et exerce les deux chemins de
-  chargement réels (`create_app()` de l'API, import des activités de l'orchestrateur), garde de
-  démarrage comprise. Il demande Docker et `CHOREGOS_IMAGES_CE` (images séparées par des
-  virgules), et s'écarte sans eux.
+- `test_le_socle_commun_*` reads the Dockerfile — fast, in `make ci`, and it goes red without
+  the line.
+- `test_la_roue_ee_*` builds a real image FROM a CE image and exercises the two real loading
+  paths (the API's `create_app()`, the import of the orchestrator's activities), startup guard
+  included. It needs Docker and `CHOREGOS_IMAGES_CE` (comma-separated images), and skips
+  without them.
 """
 
 from __future__ import annotations
@@ -38,12 +39,12 @@ import pytest
 
 RACINE = pathlib.Path(__file__).resolve().parents[2]
 DOCKERFILE = RACINE / "docker" / "api.Dockerfile"
-#: Les images CE à éprouver, p. ex. `choregos-api:local,choregos-orchestrator:local`.
+#: The CE images to exercise, e.g. `choregos-api:local,choregos-orchestrator:local`.
 IMAGES_CE = [i.strip() for i in os.environ.get("CHOREGOS_IMAGES_CE", "").split(",") if i.strip()]
 
 
 def _etages() -> dict[str, str]:
-    """{nom d'étage: son texte} pour chaque `FROM … AS nom` du Dockerfile."""
+    """{stage name: its text} for each `FROM … AS name` of the Dockerfile."""
     morceaux = re.split(r"^(?=FROM\s)", DOCKERFILE.read_text(encoding="utf-8"), flags=re.M)
     etages: dict[str, str] = {}
     for morceau in morceaux:
@@ -54,7 +55,7 @@ def _etages() -> dict[str, str]:
 
 
 def _env(etage: str) -> dict[str, str]:
-    """Les `ENV clé=valeur` d'un étage, valeurs sans guillemets."""
+    """The `ENV key=value`s of a stage, values without quotes."""
     paires: dict[str, str] = {}
     for ligne in re.findall(r"^ENV\s+(.+)$", etage, flags=re.M):
         for cle, valeur in re.findall(r'(\w+)=("[^"]*"|\S+)', ligne):
@@ -63,28 +64,28 @@ def _env(etage: str) -> dict[str, str]:
 
 
 def test_les_deux_cibles_heritent_du_socle_commun() -> None:
-    """Sans cette garde, une cible qui repartirait de `python:` perdrait `PIP_PYTHON` en silence."""
+    """Without this guard, a target restarting from `python:` would silently lose `PIP_PYTHON`."""
     etages = _etages()
-    assert "commun" in etages, f"étage `commun` introuvable dans {DOCKERFILE.name} : {sorted(etages)}"
+    assert "commun" in etages, f"stage `commun` not found in {DOCKERFILE.name}: {sorted(etages)}"
     for cible in ("api", "worker"):
-        assert cible in etages, f"cible `{cible}` introuvable : {sorted(etages)}"
-        assert re.match(r"FROM\s+commun\s", etages[cible]), f"la cible `{cible}` ne part pas de `commun`"
+        assert cible in etages, f"target `{cible}` not found: {sorted(etages)}"
+        assert re.match(r"FROM\s+commun\s", etages[cible]), f"target `{cible}` does not start from `commun`"
 
 
 def test_le_socle_commun_fait_poser_la_roue_ee_dans_le_venv() -> None:
-    """`pip install` dans une image FROM celle-ci doit viser le python qui fait tourner la plateforme."""
+    """`pip install` in an image FROM this one must target the python that runs the platform."""
     env = _env(_etages()["commun"])
     chemin = env.get("PATH", "")
     venv_bin = chemin.split(":", 1)[0]
-    assert venv_bin.endswith("/.venv/bin"), f"le venv n'est pas en tête du PATH : {chemin!r}"
+    assert venv_bin.endswith("/.venv/bin"), f"the venv is not first on the PATH: {chemin!r}"
     assert env.get("PIP_PYTHON") == f"{venv_bin}/python", (
-        "le socle commun ne dit pas à `pip` d'installer dans le venv : une image EE FROM celle-ci "
-        f"poserait sa roue hors du venv et tournerait en `community`. PIP_PYTHON={env.get('PIP_PYTHON')!r}"
+        "the common base does not tell `pip` to install into the venv: an EE image FROM this one "
+        f"would put its wheel outside the venv and run as `community`. PIP_PYTHON={env.get('PIP_PYTHON')!r}"
     )
 
 
-#: Ce que la plateforme fait au démarrage : l'API appelle `create_app()` (garde d'édition comprise),
-#: l'orchestrateur charge les greffons en important ses activités.
+#: What the platform does at startup: the API calls `create_app()` (edition guard included),
+#: the orchestrator loads the plugins by importing its activities.
 VERIFICATION = """
 from choregos_api.main import create_app
 create_app()
@@ -96,8 +97,8 @@ print(courante(), ",".join(sorted(fonctions())))
 
 @pytest.mark.integration
 @pytest.mark.slow
-@pytest.mark.skipif(shutil.which("docker") is None, reason="docker absent")
-@pytest.mark.skipif(not IMAGES_CE, reason="CHOREGOS_IMAGES_CE non défini")
+@pytest.mark.skipif(shutil.which("docker") is None, reason="docker missing")
+@pytest.mark.skipif(not IMAGES_CE, reason="CHOREGOS_IMAGES_CE not set")
 @pytest.mark.parametrize("image_ce", IMAGES_CE)
 def test_la_roue_ee_posee_par_le_geste_evident_rend_l_edition_entreprise(
     image_ce: str, roue_ee: pathlib.Path, tmp_path: pathlib.Path
@@ -105,7 +106,7 @@ def test_la_roue_ee_posee_par_le_geste_evident_rend_l_edition_entreprise(
     contexte = tmp_path / "contexte"
     contexte.mkdir()
     shutil.copy(roue_ee, contexte / roue_ee.name)
-    # Le geste évident, et rien de plus : pas de `--python`, pas de chemin de venv.
+    # The obvious gesture, and nothing more: no `--python`, no venv path.
     (contexte / "Dockerfile").write_text(
         f"FROM {image_ce}\n"
         f"COPY {roue_ee.name} /tmp/\n"
@@ -120,7 +121,7 @@ def test_la_roue_ee_posee_par_le_geste_evident_rend_l_edition_entreprise(
         check=False,
         timeout=600,
     )
-    assert construit.returncode == 0, f"l'image EE ne se construit pas :\n{construit.stderr[-800:]}"
+    assert construit.returncode == 0, f"the EE image does not build:\n{construit.stderr[-800:]}"
     try:
         env = ["-e", "CHOREGOS_FAKES=1", "-e", "CHOREGOS_EDITION=enterprise"]
         lance = subprocess.run(
@@ -134,7 +135,7 @@ def test_la_roue_ee_posee_par_le_geste_evident_rend_l_edition_entreprise(
         subprocess.run(["docker", "rmi", "-f", etiquette], capture_output=True, check=False)
 
     assert lance.returncode == 0, (
-        f"FROM {image_ce} : la plateforme ne démarre pas en édition entreprise — la roue n'est pas "
-        f"dans le venv qui la fait tourner :\n{lance.stderr[-600:]}"
+        f"FROM {image_ce}: the platform does not start in enterprise edition — the wheel is not "
+        f"in the venv that runs it:\n{lance.stderr[-600:]}"
     )
     assert lance.stdout.strip().splitlines()[-1] == "enterprise multi_org", lance.stdout

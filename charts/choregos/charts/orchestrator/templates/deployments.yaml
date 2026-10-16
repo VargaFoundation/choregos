@@ -153,6 +153,10 @@ spec:
             # it goes to this executor. Empty keeps the sandbox executor's refusal.
             - name: CHOREGOS_CUSTOM_IMAGE_EXECUTOR
               value: {{ $root.Values.runner.customImageExecutor | default "" | quote }}
+            # How long a finished sandbox keeps its workspace volume before the controller
+            # deletes it: every second of it counts against the namespace's storage quota.
+            - name: CHOREGOS_SANDBOX_TTL_SECONDS
+              value: {{ (($root.Values.runner.sandbox | default dict).ttlSecondsAfterFinished | default 300) | quote }}
             {{- end }}
             # The kill switch for context reduction (ADR 0055): "off" refuses rtk and headroom
             # to every run, whatever a project's policy asks.
