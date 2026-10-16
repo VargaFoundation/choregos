@@ -24,6 +24,16 @@ global:
   # healthy and refusing the second organization weeks later.
   edition: community
   fakes: false
+  # What runs agent stages (ADR 0072): one setting for the API and for the workers.
+  # `agent_sandbox` (kubernetes-sigs/agent-sandbox) is the default of a real deployment; the
+  # chart refuses to render without its operator. Every other executor is chosen here, by name:
+  # `k8s_job` (a Job per stage), `tekton` (a PipelineRun per stage, only where Tekton runs),
+  # `aca`, `local_docker`. Upgrading from <= 0.17, which defaulted to `tekton`: set `tekton`.
+  runner:
+    executor: agent_sandbox
+    # What the API lets a project choose as its `runtime` connector. Empty: only `executor`.
+    # Add `k8s_job` for the steps that name their own image.
+    allowedExecutors: []
   # Secrets by reference (ADR 0034). A connector's `env:NAME` reference reads only the variables
   # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
   # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are
@@ -92,6 +102,28 @@ global:
     jobs: {}
     agents: {}
     requireDigest: true
+  # The per-run egress proxy `choregos-egress` (ADR 0070), in the release namespace, from the API image.
+  # A runner presents its run id and token as proxy credentials; the proxy asks the API what THAT run
+  # may reach and lets a tunnel through or refuses. Off by default: nothing changes for an existing
+  # install. When on, `choregos-orchestrator.runner.egressProxy` MUST name it (the chart refuses
+  # otherwise) and the orchestrator tells runners to authenticate (`CHOREGOS_RUNNER_EGRESS_AUTH=run`).
+  # It lives under `global` because the API and the orchestrator read it too.
+  egress:
+    enabled: false
+    # Rates are counted per replica: keep one replica unless a rate that is N times looser is fine.
+    replicas: 1
+    port: 3128
+    healthPort: 8081
+    # Destination ports a tunnel may open (CONNECT 443 and plain HTTP 80).
+    ports: [443, 80]
+    # Hosts no run may reach, for the whole deployment, whatever an organisation or a project says.
+    # The API reads the same list (`CHOREGOS_NETWORK_INSTANCE_DENY`).
+    denyDomains: []
+    # How long a run's network is cached before the API is asked again.
+    cacheSeconds: 60
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { cpu: 500m, memory: 256Mi }
   logLevel: INFO
   # Anti-affinity between the replicas of a same component: `soft` (preferred), `hard`
   # (one replica per node, otherwise no pod) or `none`.
@@ -300,12 +332,21 @@ choregos-orchestrator:
     # installation. It happened on 2026-09-27: a slightly broad cut removing a
     # neighboring setting, and `helm-unittest` caught it on `global.imageTag: 9.9.9` → `…-runner:1.0.0`.
     tag: ""
-    namespacePattern: "proj-{slug}-runners"
+    # Empty: follows the executor, the release namespace for `agent_sandbox` (its template
+    # lives there), `proj-{slug}-runners` for the others. A value here always wins.
+    namespacePattern: ""
     # Simultaneous runs per namespace. Beyond that, the Job waits WITHOUT a pod (`spec.suspend`),
     # in order of arrival: a spike of tickets no longer turns into a spike of
     # pods all pulling the same image. 0 = no ceiling.
     maxActive: 0
-    executor: tekton
+    # Leave empty: `global.runner.executor` decides. A different value is refused at render.
+    executor: ""
+    # Skip the render-time check that the agent-sandbox operator is installed, for an offline
+    # rendering (CI, a preview). Never needed under Argo CD or `helm install`.
+    skipOperatorCheck: false
+    # `agent_sandbox` only (ADR 0072): the executor that runs a step naming its own image, since a
+    # warm pool is made from one image. Add it to `global.runner.allowedExecutors` too. Empty: refused.
+    customImageExecutor: k8s_job
     # What each agent pod receives in addition. `env` carries plain values (never a
     # secret); `envFromSecrets` lists the namespace's Secrets, mounted by reference —
     # this is how a backend token or git credentials get through.
@@ -347,9 +388,11 @@ choregos-orchestrator:
     contextReduction:
       enabled: true
     # The egress proxy through which EACH agent pod gets out (`HTTP_PROXY`/`HTTPS_PROXY`),
-    # `{namespace}` = the runners'. The provisioning deploys a Squid there whose
-    # allowlist is `policy.sandbox.network.allow_domains`; without an allowed domain,
-    # no proxy and no egress. Empty: no proxy (local bench).
+    # `{namespace}` = the runners'. In per-project runner namespaces the provisioning deploys a Squid
+    # there whose allowlist is `policy.sandbox.network.allow_domains` (project-level, host-level);
+    # without an allowed domain, no proxy and no egress. With `global.egress.enabled` the per-run proxy
+    # `choregos-egress` serves the RELEASE namespace (the `agent_sandbox` executor's), and this value
+    # must name it: `http://choregos-egress.<release-namespace>.svc:3128`. Empty: no proxy (local bench).
     egressProxy: "http://choregos-egress.{namespace}.svc:3128"
     # Its image, to be pinned by digest where Kyverno requires it. Empty: the one from `gitops.py`.
     egressImage: ""

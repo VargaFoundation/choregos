@@ -69,5 +69,6 @@ def gate(new: AgentSpec, published: AgentSpec | None) -> list[AgentEvalResult]:
                 }
                 for r in failing
             ],
+            extra={"code": "eval_failed"},
         )
     return results

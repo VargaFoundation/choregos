@@ -15,7 +15,7 @@ from choregos_adapters import register
 from choregos_adapters.errors import ConfigurationError
 from choregos_adapters.memory.lexicale import LexicalMemory, ModelesMemoire
 
-from .db.models import MemoryFact, Project
+from .db.models import MemoryFact, MemoryStore, Organization, Project
 from .db.session import TOUT, session_scope
 
 
@@ -36,7 +36,10 @@ def _memoire_lexicale(cfg: dict[str, Any]) -> LexicalMemory:
         )
     portee: str | list[str] = TOUT if org == TOUT else [org]
     return LexicalMemory(
-        partial(session_scope, orgs=portee), ModelesMemoire(Project=Project, MemoryFact=MemoryFact)
+        partial(session_scope, orgs=portee),
+        ModelesMemoire(
+            Project=Project, MemoryFact=MemoryFact, Organization=Organization, MemoryStore=MemoryStore
+        ),
     )
 
 

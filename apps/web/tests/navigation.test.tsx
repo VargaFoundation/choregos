@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TopNav } from "@/app/top-nav";
-import { entreeActive, GROUPES, NAV } from "@/components/coquille/navigation";
+import { entreeActive, GROUPES, NAV, projectGroups } from "@/components/coquille/navigation";
 import { ThemeProvider } from "@/lib/theme";
 
 const chemin = { courant: "/" };
@@ -48,6 +48,17 @@ describe("la navigation (S21-03, S24-03)", () => {
     expect(NAV.map((entree) => entree.label)).toContain("Skills");
     const rangees = GROUPES.flatMap((groupe) => groupe.entrees);
     expect([...rangees].sort()).toEqual(NAV.map((entree) => entree.href).sort());
+  });
+
+  it("Integrations is not in the Catalogue group and is named like the project's entry (S40-08)", () => {
+    const catalogue = GROUPES.find((groupe) => groupe.titre === "Catalogue")!;
+    expect(catalogue.entrees).not.toContain("/integrations");
+    const organisation = GROUPES.find((groupe) => groupe.titre === "Organisation")!;
+    expect(organisation.entrees[0]).toBe("/integrations");
+    const projet = projectGroups("x")
+      .flatMap((groupe) => groupe.entries)
+      .find((entree) => entree.href.endsWith("/integrations"))!;
+    expect(NAV.find((entree) => entree.href === "/integrations")!.label).toBe(projet.label);
   });
 
   it("les projets restent actifs dans un projet, et une seule entrée l'est à la fois", () => {

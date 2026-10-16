@@ -1,6 +1,7 @@
 # 0013 — Agent task density, and what we take from AX
 
 - **Status**: accepted, 2026-09-24 — Decisions 2 and 3 are revisited by [ADR 0016](0016-agent-sandbox-executor.md) (accepted 2026-10-12, not implemented)
+- **Superseded in part by [0072](0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)**: the default executor is `agent_sandbox`, which has a warm pool.
 - **Concerns**: the execution of agent stages (`Executor`), the chart, operations
 
 ## Context

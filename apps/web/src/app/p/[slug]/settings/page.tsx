@@ -1,244 +1,41 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import dynamic from "next/dynamic";
-import { use, useState } from "react";
-import { Connecteurs } from "@/components/connecteurs";
-import { EvalMatrixTable } from "@/components/eval-matrix";
-import { OperationsDuProjet } from "@/components/operations-du-projet";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
-import { api } from "@/lib/api";
-import { eur } from "@/lib/format";
-import { useSession } from "@/lib/session";
-import { usableModels } from "@/lib/usable-models";
-import type { ProjectModels } from "@/lib/types";
+import { use } from "react";
+import { AgentsModelsSection } from "@/components/project-settings/agents-models-section";
+import { ConnectionsSection } from "@/components/project-settings/connections-section";
+import { GuardrailsSection } from "@/components/project-settings/guardrails-section";
+import { SettingsNav } from "@/components/project-settings/settings-nav";
+import { ToolsSection } from "@/components/project-settings/tools-section";
 
-const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
-  ssr: false,
-  loading: () => <p className="text-sm text-ink-muted">Loading the editor…</p>,
-});
-
-const PROFILS = ["standard", "strong", "cheap", "by_size"];
+/** The sections of the page, in reading order: what the project is connected to first. */
+const SECTIONS = [
+  { id: "connections", label: "Connections" },
+  { id: "agents-models", label: "Agents & models" },
+  { id: "guardrails", label: "Guardrails" },
+  { id: "tools", label: "Tools" },
+];
 
 /**
- * Les paramètres d'un projet — et ils se MODIFIENT ici.
+ * A project's settings, and they are edited here (S40-03b). The page only COMPOSES sections, one file
+ * each under `components/project-settings/`, so a later section is added without touching the others:
+ * the `readiness` slot below is filled by the readiness panel (S40-06c).
  *
- * Avant le 2026-09-24 cet écran listait les connecteurs sans pouvoir en poser un (la
- * documentation disait pourtant « Settings → Connectors »), montrait la politique dans un
- * `<pre>` et n'avait pas de réglage de modèles. Tout ce que l'API acceptait déjà se fait
- * maintenant d'ici : connecteurs (ceux que les workflows exigent, formulaires tirés du schéma de
- * leur type, secrets en références — ADR 0034), politique (YAML, validée par le serveur à
- * l'enregistrement), profils de modèles.
+ * Before: one two-column grid of unrelated cards with no heading, no way to tell what is required from
+ * what is optional, a raw 380 px YAML editor, and a connector row printing the raw kind, the raw state
+ * and no icon.
  */
 export default function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const queryClient = useQueryClient();
-  const { org } = useSession();
-  const policy = useQuery({ queryKey: ["policy", slug], queryFn: () => api.policy(slug) });
-  const matrix = useQuery({ queryKey: ["matrix", slug], queryFn: () => api.modelMatrix(slug) });
-  const tools = useQuery({ queryKey: ["project-tools", slug], queryFn: () => api.projectTools(slug) });
-  const models = useQuery({ queryKey: ["models", slug], queryFn: () => api.models(slug) });
-  // The models the organisation lets agents use (`/admin/models`, ADR 0060), the gateway's list when it has none.
-  const platformModels = useQuery({ queryKey: ["usable-models", org], queryFn: () => usableModels(org, { usage: "agent" }) });
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function faire(action: () => Promise<unknown>, succes: string, cles: string[]) {
-    setError(null);
-    setMessage(null);
-    try {
-      await action();
-      setMessage(succes);
-      for (const cle of cles) void queryClient.invalidateQueries({ queryKey: [cle, slug] });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "refused");
-    }
-  }
-
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      {(message || error) && (
-        <div className="lg:col-span-2">
-          {message && <p className="text-sm text-ok">{message}</p>}
-          {error && <ErrorNote>{error}</ErrorNote>}
-        </div>
-      )}
-
-      <Connecteurs slug={slug} />
-      <OperationsDuProjet slug={slug} />
-
-      <Card title="Policy" className="lg:col-span-2">
-        {(policy.data?.clamps ?? []).length > 0 && (
-          <div className="mb-2 text-sm" data-testid="policy-clamps">
-            <p>The organisation&apos;s ceiling brings this policy down; what runs is clamped:</p>
-            <ul className="list-disc pl-5 text-xs">
-              {(policy.data?.clamps ?? []).map((clamp) => (
-                <li key={clamp}>{clamp}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <PolicyEditor
-          yaml={policy.data?.yaml ?? ""}
-          onSave={(yaml) => faire(() => api.putPolicy(slug, yaml), "Policy saved", ["policy"])}
-        />
-      </Card>
-
-      <Card title="Model profiles">
-        <ModelsEditor
-          models={models.data}
-          disponibles={(platformModels.data ?? []).map((m) => m.model_name)}
-          onSave={(body) => faire(() => api.putModels(slug, body), "Profiles saved", ["models", "matrix"])}
-        />
-      </Card>
-
-      <Card title="Tool catalogue">
-        {(tools.data?.tools ?? []).length === 0 ? (
-          <Empty>No tool declared by the deployment.</Empty>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Tool</th>
-                  <th>Provider</th>
-                  <th>Open to</th>
-                  <th>Per call</th>
-                  <th>This project</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(tools.data?.tools ?? []).map((tool) => (
-                  <tr key={tool.name}>
-                    <td>
-                      <span className="font-mono text-xs">{tool.name}</span>
-                      <p className="text-xs text-ink-muted">{tool.description}</p>
-                    </td>
-                    <td className="text-xs">
-                      {tool.provider}
-                      {tool.source === "mcp" ? " · remote MCP" : ""}
-                      {tool.needs_credential ? " · platform key" : " · no key"}
-                    </td>
-                    <td className="text-xs">{(tool.groups ?? []).join(", ") || "Everyone"}</td>
-                    <td className="text-xs">{eur(tool.price_eur ?? 0)}</td>
-                    <td className="text-xs">{tool.allowed ? "Allowed" : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {tools.data?.allows_all && (
-          <p className="mt-2 text-xs text-ink-muted">
-            This project declares <span className="font-mono">*</span>: the whole catalogue is open to it.
-          </p>
-        )}
-        <p className="mt-2 text-xs text-ink-muted">
-          A project&apos;s tool list (<code>tools</code>, <code>groups</code>) is set in its configuration — it is reviewed like code.
-        </p>
-      </Card>
-
-      <Card title="Backend × model × context matrix" className="lg:col-span-2">
-        <p className="mb-2 text-sm text-ink-muted">
-          Published by the nightly evals: an unvalidated combination is refused on save.
-        </p>
-        <EvalMatrixTable entries={matrix.data?.entries ?? []} />
-        <EtatDeLecture lecture={matrix} quoi="the eval matrix" />
-        {matrix.data && (matrix.data.entries ?? []).length === 0 && <Empty>No eval published yet</Empty>}
-      </Card>
-    </div>
-  );
-}
-
-function PolicyEditor({ yaml, onSave }: { yaml: string; onSave: (yaml: string) => Promise<void> }) {
-  const [texte, setTexte] = useState("");
-  const [seeded, setSeeded] = useState<string | null>(null);
-  if (yaml && yaml !== seeded) {
-    setSeeded(yaml);
-    setTexte(yaml);
-  }
-  return (
-    <div className="space-y-2">
-      <YamlEditor label="Policy YAML" value={texte} onChange={setTexte} issues={[]} />
-      <div className="flex justify-end">
-        <Button tone="primary" onClick={() => void onSave(texte)} disabled={!texte || texte === yaml}>
-          Save the policy
-        </Button>
-      </div>
-      <p className="text-xs text-ink-muted">
-        Budgets, attempts, scope, sandbox and release trains: the same policy the orchestrator applies. The server
-        validates it on save.
-      </p>
-      {/* `approvals.*` et `review.require_human_for_risk` passent la validation mais ne gardent rien
-          (ADR 0044) : l'écran ne les range plus parmi ce qui s'applique, il dit où déclarer l'humain. */}
-      <p className="text-xs text-ink-muted" data-testid="politique-sans-gardes">
-        <code>approvals</code> and <code>review.require_human_for_risk</code> are accepted but not enforced: no one
-        is asked. To make a person approve or review, declare a human transition in the workflow — a human actor, or{" "}
-        <code>train.approval</code>. A release train&apos;s departure is approved through <code>release_train.&lt;env&gt;.approval</code>.
-      </p>
-    </div>
-  );
-}
-
-function ModelsEditor({
-  models,
-  disponibles,
-  onSave,
-}: {
-  models?: ProjectModels;
-  disponibles: string[];
-  onSave: (body: ProjectModels) => Promise<void>;
-}) {
-  const [profils, setProfils] = useState<Record<string, string>>({});
-  const [seeded, setSeeded] = useState<ProjectModels | null>(null);
-  const [allowUnvalidated, setAllowUnvalidated] = useState(false);
-  if (models && models !== seeded) {
-    setSeeded(models);
-    setProfils(Object.fromEntries(Object.entries(models.profiles ?? {}).map(([k, v]) => [k, v.litellm_model])));
-    setAllowUnvalidated(models.allow_unvalidated ?? false);
-  }
-  const options = Array.from(new Set([...disponibles, ...Object.values(profils)])).filter(Boolean);
-  return (
-    <div className="space-y-2 text-sm">
-      {PROFILS.map((profil) => (
-        <label key={profil} className="flex items-center justify-between gap-3">
-          <span className="font-mono text-xs">profile:{profil}</span>
-          <Input
-            list="modeles-disponibles"
-            value={profils[profil] ?? ""}
-            placeholder={models?.inherited?.[profil] ? `Inherited: ${models.inherited[profil]}` : "platform/standard"}
-            onChange={(event) => setProfils((p) => ({ ...p, [profil]: event.target.value }))}
-            className="w-64 min-w-0 font-mono"
-          />
-        </label>
-      ))}
-      <datalist id="modeles-disponibles">
-        {options.map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
-      <label className="flex items-center gap-2 text-xs text-ink-muted">
-        <input type="checkbox" checked={allowUnvalidated} onChange={(e) => setAllowUnvalidated(e.target.checked)} />
-        Accept a backend × model combination not validated by the evals
-      </label>
-      <div className="flex justify-end">
-        <Button
-          tone="primary"
-          onClick={() =>
-            void onSave({
-              profiles: Object.fromEntries(
-                Object.entries(profils)
-                  .filter(([, v]) => v)
-                  .map(([k, v]) => [k, { litellm_model: v, params: {}, max_turns_factor: 1 }]),
-              ),
-              allow_unvalidated: allowUnvalidated,
-              inherited: {},
-            })
-          }
-        >
-          Save the profiles
-        </Button>
+    <div className="gap-8 space-y-4 lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:space-y-0">
+      <SettingsNav sections={SECTIONS} />
+      <div className="min-w-0 space-y-10">
+        <section id="readiness" aria-label="Readiness" data-testid="readiness-slot" className="empty:hidden" />
+        <ConnectionsSection slug={slug} />
+        <AgentsModelsSection slug={slug} />
+        <GuardrailsSection slug={slug} />
+        <ToolsSection slug={slug} />
       </div>
     </div>
   );

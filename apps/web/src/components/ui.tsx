@@ -716,9 +716,12 @@ export function Button({
   title,
   size = "md",
   "aria-describedby": decritPar,
+  "aria-label": etiquette,
 }: {
   children: ReactNode;
   onClick?: () => void;
+  /** A name for a button whose text alone is not enough (an arrow, a bare "Remove" in a list). */
+  "aria-label"?: string;
   /** Ce qui explique le bouton — pourquoi il attend, ce qu'il va faire. */
   "aria-describedby"?: string;
   /**
@@ -738,6 +741,7 @@ export function Button({
       disabled={disabled}
       title={title}
       aria-describedby={decritPar}
+      aria-label={etiquette}
       // Au doigt, 44 px de haut au moins (WCAG 2.5.8, S23-11) : `buttonClasses` les porte.
       className={buttonClasses(TONE_TO_VARIANT[tone], size)}
     >

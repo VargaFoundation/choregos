@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -435,6 +436,38 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class MemoryStore(Base, PkMixin, TimestampMixin):
+    """A named memory (S40-11, ADR 0075): `global` (the organisation's, curated by an administrator,
+    with a reach) or `project` (a project's, curated by its owners, read by its runs only).
+
+    The implicit memories of a project (`shared`, `own`) are never rows.
+    """
+
+    __tablename__ = "memory_stores"
+    __table_args__ = (
+        UniqueConstraint("org_id", "owner_key", "slug", name="uq_memory_stores_owner_slug"),
+        CheckConstraint("(scope = 'project') = (project_id IS NOT NULL)", name="ck_memory_stores_scope"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(64))
+    display_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: global | project
+    scope: Mapped[str] = mapped_column(String(16))
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: `org`, or the project's id: a unique key without NULLs.
+    owner_key: Mapped[str] = mapped_column(String(36))
+    #: For a global memory, whose runs may read it: `org` (every project) or `projects` (listed).
+    reach: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    projects: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: active | archived
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
 class MemoryFact(Base, PkMixin, TimestampMixin):
     """Repli lexical : mémoire stockée dans Choregos quand Ecphoria n'est pas déployé.
 
@@ -443,9 +476,25 @@ class MemoryFact(Base, PkMixin, TimestampMixin):
     autre chose."""
 
     __tablename__ = "memory_facts"
-    __table_args__ = (Index("ix_memory_facts_project_subject", "project_id", "subject"),)
+    __table_args__ = (
+        Index("ix_memory_facts_project_subject", "project_id", "subject"),
+        CheckConstraint(
+            "project_id IS NOT NULL OR memory_store_id IS NOT NULL", name="ck_memory_facts_has_a_home"
+        ),
+    )
 
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    #: The organisation the fact belongs to (S40-11): what the row-level security keys on, since a
+    #: global memory's facts belong to no project.
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    #: `None` for the facts of a global memory (they carry `memory_store_id` only).
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    #: The named memory the fact is in (S40-11); `None` for a project's shared memory and for an
+    #: agent's own memory.
+    memory_store_id: Mapped[str | None] = mapped_column(
+        ForeignKey("memory_stores.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     kind: Mapped[str] = mapped_column(String(32), index=True)
     subject: Mapped[str] = mapped_column(String(300))
     content: Mapped[str] = mapped_column(Text)
@@ -623,6 +672,70 @@ class RemoteCredential(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GitHubInstallation(Base, TimestampMixin):
+    """An installation of the deployment's GitHub App on a GitHub account (ADR 0073).
+
+    The primary key is GitHub's installation id, which nobody types: it is discovered by polling
+    `GET /app/installations`, by the Setup URL redirect after an install, and by webhooks. `org_id`
+    is the Choregos organisation that CLAIMED it; a token for `owner/repo` is only minted through an
+    installation claimed by the project's organisation. Unclaimed rows are visible to the platform
+    scope only."""
+
+    __tablename__ = "github_installations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    account_login: Mapped[str] = mapped_column(String(200))
+    #: `account_login` lower-cased: GitHub logins are case-insensitive, the lookups use this one.
+    account_key: Mapped[str] = mapped_column(String(200), index=True)
+    account_id: Mapped[int] = mapped_column(BigInteger)
+    #: `Organization` or `User`
+    account_type: Mapped[str] = mapped_column(String(32))
+    app_id: Mapped[str] = mapped_column(String(32), default="")
+    #: `all` or `selected`
+    repository_selection: Mapped[str] = mapped_column(String(16), default="selected")
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    org_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    claimed_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NetworkDecision(Base, PkMixin, TimestampMixin):
+    """What reached or was refused at the network, aggregated per run (ADR 0070).
+
+    One row per (run, layer, host, port, decision, reason). The counters are CUMULATIVE totals sent
+    by the reporter (the egress proxy, the runner): a replayed batch replaces them, it never adds."""
+
+    __tablename__ = "network_decisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "layer", "host", "port", "decision", "reason", name="uq_network_decisions_key"
+        ),
+        Index("ix_network_decisions_org_last", "org_id", "last_at"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: `proxy`, `runner`, `broker` or `platform`
+    layer: Mapped[str] = mapped_column(String(16))
+    host: Mapped[str] = mapped_column(String(253))
+    port: Mapped[int] = mapped_column(Integer, default=0)
+    #: `allowed`, `denied`, `rate_limited` or `unreachable`
+    decision: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str] = mapped_column(String(200), default="")
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    bytes_up: Mapped[int] = mapped_column(BigInteger, default=0)
+    bytes_down: Mapped[int] = mapped_column(BigInteger, default=0)
+    first_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ConnectorOperation(Base, PkMixin, TimestampMixin):
@@ -848,6 +961,9 @@ class Agent(Base, PkMixin, TimestampMixin):
     forked_from_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     display_name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Labels people find the agent by (S40-10). Metadata, not part of a version: editing them never
+    #: publishes one and never moves a checksum.
+    tags: Mapped[list[str]] = mapped_column(Json, default=list, server_default="[]")
     owner_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="active")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -872,6 +988,11 @@ class AgentVersion(Base, PkMixin, TimestampMixin):
     spec: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     checksum: Mapped[str] = mapped_column(String(80))
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Why this version exists, in the author's words (S40-12, ADR 0076); null for a version published
+    #: before messages existed or through the original bare-spec endpoint.
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The version this one copies, when it is a restore (S40-12): the spec and checksum are the same bytes.
+    restored_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ProjectAgent(Base, PkMixin, TimestampMixin):

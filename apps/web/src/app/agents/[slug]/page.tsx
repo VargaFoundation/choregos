@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { LifecycleBadges, LifecyclePanel } from "@/components/agents/lifecycle";
 import {
@@ -15,9 +15,13 @@ import {
   ScopePanel,
   UpstreamBanner,
 } from "@/components/agents/governance";
+import { DefinitionView } from "@/components/agents/definition-view";
+import { AgentDetailsCard } from "@/components/agents/details";
+import { History } from "@/components/agents/history";
+import { TagList } from "@/components/agents/tags";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
-import { estUnClientMcp, etatDuClient, readOnly, resumeDeLaVersion } from "@/components/agents/registre";
+import { estUnClientMcp, etatDuClient, readOnly } from "@/components/agents/registre";
 import {
   Badge,
   Breadcrumbs,
@@ -38,10 +42,11 @@ import {
   Tabs,
   tabClasses,
 } from "@/components/ui";
+import { canEdit, currentVersion, parseCompare, versionOf } from "@/lib/agent-versions";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import type { Agent, AgentSpec } from "@/lib/types";
+import type { Agent } from "@/lib/types";
 
 // The builder is loaded when the Definition tab is opened (S32-01).
 const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {
@@ -52,7 +57,7 @@ const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m
 const AGENT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "definition", label: "Definition" },
-  { id: "versions", label: "Versions" },
+  { id: "history", label: "History" },
   { id: "runs", label: "Runs" },
   { id: "access", label: "Access" },
 ] as const;
@@ -68,7 +73,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   const { org } = useSession();
   const pathname = usePathname();
   const search = useSearchParams();
-  const demande = search.get("tab");
+  const demande = search.get("tab") === "versions" ? "history" : search.get("tab"); // the former name still opens History
   const onglet: AgentTab = AGENT_TABS.some((o) => o.id === demande) ? (demande as AgentTab) : "overview";
   const agent = useQuery({ queryKey: ["agent", org, slug], queryFn: () => api.agent(org, slug) });
   const [forking, setForking] = useState(false);
@@ -92,6 +97,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         {a.owner && <span className="text-xs text-ink-muted">Owned by {a.owner}</span>}
         {a.expires_at && <span className="text-xs text-ink-muted">Expires {shortDate(a.expires_at)}</span>}
       </div>
+      <TagList tags={a.tags} link />
       <ReasonNote agent={a} />
       <UpstreamBanner agent={a} />
       {(a.can?.fork_scopes ?? []).length > 0 && (
@@ -117,7 +123,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       </Tabs>
       {onglet === "overview" && (
         <>
-          {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
+          <AgentDetailsCard key={`${a.slug}-${a.display_name}-${a.description}-${(a.tags ?? []).join(",")}`} org={org} agent={a} />
           {a.kind === "remote" && <RemoteDrift org={org} slug={slug} />}
           <Statut org={org} agent={a} />
           <Card title="Lifecycle">
@@ -132,7 +138,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         </>
       )}
       {onglet === "definition" && <Definition org={org} agent={a} />}
-      {onglet === "versions" && <Versions agent={a} />}
+      {onglet === "history" && <History org={org} agent={a} compare={parseCompare(search.get("compare"))} />}
       {onglet === "runs" && <Runs org={org} slug={slug} />}
       {onglet === "access" && (
         <>
@@ -273,7 +279,7 @@ function RemoteDrift({ org, slug }: { org: string; slug: string }) {
   return latest?.result?.reason === "remote_card_changed" ? <CardChangedWarning slug={slug} /> : null;
 }
 
-/** What the agent is: a remote agent shows its pinned card, any other its current version (S30-05). */
+/** What the agent is: a remote agent shows its pinned card, any other its versions (S30-05, S40-12). */
 function Definition({ org, agent }: { org: string; agent: Agent }) {
   const courante = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version)[0];
   if (agent.kind === "remote" && courante && a2aOf(courante.spec)) return <RemoteVersion org={org} agent={agent} />;
@@ -302,97 +308,48 @@ function RemoteVersion({ org, agent }: { org: string; agent: Agent }) {
   );
 }
 
-/** What the agent is: its current version, and the next one, published from it (S30-05). */
+/**
+ * What the agent is (S40-12, ADR 0076): one version, read-only and grouped. Editing is a deliberate mode
+ * (`?edit=1`), based on the version shown; leaving it, by publishing or discarding, comes back here.
+ */
 function AcpDefinition({ org, agent }: { org: string; agent: Agent }) {
-  const versions = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version);
-  const courante = versions[0];
-  // The publication message lives HERE: the form remounts when the published version arrives
-  // (key `latest_version`), and used to take the message with it (S23-13, seen in CI).
+  const router = useRouter();
+  const search = useSearchParams();
+  const asked = Number(search.get("version"));
+  const shown = Number.isInteger(asked) && asked > 0 && versionOf(agent, asked) ? asked : null;
+  const editing = search.get("edit") === "1" && canEdit(agent);
+  // The publication message lives HERE: the editor stays mounted while the published version arrives.
   const [publiee, setPubliee] = useState<string | null>(null);
+  const base = versionOf(agent, shown ?? currentVersion(agent));
+  const leave = () => router.replace(`/agents/${agent.slug}?tab=definition${shown ? `&version=${shown}` : ""}`);
   return (
     <>
-      <Card title={`Version ${courante?.version ?? "—"}`}>
-        {courante ? <Specification spec={courante.spec} /> : <p className="text-sm text-ink-muted">No version</p>}
-      </Card>
-      <CatalogueWarning agent={agent} />
-      {readOnly(agent) ? (
-        <section className="space-y-2" aria-labelledby="new-version-title">
-          <Heading as="h2" size="md" id="new-version-title">{`New version (v${agent.latest_version + 1})`}</Heading>
-          <Button disabled aria-describedby="why-readonly">
-            {`Publish v${agent.latest_version + 1}`}
-          </Button>
-          <p id="why-readonly" className="text-sm text-ink-muted" data-testid="why-readonly">
-            {agent.cannot_reason ?? "You may not change this agent."}
-          </p>
-        </section>
-      ) : agent.status !== "revoked" && (
+      {editing ? (
         // No card around the builder: it lays out its own two columns, and a card's padding took the width (S39-05).
-        <section className="space-y-3" aria-labelledby="new-version-title">
-          <Heading as="h2" size="md" id="new-version-title">{`New version (v${agent.latest_version + 1})`}</Heading>
+        <section className="space-y-3" aria-labelledby="edit-title">
+          <Heading as="h2" size="md" id="edit-title">{`Editing v${base?.version ?? "\u2014"} \u2192 v${agent.latest_version + 1}`}</Heading>
+          <CatalogueWarning agent={agent} />
           <AgentBuilder
-            key={agent.latest_version}
             org={org}
             mode={{ kind: "version", agent }}
-            start={courante?.spec ?? {}}
-            onDone={setPubliee}
+            start={base?.spec ?? {}}
+            onDone={(message) => {
+              setPubliee(message);
+              router.replace(`/agents/${agent.slug}?tab=definition`);
+            }}
+            onCancel={leave}
           />
         </section>
+      ) : (
+        <>
+          <CatalogueWarning agent={agent} />
+          <DefinitionView org={org} agent={agent} version={shown} />
+        </>
       )}
       {publiee && (
         <p className="text-sm" role="status">
           {publiee}
         </p>
-      )}
-    </>
-  );
-}
-
-/** Les versions : immuables. One is read at a time; the newest by default. */
-function Versions({ agent }: { agent: Agent }) {
-  const versions = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version);
-  const [choix, setChoix] = useState<number | null>(null);
-  const choisie = versions.find((v) => v.version === (choix ?? agent.latest_version)) ?? versions[0];
-  if (versions.length === 0) return <Empty>No version</Empty>;
-  return (
-    <>
-      <Card title="Versions" padding="none" className="overflow-hidden">
-        <Table aria-label="Versions">
-          <THead>
-            <TR>
-              <TH>Version</TH>
-              <TH>Published by</TH>
-              <TH>When</TH>
-              <TH>Checksum</TH>
-              <TH>
-                <span className="sr-only">Actions</span>
-              </TH>
-            </TR>
-          </THead>
-          <TBody>
-            {versions.map((v) => (
-              <TR key={v.version} aria-current={v.version === choisie?.version ? "true" : undefined}>
-                <TD className="font-mono">v{v.version}</TD>
-                <TD>{v.created_by ?? "—"}</TD>
-                <TD className="font-mono text-xs">{v.created_at ? shortDate(v.created_at) : "—"}</TD>
-                <TD className="font-mono text-xs">{v.checksum.slice(0, 19)}</TD>
-                <TD align="right">
-                  <Button size="sm" onClick={() => setChoix(v.version)} disabled={v.version === choisie?.version}>
-                    View<span className="sr-only"> v{v.version}</span>
-                  </Button>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      </Card>
-      {choisie && (
-        <Card title={`Version ${choisie.version}`}>
-          <Specification spec={choisie.spec} />
-          <p className="mt-3 text-xs text-ink-muted">
-            {choisie.created_by ? `Published by ${choisie.created_by}` : "Published"}
-            {choisie.created_at ? ` ${relative(choisie.created_at)}` : ""} · {choisie.checksum.slice(0, 19)}
-          </p>
-        </Card>
       )}
     </>
   );
@@ -463,75 +420,6 @@ function Acces({ agent }: { agent: Agent }) {
         </ul>
       )}
     </Card>
-  );
-}
-
-function Specification({ spec }: { spec: AgentSpec }) {
-  // A code agent names an image; whether the operator pinned it by digest is the platform's to say.
-  const images = useQuery({
-    queryKey: ["platform-agent-images"],
-    queryFn: () => api.agentImages(),
-    retry: false,
-    enabled: spec.runtime?.kind === "code",
-  });
-  const imageName = spec.runtime?.kind === "code" ? spec.runtime.image : undefined;
-  const pinned = images.data?.find((i) => i.name === imageName)?.digest_pinned;
-  const outils = (spec.mcp_servers ?? []).flatMap((s) => (s.tools ?? []).map((t) => `${s.connector}: ${t}`));
-  return (
-    <div className="space-y-3 text-sm" data-testid="version">
-      <p className="text-ink-muted">{resumeDeLaVersion(spec)}</p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
-        <dt className="text-ink-muted">Model</dt>
-        <dd>{spec.model ?? "The project's profile"}</dd>
-        {spec.runtime?.kind === "code" ? (
-          <>
-            <dt className="text-ink-muted">Runtime</dt>
-            <dd data-testid="runtime-code">
-              <span className="rounded border border-line px-1.5 py-0.5">Code · {spec.runtime.image}</span>{" "}
-              <span className={pinned === false ? "text-warn" : "text-ink-muted"} data-testid="image-pinned">
-                {pinned === undefined ? "" : pinned ? "pinned by digest" : "not pinned by digest"}
-              </span>
-              <span className="mt-1 block font-mono text-ink-muted">{(spec.runtime.command ?? []).join(" ")}</span>
-            </dd>
-          </>
-        ) : (
-          <>
-            <dt className="text-ink-muted">Backend</dt>
-            <dd>{spec.backend ?? "The project's"}</dd>
-          </>
-        )}
-        <dt className="text-ink-muted">Limits</dt>
-        <dd>
-          {spec.limits?.max_turns ?? "—"} turns · {spec.limits?.max_minutes ?? "—"} min
-        </dd>
-        <dt className="text-ink-muted">Budget</dt>
-        <dd>
-          {spec.budget?.run_usd != null ? `${usd(spec.budget.run_usd)}/run` : "—"} ·{" "}
-          {spec.budget?.daily_usd != null ? `${usd(spec.budget.daily_usd)}/day` : "—"}
-          {spec.budget?.monthly_usd != null ? ` · ${usd(spec.budget.monthly_usd)}/month` : ""}
-        </dd>
-        <dt className="text-ink-muted">Skills</dt>
-        <dd>
-          {(spec.skills ?? []).length === 0
-            ? "None"
-            : (spec.skills ?? []).map((s) => (
-                <Link key={s.slug} href={`/skills/${s.slug}`} className="mr-2 underline">
-                  {s.slug}
-                  {s.version ? `@${s.version}` : ""}
-                </Link>
-              ))}
-        </dd>
-        <dt className="text-ink-muted">Tools</dt>
-        <dd>{outils.length === 0 ? "Those of the platform (or of its human)" : outils.join(", ")}</dd>
-      </dl>
-      {spec.instructions ? (
-        <pre aria-label="Instructions" className="whitespace-pre-wrap break-words rounded bg-surface-muted p-3 text-xs">
-          {spec.instructions}
-        </pre>
-      ) : (
-        <p className="text-xs text-ink-muted">No instructions: the playbook of its role speaks.</p>
-      )}
-    </div>
   );
 }
 

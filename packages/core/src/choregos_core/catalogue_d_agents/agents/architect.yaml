@@ -7,6 +7,7 @@ catalogue:
   tools: ["skill:madr-4", "knowledge"]
 agent:
   slug: architect
+  tags: [madr, architecture, design]
   display_name: Architect
   description: Writes one architecture decision record in MADR 4 format from the study's research, and marks it accepted once people approve it.
   spec:

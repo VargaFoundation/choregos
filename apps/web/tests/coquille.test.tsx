@@ -51,8 +51,8 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
         .getAllByRole("link")
         .map((lien) => lien.textContent);
     expect(noms("Work")).toEqual(["Projects", "Inbox"]);
-    expect(noms("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "AI clients"]);
-    expect(noms("Organisation")).toEqual(["Spend", "Admin"]);
+    expect(noms("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "Memories"]);
+    expect(noms("Organisation")).toEqual(["Integrations", "Spend", "Admin"]);
   });
 
   it.each([
@@ -61,7 +61,7 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
     ["/p/billing-api/workflows/default-simple/map", "Workflows"],
     ["/p/billing-api", "Overview"],
     ["/skills/onboarding-procedure", "Skills"],
-    ["/integrations/cursor", "AI clients"],
+    ["/integrations/cursor", "Integrations"],
     ["/admin/connectors", "Connectors"],
     ["/admin", "Overview"],
   ])("sur %s, une seule entrée est active : %s", (pathname, attendue) => {

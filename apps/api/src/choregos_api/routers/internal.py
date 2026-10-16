@@ -29,7 +29,7 @@ from sqlalchemy import func, select
 from ..catalogue import appeler as appeler_outil
 from ..catalogue import outils_du_projet
 from ..config import get_settings
-from ..db.models import CostLedger, HumanRequest, Project, Run, RunEvent, WorkItem
+from ..db.models import CostLedger, HumanRequest, Organization, Project, Run, RunEvent, WorkItem
 from ..db.models import Finding as FindingRow
 from ..deps import Db, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
@@ -47,6 +47,8 @@ from ..schemas import (
     ScopeChangeRequestIn,
 )
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
+from ..schemas.memory import RunMemoryHit, RunMemorySearch
+from ..schemas.network import NetworkDecisionBatch, RunNetwork
 from ..services import effective_policy, persist_event, ranger_les_sorties
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -59,6 +61,7 @@ from ..services.artifacts import (
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
 from ..services.couts import dimensions_of
+from ..services.network import record_decisions, run_network
 from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner, record_digests
 from ..services.tickets import sorties_a_ranger
 from ..temporal import get_temporal, interpreter_id
@@ -123,6 +126,26 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
             last_seq=max(e.seq for e in body.events),
         )
     return {"accepted": written}
+
+
+@router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")
+async def get_run_network(id: str, session: Db, claims: RunAuth) -> RunNetwork:
+    """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token."""
+    run, _, _ = await _run_and_item(session, id)
+    return await run_network(session, run)
+
+
+@router.post(
+    "/runs/{id}/network/decisions",
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="postRunNetworkDecisions",
+)
+async def post_network_decisions(
+    id: str, body: NetworkDecisionBatch, session: Db, claims: RunAuth
+) -> dict[str, int]:
+    """What the proxy or the runner let through or refused: cumulative totals, replay-safe."""
+    run, _, project = await _run_and_item(session, id)
+    return {"accepted": await record_decisions(session, run, project, body)}
 
 
 @router.post("/runs/{id}/result", operation_id="postRunResult")
@@ -556,6 +579,38 @@ async def search_knowledge(
     )
 
 
+@router.post(
+    "/runs/{id}/memory/search",
+    response_model=list[RunMemoryHit],
+    operation_id="searchRunMemory",
+)
+async def search_memory(id: str, body: RunMemorySearch, session: Db, claims: RunAuth) -> list[RunMemoryHit]:
+    """`search_memory` of the sidecar (S40-11): the memories the run's `StageInput` names, and no others.
+
+    The run token proves the run; what it may read is what its `StageInput` resolved when it was
+    prepared. A label that is not one of them is 404. Each memory is searched under the read timeout.
+    """
+    from ..services.memory_access import search_run_memories
+
+    run, _, project = await _run_and_item(session, id)
+    policy = await effective_policy(session, project.id)
+    if not policy.memory.enabled:
+        return []
+    organisation = await session.get(Organization, project.org_id)
+    org_slug = organisation.slug if organisation is not None else ""
+    hits = await search_run_memories(
+        session,
+        run,
+        project,
+        org_slug,
+        body.query,
+        body.k,
+        body.memory,
+        policy.memory.read_timeout_ms / 1000 * 10,
+    )
+    return [RunMemoryHit.model_validate(hit) for hit in hits]
+
+
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
 async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
     run, item, project = await _run_and_item(session, id)
@@ -608,7 +663,9 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     import httpx
     from choregos_adapters.github import RUNNER_PERMISSIONS, GitHubAppAuth
 
-    run, _item, _project = await _run_and_item(session, id)
+    from ..services.github_app import claimed_installation_for, implicit_claim_enabled
+
+    run, _item, project_row = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("result already posted for this run")
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
@@ -617,7 +674,19 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     cle = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
     if depot is None or not app_id or not cle:
         return GitToken(token=None, repository=depot)
-    auth = GitHubAppAuth(app_id=app_id, private_key=cle)
+    # The installation THIS organisation claimed on the repository's owner, never another's (ADR 0073).
+    # Without a claim, a single-organisation instance still discovers it from the repository; with
+    # several organisations a repository outside the claims gets no token.
+    owner = depot.split("/", 1)[0]
+    claimed = await claimed_installation_for(session, project_row.org_id, owner)
+    if claimed is None and not await implicit_claim_enabled(session):
+        return GitToken(token=None, repository=depot)
+    auth = GitHubAppAuth(
+        app_id=app_id,
+        private_key=cle,
+        pinned_installation=claimed.id if claimed else None,
+        pinned_account=owner if claimed else None,
+    )
     async with httpx.AsyncClient(timeout=20) as client:
         # Cloner et pousser sa branche : `contents: write`, rien d'autre — la PR, la plateforme l'ouvre.
         jeton = await auth.token_for(client, depot, permissions=RUNNER_PERMISSIONS, ttl_s=3600)

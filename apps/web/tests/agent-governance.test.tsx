@@ -103,13 +103,14 @@ describe("an agent the caller may not change", () => {
     expect(screen.getByRole("button", { name: "Suspend" })).toBeDisabled();
   });
 
-  it("the Definition tab holds the publish button back with the reason, and no builder", async () => {
+  it("the Definition tab holds the Edit button back with the reason, and no builder", async () => {
     window.history.replaceState(null, "", "/agents/developer?tab=definition");
     const search = vi.spyOn(URLSearchParams.prototype, "get").mockImplementation((k) => (k === "tab" ? "definition" : null));
     vi.mocked(api.agent).mockResolvedValue(common());
     await open(page());
-    expect(await screen.findByRole("button", { name: "Publish v4" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeDisabled();
     expect(screen.getByTestId("why-readonly").textContent).toBe(REASON);
+    expect(screen.queryByRole("button", { name: /^Publish v/ })).toBeNull();
     search.mockRestore();
   });
 

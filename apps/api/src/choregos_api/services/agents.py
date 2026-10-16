@@ -35,6 +35,11 @@ def empreinte(spec: AgentSpec) -> str:
     # Same for the runtime (ADR 0063): a version that names none keeps the digest it had.
     if contenu.get("runtime") is None:
         contenu.pop("runtime", None)
+    # `memories` (S40-11) needs nothing here: `AgentSpec` does not serialise it while unset, so every
+    # version published before it keeps its digest.
+    # The default network (ADR 0070): every field unset, as in a version published before it existed.
+    if not any(value is not None for value in (contenu.get("network") or {}).values()):
+        contenu.pop("network", None)
     blob = json.dumps(contenu, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 

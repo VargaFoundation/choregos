@@ -147,3 +147,58 @@ async def test_la_pagination_suit_les_pages_pleines() -> None:
     )
     assert [r.url.params["page"] for r in fil.requetes] == ["1", "2"]
     assert fil.requetes[0].url.params["per_page"] == "100"
+
+
+async def test_a_pinned_installation_is_used_without_discovery(cle_privee: tuple[str, str]) -> None:
+    pem, _ = cle_privee
+    fil = Fil({("POST", "/app/installations/77/access_tokens"): (201, {"token": "ghs_pinned"})})
+    auth = GitHubAppAuth(
+        app_id="1", private_key=pem, base_url=API, pinned_installation=77, pinned_account="Varga"
+    )
+    async with fil.client() as client:
+        token = await auth.token_for(client, "varga/billing", permissions=RUNNER_PERMISSIONS)
+    assert token.token == "ghs_pinned"
+    assert fil.envoyees() == [("POST", "/app/installations/77/access_tokens")], (
+        "no GET /repos/.../installation: the claimed installation is not rediscovered"
+    )
+
+
+async def test_a_pinned_installation_refuses_another_owner(cle_privee: tuple[str, str]) -> None:
+    from choregos_adapters.errors import ConfigurationError
+
+    pem, _ = cle_privee
+    fil = Fil({("POST", "/app/installations/77/access_tokens"): (201, {"token": "ghs_stolen"})})
+    auth = GitHubAppAuth(
+        app_id="1", private_key=pem, base_url=API, pinned_installation=77, pinned_account="varga"
+    )
+    async with fil.client() as client:
+        with pytest.raises(ConfigurationError, match="belongs to `varga`"):
+            await auth.token_for(client, "othercorp/private-repo")
+    assert fil.requetes == [], "nothing left for GitHub: no token for a repository of another owner"
+
+
+async def test_list_installations_paginates(cle_privee: tuple[str, str]) -> None:
+    pem, _ = cle_privee
+    first = [{"id": n} for n in range(100)]
+    second = [{"id": 100}]
+    pages = [first, second]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/app/installations"
+        return httpx.Response(200, json=pages[int(request.url.params["page"]) - 1])
+
+    auth = GitHubAppAuth(app_id="1", private_key=pem, base_url=API)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        found = await auth.list_installations(client)
+    assert [i["id"] for i in found] == list(range(101))
+
+
+def test_the_connector_factory_pins_the_injected_installation(monkeypatch: pytest.MonkeyPatch) -> None:
+    from choregos_adapters import _github_client
+
+    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "1")
+    monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "pem")
+    pinned = _github_client({"repo": "varga/billing", "installation_id": 5})
+    assert (pinned.auth.pinned_installation, pinned.auth.pinned_account) == (5, "varga")
+    discovered = _github_client({"repo": "varga/billing"})
+    assert discovered.auth.pinned_installation is None, "no claim injected: discovery, as before"

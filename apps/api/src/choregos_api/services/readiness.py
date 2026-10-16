@@ -1,0 +1,723 @@
+# SPDX-License-Identifier: Apache-2.0
+"""What a project still lacks to run, computed from stored state (S40-06).
+
+`load_facts` reads everything once; each `item_*` function is pure over the resulting `Facts`, so a
+unit test needs no database. Nothing here calls the network: a connector's state is the one its last
+test left, which keeps the read fast and lets the CLI and the MCP door show the same list as the console.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from choregos_contracts import ProjectConfig
+from choregos_core import ModelResolutionError
+from choregos_core.models import ModelResolver
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..config import get_settings
+from ..db.models import (
+    BackendRegistryRow,
+    Connector,
+    Membership,
+    ModelProfileRow,
+    Project,
+    WorkflowDef,
+    WorkItem,
+)
+from ..schemas.readiness import ProjectReadiness, ReadinessFix, ReadinessItem, ReadinessSummary
+from . import github_app
+from .definitions import active_policy, policy_model, workflow_model
+from .human_groups import groups_known_in, unknown_group_warnings
+from .projets import declares_a_release_train
+
+#: A test older than this is worth running again.
+STALE_TEST = timedelta(days=7)
+#: Connector types that stand in for the real thing.
+STAND_INS = {"demo", "fake"}
+#: Capabilities the deployment provides when a project does not configure one: the executor
+#: (`CHOREGOS_EXECUTOR_KIND`), the gateway, the memory service, and the internal tracker.
+PROVIDED_BY_THE_DEPLOYMENT = frozenset({"runtime", "gateway", "memory", "tracker"})
+#: Secret fields that never block a connector: a webhook secret only matters once GitHub can reach us.
+OPTIONAL_SECRETS = {"webhook_secret"}
+GITHUB_KINDS = {"tracker": "github-issues", "scm": "github"}
+
+CAPABILITY_TITLES = {
+    "tracker": "Tracker",
+    "scm": "Repository (SCM)",
+    "ci": "Continuous integration",
+    "cd": "Continuous delivery",
+    "runtime": "Agent runtime",
+    "gateway": "Model gateway",
+    "memory": "Memory",
+    "notify": "Notifications",
+}
+
+
+@dataclass(frozen=True)
+class ConnectorFact:
+    kind: str
+    type: str
+    status: str
+    last_check_at: datetime | None
+    last_error: str | None
+    config: dict[str, Any]
+    #: secret fields the type declares and the connector needs
+    secrets_expected: tuple[str, ...] = ()
+    #: those that are set (a sealed value that exists, or a reference)
+    secrets_set: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class Facts:
+    slug: str
+    status: str
+    provision_failure: str | None
+    config: ProjectConfig
+    #: names of the active workflows, and the default one
+    workflows: tuple[str, ...]
+    default_workflow: str | None
+    #: (capability, reasons) as `exigences` derives them
+    requirements: tuple[tuple[str, tuple[str, ...]], ...]
+    connectors: dict[str, ConnectorFact]
+    #: capabilities the deployment provides on its own
+    provided: frozenset[str]
+    #: does the deployment have a GitHub App; (kind, owner, claimed) of each GitHub connector
+    github_app: bool = False
+    github_owners: tuple[tuple[str, str, bool], ...] = ()
+    #: the backends a project may use here (deployment list and the platform catalogue)
+    usable_backends: frozenset[str] = frozenset({"claude-code"})
+    #: profiles named by the active workflows that no project or platform profile defines
+    profiles_unknown: tuple[str, ...] = ()
+    #: profiles that resolve but have no eval for the default backend
+    profiles_unvalidated: tuple[str, ...] = ()
+    profiles_used: int = 0
+    ticket_budget_set: bool = False
+    daily_budget_set: bool = False
+    has_owner: bool = False
+    has_release_captain: bool = False
+    unknown_groups: tuple[str, ...] = ()
+    has_release_train: bool = False
+    #: findings or memory reviews announce themselves to the notification channel
+    announces: bool = False
+    work_items: int = 0
+    now: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+def _fix(slug: str, anchor: str, by: str = "project_owner", *, page: str = "settings") -> ReadinessFix:
+    return ReadinessFix(href=f"/p/{slug}/{page}" + (f"#{anchor}" if anchor else ""), by=by)
+
+
+def _item(id_: str, section: str, title: str, state: str, detail: str, fix: ReadinessFix) -> ReadinessItem:
+    return ReadinessItem(id=id_, section=section, title=title, state=state, detail=detail, fix=fix)
+
+
+# ───────────────────────────── the items: pure functions over Facts ─────────────────────────────
+
+
+def item_provisioned(f: Facts) -> list[ReadinessItem]:
+    fix = _fix(f.slug, "")
+    if f.status == "active":
+        return [_item("provisioned", "general", "Project provisioned", "done", "provisioning ran.", fix)]
+    if f.status == "provisioning":
+        return [
+            _item("provisioned", "general", "Project provisioned", "todo", "provisioning is running.", fix)
+        ]
+    why = f" Provisioning failed at: {f.provision_failure}." if f.provision_failure else ""
+    return [
+        _item(
+            "provisioned",
+            "general",
+            "Project provisioned",
+            "todo",
+            f"the project is {f.status}: nothing runs until it is active.{why}",
+            fix,
+        )
+    ]
+
+
+def item_workflow(f: Facts) -> list[ReadinessItem]:
+    title = "A workflow published"
+    fix = ReadinessFix(href=f"/p/{f.slug}/workflows", by="project_owner")
+    if not f.workflows:
+        return [
+            _item(
+                "workflow",
+                "general",
+                title,
+                "todo",
+                "a request has nowhere to go until a workflow exists.",
+                fix,
+            )
+        ]
+    if f.default_workflow is None or f.default_workflow not in f.workflows:
+        return [
+            _item(
+                "workflow",
+                "general",
+                title,
+                "check",
+                "no active workflow is the default: a request that names none has nowhere to go.",
+                fix,
+            )
+        ]
+    return [
+        _item(
+            "workflow",
+            "general",
+            title,
+            "done",
+            f"{len(f.workflows)} active, `{f.default_workflow}` by default.",
+            fix,
+        )
+    ]
+
+
+def _connector_item(f: Facts, capability: str, reasons: tuple[str, ...]) -> ReadinessItem:
+    title = f"{CAPABILITY_TITLES.get(capability, capability.title())} connected"
+    why = reasons[0] if reasons else "a workflow needs it"
+    id_ = f"connector-{capability}"
+    connector = f.connectors.get(capability)
+    platform = capability in f.provided
+    fix = _fix(f.slug, "connections", "platform_operator" if platform else "project_owner")
+    if connector is None:
+        if platform:
+            return _item(id_, "connections", title, "done", "provided by the platform.", fix)
+        return _item(id_, "connections", title, "todo", f"{why}; none is configured.", fix)
+    if connector.type in STAND_INS:
+        return _item(
+            id_, "connections", title, "check", f"`{connector.type}` is a stand-in, not the real thing.", fix
+        )
+    if connector.status == "ok":
+        return _item(id_, "connections", title, "done", f"`{connector.type}`, last test passed.", fix)
+    if connector.status == "unknown":
+        return _item(id_, "connections", title, "check", f"`{connector.type}` was never tested.", fix)
+    error = f": {connector.last_error}" if connector.last_error else ""
+    return _item(id_, "connections", title, "todo", f"`{connector.type}` failed its last test{error}.", fix)
+
+
+def item_connectors(f: Facts) -> list[ReadinessItem]:
+    return [_connector_item(f, capability, reasons) for capability, reasons in f.requirements]
+
+
+def item_connector_secrets(f: Facts) -> list[ReadinessItem]:
+    items: list[ReadinessItem] = []
+    for kind, connector in sorted(f.connectors.items()):
+        missing = [s for s in connector.secrets_expected if s not in connector.secrets_set]
+        if not connector.secrets_expected:
+            continue
+        title = f"{CAPABILITY_TITLES.get(kind, kind.title())} secrets set"
+        fix = _fix(f.slug, "connections")
+        id_ = f"connector-{kind}-secrets"
+        if missing:
+            items.append(_item(id_, "connections", title, "todo", f"not set: {', '.join(missing)}.", fix))
+        else:
+            items.append(_item(id_, "connections", title, "done", "every secret field is set.", fix))
+    return items
+
+
+def item_github_app(f: Facts) -> list[ReadinessItem]:
+    items: list[ReadinessItem] = []
+    for kind, owner, claimed in f.github_owners:
+        id_ = f"github-app-{kind}"
+        title = "GitHub App installed on the repository's owner"
+        fix = _fix(f.slug, "connections")
+        if not f.github_app:
+            items.append(
+                _item(id_, "connections", title, "not_needed", "this deployment has no GitHub App.", fix)
+            )
+        elif claimed:
+            items.append(
+                _item(
+                    id_,
+                    "connections",
+                    title,
+                    "done",
+                    f"installed on `{owner}`, claimed by this organisation.",
+                    fix,
+                )
+            )
+        else:
+            items.append(
+                _item(
+                    id_,
+                    "connections",
+                    title,
+                    "todo",
+                    f"the Choregos GitHub App is not installed on `{owner}` for this organisation.",
+                    fix,
+                )
+            )
+    return items
+
+
+def item_stale_tests(f: Facts) -> list[ReadinessItem]:
+    items: list[ReadinessItem] = []
+    for kind, connector in sorted(f.connectors.items()):
+        if connector.status != "ok" or connector.last_check_at is None:
+            continue
+        checked = connector.last_check_at
+        if checked.tzinfo is None:
+            checked = checked.replace(tzinfo=UTC)
+        if f.now - checked > STALE_TEST:
+            days = (f.now - checked).days
+            items.append(
+                _item(
+                    f"connector-{kind}-stale",
+                    "connections",
+                    f"{CAPABILITY_TITLES.get(kind, kind.title())} tested recently",
+                    "check",
+                    f"the last test passed {days} days ago: test it again.",
+                    _fix(f.slug, "connections"),
+                )
+            )
+    return items
+
+
+def item_repository(f: Facts) -> list[ReadinessItem]:
+    if "scm" not in {capability for capability, _ in f.requirements}:
+        return []
+    fix = _fix(f.slug, "general")
+    repo = f.config.repo
+    items = [
+        _item("repository", "general", "Repository set", "done", f"`{repo.url}`.", fix)
+        if repo and repo.url
+        else _item(
+            "repository", "general", "Repository set", "todo", "the project names no repository URL.", fix
+        )
+    ]
+    measured = bool(repo and repo.test_command) or bool(f.config.dod.facts)
+    items.append(
+        _item(
+            "repository-checks",
+            "general",
+            "Tests measured by the runner",
+            "done",
+            "a test command is set.",
+            fix,
+        )
+        if measured
+        else _item(
+            "repository-checks",
+            "general",
+            "Tests measured by the runner",
+            "check",
+            "no test command: the runner measures no tests, lint or types, only what the agent says.",
+            fix,
+        )
+    )
+    return items
+
+
+def item_backend(f: Facts) -> list[ReadinessItem]:
+    backend = f.config.agent.default_backend
+    fix = _fix(f.slug, "agents")
+    usable = ", ".join(sorted(f.usable_backends)) or "none"
+    if backend in f.usable_backends:
+        return [_item("backend", "agents", "Agent backend usable", "done", f"`{backend}`.", fix)]
+    return [
+        _item(
+            "backend",
+            "agents",
+            "Agent backend usable",
+            "todo",
+            f"`{backend}` is not enabled on this deployment (usable: {usable}).",
+            ReadinessFix(href=fix.href, by="project_owner"),
+        )
+    ]
+
+
+def item_models(f: Facts) -> list[ReadinessItem]:
+    title = "Model profiles resolve"
+    fix = _fix(f.slug, "agents")
+    if f.profiles_used == 0:
+        return [
+            _item("models", "agents", title, "not_needed", "no active workflow names a model profile.", fix)
+        ]
+    if f.profiles_unknown:
+        names = ", ".join(f"`{n}`" for n in f.profiles_unknown)
+        return [
+            _item("models", "agents", title, "todo", f"no project or platform profile defines {names}.", fix)
+        ]
+    if f.profiles_unvalidated and not f.config.models.allow_unvalidated:
+        names = ", ".join(f"`{n}`" for n in f.profiles_unvalidated)
+        return [
+            _item(
+                "models",
+                "agents",
+                title,
+                "check",
+                f"{names} has no eval for `{f.config.agent.default_backend}`: the pairing is unproven.",
+                fix,
+            )
+        ]
+    return [_item("models", "agents", title, "done", f"{f.profiles_used} profile(s) resolve.", fix)]
+
+
+def item_budgets(f: Facts) -> list[ReadinessItem]:
+    fix = _fix(f.slug, "guardrails")
+    title = "Spending capped"
+    if f.ticket_budget_set and f.daily_budget_set:
+        return [_item("budgets", "guardrails", title, "done", "per-ticket and daily budgets are set.", fix)]
+    missing = [
+        label
+        for label, ok in (
+            ("`budgets.ticket_usd`", f.ticket_budget_set),
+            ("`budgets.daily_project_usd`", f.daily_budget_set),
+        )
+        if not ok
+    ]
+    return [
+        _item("budgets", "guardrails", title, "check", f"not set in the policy: {', '.join(missing)}.", fix)
+    ]
+
+
+def item_people(f: Facts) -> list[ReadinessItem]:
+    members = f"/p/{f.slug}/members"
+    items = [
+        _item(
+            "people-owner",
+            "people",
+            "A project owner",
+            "done" if f.has_owner else "todo",
+            "someone owns the project." if f.has_owner else "nobody holds the project_owner role.",
+            ReadinessFix(href=members, by="org_admin"),
+        )
+    ]
+    if f.has_release_train:
+        items.append(
+            _item(
+                "people-release-captain",
+                "people",
+                "A release captain",
+                "done" if f.has_release_captain else "todo",
+                "a release captain is a member."
+                if f.has_release_captain
+                else "the workflows run a release train and nobody holds the release_captain role.",
+                ReadinessFix(href=members, by="project_owner"),
+            )
+        )
+    for group in f.unknown_groups:
+        items.append(
+            _item(
+                f"people-group-{group}",
+                "people",
+                f"Group `{group}` exists",
+                "check",
+                f"nobody in the organisation has carried the identity-provider group `{group}` at sign-in: "
+                "a step addressed to it waits for an administrator.",
+                ReadinessFix(href=members, by="external"),
+            )
+        )
+    return items
+
+
+def item_notifications(f: Facts) -> list[ReadinessItem]:
+    title = "Notifications reach someone"
+    fix = _fix(f.slug, "notifications")
+    if not f.has_release_train and not f.announces:
+        return [
+            _item("notifications", "notifications", title, "not_needed", "nothing announces itself.", fix)
+        ]
+    strong = f.has_release_train
+    notify = f.connectors.get("notify")
+    channel = f.config.notify.slack_channel
+    state_if_missing = "todo" if strong else "check"
+    what = "the release train announces and asks" if strong else "findings and memory reviews announce"
+    if notify is None:
+        return [
+            _item(
+                "notifications",
+                "notifications",
+                title,
+                state_if_missing,
+                f"{what}, but the project has no notify connector: the default channel is unconfigured.",
+                fix,
+            )
+        ]
+    if notify.type in STAND_INS:
+        return [
+            _item("notifications", "notifications", title, "check", f"`{notify.type}` is a stand-in.", fix)
+        ]
+    if notify.status not in {"ok", "unknown"}:
+        return [
+            _item(
+                "notifications",
+                "notifications",
+                title,
+                state_if_missing,
+                "the notify connector failed its last test.",
+                fix,
+            )
+        ]
+    if not channel and not f.config.notify.emails:
+        return [
+            _item(
+                "notifications",
+                "notifications",
+                title,
+                state_if_missing,
+                f"{what}, but no Slack channel or e-mail is set.",
+                fix,
+            )
+        ]
+    if notify.status == "unknown":
+        return [
+            _item(
+                "notifications",
+                "notifications",
+                title,
+                "check",
+                "the notify connector was never tested.",
+                fix,
+            )
+        ]
+    return [
+        _item("notifications", "notifications", title, "done", "a connector and a destination are set.", fix)
+    ]
+
+
+def item_tools(f: Facts) -> list[ReadinessItem]:
+    tools = f.config.tools
+    fix = _fix(f.slug, "tools")
+    detail = (
+        "no catalogue tool is opened to this project."
+        if not tools
+        else "the whole catalogue is opened to this project."
+        if "*" in tools
+        else f"{len(tools)} catalogue tool(s) opened."
+    )
+    return [_item("tools", "tools", "Catalogue tools", "done", detail, fix)]
+
+
+def item_first_work_item(f: Facts) -> list[ReadinessItem]:
+    done = f.work_items > 0
+    return [
+        _item(
+            "first-item",
+            "general",
+            "A first request",
+            "done" if done else "check",
+            f"{f.work_items} request(s) filed." if done else "nothing has been filed yet.",
+            ReadinessFix(href=f"/p/{f.slug}/items", by="project_owner"),
+        )
+    ]
+
+
+ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
+    item_provisioned,
+    item_workflow,
+    item_connectors,
+    item_connector_secrets,
+    item_github_app,
+    item_stale_tests,
+    item_repository,
+    item_backend,
+    item_models,
+    item_budgets,
+    item_people,
+    item_notifications,
+    item_tools,
+    item_first_work_item,
+)
+
+
+def evaluate(facts: Facts) -> ProjectReadiness:
+    items = [item for function in ITEMS for item in function(facts)]
+    summary = ReadinessSummary(
+        done=sum(i.state == "done" for i in items),
+        check=sum(i.state == "check" for i in items),
+        todo=sum(i.state == "todo" for i in items),
+    )
+    return ProjectReadiness(ready=summary.todo == 0, summary=summary, items=items)
+
+
+# ───────────────────────────── loading ─────────────────────────────
+
+
+def _deployment_provides(capability: str) -> bool:
+    """`deployment_default_type` when the registry has it (S40-05), else the fixed list."""
+    from choregos_adapters import registry
+
+    custom = getattr(registry, "deployment_default_type", None)
+    if callable(custom):
+        return custom(capability) is not None
+    return capability in PROVIDED_BY_THE_DEPLOYMENT
+
+
+async def _connector_facts(session: AsyncSession, project: Project) -> dict[str, ConnectorFact]:
+    from choregos_adapters import spec_of
+    from choregos_adapters.registry import references_de_secret
+
+    from ..secret_store import secret_states
+
+    rows = (
+        (await session.execute(select(Connector).where(Connector.project_id == project.id))).scalars().all()
+    )
+    facts: dict[str, ConnectorFact] = {}
+    for row in rows:
+        spec = spec_of(row.kind, row.type)
+        expected = tuple(s for s in (spec.secret_fields if spec else ()) if s not in OPTIONAL_SECRETS)
+        references = references_de_secret(row.kind, row.type, dict(row.secret_refs or {}), row.secret_ref)
+        states = await secret_states(session, project.org_id, references)
+        is_set = frozenset(
+            s.field
+            for s in states
+            if s.source == "reference" or (s.source == "store" and s.version is not None)
+        )
+        facts[row.kind] = ConnectorFact(
+            kind=row.kind,
+            type=row.type,
+            status=row.status or "unknown",
+            last_check_at=row.last_check_at,
+            last_error=row.last_error,
+            config=dict(row.config or {}),
+            secrets_expected=expected,
+            secrets_set=is_set,
+        )
+    return facts
+
+
+async def _github_owners(
+    session: AsyncSession, project: Project, connectors: dict[str, ConnectorFact]
+) -> tuple[tuple[str, str, bool], ...]:
+    owners: list[tuple[str, str, bool]] = []
+    for kind, type_ in GITHUB_KINDS.items():
+        connector = connectors.get(kind)
+        if connector is None or connector.type != type_ or connector.config.get("api_url"):
+            continue
+        owner = github_app.owner_of(str(connector.config.get("repo") or ""))
+        if owner is None:
+            continue
+        claimed = await github_app.claimed_installation_for(session, project.org_id, owner) is not None
+        owners.append((kind, owner, claimed))
+    return tuple(owners)
+
+
+async def _usable_backends(session: AsyncSession) -> frozenset[str]:
+    from ..routers.admin import KNOWN_BACKENDS
+
+    rows = {row.name: row for row in (await session.execute(select(BackendRegistryRow))).scalars().all()}
+    allowed = set(get_settings().allowed_agent_backends)
+    usable = {
+        name
+        for name, _capabilities in KNOWN_BACKENDS
+        if (rows[name].enabled if name in rows else name == "claude-code")
+        and (not allowed or name in allowed)
+    }
+    return frozenset(usable)
+
+
+def _model_facts(
+    workflows: list[Any], config: ProjectConfig, validated: dict[str, list[str]]
+) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+    """(unknown profiles, unvalidated profiles, how many profiles the workflows name)."""
+    requested: set[str] = set()
+    for workflow in workflows:
+        for actor in workflow.actors.values():
+            model = str(getattr(actor, "model", "") or "")
+            if model.startswith("profile:") and model != "profile:by_size":
+                requested.add(model)
+    resolver = ModelResolver(gateway_url="", gateway_models=[], validated_backends=validated)
+    backend = config.agent.default_backend
+    unknown: list[str] = []
+    unvalidated: list[str] = []
+    for model in sorted(requested):
+        try:
+            resolver.resolve(model, project=config, backend=backend, allow_unvalidated=True)
+        except ModelResolutionError:
+            unknown.append(model.removeprefix("profile:"))
+            continue
+        try:
+            resolver.resolve(model, project=config, backend=backend, allow_unvalidated=False)
+        except ModelResolutionError:
+            unvalidated.append(model.removeprefix("profile:"))
+    return tuple(unknown), tuple(unvalidated), len(requested)
+
+
+async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> Facts:
+    from choregos_core.dsl.exigences import exigences
+
+    config = ProjectConfig.model_validate(project.config)
+    workflow_rows = (
+        (
+            await session.execute(
+                select(WorkflowDef).where(
+                    WorkflowDef.project_id == project.id, WorkflowDef.is_active.is_(True)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    workflows = [workflow_model(row) for row in workflow_rows]
+    requirements = tuple((e.capacite, tuple(e.raisons)) for e in exigences(workflows))
+    connectors = await _connector_facts(session, project)
+    policy = policy_model(await active_policy(session, project.id))
+    known_groups = await groups_known_in(session, project.org_id)
+    unknown_groups = sorted(
+        {
+            str(issue["message"]).split("`")[1]
+            for workflow in workflows
+            for issue in unknown_group_warnings(workflow, known_groups)
+        }
+    )
+    memberships = (
+        (
+            await session.execute(
+                select(Membership.role).where(
+                    Membership.org_id == project.org_id,
+                    (Membership.project_id == project.id) | Membership.project_id.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    validated = {
+        row.litellm_model: list(row.validated_backends or [])
+        for row in (
+            await session.execute(select(ModelProfileRow).where(ModelProfileRow.scope == "platform"))
+        ).scalars()
+    }
+    unknown_profiles, unvalidated_profiles, used = _model_facts(workflows, config, validated)
+    state = project.provision_state or {}
+    failed = next((s for s in state.get("steps", []) if s.get("status") == "failed"), None)
+    capabilities = {c for c, _ in requirements} | set(connectors)
+    return Facts(
+        slug=project.slug,
+        status=project.status,
+        provision_failure=(f"{failed.get('name')}: {failed.get('message')}" if failed else None),
+        config=config,
+        workflows=tuple(row.name for row in workflow_rows),
+        default_workflow=project.default_workflow,
+        requirements=requirements,
+        connectors=connectors,
+        provided=frozenset(c for c in capabilities if _deployment_provides(c)),
+        github_app=github_app.get_github_app() is not None,
+        github_owners=await _github_owners(session, project, connectors),
+        usable_backends=await _usable_backends(session),
+        profiles_unknown=unknown_profiles,
+        profiles_unvalidated=unvalidated_profiles,
+        profiles_used=used,
+        ticket_budget_set=bool(policy.budgets.ticket_usd),
+        daily_budget_set=policy.budgets.daily_project_usd is not None,
+        has_owner="project_owner" in memberships,
+        has_release_captain="release_captain" in memberships,
+        unknown_groups=tuple(unknown_groups),
+        has_release_train=await declares_a_release_train(session, project.id),
+        announces=bool(policy.findings.notify_severities) or policy.memory.enabled,
+        work_items=(
+            await session.execute(
+                select(func.count()).select_from(WorkItem).where(WorkItem.project_id == project.id)
+            )
+        ).scalar_one(),
+    )
+
+
+async def project_readiness(session: AsyncSession, project: Project, org_slug: str) -> ProjectReadiness:
+    return evaluate(await load_facts(session, project, org_slug))

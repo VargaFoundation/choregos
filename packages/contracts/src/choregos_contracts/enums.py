@@ -195,6 +195,7 @@ class EventType(StrEnum):
     RELEASE_ROLLED_BACK = "choregos.release.rolled_back"
     RELEASE_FROZEN = "choregos.release.frozen"
     TOOL_CALLED = "choregos.tool.called"
+    NETWORK_DENIED = "choregos.network.denied"
     #: Des motifs d'injection de prompt dans ce que l'agent allait lire (ticket, documents,
     #: mémoire) : journalisé toujours, bloquant selon `sandbox.prompt_injection`.
     SECURITY_INJECTION_SUSPECTED = "choregos.security.injection_suspected"

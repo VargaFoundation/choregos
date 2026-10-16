@@ -7,10 +7,11 @@ Seven ideas carry the whole platform. Everything else is plumbing.
 A project is a unit of work with its own connectors, workflow, policy and budgets. It lives
 in an organisation. Its configuration (`ProjectConfig`) names the repository, the model
 profiles and the labels; its **connectors** say which outside systems it talks to.
+Its **readiness** (`GET /projects/{id}/readiness`) lists, from stored state, what it still lacks to run and who can fix each item.
 
 Connectors ship for: trackers (`github-issues`, `jira`, `gitlab-issues`, `internal`), source
-control (`github`), CI (`tekton`), CD (`argocd`), execution (`tekton`, `k8s_job`, `aca`,
-`local_docker`), model gateway (`litellm`, `direct`), memory (`ecphoria`, `lexical`) and
+control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, the deployment's default; `tekton`, `k8s_job`, `aca`,
+`local_docker`, each chosen by name), model gateway (`litellm`, `direct`), memory (`ecphoria`, `lexical`) and
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 A **catalogue** is what the platform *offers*; a **connector** is what an organisation has
@@ -78,7 +79,9 @@ A **personal agent never runs in a workflow**: a process a whole team runs must 
 one person can change at will or take away when they leave. It runs in trials, and is promoted to a
 project (or forked into one) to reach a workflow. A **fork** is a new agent whose first version copies
 one version of its source and which remembers where it came from; it never follows the source on its
-own — it tells you when the source moved on.
+own — it tells you when the source moved on. An agent also carries **tags**, labels people find it by;
+they are metadata outside its versions, so editing them publishes nothing. A version carries a
+**message**, and going back to an older one **appends** a copy of it (ADR 0076): nothing is rewritten.
 
 ## Agent kinds and runtimes
 
@@ -87,6 +90,27 @@ MCP door, ADR 0033) or `remote` (the platform calls it over A2A, ADR 0062 — fo
 Rovo). A version's **runtime** says how it runs: `acp` (a coding agent the runner ships), `code` (an
 agent written in code, ADR 0063) or `a2a` (a remote agent: the runner pod calls it, a declared cost
 is booked, the same gates read its outputs).
+
+## Memory
+
+What agents learn from work is kept in **memories** ([ADR 0075](adr/0075-an-agent-reads-several-memories.md)),
+apart from knowledge bases (a corpus a human curates, read-only):
+
+- every project has two **implicit** memories: **shared** (what the project knows) and **own** (what one
+  agent learnt in that project, read by that agent only);
+- a project owner may add **named project memories** (`decisions`), read by that project's runs only;
+- an organisation administrator may add **global memories** (`security-lessons`), with a **reach**: every
+  project, or a listed few.
+
+An agent version **binds** up to eight of them, in order, each read or read-and-write
+(`"memories": [{"scope": "global", "slug": "security-lessons"}, {"scope": "project", "slug": "shared",
+"mode": "write"}]`). A `project` reference means "of whichever project the run is in", so an organisation
+agent works in many projects without ever reading another one's memory. **Earlier wins**: when two
+memories hold the same subject, the first is kept, and what fits the token budget is taken from each
+memory in turn. At most one binding **writes**: the run's lessons and the agent's proposals go there; for
+a **global** memory they are only ever **proposals**, accepted by an administrator. A version that
+says nothing keeps its legacy `memory` field (`project`, `agent`, `none`), which means the same
+bindings as before; nothing already published changes.
 
 ## Stage and run
 
@@ -166,6 +190,19 @@ a project both declares what it uses and belongs to the groups that entitle it.
 
 The list is written and reviewed like code. Choregos does not ask a remote server what it
 offers: an inventory that updates itself is not an access control.
+
+## Network access
+
+What a run may reach is bounded in three scopes that only ever narrow one another
+([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)): the **organisation**
+(`network` in its policy ceiling: the widest allowed set, a deny list, rate caps), the **project**
+(`sandbox.network` in its policy) and the **agent** (`network` in each published version). The
+network of a run is their intersection, plus the host of the project's repository, minus every deny
+list. Egress is always closed: an empty list means no internet. A host pattern `example.com` covers
+that host and its subdomains, `*.example.com` only its subdomains, `*` any public host name; IP
+addresses are never allowed. An agent that asks for a host its project or organisation does not allow
+is refused when published, and its run is refused at admission. What each layer can and cannot stop is
+in [security](security.md).
 
 ## Findings and trains
 

@@ -119,6 +119,8 @@ export type {
   AgentTrial,
   AgentTrialCreate,
   AgentVersion,
+  AgentVersionPublish,
+  AgentVersionRestore,
   AgentResolution,
   ArtifactFlow,
   ImplicitAgent,
@@ -163,6 +165,16 @@ export type {
   KnowledgeSource,
   KnowledgeSourceCreate,
   KnowledgeSourcePatch,
+} from "@choregos/contracts/api";
+
+/** Named memories, global and project, and an agent's bindings to them (S40-11, ADR 0075). */
+export type {
+  AgentMemoryBinding,
+  MemoryStore,
+  MemoryStoreCreate,
+  MemoryStorePatch,
+  MemoryStoreUser,
+  ProjectMemoryCreate,
 } from "@choregos/contracts/api";
 
 /** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */

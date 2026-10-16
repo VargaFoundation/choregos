@@ -193,17 +193,72 @@ def type_par_defaut(kind: str) -> str | None:
     return TYPES_PAR_DEFAUT.get(kind)
 
 
+def deployment_default_type(kind: str) -> str | None:
+    """The type a DEPLOYMENT really provides for a capability, or None (S40-05).
+
+    Only `runtime` (the deployment's executor), `gateway` (`CHOREGOS_GATEWAY_TYPE`) and `memory`
+    (`ecphoria` when `CHOREGOS_MEMORY_URL` is set, `lexical` otherwise) are provided by a
+    deployment. For every other kind, `type_par_defaut` names what the adapter factory would
+    build with an empty configuration, which is not something that works: `argocd` without a
+    GitOps repository and a token provides no CD. The console claims a platform default only
+    from this function."""
+    if kind == "runtime":
+        return default_executor_kind()
+    if kind == "gateway":
+        return default_gateway_type()
+    if kind == "memory":
+        return "ecphoria" if os.environ.get("CHOREGOS_MEMORY_URL", "") else "lexical"
+    return None
+
+
 def fakes_enabled() -> bool:
     return os.environ.get("CHOREGOS_FAKES", "") in {"1", "true", "yes"}
 
 
 def default_executor_kind() -> str:
-    """L'exécuteur d'un projet qui n'en déclare pas : celui du déploiement.
+    """The executor of a project that declares none: the deployment's own (ADR 0072).
 
-    `CHOREGOS_EXECUTOR_KIND` était posé par le chart et lu nulle part — chaque projet
-    retombait sur Tekton, y compris là où Tekton n'existe pas (un locataire qui ne peut
-    lancer que des Jobs dans son namespace)."""
-    return os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or "tekton"
+    `agent_sandbox` when the deployment says nothing: Tekton is no longer assumed, since it
+    is absent from the clusters this platform runs on. A deployment that wants Tekton says so
+    (`global.runner.executor: tekton`)."""
+    return os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or "agent_sandbox"
+
+
+def executors_declared() -> bool:
+    """True when the deployment says which executors it runs (the chart always does)."""
+    return bool(
+        os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or os.environ.get("CHOREGOS_EXECUTORS_ALLOWED", "")
+    )
+
+
+def allowed_executor_kinds() -> list[str]:
+    """The executors a project may pick as its `runtime`: the deployment's, plus the allowed ones.
+
+    `CHOREGOS_EXECUTORS_ALLOWED` is a comma-separated list (chart `global.runner.allowedExecutors`);
+    the default executor is always in it. `fake` is added under `CHOREGOS_FAKES`."""
+    kinds = [default_executor_kind()]
+    for raw in os.environ.get("CHOREGOS_EXECUTORS_ALLOWED", "").split(","):
+        name = raw.strip()
+        if name and name not in kinds:
+            kinds.append(name)
+    if fakes_enabled() and "fake" not in kinds:
+        kinds.append("fake")
+    return kinds
+
+
+def with_custom_image_executor(executor: Any) -> Any:
+    """On `agent_sandbox`, send a step that names its own image to a second executor (ADR 0072).
+
+    `CHOREGOS_CUSTOM_IMAGE_EXECUTOR` (chart `runner.customImageExecutor`) names it; empty keeps the
+    sandbox executor's refusal. Nothing changes for any other executor, or when the pool's image
+    (`CHOREGOS_RUNNER_IMAGE`) is unknown, because an override cannot then be told from the default."""
+    secondary = os.environ.get("CHOREGOS_CUSTOM_IMAGE_EXECUTOR", "")
+    pool_image = os.environ.get("CHOREGOS_RUNNER_IMAGE", "")
+    if not secondary or not pool_image or str(getattr(executor, "kind", "")) != "agent_sandbox":
+        return executor
+    from .executor.routing import RoutingExecutor
+
+    return RoutingExecutor(executor, build("runtime", secondary, {}), pool_image)
 
 
 def available(kind: ConnectorKind | str) -> list[str]:
@@ -286,7 +341,7 @@ class AdapterSet:
             scm=get("scm", TYPES_PAR_DEFAUT["scm"]),
             ci=get("ci", TYPES_PAR_DEFAUT["ci"]),
             cd=get("cd", TYPES_PAR_DEFAUT["cd"]),
-            executor=get("runtime", default_executor_kind()),
+            executor=with_custom_image_executor(get("runtime", default_executor_kind())),
             memory=get("memory", TYPES_PAR_DEFAUT["memory"]),
             gateway=get("gateway", default_gateway_type()),
             notify=get("notify", TYPES_PAR_DEFAUT["notify"]),

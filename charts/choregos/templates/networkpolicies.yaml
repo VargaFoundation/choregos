@@ -16,7 +16,12 @@ metadata:
   name: choregos-allow-platform
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
-  podSelector: {}
+  # Not the runner pods and not the egress proxy: a runner is untrusted code and must not reach
+  # PostgreSQL or Temporal (ADR 0070); each has its own policy below. They share this namespace
+  # when the executor is `agent_sandbox`.
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [choregos-runner, choregos-egress] }
   policyTypes: ["Egress"]
   egress:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
@@ -36,6 +41,70 @@ spec:
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-demo-fakes } } }]
       ports: [{ protocol: TCP, port: {{ .Values.demoFakes.port }} }]
     {{- end }}
+---
+{{- /* The API pods a runner reports to: the platform namespaces above are named, this one is the release's. */ -}}
+{{- $api := index .Values "choregos-api" | default dict }}
+{{- $apiPort := int (($api.service | default dict).port | default 8000) }}
+{{- $e := .Values.global.egress | default dict }}
+{{- $egressPort := int ($e.port | default 3128) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-runner-egress
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-runner
+  policyTypes: ["Egress"]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    # The API it reports to, never the database or Temporal.
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-api } } }]
+      ports: [{ protocol: TCP, port: {{ $apiPort }} }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-gateway } } }]
+      ports: [{ protocol: TCP, port: 4000 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-memory } } }]
+      ports: [{ protocol: TCP, port: 8432 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+      ports: [{ protocol: TCP, port: 4318 }]
+    {{- if $e.enabled }}
+    # The way out: the per-run egress proxy, and nothing else.
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-egress } } }]
+      ports: [{ protocol: TCP, port: {{ $egressPort }} }]
+    {{- end }}
+{{- if $e.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-egress-net
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-egress
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # Only runner pods talk to the proxy.
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-runner } } }]
+      ports: [{ protocol: TCP, port: {{ $egressPort }} }]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-api } } }]
+      ports: [{ protocol: TCP, port: {{ $apiPort }} }]
+    # The Internet, minus the private ranges, on the ports the proxy opens.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"]
+      ports:
+        {{- range ($e.ports | default (list 443 80)) }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

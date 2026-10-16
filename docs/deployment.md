@@ -77,6 +77,7 @@ The chart never writes production secrets. It expects them to exist:
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
 | `global.apiSecretRef` (default `choregos-api-secrets`) | `session-secret`, `run-token-private-key`, `run-token-public-key`, `github-app-id`, `github-app-private-key`, `github-webhook-secret` | API **and** orchestrator |
+| `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
 | `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
@@ -125,22 +126,50 @@ set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CH
 an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
 rename its variable or widen the pattern.
 
+## The GitHub App
+
+One App serves the deployment (`github-app-id`, `github-app-private-key`). Its settings on github.com
+decide whether other companies can use it and whether a console install finds its way back:
+
+| Setting | Value |
+| :-- | :-- |
+| Permissions | Repository: Contents, Issues, Pull requests, Checks: read and write; Metadata: read |
+| Events | Issues, Issue comment, Pull request, Pull request review, Check suite, **Installation**, **Installation repositories** |
+| Setup URL | `<public url>/api/v1/github/setup`, with **Redirect on update** ticked. A browser redirect: it works over a VPN |
+| Webhook URL | `<public url>/api/v1/webhooks/github` (needs a host GitHub can reach; discovery does not depend on it) |
+| Where can this GitHub App be installed? | **Any account** if companies other than the App's owner use the deployment (a private App installs only on its owner's account) |
+| Request user authorization (OAuth) during installation | **Tick it before a second organisation exists**, generate a client secret, and give `github-app-client-id` / `github-app-client-secret` to the API |
+
+Nobody types an installation id ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
+the console lists what the App sees, *Install on GitHub* sends the person to github.com and back through
+the Setup URL, and the installation is **claimed** by the organisation that started the flow. On an
+instance with one organisation every installation is claimed implicitly; with several, a claim is
+refused (403, naming `CHOREGOS_GITHUB_APP_CLIENT_SECRET`) until the OAuth client is configured.
+
 ## Running agent stages
 
-Agent stages run as disposable sandboxes. Which kind is `runner.executor`:
+Agent stages run as disposable sandboxes. Which kind is `global.runner.executor`
+([ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)): the API and the
+workers read the same setting, and `agent_sandbox` is the default.
 
 | Executor | Where it runs | Notes |
 | :-- | :-- | :-- |
-| `tekton` | A `PipelineRun` per stage | The default when Tekton is present |
+| `tekton` | A `PipelineRun` per stage | Only where written: `global.runner.executor: tekton` |
 | `k8s_job` | A `Job` per stage | Fewest moving parts; supports queueing |
 | `aca` | Azure Container Apps job | Verified against a real subscription |
 | `local_docker` | A container on the host | Development only |
-| `agent_sandbox` | A claimed sandbox from a warm pool (`kubernetes-sigs/agent-sandbox`) | Opt-in, needs the operator; supports queueing |
+| `agent_sandbox` | A claimed sandbox from a warm pool (`kubernetes-sigs/agent-sandbox`) | **The default**; needs the operator (the chart fails at render without it); supports queueing |
 
 ```yaml
-choregos-orchestrator:
+global:
   runner:
     executor: k8s_job
+    # What a project may pick as its `runtime` connector. Empty: only `executor`.
+    allowedExecutors: []
+choregos-orchestrator:
+  runner:
+    # Empty follows the executor: the release namespace for agent_sandbox,
+    # `proj-{slug}-runners` for the others.
     namespacePattern: "proj-{slug}-runners"
     # Concurrent runs per namespace. Beyond it, the Job is created SUSPENDED: no pod,
     # no image pull, no quota taken, and it is admitted in arrival order. 0 = no cap.
@@ -151,7 +180,17 @@ choregos-orchestrator:
 
 `maxActive` is the knob that keeps a burst of tickets from becoming a burst of pods. It is a
 **soft** cap: two runs can admit themselves in the same window and exceed it by one. See
-[ADR 0013](adr/0013-agent-task-density.md) for why there is no warm pool.
+[ADR 0013](adr/0013-agent-task-density.md) for the density reasoning (its "no warm pool" is
+superseded by [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)).
+
+**What a project may pick.** The API knows the executor (`CHOREGOS_EXECUTOR_KIND`) and the
+allowed list (`CHOREGOS_EXECUTORS_ALLOWED`, from `global.runner.allowedExecutors`). `GET
+/platform/executors` answers from them, and `PUT /projects/{id}/connectors/runtime` refuses (422)
+a type outside the list and names the allowed ones.
+
+**Upgrading from 0.17 or earlier**, which defaulted to Tekton: set
+`global.runner.executor: tekton` to keep it. An override of only
+`choregos-orchestrator.runner.executor` fails the render and names the global setting.
 
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
@@ -178,13 +217,20 @@ Each image is built **from** the runner image: the runner is the entrypoint, the
 subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
 warm pool built from the runner image: use `k8s_job` for steps that name their own image.
 
-### The `agent_sandbox` executor (opt-in)
+### The `agent_sandbox` executor (the default)
 
 [ADR 0016](adr/0016-agent-sandbox-executor.md) adds an executor on
 [`kubernetes-sigs/agent-sandbox`](https://github.com/kubernetes-sigs/agent-sandbox): a warm pool
 of sandboxes that have never run anything, and a sandbox that can be suspended across a human
 question. It needs the operator, whose CRDs are **cluster-scoped**: a platform team installs it,
-a tenant of a shared cluster cannot. `tekton` and `k8s_job` remain the defaults.
+a tenant of a shared cluster cannot. It is the default executor
+([ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)): the chart checks at
+render that `extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` is among the cluster's API
+versions (Argo CD and `helm install` pass them) and fails, naming the operator and
+`global.runner.executor: k8s_job`, when it is not. An offline rendering passes
+`--api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` or sets
+`runner.skipOperatorCheck: true`. The namespace's volume quota must cover
+`sandbox.storage × (maxActive + warmPool.size + runs finished within the volume's lifetime)`.
 
 1. **The operator**, pinned to v1.0.6 (API `agents.x-k8s.io/v1beta1` and
    `extensions.agents.x-k8s.io/v1beta1`): `infra/bootstrap/agent-sandbox.yaml` is the Argo CD
@@ -197,10 +243,12 @@ a tenant of a shared cluster cannot. `tekton` and `k8s_job` remain the defaults.
 3. **The chart**:
 
 ```yaml
+global:
+  runner:
+    executor: agent_sandbox           # the default, written here to make the choice visible
 choregos-orchestrator:
   runner:
-    executor: agent_sandbox
-    namespacePattern: choregos        # the release namespace: the template lives there
+    # namespacePattern empty = the release namespace: the template lives there
     warmPool: { size: 2 }             # sandboxes made in advance, never used, holding nothing
     runtimeClass: gvisor              # the template's RuntimeClass; "" = the cluster's
     sandbox: { storage: 10Gi, storageClassName: "", assignmentPort: 8765, ttlSecondsAfterFinished: 300 }
@@ -232,7 +280,11 @@ is admitted in arrival order. A policy that asks for a RuntimeClass the pool was
 is refused, never run without it. The same goes for the image: a pool's pods are made from one
 image (`CHOREGOS_RUNNER_IMAGE`, or `pool_image` in the connector), so a step that names its own
 image (a `job` with `image:`) is refused with a `ConfigurationError` instead of running in the
-pool's image; use `runner.executor: k8s_job` for such steps.
+pool's image. A deployment on `agent_sandbox` sends such a step to a second executor,
+`runner.customImageExecutor` (default `k8s_job`; empty keeps the refusal): the choice is made at
+start on the step's image, and the run's executor kind, persisted per run, routes its status, logs
+and cancel afterwards. Add `k8s_job` to `global.runner.allowedExecutors`. A run on the second
+executor has that executor's capabilities (no suspension across a question).
 
 When an agent asks a question, its sandbox is **suspended** (pod gone, workspace volume kept)
 and the answer resumes the same run in it: one run, not two. The policy bounds the wait:
@@ -777,13 +829,63 @@ What the chart does for a multi-node installation, and the knobs behind it:
 | The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
 | A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin` or `demoFakes` is on, and names the value | `templates/garde.yaml` |
 | A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
-| An agent must not reach the Internet except where the policy says | the runners namespace denies egress by default; the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains`, and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest |
+| An agent must not reach the Internet except where the policy says | in **per-project runner namespaces** the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains` (project-level, host-level, no per-agent wall), and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door. In the **release namespace** (the `agent_sandbox` executor) the chart's **`choregos-egress`** proxy is per run: it knows which run is calling, applies the agent ∩ project ∩ organisation network, and reports every decision ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)) | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest; `global.egress.*` for `choregos-egress` |
 | Temporal must be restorable | it holds the position of every ticket in flight; `docs/runbooks/temporal-backup.md` says what to copy and how to reconcile afterwards | — |
 
 The proxy is the honest part of "egress allowlist": before 2026-09-25 the NetworkPolicy
 opened a `choregos-egress` namespace that no chart delivered, and the allowlist was an
 annotation. It is verified on a cluster (`tests/cluster/test_egress_proxy.py`: an
 allowed domain answers 200 through the proxy, any other gets 403 from Squid).
+
+### The per-run egress proxy (`choregos-egress`)
+
+`global.egress.enabled: true` renders a Deployment and a Service named `choregos-egress` in the release
+namespace, from the API image (`python -m choregos_api.egress`), with a restricted pod (non-root,
+read-only root file system, all capabilities dropped, `RuntimeDefault` seccomp, no service account
+token). Nothing is rendered by default.
+
+| Value | Default | What it does |
+| :-- | :-- | :-- |
+| `global.egress.enabled` | `false` | renders the proxy, makes the orchestrator set `CHOREGOS_RUNNER_EGRESS_AUTH=run` (the runner then presents its run id and run token as proxy credentials) and opens runner pods to it |
+| `global.egress.replicas` | `1` | rates are counted per replica: with N replicas a rate is up to N times looser |
+| `global.egress.port`, `healthPort` | `3128`, `8081` | the proxy and its `/healthz` |
+| `global.egress.ports` | `[443, 80]` | the destination ports a tunnel may open (`CONNECT` and plain HTTP); anything else is refused |
+| `global.egress.denyDomains` | `[]` | hosts no run may reach, for the whole deployment: the proxy and the API (`CHOREGOS_NETWORK_INSTANCE_DENY`) both read it |
+| `global.egress.cacheSeconds` | `60` | how long a run's network is cached: a revoked agent or a changed ceiling applies within this time |
+| `global.egress.resources` | 50m/64Mi, limits 500m/256Mi | |
+
+`choregos-orchestrator.runner.egressProxy` MUST name the Service
+(`http://choregos-egress.<release-namespace>.svc:3128`) — the chart refuses to render
+`global.egress.enabled` with an empty value (`templates/garde.yaml`): a proxy nobody sends traffic to
+would look like a control. The default value, `http://choregos-egress.{namespace}.svc:3128`, resolves to
+it when `runner.namespacePattern` is the release namespace.
+
+With `networkPolicies.enabled` the chart goes with it: `choregos-allow-platform` no longer selects runner
+pods or the proxy (a runner must not reach PostgreSQL or Temporal); `choregos-runner-egress` lets runner
+pods reach only DNS, the API pods, the gateway, the memory service, telemetry and, when the proxy is on,
+`choregos-egress` on its port; `choregos-egress-net` takes traffic from runner pods only and lets the proxy
+reach the API and the Internet **except the private ranges** (`10/8`, `172.16/12`, `192.168/16`,
+`169.254/16`) on the configured ports. The proxy also refuses, by itself, a name that resolves to a
+non-public address, and it connects to the address it resolved.
+
+**What it proves, and what it does not.** For a run, it enforces host, port and a *connection* rate
+(per host, per run, per organisation host) and journals each decision (`GET
+/orgs/{org}/network-activity`). It cannot see inside TLS: method, path, headers and User-Agent are
+invisible to it, and one tunnel can carry many HTTP/2 requests. It is a wall only where the network forces
+traffic through it.
+
+**Reading a `502`.** `choregos-egress: <host>:<port> is allowed for this run but could not be reached`
+means Choregos allowed the host and something *below* it blocked or lost the connection: the node's
+network, an egress firewall, a Cilium FQDN rule that does not list the host, DNS. It shows in Network
+activity as `unreachable`. A `403` names the reason (`not_allowed`, `denied:<pattern>`, `ip_literal`,
+`port_not_allowed`, `private_address`), a `429` comes with `Retry-After`, and a `407` means the proxy
+credentials are not a live run's.
+
+**On the Diametral platform** the infra owns egress with Cilium FQDN policies: runner pods may reach eight
+hosts directly, identically for every project and agent, so the Choregos proxy is a net there until infra
+(1) gives the `choregos-egress` pods an FQDN egress rule for the hosts the instance allows and (2) removes
+the runner entry's direct FQDNs. Until then a `502 unreachable` also appears if the proxy pod itself has no
+FQDN rule. The deploy repository sets `global.egress.enabled` and `runner.egressProxy` only after that.
 
 ## Gateways and what each can do
 

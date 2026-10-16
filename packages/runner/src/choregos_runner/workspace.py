@@ -404,6 +404,11 @@ def inline_outputs(stage_input: StageInput) -> list[str]:
     return [name for name in stage_input.transition.outputs if name not in files]
 
 
+def _from(label: str | None) -> str:
+    """` (from global:security-lessons)` when the item says which memory it came from (S40-11)."""
+    return f" (from {label})" if label else ""
+
+
 def _context_markdown(context: ContextPack | None) -> str:
     if context is None or context.is_empty():
         return "# Context\n\n_No memory available for this work item._\n"
@@ -414,9 +419,9 @@ def _context_markdown(context: ContextPack | None) -> str:
         "",
     ]
     for memory in context.memories:
-        lines.append(f"- **{memory.kind}** · {memory.subject} — {memory.content}")
+        lines.append(f"- **{memory.kind}** · {memory.subject} — {memory.content}{_from(memory.memory)}")
     for incident in context.incidents:
-        lines.append(f"- **incident** · {incident.subject} — {incident.content}")
+        lines.append(f"- **incident** · {incident.subject} — {incident.content}{_from(incident.memory)}")
     for related in context.related_items:
         lines.append(f"- **related item** · {related.key} — {related.title}")
     return "\n".join(lines) + "\n"

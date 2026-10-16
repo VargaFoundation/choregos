@@ -8,6 +8,8 @@ import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/componen
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { ROLE_LABELS } from "@/components/members";
+import { isMultiOrg, membershipGroups } from "@/lib/memberships";
 import { PolicyCeilingCard } from "@/components/admin/policy-ceiling";
 import { GesteConfirme } from "@/components/geste-confirme";
 
@@ -18,6 +20,8 @@ import { GesteConfirme } from "@/components/geste-confirme";
 export default function AdminPage() {
   const { me, org } = useSession();
   const orgAdmin = (me?.memberships ?? []).some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
+  const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
+  const groups = membershipGroups(me?.memberships ?? [], { multiOrg: isMultiOrg(edition.data), currentOrg: org });
   const queryClient = useQueryClient();
   const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
   const [error, setError] = useState<string | null>(null);
@@ -45,14 +49,28 @@ export default function AdminPage() {
           <p className="text-sm">
             {me?.display_name} — {me?.email}
           </p>
-          <ul className="mt-2 space-y-1 text-xs text-ink-muted">
-            {(me?.memberships ?? []).map((membership, index) => (
-              <li key={index}>
-                {membership.org}
-                {membership.project_slug ? `/${membership.project_slug}` : ""} : {membership.role}
-              </li>
-            ))}
-          </ul>
+          {groups.map((group) => (
+            <div key={group.org ?? "platform"} className="mt-2">
+              {group.org !== null && (
+                <p className="text-xs font-medium text-ink" data-donnee>
+                  {group.org}
+                </p>
+              )}
+              <ul
+                aria-label={group.org ? `Your roles in ${group.org}` : "Your roles"}
+                className="space-y-1 text-xs text-ink-muted"
+              >
+                {group.lines.map((line) => (
+                  <li key={line.scope} data-testid="membership">
+                    <span data-donnee>{line.scope}</span> :{" "}
+                    <span className="font-mono" title={ROLE_LABELS[line.role]}>
+                      {line.role}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </Card>
 
         {/* Un jeton, un nom, un endroit (S23-14) : « API token » ici, « token for Claude Code » dans les
@@ -62,7 +80,7 @@ export default function AdminPage() {
         <Card title="My access tokens">
           <p className="mb-3 text-xs text-ink-muted" id="jetons">
             Every token you hold: for the API and the CLI, or for an AI client at the MCP door (created from{" "}
-            <Link href="/integrations">AI clients</Link> or <Link href="/agents">Agents</Link>).
+            <Link href="/integrations">Integrations</Link> or <Link href="/agents">Agents</Link>).
           </p>
           {/* Le clair n'existe qu'ici, une fois : il n'est jamais stocké ni réaffiché. */}
           {tokenClair && (

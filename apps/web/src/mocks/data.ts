@@ -33,6 +33,7 @@ import type {
   SkillCatalogue,
   SkillCatalogueEntry,
   ProjectOperation,
+  ConnectorDto,
   ProjectRequirement,
   AgentCredential,
   AgentMetrics,
@@ -43,6 +44,7 @@ import type {
   ProjectAgentPut,
   BudgetAlert,
   KnowledgeBase,
+  MemoryStore,
   Skill,
   SkillGitPreview,
   SkillVersion,
@@ -71,6 +73,7 @@ import type {
   WorkItemDto,
   WorkItemPage,
 } from "@/lib/types";
+import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
@@ -885,6 +888,101 @@ export const pendingMemories: Memory[] = [
   },
 ];
 
+/**
+ * Named memories (S40-11, ADR 0075): two global ones — `security-lessons` for every project,
+ * `architecture-decisions` for billing-api alone — and `decisions`, a memory of billing-api (and, by the same
+ * name, of checkout-web). `used_by` is what the API computes from the agents' latest versions.
+ */
+export const memoryStores: MemoryStore[] = [
+  {
+    slug: "security-lessons",
+    display_name: "Security lessons",
+    description: "What the security reviews taught, for every project.",
+    scope: "global",
+    project: null,
+    reach: "org",
+    projects: [],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 12),
+    used_by: [{ agent: "onboarding-coordinator", version: 2 }],
+  },
+  {
+    slug: "architecture-decisions",
+    display_name: "Architecture decisions",
+    description: "The decision records the organisation keeps.",
+    scope: "global",
+    project: null,
+    reach: "projects",
+    projects: ["billing-api"],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 8),
+    used_by: [],
+  },
+  {
+    slug: "decisions",
+    display_name: "Decisions",
+    description: "Billing's own decisions.",
+    scope: "project",
+    project: "billing-api",
+    reach: null,
+    projects: ["billing-api"],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 5),
+    used_by: [],
+  },
+  {
+    slug: "decisions",
+    display_name: "Decisions",
+    description: null,
+    scope: "project",
+    project: "checkout-web",
+    reach: null,
+    projects: ["checkout-web"],
+    status: "active",
+    implicit: false,
+    created_by: "lea@acme.dev",
+    created_at: iso(60 * 24 * 4),
+    used_by: [],
+  },
+];
+
+/** `acme:billing-api` (how the client qualifies a project) or `billing-api`: the slug. */
+const bareSlug = (id: string): string => decodeURIComponent(id).split(/[:/]/).pop() ?? id;
+
+/** What `GET /projects/{id}/memories` returns for a project: the implicit memories, its own, the global ones that reach it. */
+export function projectMemoryList(project: string): MemoryStore[] {
+  const implicit: MemoryStore[] = (["shared", "own"] as const).map((slug) => ({
+    slug,
+    display_name: slug === "shared" ? "Shared memory" : "Own memory",
+    scope: "project",
+    project,
+    implicit: true,
+    status: "active",
+    used_by: [],
+  }));
+  const named = memoryStores.filter((m) => (m.scope === "project" && m.project === project) || (m.scope === "global" && (m.reach === "org" || (m.projects ?? []).includes(project))));
+  return [...implicit, ...named];
+}
+
+/** What agents proposed to the global `security-lessons` memory, waiting for an administrator. */
+const proposedToGlobal: Memory[] = [
+  {
+    id: "g1",
+    kind: "run_lesson",
+    subject: "lesson:tls:pin-the-minimum-version",
+    content: "Pin the minimum TLS version in every service configuration.",
+    status: "pending",
+    proposed_by: "r7",
+    provenance: { source: "agent", run_id: "r7" },
+  },
+];
+
 export const costs: CostReport = {
   group_by: "day",
   currency: "EUR",
@@ -1405,6 +1503,7 @@ export const agents: Agent[] = [
     kind: "internal",
     display_name: "Onboarding coordinator",
     description: "Prepares a joiner's access plan and follows each step up to the badge.",
+    tags: ["onboarding", "hr"],
     status: "active",
     owner: "lea@acme.dev",
     latest_version: 2,
@@ -1421,10 +1520,15 @@ export const agents: Agent[] = [
           budget: { run_usd: 1.5, daily_usd: 5 },
           skills: [{ slug: "onboarding-procedure", version: 1 }],
           mcp_servers: [],
+          memories: [
+            { scope: "global", slug: "security-lessons", mode: "read" },
+            { scope: "project", slug: "shared", mode: "write" },
+          ],
         },
         checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
         created_by: "lea@acme.dev",
         created_at: iso(60 * 24 * 2),
+        message: "Cite the access profile and add the laptop step",
       },
       {
         version: 1,
@@ -1459,6 +1563,7 @@ export const agents: Agent[] = [
     kind: "internal",
     display_name: "Developer",
     description: "Implements the specification inside the allowed paths, test first.",
+    tags: ["implementation", "coding", "software"],
     status: "active",
     owner: null,
     latest_version: 2,
@@ -1480,6 +1585,60 @@ export const agents: Agent[] = [
         checksum: "sha256:1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
         created_by: "catalogue:developer@1",
         created_at: iso(60 * 24 * 20),
+      },
+    ],
+  },
+  {
+    slug: "architect",
+    kind: "internal",
+    display_name: "Architect",
+    description: "Writes one architecture decision record in MADR 4 format from the study's research, and marks it accepted once people approve it.",
+    tags: ["madr", "architecture", "design"],
+    status: "active",
+    owner: null,
+    latest_version: 3,
+    scope: "platform",
+    project: null,
+    can: { publish: true, manage: true, pin: true, fork_scopes: ["org", "project", "personal"] },
+    cannot_reason: null,
+    created_at: iso(60 * 24 * 30),
+    versions: [
+      {
+        version: 3,
+        spec: {
+          instructions: "You write ONE architecture decision record that answers the study's question.\nFollow MADR 4; cite the enterprise framework when a knowledge base holds it.\nOnce people approve it, mark it accepted.",
+          model: "profile:standard",
+          limits: { max_turns: 30, max_minutes: 20 },
+          budget: { run_usd: 2, daily_usd: 8 },
+          skills: [{ slug: "madr-4", version: 1 }],
+          mcp_servers: [],
+        },
+        checksum: "sha256:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
+        created_by: "augustin@acme.dev",
+        created_at: iso(60 * 24),
+        message: "Tighten the run budget and ask for the acceptance step",
+      },
+      {
+        version: 2,
+        spec: {
+          instructions: "You write ONE architecture decision record that answers the study's question.\nFollow MADR 4; cite the enterprise framework when a knowledge base holds it.",
+          model: "profile:standard",
+          limits: { max_turns: 30, max_minutes: 20 },
+          skills: [{ slug: "madr-4", version: 1 }],
+        },
+        checksum: "sha256:2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
+        created_by: "catalogue:architect@2",
+        created_at: iso(60 * 24 * 12),
+        message: "Catalogue update to architect@2",
+      },
+      {
+        version: 1,
+        spec: { instructions: "You write ONE architecture decision record in MADR 4 format.", model: "profile:standard" },
+        checksum: "sha256:1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d",
+        created_by: "catalogue:architect@1",
+        created_at: iso(60 * 24 * 30),
+        message: "Installed from the catalogue (architect@1)",
+        pinned_by: ["billing-api"],
       },
     ],
   },
@@ -1536,11 +1695,11 @@ const entreeDuCatalogue = (slug: string, display_name: string, role: string, sum
   own_agent: false, update_available: false, offered: true, unavailable_reason: null, client: null, reach: null, ...extra,
 });
 export const agentCatalogue: AgentCatalogueEntry[] = [
-  entreeDuCatalogue("developer", "Developer", "implement", "Implements the specification inside the allowed paths, test first, small conventional commits."),
-  entreeDuCatalogue("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1 }),
+  entreeDuCatalogue("developer", "Developer", "implement", "Implements the specification inside the allowed paths, test first, small conventional commits.", { tags: ["implementation", "coding", "software"] }),
+  entreeDuCatalogue("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1, tags: ["testing", "ci", "software"] }),
   entreeDuCatalogue("reviewer", "Reviewer", "review", "Reviews the branch with fresh eyes and gives a verdict.", { installed: true, installed_version: 1, update_available: true, skills: ["madr-4"] }),
-  entreeDuCatalogue("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"] }),
-  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP door, with its person's rights.", { kind: "external", client: "claude-code", reach: "always" }),
+  entreeDuCatalogue("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"], tags: ["madr", "architecture", "design"] }),
+  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP door, with its person's rights.", { kind: "external", client: "claude-code", reach: "always", tags: ["mcp-client", "ide"] }),
   entreeDuCatalogue("chatgpt", "ChatGPT", "external", "ChatGPT acting through the MCP door, with its person's rights.", {
     kind: "external", client: "chatgpt", reach: "cloud", offered: false, unavailable_reason: "the MCP door does not accept OAuth (`global.mcp.oauth`); the console's public address is not https",
   }),
@@ -1855,6 +2014,8 @@ export const connectorTypes: ConnectorType[] = [
   { kind: "scm", type: "github", display: "GitHub (App choregos-bot)", config_schema: objet({ repo: { type: "string" } }, ["repo"]), capabilities: ["scm"], secret_fields: [] },
   { kind: "ci", type: "tekton", display: "Tekton Pipelines", config_schema: objet({ namespace: { type: "string" } }), capabilities: ["ci"], secret_fields: [] },
   { kind: "cd", type: "argocd", display: "Argo CD + Rollouts", config_schema: objet({ gitops_repo: { type: "string" } }, ["gitops_repo"]), capabilities: ["cd"], secret_fields: ["token"] },
+  { kind: "cd", type: "demo", display: "Demo stand-in (simulated CD)", config_schema: objet({ url: { type: "string" } }), capabilities: ["cd"], secret_fields: [] },
+  { kind: "runtime", type: "agent_sandbox", display: "Kubernetes · agent-sandbox (warm pool)", config_schema: objet({ runtime_class: { type: "string" } }), capabilities: ["runtime"], secret_fields: [] },
   { kind: "runtime", type: "k8s_job", display: "Kubernetes Job", config_schema: objet({ service_account: { type: "string" } }), capabilities: ["runtime"], secret_fields: [] },
   { kind: "gateway", type: "litellm", display: "LiteLLM", config_schema: objet({ base_url: { type: "string" } }), capabilities: ["gateway"], secret_fields: ["master_key"] },
   { kind: "notify", type: "slack", display: "Slack", config_schema: objet({ channel: { type: "string" } }), capabilities: ["notify"], secret_fields: ["webhook_url", "bot_token"] },
@@ -2027,11 +2188,38 @@ export const projectRequirements: ProjectRequirement[] = [
     connector: { id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" },
     default_type: null,
   },
-  { capability: "scm", reasons: ["default-simple: the guarantee scope_respected on t-implement"], connector: null, default_type: "github" },
-  { capability: "ci", reasons: ["hotfix: the guarantee ci_green on t-ship"], connector: null, default_type: "tekton" },
+  { capability: "scm", reasons: ["default-simple: the guarantee scope_respected on t-implement"], connector: null, default_type: null },
+  { capability: "ci", reasons: ["hotfix: the guarantee ci_green on t-ship"], connector: null, default_type: null },
   { capability: "runtime", reasons: ["default-simple: the agent dev runs somewhere"], connector: null, default_type: "k8s_job" },
   { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
 ];
+
+/** What a project's connectors are on the mock, before any write (Checkout Web has its own). */
+const checkoutWebConnectors = [
+  { id: "c-jira", kind: "tracker", type: "jira", config: {}, secret_refs: {}, status: "ok" },
+  { id: "c-gh", kind: "scm", type: "github", config: {}, secret_refs: {}, status: "ok" },
+  { id: "c-argo", kind: "cd", type: "argocd", config: {}, secret_refs: {}, status: "error", last_error: "401 from Argo CD" },
+];
+/**
+ * The project `dev` as `essai/projet-dev/scenario_dev.py preparer` leaves it: a tracker, a repository, and
+ * a CD that is the demo stand-in, never tested. The runtime is the deployment's own (agent-sandbox).
+ */
+const devConnectors = [
+  { id: "c-dev-tracker", kind: "tracker", type: "github-issues", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
+  { id: "c-dev-scm", kind: "scm", type: "github", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
+  { id: "c-dev-cd", kind: "cd", type: "demo", config: { url: "http://choregos-demo-fakes:8090/cd/mcp" }, secret_refs: {}, status: "unknown" },
+];
+const devRequirements: ProjectRequirement[] = [
+  { capability: "tracker", reasons: ["default-simple: work items live in a tracker"], connector: devConnectors[0] as unknown as ConnectorDto, default_type: null },
+  { capability: "scm", reasons: ["default-simple: the guarantee scope_respected on t-implement", "hotfix: the agent dev opens a pull request"], connector: devConnectors[1] as unknown as ConnectorDto, default_type: null },
+  { capability: "cd", reasons: ["hotfix: the release train deploys to prod"], connector: devConnectors[2] as unknown as ConnectorDto, default_type: null },
+  { capability: "runtime", reasons: ["default-simple: the agent dev runs somewhere"], connector: null, default_type: "agent_sandbox" },
+  { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
+];
+const isDev = (project: string) => /(?:^|[:/])dev$/.test(decodeURIComponent(project));
+const defaultProjectConnectors = [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }];
+/** Connectors written during the page's life, by project: saving tests (S40-05), so the mock answers `ok`. */
+const writtenConnectors = new Map<string, Array<Record<string, unknown>>>();
 
 /**
  * The writes the demo received, in order: what a real API would have been sent. Playwright reads
@@ -2129,6 +2317,32 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
   }
   const [chemin] = path.split("?");
+  const projectConnectors = /^\/projects\/([^/]+)\/connectors(?:\/([a-z_]+))?$/.exec(chemin ?? "");
+  if (projectConnectors) {
+    const [, project = "", kind] = projectConnectors;
+    const base = /checkout-web$/.test(decodeURIComponent(project))
+      ? checkoutWebConnectors
+      : isDev(project)
+        ? devConnectors
+        : defaultProjectConnectors;
+    const current = writtenConnectors.get(project) ?? base;
+    if (method === "GET" && !kind) return structuredClone(current) as T;
+    if (method === "PUT" && kind) {
+      const corps = (body ?? {}) as { type?: string; config?: Record<string, unknown>; secret_refs?: Record<string, string> };
+      const saved = {
+        id: `c-${kind}`,
+        kind,
+        type: corps.type ?? "demo",
+        config: corps.config ?? {},
+        secret_refs: corps.secret_refs ?? {},
+        // Saving tests the connector (S40-05): the mock's adapters all answer.
+        status: "ok",
+        last_check_at: new Date().toISOString(),
+      };
+      writtenConnectors.set(project, [...current.filter((c) => c.kind !== kind), saved]);
+      return saved as T;
+    }
+  }
   // Le routage et la désactivation changent l'état de la démo, le temps de la page : les écrans se
   // relisent comme sur la vraie API, et les mêmes refus s'y jouent (S23-13).
   if (method === "PUT" && /^\/projects\/[^/]+\/workflow-routing$/.test(chemin ?? "")) {
@@ -2160,6 +2374,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       kind: corps.kind ?? "internal",
       display_name: corps.display_name,
       description: corps.description ?? null,
+      tags: corps.tags ?? [],
       status: "active",
       lifecycle: corps.lifecycle ?? "active",
       owner: me.email,
@@ -2247,6 +2462,38 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       oauth_client_id: null,
     } as T;
   }
+  // Publish with a message, from a base; restore as a new version (S40-12). The same refusals as the API.
+  const versionsEcrit = /^\/orgs\/[^/]+\/agents\/([^/]+)\/versions\/(?:publish|(\d+)\/restore)$/.exec(chemin ?? "");
+  if (method === "POST" && versionsEcrit) {
+    const agent = agents.find((a) => a.slug === versionsEcrit[1]) ?? agents[0]!;
+    const body = JSON.parse(String(init.body ?? "{}")) as { spec?: AgentSpec; message?: string | null; base_version: number };
+    const latest = agent.versions?.find((v) => v.version === agent.latest_version);
+    const source = versionsEcrit[2] ? agent.versions?.find((v) => v.version === Number(versionsEcrit[2])) : undefined;
+    if (versionsEcrit[2] && !source) throw new ApiError(404, { detail: `Agent version \`${agent.slug}@${versionsEcrit[2]}\` does not exist` });
+    if (body.base_version !== agent.latest_version)
+      throw new ApiError(409, {
+        detail: `v${agent.latest_version} was published since you started from v${body.base_version}`,
+        code: "stale_base",
+        latest_version: agent.latest_version,
+        latest_author: latest?.created_by ?? null,
+      });
+    const spec = (source ? source.spec : body.spec) ?? {};
+    if (JSON.stringify(normalizeSpec(spec)) === JSON.stringify(normalizeSpec(latest?.spec)))
+      throw new ApiError(409, { detail: `nothing changed since v${agent.latest_version}`, code: "no_change", latest_version: agent.latest_version });
+    evalGate(spec, latest?.spec);
+    const version = {
+      version: agent.latest_version + 1,
+      spec: structuredClone(spec),
+      checksum: source ? source.checksum : `sha256:${agent.latest_version + 1}`.padEnd(40, "0"),
+      created_by: me.email,
+      created_at: iso(0),
+      message: (body.message ?? "").trim() || (source ? `Restore v${source.version}` : null),
+      restored_from: source?.version ?? null,
+    };
+    agent.latest_version = version.version;
+    agent.versions = [version, ...(agent.versions ?? [])];
+    return structuredClone(version) as T;
+  }
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
     // La version publiée s'ajoute à l'agent, le temps de la page : sa fiche la relit (S23-13).
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
@@ -2264,7 +2511,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (method === "PATCH" && agentEcrit && !agentEcrit[2]) {
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
-    return { ...agent, ...(JSON.parse(String(init.body ?? "{}")) as object) } as T;
+    const patch = JSON.parse(String(init.body ?? "{}")) as Partial<Agent>;
+    // The details live for the time of the page, as the API's PATCH would keep them (S40-10).
+    if (patch.display_name != null) agent.display_name = patch.display_name;
+    if ("description" in patch) agent.description = patch.description ?? null;
+    if (patch.tags != null) agent.tags = patch.tags;
+    return { ...agent, ...patch } as T;
   }
   if (method === "PUT" && /^\/projects\/[^/]+\/agents\/[^/]+$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as ProjectAgentPut;
@@ -2455,6 +2707,44 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const autorise = /^\/orgs\/[^/]+\/remote-credentials\/([^/]+)\/authorize$/.exec(chemin ?? "");
   if (method === "POST" && autorise) return { redirect_url: `/admin/remote-agents?connected=${autorise[1]}` } as T;
+  const memoryWrite = /^\/(orgs|projects)\/([^/]+)\/memories(?:\/([^/]+))?$/.exec(path.split("?")[0] ?? path);
+  if (memoryWrite && method === "POST" && !memoryWrite[3]) {
+    const corps = (body ?? {}) as { slug: string; display_name: string; description?: string; reach?: "org" | "projects"; projects?: string[] };
+    const project = memoryWrite[1] === "projects" ? bareSlug(memoryWrite[2]!) : null;
+    if (["shared", "own"].includes(corps.slug)) throw new ApiError(422, { detail: `\`${corps.slug}\` is reserved for the implicit memories of every project` });
+    if (memoryStores.some((m) => m.slug === corps.slug && m.scope === (project ? "project" : "global") && (project === null || m.project === project)))
+      throw new ApiError(409, { detail: `memory \`${corps.slug}\` already exists` });
+    const made: MemoryStore = {
+      slug: corps.slug,
+      display_name: corps.display_name,
+      description: corps.description ?? null,
+      scope: project ? "project" : "global",
+      project,
+      reach: project ? null : (corps.reach ?? "org"),
+      projects: project ? [project] : corps.reach === "projects" ? (corps.projects ?? []) : [],
+      status: "active",
+      implicit: false,
+      created_by: me.email,
+      created_at: new Date().toISOString(),
+      used_by: [],
+    };
+    memoryStores.push(made);
+    return structuredClone(made) as T;
+  }
+  if (memoryWrite && method === "PATCH" && memoryWrite[3]) {
+    const project = memoryWrite[1] === "projects" ? bareSlug(memoryWrite[2]!) : null;
+    const found = memoryStores.find((m) => m.slug === memoryWrite[3] && (project ? m.scope === "project" && m.project === project : m.scope === "global"));
+    if (!found) throw new ApiError(404, { detail: "memory not found" });
+    Object.assign(found, body ?? {});
+    return structuredClone(found) as T;
+  }
+  const memoryDecision = /^\/orgs\/[^/]+\/memories\/([^/]+)\/pending$/.exec(path.split("?")[0] ?? path);
+  if (memoryDecision && method === "POST") {
+    const decided = (body ?? {}) as { id?: string };
+    const at = proposedToGlobal.findIndex((m) => m.id === decided.id);
+    if (at >= 0) proposedToGlobal.splice(at, 1);
+    return { status: "accepted" } as T;
+  }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   if (/^\/orgs\/[^/]+\/models$/.test(route ?? "")) return modelCatalogue as T;
@@ -2466,6 +2756,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (installedVersion && catalogueSkills.has(installedVersion[1]!)) return catalogueSkills.get(installedVersion[1]!)!.version as T;
   const installedSkill = /^\/orgs\/[^/]+\/skills\/([^/]+)$/.exec(route ?? "");
   if (installedSkill && catalogueSkills.has(installedSkill[1]!)) return catalogueSkills.get(installedSkill[1]!)!.skill as T;
+  if (/^\/orgs\/[^/]+\/memories$/.test(route ?? "")) {
+    const wanted = new URLSearchParams(path.split("?")[1] ?? "").get("scope");
+    return structuredClone(memoryStores.filter((m) => !wanted || m.scope === wanted)) as T;
+  }
+  const memoryOf = /^\/orgs\/[^/]+\/memories\/([^/]+)(\/search|\/pending)?$/.exec(route ?? "");
+  if (memoryOf) {
+    if (memoryOf[2] === "/search") return memories.filter((m) => m.content.toLowerCase().includes((new URLSearchParams(path.split("?")[1] ?? "").get("q") ?? "").toLowerCase().split(" ")[0] ?? "")) as T;
+    if (memoryOf[2] === "/pending") return structuredClone(proposedToGlobal) as T;
+    const global = memoryStores.find((m) => m.scope === "global" && m.slug === memoryOf[1]);
+    if (!global) throw new ApiError(404, { detail: "memory not found" });
+    return structuredClone(global) as T;
+  }
+  const projectMemories = /^\/projects\/([^/]+)\/memories$/.exec(route ?? "");
+  if (projectMemories) return structuredClone(projectMemoryList(bareSlug(projectMemories[1]!))) as T;
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
@@ -2475,6 +2779,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
   // would be seen by the query cache as unchanged.
   if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
+  if (/^\/orgs\/[^/]+\/agents$/.test(route ?? "")) {
+    // Every tag given (AND), as the API filters (S40-10).
+    const wanted = new URLSearchParams(path.split("?")[1] ?? "").getAll("tag");
+    return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t)))) as T;
+  }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
   if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
@@ -2531,6 +2840,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/members$/, membersOf(path)],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],
+    [/^\/projects\/(?:[^/]*:)?dev\/requirements$/, devRequirements],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
     [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
@@ -2539,7 +2849,17 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/agent-images$/, platformAgentImages],
-    [/^\/platform\/executors$/, []],
+    // What a deployment on agent-sandbox answers (ADR 0072): the others are not run there.
+    [
+      /^\/platform\/executors$/,
+      [
+        { kind: "agent_sandbox", enabled: true },
+        { kind: "k8s_job", enabled: true },
+        { kind: "tekton", enabled: false },
+        { kind: "aca", enabled: false },
+        { kind: "local_docker", enabled: false },
+      ],
+    ],
     [/^\/projects\/[^/]+\/models$/, { profiles: {}, allow_unvalidated: false, inherited: {} }],
     [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],
     [
@@ -2582,17 +2902,6 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
-    // Checkout Web livre par Jira, GitHub et Argo CD — dont la dernière vérification a échoué.
-    [
-      /^\/projects\/[^/]*checkout-web\/connectors$/,
-      [
-        { id: "c-jira", kind: "tracker", type: "jira", config: {}, secret_refs: {}, status: "ok" },
-        { id: "c-gh", kind: "scm", type: "github", config: {}, secret_refs: {}, status: "ok" },
-        { id: "c-argo", kind: "cd", type: "argocd", config: {}, secret_refs: {}, status: "error" },
-      ],
-    ],
-    // Un tracker interne : la demande se pose dans la console (le board offre “ new request ”).
-    [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
     [/^\/work-items\/[^/]+\/hand-offs$/, handOffs],
     [/^\/work-items\/[^/]+\/artifacts$/, artifacts],

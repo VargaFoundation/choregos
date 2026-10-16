@@ -8,6 +8,7 @@ catalogue:
   tools: ["runner:trivy", "runner:gitleaks"]
 agent:
   slug: secops
+  tags: [security, supply-chain, sbom]
   display_name: SecOps
   description: Runs the scanners of the runner image on the branch — dependency vulnerabilities, SBOM, secrets, container and infrastructure-as-code misconfigurations — and interprets them into a SARIF findings report with a verdict. It changes no project file.
   spec:

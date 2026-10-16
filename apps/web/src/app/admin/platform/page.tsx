@@ -32,7 +32,7 @@ export default function PlatformPage() {
         <ul className="space-y-1 text-xs">
           {(executors.data ?? []).map((executor) => (
             <li key={executor.kind} className="flex items-center gap-2">
-              <span className="font-mono">{executor.kind}</span>
+              <span className="font-mono" data-donnee>{executor.kind}</span>
               <span className="text-ink-muted">{executor.enabled === false ? "Disabled" : "Enabled"}</span>
             </li>
           ))}

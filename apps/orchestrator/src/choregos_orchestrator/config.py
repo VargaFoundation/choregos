@@ -54,7 +54,7 @@ class OrchestratorSettings(BaseSettings):
     agent_images: dict[str, str] = {}
     #: A reference without `@sha256:` stops the worker at start-up (`CHOREGOS_REQUIRE_IMAGE_DIGEST`).
     require_image_digest: bool = False
-    executor_kind: str = "tekton"
+    executor_kind: str = "agent_sandbox"
     # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
     # secret n'a rien à faire ici : `CHOREGOS_RUNNER_ENV_SECRETS` liste des secrets, que
     # l'exécuteur monte par référence.
@@ -65,6 +65,12 @@ class OrchestratorSettings(BaseSettings):
     # l'allowlist est celle de la politique du projet. Vide : aucun proxy — le banc local,
     # dont le namespace n'a ni NetworkPolicy ni proxy.
     runner_egress_proxy: str = ""
+    #: `run`: the runner presents its run id and run token to the egress proxy as proxy credentials
+    #: (ADR 0070): the per-run `choregos-egress` proxy of the chart sets it. Empty: no credentials.
+    runner_egress_auth: str = ""
+    #: Hosts no run of this deployment may reach (comma-separated host patterns, ADR 0070): the same
+    #: value as the API's `CHOREGOS_NETWORK_INSTANCE_DENY`.
+    network_instance_deny: str = ""
     # L'image de ce proxy ; vide : celle que `gitops.py` connaît. À épingler par digest là
     # où Kyverno l'exige.
     egress_image: str = ""

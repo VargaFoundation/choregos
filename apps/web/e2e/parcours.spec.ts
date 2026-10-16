@@ -131,6 +131,13 @@ test("administration : membres et jetons ont un écran", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Remove / }).first()).toBeVisible();
 });
 
+test("the administration lists my roles by scope (S40-07)", async ({ page }) => {
+  await page.goto("/admin");
+  const roles = page.getByRole("list", { name: "Your roles" });
+  await expect(roles).toContainText("platform : org_admin");
+  await expect(roles).not.toContainText("acme :");
+});
+
 test("members: a person appears once; a project has its members; org_admin is not a project role (S30-06)", async ({ page }) => {
   await page.goto("/admin/members");
   const membres = page.getByTestId("membres");
@@ -179,7 +186,7 @@ test("administration : en communautaire, ce que l'édition entreprise ajoute, sa
 
 test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async ({ page }) => {
   await page.goto("/integrations");
-  await expect(page.getByRole("heading", { name: "AI clients", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integrations", level: 1 })).toBeVisible();
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp");
   await expect(page.getByTestId("snippet")).toContainText("claude mcp add --transport http choregos");
   await page.getByRole("button", { name: "Create an access token" }).click();
@@ -309,7 +316,7 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   // AI clients live on their own page now (S30-04).
   await expect(page.getByTestId("client-tok-claude")).toHaveCount(0);
   await page.goto("/integrations");
-  await expect(page.getByRole("heading", { name: "AI clients", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integrations", level: 1 })).toBeVisible();
   // Le jeton du Claude Code de Léa a appelé la porte : connecté, et rattaché à son agent externe.
   const claude = page.getByTestId("client-tok-claude");
   await expect(claude).toContainText("Connected");
@@ -323,7 +330,8 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await page.getByRole("link", { name: "Onboarding coordinator" }).click();
   await expect(page.getByTestId("mesures")).toContainText("14 (12 succeeded, 2 failed)");
   await page.getByRole("link", { name: "Definition" }).click();
-  await expect(page.getByTestId("version")).toContainText("onboarding-procedure@1");
+  await expect(page.getByTestId("definition-groups")).toContainText("onboarding-procedure@1");
+  await page.locator("summary", { hasText: "Capabilities" }).click();
   await page.getByRole("link", { name: "onboarding-procedure@1" }).click();
   await expect(page.getByTestId("fichiers")).toContainText("Entra accounts ten days before the start date");
 });
@@ -365,10 +373,11 @@ test("an agent is created from the builder alone, every field of its version set
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/triage$/);
   await page.getByRole("link", { name: "Definition" }).click();
-  const version = page.getByTestId("version");
+  const version = page.getByTestId("definition-groups");
   await expect(version).toContainText("platform/cheap");
   await expect(version).toContainText("claude-code");
-  await expect(version).toContainText("supplier-agent: track_*");
+  await expect(version).toContainText("supplier-agent");
+  await expect(version).toContainText("track_*");
   await expect(version).toContainText("onboarding-procedure");
 });
 
@@ -388,23 +397,30 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   // (The placeholder and the demo's project-scoped base remain.)
   await expect(builder.getByLabel("Add a knowledge base").locator("option")).toHaveCount(2);
   await expect(builder.getByLabel("Add a knowledge base").locator("option[value='architecture-framework']")).toHaveCount(0);
-  await builder.getByLabel("Memory scope").selectOption("agent");
+  // Memory: its own memory in the project, instead of the project's shared one (S40-11).
+  await builder.getByRole("button", { name: "Remove project:shared" }).click();
+  await builder.getByLabel("Add a memory").selectOption("project:own");
+  await builder.getByRole("button", { name: "Add it" }).click();
+  await builder.getByTestId("memory-binding").getByLabel("Read and write").check();
   await page.getByRole("tab", { name: "What it costs and allows" }).click();
   const allows = page.getByTestId("ce-que-ca-permet");
   await expect(allows.getByTestId("connaissances-resolues")).toContainText(
     "architecture-framework — laid read-only in the workspace; served to every project of the organisation.",
   );
-  await expect(allows.getByTestId("memoire-resolue")).toContainText("Its own memory within each project");
+  await expect(allows.getByTestId("memoire-resolue")).toContainText("Its own memory in the project — read and written");
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/zoning-reviewer$/);
 
   // Its next version starts from what v1 holds, and can drop both.
   await page.getByRole("link", { name: "Definition" }).click();
+  await expect(page.getByTestId("definition-groups")).toContainText("architecture-framework");
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
   const suivante = page.getByTestId("agent-builder");
   await expect(suivante.getByTestId("bases-de-la-version")).toContainText("architecture-framework");
-  await expect(suivante.getByLabel("Memory scope")).toHaveValue("agent");
+  await expect(suivante.getByTestId("memory-binding")).toHaveCount(1);
+  await expect(suivante.getByTestId("memory-binding")).toContainText("project:own");
   await suivante.getByRole("button", { name: "Remove architecture-framework" }).click();
-  await suivante.getByLabel("Memory scope").selectOption("none");
+  await suivante.getByRole("button", { name: "Remove project:own" }).click();
   await expect(page.getByTestId("connaissances-resolues")).toContainText("None.");
   await expect(page.getByTestId("memoire-resolue")).toContainText("No memory: a run neither reads nor writes");
 });
@@ -436,25 +452,27 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
 
   // Its next version breaks the case: the publication is refused, the case named.
   await page.getByRole("link", { name: "Definition" }).click();
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
   const suivante = page.getByTestId("agent-builder");
-  await suivante.getByLabel("Instructions").fill("Handle {{ ticket.title }} calmly.");
+  await suivante.getByRole("textbox", { name: "Instructions" }).fill("Handle {{ ticket.title }} calmly.");
+  await suivante.getByLabel("What changed and why").fill("Calmer wording");
   await suivante.getByRole("button", { name: "Publish v2" }).click();
   await expect(suivante.getByTestId("evals-en-echec")).toContainText("vip: missing “Escalate VIP outage”");
-  await page.getByRole("link", { name: "Versions" }).click();
-  await expect(page.getByRole("table", { name: "Versions" }).getByRole("row")).toHaveCount(2);
+  await page.getByRole("link", { name: "History" }).click();
+  await expect(page.getByTestId("history").getByRole("listitem")).toHaveCount(1);
 });
 
-test("an agent's page is in tabs: overview, definition, versions, runs, access (S30-05)", async ({ page }) => {
+test("an agent's page is in tabs: overview, definition, history, runs, access (S30-05, S40-12)", async ({ page }) => {
   await page.goto("/agents/onboarding-coordinator");
   const onglets = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
-  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "Versions", "Runs", "Access"]);
+  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Runs", "Access"]);
   await expect(onglets.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("mesures")).toBeVisible();
   await expect(page.getByTestId("version")).toHaveCount(0);
 
-  await onglets.getByRole("link", { name: "Versions" }).click();
-  await expect(page).toHaveURL(/tab=versions/);
-  await expect(page.getByRole("table", { name: "Versions" }).getByRole("row")).not.toHaveCount(1);
+  await onglets.getByRole("link", { name: "History" }).click();
+  await expect(page).toHaveURL(/tab=history/);
+  await expect(page.getByTestId("history").getByRole("listitem")).not.toHaveCount(1);
   await expect(page.getByTestId("mesures")).toHaveCount(0);
 
   await onglets.getByRole("link", { name: "Runs" }).click();
@@ -483,7 +501,7 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await page.goto("/p/billing-api/settings");
   const connecteurs = page.getByTestId("connecteurs");
   // Billing API livre du logiciel : un dépôt et une CI, chacun avec sa raison.
-  await expect(page.getByTestId("connecteur-scm")).toContainText("Platform default: github");
+  await expect(page.getByTestId("connecteur-scm")).toContainText("Not connected");
   await expect(page.getByTestId("connecteur-scm")).toContainText("the guarantee scope_respected on t-implement");
   // Rien n'exige de notification : la ligne n'existe pas tant qu'on ne l'ajoute pas.
   await expect(page.getByTestId("connecteur-notify")).toHaveCount(0);
@@ -528,7 +546,7 @@ test("connecteurs : systèmes métier, serveurs MCP et outils de livraison des p
   await expect(page.getByTestId("section-mcp")).toContainText("supplier-agent");
   await expect(page.getByTestId("section-metier")).not.toContainText("supplier-agent");
   await expect(page.getByTestId("livraison-checkout-web")).toContainText("Work tracker: jira");
-  await expect(page.getByTestId("livraison-checkout-web")).toContainText("Deployment: argocd");
+  await expect(page.getByTestId("livraison-checkout-web")).toContainText("Deployment (CD): argocd");
   await page.getByTestId("livraison-checkout-web").getByRole("link", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/p\/checkout-web\/settings$/);
 });

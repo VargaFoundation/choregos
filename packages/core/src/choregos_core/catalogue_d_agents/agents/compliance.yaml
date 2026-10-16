@@ -9,6 +9,7 @@ catalogue:
   human_gate_after: true
 agent:
   slug: compliance
+  tags: [compliance, licences, privacy]
   display_name: Compliance
   description: Reviews a change for dependency licences, personal-data processing and third-party terms, citing the organisation's policies when a knowledge base holds them. Its review goes to people who decide; it is never legal advice.
   spec:

@@ -6,12 +6,40 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator, model_validator
+from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
+from choregos_core.network import validate_pattern
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    computed_field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from .base import Dto
 from .identite import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
+
+#: A tag (S40-10): a lowercase slug of at most 32 characters; an agent carries at most `MAX_TAGS`.
+TAG = r"^[a-z0-9][a-z0-9-]{0,31}$"
+MAX_TAGS = 10
+AgentTag = Annotated[str, Field(pattern=TAG)]
+
+#: The longest message a version carries (S40-12).
+MESSAGE_MAX = 500
+
+
+def _no_duplicate_tags(tags: list[str] | None) -> list[str] | None:
+    if tags is not None:
+        seen: set[str] = set()
+        for tag in tags:
+            if tag in seen:
+                raise ValueError(f"duplicate tag: {tag}")
+            seen.add(tag)
+    return tags
+
 
 #: Who owns an agent (ADR 0061). `platform` is never asked for: a common agent comes from the catalogue.
 AgentScope = Literal["platform", "org", "project", "personal"]
@@ -48,6 +76,18 @@ class AgentKnowledgeRef(Dto):
     """A knowledge base an agent reads (ADR 0051): by its slug; its documents are read at each run."""
 
     slug: str = Field(pattern=SLUG)
+
+
+class AgentMemoryBinding(Dto):
+    """A memory an agent version binds (S40-11, ADR 0075): global to the organisation, or a memory of
+    whichever project the run is in; read, or read and write (at most one write in a list)."""
+
+    scope: Literal["global", "project"]
+    slug: str = Field(pattern=SLUG)
+    mode: Literal["read", "write"] = "read"
+
+    def to_binding(self) -> Binding:
+        return Binding(self.scope, self.slug, self.mode)
 
 
 class AgentSampleInput(Dto):
@@ -149,6 +189,37 @@ class A2aRuntime(Dto):
 AgentRuntime = Annotated[AcpRuntime | CodeRuntime | A2aRuntime, Field(discriminator="kind")]
 
 
+class AgentNetwork(Dto):
+    """What one agent version may reach (ADR 0070). It only ever narrows the project's network and
+    the organisation's: a host they do not allow refuses the publication and the run.
+
+    Every field defaults to `None`, and a version that leaves them all there carries no `network`
+    in its digest: versions published before the field existed keep theirs."""
+
+    #: `None`: the project's list; `[]`: no internet; a list: only these hosts.
+    domains: list[str] | None = None
+    #: New connections a run may open to one host per minute.
+    per_host_per_minute: int | None = Field(default=None, ge=1)
+    #: `False` switches the agent CLI's own web tools off; `None` or `True`: as the policy says.
+    builtin_web_tools: bool | None = None
+
+    @field_validator("domains")
+    @classmethod
+    def _patterns(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        errors: list[str] = []
+        patterns: list[str] = []
+        for entry in value:
+            try:
+                patterns.append(validate_pattern(entry))
+            except ValueError as error:
+                errors.append(str(error))
+        if errors:
+            raise ValueError("; ".join(errors))
+        return list(dict.fromkeys(patterns))
+
+
 class AgentSpec(Dto):
     """Ce qu'une version d'agent EST. Elle ne se modifie jamais : un changement publie la suivante."""
 
@@ -168,6 +239,40 @@ class AgentSpec(Dto):
     #: Whose memory a run reads and writes (S32-02): `project` (shared, the default), `agent` (its
     #: own, within the project) or `none`.
     memory: Literal["none", "project", "agent"] = "project"
+    #: The hosts the agent may reach and how fast (ADR 0070).
+    network: AgentNetwork = Field(default_factory=AgentNetwork)
+
+    #: The memories a run reads and writes (S40-11, ADR 0075), in precedence order; at most 8, one
+    #: `write`. Absent, the legacy `memory` field decides (`project` -> the project's shared memory).
+    memories: list[AgentMemoryBinding] | None = Field(default=None, max_length=8)
+
+    @model_validator(mode="after")
+    def _memories_are_coherent(self) -> AgentSpec:
+        if self.memories is None:
+            return self
+        if self.memory != "project":
+            raise ValueError("`memory` is superseded by `memories`: send one of them, not both")
+        if problems := binding_problems([binding.to_binding() for binding in self.memories]):
+            raise ValueError("; ".join(problems))
+        return self
+
+    @model_serializer(mode="wrap")
+    def _leave_out_absent_memories(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """`memories` is left out while it is unset: a version published before the field existed keeps
+        its stored spec, its digest and its response byte for byte."""
+        data: dict[str, object] = handler(self)
+        if data.get("memories") is None:
+            data.pop("memories", None)
+        return data
+
+    def effective_memories(self) -> list[AgentMemoryBinding]:
+        """What a run binds: `memories`, or what the legacy `memory` means."""
+        return [
+            AgentMemoryBinding(scope=b.scope, slug=b.slug, mode=b.mode)
+            for b in effective_bindings(
+                None if self.memories is None else [m.to_binding() for m in self.memories], self.memory
+            )
+        ]
 
     @model_validator(mode="after")
     def _one_way_to_say_the_backend(self) -> AgentSpec:
@@ -240,6 +345,12 @@ class AgentCreate(Dto):
     scope: CreatableScope = "org"
     #: The project's slug: required for, and only for, a `project` agent.
     project: str | None = Field(default=None, min_length=1)
+    #: Labels people find the agent by (S40-10); never part of a version.
+    tags: list[AgentTag] = Field(default_factory=list, max_length=MAX_TAGS)
+    #: Why version 1 exists (S40-12); absent, `Created`.
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
+
+    _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
 
     @model_validator(mode="after")
     def _a_project_agent_names_its_project(self) -> AgentCreate:
@@ -269,6 +380,8 @@ class AgentFork(Dto):
     project: str | None = Field(default=None, min_length=1)
     #: The source version to copy; absent, its latest.
     version: int | None = Field(default=None, ge=1)
+    #: Why version 1 exists (S40-12); absent, `Forked from <slug>@<version>`.
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
 
     @model_validator(mode="after")
     def _a_project_fork_names_its_project(self) -> AgentFork:
@@ -351,6 +464,8 @@ class AgentCatalogueEntry(Dto):
     summary: str
     version: int
     skills: list[str] = Field(default_factory=list)
+    #: Labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed.
+    tags: list[str] = Field(default_factory=list)
     #: Pour un client externe : son identifiant sur la page des clients, et d'où il appelle.
     client: str | None = None
     reach: Literal["always", "cloud"] | None = None
@@ -393,6 +508,10 @@ class AgentPatch(Dto):
     #: `revoked` est définitif ; `suspended` se lève.
     status: Literal["active", "suspended", "revoked"] | None = None
     expires_at: datetime | None = None
+    #: Replaces the agent's tags; absent or null leaves them as they are (S40-10).
+    tags: list[AgentTag] | None = Field(default=None, max_length=MAX_TAGS)
+
+    _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
 
 
 class AgentVersionDto(Dto):
@@ -401,6 +520,47 @@ class AgentVersionDto(Dto):
     checksum: str
     created_by: str | None = None
     created_at: datetime | None = None
+    #: Why the version exists, in its author's words; absent for a version published before messages.
+    message: str | None = None
+    #: The version this one copies, when it is a restore.
+    restored_from: int | None = None
+    #: The projects the caller may see that pin this version.
+    pinned_by: list[str] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def effective_memories(self) -> list[AgentMemoryBinding]:
+        """The memories a run of this version binds, derived from `memory` when `memories` is absent."""
+        return self.spec.effective_memories()
+
+
+class AgentVersionPublish(Dto):
+    """Publish the next version from the one the author read: refused when the latest has moved (S40-12)."""
+
+    spec: AgentSpec
+    message: str = Field(min_length=1, max_length=MESSAGE_MAX)
+    #: The latest version the author started from (0 for an agent with none).
+    base_version: int = Field(ge=0)
+
+    @field_validator("message")
+    @classmethod
+    def _message_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a message says what changed and why")
+        return value
+
+
+class AgentVersionRestore(Dto):
+    """Copy an older version as the next one; nothing is rewritten or deleted (S40-12)."""
+
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
+    base_version: int = Field(ge=1)
+
+    @field_validator("message")
+    @classmethod
+    def _message_is_stripped(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
 
 
 class AgentDto(Dto):
@@ -408,6 +568,8 @@ class AgentDto(Dto):
     kind: Literal["internal", "external", "remote"]
     display_name: str
     description: str | None = None
+    #: Labels people find the agent by (S40-10); apart from its versions.
+    tags: list[str] = Field(default_factory=list)
     status: str
     owner: str | None = None
     expires_at: datetime | None = None

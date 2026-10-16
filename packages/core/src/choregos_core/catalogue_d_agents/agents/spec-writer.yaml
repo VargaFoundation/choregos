@@ -4,6 +4,7 @@ catalogue:
   summary: Turns a work item into a testable specification and the minimal list of paths the change may touch.
 agent:
   slug: spec-writer
+  tags: [specification, requirements, software]
   display_name: Spec writer
   description: Writes a one-page, testable specification — problem, acceptance criteria, out of scope, test plan, risk — and the minimal allowed paths.
   spec:

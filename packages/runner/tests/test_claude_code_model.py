@@ -46,3 +46,19 @@ def test_the_settings_file_names_the_runs_model(tmp_path: Path) -> None:
     stage_input.model = _model()
     plan = get_backend("claude-code").launch_plan(stage_input, tmp_path)
     assert json.loads(plan.files[".claude/settings.json"])["model"] == MODEL
+
+
+def test_the_built_in_web_tools_are_denied_exactly_when_the_run_switches_them_off(tmp_path: Path) -> None:
+    """ADR 0070: `WebSearch` runs at the model provider, outside every network layer of the platform:
+    denying it in the settings is the only lever there is."""
+    stage_input = _minimal_stage_input(tmp_path)
+    stage_input.model = _model()
+    backend = get_backend("claude-code")
+
+    on = json.loads(backend.launch_plan(stage_input, tmp_path).files[".claude/settings.json"])
+    assert "WebFetch" not in on["permissions"]["deny"] and "WebSearch" not in on["permissions"]["deny"]
+
+    stage_input.permissions.builtin_web_tools = False
+    stage_input.permissions.deny_commands = ["kubectl"]
+    off = json.loads(backend.launch_plan(stage_input, tmp_path).files[".claude/settings.json"])
+    assert off["permissions"]["deny"] == ["Bash(kubectl)", "WebFetch", "WebSearch"]

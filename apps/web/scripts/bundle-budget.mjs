@@ -3,11 +3,13 @@
 // Lu après `next build` : la taille totale des chunks JS servis et celle du plus gros.
 // Les seuils sont larges (le mesuré du 2026-09-25 : ~1,2 Mo au total) — ils attrapent
 // une dépendance qu'on aurait embarquée par mégarde, pas dix kilo-octets.
+// 2026-10-16 (S40 integration, batch 1): 1600 -> 1800 kB. The S39 base measured 1599 kB; S40 adds about
+// 100 kB of console (vendored CC0 brand icons, memories, agent history and diff, project settings).
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1600);
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1800);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {

@@ -132,6 +132,12 @@ export type Problem = {
     column?: number;
   }>;
   retry_after?: number;
+  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12) */
+  code?: string;
+  /** On `stale_base` and `no_change`: the agent's latest version */
+  latest_version?: number;
+  /** On `stale_base`: who published the latest version */
+  latest_author?: string | null;
 };
 
 export type PageMeta = {
@@ -300,6 +306,56 @@ export type ConnectorTestResult = {
     ok: boolean;
     detail?: string | null;
   }>;
+};
+
+export type GitHubInstallation = {
+  /** GitHub's installation id; discovered, never typed */
+  id: number;
+  account_login: string;
+  account_type: "Organization" | "User";
+  repository_selection: "all" | "selected";
+  suspended: boolean;
+  /** Claimed by the organisation asking */
+  claimed: boolean;
+  /** Where to change the installation's repositories on github.com */
+  settings_url: string;
+};
+
+export type GitHubAppStatus = {
+  /** The deployment has a GitHub App (`CHOREGOS_GITHUB_APP_ID` and key) */
+  configured: boolean;
+  /** Read from GitHub (`GET /app`), never configured */
+  app_slug?: string | null;
+  app_name?: string | null;
+  /** Installs the App on a GitHub account, without a state; use install-link to come back to the console */
+  install_url?: string | null;
+  /** How an installation is claimed: implicit (a single-organisation instance), oauth (several organisations, proof by GitHub user authorization), unavailable (several organisations and no OAuth client secret) */
+  multi_org_claim: "implicit" | "oauth" | "unavailable";
+  installations: Array<GitHubInstallation>;
+};
+
+export type GitHubRepository = {
+  /** owner/repo */
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  installation_id: number;
+};
+
+export type GitHubRepositoryPage = {
+  items: Array<GitHubRepository>;
+  meta: PageMeta;
+};
+
+export type GitHubInstallLinkRequest = {
+  /** Project slug the person came from */
+  project?: string | null;
+  /** A path of the console (starts with `/`), where the setup callback sends the person back */
+  return_to: string;
+};
+
+export type GitHubInstallLink = {
+  url: string;
 };
 
 export type ConnectorType = {
@@ -618,6 +674,38 @@ export type Action = {
   journal?: Array<ActionEffect>;
 };
 
+export type ReadinessFix = {
+  /** Where it is fixed: a console path, with an `#anchor` to the field */
+  href?: string | null;
+  /** Who can do it: the project's owner, the organisation's administrator, the platform's operator, or someone outside Choregos (an identity provider, a vendor) */
+  by: "project_owner" | "org_admin" | "platform_operator" | "external";
+};
+
+export type ReadinessItem = {
+  /** Stable, e.g. `provisioned`, `connector-cd`, `connector-cd-secrets`, `people-release-captain`, `notifications` */
+  id: string;
+  section: "general" | "connections" | "agents" | "guardrails" | "people" | "notifications" | "tools";
+  title: string;
+  /** done: nothing to do. check: works but deserves a look (a demo stand-in, a stale test, an unmeasured check). todo: the project cannot run as intended. not_needed: its workflows do not need it */
+  state: "done" | "check" | "todo" | "not_needed";
+  /** Why, in a sentence */
+  detail: string;
+  fix: ReadinessFix;
+};
+
+export type ReadinessSummary = {
+  done: number;
+  check: number;
+  todo: number;
+};
+
+export type ProjectReadiness = {
+  /** No item is `todo` */
+  ready: boolean;
+  summary: ReadinessSummary;
+  items: Array<ReadinessItem>;
+};
+
 /** A capability the project's workflows require, and why (ADR 0034). */
 export type ProjectRequirement = {
   capability: string;
@@ -791,8 +879,11 @@ export type AgentSpec = {
   }>;
   /** The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published */
   evals?: Array<AgentEvalCase>;
-  /** whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none */
+  /** SUPERSEDED by `memories` (S40-11): read only when `memories` is absent. Whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none */
   memory?: "none" | "project" | "agent";
+  /** The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422. */
+  memories?: Array<AgentMemoryBinding> | null;
+  network?: AgentNetwork;
 };
 
 /** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
@@ -914,6 +1005,161 @@ export type AgentImageInfo = {
   digest_pinned: boolean;
 };
 
+export type AgentMemoryBinding = {
+  /** `global`: the organisation's memory; `project`: a memory of whichever project the run is in (`shared`, `own`, or a named one) */
+  scope: "global" | "project";
+  slug: string;
+  mode?: "read" | "write";
+};
+
+export type RunMemorySearch = {
+  query: string;
+  k?: number;
+  /** one memory of the run, by label (`global:security-lessons`); absent, all of them */
+  memory?: string | null;
+};
+
+export type RunMemoryHit = {
+  /** the label of the memory the hit came from */
+  memory: string;
+  kind: string;
+  subject: string;
+  content: string;
+  score?: number | null;
+};
+
+export type MemoryStoreUser = {
+  agent: string;
+  version: number;
+};
+
+export type MemoryStore = {
+  slug: string;
+  display_name: string;
+  description?: string | null;
+  scope: "global" | "project";
+  /** the project's slug, for a project memory */
+  project?: string | null;
+  /** for a global memory: whose runs read it */
+  reach?: "org" | "projects" | null;
+  projects?: Array<string>;
+  status?: "active" | "archived";
+  /** `shared` and `own`: every project has them, they are not rows */
+  implicit?: boolean;
+  created_by?: string | null;
+  created_at?: string | null;
+  /** visible agents whose latest version binds it */
+  used_by?: Array<MemoryStoreUser>;
+};
+
+export type MemoryStoreCreate = {
+  slug: string;
+  display_name: string;
+  description?: string | null;
+  reach?: "org" | "projects";
+  /** required, non-empty, when `reach` is `projects` */
+  projects?: Array<string>;
+};
+
+export type ProjectMemoryCreate = {
+  slug: string;
+  display_name: string;
+  description?: string | null;
+};
+
+export type MemoryStorePatch = {
+  display_name?: string;
+  description?: string | null;
+  reach?: "org" | "projects";
+  projects?: Array<string>;
+  status?: "active" | "archived";
+};
+
+/** What one agent version may reach (ADR 0070). It can only narrow the project's and the organisation's network: a host they do not allow refuses the publication (422) and the run. */
+export type AgentNetwork = {
+  /** null: the project's list; []: no internet; a list: only these hosts (`example.com` = it and its subdomains, `*.example.com` = subdomains only) */
+  domains?: Array<string> | null;
+  /** new connections a run may open to one host per minute */
+  per_host_per_minute?: number | null;
+  /** false switches the agent CLI's own WebFetch and WebSearch off; null or true: as the policy says */
+  builtin_web_tools?: boolean | null;
+};
+
+export type RunNetwork = {
+  run_id: string;
+  allow: Array<string>;
+  deny: Array<string>;
+  /** hosts the run needs to work at all (the project's repository host) */
+  implied: Array<string>;
+  per_host_per_minute?: number | null;
+  per_run_per_minute?: number | null;
+  /** the organisation's cap, counted across all its runs */
+  org_per_host_per_minute?: number | null;
+  builtin_web_tools: boolean;
+  /** always true today: an empty allow list means no internet */
+  listed: boolean;
+  org: string;
+  project: string;
+  agent?: string | null;
+};
+
+export type NetworkDecisionIn = {
+  layer: "proxy" | "runner";
+  host: string;
+  port?: number;
+  decision: "allowed" | "denied" | "rate_limited" | "unreachable";
+  reason?: string;
+  count?: number;
+  bytes_up?: number;
+  bytes_down?: number;
+  first_at?: string | null;
+  last_at?: string | null;
+};
+
+export type NetworkDecisionBatch = {
+  decisions: Array<NetworkDecisionIn>;
+};
+
+export type EffectiveNetwork = {
+  allow: Array<string>;
+  deny: Array<string>;
+  implied: Array<string>;
+  per_host_per_minute?: number | null;
+  per_run_per_minute?: number | null;
+  org_per_host_per_minute?: number | null;
+  builtin_web_tools: boolean;
+};
+
+export type ProjectNetwork = {
+  /** the project's `sandbox.network`, as stored */
+  policy: {
+    [key: string]: unknown;
+  };
+  /** the organisation's `network` ceiling, null when it sets none */
+  ceiling?: {
+    [key: string]: unknown;
+  } | null;
+  effective: EffectiveNetwork;
+  clamps: Array<string>;
+};
+
+export type NetworkActivityRow = {
+  host: string;
+  /** proxy, runner, broker or platform */
+  layer: string;
+  decision: string;
+  reason: string;
+  count: number;
+  runs: number;
+  projects: Array<string>;
+  agents: Array<string>;
+  last_at: string;
+};
+
+export type NetworkActivity = {
+  rows: Array<NetworkActivityRow>;
+};
+
 /** A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not. */
 export type AgentEvalCase = {
   name: string;
@@ -959,6 +1205,9 @@ export type AgentTrial = {
   evals?: Array<AgentEvalResult>;
 };
 
+/** Labels people find the agent by (S40-10); never part of a version */
+export type AgentTags = Array<string>;
+
 export type AgentCreate = {
   /** `new` is reserved: the console's `/agents/new` page would shadow it (422) */
   slug: string;
@@ -973,6 +1222,9 @@ export type AgentCreate = {
   scope?: "org" | "project" | "personal";
   /** the project's slug: required for, and only for, a `project` agent */
   project?: string | null;
+  tags?: AgentTags;
+  /** why version 1 exists; absent, `Created` (S40-12) */
+  message?: string | null;
 };
 
 export type AgentFork = {
@@ -984,6 +1236,8 @@ export type AgentFork = {
   project?: string | null;
   /** the source version to copy; absent, its latest */
   version?: number | null;
+  /** why version 1 exists; absent, `Forked from <slug>@<version>` (S40-12) */
+  message?: string | null;
 };
 
 export type AgentScopeChange = {
@@ -1048,6 +1302,8 @@ export type AgentCatalogueEntry = {
   /** the catalogue's version of the entry */
   version: number;
   skills?: Array<string>;
+  /** labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed */
+  tags?: Array<string>;
   /** an external client's id on the AI clients page */
   client?: string | null;
   /** `cloud`: it calls from its vendor's cloud */
@@ -1087,6 +1343,8 @@ export type AgentPatch = {
   description?: string | null;
   status?: "active" | "suspended" | "revoked" | null;
   expires_at?: string | null;
+  /** replaces the agent's tags; absent or null leaves them as they are (S40-10) */
+  tags?: AgentTags | null;
 };
 
 export type AgentVersion = {
@@ -1095,6 +1353,29 @@ export type AgentVersion = {
   checksum: string;
   created_by?: string | null;
   created_at?: string | null;
+  /** why the version exists, in its author's words (S40-12); null for a version published before messages or through the bare-spec endpoint */
+  message?: string | null;
+  /** the version this one copies, when it is a restore */
+  restored_from?: number | null;
+  /** the slugs of the projects the caller may see that pin this version */
+  pinned_by?: Array<string>;
+  /** what a run of this version binds: `spec.memories`, or what the legacy `spec.memory` means (S40-11) */
+  effective_memories?: Array<AgentMemoryBinding>;
+};
+
+export type AgentVersionPublish = {
+  spec: AgentSpec;
+  /** what changed and why */
+  message: string;
+  /** the latest version the author started from (0 for an agent with none) */
+  base_version: number;
+};
+
+export type AgentVersionRestore = {
+  /** absent, `Restore vN` */
+  message?: string | null;
+  /** the latest version the author saw */
+  base_version: number;
 };
 
 export type Agent = {
@@ -1102,6 +1383,7 @@ export type Agent = {
   kind: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
+  tags?: AgentTags;
   status: string;
   owner?: string | null;
   expires_at?: string | null;
@@ -2584,6 +2866,8 @@ export interface Operations {
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
+  createGitHubInstallLink: { method: "POST"; path: "/orgs/{org}/github/install-link"; body: GitHubInstallLinkRequest; response: GitHubInstallLink };
+  createGlobalMemory: { method: "POST"; path: "/orgs/{org}/memories"; body: MemoryStoreCreate; response: MemoryStore };
   createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
   createKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources"; body: KnowledgeSourceCreate; response: KnowledgeSource };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
@@ -2591,12 +2875,14 @@ export interface Operations {
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
+  createProjectMemory: { method: "POST"; path: "/projects/{id}/memories"; body: ProjectMemoryCreate; response: MemoryStore };
   createRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials"; body: RemoteCredentialCreate; response: RemoteCredential };
   createSkill: { method: "POST"; path: "/orgs/{org}/skills"; body: SkillFiles; response: Skill };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
+  decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
@@ -2630,14 +2916,17 @@ export interface Operations {
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
+  getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
+  getMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}"; body: never; response: MemoryStore };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
+  getNetworkActivity: { method: "GET"; path: "/orgs/{org}/network-activity"; body: never; response: NetworkActivity };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
@@ -2647,6 +2936,8 @@ export interface Operations {
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
   getProjectModels: { method: "GET"; path: "/projects/{id}/models"; body: never; response: ProjectModels };
+  getProjectNetwork: { method: "GET"; path: "/projects/{id}/network"; body: never; response: ProjectNetwork };
+  getProjectReadiness: { method: "GET"; path: "/projects/{id}/readiness"; body: never; response: ProjectReadiness };
   getProjectTools: { method: "GET"; path: "/projects/{id}/tools"; body: never; response: {
   allows_all: boolean;
   tools: Array<{
@@ -2717,6 +3008,7 @@ export interface Operations {
   }>;
 }> };
   getRunLogs: { method: "GET"; path: "/runs/{id}/logs"; body: never; response: RunLogs };
+  getRunNetwork: { method: "GET"; path: "/internal/runs/{id}/network"; body: never; response: RunNetwork };
   getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: Array<{
   slug: string;
   version: number;
@@ -2749,6 +3041,7 @@ export interface Operations {
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
+  githubAppSetup: { method: "GET"; path: "/github/setup"; body: never; response: void };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2780,10 +3073,13 @@ export interface Operations {
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
+  listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
+  listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
+  listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
@@ -2792,6 +3088,7 @@ export interface Operations {
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
+  listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
   listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: Array<ProjectOperation> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
@@ -2815,6 +3112,9 @@ export interface Operations {
 }; response: void };
   postRunFinding: { method: "POST"; path: "/internal/runs/{id}/findings"; body: Finding; response: FindingAck };
   postRunGitToken: { method: "POST"; path: "/internal/runs/{id}/git-token"; body: never; response: GitToken };
+  postRunNetworkDecisions: { method: "POST"; path: "/internal/runs/{id}/network/decisions"; body: NetworkDecisionBatch; response: {
+  accepted: number;
+} };
   postRunQuestion: { method: "POST"; path: "/internal/runs/{id}/question"; body: {
   text: string;
   options?: Array<string>;
@@ -2830,6 +3130,7 @@ export interface Operations {
   proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
   publishAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions"; body: AgentSpec; response: AgentVersion };
+  publishAgentVersionWithMessage: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/publish"; body: AgentVersionPublish; response: AgentVersion };
   publishSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions"; body: SkillFiles; response: SkillVersion };
   putBackend: { method: "PUT"; path: "/platform/backends"; body: AgentBackendUpdate; response: AgentBackendInfo };
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
@@ -2845,6 +3146,7 @@ export interface Operations {
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
+  refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
@@ -2853,14 +3155,17 @@ export interface Operations {
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
+  restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
+  searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
+  searchRunMemory: { method: "POST"; path: "/internal/runs/{id}/memory/search"; body: RunMemorySearch; response: Array<RunMemoryHit> };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
@@ -2881,10 +3186,12 @@ export interface Operations {
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
+  updateMemory: { method: "PATCH"; path: "/orgs/{org}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateModelCatalogueEntry: { method: "PATCH"; path: "/orgs/{org}/models/{entry_id}"; body: ModelCataloguePatch; response: ModelCatalogueEntry };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
+  updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };

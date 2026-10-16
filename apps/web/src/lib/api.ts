@@ -42,6 +42,8 @@ import type {
   AgentPatch,
   AgentSpec,
   AgentVersion,
+  AgentVersionPublish,
+  AgentVersionRestore,
   ProjectAgent,
   ProjectAgentPut,
   Skill,
@@ -103,6 +105,10 @@ import type {
   FindingPage,
   MeDto,
   Memory,
+  MemoryStore,
+  MemoryStoreCreate,
+  MemoryStorePatch,
+  ProjectMemoryCreate,
   ModelMatrix,
   PolicyDef,
   PolicyCeilingState,
@@ -156,7 +162,16 @@ export function qualify(id: string): string {
 }
 
 /** An RFC 9457 problem as the API answers it; `correlation_id` ties a 500 to the API's logs (S26-02). */
-export type Problem = { title?: string; detail?: string; errors?: unknown[]; correlation_id?: string };
+export type Problem = {
+  title?: string;
+  detail?: string;
+  errors?: unknown[];
+  correlation_id?: string;
+  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12). */
+  code?: string;
+  latest_version?: number;
+  latest_author?: string | null;
+};
 
 export class ApiError extends Error {
   constructor(
@@ -327,6 +342,12 @@ export const api = {
     request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),
   transferAgentOwnership: (org: string, slug: string, email: string) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
+  /** The next version with its message, from the version the author read; 409 `stale_base` or `no_change` otherwise (S40-12). */
+  publishAgentVersionWithMessage: (org: string, slug: string, body: AgentVersionPublish) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/publish`, { method: "POST", body: JSON.stringify(body) }),
+  /** Copy version N as the next version; nothing is rewritten (S40-12). */
+  restoreAgentVersion: (org: string, slug: string, version: number, body: AgentVersionRestore) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/${version}/restore`, { method: "POST", body: JSON.stringify(body) }),
   publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
@@ -686,13 +707,38 @@ export const api = {
   findingAction: (findingId: string, action: string) =>
     request<unknown>(`/findings/${findingId}/actions`, { method: "POST", body: JSON.stringify({ action }) }),
 
-  memorySearch: (id: string, q: string) => request<Memory[]>(`/projects/${qualify(id)}/memory/search${query({ q })}`),
-  memoryPending: (id: string) => request<Memory[]>(`/projects/${qualify(id)}/memory/pending`),
-  memoryDecide: (id: string, memoryId: string, action: "accept" | "reject") =>
-    request<unknown>(`/projects/${qualify(id)}/memory/pending`, {
+  /** `which` picks the project's memory to read (S40-11): `shared` (the default), `own` with an agent, or a named one. */
+  memorySearch: (id: string, q: string, which?: MemoryChoice) =>
+    request<Memory[]>(`/projects/${qualify(id)}/memory/search${query({ q, ...memoryParams(which) })}`),
+  memoryPending: (id: string, which?: MemoryChoice) =>
+    request<Memory[]>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`),
+  memoryDecide: (id: string, memoryId: string, action: "accept" | "reject", which?: MemoryChoice) =>
+    request<unknown>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`, {
       method: "POST",
       body: JSON.stringify({ id: memoryId, action }),
     }),
+  /** Named memories (S40-11, ADR 0075): the organisation's, global and project, with who uses each. */
+  memories: (org: string, filter: { scope?: "global" | "project"; project?: string } = {}) =>
+    request<MemoryStore[]>(`/orgs/${org}/memories${query(compact(filter))}`),
+  memory: (org: string, slug: string) => request<MemoryStore>(`/orgs/${org}/memories/${slug}`),
+  createGlobalMemory: (org: string, body: MemoryStoreCreate) =>
+    request<MemoryStore>(`/orgs/${org}/memories`, { method: "POST", body: JSON.stringify(body) }),
+  updateMemory: (org: string, slug: string, body: MemoryStorePatch) =>
+    request<MemoryStore>(`/orgs/${org}/memories/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  searchGlobalMemory: (org: string, slug: string, q: string) =>
+    request<Memory[]>(`/orgs/${org}/memories/${slug}/search${query({ q })}`),
+  globalMemoryPending: (org: string, slug: string) => request<Memory[]>(`/orgs/${org}/memories/${slug}/pending`),
+  decideGlobalMemory: (org: string, slug: string, memoryId: string, action: "accept" | "reject") =>
+    request<unknown>(`/orgs/${org}/memories/${slug}/pending`, {
+      method: "POST",
+      body: JSON.stringify({ id: memoryId, action }),
+    }),
+  /** What a run of the project may bind: `shared`, `own`, its named memories, the global ones that reach it. */
+  projectMemories: (id: string) => request<MemoryStore[]>(`/projects/${qualify(id)}/memories`),
+  createProjectMemory: (id: string, body: ProjectMemoryCreate) =>
+    request<MemoryStore>(`/projects/${qualify(id)}/memories`, { method: "POST", body: JSON.stringify(body) }),
+  updateProjectMemory: (id: string, slug: string, body: MemoryStorePatch) =>
+    request<MemoryStore>(`/projects/${qualify(id)}/memories/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   costs: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
@@ -720,8 +766,18 @@ export const api = {
 
 export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" };
 
-function compact(filtre: CostFilter): Record<string, string> {
+function compact(filtre: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(filtre).filter(([, v]) => v)) as Record<string, string>;
+}
+
+/** Which of a project's memories a review reads (S40-11): absent, the shared one. */
+export type MemoryChoice = { memory?: string; agent?: string };
+
+function memoryParams(which?: MemoryChoice): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (which?.memory && which.memory !== "shared") out.memory = which.memory;
+  if (which?.memory === "own" && which.agent) out.agent = which.agent;
+  return out;
 }
 
 function query(params?: Record<string, string>): string {
