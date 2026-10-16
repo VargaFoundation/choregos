@@ -12,7 +12,7 @@ from choregos_api.db.models import CostLedger, Run
 from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
 from choregos_core.domain import DiffSummary, PrRef
-from choregos_core.gates import DIFF_GATES, MOTIF_ADR
+from choregos_core.gates import ALREADY_FIXED_GATE, DIFF_GATES, MOTIF_ADR, unchanged_run
 from temporalio import activity
 
 from .base import db, load_work_item, project_bundle
@@ -62,6 +62,8 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     if file.patch:
                         secrets.extend(scan_secrets(file.patch))
                         ajoute[file.path] = texte_ajoute(file.patch)
+
+        branch_pushed = await _branch_pushed(bundle, item, result) if _reads_branch(gates) else None
 
         ci_status = None
         review_state = None
@@ -117,6 +119,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             added_text=ajoute,
             documents=dict(item.documents or {}),
             fields=dict(item.fields or {}),
+            branch_pushed=branch_pushed,
         )
         outcomes = [await _juger(gate, context, bundle, diff is not None, perimetre_du_run) for gate in gates]
 
@@ -147,15 +150,31 @@ def empty_diff_of_unchanged_run(
     runner MEASURED an empty change (git's `diff_files` / `diff_lines`, not the agent's word) with
     no commit. A run whose push failed has commits and a non-empty diff: it is still refused.
     """
-    if not (isinstance(exc, UpstreamError) and exc.status_code == 404) or result is None:
+    if not (isinstance(exc, UpstreamError) and exc.status_code == 404):
         return None
-    evidence = result.evidence
-    measured = set(evidence.measured or [])
-    if not {"diff_files", "diff_lines"} <= measured:
-        return None  # a runner that does not measure its diff: nothing proves it is empty
-    if evidence.diff_files or evidence.diff_lines or result.artifacts.commits:
+    # A runner that does not measure its diff proves nothing; a measured change or a commit is not empty.
+    if not unchanged_run(result):
         return None
     return DiffSummary(base=base, head=branch)
+
+
+def _reads_branch(gates: list[dict[str, Any]]) -> bool:
+    return any(g["name"] == ALREADY_FIXED_GATE for g in gates)
+
+
+async def _branch_pushed(bundle: Any, item: Any, result: StageResult | None) -> bool | None:
+    """Whether the work item's branch exists on the SCM (S22-47), for `already_fixed_proven`.
+
+    `None` — the guarantee refuses — without a repository, or when the SCM cannot answer: a 403 or
+    an outage proves nothing either way."""
+    depot = bundle.config.repo
+    if depot is None:
+        return None
+    branch = (result.artifacts.branch if result else None) or bundle.config.branch_for(item.tracker_key)
+    try:
+        return bool(await bundle.adapters.scm.branch_exists(_repo_slug(depot.url), branch))
+    except Exception:
+        return None
 
 
 async def _diff_du_run(

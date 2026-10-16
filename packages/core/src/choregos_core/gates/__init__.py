@@ -69,6 +69,9 @@ class GateContext:
     #: The work item's fields (a campaign's period, costs, thresholds): `numbers_measured` reads
     #: them as the source `fields`, so a memo may restate what it was asked without inventing it.
     fields: dict[str, Any] = field(default_factory=dict)
+    #: Does the work item's branch exist on the SCM (S22-47)? `None` when nobody read it, or the
+    #: SCM could not answer: `already_fixed_proven` then refuses rather than assume.
+    branch_pushed: bool | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -871,7 +874,70 @@ def _external(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     return GateOutcome("external", ok, detail=f"{url} → {'ok' if ok else 'ko'}")
 
 
+# ───────────────────────────── a ticket already fixed (S22-47) ─────────────────────────────
+
+#: The guarantee that a ticket's fix is already on the default branch (#539). A `system` transition
+#: that carries it is an alternative exit of the agent step from the same state: the interpreter takes
+#: it only after that step measured no change, never by default (`WorkflowEngine.already_fixed_exit`).
+ALREADY_FIXED_GATE = "already_fixed_proven"
+
+#: What an unproven "already fixed" says first: the reason a person reads on the escalation.
+ALREADY_FIXED_UNPROVEN = (
+    "the implementation changed nothing and the evidence does not prove the fix already exists"
+)
+
+
+def unchanged_run(result: StageResult | None) -> bool:
+    """The runner MEASURED that the run changed nothing: `diff_files` and `diff_lines` measured by
+    git (ADR 0045), both 0, and no commit. The agent's word that it changed nothing is not enough."""
+    if result is None:
+        return False
+    evidence = result.evidence
+    if not {"diff_files", "diff_lines"} <= set(evidence.measured or []):
+        return False
+    return not (evidence.diff_files or evidence.diff_lines or result.artifacts.commits)
+
+
+@gate(ALREADY_FIXED_GATE, needs=("scm",))
+def _already_fixed_proven(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """The ticket's fix is already on the default branch, on measured evidence only (#539).
+
+    The run changed nothing (`unchanged_run`), pushed no branch (read from the SCM), and the tests
+    pass on that unchanged checkout — which is the default branch: the runner ran them, at least one,
+    none failed (`tests_run` and `tests_failed` in `evidence.measured`). Anything missing refuses,
+    and says what is missing."""
+    name = ALREADY_FIXED_GATE
+    result = ctx.result
+    if result is None:
+        return GateOutcome(name, False, detail="no stage result")
+    evidence = result.evidence
+    measured = set(evidence.measured or [])
+    if not unchanged_run(result):
+        return GateOutcome(name, False, detail="the run did not measure an empty change")
+    if ctx.branch_pushed is None:
+        return GateOutcome(name, False, detail="whether a branch was pushed could not be read from the SCM")
+    if ctx.branch_pushed:
+        return GateOutcome(name, False, detail="a work branch was pushed")
+    if not {"tests_run", "tests_failed"} <= measured:
+        return GateOutcome(name, False, detail="the platform did not run the tests (none measured)")
+    if not evidence.tests_run:
+        return GateOutcome(name, False, detail="no test ran on the default branch")
+    if evidence.tests_failed or evidence.tests_passed is False:
+        failed = evidence.tests_failed or "some"
+        return GateOutcome(name, False, detail=f"{failed} test(s) fail on the default branch")
+    return GateOutcome(
+        name,
+        True,
+        detail=(
+            f"nothing to change (0 files, 0 lines, no commit, no branch) and {evidence.tests_run} "
+            "test(s) pass on the default branch, 0 failed — measured by the platform"
+        ),
+    )
+
+
 __all__ = [
+    "ALREADY_FIXED_GATE",
+    "ALREADY_FIXED_UNPROVEN",
     "DIFF_GATES",
     "GateContext",
     "GateOutcome",
@@ -882,4 +948,5 @@ __all__ = [
     "known_gates",
     "matches_any",
     "scan_secrets",
+    "unchanged_run",
 ]
