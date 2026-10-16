@@ -28,6 +28,7 @@ from ..config import get_settings
 from ..db.models import KnowledgeBase, KnowledgeChunk, KnowledgeDocument
 from ..db.session import session_scope
 from ..logging import get_logger
+from . import offload
 from .chunking import chunk
 from .embeddings import Embedder, check_model_usage, cosine, embedding_model, get_embedder, words
 
@@ -101,7 +102,8 @@ async def index_document(org: str, document_id: str, embedder: Embedder | None =
         await session.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id))
         if base is None or base.serving_mode != "index" or document.status != "ready":
             return 0
-        chunks = chunk(document.markdown or "", document.title)
+        # Cutting a long document is CPU-bound: a worker process, not the API's event loop (S39-26).
+        chunks = await offload.run(chunk, document.markdown or "", document.title)
         if not chunks:
             return 0
         embedder = embedder if embedder is not None else get_embedder()
@@ -227,15 +229,27 @@ async def _in_process(
             )
         ).tuples()
     )
-    lexical = bm25(query, {str(i): t for i, t, _ in rows})[:CANDIDATES]
     if embedder is None:
-        return [lexical]
+        return [await offload.run(_lexical, query, [(str(i), t) for i, t, _ in rows])]
     (vector,) = await embedder.embed([query])
-    scored = sorted(
-        ((cosine(vector, list(e or [])), str(i)) for i, _, e in rows if e),
-        key=lambda item: (-item[0], item[1]),
+    return list(
+        await offload.run(_rankings, query, vector, [(str(i), t, list(e) if e else None) for i, t, e in rows])
     )
-    return [lexical, [key for score, key in scored[:CANDIDATES] if score > 0]]
+
+
+def _lexical(query: str, rows: list[tuple[str, str]]) -> list[str]:
+    return bm25(query, dict(rows))[:CANDIDATES]
+
+
+def _rankings(
+    query: str, vector: list[float], rows: list[tuple[str, str, list[float] | None]]
+) -> list[list[str]]:
+    """The two in-process rankings (BM25, cosine): CPU-bound, so run in the worker process."""
+    scored = sorted(((cosine(vector, e), i) for i, _, e in rows if e), key=lambda item: (-item[0], item[1]))
+    return [
+        _lexical(query, [(i, t) for i, t, _ in rows]),
+        [k for score, k in scored[:CANDIDATES] if score > 0],
+    ]
 
 
 async def search(

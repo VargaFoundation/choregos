@@ -174,8 +174,9 @@ class Settings(BaseSettings):
     knowledge_max_markdown_mib: int = 8
     #: A conversion runs in a child process, killed past this delay.
     knowledge_conversion_timeout_s: float = 120.0
-    #: How many conversions run at once in one API replica.
-    knowledge_conversion_concurrency: int = 2
+    #: How many conversions run at once in one API replica. One by default: the API pod has one CPU
+    #: (S39-26), a second converter would only share it.
+    knowledge_conversion_concurrency: int = 1
     #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.
     knowledge_embedding_model: str = "platform/embed"
     #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the

@@ -6,11 +6,17 @@ An upload answers 202 with a `pending` document; `schedule()` starts a task that
 process with a timeout, and writes `ready` with the markdown, or `failed` with the reason. A replica
 that dies mid-conversion leaves a `converting` row: `recover()`, at start-up, puts the stale ones
 back to `pending` and schedules every pending one.
+
+Nothing here may hold the API's event loop (S39-26): the converter is a child process, started at a
+low priority so that, under a CPU limit shared by the whole pod, the kernel serves the API first;
+what stays in the process and is CPU-bound (parsing the answer, cutting chunks) runs in a worker
+thread. Only I/O awaits on the loop.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import re
@@ -35,6 +41,16 @@ PENDING, CONVERTING, READY, FAILED = "pending", "converting", "ready", "failed"
 _HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 #: The environment a converter sees: enough to run Python, nothing of the API's secrets.
 _ENV_KEPT = ("PATH", "LANG", "LC_ALL", "HOME", "TMPDIR", "PYTHONPATH", "VIRTUAL_ENV", "PYTHONHOME")
+
+
+#: Niceness of the converter process: the API's own threads win every contest for the pod's CPU.
+CONVERTER_NICE = 15
+
+
+def _lower_priority() -> None:
+    """Runs in the child between fork and exec."""
+    with contextlib.suppress(OSError):
+        os.nice(CONVERTER_NICE)
 
 
 class ConversionError(RuntimeError):
@@ -67,6 +83,7 @@ async def run_converter(data: bytes, extension: str, *, timeout_s: float, max_by
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=child_environment(),
+        preexec_fn=_lower_priority,
     )
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(data), timeout=timeout_s)
@@ -78,6 +95,11 @@ async def run_converter(data: bytes, extension: str, *, timeout_s: float, max_by
         raise ConversionError(
             stderr.decode("utf-8", "replace").strip()[:1000] or f"converter exited {process.returncode}"
         )
+    # Up to `max_bytes` of JSON and UTF-8: decoded off the loop.
+    return await asyncio.to_thread(_checked_answer, stdout, max_bytes)
+
+
+def _checked_answer(stdout: bytes, max_bytes: int) -> dict[str, Any]:
     try:
         result = json.loads(stdout)
     except json.JSONDecodeError as exc:
@@ -127,7 +149,7 @@ async def convert_document(org: str, document_id: str) -> str:
             READY,
             {
                 "markdown": result["markdown"],
-                "title": title_of(result["markdown"], result.get("title"), filename),
+                "title": await asyncio.to_thread(title_of, result["markdown"], result.get("title"), filename),
                 "error": None,
                 "converted_at": utcnow(),
             },
