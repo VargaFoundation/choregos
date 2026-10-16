@@ -178,6 +178,8 @@ connector is available to every project), `GET /projects/{id}/org-connectors` to
 reaches the connector only if it is enabled for its project, the effective policy is not forbidden, the
 groups match and the agent version selects it; the same holds for governed actions.
 
+In the console, **Catalogue → MCP servers** (`/catalogue/mcp-servers`; the former administration path redirects) shows each entry's Install button disabled, with the server's reason, for anyone who may not install. The install panel asks whether the server is available to *selected projects* (the default) or *every project*; an installed server says where it is on ("on in billing-api", "on in no project yet") and **Projects…** opens a panel that turns it on or off per project. *Administration → Connectors* sets each connector's availability, after a confirmation that every project loses it until it is enabled.
+
 **The MCP catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) is a list
 of well-known MCP servers shipped in the image, so an administrator does not need to know a
 vendor's URL by heart: `choregos_core/mcp_catalogue/catalogue.yaml`, about a hundred entries,
