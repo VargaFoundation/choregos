@@ -52,6 +52,10 @@ organisations must assume **a member of one will try to read another**.
   policy lets runner pods reach eight hosts directly and its baseline policy lets every pod of the
   namespace reach every other one (PostgreSQL and Temporal included): until infra changes that, the
   Choregos proxy is bypassable for those hosts.
+- **`choregos-egress` limits.** Its rate limits count per replica and per connection; it stops a
+  name that resolves to a private address and connects to the address it resolved (one resolution), but
+  a wall also needs the chart's NetworkPolicies (or the platform's) to stop runner pods going out
+  another way. The per-project Squid of per-project namespaces stays host-level and project-level.
 - **Row-level security needs a non-superuser role.** A PostgreSQL superuser ignores every
   policy. The API refuses to start as one in `staging` and `prod`; the embedded PostgreSQL
   creates `choregos_app` at initdb for that reason.

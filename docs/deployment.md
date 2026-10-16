@@ -824,13 +824,63 @@ What the chart does for a multi-node installation, and the knobs behind it:
 | The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
 | A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin` or `demoFakes` is on, and names the value | `templates/garde.yaml` |
 | A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
-| An agent must not reach the Internet except where the policy says | the runners namespace denies egress by default; the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains`, and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest |
+| An agent must not reach the Internet except where the policy says | in **per-project runner namespaces** the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains` (project-level, host-level, no per-agent wall), and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door. In the **release namespace** (the `agent_sandbox` executor) the chart's **`choregos-egress`** proxy is per run: it knows which run is calling, applies the agent ∩ project ∩ organisation network, and reports every decision ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)) | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest; `global.egress.*` for `choregos-egress` |
 | Temporal must be restorable | it holds the position of every ticket in flight; `docs/runbooks/temporal-backup.md` says what to copy and how to reconcile afterwards | — |
 
 The proxy is the honest part of "egress allowlist": before 2026-09-25 the NetworkPolicy
 opened a `choregos-egress` namespace that no chart delivered, and the allowlist was an
 annotation. It is verified on a cluster (`tests/cluster/test_egress_proxy.py`: an
 allowed domain answers 200 through the proxy, any other gets 403 from Squid).
+
+### The per-run egress proxy (`choregos-egress`)
+
+`global.egress.enabled: true` renders a Deployment and a Service named `choregos-egress` in the release
+namespace, from the API image (`python -m choregos_api.egress`), with a restricted pod (non-root,
+read-only root file system, all capabilities dropped, `RuntimeDefault` seccomp, no service account
+token). Nothing is rendered by default.
+
+| Value | Default | What it does |
+| :-- | :-- | :-- |
+| `global.egress.enabled` | `false` | renders the proxy, makes the orchestrator set `CHOREGOS_RUNNER_EGRESS_AUTH=run` (the runner then presents its run id and run token as proxy credentials) and opens runner pods to it |
+| `global.egress.replicas` | `1` | rates are counted per replica: with N replicas a rate is up to N times looser |
+| `global.egress.port`, `healthPort` | `3128`, `8081` | the proxy and its `/healthz` |
+| `global.egress.ports` | `[443, 80]` | the destination ports a tunnel may open (`CONNECT` and plain HTTP); anything else is refused |
+| `global.egress.denyDomains` | `[]` | hosts no run may reach, for the whole deployment: the proxy and the API (`CHOREGOS_NETWORK_INSTANCE_DENY`) both read it |
+| `global.egress.cacheSeconds` | `60` | how long a run's network is cached: a revoked agent or a changed ceiling applies within this time |
+| `global.egress.resources` | 50m/64Mi, limits 500m/256Mi | |
+
+`choregos-orchestrator.runner.egressProxy` MUST name the Service
+(`http://choregos-egress.<release-namespace>.svc:3128`) — the chart refuses to render
+`global.egress.enabled` with an empty value (`templates/garde.yaml`): a proxy nobody sends traffic to
+would look like a control. The default value, `http://choregos-egress.{namespace}.svc:3128`, resolves to
+it when `runner.namespacePattern` is the release namespace.
+
+With `networkPolicies.enabled` the chart goes with it: `choregos-allow-platform` no longer selects runner
+pods or the proxy (a runner must not reach PostgreSQL or Temporal); `choregos-runner-egress` lets runner
+pods reach only DNS, the API pods, the gateway, the memory service, telemetry and, when the proxy is on,
+`choregos-egress` on its port; `choregos-egress-net` takes traffic from runner pods only and lets the proxy
+reach the API and the Internet **except the private ranges** (`10/8`, `172.16/12`, `192.168/16`,
+`169.254/16`) on the configured ports. The proxy also refuses, by itself, a name that resolves to a
+non-public address, and it connects to the address it resolved.
+
+**What it proves, and what it does not.** For a run, it enforces host, port and a *connection* rate
+(per host, per run, per organisation host) and journals each decision (`GET
+/orgs/{org}/network-activity`). It cannot see inside TLS: method, path, headers and User-Agent are
+invisible to it, and one tunnel can carry many HTTP/2 requests. It is a wall only where the network forces
+traffic through it.
+
+**Reading a `502`.** `choregos-egress: <host>:<port> is allowed for this run but could not be reached`
+means Choregos allowed the host and something *below* it blocked or lost the connection: the node's
+network, an egress firewall, a Cilium FQDN rule that does not list the host, DNS. It shows in Network
+activity as `unreachable`. A `403` names the reason (`not_allowed`, `denied:<pattern>`, `ip_literal`,
+`port_not_allowed`, `private_address`), a `429` comes with `Retry-After`, and a `407` means the proxy
+credentials are not a live run's.
+
+**On the Diametral platform** the infra owns egress with Cilium FQDN policies: runner pods may reach eight
+hosts directly, identically for every project and agent, so the Choregos proxy is a net there until infra
+(1) gives the `choregos-egress` pods an FQDN egress rule for the hosts the instance allows and (2) removes
+the runner entry's direct FQDNs. Until then a `502 unreachable` also appears if the proxy pod itself has no
+FQDN rule. The deploy repository sets `global.egress.enabled` and `runner.egressProxy` only after that.
 
 ## Gateways and what each can do
 
