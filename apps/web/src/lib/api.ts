@@ -12,7 +12,9 @@ import type {
   ConnectorOperation,
   OperationPatch,
   McpCatalogue,
+  ConnectorCatalogue,
   McpCatalogueInstall,
+  ProjectOrgConnector,
   SkillCatalogue,
   OrgConnector,
   OrgConnectorCreate,
@@ -639,6 +641,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** The connector types of the registry, by family, with the caller's rights (ADR 0074). */
+  connectorCatalogue: (org: string) => request<ConnectorCatalogue>(`/orgs/${org}/connector-catalogue`),
+  /** The organisation's connectors as one project sees them: on or off, and may the caller switch. */
+  projectOrgConnectors: (id: string) => request<ProjectOrgConnector[]>(`/projects/${qualify(id)}/org-connectors`),
+  enableOrgConnector: (id: string, name: string) =>
+    request<ProjectOrgConnector>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "PUT" }),
+  disableOrgConnector: (id: string, name: string) =>
+    request<void>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "DELETE" }),
   /** Un serveur MCP dit ses outils ; un nouveau naît fermé, un schéma qui dérive le referme. */
   discoverConnectorOperations: (org: string, name: string) =>
     request<ConnectorDiscovery>(`/orgs/${org}/connectors/${name}/discover`, { method: "POST" }),

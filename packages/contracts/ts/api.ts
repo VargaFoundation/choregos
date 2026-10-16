@@ -414,6 +414,67 @@ export type OrgConnector = {
   /** `<id>@<catalogue_version>` when it was installed from the MCP catalogue (ADR 0065) */
   catalogue_entry?: string | null;
   operations?: Array<ConnectorOperation>;
+  availability?: ConnectorAvailability;
+  /** the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074) */
+  enabled_projects?: Array<string>;
+};
+
+/** `all_projects`: every project whose groups match reaches it (the default). `selected_projects`: only the projects it is enabled for (ADR 0074). */
+export type ConnectorAvailability = "all_projects" | "selected_projects";
+
+/** What the caller may do with a catalogue entry, decided by the server (ADR 0074). The console never derives it from a role. */
+export type CataloguePermissions = {
+  /** declare it in the organisation */
+  install: boolean;
+  /** project-scope types: the projects whose settings the caller may set */
+  configure_projects: Array<string>;
+  /** the projects where the caller may turn an installed organisation connector on or off */
+  enable_projects: Array<string>;
+};
+
+export type ConnectorEnablement = {
+  connector: string;
+  availability: ConnectorAvailability;
+  /** among the projects the caller sees; empty with all_projects */
+  enabled_projects: Array<string>;
+};
+
+export type ConnectorCatalogueEntry = {
+  kind: string;
+  type: string;
+  display: string;
+  /** Source code, Work trackers, CI, Deployment, Documents, Directory, Network operations, Notifications, MCP servers, or Other */
+  family: string;
+  /** an organisation connector is installed by the administrator; a project connector is configured in the project's settings */
+  scope: "organisation" | "project";
+  capabilities: Array<string>;
+  /** field names only, never values */
+  secret_fields: Array<string>;
+  /** operations the type declares; an MCP server discovers its own (0) */
+  operations: number;
+  /** names of the organisation connectors of this type */
+  installed_as: Array<string>;
+  /** slugs of the projects, among those the caller sees, that configure this type */
+  configured_in: Array<string>;
+  enablement: Array<ConnectorEnablement>;
+  can: CataloguePermissions;
+  /** the server's sentence when the caller may do nothing here */
+  cannot_reason?: string | null;
+};
+
+export type ConnectorCatalogue = {
+  entries: Array<ConnectorCatalogueEntry>;
+};
+
+export type ProjectOrgConnector = {
+  name: string;
+  kind: string;
+  type: string;
+  availability: ConnectorAvailability;
+  enabled: boolean;
+  /** the caller may turn it on or off here: availability is selected_projects and the caller owns the project or administers the organisation */
+  can_toggle: boolean;
+  cannot_reason?: string | null;
 };
 
 /** Provenance shared by the platform's catalogues (ADR 0065) — which file, built when, from what. */
@@ -473,6 +534,11 @@ export type McpCatalogueEntry = {
   installed_as?: Array<string>;
   /** whether the deployment declares the host reachable from the API */
   egress: "open" | "undeclared" | "unknown";
+  can: CataloguePermissions;
+  /** why the entry cannot be installed by the caller: the server's sentence */
+  cannot_reason?: string | null;
+  /** one per installed instance of this entry */
+  enablement?: Array<ConnectorEnablement>;
 };
 
 export type McpCatalogueInstall = {
@@ -488,6 +554,8 @@ export type McpCatalogueInstall = {
   };
   /** for an entry whose auth is header:<Name>, the header's name; defaults to the entry's */
   auth_header?: string | null;
+  /** defaults to all_projects through the API; the console proposes selected_projects (ADR 0074) */
+  availability?: ConnectorAvailability;
 };
 
 export type SkillCatalogueSignals = {
@@ -546,6 +614,7 @@ export type OrgConnectorCreate = {
   secret_values?: {
     [key: string]: string;
   };
+  availability?: ConnectorAvailability;
 };
 
 /** Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's. */
@@ -559,6 +628,8 @@ export type OrgConnectorUpdate = {
   secret_values?: {
     [key: string]: string;
   } | null;
+  /** the organisation's administrator only; switching to selected_projects turns it on for no project (ADR 0074) */
+  availability?: ConnectorAvailability | null;
 };
 
 export type OperationPatch = {
@@ -3090,6 +3161,7 @@ export interface Operations {
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
+  disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
@@ -3105,6 +3177,7 @@ export interface Operations {
   /** the version of the edition plugin; null in the community edition */
   edition_version?: string | null;
 } };
+  enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
@@ -3272,6 +3345,7 @@ export interface Operations {
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
   listBudgetAlerts: { method: "GET"; path: "/orgs/{org}/budget-alerts"; body: never; response: Array<BudgetAlert> };
+  listConnectorCatalogue: { method: "GET"; path: "/orgs/{org}/connector-catalogue"; body: never; response: ConnectorCatalogue };
   listConnectorTypes: { method: "GET"; path: "/connectors/types"; body: never; response: Array<ConnectorType> };
   listConnectors: { method: "GET"; path: "/projects/{id}/connectors"; body: never; response: Array<Connector> };
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
@@ -3295,6 +3369,7 @@ export interface Operations {
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
   listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
   listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: Array<ProjectOperation> };
+  listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: Array<ProjectOrgConnector> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };

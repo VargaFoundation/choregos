@@ -86,6 +86,10 @@ export type {
   Action,
   ActionEffect,
   CatalogueMeta,
+  CataloguePermissions,
+  ConnectorCatalogue,
+  ConnectorCatalogueEntry,
+  ConnectorEnablement,
   McpCatalogue,
   McpCatalogueEntry,
   McpCatalogueInstall,
@@ -100,6 +104,7 @@ export type {
   OrgConnectorCreate,
   OrgConnectorUpdate,
   ProjectOperation,
+  ProjectOrgConnector,
   ProjectRequirement,
 } from "@choregos/contracts/api";
 
