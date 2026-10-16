@@ -4,6 +4,7 @@ catalogue:
   summary: Compiles a knowledge base into a principles skill, each principle citing the documents it comes from; a person approves it.
 agent:
   slug: knowledge-distiller
+  tags: [knowledge, skills, distillation]
   display_name: Knowledge distiller
   description: Reads a knowledge base and writes the principles it holds as a skill — short, checkable, each one citing its source documents. The skill waits for a person's review.
   spec:

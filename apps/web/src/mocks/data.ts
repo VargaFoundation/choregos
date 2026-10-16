@@ -1270,6 +1270,7 @@ export const agents: Agent[] = [
     kind: "internal",
     display_name: "Onboarding coordinator",
     description: "Prepares a joiner's access plan and follows each step up to the badge.",
+    tags: ["onboarding", "hr"],
     status: "active",
     owner: "lea@acme.dev",
     latest_version: 2,
@@ -1324,6 +1325,7 @@ export const agents: Agent[] = [
     kind: "internal",
     display_name: "Developer",
     description: "Implements the specification inside the allowed paths, test first.",
+    tags: ["implementation", "coding", "software"],
     status: "active",
     owner: null,
     latest_version: 2,
@@ -1345,6 +1347,56 @@ export const agents: Agent[] = [
         checksum: "sha256:1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
         created_by: "catalogue:developer@1",
         created_at: iso(60 * 24 * 20),
+      },
+    ],
+  },
+  {
+    slug: "architect",
+    kind: "internal",
+    display_name: "Architect",
+    description: "Writes one architecture decision record in MADR 4 format from the study's research, and marks it accepted once people approve it.",
+    tags: ["madr", "architecture", "design"],
+    status: "active",
+    owner: null,
+    latest_version: 3,
+    scope: "platform",
+    project: null,
+    can: { publish: true, manage: true, pin: true, fork_scopes: ["org", "project", "personal"] },
+    cannot_reason: null,
+    created_at: iso(60 * 24 * 30),
+    versions: [
+      {
+        version: 3,
+        spec: {
+          instructions: "You write ONE architecture decision record that answers the study's question.\nFollow MADR 4; cite the enterprise framework when a knowledge base holds it.\nOnce people approve it, mark it accepted.",
+          model: "profile:standard",
+          limits: { max_turns: 30, max_minutes: 20 },
+          budget: { run_usd: 2, daily_usd: 8 },
+          skills: [{ slug: "madr-4", version: 1 }],
+          mcp_servers: [],
+        },
+        checksum: "sha256:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
+        created_by: "augustin@acme.dev",
+        created_at: iso(60 * 24),
+      },
+      {
+        version: 2,
+        spec: {
+          instructions: "You write ONE architecture decision record that answers the study's question.\nFollow MADR 4; cite the enterprise framework when a knowledge base holds it.",
+          model: "profile:standard",
+          limits: { max_turns: 30, max_minutes: 20 },
+          skills: [{ slug: "madr-4", version: 1 }],
+        },
+        checksum: "sha256:2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
+        created_by: "catalogue:architect@2",
+        created_at: iso(60 * 24 * 12),
+      },
+      {
+        version: 1,
+        spec: { instructions: "You write ONE architecture decision record in MADR 4 format.", model: "profile:standard" },
+        checksum: "sha256:1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d",
+        created_by: "catalogue:architect@1",
+        created_at: iso(60 * 24 * 30),
       },
     ],
   },
@@ -1401,11 +1453,11 @@ const entreeDuCatalogue = (slug: string, display_name: string, role: string, sum
   own_agent: false, update_available: false, offered: true, unavailable_reason: null, client: null, reach: null, ...extra,
 });
 export const agentCatalogue: AgentCatalogueEntry[] = [
-  entreeDuCatalogue("developer", "Developer", "implement", "Implements the specification inside the allowed paths, test first, small conventional commits."),
-  entreeDuCatalogue("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1 }),
+  entreeDuCatalogue("developer", "Developer", "implement", "Implements the specification inside the allowed paths, test first, small conventional commits.", { tags: ["implementation", "coding", "software"] }),
+  entreeDuCatalogue("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1, tags: ["testing", "ci", "software"] }),
   entreeDuCatalogue("reviewer", "Reviewer", "review", "Reviews the branch with fresh eyes and gives a verdict.", { installed: true, installed_version: 1, update_available: true, skills: ["madr-4"] }),
-  entreeDuCatalogue("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"] }),
-  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP door, with its person's rights.", { kind: "external", client: "claude-code", reach: "always" }),
+  entreeDuCatalogue("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"], tags: ["madr", "architecture", "design"] }),
+  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP door, with its person's rights.", { kind: "external", client: "claude-code", reach: "always", tags: ["mcp-client", "ide"] }),
   entreeDuCatalogue("chatgpt", "ChatGPT", "external", "ChatGPT acting through the MCP door, with its person's rights.", {
     kind: "external", client: "chatgpt", reach: "cloud", offered: false, unavailable_reason: "the MCP door does not accept OAuth (`global.mcp.oauth`); the console's public address is not https",
   }),
@@ -1930,6 +1982,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       kind: corps.kind ?? "internal",
       display_name: corps.display_name,
       description: corps.description ?? null,
+      tags: corps.tags ?? [],
       status: "active",
       lifecycle: corps.lifecycle ?? "active",
       owner: me.email,
@@ -2034,7 +2087,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (method === "PATCH" && agentEcrit && !agentEcrit[2]) {
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
-    return { ...agent, ...(JSON.parse(String(init.body ?? "{}")) as object) } as T;
+    const patch = JSON.parse(String(init.body ?? "{}")) as Partial<Agent>;
+    // The details live for the time of the page, as the API's PATCH would keep them (S40-10).
+    if (patch.display_name != null) agent.display_name = patch.display_name;
+    if ("description" in patch) agent.description = patch.description ?? null;
+    if (patch.tags != null) agent.tags = patch.tags;
+    return { ...agent, ...patch } as T;
   }
   if (method === "PUT" && /^\/projects\/[^/]+\/agents\/[^/]+$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as ProjectAgentPut;
@@ -2129,6 +2187,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
   // would be seen by the query cache as unchanged.
   if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
+  if (/^\/orgs\/[^/]+\/agents$/.test(route ?? "")) {
+    // Every tag given (AND), as the API filters (S40-10).
+    const wanted = new URLSearchParams(path.split("?")[1] ?? "").getAll("tag");
+    return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t)))) as T;
+  }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
   if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;

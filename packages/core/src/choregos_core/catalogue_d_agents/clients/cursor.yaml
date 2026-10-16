@@ -8,6 +8,7 @@ catalogue:
   summary: Cursor acting through the MCP door, with its person's rights intersected with this agent's.
 agent:
   slug: cursor
+  tags: [mcp-client, ide]
   kind: external
   display_name: Cursor
   description: Cursor, connected to Choregos through the MCP door. It acts with its person's rights, never more, and never decides.

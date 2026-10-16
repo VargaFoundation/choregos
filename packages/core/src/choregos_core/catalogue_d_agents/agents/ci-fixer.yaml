@@ -4,6 +4,7 @@ catalogue:
   summary: Makes a red CI green with the smallest fix of the cause; reports flaky tests, never disables one silently.
 agent:
   slug: ci-fixer
+  tags: [ci, debugging, software]
   display_name: CI fixer
   description: Reads the CI logs, finds the cause, makes the smallest fix; a flaky test becomes a finding, never a silently disabled test.
   spec:

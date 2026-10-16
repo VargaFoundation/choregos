@@ -4,6 +4,7 @@ catalogue:
   summary: Sizes and qualifies an incoming work item; asks at most three questions; changes no file.
 agent:
   slug: triager
+  tags: [triage, intake]
   display_name: Triager
   description: Estimates size and risk, looks for a duplicate, and asks at most three questions. It edits nothing.
   spec:

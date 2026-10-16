@@ -4,6 +4,7 @@ catalogue:
   summary: Diagnoses network behaviour from flows, policies and firewall rules; proposes every change as code, never applies one.
 agent:
   slug: netops
+  tags: [network, firewall, infrastructure]
   display_name: Network operations
   description: Reads our network estate — pfSense rules, Cilium policies and Hubble flows, the nginx configuration in the GitOps repository — explains what it sees, and proposes a change as code with its risk and its rollback. It never writes to a device or a cluster.
   spec:

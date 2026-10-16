@@ -3,12 +3,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AgentCatalogue } from "@/components/agents/catalogue";
 import { LifecycleBadges } from "@/components/agents/lifecycle";
 import { ScopeBadge, ScopeFilter } from "@/components/agents/governance";
 import { resumeDeLaVersion, scopeLabel, type AgentScope } from "@/components/agents/registre";
+import { TagFilter, TagList, withTags } from "@/components/agents/tags";
 import { Glossaire } from "@/components/glossaire";
 import {
   Badge,
@@ -47,12 +48,26 @@ export default function AgentsPage() {
 function Agents() {
   const { org } = useSession();
   // `/agents?catalogue=1`: the way back from the new-agent page's "add one from the catalogue".
-  const catalogue = useSearchParams().get("catalogue") === "1";
+  const search = useSearchParams();
+  const router = useRouter();
+  const catalogue = search.get("catalogue") === "1";
+  // `/agents?tag=madr&tag=design`: a filtered list is a link (S40-10); an agent must carry every tag.
+  const tags = search.getAll("tag");
+  function selectTags(next: string[]) {
+    const query = new URLSearchParams(search.toString());
+    query.delete("tag");
+    for (const tag of next) query.append("tag", tag);
+    const text = query.toString();
+    router.replace(text ? `/agents?${text}` : "/agents");
+  }
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   const metrics = useQuery({ queryKey: ["agent-metrics", org], queryFn: () => api.agentMetricsList(org) });
   const [scope, setScope] = useState<AgentScope | null>(null);
   const [drawer, setDrawer] = useState<"catalogue" | null>(catalogue ? "catalogue" : null);
-  const shown = (agents.data ?? []).filter((a) => scope === null || (a.scope ?? "org") === scope);
+  const shown = withTags(
+    (agents.data ?? []).filter((a) => scope === null || (a.scope ?? "org") === scope),
+    tags,
+  );
   const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
@@ -75,6 +90,7 @@ function Agents() {
       </div>
       <Glossaire ici="agents" />
       {agents.data && agents.data.length > 0 && <ScopeFilter agents={agents.data} value={scope} onChange={setScope} />}
+      {agents.data && <TagFilter agents={agents.data} value={tags} onChange={selectTags} />}
       <Card title="Registry" padding="none" className="overflow-hidden">
         {agents.error ? (
           <div className="p-5">
@@ -88,7 +104,16 @@ function Agents() {
           </div>
         ) : shown.length === 0 ? (
           <div className="p-5">
-            <Empty title={`No ${scopeLabel(scope ?? undefined).toLowerCase()} agent`}>Pick another scope, or clear the filter.</Empty>
+            {tags.length > 0 ? (
+              <Empty title={`No agent tagged ${tags.join(" + ")}`}>
+                <button type="button" className="underline" onClick={() => selectTags([])}>
+                  Clear the tags
+                </button>
+                {scope !== null && " or pick another scope."}
+              </Empty>
+            ) : (
+              <Empty title={`No ${scopeLabel(scope ?? undefined).toLowerCase()} agent`}>Pick another scope, or clear the filter.</Empty>
+            )}
           </div>
         ) : (
           <Table data-testid="registre">
@@ -120,6 +145,11 @@ function Agents() {
                         <Badge tone="accent" className="ml-2">
                           External
                         </Badge>
+                      )}
+                      {(agent.tags ?? []).length > 0 && (
+                        <div className="mt-1">
+                          <TagList tags={agent.tags} />
+                        </div>
                       )}
                     </TD>
                     <TD className="text-xs text-ink-muted">{agent.owner ?? "—"}</TD>
