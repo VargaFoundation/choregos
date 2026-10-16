@@ -1,4 +1,4 @@
-"""M5 — durci : sandbox, chaos, reprise sans double coût, sauvegarde, second écosystème."""
+"""M5 — hardened: sandbox, chaos, resumption without double cost, backup, second ecosystem."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
 
 async def test_reprise_apres_panne_sans_double_cout(platform: Platform) -> None:
-    """Le cœur de la promesse : rejouer une étape ne facture jamais deux fois."""
+    """The heart of the promise: replaying a stage never bills twice."""
     await login(platform.client)
     from choregos_api.db.models import CostLedger, Run, WorkItem
     from choregos_api.db.session import session_scope
@@ -22,7 +22,7 @@ async def test_reprise_apres_panne_sans_double_cout(platform: Platform) -> None:
         item = WorkItem(
             project_id=platform.project_id,
             tracker_key="varga/billing-api#500",
-            title="Ticket rejoué",
+            title="Replayed ticket",
             state="ready",
             size="M",
         )
@@ -61,9 +61,9 @@ async def test_reprise_apres_panne_sans_double_cout(platform: Platform) -> None:
     )
     await stage_activities.collect_spend({"project_id": platform.project_id, "run_id": first["run_id"]})
 
-    # Panne : l'activité est rejouée par Temporal avec le même run_id.
+    # Outage: the activity is replayed by Temporal with the same run_id.
     second = await stage_activities.prepare_stage(plan)
-    assert second["run_id"] == first["run_id"], "l'identifiant de run est déterministe"
+    assert second["run_id"] == first["run_id"], "the run id is deterministic"
     assert second["reused"] is True
     await stage_activities.start_run(
         {"project_id": platform.project_id, "work_item_id": item_id, "stage_input": second["stage_input"]}
@@ -77,13 +77,13 @@ async def test_reprise_apres_panne_sans_double_cout(platform: Platform) -> None:
                 select(func.count()).select_from(CostLedger).where(CostLedger.run_id == first["run_id"])
             )
         ).scalar_one()
-    assert runs == 1, "un seul run en base"
-    assert ledger == 1, "une seule ligne de coût : pas de double facturation"
+    assert runs == 1, "a single run in the database"
+    assert ledger == 1, "a single cost line: no double billing"
     assert platform.adapters.executor.start_calls_by_run[first["run_id"]] >= 1
 
 
 async def test_le_runner_ne_peut_pas_sortir_du_perimetre(platform: Platform) -> None:
-    """Sandbox : ce que l'agent tente hors périmètre est refusé et tracé."""
+    """Sandbox: what the agent tries outside its scope is refused and traced."""
     from choregos_contracts import Permissions
     from choregos_runner.guardrails import GuardRails
 
@@ -102,13 +102,13 @@ async def test_le_runner_ne_peut_pas_sortir_du_perimetre(platform: Platform) -> 
         guards.check_write(".env"),
     ]
     assert all(not decision.allowed for decision in refused)
-    assert all(decision.reason for decision in refused), "chaque refus est motivé"
+    assert all(decision.reason for decision in refused), "every refusal has a reason"
     assert guards.check_write("src/orders/total.py").allowed
     assert guards.check_network("https://pypi.org/simple/").allowed
 
 
 async def test_les_manifestes_de_projet_verrouillent_le_reseau(platform: Platform) -> None:
-    """Le provisioning écrit un egress refusé par défaut et des quotas : c'est du GitOps."""
+    """Provisioning writes a deny-by-default egress and quotas: it is GitOps."""
     import yaml
     from choregos_contracts import ProjectConfig
     from choregos_core import load_preset
@@ -135,7 +135,7 @@ async def test_les_manifestes_de_projet_verrouillent_le_reseau(platform: Platfor
     role = next(doc for doc in rbac if doc["kind"] == "Role")
     verbs = {verb for rule in role["rules"] for verb in rule["verbs"]}
     assert "create" in verbs and "delete" in verbs
-    assert all(rule.get("apiGroups") != ["*"] for rule in role["rules"]), "aucun droit générique"
+    assert all(rule.get("apiGroups") != ["*"] for rule in role["rules"]), "no wildcard right"
 
 
 async def test_annulation_d_un_run_est_propre(platform: Platform) -> None:
@@ -148,7 +148,7 @@ async def test_annulation_d_un_run_est_propre(platform: Platform) -> None:
         item = WorkItem(
             project_id=platform.project_id,
             tracker_key="varga/billing-api#501",
-            title="Ticket arrêté",
+            title="Stopped ticket",
             state="ready",
             size="S",
         )
@@ -186,7 +186,7 @@ async def test_annulation_d_un_run_est_propre(platform: Platform) -> None:
 
 
 async def test_second_ecosysteme_refuse_proprement_tant_qu_il_n_est_pas_active(platform: Platform) -> None:
-    """Jira et GitLab acceptent les webhooks mais annoncent clairement qu'ils sont inactifs."""
+    """Jira and GitLab accept webhooks but clearly announce that they are inactive."""
     from choregos_api.config import get_settings
 
     secret = get_settings().generic_webhook_secret
@@ -197,11 +197,11 @@ async def test_second_ecosysteme_refuse_proprement_tant_qu_il_n_est_pas_active(p
             headers={header: secret, "content-type": "application/json"},
         )
         assert response.status_code == 202
-        assert response.json()["events"] == 0, "aucun événement acheminé tant que l'adaptateur n'existe pas"
+        assert response.json()["events"] == 0, "no event routed as long as the adapter does not exist"
 
     refused = await platform.client.post(
         "/api/v1/webhooks/jira",
         content=b"{}",
-        headers={"X-Choregos-Secret": "mauvais", "content-type": "application/json"},
+        headers={"X-Choregos-Secret": "wrong", "content-type": "application/json"},
     )
     assert refused.status_code == 401

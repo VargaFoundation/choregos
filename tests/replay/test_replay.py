@@ -1,8 +1,8 @@
-"""Rejouer des historiques archivés : un changement de logique ne doit pas casser les runs en cours.
+"""Replay archived histories: a logic change must not break the runs in flight.
 
-C'est la contrepartie de `workflow.patched()` : la CI rejoue les historiques enregistrés
-contre le code actuel. Si un workflow prend une décision différente, le replay échoue —
-avant que ça n'arrive en production.
+This is the counterpart of `workflow.patched()`: the CI replays the recorded histories
+against the current code. If a workflow makes a different decision, the replay fails —
+before that happens in production.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def history_files() -> list[Path]:
     return sorted(HISTORIES.glob("*.json"))
 
 
-@pytest.mark.skipif(not history_files(), reason="aucun historique archivé (voir `make replay-record`)")
+@pytest.mark.skipif(not history_files(), reason="no archived history (see `make replay-record`)")
 @pytest.mark.parametrize("path", history_files(), ids=lambda path: path.stem)
 async def test_replay_history(path: Path) -> None:
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
@@ -34,7 +34,7 @@ async def test_replay_history(path: Path) -> None:
 
 
 async def test_record_and_replay_roundtrip(tmp_path: Path) -> None:
-    """Enregistre un historique neuf puis le rejoue : la boucle est vérifiable en CI."""
+    """Record a fresh history then replay it: the loop is verifiable in CI."""
     from choregos_orchestrator.testing import workers_repartis
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from choregos_orchestrator.workflows.train import ReleaseTrain
@@ -44,9 +44,9 @@ async def test_record_and_replay_roundtrip(tmp_path: Path) -> None:
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        # Un worker par file : `notify` et `enqueue_merge` sont planifiées sur `tracker`, pas sur
-        # la file du workflow. Un worker unique masquerait la répartition que l'historique doit
-        # porter, et l'historique rejoué serait celui d'un déploiement qui n'existe pas.
+        # One worker per queue: `notify` and `enqueue_merge` are scheduled on `tracker`, not on
+        # the workflow's queue. A single worker would hide the split the history must carry,
+        # and the replayed history would be that of a deployment that does not exist.
         async with workers_repartis(
             environment.client,
             activites=_stub_activities(),
@@ -75,7 +75,7 @@ async def test_record_and_replay_roundtrip(tmp_path: Path) -> None:
 
 
 def _stub_activities() -> list[Any]:
-    """Activités neutres : le replay ne rejoue pas les effets, seulement les décisions."""
+    """Neutral activities: the replay does not replay effects, only decisions."""
     from temporalio import activity
 
     @activity.defn(name="load_train_config")

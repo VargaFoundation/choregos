@@ -156,6 +156,8 @@ class Runner:
         self.jeton_git: str | None = None
         #: The run's compression proxy (ADR 0055), when it runs one.
         self.compressor: compression.Compressor | None = None
+        #: The platform's tool server, when the run serves it itself (no sidecar).
+        self.tools: Any = None
 
     async def run(self) -> RunOutcome:
         # ADR 0070: before anything makes a network call — git, pip, the agent — the egress proxy
@@ -189,12 +191,15 @@ class Runner:
             self.settings.event_batch_size,
             seq=_events_already_journaled(workspace.path / ".choregos" / "transcript.jsonl"),
         )
-        # The run's compression proxy (ADR 0055) dies with the run, whatever way the run ends.
+        # The run's compression proxy (ADR 0055) and its tool server die with the run, whatever way
+        # the run ends: a server left behind by an early exit holds its port (#474).
         self.compressor = None
+        self.tools = None
         try:
             return await self._execute(stage_input, client, workspace, journal)
         finally:
             await compression.stop(self.compressor)
+            await arreter_outils(self.tools)
 
     async def _execute(
         self, stage_input: StageInput, client: InternalClient, workspace: Workspace, journal: EventJournal
@@ -203,7 +208,7 @@ class Runner:
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
         )
 
-        outils = await self._start_tools(client, journal, stage_input)
+        self.tools = await self._start_tools(client, journal, stage_input)
 
         # 2. clone et branche — avec le jeton git du run (S22-07) : sans lui, un dépôt privé rendait
         # « Repository not found ». Il reste en mémoire, jamais dans le workspace ni dans le journal.
@@ -374,7 +379,6 @@ class Runner:
             scope_blocked=scope_result.remaining if scope_result else None,
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
-        await arreter_outils(outils)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     # ───────────────────────── étapes internes ─────────────────────────

@@ -1,22 +1,20 @@
-"""Les paquets se construisent-ils TOUS, et emportent-ils leurs données ?
+"""Do ALL the packages build, and do they carry their data?
 
-La release attache les wheels. Elle a échoué deux fois de suite sur le même défaut, dans
-trois paquets différents : un `pyproject.toml` déclarait à la fois `packages` (qui embarque
-tout l'arbre) et un `force-include` sur un dossier DÉJÀ dedans. Hatchling refuse alors
-d'ajouter deux fois un même chemin — « A second file is being added to the wheel archive at
-the same path ».
+The release attaches the wheels. It failed twice in a row on the same defect, in three
+different packages: a `pyproject.toml` declared both `packages` (which embeds the whole tree)
+and a `force-include` on a folder ALREADY inside it. Hatchling then refuses to add the same
+path twice: "A second file is being added to the wheel archive at the same path".
 
-Rien ne le voyait : `make ci` ne construisait aucun wheel, et l'espace de travail tourne en
-mode éditable, où les fichiers de données sont simplement là. La première version de ce test
-ne construisait qu'un paquet — celui qui avait cassé — et la release suivante est tombée sur
-le voisin. On construit donc TOUT, et on compte : « neuf wheels » ne voulait rien dire sans
-savoir combien en attendre.
+Nothing saw it: `make ci` built no wheel, and the workspace runs in editable mode, where the
+data files are simply there. The first version of this test built only one package, the one
+that had broken, and the next release tripped over its neighbour. So we build EVERYTHING, and
+we count: "nine wheels" meant nothing without knowing how many to expect.
 
-Deux propriétés, et la seconde est la vraie : un paquet qui se construit mais part sans ses
-gabarits de prompt ou ses presets de politique explose à l'exécution, loin d'ici. On regarde
-DANS chaque wheel.
+Two properties, and the second is the real one: a package that builds but ships without its
+prompt templates or its policy presets blows up at run time, far from here. We look INSIDE
+each wheel.
 
-Lent (l'espace de travail entier), donc marqué `slow` : `-m "not slow"` l'écarte.
+Slow (the whole workspace), hence marked `slow`: `-m "not slow"` skips it.
 """
 
 from __future__ import annotations
@@ -31,17 +29,17 @@ import pytest
 
 RACINE = pathlib.Path(__file__).resolve().parents[2]
 
-#: Extensions qui sont des DONNÉES : leur absence d'un wheel est un défaut silencieux.
+#: Extensions that are DATA: their absence from a wheel is a silent defect.
 DONNEES = {".md", ".yaml", ".yml", ".json", ".lock", ".j2", ".sql", ".ini", ".txt", ".mako"}
 
 pytestmark = [
     pytest.mark.slow,
-    pytest.mark.skipif(shutil.which("uv") is None, reason="uv absent"),
+    pytest.mark.skipif(shutil.which("uv") is None, reason="uv missing"),
 ]
 
 
 def _paquets() -> dict[str, pathlib.Path]:
-    """{nom de distribution: dossier}, lus des pyproject de l'espace de travail."""
+    """{distribution name: folder}, read from the workspace pyprojects."""
     trouves: dict[str, pathlib.Path] = {}
     fichiers = [*RACINE.glob("packages/*/pyproject.toml"), *RACINE.glob("apps/*/pyproject.toml")]
     for pyproject in sorted(fichiers):
@@ -52,10 +50,10 @@ def _paquets() -> dict[str, pathlib.Path]:
 
 @pytest.fixture(scope="module")
 def wheels(tmp_path_factory: pytest.TempPathFactory) -> dict[str, pathlib.Path]:
-    """Construit TOUT l'espace de travail une fois, et rend {nom: wheel}.
+    """Build the WHOLE workspace once, and return {name: wheel}.
 
-    `--all-packages` plutôt qu'une boucle : c'est la commande de la release, donc c'est elle
-    qu'il faut éprouver. Un échec ici nomme le paquet qui ne se construit pas.
+    `--all-packages` rather than a loop: it is the release command, so it is the one to
+    exercise. A failure here names the package that does not build.
     """
     sortie = tmp_path_factory.mktemp("dist")
     resultat = subprocess.run(
@@ -64,31 +62,31 @@ def wheels(tmp_path_factory: pytest.TempPathFactory) -> dict[str, pathlib.Path]:
         capture_output=True,
         text=True,
         timeout=1800,
-        # `check=False` à dessein : on veut LIRE l'erreur de hatchling et la montrer, pas
-        # une trace de CalledProcessError qui cache quel paquet a refusé de se construire.
+        # `check=False` on purpose: we want to READ hatchling's error and show it, not a
+        # CalledProcessError trace that hides which package refused to build.
         check=False,
     )
-    assert resultat.returncode == 0, f"`uv build --all-packages` a échoué :\n{resultat.stderr[-3000:]}"
+    assert resultat.returncode == 0, f"`uv build --all-packages` failed:\n{resultat.stderr[-3000:]}"
     return {wheel.name.split("-")[0].replace("_", "-"): wheel for wheel in sortie.glob("*.whl")}
 
 
 def test_chaque_paquet_de_l_espace_de_travail_produit_un_wheel(wheels: dict[str, pathlib.Path]) -> None:
     manquants = sorted(set(_paquets()) - set(wheels))
-    assert not manquants, f"paquets sans wheel : {manquants} (obtenus : {sorted(wheels)})"
+    assert not manquants, f"packages without a wheel: {manquants} (got: {sorted(wheels)})"
 
 
 @pytest.mark.parametrize("nom", sorted(_paquets()))
 def test_les_fichiers_de_donnees_partent_dans_le_wheel(nom: str, wheels: dict[str, pathlib.Path]) -> None:
-    """Chaque fichier de données du paquet doit être dans son wheel, et une seule fois.
+    """Every data file of the package must be in its wheel, exactly once.
 
-    La liste attendue est LUE sur le disque, pas écrite à la main : un gabarit ajouté demain
-    est couvert sans que personne y pense.
+    The expected list is READ from disk, not written by hand: a template added tomorrow is
+    covered without anyone thinking about it.
     """
     dossier = _paquets()[nom]
     source = dossier / "src"
     modules = [chemin for chemin in sorted(source.glob("*")) if chemin.is_dir()] if source.is_dir() else []
     if not modules:
-        pytest.skip(f"{nom} n'a pas de module sous src/")
+        pytest.skip(f"{nom} has no module under src/")
 
     attendus = {
         str(chemin.relative_to(source))
@@ -97,16 +95,16 @@ def test_les_fichiers_de_donnees_partent_dans_le_wheel(nom: str, wheels: dict[st
         if chemin.is_file() and chemin.suffix in DONNEES and "__pycache__" not in chemin.parts
     }
     if not attendus:
-        pytest.skip(f"{nom} n'embarque aucun fichier de données")
+        pytest.skip(f"{nom} ships no data file")
 
     noms = zipfile.ZipFile(wheels[nom]).namelist()
-    assert len(noms) == len(set(noms)), f"{nom} : un même chemin apparaît deux fois dans le wheel"
+    assert len(noms) == len(set(noms)), f"{nom}: the same path appears twice in the wheel"
     manquants = sorted(attendus - set(noms))
-    assert not manquants, f"{nom} : données absentes du wheel : {manquants}"
+    assert not manquants, f"{nom}: data missing from the wheel: {manquants}"
 
 
 def _force_include(dossier: pathlib.Path) -> dict[str, str]:
-    """Les `force-include` déclarés : {chemin source: chemin dans le wheel}."""
+    """The declared `force-include`s: {source path: path in the wheel}."""
     config = tomllib.loads((dossier / "pyproject.toml").read_text(encoding="utf-8"))
     cible = config.get("tool", {}).get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {})
     return dict(cible.get("force-include", {}))
@@ -116,19 +114,19 @@ def _force_include(dossier: pathlib.Path) -> dict[str, str]:
 def test_les_force_include_declares_arrivent_bien_dans_le_wheel(
     nom: str, wheels: dict[str, pathlib.Path]
 ) -> None:
-    """Un `force-include` sert quand la donnée vit HORS du dossier du module — les schémas et
-    l'`openapi.yaml` des contrats, par exemple. Là il est nécessaire, et il doit donc être
-    vérifié : un chemin source qui disparaît laisserait un wheel silencieusement amputé.
+    """A `force-include` is used when the data lives OUTSIDE the module folder — the contracts'
+    schemas and `openapi.yaml`, for example. There it is necessary, so it must be checked:
+    a source path that disappears would leave a silently truncated wheel.
     """
     dossier = _paquets()[nom]
     mappages = _force_include(dossier)
     if not mappages:
-        pytest.skip(f"{nom} ne déclare aucun force-include")
+        pytest.skip(f"{nom} declares no force-include")
 
     noms = set(zipfile.ZipFile(wheels[nom]).namelist())
     for source, destination in sorted(mappages.items()):
         chemin = dossier / source
-        assert chemin.exists(), f"{nom} : force-include sur « {source} », qui n'existe pas"
+        assert chemin.exists(), f'{nom}: force-include on "{source}", which does not exist'
         if chemin.is_file():
             attendus = {destination}
         else:
@@ -138,18 +136,19 @@ def test_les_force_include_declares_arrivent_bien_dans_le_wheel(
                 if fichier.is_file() and "__pycache__" not in fichier.parts
             }
         manquants = sorted(attendus - noms)
-        assert not manquants, f"{nom} : {source} → {destination}, absents du wheel : {manquants}"
+        assert not manquants, f"{nom}: {source} → {destination}, missing from the wheel: {manquants}"
 
 
 def test_les_migrations_partent_dans_le_wheel_de_l_api(wheels: dict[str, pathlib.Path]) -> None:
-    """Sans elles, personne ne migre une base avec le cœur PUBLIÉ : elles vivaient hors du paquet
-    (`apps/api/migrations`), et la roue `choregos-api` 0.8.3 n'en portait aucune. Une édition
-    entreprise testée contre les roues du cœur ne pouvait donc pas monter un vrai PostgreSQL.
+    """Without them, nobody migrates a database with the PUBLISHED core: they lived outside the
+    package (`apps/api/migrations`), and the `choregos-api` 0.8.3 wheel carried none. An
+    enterprise edition tested against the core wheels could therefore not bring up a real
+    PostgreSQL.
 
-    Chaque révision est comptée : une migration oubliée casserait la chaîne à la montée."""
+    Every revision is counted: a forgotten migration would break the chain on upgrade."""
     source = RACINE / "apps/api/src/choregos_api/migrations"
     revisions = sorted(p.relative_to(RACINE / "apps/api/src") for p in (source / "versions").glob("*.py"))
-    assert revisions, f"aucune révision sous {source} : le test ne prouverait rien"
+    assert revisions, f"no revision under {source}: the test would prove nothing"
     attendus = {str(p) for p in revisions} | {
         "choregos_api/migrations/env.py",
         "choregos_api/migrations/script.py.mako",
@@ -157,4 +156,4 @@ def test_les_migrations_partent_dans_le_wheel_de_l_api(wheels: dict[str, pathlib
     }
     noms = set(zipfile.ZipFile(wheels["choregos-api"]).namelist())
     manquants = sorted(attendus - noms)
-    assert not manquants, f"choregos-api : migrations absentes du wheel : {manquants}"
+    assert not manquants, f"choregos-api: migrations missing from the wheel: {manquants}"

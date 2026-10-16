@@ -1,1 +1,1 @@
-"""Conformité des exécuteurs : ce qu'ils annoncent savoir faire, ils savent le faire."""
+"""Conformance of the executors: what they announce they can do, they can do."""

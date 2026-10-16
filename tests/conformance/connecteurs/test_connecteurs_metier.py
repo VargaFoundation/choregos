@@ -1,16 +1,16 @@
-"""Ce qu'un connecteur métier promet, quel qu'il soit (S20-04) : la même suite juge chaque famille
-(parc, transporteur, badges), servie typée ou en MCP, l'annuaire Entra et l'agent du fournisseur.
+"""What a business connector promises, whatever it is (S20-04): the same suite judges each family
+(fleet, carrier, badges), served typed or over MCP, the Entra directory and the supplier's agent.
 
-1. **Des schémas suivis** : chaque opération déclare un schéma d'entrée fermé, et l'implémentation
-   accepte ce qu'il permet — toutes ses propriétés, ou les seules requises.
-2. **Des écritures idempotentes** : une action gouvernée se rejoue (ADR 0035) ; une écriture
-   rejouée ne change rien, une lecture n'écrit pas.
-3. **Aucun secret au journal** : la clé du connecteur sert — une mauvaise est refusée — mais elle
-   n'apparaît ni au journal, ni dans un résultat, ni dans un refus, ni dans la représentation du
-   client.
+1. **Schemas followed**: each operation declares a closed input schema, and the implementation
+   accepts what it allows — all its properties, or only the required ones.
+2. **Idempotent writes**: a governed action is replayed (ADR 0035); a replayed write changes
+   nothing, a read does not write.
+3. **No secret in the log**: the connector's key works — a wrong one is refused — but it
+   appears neither in the log, nor in a result, nor in a refusal, nor in the client's
+   representation.
 
-Un vrai type (Intune, un transporteur, un fabricant de lecteurs) entrera ici avec le faux de son
-API, et sera jugé pareil.
+A real type (Intune, a carrier, a reader manufacturer) will come in here with the fake of its
+API, and will be judged the same.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class Cas:
     appeler: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
     etat: Callable[[], Any]
     client: Any
-    #: des valeurs d'exemple propres à une opération, quand celles de la famille se contrediraient
+    #: example values specific to one operation, when the family's would contradict each other
     surcharges: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def parametres(self, operation: Operation, *, tout: bool = True) -> dict[str, Any]:
@@ -64,8 +64,8 @@ class Cas:
 
 
 def _exemple(nom: str, schema: dict[str, Any]) -> Any:
-    """Une valeur tirée du NOM de la propriété : d'une opération à l'autre, `serial` ou `upn`
-    désignent le même poste, le même compte — la suite joue une histoire cohérente."""
+    """A value drawn from the property NAME: from one operation to the next, `serial` or `upn`
+    designate the same workstation, the same account — the suite plays a coherent story."""
     match schema.get("type"):
         case "array":
             return [_exemple(nom, schema.get("items") or {"type": "string"})]
@@ -83,12 +83,12 @@ def _typees(famille: str) -> list[Operation]:
     from choregos_adapters import spec_of
 
     spec = spec_of(*famille.split("/"))
-    assert spec is not None, f"{famille} n'est pas enregistré"
+    assert spec is not None, f"{famille} is not registered"
     return [Operation(o.name, o.access, dict(o.input_schema or {})) for o in spec.operations]
 
 
 async def _typee(famille: str, cle: str, monkeypatch: pytest.MonkeyPatch) -> Cas:
-    """Un connecteur `<famille>: demo`, construit par le registre, comme la plateforme le fait."""
+    """A `<family>: demo` connector, built by the registry, as the platform does."""
     import choregos_adapters
     from choregos_adapters import build
     from choregos_adapters.fakes.rh import FAUX_PAR_FAMILLE
@@ -101,7 +101,7 @@ async def _typee(famille: str, cle: str, monkeypatch: pytest.MonkeyPatch) -> Cas
 
 
 async def _en_mcp(faux: Any, cle: str) -> Cas:
-    """Le même faux, servi en MCP : ses outils se découvrent, et le client les appelle."""
+    """The same fake, served over MCP: its tools are discovered, and the client calls them."""
     from choregos_adapters.fakes.rh import serveur_mcp
     from choregos_adapters.mcp import ClientMcp
 
@@ -126,8 +126,8 @@ async def _en_mcp(faux: Any, cle: str) -> Cas:
 
 
 async def _servie(famille: str, cle: str) -> Cas:
-    """Un connecteur `demo` qui porte une `url` : le faux servi par UN processus (`fakes/serveur.py`),
-    ce que le dev déploie — ses opérations sont celles de la famille, déclarées, pas découvertes."""
+    """A `demo` connector that carries a `url`: the fake served by ONE process (`fakes/serveur.py`),
+    what the dev deploys — its operations are the family's, declared, not discovered."""
     import httpx
     from choregos_adapters.fakes.rh import GuichetDistant
     from choregos_adapters.fakes.serveur import ApplicationDeDemo
@@ -203,13 +203,13 @@ async def test_chaque_operation_declare_un_schema_ferme_que_l_implementation_sui
     nom: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cas = await ouvrir(nom, monkeypatch)
-    assert cas.operations, f"{nom} n'annonce aucune opération"
-    assert {o.access for o in cas.operations} == {"read", "write"}, "une famille lit et écrit"
+    assert cas.operations, f"{nom} announces no operation"
+    assert {o.access for o in cas.operations} == {"read", "write"}, "a family reads and writes"
     for operation in cas.operations:
         Draft202012Validator.check_schema(operation.schema)
         assert operation.schema.get("type") == "object"
         assert operation.schema.get("additionalProperties") is False, (
-            f"{nom}/{operation.name} : un argument inattendu doit être refusé avant l'appel"
+            f"{nom}/{operation.name}: an unexpected argument must be refused before the call"
         )
         assert set(operation.schema.get("required", [])) <= set(operation.schema.get("properties", {}))
     for tout in (True, False):
@@ -218,11 +218,11 @@ async def test_chaque_operation_declare_un_schema_ferme_que_l_implementation_sui
             params = cas.parametres(operation, tout=tout)
             Draft202012Validator(operation.schema).validate(params)
             resultat = await cas.appeler(operation.name, params)
-            assert isinstance(resultat, dict), f"{nom}/{operation.name} rend un objet"
+            assert isinstance(resultat, dict), f"{nom}/{operation.name} returns an object"
             json.dumps(resultat)
 
 
-#: Le type JSON de chaque annotation Python d'un paramètre.
+#: The JSON type of each Python annotation of a parameter.
 TYPES_JSON = {str: "string", int: "integer", bool: "boolean", list: "array", dict: "object"}
 
 
@@ -237,8 +237,8 @@ def _type_json(annotation: Any) -> str:
 
 @pytest.mark.parametrize("nom", ["demo:mdm", "demo:shipping", "demo:access_control", "entra"])
 def test_le_schema_et_la_signature_disent_la_meme_chose(nom: str) -> None:
-    """Ce que la famille déclare, l'implémentation le prend : les mêmes paramètres, requis quand ils
-    n'ont pas de valeur par défaut, du même type."""
+    """What the family declares, the implementation takes: the same parameters, required when they
+    have no default value, of the same type."""
     import inspect
     import typing
 
@@ -259,7 +259,7 @@ def test_le_schema_et_la_signature_disent_la_meme_chose(nom: str) -> None:
         assert {p.name for p in parametres} == set(proprietes), f"{nom}/{operation.name}"
         assert {p.name for p in parametres if p.default is inspect.Parameter.empty} == set(
             operation.schema.get("required", [])
-        ), f"{nom}/{operation.name} : requis d'un côté, facultatif de l'autre"
+        ), f"{nom}/{operation.name}: required on one side, optional on the other"
         for parametre in parametres:
             attendu = proprietes[parametre.name].get("type")
             assert _type_json(types_python[parametre.name]) == attendu, (
@@ -278,15 +278,15 @@ async def test_une_ecriture_rejouee_ne_change_rien_et_une_lecture_n_ecrit_pas(
         await cas.appeler(operation.name, params)
         apres = cas.etat()
         if operation.access == "read":
-            assert apres == avant, f"{nom}/{operation.name} est une lecture, et a écrit"
-            # Ce qui n'existe pas se lit absent : sans erreur, et sans rien créer.
+            assert apres == avant, f"{nom}/{operation.name} is a read, and wrote"
+            # What does not exist reads as absent: no error, and nothing created.
             inconnu = {k: f"{v}-inconnu" if isinstance(v, str) else v for k, v in params.items()}
             await cas.appeler(operation.name, inconnu)
-            assert cas.etat() == apres, f"{nom}/{operation.name} a créé ce qu'on lui demandait de lire"
+            assert cas.etat() == apres, f"{nom}/{operation.name} created what it was asked to read"
             continue
-        assert apres != avant, f"{nom}/{operation.name} n'a rien écrit : son idempotence ne prouve rien"
+        assert apres != avant, f"{nom}/{operation.name} wrote nothing: its idempotence proves nothing"
         await cas.appeler(operation.name, params)
-        assert cas.etat() == apres, f"{nom}/{operation.name}, rejouée, a changé l'état"
+        assert cas.etat() == apres, f"{nom}/{operation.name}, replayed, changed the state"
 
 
 @pytest.mark.parametrize("nom", CAS)
@@ -303,7 +303,7 @@ async def test_la_cle_sert_et_n_apparait_nulle_part(
         with pytest.raises(Exception) as refus:
             await intrus.appeler(premiere.name, intrus.parametres(premiere))
     code = getattr(refus.value, "status_code", None) or getattr(refus.value, "code", None)
-    assert code == 401, f"{nom} : une mauvaise clé passe — la clé ne sert à rien, la taire ne prouve rien"
+    assert code == 401, f"{nom}: a wrong key gets through — the key is useless, hiding it proves nothing"
     traces = [
         *(r.getMessage() for r in caplog.records),
         *(repr(e) for e in evenements),
@@ -313,4 +313,4 @@ async def test_la_cle_sert_et_n_apparait_nulle_part(
         repr(intrus.client),
     ]
     fuites = [t for t in traces if SECRET in t or MAUVAISE in t]
-    assert fuites == [], f"{nom} : une clé se lit dans {fuites[:3]}"
+    assert fuites == [], f"{nom}: a key can be read in {fuites[:3]}"

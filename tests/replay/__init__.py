@@ -1,1 +1,1 @@
-"""Replay des historiques Temporal : la garantie de non-régression des workflows."""
+"""Replay of Temporal histories: the workflows' non-regression guarantee."""

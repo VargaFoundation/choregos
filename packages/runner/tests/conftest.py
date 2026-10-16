@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -222,4 +223,14 @@ def runner_settings(tmp_path: Path) -> Any:
         run_token="tok",
         workspace=tmp_path / "workspace",
         dry_run=False,
+        # Each run serves its tool server on a port of its own: on the shared default (7777), one
+        # test could find it taken by the one before (#474).
+        tools_url=f"http://127.0.0.1:{free_port()}/mcp",
     )
+
+
+def free_port() -> int:
+    """A loopback port nobody listens on, at the time of asking."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
