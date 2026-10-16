@@ -73,11 +73,26 @@ operator who prefers a vault can instead give a **reference** (`env:NAME`, or a 
 holds no secrets key, typing a value answers 409 and says so ([deployment](deployment.md#secrets)).
 An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
 
-Until a project can run, its overview opens on a **getting started** list: provisioned, a workflow
-published, each required capability covered (by the project's connector, tested, or, for the runtime, the
-gateway and the memory only, by what the platform provides), no configured connector failing its last test, and a first request — each
-missing step says why and links to where it is fixed. The list disappears once every step is done.
-Human groups are not checked yet.
+**GitHub: no installation id.** A GitHub connector asks for a repository, not for an installation
+([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). The Choregos GitHub App is
+installed from the console (*Install on GitHub*, which returns to the settings page); the platform
+discovers the installation and your organisation claims it. The repository field is a picker over the
+repositories the App sees (`GET /orgs/{org}/github/repositories?q=`); an owner the App is not installed
+on is refused with `422` and the install link. `GET /orgs/{org}/github` lists the claimed installations
+and says how a claim works on this instance; `POST /orgs/{org}/github/refresh` resyncs them from GitHub.
+A legacy `installation_id` in a request is ignored. The installation used by a connector and by a run's
+git token is always the one the organisation claimed.
+
+In the console, the repository field of a GitHub connector (Settings, Connections) is a searchable list of
+the repositories the App can see, each marked private or public. When the organisation has no installation
+yet, the field says so and offers *Install on GitHub* (it opens GitHub in the same tab and returns to the
+settings page) and *Refresh*. *Type it instead* switches to a text input for a repository the App cannot
+list; an owner without an installation is warned about on the spot, with the same install action. A GitHub
+card reads "via the Choregos App on `<account>`", and a save refused with `422` shows *Install on GitHub*
+under the error. No screen asks for an installation id.
+
+Until a project can run, its overview opens on a **getting started** list, which is the project's
+readiness (below): one list, computed by the API, that the settings page, the CLI and the MCP door share.
 
 A secret is never written in `config` — a secret field there is refused (`422`). It is named by
 **reference**, field by field, and resolved when the adapter is built, in the process that uses it:
@@ -198,6 +213,41 @@ organization, like everything else under row-level security.
 `gateway: direct` lets agents use credentials they bring themselves. It is the honest choice
 for a bench, and it says what it costs: **no spend is measured and no cap applies** — only
 the turn and minute budgets still hold.
+
+### Project settings and readiness
+
+`GET /projects/{id}/readiness` (`choregos projects readiness <slug>`, exit code 1 while something is
+to do) says what a project still lacks to run. It is computed from stored state only: the last connector
+tests, the policy, the members, the workflows. It makes no network call, so a read is fast, and it does not
+prove live connectivity: *Test now* (the connector test endpoint) refreshes what it reads.
+
+Each item has a `state` (`done`; `check`: it works but deserves a look; `todo`: the project cannot run as
+intended; `not_needed`: the workflows do not need it), a one-sentence `detail`, a `section` (`general`,
+`connections`, `agents`, `guardrails`, `people`, `notifications`, `tools`) and a `fix`: a console link and who
+can do it (`project_owner`, `org_admin`, `platform_operator`, or `external` for the identity provider or a
+vendor). `ready` is true when no item is `todo`.
+
+| Item | `todo` when | `check` when |
+| :-- | :-- | :-- |
+| `provisioned` | the project is not active (the failing provisioning step is named) | |
+| `workflow` | no active workflow | none is the default |
+| `connector-<capability>` | a workflow needs it, none is configured and the deployment does not provide it, or its last test failed | a `demo`/`fake` stand-in, or never tested |
+| `connector-<kind>-secrets` | a secret field of the type is not set (webhook secrets excepted) | |
+| `connector-<kind>-stale` | | the last passing test is older than 7 days |
+| `github-app-<kind>` | the repository's owner has no installation claimed by the organisation ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)); `not_needed` without an App | |
+| `repository` | a repository is needed and has no URL | |
+| `repository-checks` | | no `repo.test_command` and no `dod.facts`: the runner measures nothing |
+| `backend` | the default backend is not enabled on the deployment | |
+| `models` | a `profile:` named by an active workflow is defined nowhere | the pairing with the default backend has no eval (unless `allow_unvalidated`) |
+| `budgets` | | `budgets.ticket_usd` or `budgets.daily_project_usd` unset |
+| `people-owner`, `people-release-captain` | nobody is `project_owner`; a release train and nobody is `release_captain` | |
+| `people-group-<group>` | | a human actor's group was never carried by anyone at sign-in |
+| `notifications` | a release train announces and there is no notify connector, channel or e-mail | findings or memory reviews announce and nothing is set, or the connector was never tested |
+| `tools` | never: informational | |
+| `first-item` | | nothing filed yet |
+
+A capability that the deployment provides when a project configures none (the executor, the gateway, the
+memory service, the internal tracker) is `done` ("provided by the platform").
 
 ## 3. Write the workflow
 

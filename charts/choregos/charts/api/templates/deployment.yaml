@@ -184,6 +184,12 @@ spec:
             - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
               # Optional: a tenant without a GitHub App has none.
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-private-key, optional: true } }
+            # The App's OAuth client (ADR 0073): only needed to claim an installation when the
+            # instance has several organisations. Optional.
+            - name: CHOREGOS_GITHUB_APP_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-client-id, optional: true } }
+            - name: CHOREGOS_GITHUB_APP_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-client-secret, optional: true } }
             # The key that seals the connector secrets typed in the console (ADR 0058). Optional: a
             # deployment without it keeps `env:` references and answers 409 when a value is typed.
             - name: CHOREGOS_SECRETS_KEKS
