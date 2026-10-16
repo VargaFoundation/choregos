@@ -83,6 +83,10 @@ import type {
   ModelCuratePreview,
   ModelSyncResult,
   UsableModel,
+  GitHubAppStatus,
+  GitHubInstallLink,
+  GitHubInstallLinkRequest,
+  GitHubRepositoryPage,
   HandOff,
   Membership,
   MembershipUpsert,
@@ -620,6 +624,15 @@ export const api = {
     request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}/secrets/${field}`, { method: "DELETE" }),
   testConnector: (id: string, kind: string) =>
     request<ConnectorTestResult>(`/projects/${qualify(id)}/connectors/${kind}/test`, { method: "POST" }),
+
+  /** The Choregos GitHub App as the organisation sees it: its installations, never an installation id to type (ADR 0073). */
+  githubStatus: (org: string) => request<GitHubAppStatus>(`/orgs/${org}/github`),
+  githubRefresh: (org: string) => request<GitHubAppStatus>(`/orgs/${org}/github/refresh`, { method: "POST" }),
+  /** The repositories of the installations the organisation claimed, filtered by `q`. */
+  githubRepositories: (org: string, q = "") =>
+    request<GitHubRepositoryPage>(`/orgs/${org}/github/repositories${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  githubInstallLink: (org: string, body: GitHubInstallLinkRequest) =>
+    request<GitHubInstallLink>(`/orgs/${org}/github/install-link`, { method: "POST", body: JSON.stringify(body) }),
 
   workflow: (id: string) => request<WorkflowDef>(`/projects/${qualify(id)}/workflow`),
   putWorkflow: (id: string, yaml: string) =>
