@@ -64,13 +64,46 @@ describe("diffSpecs", () => {
 
   it("reads scalars, limits and memory", () => {
     const changes = diffSpecs(base, { ...base, model: "profile:strong", limits: { max_turns: 30 }, budget: { run_usd: 2 }, memory: "agent" });
+    // The legacy `memory` is read as the bindings it means (S40-11): the shared memory leaves, the agent's own comes.
     expect(changes.map((c) => [c.field, c.kind])).toEqual([
       ["model", "changed"],
       ["limits.max_turns", "added"],
       ["budget.run_usd", "added"],
-      ["memory", "changed"],
+      ["memories", "removed"],
+      ["memories", "added"],
     ]);
     expect(changes[2]).toMatchObject({ after: "$2", before: "none" });
+  });
+
+  it("sees no change between the legacy memory and the bindings it means", () => {
+    expect(diffSpecs({ ...base, memory: "project" }, { ...base, memories: [{ scope: "project", slug: "shared", mode: "write" }] })).toEqual([]);
+    expect(diffSpecs({ ...base, memory: "none" }, { ...base, memories: [] })).toEqual([]);
+  });
+
+  it("diffs the memories a version binds: one added, a mode that moved, a new order", () => {
+    const before: AgentSpec = {
+      ...base,
+      memories: [
+        { scope: "global", slug: "lessons", mode: "read" },
+        { scope: "project", slug: "shared", mode: "write" },
+      ],
+    };
+    const added = diffSpecs(before, { ...before, memories: [...before.memories!, { scope: "project", slug: "decisions", mode: "read" }] });
+    expect(added.map((c) => [c.label, c.kind, c.after])).toEqual([["Memory decisions (project)", "added", "read"]]);
+    const moved = diffSpecs(before, {
+      ...before,
+      memories: [
+        { scope: "global", slug: "lessons", mode: "write" },
+        { scope: "project", slug: "shared", mode: "read" },
+      ],
+    });
+    expect(moved.map((c) => [c.label, c.kind, c.before, c.after])).toEqual([
+      ["Memory lessons (organisation)", "changed", "read", "read and written"],
+      ["Memory The project's shared memory", "changed", "read and written", "read"],
+    ]);
+    const reordered = diffSpecs(before, { ...before, memories: [...before.memories!].reverse() });
+    expect(reordered).toHaveLength(1);
+    expect(reordered[0]).toMatchObject({ label: "Memory order", kind: "changed", after: "project:shared, global:lessons" });
   });
 
   it("shows a field it does not know as JSON before and after", () => {
