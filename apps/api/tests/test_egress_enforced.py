@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -188,3 +189,26 @@ async def test_a_web_sync_with_the_host_absent_fails_the_source_and_sends_nothin
 
 async def _public(host: str) -> list[str]:
     return ["93.184.216.34"]
+
+
+async def test_a_remote_agents_card_fetch_on_a_revoked_host_is_refused_and_never_sent(
+    client: AsyncClient, admin: str, enforce: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_adapters.fakes.a2a import FakeA2aAgent
+
+    from .conftest_remote import remote_agent, set_sealing_key
+
+    set_sealing_key(monkeypatch)
+    for remote in remote_agent():
+        assert isinstance(remote, FakeA2aAgent)
+        await client.post(f"{ORG}/remote-credentials", json={"name": "rovo", "type": "none"})
+        remote.security = "none"
+        host = urlsplit(remote.card_url).hostname or ""
+        await client.post(f"{ORG}/egress/rules", json={"host": host, "used_by": ["api"]})
+        discover = {"card_url": remote.card_url}
+        assert (await client.post(f"{ORG}/agents/discover", json=discover)).status_code == 200
+        fetched = remote.card_fetches
+        await _revoke(client, host)
+        refused = await client.post(f"{ORG}/agents/discover", json=discover)
+        assert refused.status_code == 422 and "egress refused" in refused.text, refused.text
+        assert remote.card_fetches == fetched, "the card was never requested"
