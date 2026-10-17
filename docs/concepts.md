@@ -120,7 +120,10 @@ the platform did not measure (a job's facts, `dod.facts`): a threshold on a numb
 wrote is not a guarantee. `numbers_measured` reads the numbers an agent writes in its outputs and
 requires each to be found in the `sources:` documents an earlier step produced — rounding, a
 percentage for a fraction and a dropped sign are tolerated; years, integers below `ignore_below`
-(default 10) and an explicit `allow:` list are skipped.
+(default 10) and an explicit `allow:` list are skipped. The source `fields` is the work item's own
+fields, which a person can edit; a child opened by a fan-out reads `parent.<doc>[.<key>...]` instead,
+the parent's measured document (a key `$name` is the child's own field `name`); a work item with no
+parent has no such source and is refused.
 
 `adr_number_free` guards numbered records: when the branch adds `docs/adr/NNNN-*.md` (the path
 pattern is the `pattern` parameter), it lists the records already on the default branch and refuses

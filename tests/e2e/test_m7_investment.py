@@ -222,6 +222,46 @@ async def honest_analyst(stage_input: StageInput) -> StageResult:
     return StageResult(status=StageStatus.DONE, summary="memo", outputs={"memo_markdown": memo})
 
 
+def _memo_of(fields: dict[str, Any]) -> StageResult:
+    product = fields["product"]
+    oos = product["strategies"][product["best_in_sample"]]["oos"]
+    memo = (
+        f"# Memo {fields['symbol']}\n\n"
+        f"- out-of-sample CAGR {oos['cagr']:.1%}, max drawdown {abs(oos['max_drawdown']):.1%}."
+    )
+    return StageResult(status=StageStatus.DONE, summary="memo", outputs={"memo_markdown": memo})
+
+
+#: The client a person would use: set by the test that has an analyst edit a child's fields.
+_PERSON: list[AsyncClient] = []
+FORGED_CAGR = 0.9876
+
+
+async def editing_analyst(stage_input: StageInput) -> StageResult:
+    """A person edits the child's fields through the API (they are editable), the memo quotes the edit."""
+    fields = await _child_fields(stage_input)
+    oos = fields["product"]["strategies"][fields["product"]["best_in_sample"]]["oos"]
+    if oos["cagr"] != FORGED_CAGR:
+        oos["cagr"] = FORGED_CAGR
+        from choregos_api.db.models import WorkItem
+        from choregos_api.db.session import session_scope
+        from sqlalchemy import select
+
+        async with session_scope() as session:
+            item_id = (
+                await session.execute(
+                    select(WorkItem.id).where(WorkItem.tracker_key == stage_input.work_item.key)
+                )
+            ).scalar_one()
+        patched = await _PERSON[0].patch(f"/api/v1/work-items/{item_id}", json={"fields": fields})
+        assert patched.status_code == 200, patched.text
+    return _memo_of(fields)
+
+
+async def hand_made_analyst(stage_input: StageInput) -> StageResult:
+    return _memo_of(await _child_fields(stage_input))
+
+
 async def inventive_analyst(stage_input: StageInput) -> StageResult:
     memo = "# Product memo\n\nTRND.US should return 987.6% next year."
     return StageResult(status=StageStatus.DONE, summary="memo", outputs={"memo_markdown": memo})
@@ -519,6 +559,66 @@ async def test_a_memo_that_quotes_an_unmeasured_number_never_reaches_the_owner(
         await interpreter.cancel()
     memos = [s for s in bench.started if s.stage_input and s.stage_input.transition.role == "memo"]
     assert len(memos) == 2, "the analyst had its two attempts"
+
+
+async def test_a_child_whose_fields_were_edited_is_checked_against_the_parents_measures(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    _PERSON[:] = [client]
+    bench = Bench(api_url, tmp_path / "runs", {"strategize": strategist, "memo": editing_analyst})
+    platform.adapters.executor = bench
+    fields = {"symbols": ["TRND.US", "AAA.US"], **PERIOD, "min_dsr": 0.9, "min_trades": 3}
+
+    async with worker():
+        item, interpreter = await _campaign(platform, project, fields)
+        child = await _child(client, item["key"], 1)
+        await _state(
+            client, child["id"], "to_review", "the edited number is not the one the backtest measured"
+        )
+        await interpreter.cancel()
+    edited = (await _children(item["key"]))[0]["fields"]["product"]
+    assert edited["strategies"][edited["best_in_sample"]]["oos"]["cagr"] == FORGED_CAGR, "the edit was kept"
+
+
+async def test_a_product_memo_created_by_hand_has_no_measured_numbers_to_quote(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    from choregos_api.temporal import interpreter_id
+    from choregos_core.domain import WorkItemData
+
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    bench = Bench(api_url, tmp_path / "runs", {"memo": hand_made_analyst})
+    platform.adapters.executor = bench
+    if not isinstance(platform.adapters.tracker.items, _Items):
+        platform.adapters.tracker.items = _Items(platform.adapters.tracker.items)
+    product = {
+        "best_in_sample": "s1",
+        "strategies": {"s1": {"oos": {"cagr": FORGED_CAGR, "max_drawdown": -0.1234}}},
+    }
+    created = await client.post(
+        f"/api/v1/projects/{project['id']}/work-items",
+        json={"title": "By hand", "workflow": "product-memo", "start": False, "fields": {
+            "symbol": "TRND.US", "product": product, "facts": {}, **PERIOD}},
+    )  # fmt: skip
+    assert created.status_code == 201 and created.json()["workflow_name"] == "product-memo", created.text
+    key, item_id = created.json()["tracker_key"], created.json()["id"]
+    platform.adapters.tracker.items.setdefault(key, WorkItemData(key=key, title="H", state="Todo"))
+
+    async with worker():
+        handle = await platform.env.client.start_workflow(
+            "WorkflowInterpreter",
+            {"project_id": project["id"], "project_slug": "research", "work_item_id": item_id,
+             "tracker_key": key},
+            id=interpreter_id("research", key),
+            task_queue="e2e",
+        )  # fmt: skip
+        await _state(client, item_id, "to_review", "a memo with no parent measures nothing")
+        await handle.cancel()
 
 
 DIVERGING = {"source": "yahoo", "common_days": 700, "max_rel_diff": 0.31, "diverging_days": 4}

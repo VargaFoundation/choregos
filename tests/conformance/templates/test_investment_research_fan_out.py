@@ -57,8 +57,16 @@ def test_the_memo_and_the_decision_keep_their_guarantees_in_the_child() -> None:
     child, campaign = _workflow("product-memo"), _workflow("campaign")
     memo = _transition(child, "t-memo")
     assert [(g.name, dict(g.params or {})) for g in memo.gates] == [
-        ("numbers_measured", {"sources": ["fields"], "outputs": ["memo_markdown"]})
+        (
+            "numbers_measured",
+            {
+                "sources": ["parent.metrics.products.$symbol", "parent.metrics.facts"],
+                "outputs": ["memo_markdown"],
+            },
+        )
     ]
+    # Never the child's own fields: a person can edit them (S38-17).
+    assert "fields" not in memo.gates[0].params["sources"]
     decide = _transition(child, "t-decide")
     assert decide.task is not None and decide.task.attest and decide.on_reject == "rejected"
     assert child.states["adopted"].terminal and child.states["rejected"].terminal
