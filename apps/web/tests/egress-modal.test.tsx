@@ -69,13 +69,20 @@ function view(call: (allow: boolean) => Promise<string>) {
   fireEvent.click(screen.getByRole("button", { name: "go" }));
 }
 
+/**
+ * The modal, once its `<dialog>` is open. Its content renders with the state, but the `open`
+ * attribute comes from an effect: until then the dialog is hidden, every role query inside it misses,
+ * and a `queryByRole(...)).toBeNull()` passes for the wrong reason (#686).
+ */
+const openModal = () => screen.findByRole("dialog", { name: "Network access needed" });
+
 beforeEach(() => vi.clearAllMocks());
 
 describe("the network access modal (S39-22)", () => {
   it("an administrator sees 'Allow and continue', and the retry carries allow_egress", async () => {
     const call = vi.fn().mockRejectedValueOnce(required([verdict()])).mockResolvedValueOnce("ok");
     view(call);
-    expect(await screen.findByTestId("egress-modal")).toBeInTheDocument();
+    expect(await openModal()).toBeInTheDocument();
     expect(screen.getByTestId("org-mcp.example.test").textContent).toBe("not allowed");
     expect(screen.getByTestId("ceiling-mcp.example.test").textContent).toBe("declared open");
     expect(screen.queryByRole("button", { name: "Ask an administrator" })).toBeNull();
@@ -89,7 +96,8 @@ describe("the network access modal (S39-22)", () => {
   it("anyone else sees who can allow it, and asks: a request with the prefilled reason and origin", async () => {
     const call = vi.fn().mockRejectedValueOnce(required([verdict({ can_allow: false })]));
     view(call);
-    const approvers = await screen.findByTestId("egress-approvers");
+    await openModal();
+    const approvers = screen.getByTestId("egress-approvers");
     expect(approvers.textContent).toContain("Augustin · augustin@acme.dev");
     expect(screen.queryByRole("button", { name: "Allow and continue" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Ask an administrator" }));
@@ -108,7 +116,7 @@ describe("the network access modal (S39-22)", () => {
   it("closing the modal abandons the add without retrying it", async () => {
     const call = vi.fn().mockRejectedValue(required([verdict()]));
     view(call);
-    await screen.findByTestId("egress-modal");
+    await openModal();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.getByTestId("outcome").textContent).toMatch(/^EgressCancelled:/));
     expect(call).toHaveBeenCalledTimes(1);
