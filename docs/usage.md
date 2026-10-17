@@ -771,9 +771,10 @@ supply-chain gate's **risk** at generation time, and its **delivery**:
 
 What is **not** listed, on purpose: Anthropic's `docx`, `pdf`, `pptx` and `xlsx` (governed by an
 agreement with Anthropic, not an open licence), skills without a licence file, skills that declare
-`allowed-tools`, skills that carry binary files, repositories whose owner is not on the publisher list
-(`tools/catalogues/skills/publishers.yaml`: a vendor, or a maintainer with at least 1 000 stars and a
-repository that is not archived), and a few that only make sense inside one coding assistant. A
+`allowed-tools`, skills that carry binary files other than fonts and images, repositories whose
+owner is not on the publisher list (`tools/catalogues/skills/publishers.yaml`: a vendor, or a
+maintainer with at least 1 000 stars and a repository that is not archived), and a few that only
+make sense inside one coding assistant. A
 person with the right to use a skill that is not listed can still import it by hand, above, where
 the gate flags its licence and a person decides.
 
