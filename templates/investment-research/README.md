@@ -51,8 +51,11 @@ forbids.
   so that it is right. A re-run of the step reuses the stored snapshot for the same request, byte
   for byte, and fetches nothing (`reused: 1` in its facts); a new window is a new request. With a
   `composite` connector, each symbol's cross-check stays in `snapshot.json` and the facts count the
-  symbols a second source confirmed (`cross_checked`) and those that diverge (`diverging`) —
-  recorded, not gated. On 2026-10-14 Stooq answered scripts with a browser check: a composite of
+  symbols a second source confirmed (`cross_checked`), those that diverge (`diverging`) and the
+  worst gap (`max_rel_diff`). It is a gate (S38-14): `t-snapshot` refuses the snapshot, and the
+  campaign goes to `to_review`, when more symbols diverge than the campaign field
+  `max_diverging_symbols` (default 0) allows — `diverging_excess` > 0. A single-source connector has
+  nothing to compare and is not refused: read `cross_checked`. On 2026-10-14 Stooq answered scripts with a browser check: a composite of
   Yahoo and Alpha Vantage (free key) is the one that cross-checks (`essai/investissement/`).
 - **Assumed costs.** `cost_bps` per change of position; no spread model, no tax, no currency hedge.
 - **Internal use.** The memo is a research note, not investment advice, not an offer, not an order.

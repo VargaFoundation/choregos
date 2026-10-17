@@ -24,9 +24,31 @@ class Fixture:
     adapters: Any
 
 
+#: `CHOREGOS_TEST_ORCH_ON_POSTGRES=1` (with `CHOREGOS_TEST_DATABASE_URL`) runs the orchestrator
+#: suite's `setup` on a real PostgreSQL, schema recreated for each test (S27-11: the reservation lock
+#: is an advisory lock there, which SQLite cannot exercise).
+ON_POSTGRES = os.environ.get("CHOREGOS_TEST_ORCH_ON_POSTGRES") == "1"
+PG_URL = os.environ.get("CHOREGOS_TEST_DATABASE_URL", "")
+
+
+async def _reset_postgres_schema() -> None:
+    import asyncpg
+
+    connection = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
+    try:
+        await connection.execute("DROP SCHEMA public CASCADE")
+        await connection.execute("CREATE SCHEMA public")
+    finally:
+        await connection.close()
+
+
 @pytest.fixture
 async def setup(tmp_path: Any) -> AsyncIterator[Fixture]:
-    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/orch.db"
+    if ON_POSTGRES:
+        await _reset_postgres_schema()
+        os.environ["CHOREGOS_DATABASE_URL"] = PG_URL
+    else:
+        os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/orch.db"
     from choregos_adapters import AdapterSet
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session

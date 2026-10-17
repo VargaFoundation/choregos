@@ -23,6 +23,7 @@ class Campaign:
     max_drawdown: float = 0.35
     min_trades: int = 10
     max_strategies: int = 8
+    max_diverging_symbols: int = 0
     seed: str = "choregos"
 
 
@@ -54,6 +55,9 @@ def parse_campaign(raw: Any) -> Campaign:
         raise InputError("campaign needs start < oos_start <= end")
     min_trades = _number(raw, "min_trades", 10)
     max_strategies = _number(raw, "max_strategies", 8)
+    max_diverging = _number(raw, "max_diverging_symbols", 0)
+    if max_diverging < 0:
+        raise InputError("campaign.max_diverging_symbols must be >= 0")
     seed = raw.get("seed", "choregos")
     if not isinstance(seed, str):
         raise InputError("campaign.seed must be a string")
@@ -70,6 +74,7 @@ def parse_campaign(raw: Any) -> Campaign:
         max_drawdown=_number(raw, "max_drawdown", 0.35),
         min_trades=int(min_trades),
         max_strategies=int(max_strategies),
+        max_diverging_symbols=int(max_diverging),
         seed=seed,
     )
 

@@ -11,6 +11,8 @@ Campaign A has a trending product: it goes to the memo, then a person adopts it.
 random walks: the verdict, on measured facts, ends it in `not_relevant`. An analyst who quotes a
 number the backtest did not compute is refused until the campaign goes to review.
 
+Sources that disagree beyond the campaign's `max_diverging_symbols` end in `to_review` (S38-14).
+
 Remove a brick — the job mode, the measured marking, `numbers_measured`, the market data route —
 and a scenario turns red.
 """
@@ -386,3 +388,135 @@ async def test_a_memo_that_quotes_an_unmeasured_number_never_reaches_the_owner(
         await interpreter.cancel()
     memos = [s for s in bench.started if s.stage_input and s.stage_input.transition.role == "memo"]
     assert len(memos) == 2, "the analyst had its two attempts"
+
+
+DIVERGING = {"source": "yahoo", "common_days": 700, "max_rel_diff": 0.31, "diverging_days": 4}
+
+
+async def test_sources_that_disagree_send_the_campaign_to_review_before_any_backtest(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    """S38-14: the snapshot job measures the symbols whose two sources diverge; beyond the campaign's
+    `max_diverging_symbols` the `t-snapshot` gate refuses and a person reviews. Without the gate the
+    campaign would profile and backtest on closes the second source contradicts."""
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    market.cross_checks["TRND.US"] = DIVERGING
+    bench = Bench(api_url, tmp_path / "runs", {"strategize": strategist, "memo": honest_analyst})
+    platform.adapters.executor = bench
+    fields = {"symbols": ["TRND.US", "AAA.US"], **PERIOD, "min_dsr": 0.9, "min_trades": 3}
+
+    async with worker():
+        item, interpreter = await _campaign(platform, project, fields)
+        await _state(client, item["id"], "to_review", "diverging sources send the campaign to review")
+        await _replayed(interpreter, "wi-campaign-diverging-sources-S38-14.json")
+        await interpreter.cancel()
+    roles = [s.stage_input.transition.role for s in bench.started if s.stage_input]
+    assert roles == ["snapshot"], f"nothing runs after a refused snapshot: {roles}"
+
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        snapshot = (await session.execute(select(Run).where(Run.stage_role == "snapshot"))).scalar_one()
+        evidence = (snapshot.result or {}).get("evidence") or {}
+    assert {"facts.diverging", "facts.diverging_excess"} <= set(evidence.get("measured") or []), evidence
+    assert evidence["facts"]["diverging_excess"] == 1 and evidence["facts"]["max_rel_diff"] == 0.31
+
+
+async def test_a_divergence_within_the_campaign_threshold_goes_on(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    market.cross_checks["TRND.US"] = DIVERGING
+    bench = Bench(api_url, tmp_path / "runs", {"strategize": strategist, "memo": honest_analyst})
+    platform.adapters.executor = bench
+    fields = {
+        "symbols": ["TRND.US", "AAA.US"], **PERIOD, "min_dsr": 0.9, "min_trades": 3,
+        "max_diverging_symbols": 1,
+    }  # fmt: skip
+
+    async with worker():
+        item, interpreter = await _campaign(platform, project, fields)
+        await _state(client, item["id"], "memo_written", "a tolerated divergence does not stop the campaign")
+        await interpreter.cancel()
+
+
+async def _until(what: str, condition: Callable[[], bool], tries: int = 1200) -> None:
+    for _ in range(tries):
+        if condition():
+            return
+        await asyncio.sleep(0.1)
+    raise AssertionError(f"timed out: {what}")
+
+
+async def test_a_relaunched_campaign_reads_the_stored_snapshot_and_computes_the_same_metrics(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    """S38-16: the invented number sends the campaign to review, the owner relaunches it, and the
+    second round plays `t-snapshot` and `t-backtest` again on the same request. The provider is
+    called by the first snapshot only; the second snapshot reuses the stored bars; both backtests
+    read bars with the same SHA-256; the same job on the same snapshot gives the same metrics."""
+    from choregos_api.db.models import ArtifactRecord, Run
+    from choregos_api.db.session import session_scope
+    from choregos_contracts import artifact_digest
+    from sqlalchemy import select
+
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    runs = tmp_path / "runs"
+    bench = Bench(api_url, runs, {"strategize": strategist, "memo": inventive_analyst})
+    platform.adapters.executor = bench
+    fields = {"symbols": ["TRND.US", "AAA.US"], **PERIOD, "min_dsr": 0.9, "min_trades": 3}
+
+    def played(role: str) -> list[StageJobSpec]:
+        return [s for s in bench.started if s.stage_input and s.stage_input.transition.role == role]
+
+    async with worker():
+        item, interpreter = await _campaign(platform, project, fields)
+        await _state(client, item["id"], "to_review", "the first round ends in review")
+        await _until("two memo attempts", lambda: len(played("memo")) == 2)
+        first_calls = len(market.calls)
+        assert sorted(a["symbol"] for _, a in market.calls) == ["AAA.US", "TRND.US"]
+        assert (await _request(client, item["id"]))["kind"] == "approval"
+        relaunched = await client.post(f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "approve"})
+        assert relaunched.status_code == 202, relaunched.text
+        # The attempts of `t-memo` are counted per work item: the second round gets one more.
+        await _until("a second round", lambda: len(played("memo")) == 3)
+        await _state(client, item["id"], "to_review", "the second round ends in review too")
+        await interpreter.cancel()
+
+    assert [len(played(r)) for r in ("snapshot", "profile", "strategize", "backtest")] == [2, 2, 2, 2]
+    # (1) The provider is called by the first snapshot only.
+    assert len(market.calls) == first_calls == 2, market.calls
+    async with session_scope() as session:
+        snapshots = list(
+            (
+                await session.execute(
+                    select(Run).where(Run.stage_role == "snapshot").order_by(Run.created_at)
+                )
+            ).scalars()
+        )
+        facts = [((r.result or {}).get("evidence") or {}).get("facts") or {} for r in snapshots]
+        bars = list(
+            (await session.execute(select(ArtifactRecord).where(ArtifactRecord.name == "bars"))).scalars()
+        )
+        metrics = list(
+            (await session.execute(select(ArtifactRecord).where(ArtifactRecord.name == "metrics"))).scalars()
+        )
+    assert [f.get("reused") for f in facts] == [0, 1], facts
+    # (2) Both backtests read, from their workspace, the very bytes the snapshot stored.
+    assert len(bars) == 1 and bars[0].digest.startswith("sha256:"), "the stored bars did not change"
+    read = [
+        artifact_digest((runs / s.run_id / ".choregos" / "inputs" / "bars.csv").read_bytes())
+        for s in played("backtest")
+    ]
+    assert read == [bars[0].digest] * 2, read
+    # (3) The same job on the same snapshot: byte-identical metrics, so no second revision.
+    assert len(metrics) == 1, [(m.version, m.digest) for m in metrics]
+    await _replayed(interpreter, "wi-campaign-relaunched-S38-16.json")
