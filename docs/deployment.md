@@ -213,6 +213,11 @@ the controller deletes it. Until then the volume counts against the namespace's 
 `storage` × (runs finished in that window + warm pool) against it. At 3600, one ticket's six
 stages filled the dev tenant's 10 PVCs / 50Gi, and the next claim found no volume.
 
+The warm pool is rendered with `updateStrategy: Recreate`: when the template changes (an
+upgrade changes the runner image), the controller deletes the unclaimed warm sandboxes and makes
+new ones. With the operator's default, `OnReplenish`, a stale sandbox stays in the pool until a
+claim takes it, so the first run after an upgrade ran in the previous version's runner.
+
 The chart also renders `choregos-runner-assignment`, a NetworkPolicy that lets only the
 orchestrator's `executor` workers reach the assignment port. Where the platform lays the
 namespace's NetworkPolicies and refuses a tenant's (an Argo CD AppProject that blacklists
