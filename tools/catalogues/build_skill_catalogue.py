@@ -44,6 +44,7 @@ from choregos_api.services.skill_sources import (
     read_tarball,
 )
 from choregos_api.services.skills import empreinte
+from choregos_contracts.skill_files import skill_file_bytes
 
 from tools.catalogues import _github, _recording
 
@@ -290,7 +291,7 @@ def resolve(
         "licence": licence,
         "licence_class": "permissive" if permissive else "copyleft",
         "files": len(found.files),
-        "bytes": sum(len(t.encode("utf-8")) for t in found.files.values()),
+        "bytes": sum(len(skill_file_bytes(p, t)) for p, t in found.files.items()),
         "digest": empreinte(found.files),
         "risk": assessment.risk,
         "findings_count": len(assessment.findings),
@@ -388,8 +389,10 @@ def bundled_tree(bundles: dict[str, dict[str, Any]]) -> dict[Path, bytes]:
     tree: dict[Path, bytes] = {}
     for entry_id, bundle in sorted(bundles.items()):
         entry, files, licence = bundle["entry"], bundle["files"], bundle["licence"]
-        for relative, text in sorted(files.items()):
-            tree[Path(entry_id) / "files" / relative] = text.encode("utf-8")
+        # a font or an image is stored as base64 (ADR 0050): the tree holds its real bytes
+        stored = {relative: skill_file_bytes(relative, text) for relative, text in sorted(files.items())}
+        for relative, data in stored.items():
+            tree[Path(entry_id) / "files" / relative] = data
         licence_file: dict[str, str] = {
             "scope": licence["scope"],
             "name": licence["name"],
@@ -405,7 +408,7 @@ def bundled_tree(bundles: dict[str, dict[str, Any]]) -> dict[Path, bytes]:
             "path": entry["path"],
             "licence": entry["licence"],
             "licence_file": licence_file,
-            "files": {relative: sha256(text) for relative, text in sorted(files.items())},
+            "files": {relative: hashlib.sha256(data).hexdigest() for relative, data in stored.items()},
         }
         tree[Path(entry_id) / "PROVENANCE.json"] = (
             json.dumps(provenance, indent=1, sort_keys=True) + "\n"
