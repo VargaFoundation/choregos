@@ -8,7 +8,7 @@ global:
   publicUrl: ""
   apiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
-  imageTag: "0.18.3"
+  imageTag: "0.18.4"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
