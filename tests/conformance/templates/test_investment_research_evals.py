@@ -51,6 +51,7 @@ def _score(
     outputs: dict[str, Any],
     documents: dict[str, Any],
     fields: dict[str, Any] | None = None,
+    parent: dict[str, Any] | None = None,
     workflow_file: str = "campaign.yaml",
 ) -> list[str]:
     from choregos_contracts import StageOutputs, StageResult, StageStatus
@@ -60,6 +61,7 @@ def _score(
         result=StageResult(status=StageStatus.DONE, summary="eval", outputs=StageOutputs(**outputs)),
         documents=documents,
         fields=CASES["fields"] if fields is None else fields,
+        parent_documents=parent,
     )
     failed = []
     for name, params in _gates(transition_id, workflow_file):
@@ -82,14 +84,19 @@ def test_the_strategist_cases(case: dict[str, Any]) -> None:
 @pytest.mark.parametrize("case", CASES["analyst"], ids=lambda c: c["id"])
 def test_the_analyst_cases(case: dict[str, Any]) -> None:
     symbol = case.get("product", "P01")
-    child_fields = {  # what `t-fan-out` copies into the child of this product
+    child_fields = {  # what `t-fan-out` copies into the child of this product (not a source)
         "symbol": symbol,
         "product": CASES["metrics"]["products"][symbol],
-        "facts": {"trials": CASES["metrics"]["trials"]},
+        "facts": CASES["metrics"]["facts"],
         **{k: CASES["fields"][k] for k in ("start", "oos_start", "end")},
     }
     refused = _score(
-        "t-memo", {"memo_markdown": case["memo"]}, {}, fields=child_fields, workflow_file="product-memo.yaml"
+        "t-memo",
+        {"memo_markdown": case["memo"]},
+        {},
+        fields=child_fields,
+        parent={"metrics": CASES["metrics"]},
+        workflow_file="product-memo.yaml",
     )
     if case["expect"] == "accept":
         assert not refused, refused

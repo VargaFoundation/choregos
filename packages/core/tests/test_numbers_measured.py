@@ -86,3 +86,39 @@ def test_the_work_item_fields_are_a_source_when_named() -> None:
 
 def test_process_view_says_what_it_checks() -> None:
     assert "measured" in RESUMES["numbers_measured"]
+
+
+def _child_memo(text: str, parent: dict[str, Any] | None, fields: dict[str, Any]) -> tuple[bool, str]:
+    ctx = GateContext(
+        result=StageResult(
+            status=StageStatus.DONE,
+            summary="ok",
+            outputs=StageOutputs(memo_markdown=text),  # type: ignore[call-arg]
+        ),
+        fields=fields,
+        parent_documents=parent,
+    )
+    out = evaluate(
+        "numbers_measured",
+        ctx,
+        {"sources": ["parent.metrics.products.$symbol"], "outputs": ["memo_markdown"]},
+    )
+    return out.passed, out.detail
+
+
+PARENT = {"metrics": {"products": {"A.US": {"sharpe": 1.23}, "B.US": {"sharpe": 0.55}}}}
+
+
+def test_parent_source_reads_the_parents_measure_of_this_product_only() -> None:
+    assert _child_memo("Sharpe 1.23.", PARENT, {"symbol": "A.US"})[0]
+    assert not _child_memo("Sharpe 0.55.", PARENT, {"symbol": "A.US"})[0], "a sibling's number"
+
+
+def test_parent_source_ignores_what_the_childs_fields_say() -> None:
+    fields = {"symbol": "A.US", "product": {"sharpe": 9.87}}
+    assert not _child_memo("Sharpe 9.87.", PARENT, fields)[0]
+
+
+def test_parent_source_refuses_a_work_item_with_no_parent() -> None:
+    passed, detail = _child_memo("Sharpe 1.23.", None, {"symbol": "A.US"})
+    assert not passed and "no parent" in detail
