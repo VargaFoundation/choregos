@@ -14,9 +14,10 @@ async function declareMcp(page: Page, url: string) {
   await page.getByPlaceholder("entra-acme").fill("vendor");
   await page.locator("label:has(span:text-is('Type')) select").selectOption("mcp/mcp");
   await page.getByLabel(/^url/).fill(url);
-  // The setup procedure (S39-23) opens with the type; below the xl breakpoint it is a sheet over the form.
-  const close = page.getByTestId("procedure-close");
-  if (await close.isVisible()) await close.click();
+  // The setup procedure (S39-23) opens with the type, once its file is read; below the xl breakpoint
+  // it is a sheet over the form. Wait for it and close it: an instant `isVisible()` could look before
+  // it opened, and the sheet then covered "Declare" (seen at 390 px on CI).
+  await page.getByTestId("procedure-close").click();
   await page.getByRole("button", { name: "Declare" }).click();
 }
 
