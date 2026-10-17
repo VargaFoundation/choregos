@@ -1256,7 +1256,9 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   that project's tickets, actions and project budget alerts. An agent's budget alert stays in the
   organisation's inbox, because an agent serves several projects. Acknowledging a budget alert takes
   it out of everyone's inbox, so it needs the **project owner** role or above: on that project for a
-  project's alert, in the organisation for an agent's. Every member still sees it.
+  project's alert, in the organisation for an agent's. Every member still sees it; the
+  **Acknowledge** button appears only to those who may (`can_acknowledge` on each alert), the
+  others read who can.
 
 The core ships two effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP

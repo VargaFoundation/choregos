@@ -44,8 +44,9 @@ async def test_an_organisation_role_below_project_owner_cannot_acknowledge(
     async with _as(client, f"{role}@varga.dev") as member:
         refused = await member.post(f"/api/v1/orgs/varga/budget-alerts/{alert}/acknowledge")
         assert refused.status_code == 403, refused.text
-        # They still see it: reading the inbox is every member's.
-        assert [a["id"] for a in (await member.get("/api/v1/orgs/varga/budget-alerts")).json()] == [alert]
+        # They still see it: reading the inbox is every member's. The console is told not to offer it.
+        seen = (await member.get("/api/v1/orgs/varga/budget-alerts")).json()
+        assert [(a["id"], a["can_acknowledge"]) for a in seen] == [(alert, False)]
     assert [a["status"] for a in await _alerts(client)] == ["open"], "a refusal leaves it in the inbox"
 
 
@@ -56,9 +57,12 @@ async def test_the_owner_of_the_project_acknowledges_its_alert(
     await _member("lea@varga.dev", "developer")
     await _member("lea@varga.dev", "project_owner", project["slug"])
     async with _as(client, "lea@varga.dev") as owner:
+        offered = (await owner.get("/api/v1/orgs/varga/budget-alerts")).json()
+        assert [a["can_acknowledge"] for a in offered] == [True]
         done = await owner.post(f"/api/v1/orgs/varga/budget-alerts/{alert}/acknowledge")
     assert done.status_code == 200, done.text
     assert done.json()["acknowledged_by"] == "lea@varga.dev"
+    assert done.json()["can_acknowledge"] is False, "an acknowledged alert offers nothing more"
 
 
 async def test_owning_one_project_does_not_acknowledge_an_agents_alert(
@@ -68,6 +72,9 @@ async def test_owning_one_project_does_not_acknowledge_an_agents_alert(
     await _member("lea@varga.dev", "developer")
     await _member("lea@varga.dev", "project_owner", project["slug"])
     async with _as(client, "lea@varga.dev") as owner:
+        assert [
+            a["can_acknowledge"] for a in (await owner.get("/api/v1/orgs/varga/budget-alerts")).json()
+        ] == [False]
         refused = await owner.post(f"/api/v1/orgs/varga/budget-alerts/{alert}/acknowledge")
     assert refused.status_code == 403, refused.text
     await _member("max@varga.dev", "project_owner")

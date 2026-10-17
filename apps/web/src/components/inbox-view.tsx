@@ -23,7 +23,8 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
   const { org } = useSession();
   const queryClient = useQueryClient();
   const boite = useADecider(org, project);
-  // A developer sees the alert but may not acknowledge it: the API's refusal is shown, not swallowed.
+  // A developer sees the alert but is not offered the gesture (`can_acknowledge`); should the role
+  // change between the read and the click, the API's refusal is shown, not swallowed.
   const [refus, setRefus] = useState<string | null>(null);
   return (
     <div className="space-y-6">
@@ -217,21 +218,29 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                 <Link href={alerte.scope === "agent" ? `/agents/${alerte.subject}` : `/costs?project=${alerte.subject}`} className="text-xs">
                   {alerte.scope === "agent" ? "The agent" : "Its spend"}
                 </Link>
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    setRefus(null);
-                    try {
-                      await api.acknowledgeBudgetAlert(org, alerte.id);
-                    } catch (erreur) {
-                      setRefus(erreur instanceof Error ? erreur.message : String(erreur));
-                      return;
-                    }
-                    await queryClient.invalidateQueries({ queryKey: ["budget-alerts", org] });
-                  }}
-                >
-                  Acknowledge
-                </Button>
+                {alerte.can_acknowledge ? (
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      setRefus(null);
+                      try {
+                        await api.acknowledgeBudgetAlert(org, alerte.id);
+                      } catch (erreur) {
+                        setRefus(erreur instanceof Error ? erreur.message : String(erreur));
+                        return;
+                      }
+                      await queryClient.invalidateQueries({ queryKey: ["budget-alerts", org] });
+                    }}
+                  >
+                    Acknowledge
+                  </Button>
+                ) : (
+                  <span className="text-xs text-ink-muted" data-testid={`budget-owner-${alerte.id}`}>
+                    {alerte.scope === "agent"
+                      ? "An organisation owner or administrator acknowledges it."
+                      : "A project owner acknowledges it."}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
