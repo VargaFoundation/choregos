@@ -12,12 +12,13 @@ from choregos_adapters.errors import AdapterError
 from choregos_contracts import EventType
 from choregos_core.domain import NewItem
 from choregos_core.secrets import SecretIntrouvable
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import (
     Connector,
+    CostLedger,
     Event,
     Finding,
     HumanRequest,
@@ -145,6 +146,18 @@ async def work_item_dto(
             .limit(1)
         )
     ).scalar_one_or_none()
+    totals = totals_from(item.totals)
+    # What the ticket has cost is the ledger's sum — models AND tools (S27-03): the counter kept on
+    # the row adds model spend only. A ticket with no ledger line keeps its counter.
+    booked = (
+        await session.execute(
+            select(func.sum(CostLedger.cost_usd), func.sum(CostLedger.cost_eur)).where(
+                CostLedger.work_item_id == item.id
+            )
+        )
+    ).one()
+    if booked[0] is not None:
+        totals = totals.model_copy(update={"cost_usd": float(booked[0]), "cost_eur": float(booked[1] or 0.0)})
     return WorkItemDto(
         id=item.id,
         fields=dict(item.fields or {}),
@@ -166,7 +179,7 @@ async def work_item_dto(
         current_run=run_summary(current) if current else None,
         pending_request=human_request_dto(pending) if pending else None,
         pr_url=item.pr_url,
-        totals=totals_from(item.totals),
+        totals=totals,
         budget_usd=item.budget_usd,
         estimate=await estimate_cost(session, project.id, item),
         created_at=item.created_at,

@@ -508,6 +508,9 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
           - name: evidence_facts
             params: { keys: [profils_retenus], min: { profils_retenus: 1 }, must_be_true: [besoin_complet] }
 
+    `max` is the mirror bound (a ceiling: `max: { diverging_excess: 0 }`); like `min` it compares
+    only real numbers, so a fact declared `true` never passes for a 1.
+
     `min` refuse un zéro poli : un agent qui ne trouve personne doit le dire en échouant
     son étape, pas en rendant une preuve vide qui passe.
     """
@@ -551,6 +554,15 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         and not isinstance(facts[key], bool)
         and float(facts[key]) < float(seuil)
     ]
+    excessifs = [
+        f"{key} = {facts[key]} > {plafond}"
+        for key, plafond in (params.get("max") or {}).items()
+        if key in facts
+        and isinstance(facts[key], int | float)
+        and not isinstance(facts[key], bool)
+        and float(facts[key]) > float(plafond)
+    ]
+    insuffisants += excessifs
     # `must_be_true` et pas `true` : en YAML, une clé `true:` est lue comme le BOOLÉEN
     # `True`, et le workflow est refusé avec un message sur les types. Un nom de
     # paramètre ne doit pas être un mot réservé du format qui le porte.

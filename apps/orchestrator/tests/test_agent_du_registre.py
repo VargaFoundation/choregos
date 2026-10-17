@@ -466,3 +466,20 @@ async def test_the_agent_memory_scope_decides_what_the_run_reads(setup: Fixture)
 
     entree, lues = await _memory_of_the_run(setup, "none", attempt=3)
     assert entree["memory_scope"] == "none" and lues == []
+
+
+async def test_the_instructions_read_the_fields_of_the_work_item(setup: Fixture) -> None:
+    """A child opened by a fan-out holds there what its parent measured for it (S38-15): the agent's
+    instructions render them, as the work item stores them."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        item.fields = {"symbol": "TRND.US", "product": {"relevant": True, "dsr": 0.9731}}
+    await _agent(setup, instructions="Fields: {{ ticket.fields | tojson }}")
+    prepare = await prepare_stage(_plan(setup, agent="coordinateur"))
+    prompt = prepare["stage_input"]["playbook"]["prompt"]
+    assert '"symbol": "TRND.US"' in prompt and "0.9731" in prompt, prompt

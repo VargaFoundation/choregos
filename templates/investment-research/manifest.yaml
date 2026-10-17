@@ -9,8 +9,10 @@ metadata:
     snapshot of daily bars through the platform's market data connector; a job profiles the universe
     without names; an agent proposes strategies in a closed grammar; a job backtests them with
     costs, an out-of-sample period and a Deflated Sharpe Ratio; the platform keeps the campaign only
-    if a product passes, on measured facts; an agent writes the memo, every number of which must be
-    one the backtest computed; a person decides. A research note for internal use, never an order.
+    if a product passes, on measured facts; it then opens one child work item per relevant product,
+    where an agent writes the memo, every number of which must be one the backtest computed for that
+    product, and a person decides on it; the campaign resumes once every product is decided, and a
+    person decides on the campaign. A research note for internal use, never an order.
 requires:
   connectors:
     tracker: internal
@@ -18,7 +20,7 @@ requires:
   org_connectors:
     marketdata: marketdata
 defaults:
-  workflows: [./workflows/campaign.yaml]
+  workflows: [./workflows/campaign.yaml, ./workflows/product-memo.yaml]
   default_workflow: campaign
   # A closed sandbox: neither agent needs the network, the data goes through the platform.
   policy: preset:regulated

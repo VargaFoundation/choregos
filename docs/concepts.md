@@ -221,8 +221,11 @@ work item goes to `on_budget_exceeded` (else `on_question`, else the retry polic
 a person decides. A stage stopped on budget is **never retried** — a retry would mint a fresh key.
 
 A run's key is minted at what is **left**: the smallest of the stage budget, the agent's run and day
-budgets, the ticket budget and the project's day budget (`daily_project_usd`), each minus what the
-cost ledger says was spent (models and tools) and minus the keys still open. Below
+budgets, the ticket budget, the project's day budget (`daily_project_usd`) and the organisation's
+month budget (`monthly_org_usd` in its policy ceiling), each minus what the cost ledger says was
+spent (models and tools) and minus the keys still open at that scope (an agent's open keys count
+against its day and month). Stages that reserve from the same scope are serialized (a PostgreSQL
+advisory lock), so two stages preparing at once cannot both take the same remainder. Below
 `CHOREGOS_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
 the work item goes to a person the same way.
 

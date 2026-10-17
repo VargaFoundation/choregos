@@ -1,8 +1,9 @@
 # investment-research — is any product of this universe worth following?
 
 One work item is a **campaign**: a universe of listed products (equities, ETFs), a period, an
-out-of-sample start and the thresholds of a verdict, in the work item's fields. One workflow
-(`workflows/campaign.yaml`), two agents (`agents/`), two skills (`skills/`).
+out-of-sample start and the thresholds of a verdict, in the work item's fields. Two workflows
+(`workflows/campaign.yaml`, and `workflows/product-memo.yaml` for each relevant product), two agents
+(`agents/`), two skills (`skills/`).
 
 | # | Step | Actor | Produces | Gate |
 |:--|:--|:--|:--|:--|
@@ -11,8 +12,23 @@ out-of-sample start and the thresholds of a verdict, in the work item's fields. 
 | 3 | `strategize` | agent `quant-strategist` | `strategies` (closed grammar) | `output_schema` |
 | 4 | `backtest` | job `choregos-quant backtest` | `metrics`, `results` (csv), `report` (html) | `outputs_present` |
 | 5 | `verdict` | the platform | — | `evidence_facts` on **measured** facts: `relevant_count ≥ 1` |
-| 6 | `memo` | agent `quant-analyst` | `memo_markdown` | `numbers_measured`: every number quoted is one the backtest computed |
-| 7 | `decide` | a person (`owner`) | adopted / rejected | attested task |
+| 6 | `t-fan-out` | the platform (`spawn:`, ADR 0057) | one child work item per product in `metrics.relevant`, in `product-memo` | passes once every child is settled and at least one is `adopted` (else `not_adopted`) |
+| 7 | `decide` | a person (`owner`) | adopted / rejected | attested task, after the join |
+
+Each child (`workflow product-memo`, keyed `<campaign>.<rank>`) is followed on its own:
+
+| # | Step | Actor | Produces | Gate |
+|:--|:--|:--|:--|:--|
+| 1 | `memo` | agent `quant-analyst` | `memo_markdown` for **one** product | `numbers_measured`: every number quoted is one the backtest measured for that product |
+| 2 | `decide` | a person (`owner`) | adopted / rejected | attested task |
+
+The platform copies into the child's fields what the backtest measured for its product (`product`,
+`facts`) and the dates; the memo is checked against those fields only, so the memo of one product
+cannot quote another's. The campaign writes no memo of its own.
+
+A campaign waits for its slowest child: the owner's SLA (72 h) is on the child's decision, and the
+campaign's status says how many are still open. A campaign whose products are all rejected ends in
+`not_adopted`.
 
 No verdict rests on a number a model wrote: the jobs (ADR 0056) compute them, the platform records
 them as measured, and the gates refuse a declared one.
@@ -51,8 +67,11 @@ forbids.
   so that it is right. A re-run of the step reuses the stored snapshot for the same request, byte
   for byte, and fetches nothing (`reused: 1` in its facts); a new window is a new request. With a
   `composite` connector, each symbol's cross-check stays in `snapshot.json` and the facts count the
-  symbols a second source confirmed (`cross_checked`) and those that diverge (`diverging`) —
-  recorded, not gated. On 2026-10-14 Stooq answered scripts with a browser check: a composite of
+  symbols a second source confirmed (`cross_checked`), those that diverge (`diverging`) and the
+  worst gap (`max_rel_diff`). It is a gate (S38-14): `t-snapshot` refuses the snapshot, and the
+  campaign goes to `to_review`, when more symbols diverge than the campaign field
+  `max_diverging_symbols` (default 0) allows — `diverging_excess` > 0. A single-source connector has
+  nothing to compare and is not refused: read `cross_checked`. On 2026-10-14 Stooq answered scripts with a browser check: a composite of
   Yahoo and Alpha Vantage (free key) is the one that cross-checks (`essai/investissement/`).
 - **Assumed costs.** `cost_bps` per change of position; no spread model, no tax, no currency hedge.
 - **Internal use.** The memo is a research note, not investment advice, not an offer, not an order.
