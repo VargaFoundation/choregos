@@ -221,6 +221,30 @@ def test_evidence_facts_lit_les_preuves_du_metier() -> None:
     ).passed
 
 
+def test_evidence_facts_max_is_a_ceiling_on_numbers_only() -> None:
+    from choregos_contracts import Evidence, StageResult, StageStatus
+
+    def resultat(**faits: object) -> StageResult:
+        return StageResult(
+            schema="choregos/StageResult/v1",
+            status=StageStatus.DONE,
+            summary="facts",
+            evidence=Evidence(facts=dict(faits)),  # type: ignore[arg-type]
+        )
+
+    params = {"keys": ["diverging_excess"], "max": {"diverging_excess": 0}}
+    assert evaluate("evidence_facts", GateContext(result=resultat(diverging_excess=0)), params).passed
+    verdict = evaluate("evidence_facts", GateContext(result=resultat(diverging_excess=2)), params)
+    assert not verdict.passed and "diverging_excess = 2 > 0" in verdict.detail
+    # A bool is an int in Python: a declared `true` is not a number over a ceiling of 0.
+    assert evaluate("evidence_facts", GateContext(result=resultat(diverging_excess=True)), params).passed
+    # `max` and `min` together bound a fact from both sides.
+    both = {"keys": ["n"], "min": {"n": 1}, "max": {"n": 3}}
+    assert evaluate("evidence_facts", GateContext(result=resultat(n=2)), both).passed
+    assert not evaluate("evidence_facts", GateContext(result=resultat(n=4)), both).passed
+    assert not evaluate("evidence_facts", GateContext(result=resultat(n=0)), both).passed
+
+
 def test_une_garantie_sans_diff_ne_se_prononce_pas() -> None:
     """Sans diff — connecteur SCM incapable de comparer, dépôt injoignable — `scope_respected`
     déclarerait le périmètre respecté et `no_secrets` l'absence de secrets, faute d'avoir
