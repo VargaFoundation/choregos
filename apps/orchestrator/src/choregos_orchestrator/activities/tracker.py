@@ -12,7 +12,7 @@ from choregos_api.services import Naissance, nouveau_ticket, persist_event
 from choregos_contracts import EventType, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
 from choregos_core.gates import ALREADY_FIXED_GATE
-from sqlalchemy import select
+from sqlalchemy import select, update
 from temporalio import activity
 
 from ..config import get_settings
@@ -25,6 +25,7 @@ from .base import (
     tracker_possede_les_tickets,
     workflow_du_ticket,
 )
+from .interpretation import FINISHED_RUNS
 
 logger = get_logger("choregos.tracker")
 
@@ -35,9 +36,19 @@ DELIVERED_MARKER = "<!-- choregos:delivered -->"
 ALREADY_FIXED_MARKER = "<!-- choregos:already-fixed -->"
 
 
+#: The reason the interpreter mirrors the state it (re)starts from: no decision is applied then.
+STARTED_REASON = "started"
+
+
 @activity.defn(name="mirror_state")
 async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
-    """Reflète l'état du DSL dans le tracker : colonne du board et label scopé."""
+    """Mirrors the workflow state in the tracker: the board column and the scoped label.
+
+    Any other mirror than the start applies a decision (or an external move, a migration): the runs
+    of the work item that are over have then had their outcome applied, and are marked decided
+    (`runs.decided_at`, #552) in the same transaction as the state. A restarted interpreter reads
+    back only a succeeded run not decided yet. Idempotent: a run already marked keeps its time.
+    """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
@@ -45,6 +56,16 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
         state = (await workflow_du_ticket(session, item)).states.get(state_name)
         previous = item.state
         item.state = state_name
+        if payload.get("reason") != STARTED_REASON:
+            await session.execute(
+                update(Run)
+                .where(
+                    Run.work_item_id == item.id,
+                    Run.status.in_(FINISHED_RUNS),
+                    Run.decided_at.is_(None),
+                )
+                .values(decided_at=utcnow())
+            )
         if state is not None and state.terminal and item.closed_at is None:
             item.closed_at = utcnow()
         mapping = TrackerStateMapping(

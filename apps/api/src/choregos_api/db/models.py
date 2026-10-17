@@ -242,6 +242,10 @@ class Run(Base, PkMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When the interpreter applied this run's outcome to its work item (#552): written with the
+    #: state the decision moved it to. A run over but not decided is read back by a restarted
+    #: interpreter; a decided one is a spent attempt, and a later pass plays the next one.
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tokens: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     # La dépense d'un run n'est lue qu'une fois au gateway : ce drapeau interdit le double comptage.

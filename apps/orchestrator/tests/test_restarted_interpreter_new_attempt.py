@@ -57,6 +57,20 @@ async def _runs(item_id: str) -> list[tuple[str, str]]:
         return [(str(r.id), str(r.status)) for r in rows]
 
 
+async def _undecide(item_id: str) -> int:
+    """Forget that the runs' decisions were applied; returns how many runs had one recorded."""
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        rows = (await session.execute(select(Run).where(Run.work_item_id == item_id))).scalars().all()
+        decided = [run for run in rows if run.decided_at is not None]
+        for run in decided:
+            run.decided_at = None
+        return len(decided)
+
+
 async def _live_ticket(setup: Fixture) -> tuple[str, str, str]:
     """A `dev-simple` work item already in production, waiting for `t-verify-prod`."""
     projet_id = await _projet_dev(setup)
@@ -163,8 +177,10 @@ async def test_a_restart_after_a_succeeded_run_reads_it_back(
     async with worker_factory():
         first = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
         await asyncio.wait_for(first.result(), timeout=60)
-        # Where the work item stands if the interpreter died between the run and its decision.
+        # Where the work item stands if the interpreter died between the run and its decision:
+        # its state not moved, and the run not marked decided (#552).
         await _set_state(item_id, "live")
+        assert await _undecide(item_id) == 1, "the applied decision is recorded on the run"
         assert [status for _, status in await _runs(item_id)] == ["succeeded"]
 
         handle = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
