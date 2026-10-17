@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_contracts import Policy, ProjectConfig, Workflow
+from choregos_contracts import Policy, ProjectConfig, Size, Workflow
 from choregos_core import (
     PolicyEngine,
     checksum,
@@ -127,6 +127,25 @@ async def derniere_version(session: AsyncSession, project_id: Any, nom: str) -> 
     ).scalar()
 
 
+async def _verifier_le_budget(session: AsyncSession, project: Project, workflow: Workflow) -> None:
+    """Refuses (422) a `budget.ticket_usd` wider than every ticket budget the policy gives (S27-12).
+
+    A workflow's budget only tightens the policy's (S27-06, ADR 0047). The size of a work item is not
+    known at publish, so the workflow is refused only when it is wider than the policy's largest
+    size: no work item could ever be held to it. Between the sizes it is clamped at run time."""
+    wanted = workflow.budget.ticket_usd if workflow.budget is not None else None
+    if wanted is None:
+        return
+    engine = await policy_engine(session, project.id)
+    cap = max(engine.budget_ticket(size) for size in Size)
+    if wanted > cap:
+        raise unprocessable(
+            f"budget.ticket_usd {wanted:.2f} $ is wider than the policy's largest ticket budget "
+            f"({cap:.2f} $): a workflow budget may only tighten the policy's",
+            [{"loc": ["budget", "ticket_usd"], "msg": f"wider than the policy's {cap:.2f} $"}],
+        )
+
+
 async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses options sont nommées
     session: AsyncSession,
     principal: Any,
@@ -169,6 +188,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         )
     _verifier_les_effets(workflow)
     await _verifier_les_agents_nommes(session, project, workflow)
+    await _verifier_le_budget(session, project, workflow)
     actuelle = await workflow_actif(session, project.id, nom)
     if base_version is not None and (actuelle is None or actuelle.version != base_version):
         lue = actuelle.version if actuelle is not None else "none"

@@ -69,3 +69,27 @@ async def test_the_workflow_budget_applies_and_bounds_the_launch(
     wider = await _create(client, project, workflow="capped", budget_usd=5)
     assert wider.status_code == 422, wider.text
     assert "workflow `capped`" in wider.text
+
+
+async def test_a_workflow_budget_wider_than_the_policy_is_refused_at_publish(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.session import session_scope
+    from choregos_api.services import policy_engine
+    from choregos_contracts import Size
+
+    async with session_scope() as session:
+        engine = await policy_engine(session, project["id"])
+        largest = max(engine.budget_ticket(size) for size in Size)
+    url = f"/api/v1/projects/{project['id']}/workflows/capped"
+    wider = await client.put(
+        url, json={"yaml": WITH_BUDGET.replace("ticket_usd: 4", f"ticket_usd: {largest + 1}")}
+    )
+    assert wider.status_code == 422, wider.text
+    assert "budget.ticket_usd" in wider.text and "only tighten" in wider.text
+    assert (await client.get(url)).status_code == 404  # nothing was published
+    # At the policy's largest ticket budget it is accepted: only a budget no size could hold is refused.
+    exact = await client.put(
+        url, json={"yaml": WITH_BUDGET.replace("ticket_usd: 4", f"ticket_usd: {largest}")}
+    )
+    assert exact.status_code == 200, exact.text
