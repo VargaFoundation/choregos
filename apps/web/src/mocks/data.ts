@@ -961,8 +961,8 @@ export function mockCostReport(path: string): CostReport {
 }
 
 export const budgetAlerts: BudgetAlert[] = [
-  { id: "ba1", scope: "project", subject: "billing-api", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 80, spent_usd: 121.4, budget_usd: 150, status: "open", created_at: iso(35) },
-  { id: "ba2", scope: "agent", subject: "onboarding-coordinator", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 100, spent_usd: 20.3, budget_usd: 20, status: "open", created_at: iso(12) },
+  { id: "ba1", scope: "project", subject: "billing-api", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 80, spent_usd: 121.4, budget_usd: 150, status: "open", created_at: iso(35), can_acknowledge: true },
+  { id: "ba2", scope: "agent", subject: "onboarding-coordinator", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 100, spent_usd: 20.3, budget_usd: 20, status: "open", created_at: iso(12), can_acknowledge: true },
 ];
 
 export const dora: DoraReport = {

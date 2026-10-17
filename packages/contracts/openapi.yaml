@@ -5342,6 +5342,10 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         acknowledged_by: { type: [string, "null"] }
         acknowledged_at: { type: [string, "null"], format: date-time }
+        can_acknowledge:
+          type: boolean
+          default: false
+          description: "whether the person reading may acknowledge it: a project owner or above, on the alert's project for a project alert, on the organisation for an agent alert"
     CostReport:
       type: object
       required: [group_by, rows, total]

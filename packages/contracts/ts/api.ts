@@ -2524,6 +2524,8 @@ export type BudgetAlert = {
   created_at?: string | null;
   acknowledged_by?: string | null;
   acknowledged_at?: string | null;
+  /** whether the person reading may acknowledge it: a project owner or above, on the alert's project for a project alert, on the organisation for an agent alert */
+  can_acknowledge?: boolean;
 };
 
 export type CostReport = {
