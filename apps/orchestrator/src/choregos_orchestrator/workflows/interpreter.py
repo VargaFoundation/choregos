@@ -147,6 +147,10 @@ STAGE_CONFIG_REFUSAL_ESCALATES = "stage-config-refusal-escalates"
 #: handed back the run of that number, already over, `await_run` its old result, and the stage was
 #: never played again.
 ATTEMPTS_FROM_RUNS = "attempts-from-runs"
+#: A `rerun_stage` grants ONE more attempt to the stage it replays, not a fresh allowance
+#: (S27-13, ADR 0047 decision 4): `max_attempts` stays a cap, and a person's click is one more try.
+#: Before this marker the click reset the stage's attempts: each click bought `max_attempts` new ones.
+RERUN_GRANTS_ONE_ATTEMPT = "rerun-grants-one-attempt"
 #: `open_pull_request` refusing a work item that has no branch — its implementation changed nothing,
 #: so nothing was pushed — escalates the work item with that reason (S22-46, #539). Before this
 #: marker GitHub answered 422 `head invalid` and the interpreter failed.
@@ -252,6 +256,8 @@ class WorkflowInterpreter:
         self.remises: Counter[str] = Counter()
         #: « Replay the stage » demandé (`rerun_stage`), pas encore joué.
         self.relance: bool = False
+        #: The policy's `attempts.by_role` ceilings, read with the context: a rerun needs them (S27-13).
+        self.ceilings: dict[str, Any] = {}
         #: The run suspended across a person's answer (S35-03): `{run_id, key, until, answered}`.
         self.suspension: dict[str, Any] | None = None
         #: How many suspended runs were resumed: names each resumption, for idempotence.
@@ -382,6 +388,7 @@ class WorkflowInterpreter:
         engine = WorkflowEngine(Workflow.model_validate(context["workflow"]))
         self._start_from(params, engine, context)
         self._restore_attempts(context)
+        self.ceilings = dict(context.get("attempts_ceilings") or {})
 
         await self._mirror(params, "started")
 
@@ -999,7 +1006,7 @@ class WorkflowInterpreter:
                 # deletes it at that instant anyway), and the answer will replay the stage.
                 await self._release_suspension()
             if await self._replay_requested():
-                return await self._reprendre("replay requested", self.pending_request)
+                return await self._reprendre("replay requested", self.pending_request, engine=engine)
             if self.decisions:
                 decision = self.decisions.popleft()
                 if self._reponse_qui_reprend(decision):
@@ -1379,7 +1386,23 @@ class WorkflowInterpreter:
             and workflow.patched(REPRISE_APRES_ESCALADE)
         )
 
-    async def _reprendre(self, pourquoi: str, *demandes: Any) -> Decision:
+    def _rerun_allowance(self, engine: WorkflowEngine, key: str) -> None:
+        """A rerun leaves the stage ONE attempt before its cap (S27-13): the replayed stage plays
+        once, and escalates again if it fails. Attempts spent before count, whatever the number of
+        reruns, so `max_attempts` bounds the stage plus one attempt per explicit rerun."""
+        transition = next((t for t in engine.wf.transitions if t.key == key), None)
+        if transition is None:
+            self.remises[key] = self.attempts[key]
+            return
+        allowed = engine.max_attempts(transition)
+        ceiling = _attempts_ceiling({"attempts_ceilings": self.ceilings}, engine.agent_of(transition))
+        if ceiling is not None:
+            allowed = min(allowed, ceiling)
+        self.remises[key] = max(self.remises[key], self.attempts[key] - (allowed - 1))
+
+    async def _reprendre(
+        self, pourquoi: str, *demandes: Any, engine: WorkflowEngine | None = None
+    ) -> Decision:
         """Ramène le ticket garé à l'état d'où il est parti : les demandes en attente sont closes
         (l'abandon proposé n'a plus d'objet), le budget de tentatives de l'étape repart de zéro."""
         assert self.reprise is not None
@@ -1401,7 +1424,11 @@ class WorkflowInterpreter:
         self.pending_request = None
         self.relance = False
         self.reprise = None
-        self.remises[cle] = self.attempts[cle]
+        # The condition first, `patched` next: only a rerun asks.
+        if engine is not None and workflow.patched(RERUN_GRANTS_ONE_ATTEMPT):
+            self._rerun_allowance(engine, cle)
+        else:
+            self.remises[cle] = self.attempts[cle]
         return Decision(next_state=origine, reason=f"{pourquoi}: resumes at `{origine}`")
 
     # ───────────────────────── utilitaires ─────────────────────────
@@ -1485,7 +1512,9 @@ class WorkflowInterpreter:
                 await self._release_suspension()
                 continue
             if await self._replay_requested():
-                return (await self._reprendre("replay requested", self.pending_request)).next_state
+                return (
+                    await self._reprendre("replay requested", self.pending_request, engine=engine)
+                ).next_state
             if self.migration and not (self.inbox or self.decisions or self.stopped):
                 if workflow.patched(MIGRATION_PAR_DEFINITION):
                     return _MIGRATION
