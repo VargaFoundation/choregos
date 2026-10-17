@@ -59,7 +59,7 @@ from ..schemas.knowledge import (
     KnowledgeSourcePatch,
     ProjectKnowledgeBaseCreate,
 )
-from ..services.egress import ensure_or_409, knowledge_source_targets, targets_of_connector
+from ..services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
 from ..temporal import get_temporal, knowledge_sync_id
 
 router = APIRouter(tags=["knowledge"])
@@ -794,12 +794,21 @@ async def _checked_source_config(
         if not connector:
             raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
         await _documents_connector(session, organisation, connector, kind)
-    checked = _SOURCE_VALIDATORS[kind](config)
-    if kind == "web" and not fakes_enabled():
-        exclude = checked.get("exclude") or []
-        assert isinstance(exclude, list)
-        await _check_web_start(str(checked["url"]), exclude)
-    return checked
+    return _SOURCE_VALIDATORS[kind](config)
+
+
+async def _reachable_start(
+    session: AsyncSession, organisation: Organization, kind: str, config: dict[str, object]
+) -> None:
+    """A web source's start URL answers, checked AFTER the egress gate (which may just have allowed
+    its host) and INSIDE the organisation's policy: the guarded client fails closed without one
+    (S39-28, seen on the dev tenant in `enforce`)."""
+    if kind != "web" or fakes_enabled():
+        return
+    exclude = config.get("exclude") or []
+    assert isinstance(exclude, list)
+    async with egress_scope(session, organisation, "api", "knowledge-source:web"):
+        await _check_web_start(str(config["url"]), exclude)
 
 
 async def _check_web_start(url: str, exclude: list[str]) -> None:
@@ -925,6 +934,7 @@ async def create_knowledge_source(
     await _egress_gate(
         session, principal, organisation, body.kind, body.connector, config, body.name, body.allow_egress
     )
+    await _reachable_start(session, organisation, body.kind, config)
     refresh_cron, refresh_timezone = _checked_refresh(
         body.refresh_mode, body.refresh_cron, body.refresh_timezone
     )
@@ -1007,6 +1017,7 @@ async def update_knowledge_source(
             source.name,
             body.allow_egress,
         )
+        await _reachable_start(session, organisation, source.kind, source.config)
         # Another site, URL or ref: the next sync starts from scratch.
         source.cursor = None
     if refresh_changed:
