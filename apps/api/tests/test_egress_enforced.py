@@ -217,3 +217,45 @@ async def test_a_remote_agents_card_fetch_outside_the_ceiling_is_refused_and_nev
         refused = await client.post(f"{ORG}/agents/discover", json=discover)
         assert refused.status_code == 422 and "egress refused" in refused.text, refused.text
         assert remote.card_fetches == fetched, "the card was never requested"
+
+
+async def test_creating_a_web_source_checks_its_start_url_inside_the_organisations_policy(
+    client: AsyncClient, admin: str, enforce: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On the dev tenant (0.18.3, `enforce`) a web source was refused at creation with "no egress
+    policy in context" although its host was allowed: the start URL check ran outside the
+    organisation's policy (S39-28). Fakes skip that check, so it is switched on here."""
+    from choregos_adapters.documents import web
+    from choregos_api.routers import knowledge as router
+
+    monkeypatch.setattr(router, "fakes_enabled", lambda: False)
+    sent: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(
+            200, text="<html><body>Guide</body></html>", headers={"content-type": "text/html"}
+        )
+
+    real = web.WebCrawlSource
+
+    class Recorded(real):  # type: ignore[misc, valid-type]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            kwargs.setdefault("transport", httpx.MockTransport(answer))
+            kwargs["resolver"] = _public
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(web, "WebCrawlSource", Recorded)
+    base = "/api/v1/orgs/varga/knowledge"
+    assert (await client.post(base, json={"slug": "site", "name": "Site"})).status_code == 201
+    created = await client.post(
+        f"{base}/site/sources",
+        json={
+            "kind": "web",
+            "name": "Site",
+            "config": {"url": "https://site.example.test/"},
+            "allow_egress": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert sent, "the start URL was checked, through the guarded client"
