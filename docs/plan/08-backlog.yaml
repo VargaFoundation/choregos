@@ -2703,6 +2703,16 @@ stories:
     acceptance:
       - "The runner image does not build if headroom hides LiteLLM's budget_exceeded refusal from the runner's detector"
       - "Both wires (Anthropic, OpenAI), streamed and not, are probed with no network"
+  - id: S37-13
+    title: "The orchestrator image carries the eval tickets, and a matrix without them fails"
+    stream: S37
+    sprint: 20
+    priority: 8
+    size: S
+    depends_on: [S37-10a]
+    acceptance:
+      - "The api/worker image copies tests/fixtures/tickets and tests/fixtures/repos under /app, where activities/evals.py reads them"
+      - "list_fixtures with no ticket fails without retry instead of returning an empty list"
   - id: S37-10
     title: "Real eval matrix on real models, and the default-on decision per backend"
     stream: S37

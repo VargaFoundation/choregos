@@ -270,6 +270,22 @@ async def test_the_cell_reports_what_the_ledger_says_not_what_the_fixture_script
     )
 
 
+@pytest.mark.parametrize("make_dir", [True, False], ids=["empty", "missing"])
+async def test_no_reference_ticket_fails_the_matrix_without_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, make_dir: bool
+) -> None:
+    """S37-13: an image without the fixtures used to give `[]`, and the matrix published empty cells."""
+    from temporalio.exceptions import ApplicationError
+
+    tickets = tmp_path / "tickets"
+    if make_dir:
+        tickets.mkdir()
+    monkeypatch.setattr(evals, "TICKETS", tickets)
+    with pytest.raises(ApplicationError) as refused:
+        await evals.list_fixtures({})
+    assert refused.value.non_retryable and refused.value.type == "EvalFixturesMissing"
+
+
 async def test_an_unknown_context_fails_the_cell_without_retry(setup: Fixture) -> None:
     from temporalio.exceptions import ApplicationError
 
