@@ -171,6 +171,7 @@ class RealTemporal:
         return self._client
 
     async def _start(self, workflow: str, workflow_id: str, payload: dict[str, Any]) -> str:
+        from temporalio.exceptions import WorkflowAlreadyStartedError
         from temporalio.service import RPCError
 
         client = await self.client()
@@ -183,6 +184,12 @@ class RealTemporal:
                 id_reuse_policy=2,  # ALLOW_DUPLICATE_FAILED_ONLY : pas de doublon sur un même ticket
             )
             return str(handle.id)
+        except WorkflowAlreadyStartedError:
+            # Already running under this id: the expected case (one loop per source, one interpreter
+            # per ticket). The SDK raises this, not an RPCError: before S39-29 a second "sync now"
+            # on a knowledge source answered 500 on the dev tenant.
+            logger.info("workflow already started", workflow_id=workflow_id)
+            return workflow_id
         except RPCError as exc:  # déjà démarré : c'est le comportement voulu
             if "already" in str(exc).lower():
                 logger.info("workflow déjà démarré", workflow_id=workflow_id)
