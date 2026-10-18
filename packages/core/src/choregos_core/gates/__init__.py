@@ -69,6 +69,10 @@ class GateContext:
     #: The work item's fields (a campaign's period, costs, thresholds): `numbers_measured` reads
     #: them as the source `fields`, so a memo may restate what it was asked without inventing it.
     fields: dict[str, Any] = field(default_factory=dict)
+    #: The documents of the work item that opened this one (`spawn:`, ADR 0057), `None` when it was
+    #: not opened by a fan-out (created by hand). `numbers_measured` reads them as `parent.<doc>`:
+    #: what the parent's steps MEASURED, which no field of the child can rewrite (S38-17).
+    parent_documents: dict[str, Any] | None = None
     #: Does the work item's branch exist on the SCM (S22-47)? `None` when nobody read it, or the
     #: SCM could not answer: `already_fixed_proven` then refuses rather than assume.
     branch_pushed: bool | None = None
@@ -674,6 +678,30 @@ def _supported(written: str, value: float, measured: list[float], tolerance: flo
     return any(abs(c - t) <= step + 1e-9 or abs(c - t) <= tolerance * abs(t) for c, t in pairs)
 
 
+def _parent_source(ctx: GateContext, source: str) -> tuple[Any, str | None]:
+    """`parent.<doc>[.<key>...]`: a document of the parent work item, walked down by keys.
+
+    A key `$name` is the value of the child's own field `name` (`parent.metrics.products.$symbol`:
+    the metrics of THIS product, not of its siblings). Returns `(value, None)`, or `(None, why)`.
+    """
+    if ctx.parent_documents is None:
+        return None, "no parent work item (not opened by a fan-out)"
+    name, *path = source.split(".")[1:] or [""]
+    if name not in ctx.parent_documents:
+        return None, f"the parent has no `{name}` document"
+    value = _output_value(ctx.parent_documents[name])
+    for step in path:
+        key = step
+        if step.startswith("$"):
+            if step[1:] not in ctx.fields:
+                return None, f"field `{step[1:]}` absent"
+            key = str(ctx.fields[step[1:]])
+        if not isinstance(value, dict) or key not in value:
+            return None, f"`{key}` not in the parent's `{name}`"
+        value = _output_value(value[key])
+    return value, None
+
+
 @gate("numbers_measured")
 def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     """Every number an agent writes in its outputs comes from a measured document.
@@ -684,7 +712,8 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     integers below `ignore_below` (list numbering, "3 strategies") are not claims and are skipped;
     anything else needs a source. The sources are the item's documents that earlier steps declared
     — a job's measured `metrics` — and `fields`, the work item's own fields: the check reads what
-    was computed or asked, never what was said.
+    was computed or asked, never what was said. `fields` is editable by a person; a child opened by
+    a fan-out checks `parent.<doc>[.<key>...]` instead (S38-17), the parent's measured document.
     """
     sources = [str(s) for s in (params.get("sources") or [])]
     if not sources:
@@ -692,7 +721,16 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.result is None:
         return GateOutcome("numbers_measured", False, detail="no stage result")
     documents = {**ctx.documents, "fields": ctx.fields}
-    absent = [s for s in sources if s not in documents]
+    absent = []
+    for source in sources:
+        if source.startswith("parent."):
+            value, why = _parent_source(ctx, source)
+            if why is not None:
+                absent.append(f"{source} ({why})")
+            else:
+                documents[source] = value
+        elif source not in documents:
+            absent.append(source)
     if absent:
         return GateOutcome(
             "numbers_measured",

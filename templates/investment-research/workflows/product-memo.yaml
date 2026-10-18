@@ -4,8 +4,10 @@
 # once every one is settled.
 #
 # The numbers the memo may quote are the ones the campaign's backtest MEASURED for this product:
-# the platform copies them into the work item's fields when it opens it (`product`, `facts`), and
-# `numbers_measured` refuses any other. A memo of one product cannot quote another's.
+# `numbers_measured` reads them in the PARENT's `metrics` document (this product's entry and the
+# campaign's facts), never in this work item's fields — a person can edit those, and a work item
+# created by hand has no parent, so its memo is refused. A memo of one product cannot quote
+# another's. The fields `product` and `facts` are a copy for the analyst to read, not a source.
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -41,7 +43,7 @@ transitions:
     outputs: [memo_markdown]
     gates:
       - name: numbers_measured
-        params: { sources: [fields], outputs: [memo_markdown] }
+        params: { sources: [parent.metrics.products.$symbol, parent.metrics.facts], outputs: [memo_markdown] }
     on_fail: { to: product, max_attempts: 2, escalate_to: to_review }
 
   - id: t-decide

@@ -23,8 +23,12 @@ Each child (`workflow product-memo`, keyed `<campaign>.<rank>`) is followed on i
 | 2 | `decide` | a person (`owner`) | adopted / rejected | attested task |
 
 The platform copies into the child's fields what the backtest measured for its product (`product`,
-`facts`) and the dates; the memo is checked against those fields only, so the memo of one product
-cannot quote another's. The campaign writes no memo of its own.
+`facts`) and the dates, for the analyst to read. The memo is **not** checked against those fields:
+a person can edit them. `numbers_measured` reads the **parent's** `metrics` document
+(`parent.metrics.products.$symbol` and `parent.metrics.facts`, `$symbol` being the child's own
+`symbol`), which only the backtest job wrote. So the memo of one product cannot quote another's,
+a number edited into the child's fields is refused, and a product-memo created by hand (no parent)
+has nothing to quote: its memo goes to review. The campaign writes no memo of its own.
 
 A campaign waits for its slowest child: the owner's SLA (72 h) is on the child's decision, and the
 campaign's status says how many are still open. A campaign whose products are all rejected ends in
