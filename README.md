@@ -64,13 +64,23 @@ make dev-seed       # org varga, projet demo, 10 tickets, un train
 make demo           # scénario bout en bout en mémoire (fakes, sans cluster)
 ```
 
-Sans Kubernetes :
+Without Kubernetes, the whole platform from your working copy — see `docs/getting-started.md`:
 
 ```bash
-docker compose -f dev/compose.yaml up -d      # Postgres, Temporal, LiteLLM, Ecphoria, Keycloak, MinIO
-CHOREGOS_FAKES=1 uv run choregos-api          # API sur :8000
-CHOREGOS_FAKES=1 uv run choregos-orchestrator # workers Temporal
-pnpm -C apps/web dev                          # front sur :3000
+docker compose up                             # API, workers, Temporal, Postgres, LiteLLM, front on :3000
+```
+
+For front-end work only, on fakes (the API records the workflows it would start and runs none):
+
+```bash
+make api                                      # API on :8000, CHOREGOS_FAKES=1
+pnpm -C apps/web dev                          # front on :3000
+```
+
+The dependencies alone, for running the API and the workers by hand against them:
+
+```bash
+make compose-up                               # Postgres, Temporal, LiteLLM, Keycloak, Ecphoria
 ```
 
 Si un port est déjà pris — un Postgres sur 5432, un Keycloak sur 8080 — chaque service

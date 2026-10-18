@@ -6,7 +6,7 @@
 | :-- | :-- | :-- | :-- |
 | demonstration | `make demo` | the whole chain in memory, one ticket to production | nothing |
 | local install | `docker compose up` | the whole platform from the images of your working copy, a demo project, real agents with a key in `.env` — see [getting started](getting-started.md) | Docker |
-| local services | `make compose-up` then `make api` / `make worker` | the real API and workers, simulated connectors | Docker |
+| local services | `make api` and `pnpm -C apps/web dev` | the API and the front end from your working copy, on fakes: the API records the workflows it would start and runs none of them | uv, Node |
 | cluster | `make dev-up` | kind + Tekton + Argo + Tilt, hot reload | kind, kubectl, helm, tilt |
 | bench | `make demo-up`, `make demo-images`, `make demo-seed` | real agents on a one-node kind, all dependencies embedded | Docker, kind, helm, an agent credential |
 
@@ -22,13 +22,24 @@ costs per stage and the finding turned into a linked ticket.
 
 ## Local services
 
+For front-end and API work, without Docker:
+
 ```bash
-make compose-up                          # Postgres, Temporal, LiteLLM, Keycloak, RustFS (S3)
-CHOREGOS_FAKES=1 make api                # API on :8000
-CHOREGOS_FAKES=1 make worker             # Temporal workers
+make api                                 # API on :8000, CHOREGOS_FAKES=1
 make dev-seed                            # organisation, project, 10 tickets, one batch
 pnpm -C apps/web dev                     # front on :3000
 ```
+
+`make api` always sets `CHOREGOS_FAKES=1`: its Temporal is an in-memory recorder
+(`FakeTemporal`), its database is SQLite in `./choregos.db` unless `CHOREGOS_DATABASE_URL` says
+otherwise, and its connectors are simulated. Starting a work item records the workflow and runs
+nothing: no worker can see it, even one connected to a real Temporal (#441).
+
+For the real API, workers and Temporal, use the [local install](getting-started.md):
+`docker compose up` at the root of the repository builds them from your working copy.
+`make compose-up` (`dev/compose.yaml`) starts only the dependencies — Postgres, Temporal, LiteLLM,
+Keycloak, Ecphoria — for whoever runs the API and the workers against them by hand; `make api` does
+not.
 
 Development accounts (Keycloak, realm `choregos`): `augustin` / `choregos` (owner),
 `marie` / `choregos` (release captain). Locally, `/auth/login?as=<email>` opens a session
