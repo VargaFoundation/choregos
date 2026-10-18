@@ -477,6 +477,12 @@ async def _grant_top_up(
     )
 
 
+EVAL_ITEM_HAS_NO_INTERPRETER = (
+    "this work item has no interpreter: it is driven by an eval matrix (`EvalMatrix`), which runs its "
+    "stage itself; to stop it, cancel that `EvalMatrix` workflow in Temporal"
+)
+
+
 async def _interpreter_not_running(gone: InterpreterNotRunningError, what: str) -> ApiError:
     """409, not 500, when the interpreter a signal is for has ended (#679): the cause, and what to do."""
     state = await get_temporal().describe(gone.workflow_id)
@@ -538,7 +544,18 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
             reason=body.reason,
             by=principal.email,
         )
-        await deliver_control(project.slug, item.tracker_key, control)
+        try:
+            await deliver_control(project.slug, item.tracker_key, control)
+        except InterpreterNotRunningError as gone:
+            if item.created_by == "eval":
+                # An eval item is run by `EvalMatrix` itself and never gets an interpreter (#715).
+                raise ApiError(
+                    status.HTTP_409_CONFLICT,
+                    "Driven by an eval matrix",
+                    EVAL_ITEM_HAS_NO_INTERPRETER,
+                    errors=[{"code": "driven_by_eval_matrix", "msg": EVAL_ITEM_HAS_NO_INTERPRETER}],
+                ) from gone
+            raise await _interpreter_not_running(gone, f"the `{body.action}` action") from gone
         if body.action == "pause":
             item.paused = True
         elif body.action in {"resume", "stop"}:
