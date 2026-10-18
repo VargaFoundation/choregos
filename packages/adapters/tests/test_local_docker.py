@@ -19,9 +19,13 @@ class _Docker:
     def __init__(self, **reponses: tuple[int, str, str]) -> None:
         self.reponses = reponses
         self.appels: list[list[str]] = []
+        self.envs: list[dict[str, str] | None] = []
 
-    async def __call__(self, *args: str, timeout: float = 120.0) -> tuple[int, str, str]:
+    async def __call__(
+        self, *args: str, timeout: float = 120.0, env: dict[str, str] | None = None
+    ) -> tuple[int, str, str]:
         self.appels.append(list(args))
+        self.envs.append(env)
         return self.reponses.get(args[0], (0, "", ""))
 
 
@@ -43,15 +47,58 @@ def spec() -> StageJobSpec:
     )
 
 
-async def test_demarrer_lance_le_conteneur_avec_les_memes_variables_qu_en_cluster() -> None:
+async def test_start_runs_the_container_with_the_same_variables_as_in_a_cluster() -> None:
     docker = _Docker(inspect=(1, "", "no such container"))
     ref = await executeur(docker).start(spec())
     assert ref.name == "choregos-run-r-1"
     run = next(a for a in docker.appels if a[0] == "run")
     assert "--network" in run and run[run.index("--network") + 1] == "choregos_net"
     envs = [run[i + 1] for i, a in enumerate(run) if a == "--env"]
-    assert "CHOREGOS_RUN_TOKEN=jeton" in envs and "HTTPS_PROXY=http://p:3128" in envs
+    assert "CHOREGOS_RUN_TOKEN" in envs and "HTTPS_PROXY=http://p:3128" in envs
     assert run[-2:] == ["runner:dev", "run"]
+
+
+async def test_the_run_secrets_are_named_on_the_command_line_and_never_valued_there() -> None:
+    """#439: `ps` on the host shows argv; the values travel in docker's own environment."""
+    docker = _Docker(inspect=(1, "", "no such container"))
+    secret = spec().model_copy(update={"gateway_key": "gw-secret", "remote_token": "remote-secret"})
+    await executeur(docker).start(secret)
+    index = next(i for i, a in enumerate(docker.appels) if a[0] == "run")
+    argv = " ".join(docker.appels[index])
+    for value in ("jeton", "gw-secret", "remote-secret"):  # lang: fr-ok
+        assert value not in argv
+    env = docker.envs[index] or {}
+    assert env["CHOREGOS_RUN_TOKEN"] == "jeton"  # lang: fr-ok
+    assert set(env.values()) == {"jeton", "gw-secret", "remote-secret"}  # lang: fr-ok
+    named = [docker.appels[index][i + 1] for i, a in enumerate(docker.appels[index]) if a == "--env"]
+    assert set(env) <= set(named)
+
+
+async def test_docker_receives_the_environment_it_is_given_on_top_of_its_own() -> None:
+    """The real subprocess call: without `env=`, `--env NAME` would hand the container nothing."""
+    ex = LocalDockerExecutor(docker="sh")
+    script = 'echo "$CHOREGOS_RUN_TOKEN:${PATH:+path}"'
+    code, stdout, _ = await ex._run("-c", script, env={"CHOREGOS_RUN_TOKEN": "t"})
+    assert code == 0 and stdout.strip() == "t:path"
+
+
+async def test_starting_a_run_removes_the_finished_containers_beyond_the_newest_ten() -> None:
+    """#439: every run used to leave its container, and its workspace, behind for good."""
+    names = "\n".join(f"choregos-run-{i}" for i in range(12))
+    docker = _Docker(inspect=(1, "", "no such container"), ps=(0, names, ""))
+    await executeur(docker).start(spec())
+    ps = next(a for a in docker.appels if a[0] == "ps")
+    assert "label=choregos.run-id" in ps and "status=exited" in ps
+    assert ["rm", "--force", "choregos-run-10", "choregos-run-11"] in docker.appels
+    assert docker.appels[-1][0] == "run"
+
+
+async def test_a_failed_listing_or_few_finished_containers_remove_nothing() -> None:
+    for ps in ((1, "", "denied"), (0, "choregos-run-a\nchoregos-run-b", "")):
+        docker = _Docker(inspect=(1, "", "no such container"), ps=ps)
+        await executeur(docker).start(spec())
+        assert not [a for a in docker.appels if a[0] == "rm"]
+        assert docker.appels[-1][0] == "run"
 
 
 async def test_demarrer_est_idempotent_si_le_conteneur_existe() -> None:
@@ -121,9 +168,11 @@ async def test_the_run_container_drops_capabilities_and_waits_for_the_image_pull
     docker = _Docker(inspect=(1, "", "no such container"))
     timeouts: list[float] = []
 
-    async def enregistre(*args: str, timeout: float = 120.0) -> tuple[int, str, str]:
+    async def enregistre(
+        *args: str, timeout: float = 120.0, env: dict[str, str] | None = None
+    ) -> tuple[int, str, str]:
         timeouts.append(timeout)
-        return await docker(*args, timeout=timeout)
+        return await docker(*args, timeout=timeout, env=env)
 
     ex = LocalDockerExecutor(network="choregos_net")
     ex._run = enregistre  # type: ignore[method-assign]

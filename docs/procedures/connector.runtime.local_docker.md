@@ -27,6 +27,9 @@ network the runner container joins so it can reach the API.
 
 Start a run: `docker ps` shows a container named `choregos-run-<id>`.
 
+A finished run keeps its container, so `docker logs choregos-run-<id>` still works. The ten newest
+finished containers are kept; older ones are removed when the next run starts.
+
 ## When it fails
 
 - The run cannot reach the API: the container is not on `network`.
