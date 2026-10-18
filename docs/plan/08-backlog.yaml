@@ -2713,6 +2713,16 @@ stories:
     acceptance:
       - "The api/worker image copies tests/fixtures/tickets and tests/fixtures/repos under /app, where activities/evals.py reads them"
       - "list_fixtures with no ticket fails without retry instead of returning an empty list"
+  - id: S37-14
+    title: "A live eval case can run the toy repository's tests on a runner without pytest"
+    stream: S37
+    sprint: 20
+    priority: 8
+    size: S
+    depends_on: [S37-13]
+    acceptance:
+      - "The python-toy Makefile runs pytest with python3 when it has it, else from a .venv it makes on first use"
+      - "The Python tickets assert make test, and the .venv stays out of the agent's diff"
   - id: S37-10
     title: "Real eval matrix on real models, and the default-on decision per backend"
     stream: S37

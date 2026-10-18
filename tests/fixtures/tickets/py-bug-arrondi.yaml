@@ -21,7 +21,7 @@ scripted_usage:
 assertions:
   - { kind: file_exists, path: tests/test_arrondi.py }
   - { kind: file_matches, path: src/panier/panier.py, pattern: "ROUND_HALF_UP", absent: false }
-  - { kind: command, run: "python -m pytest -q" }
+  - { kind: command, run: "make test" }
 scripted:
   with_memory:
     files:
