@@ -116,6 +116,9 @@ PROVIDER_MODELS: dict[str, dict[str, str]] = {
     },
 }
 PROVIDER_KEYS: dict[str, str] = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
+#: What `platform/embed` is routed to, as in the chart's LiteLLM values. Anthropic serves no
+#: embeddings, so the alias needs an OpenAI key whichever provider runs the agents.
+EMBED_MODEL = "openai/text-embedding-3-small"
 #: The agent backend for each provider: `opencode` for both, through LiteLLM's OpenAI-compatible
 #: API. Not `claude-code` for Anthropic: in the published runner (0.17.12) its ACP adapter asked
 #: LiteLLM for `claude-sonnet-4-5-20250929` whatever `ANTHROPIC_MODEL` said, and the run's virtual
@@ -146,10 +149,12 @@ def model_provider(env: Mapping[str, str]) -> Provider | None:
     return None
 
 
-def litellm_config(provider: Provider | None) -> dict[str, Any]:
+def litellm_config(provider: Provider | None, *, embed: bool = False) -> dict[str, Any]:
     """LiteLLM's configuration: the aliases, mocked in fakes mode, routed to `provider` otherwise.
 
-    The key itself is never written: LiteLLM reads it from its own environment (`os.environ/…`).
+    `embed` also serves `platform/embed`, the alias Ecphoria embeds with (`--profile memory`),
+    routed to OpenAI as the chart does (#438). The key itself is never written: LiteLLM reads it
+    from its own environment (`os.environ/…`).
     """
     models: list[dict[str, Any]] = []
     for alias in ("platform/standard", "platform/strong", "platform/cheap"):
@@ -168,6 +173,14 @@ def litellm_config(provider: Provider | None) -> dict[str, Any]:
         if provider is not None:
             # Also under the provider's own name: the demo project asks for it (`demo_models`).
             models.append({"model_name": params["model"], "litellm_params": dict(params)})
+    if embed:
+        models.append(
+            {
+                "model_name": "platform/embed",
+                "litellm_params": {"model": EMBED_MODEL, "api_key": "os.environ/OPENAI_API_KEY"},
+                "model_info": {"mode": "embedding"},
+            }
+        )
     return {
         "model_list": models,
         "litellm_settings": {"drop_params": True},
@@ -338,9 +351,11 @@ async def seed_local_demo(
 def write_litellm_config(directory: pathlib.Path, env: Mapping[str, str]) -> Provider | None:
     """`config.yaml` for LiteLLM and `provider` for the seed, in `directory` (a shared volume)."""
     provider = model_provider(env)
+    # Real embeddings only when real models are on: `LITELLM_REAL=0` keeps everything offline.
+    embed = provider is not None and bool(env.get("OPENAI_API_KEY"))
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "config.yaml").write_text(
-        yaml.safe_dump(litellm_config(provider), sort_keys=False), encoding="utf-8"
+        yaml.safe_dump(litellm_config(provider, embed=embed), sort_keys=False), encoding="utf-8"
     )
     (directory / "provider").write_text(provider or "fakes", encoding="utf-8")
     return provider

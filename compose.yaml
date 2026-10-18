@@ -248,7 +248,8 @@ services:
       retries: 60
 
   ecphoria:
-    # Optional: `docker compose --profile memory up`. Its embeddings need a provider key.
+    # Optional: `docker compose --profile memory up`. Its embeddings need an OpenAI key in `.env`:
+    # LiteLLM serves `platform/embed` only then (Anthropic has no embeddings), #438.
     profiles: [memory]
     image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory
     environment:
