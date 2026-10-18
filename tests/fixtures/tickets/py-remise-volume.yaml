@@ -25,7 +25,7 @@ assertions:
   - { kind: file_exists, path: src/panier/remise.py }
   - { kind: file_matches, path: src/panier/remise.py, pattern: "def remise_volume", absent: false }
   - { kind: file_matches, path: src/panier/remise.py, pattern: "float", absent: true }
-  - { kind: command, run: "python -m pytest -q" }
+  - { kind: command, run: "make test" }
 scripted:
   with_memory:
     files:

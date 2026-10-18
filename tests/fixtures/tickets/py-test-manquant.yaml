@@ -19,7 +19,7 @@ scripted_usage:
 assertions:
   - { kind: file_exists, path: tests/test_bords.py }
   - { kind: file_unchanged, path: src/panier/panier.py }
-  - { kind: command, run: "python -m pytest -q" }
+  - { kind: command, run: "make test" }
 scripted:
   with_memory:
     files:

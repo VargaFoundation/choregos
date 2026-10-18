@@ -21,7 +21,7 @@ scripted_usage:
 assertions:
   - { kind: file_matches, path: src/panier/panier.py, pattern: "def appliquer_tva", absent: false }
   - { kind: file_unchanged, path: tests/test_panier.py }
-  - { kind: command, run: "python -m pytest -q" }
+  - { kind: command, run: "make test" }
 scripted:
   with_memory:
     files:

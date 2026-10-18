@@ -4,7 +4,7 @@ Dépôt minimal utilisé par les évals Choregos (`tests/fixtures/tickets/*.yaml
 Il tient en trois fichiers et ses tests s'exécutent sans réseau :
 
 ```
-python -m pytest -q
+make test
 ```
 
 Les tickets de référence demandent des modifications **petites et vérifiables** :
