@@ -9,15 +9,18 @@ stage does not start.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import Any
 
 from choregos_core import utcnow
-from sqlalchemy import func, or_, select
+from sqlalchemy import event, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import CostLedger, GatewayKeyRow, Run
+from ..config import get_settings
+from ..db.models import CostLedger, GatewayKeyRow, Project, Run
 
 #: Below this, a key is not worth minting: the stage would be refused at its first call (USD).
 DEFAULT_FLOOR_USD = 0.01
@@ -27,6 +30,61 @@ def start_of_day() -> datetime:
     """Midnight UTC today: a day budget counts from here."""
     now = utcnow()
     return datetime.combine(now.date(), time.min, tzinfo=now.tzinfo)
+
+
+def start_of_month() -> datetime:
+    """Midnight UTC on the first of the month: a month budget counts from here."""
+    now = utcnow()
+    return datetime.combine(now.date().replace(day=1), time.min, tzinfo=now.tzinfo)
+
+
+#: SQLite (dev, tests) has no advisory lock: one in-process lock per scope stands in for it. A
+#: deployment runs PostgreSQL, where the lock lives in the database and spans processes.
+_IN_PROCESS_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _lock_number(scope: str) -> int:
+    """A stable signed 64-bit number for `pg_advisory_xact_lock`."""
+    return int.from_bytes(hashlib.sha256(scope.encode()).digest()[:8], "big", signed=True)
+
+
+async def lock_budget_scopes(session: AsyncSession, scopes: list[str]) -> None:
+    """Serializes the stages that reserve from the same budget scope until this transaction ends.
+
+    Two stages preparing at once each read what is left, then each reserve it: without a lock both
+    see the same remainder (S27-11). The scopes are taken in a fixed order, so two stages that
+    share several of them cannot wait on each other. The lock is released by the commit or the
+    rollback of the session's transaction, never before: the reservation row must be visible to
+    the next stage when it reads.
+
+    PostgreSQL: `pg_advisory_xact_lock`. SQLite: an in-process `asyncio.Lock` released when the
+    transaction ends.
+    """
+    ordered = sorted(set(scopes))
+    if not get_settings().is_sqlite:
+        for scope in ordered:
+            await session.execute(text("SELECT pg_advisory_xact_lock(:n)"), {"n": _lock_number(scope)})
+        return
+    held: list[asyncio.Lock] = []
+    for scope in ordered:
+        lock = _IN_PROCESS_LOCKS.setdefault(scope, asyncio.Lock())
+        await lock.acquire()
+        held.append(lock)
+    if not held:
+        return
+
+    released = False
+
+    def _release(_session: Any, transaction: Any) -> None:
+        nonlocal released
+        # Only the outermost transaction's end releases; the listener dies with the session.
+        if transaction.parent is not None or released:
+            return
+        released = True
+        for lock in held:
+            lock.release()
+
+    event.listen(session.sync_session, "after_transaction_end", _release)
 
 
 def ticket_budget(engine: Any, item: Any) -> float:
@@ -76,9 +134,12 @@ async def open_reservations(
     *,
     work_item_id: str | None = None,
     project_id: str | None = None,
+    org_id: str | None = None,
+    agent_slug: str | None = None,
     exclude_run: str | None = None,
 ) -> float:
-    """The caps of the keys still open — not revoked, not expired — for a work item or a project.
+    """The caps of the keys still open — not revoked, not expired — for a work item, a project, an
+    organisation (all its projects) or an agent (`agent_slug`, within `org_id`; S27-11).
 
     `collect_spend` revokes a key when it books its spend in the ledger: a key is counted either
     as open or as spent, never both."""
@@ -86,13 +147,31 @@ async def open_reservations(
         GatewayKeyRow.revoked.is_(False),
         or_(GatewayKeyRow.expires_at.is_(None), GatewayKeyRow.expires_at > utcnow()),
     )
+    if work_item_id is not None or agent_slug is not None:
+        query = query.join(Run, Run.id == GatewayKeyRow.run_id)
     if work_item_id is not None:
-        query = query.join(Run, Run.id == GatewayKeyRow.run_id).where(Run.work_item_id == work_item_id)
+        query = query.where(Run.work_item_id == work_item_id)
+    if agent_slug is not None:
+        query = query.where(Run.agent_slug == agent_slug)
+    if org_id is not None:
+        query = query.join(Project, Project.id == GatewayKeyRow.project_id).where(Project.org_id == org_id)
     if project_id is not None:
         query = query.where(GatewayKeyRow.project_id == project_id)
     if exclude_run is not None:
         query = query.where(or_(GatewayKeyRow.run_id.is_(None), GatewayKeyRow.run_id != exclude_run))
     return float((await session.execute(query)).scalar_one())
+
+
+async def org_spent_since(session: AsyncSession, org_id: str, since: datetime) -> float:
+    """What the organisation's projects cost since `since`, models AND tools."""
+    total = (
+        await session.execute(
+            select(func.coalesce(func.sum(CostLedger.cost_usd), 0.0))
+            .join(Project, Project.id == CostLedger.project_id)
+            .where(Project.org_id == org_id, CostLedger.ts >= since)
+        )
+    ).scalar_one()
+    return float(total)
 
 
 @dataclass(frozen=True)
@@ -127,10 +206,13 @@ def reserve(left: dict[str, float | None]) -> Reservation:
 __all__ = [
     "DEFAULT_FLOOR_USD",
     "Reservation",
+    "lock_budget_scopes",
     "open_reservations",
+    "org_spent_since",
     "project_spent_since",
     "reserve",
     "start_of_day",
+    "start_of_month",
     "ticket_budget",
     "ticket_left",
     "ticket_spent",

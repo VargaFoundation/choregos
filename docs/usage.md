@@ -1144,11 +1144,14 @@ Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting p
 
 ```json
 {"budgets": {"ticket_usd": {"M": 20}, "stage_usd": {"default": {"M": 6}}, "max_turns": {"default": 60},
-             "max_minutes": {"implement": 45}, "tool_calls_per_run": 50, "daily_project_usd": 100},
+             "max_minutes": {"implement": 45}, "tool_calls_per_run": 50, "daily_project_usd": 100,
+             "monthly_org_usd": 5000},
  "attempts": {"default_max": 2, "by_role": {"implement": 2}},
  "scope": {"max_diff_lines": 2000}, "findings": {"max_per_run": 3}}
 ```
 
+`monthly_org_usd` is the one cap that is not a project policy field: what all the organisation's
+projects may spend in a calendar month (UTC). Nothing is clamped; it enters every stage's reservation.
 A per-role table's `default` caps every role the ceiling does not name; a cap left out leaves projects
 free. Values are compared as the engine applies them — a project policy that omits `ticket_usd` gets
 the platform's defaults, and those are compared too. Saving a project policy above the ceiling is
