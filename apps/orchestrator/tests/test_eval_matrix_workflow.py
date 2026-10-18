@@ -161,3 +161,92 @@ async def test_a_case_that_cannot_be_prepared_is_skipped_and_the_matrix_goes_on(
     assert calls == ["seed_eval_ticket", "prepare_stage", "summarize_eval_cell", "publish_matrix"]
     (outcome,) = result["results"][0]["outcomes"]
     assert outcome["skipped"] and "could not be prepared" in outcome["reason"]
+
+
+async def _cancel_live(blocking: str) -> tuple[list[str], list[dict[str, Any]], BaseException, Any]:
+    """A live matrix of two cases, cancelled while its first case waits in `blocking`: the activities
+    that ran, the payloads `cancel_run` received, the error of the workflow and its history."""
+    import asyncio
+
+    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.workflows.evals import EvalMatrix
+    from temporalio.client import WorkflowFailureError
+    from temporalio.testing import WorkflowEnvironment
+
+    calls: list[str] = []
+    stopped: list[dict[str, Any]] = []
+    waiting = asyncio.Event()
+    release = asyncio.Event()
+
+    def stub(name: str, answer: Any) -> Any:
+        @activity.defn(name=name)
+        async def run(payload: dict[str, Any]) -> Any:
+            calls.append(name)
+            if name == "cancel_run":
+                stopped.append(payload)
+            if name == blocking and not waiting.is_set():
+                waiting.set()
+                await release.wait()  # the agent is still at work when the matrix is cancelled
+            return answer
+
+        return run
+
+    plan = {"project_id": "p", "work_item_id": "w"}
+    activities = [
+        stub("seed_eval_ticket", {"skipped": False, "plan": plan}),
+        stub("prepare_stage", {"run_id": "r1", "stage_input": {"budget": {"max_minutes": 30}}}),
+        stub("start_run", None),
+        stub("await_run", {"result": {"status": "done"}}),
+        stub("record_run_outcome", {}),
+        stub("collect_spend", {}),
+        stub("cancel_run", None),
+        stub("judge_eval_run", {"ok": True, "skipped": False}),
+        stub("summarize_eval_cell", {}),
+        stub("publish_matrix", {}),
+    ]
+    payload = {
+        "project_slug": "evals",
+        "with_memory": [False],
+        "fixtures": ["py-bug-arrondi", "node-slug"],
+        "live": True,
+    }
+    error: BaseException = AssertionError("the cancelled matrix ended normally")
+    environment = await WorkflowEnvironment.start_time_skipping()
+    try:
+        async with workers_repartis(
+            environment.client, activites=activities, workflows=[EvalMatrix], file_du_workflow="evals"
+        ):
+            handle = await environment.client.start_workflow(
+                "EvalMatrix", payload, id=f"evals-cancel-{blocking}", task_queue="evals"
+            )
+            await asyncio.wait_for(waiting.wait(), timeout=30)
+            await handle.cancel()
+            try:
+                await asyncio.wait_for(handle.result(), timeout=60)
+            except WorkflowFailureError as exc:
+                error = exc
+            finally:
+                release.set()
+            history = await handle.fetch_history()
+    finally:
+        await environment.shutdown()
+    return calls, stopped, error, history
+
+
+async def test_cancelling_a_live_matrix_stops_the_run_in_flight_and_starts_no_other_case() -> None:
+    """#714: the cancelled `await_run` was caught as a failed case, judged, and the next case began."""
+    from temporalio.exceptions import CancelledError
+
+    calls, stopped, error, _ = await _cancel_live("await_run")
+    assert calls == ["seed_eval_ticket", "prepare_stage", "start_run", "await_run", "cancel_run"]
+    assert stopped == [{"project_id": "p", "run_id": "r1"}], "the run is stopped and its key revoked"
+    assert isinstance(error.__cause__, CancelledError), "the matrix ends cancelled, not failed"
+
+
+async def test_cancelling_while_a_stage_is_prepared_starts_no_run_and_no_other_case() -> None:
+    from temporalio.exceptions import CancelledError
+
+    calls, stopped, error, _ = await _cancel_live("prepare_stage")
+    assert calls == ["seed_eval_ticket", "prepare_stage"]
+    assert stopped == []
+    assert isinstance(error.__cause__, CancelledError)
