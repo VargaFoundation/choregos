@@ -100,6 +100,25 @@ def test_the_key_reaches_the_model_by_reference_never_by_value(tmp_path: pathlib
     assert read_provider(tmp_path / "provider") == provider == "anthropic"
 
 
+def test_an_openai_key_serves_the_embedding_alias_ecphoria_asks_for(tmp_path: pathlib.Path) -> None:
+    """#438: `--profile memory` embeds with `platform/embed`, which LiteLLM did not serve."""
+    for env in ({"OPENAI_API_KEY": "sk-o"}, {"ANTHROPIC_API_KEY": "sk-a", "OPENAI_API_KEY": "sk-o"}):
+        write_litellm_config(tmp_path, env)
+        written = (tmp_path / "config.yaml").read_text(encoding="utf-8")
+        embed = {m["model_name"]: m for m in yaml.safe_load(written)["model_list"]}["platform/embed"]
+        assert embed["litellm_params"] == {
+            "model": "openai/text-embedding-3-small",
+            "api_key": "os.environ/OPENAI_API_KEY",
+        }
+        assert embed["model_info"] == {"mode": "embedding"} and "sk-o" not in written
+    for env in ({"ANTHROPIC_API_KEY": "sk-a"}, {"OPENAI_API_KEY": "sk-o", "LITELLM_REAL": "0"}, {}):
+        write_litellm_config(tmp_path, env)
+        served = {
+            m["model_name"] for m in yaml.safe_load((tmp_path / "config.yaml").read_text())["model_list"]
+        }
+        assert "platform/embed" not in served, env
+
+
 def test_fakes_mode_mocks_every_alias() -> None:
     for model in litellm_config(None)["model_list"]:
         assert model["litellm_params"]["mock_response"]
