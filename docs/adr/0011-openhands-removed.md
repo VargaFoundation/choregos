@@ -33,8 +33,10 @@ OpenHands is removed.
   templates, model resolver, evals, and the `KNOWN_BACKEND_NAMES` preference order, which
   put OpenHands **first**.
 
-Still installed and called when the image is built: `claude-code-acp`, `gemini` (`--acp`)
-and `opencode` (`acp`).
+Still installed and called when the image is built: `claude-agent-acp`, `gemini` (`--acp`)
+and `opencode` (`acp`). (2026-10-19, #436: `claude-agent-acp` from
+`@agentclientprotocol/claude-agent-acp` replaced the deprecated `claude-code-acp`, which the
+image keeps as a link to it.)
 
 ## Consequences
 
