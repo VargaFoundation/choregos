@@ -11,6 +11,8 @@ Campaign A has a trending product: it goes to the memo, then a person adopts it.
 random walks: the verdict, on measured facts, ends it in `not_relevant`. An analyst who quotes a
 number the backtest did not compute is refused until the campaign goes to review.
 
+Sources that disagree beyond the campaign's `max_diverging_symbols` end in `to_review` (S38-14).
+
 Remove a brick — the job mode, the measured marking, `numbers_measured`, the market data route —
 and a scenario turns red.
 """
@@ -386,3 +388,59 @@ async def test_a_memo_that_quotes_an_unmeasured_number_never_reaches_the_owner(
         await interpreter.cancel()
     memos = [s for s in bench.started if s.stage_input and s.stage_input.transition.role == "memo"]
     assert len(memos) == 2, "the analyst had its two attempts"
+
+
+DIVERGING = {"source": "yahoo", "common_days": 700, "max_rel_diff": 0.31, "diverging_days": 4}
+
+
+async def test_sources_that_disagree_send_the_campaign_to_review_before_any_backtest(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    """S38-14: the snapshot job measures the symbols whose two sources diverge; beyond the campaign's
+    `max_diverging_symbols` the `t-snapshot` gate refuses and a person reviews. Without the gate the
+    campaign would profile and backtest on closes the second source contradicts."""
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    market.cross_checks["TRND.US"] = DIVERGING
+    bench = Bench(api_url, tmp_path / "runs", {"strategize": strategist, "memo": honest_analyst})
+    platform.adapters.executor = bench
+    fields = {"symbols": ["TRND.US", "AAA.US"], **PERIOD, "min_dsr": 0.9, "min_trades": 3}
+
+    async with worker():
+        item, interpreter = await _campaign(platform, project, fields)
+        await _state(client, item["id"], "to_review", "diverging sources send the campaign to review")
+        await _replayed(interpreter, "wi-campaign-diverging-sources-S38-14.json")
+        await interpreter.cancel()
+    roles = [s.stage_input.transition.role for s in bench.started if s.stage_input]
+    assert roles == ["snapshot"], f"nothing runs after a refused snapshot: {roles}"
+
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        snapshot = (await session.execute(select(Run).where(Run.stage_role == "snapshot"))).scalar_one()
+        evidence = (snapshot.result or {}).get("evidence") or {}
+    assert {"facts.diverging", "facts.diverging_excess"} <= set(evidence.get("measured") or []), evidence
+    assert evidence["facts"]["diverging_excess"] == 1 and evidence["facts"]["max_rel_diff"] == 0.31
+
+
+async def test_a_divergence_within_the_campaign_threshold_goes_on(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    market.cross_checks["TRND.US"] = DIVERGING
+    bench = Bench(api_url, tmp_path / "runs", {"strategize": strategist, "memo": honest_analyst})
+    platform.adapters.executor = bench
+    fields = {
+        "symbols": ["TRND.US", "AAA.US"], **PERIOD, "min_dsr": 0.9, "min_trades": 3,
+        "max_diverging_symbols": 1,
+    }  # fmt: skip
+
+    async with worker():
+        item, interpreter = await _campaign(platform, project, fields)
+        await _state(client, item["id"], "memo_written", "a tolerated divergence does not stop the campaign")
+        await interpreter.cancel()

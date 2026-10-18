@@ -25,6 +25,7 @@ metadata:
       max_drawdown: { type: number, minimum: 0, maximum: 1, default: 0.35, title: Maximum drawdown (fraction) }
       min_trades: { type: integer, minimum: 1, default: 10, title: Minimum out-of-sample trades }
       max_strategies: { type: integer, minimum: 1, maximum: 8, default: 8, title: Maximum strategies }
+      max_diverging_symbols: { type: integer, minimum: 0, default: 0, title: Symbols whose two sources may disagree beyond the connector's tolerance }
       seed: { type: string, default: choregos, title: Anonymisation seed }
       decision_note: { type: string, title: Why the owner adopted or rejected the campaign }
 initial: campaign
@@ -65,8 +66,15 @@ transitions:
     inputs: [snapshot, bars]
     outputs: [snapshot, bars]
     output_types: { bars: csv }
-    gates: [outputs_present]
-    on_fail: { to: campaign, max_attempts: 2, escalate_to: to_review }
+    # Sources that disagree are a finding, not a retry: the snapshot job MEASURES how many symbols
+    # diverge beyond `max_diverging_symbols` (`diverging_excess`) and the campaign goes to a person
+    # instead of backtesting on closes one of two sources contradicts (S38-14). A single source
+    # reports nothing to compare: `cross_checked` in the facts says how many symbols were checked.
+    gates:
+      - outputs_present
+      - name: evidence_facts
+        params: { keys: [diverging_excess], max: { diverging_excess: 0 }, measured_only: true }
+    on_fail: { to: campaign, max_attempts: 1, escalate_to: to_review }
 
   - id: t-profile
     from: snapshotted
