@@ -77,8 +77,11 @@ ARG NODE_VERSION=22
 # (beacon, update check, usage reporter, model downloads); its models are under `HF_HOME`. It does
 # not cover the litellm it imports, which fetches its price list from GitHub at every start:
 # `LITELLM_LOCAL_MODEL_COST_MAP` makes it read the copy in its own package.
+# The runner's venv is NOT on `PATH` (#713): an agent's `python3` is the image's interpreter, not
+# the runner's, with the runner's packages importable and no pytest. The platform's own commands are
+# linked into `/usr/local/bin` below, and the runner starts by its absolute path.
 ENV PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
+    PATH="/usr/local/bin:$PATH" \
     HOME=/workspace \
     GIT_TERMINAL_PROMPT=0 \
     RTK_TELEMETRY_DISABLED=1 \
@@ -185,6 +188,16 @@ RUN /app/.venv/bin/choregos-runner --help >/dev/null
 # Same for the deterministic backtest engine (a dependency of the runner package): a job stage
 # runs `choregos-quant` with no network, so it must be installed and start here.
 RUN /app/.venv/bin/choregos-quant --help >/dev/null
+# The platform's commands, by name, for whoever calls them so (a Tekton step's `choregos-runner run`,
+# a job's `choregos-quant`), without putting the venv's `python3` in front of the workspace (#713).
+RUN set -eux; \
+    for command in choregos-runner choregos-quant choregos-tools; do \
+      ln -s "/app/.venv/bin/$command" "/usr/local/bin/$command"; \
+    done; \
+    test "$(command -v python3)" = /usr/local/bin/python3; \
+    python3 -c 'import sys; assert sys.prefix == sys.base_prefix, sys.prefix'; \
+    if python3 -c 'import choregos_runner' 2>/dev/null; then exit 1; fi; \
+    choregos-runner --help >/dev/null
 # headroom must hand the gateway's budget refusal to the agent as the gateway wrote it, or a spent
 # key looks like a silent agent and is retried with a fresh one (S37-12): the image's headroom, a
 # fake gateway refusing for budget, and the runner's own detector, with no network.
@@ -192,5 +205,5 @@ COPY docker/headroom/relays_budget_refusal.py /tmp/relays_budget_refusal.py
 RUN timeout 180 /app/.venv/bin/python /tmp/relays_budget_refusal.py && rm /tmp/relays_budget_refusal.py
 WORKDIR /workspace
 USER 1000
-ENTRYPOINT ["/usr/bin/tini", "--", "choregos-runner"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/.venv/bin/choregos-runner"]
 CMD ["run"]
