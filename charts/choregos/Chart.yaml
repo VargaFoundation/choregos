@@ -4,8 +4,8 @@ description: >-
   Agentic delivery platform of the Varga Foundation: API, front end, Temporal workers,
   tools sidecar, and the dependencies that make it run.
 type: application
-version: 0.18.5
-appVersion: "0.18.5"
+version: 0.18.6
+appVersion: "0.18.6"
 home: https://github.com/VargaFoundation/choregos
 sources:
   - https://github.com/VargaFoundation/choregos
@@ -14,33 +14,33 @@ maintainers:
 keywords: [agents, delivery, temporal, tekton, argocd]
 dependencies:
   - name: choregos-api
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/api
   - name: choregos-web
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/web
   - name: choregos-orchestrator
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/orchestrator
   - name: choregos-tools
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/tools
   # The platform's dependencies. Off by default: a serious installation takes them
   # from outside (PostgreSQL operator, production Temporal, shared gateway).
   # Switched on, they are enough for a single-node bench — that is the `values/local.yaml` demo.
   - name: choregos-postgresql
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/postgresql
     condition: global.database.embedded
   - name: choregos-temporal
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/temporal
     condition: global.temporal.embedded
   - name: choregos-litellm
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/litellm
     condition: global.gateway.embedded
   - name: choregos-ecphoria
-    version: 0.18.5
+    version: 0.18.6
     repository: file://charts/ecphoria
     condition: global.memory.embedded
