@@ -13,6 +13,7 @@ import copy
 import json
 import os
 import pathlib
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -451,7 +452,12 @@ EXPRESS_LABEL_ARCHIVES = {
 
 
 async def _prod_policy(setup: Fixture, **changes: Any) -> None:
-    """Sets fields of the prod train policy; `express_lane__x` sets `express_lane.x`, `None` removes."""
+    """Sets fields of the prod train policy; `express_lane__x` sets `express_lane.x`, `None` removes.
+
+    Unless a test names one, the prod cron is set twelve hours away (S22-30b). The fixture's
+    `0 10,14,17 * * 1-4` is due for a whole minute three times a day, Monday to Thursday, in UTC: a
+    suite that ran at 10:00:43 on 2026-10-19 saw three trains that must wait for the cron leave on it.
+    """
     from choregos_api.db.models import PolicyDef
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
@@ -466,6 +472,7 @@ async def _prod_policy(setup: Fixture, **changes: Any) -> None:
         ).scalar_one()
         document = copy.deepcopy(row.json_doc)
         prod = document["release_train"]["prod"]
+        changes.setdefault("schedule", f"0 {(datetime.now(UTC).hour + 12) % 24} * * *")
         for key, value in changes.items():
             target, _, field = key.rpartition("__")
             place = prod[target] if target else prod
