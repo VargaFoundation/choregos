@@ -55,6 +55,44 @@ async def test_litellm_un_alias_deja_pris_ne_bloque_pas_la_reprise_d_un_run() ->
 
 
 @respx.mock
+async def test_litellm_reads_cache_reads_where_its_spend_logs_write_them() -> None:
+    """The shape of a real LiteLLM spend log (dev, 2026-10-19): the cache counts live in
+    `metadata.usage_object`. Read at the top of the entry, every run's cache reads were 0 (S37-16)."""
+    respx.get(f"{LITELLM}/key/info").mock(return_value=Response(200, json={"info": {"spend": 0.01}}))
+    anthropic_usage = {
+        "prompt_tokens": 50724,
+        "completion_tokens": 233,
+        "cache_read_input_tokens": 50453,
+        "cache_creation_input_tokens": 269,
+    }
+    openai_usage = {"prompt_tokens": 900, "prompt_tokens_details": {"cached_tokens": 800}}
+    respx.get(f"{LITELLM}/spend/logs").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "model": "anthropic/choregos-claude-sonnet",
+                    "prompt_tokens": 50724,
+                    "completion_tokens": 233,
+                    "spend": 0.00233,
+                    "metadata": {"usage_object": anthropic_usage},
+                },
+                {
+                    "model": "openai/gpt",
+                    "prompt_tokens": 900,
+                    "completion_tokens": 10,
+                    "spend": 0.001,
+                    "metadata": {"usage_object": openai_usage},
+                },
+                {"model": "openai/gpt", "prompt_tokens": 5, "completion_tokens": 1, "spend": 0.0},
+            ],
+        )
+    )
+    spend = await LiteLlmGateway(LITELLM, "sk").spend("tok-1")
+    assert (spend.tokens_in, spend.tokens_cached) == (51629, 51253)
+
+
+@respx.mock
 async def test_litellm_la_depense_vient_de_la_cle_et_des_journaux() -> None:
     respx.get(f"{LITELLM}/key/info").mock(return_value=Response(200, json={"info": {"spend": 0.42}}))
     respx.get(f"{LITELLM}/spend/logs").mock(
