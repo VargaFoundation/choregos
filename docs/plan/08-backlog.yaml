@@ -2732,6 +2732,15 @@ stories:
     depends_on: [S37-14]
     acceptance:
       - "Every check the runner runs on a Python workspace is a make target of the python-toy"
+  - id: S37-16
+    title: "A run's ledger counts its cache reads"
+    stream: S37
+    sprint: 20
+    priority: 10
+    size: XS
+    depends_on: [S37-10a]
+    acceptance:
+      - "The LiteLLM gateway reads cache reads from the spend log's usage, where LiteLLM writes them"
   - id: S37-10
     title: "Real eval matrix on real models, and the default-on decision per backend"
     stream: S37
