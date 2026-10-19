@@ -256,3 +256,7 @@ More money is a decision. "Replay the stage" on a work item whose budget is spen
 unless it carries a top-up (`top_up_usd`, or `choregos items action <id> rerun_stage --top-up 5`);
 the top-up adds to the work item's budget and the audit log records who granted it
 (`workitem.budget_top_up`).
+
+"Replay the stage" does not give a stage a fresh attempts allowance either: it leaves it one attempt
+before its cap (`max_attempts`, lowered by the policy's `attempts.by_role`), so each rerun plays one more
+run and escalates again if it fails.
