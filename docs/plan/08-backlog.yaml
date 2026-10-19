@@ -2723,6 +2723,15 @@ stories:
     acceptance:
       - "The python-toy Makefile runs pytest with python3 when it has it, else from a .venv it makes on first use"
       - "The Python tickets assert make test, and the .venv stays out of the agent's diff"
+  - id: S37-14b
+    title: "The Python toy repository answers the runner's typecheck check"
+    stream: S37
+    sprint: 20
+    priority: 8
+    size: S
+    depends_on: [S37-14]
+    acceptance:
+      - "Every check the runner runs on a Python workspace is a make target of the python-toy"
   - id: S37-10
     title: "Real eval matrix on real models, and the default-on decision per backend"
     stream: S37
