@@ -180,6 +180,7 @@ async def create_org_egress_rule(org: str, body: EgressRuleCreate, session: Db, 
     host = _host(body.host)
     if await _live(session, organisation.id, host) is not None:
         raise conflict(f"`{host}` already has a live rule in {org}: revoke or approve it")
+    service.check_opening(organisation, [host])
     now = utcnow()
     row = OrgEgressRule(
         org_id=organisation.id,
@@ -311,9 +312,12 @@ async def _decision(
     org: str, rule_id: str, body: EgressDecision, session: AsyncSession, principal: Me, *, approve: bool
 ) -> EgressRule:
     _decide(principal, org)
-    row = await _rule(session, await _organisation(session, org), rule_id)
+    organisation = await _organisation(session, org)
+    row = await _rule(session, organisation, rule_id)
     if row.status != "requested":
         raise conflict(f"the request is already {row.status}")
+    if approve:
+        service.check_opening(organisation, [row.host])
     row.status = "allowed" if approve else "refused"
     row.decided_by = principal.email
     row.decided_at = utcnow()

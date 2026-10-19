@@ -104,12 +104,19 @@ async def load_policy(
     requested: list[AllowedRule] = []
     for row in rows:
         (allowed if row.status == "allowed" else requested).append(to_rule(row))
+    # The organisation's network bounds (ADR 0070, amended) ride in the same policy: every guarded
+    # call, redirects included, is refused when the ceiling denies its host, whatever the mode.
+    from .definitions import ceiling_of as policy_ceiling_of
+    from .platform_network import bounds_of
+
+    org_ceiling = policy_ceiling_of(organisation)
     return EgressPolicy(
         org=organisation.slug,
         rules=tuple(allowed),
         requested=tuple(requested),
         ceiling=ceiling_of(settings),
         mode=mode_of(settings),
+        bounds=bounds_of(org_ceiling.network if org_ceiling else None),
     )
 
 
@@ -309,6 +316,26 @@ async def verdicts(
     return out
 
 
+def check_opening(organisation: Organization, hosts: Iterable[str]) -> None:
+    """Opening a host the organisation's network bounds refuse is a 422 (ADR 0070, amended): a deny
+    always wins, so the rule would open nothing, and the administrator must change the ceiling's
+    network access first. Called by every path that makes a rule `allowed`."""
+    from ..errors import unprocessable
+    from .definitions import ceiling_of as policy_ceiling_of
+    from .platform_network import bounds_of
+
+    org_ceiling = policy_ceiling_of(organisation)
+    bounds = bounds_of(org_ceiling.network if org_ceiling else None)
+    refused = [(h, why) for h in hosts if (why := bounds.refusal(h)) is not None]
+    if refused:
+        raise unprocessable(
+            "the organisation's network policy refuses "
+            + ", ".join(f"`{h}` ({why})" for h, why in refused)
+            + ": change its network access on the Administration page before opening it",
+            [{"loc": ["body", "host"], "msg": f"`{h}`: {why}"} for h, why in refused],
+        )
+
+
 def _merge(row: OrgEgressRule, ports: Iterable[int], used_by: Iterable[str]) -> None:
     row.ports = sorted({*(row.ports or []), *ports})
     row.used_by = [f for f in FAMILIES if f in {*(row.used_by or []), *used_by}]
@@ -330,6 +357,7 @@ async def allow_hosts(
         ports, families = by_host.setdefault(normalize_host(target.host, allow_wildcard=True), (set(), set()))
         ports.add(target.port)
         families.add(target.family)
+    check_opening(organisation, by_host)
     now = utcnow()
     rules: list[OrgEgressRule] = []
     for host, (ports, families) in by_host.items():
@@ -439,6 +467,36 @@ async def count_open_requests(session: AsyncSession, org_id: str, email: str) ->
             )
         ).scalar_one()
     )
+
+
+def runner_domain(host: str) -> str | None:
+    """The domain a runner's guard, the egress proxy and the network patterns of ADR 0070 understand:
+    a name covers itself and its subdomains, so `*.x.test` becomes `x.test`. An IP literal is not a
+    domain."""
+    import ipaddress
+
+    bare = host.removeprefix("*.")
+    try:
+        ipaddress.ip_address(bare)
+    except ValueError:
+        return bare or None
+    return None
+
+
+async def org_runner_hosts(session: AsyncSession, org_id: str) -> list[str]:
+    """The domains of the organisation's `allowed` rules that name `runners` (S39-22d). They join
+    every run of the organisation as implied hosts of its effective network (ADR 0070, amended):
+    the orchestrator writes them into the run's permissions, the API serves them to the egress
+    proxy, and every deny list still wins over them."""
+    rows = (
+        await session.execute(
+            select(OrgEgressRule.host, OrgEgressRule.used_by).where(
+                OrgEgressRule.org_id == org_id, OrgEgressRule.status == "allowed"
+            )
+        )
+    ).tuples()
+    domains = (runner_domain(host) for host, used_by in rows if "runners" in (used_by or []))
+    return sorted({d for d in domains if d})
 
 
 def rule_dto(row: OrgEgressRule) -> EgressRule:

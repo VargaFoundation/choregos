@@ -29,7 +29,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from choregos_core import utcnow
-from choregos_core.network import allowed, normalise_host
+from choregos_core.egress import NetworkBounds
+from choregos_core.network import normalise_host, platform_allowed
 from choregos_core.policy_ceiling import CeilingNetwork
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,25 +78,20 @@ def connector_host(config: Mapping[str, Any] | None) -> str | None:
     return None
 
 
-def _is_internal(host: str) -> bool:
-    import ipaddress
-
-    try:
-        ipaddress.ip_address(host.strip("[]"))
-    except ValueError:
-        return "." not in host
-    return True
+def bounds_of(net: CeilingNetwork | None) -> NetworkBounds:
+    """The organisation's network bounds: the ceiling's allowed set and deny list, with the
+    instance's. The same object rides in the egress policy of every platform client (ADR 0070,
+    amended), so a declaration, a call and a redirect are judged alike."""
+    return NetworkBounds(
+        allow=None if net is None or net.allow_domains is None else tuple(net.allow_domains),
+        deny=(*(net.deny_domains if net else []), *instance_deny()),
+    )
 
 
 def decide(host: str, net: CeilingNetwork | None) -> tuple[bool, str]:
     """Whether the platform may reach `host` for this organisation, and why."""
-    name = normalise_host(host)
-    deny = [*(net.deny_domains if net else []), *instance_deny()]
-    if _is_internal(name):
-        # Internal: only a deny entry that names it (a single label) can refuse it.
-        return (False, "denied") if any(name == p for p in deny) else (True, "internal")
-    cap = ["*"] if net is None or net.allow_domains is None else net.allow_domains
-    return allowed(name, cap, deny)
+    bounds = bounds_of(net)
+    return platform_allowed(normalise_host(host), bounds.allow, bounds.deny)
 
 
 async def ceiling_network(session: AsyncSession, org_id: str) -> CeilingNetwork | None:
@@ -281,6 +277,7 @@ async def with_identity(session: AsyncSession, org_id: str, config: dict[str, An
 __all__ = [
     "PlatformNetworkRefused",
     "PlatformRateLimited",
+    "bounds_of",
     "calls_to_host",
     "check_connector_declaration",
     "check_platform_host",

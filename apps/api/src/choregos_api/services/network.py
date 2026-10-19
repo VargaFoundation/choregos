@@ -2,9 +2,10 @@
 """Network access (ADR 0070): the network of a run, the checks at publication, the decisions journal.
 
 The effective network of a run is agent ∩ project ∩ organisation, plus the host of the project's
-repository, minus the deny lists of the instance, the organisation and the project. It is computed
-here, once, by `choregos_core.network`, for the egress proxy (`GET /internal/runs/{id}/network`),
-for the console (`GET /projects/{id}/network`) and, in the orchestrator, for the run's `Permissions`.
+repository and the hosts the organisation opened for its runners (ADR 0066), minus the deny lists of
+the instance, the organisation and the project. It is computed here, once, by `choregos_core.network`,
+for the egress proxy (`GET /internal/runs/{id}/network`), for the console
+(`GET /projects/{id}/network`) and, in the orchestrator, for the run's `Permissions`.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from ..errors import unprocessable
 from ..schemas.agents import AgentNetwork, AgentSpec
 from ..schemas.network import NetworkDecisionBatch, RunNetwork
 from .definitions import ceiling_of, effective_policy
+from .egress import org_runner_hosts
 from .evenements import persist_event
 
 
@@ -65,7 +67,9 @@ async def project_effective_network(
     """The network a run of this project gets (with the agent's narrowing, when it has one)."""
     policy = await effective_policy(session, project.id)
     ceiling = ceiling_of(await session.get(Organization, project.org_id))
-    implied = [h for h in [project_repo_host(project)] if h]
+    # The repository's host, and what the organisation opened for its runners (S39-22d): the same
+    # implied hosts the orchestrator writes into the run's permissions (ADR 0070, amended).
+    implied = [h for h in [project_repo_host(project)] if h] + await org_runner_hosts(session, project.org_id)
     effective = effective_network(
         policy.sandbox.network,
         agent_net,

@@ -25,6 +25,7 @@ from ..schemas import CatalogueMetaDto, SkillCatalogueDto, SkillCatalogueEntryDt
 from ..schemas.catalogues import SkillCatalogueInstall
 from ..services.catalogues import egress_of
 from ..services.egress import egress_scope, ensure_or_409, skill_import_targets
+from ..services.platform_network import check_platform_host
 from ..services.skill_sources import GitSource, SourceRefused, allowed, get_fetcher, parse_repo_url
 from ..services.skills import empreinte, publish_version
 from .skills import _dto, _lire, _organisation, _skill_sources, _snapshot
@@ -174,7 +175,9 @@ async def install_skill_catalogue_entry(
             raise conflict(f"`{entry.id}` is already installed at this version (v{existing.version})")
 
     if entry.delivery != "bundled":
-        # Fetched from git: the repository's hosts must be open (S39-22), as for an import.
+        # Fetched from git, as an import: the organisation's network bounds first (ADR 0070, a 422
+        # no opening can fix), then the repository's hosts must be open (S39-22, the 409).
+        await check_platform_host(session, organisation.id, source.url, "skill source")
         await ensure_or_409(
             session,
             principal,

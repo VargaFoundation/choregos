@@ -68,7 +68,12 @@ organisations must assume **a member of one will try to read another**.
 
 The platform makes outbound calls for a tenant (the MCP broker and discovery, the git skill fetch,
 the knowledge sources, a remote agent's card). Three layers decide whether one may leave
-([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)):
+([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)), after the organisation's **network
+bounds** — the deny list and allowed set of its policy ceiling's `network` section, with the
+instance's deny list — which are read first, in every mode, by the same guarded transport and by the
+declaration and call checks: a deny always wins, over an opened host too, and a host the bounds
+refuse cannot be opened (ADR 0070, amendment of 2026-10-19: one model, the list opens, the ceiling
+bounds):
 
 1. **The organisation's list** (`/admin/egress`): hosts, ports and the pod family that calls them,
    decided by the organisation's administrator (`tools:grant`), requested by anyone, audited.
@@ -88,10 +93,12 @@ redirects, because a subprocess cannot be wrapped. **Not guarded**: the deployme
 dependencies (gateway, Temporal, memory, object store, OIDC issuer, the platform's GitHub App) and,
 until phase 2, the REST connectors (Jira, GitLab, Slack…).
 
-**Runners.** A rule whose pod family is `runners` joins the project policy's `sandbox.network.allow_domains`
-for every run of the organisation (the runner's own guard, from the stage input) and for the egress
-proxy the provisioning renders, so an administrator's "allow this host for agent pods" works in every
-project without editing each policy. A wildcard rule (`*.x.test`) becomes the domain `x.test`, which the
+**Runners.** A rule whose pod family is `runners` joins every run of the organisation as an implied
+host of its effective network (ADR 0070, amended): the runner's own guard reads it from the stage
+input, the per-run egress proxy from `GET /internal/runs/{id}/network`, the per-project proxy the
+provisioning renders from the project's union; every deny list (instance, organisation ceiling,
+project) still wins over it. An administrator's "allow this host for agent pods" therefore works in
+every project without editing each policy. A wildcard rule (`*.x.test`) becomes the domain `x.test`, which the
 guard and the proxy read as the name and its subdomains. The proxy is rendered when a project is
 provisioned: a host opened later reaches the guard at the next run and the proxy at the next
 provisioning render. A project whose own list is empty gets exactly what its organisation opened.

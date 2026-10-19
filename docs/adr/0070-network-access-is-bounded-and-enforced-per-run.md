@@ -139,3 +139,56 @@ default, like `knowledge` and `memory`: versions published before this ADR keep 
   read the same values) in the release namespace, and refuses `global.egress.enabled` with an empty
   `runner.egressProxy`. With `networkPolicies.enabled` the runner pods get their own policy and the
   platform policy no longer selects them.
+
+## Amendment 2026-10-19 — one network model with ADR 0066 (integration of main 0.18.8)
+
+S39-22 shipped, in parallel, an organisation **egress allowlist**
+([ADR 0066](0066-the-organisation-egress-allowlist.md), released in 0.18.x): `org_egress_rules`
+decided by the administrator in `/admin/egress`, a request and approval flow, the guarded transport
+of every platform client, a deployment ceiling per pod family, `allow_egress` and the 409
+`egress_required` on every "add", and rules for `runners` that join every run. Its paths and its
+contract stay as released. The two decisions are reconciled into **one model with two halves**,
+never two parallel mechanisms:
+
+| Half | Where | Says | Decided by |
+| :-- | :-- | :-- | :-- |
+| **What the organisation opens** (grants) | `org_egress_rules` (ADR 0066) | the hosts, ports and pod families (`api`, `workers`, `runners`) the platform may call for it; absent means refused (in `enforce`) | its administrator (`tools:grant`), on request of anyone |
+| **What nothing may cross** (bounds) | `PolicyCeiling.network` (this ADR) | a deny list that always wins, an allowed set (`null` = no cap), rates, built-in web tools, the User-Agent contact | its administrator |
+
+The instance adds its deny list (`global.egress.denyDomains`) and its ceiling per family
+(`global.egress.ceiling`); both are one `global.egress` block of the chart.
+
+1. **One decision for a call the platform makes.** `EgressPolicy` (the object the guarded transport
+   reads on every request, redirects included) carries the organisation's bounds
+   (`NetworkBounds`, built from the ceiling's `network` and the instance deny list). A host the
+   bounds refuse is refused **first, in every egress mode** (`enforce`, `warn`, `off`): the mode is
+   the list's, ADR 0070 has no warn mode. Inside the bounds, the list and the deployment ceiling
+   decide as ADR 0066 says. `choregos_core.network.platform_allowed` is the one function both the
+   transport and the API's declaration and call checks (`services/platform_network.py`) use; an
+   internal host (an IP literal, a single-label name) is not capped, only a deny naming it refuses
+   it, as S40-01d decided.
+2. **Order of the refusals at an "add".** The bounds answer first with a **422** (no opening can fix
+   it: change the ceiling's network access), then the list with the **409 `egress_required`** (an
+   opening fixes it), then the side effect. This holds for MCP connectors (organisation and
+   catalogue installs, through `declare_org_connector`), project connectors, knowledge sources, git
+   skill imports and git-delivered skill catalogue entries. At call time the broker and governed
+   actions read the bounds again (403 `network_policy`, journaled with layer `broker`, throttled per
+   host), and the call itself runs under the egress scope (ADR 0066).
+3. **An opening never contradicts the bounds.** Creating a rule, approving a request and
+   `allow_egress` on an add refuse (422) a host the bounds refuse, a `*.` host included when a deny
+   covers it: a deny always wins, so the rule would open nothing.
+4. **Runners.** The hosts the organisation opened for `runners` (S39-22d) join each run's effective
+   network as **implied hosts**, beside the repository's host: in the orchestrator (the run's
+   `Permissions`, `activities/run_network.py`), in the API (`GET /internal/runs/{id}/network`, read by
+   the egress proxy, and the console's project network). Every deny list (instance, organisation
+   ceiling, project) wins over them, and an agent that names one of them is admitted. A remote
+   agent's admission (ADR 0062) reads the same deny lists. The per-project Squid of the GitOps
+   provisioning keeps receiving them as before (`org_allow_domains`).
+5. **One implementation each.** `org_runner_hosts` lives in the API (`services/egress.py`) and the
+   orchestrator re-exports it; host patterns of the bounds are this ADR's grammar
+   (`example.com` covers its subdomains), rules of the list keep ADR 0066's (exact, or `*.` for the
+   subdomains only) and are converted (`runner_domain`) where they join a run.
+
+Not changed: the contracts of both ADRs (no new field; the 422 is the existing validation problem),
+`/admin/egress` (the grants) and the Administration page's *Network access* card (the bounds), which
+remain two views of the same policy.

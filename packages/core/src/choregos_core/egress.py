@@ -2,6 +2,9 @@
 """An organisation's egress allowlist, as a pure matcher (S39-22, ADR 0066).
 
 Three layers decide whether the platform may call a host for a tenant:
+0. the **organisation's network bounds** (ADR 0070, amended): its policy ceiling's `network` deny
+   list (with the instance's) and allowed set. A deny always wins, over an opened host too, in
+   every mode: the mode below governs the list, not the bounds;
 1. the **organisation's list** (`org_egress_rules`, decided in the app by its administrator);
 2. the **deployment ceiling** (`CHOREGOS_EGRESS_CEILING`, what the operator says the cluster's
    network lets through, per pod family) — an `outside` host is refused before it is sent, with
@@ -33,7 +36,7 @@ Mode = Literal["enforce", "warn", "off"]
 MODES: tuple[str, ...] = ("enforce", "warn", "off")
 OrgState = Literal["allowed", "requested", "absent"]
 CeilingState = Literal["open", "outside", "unknown"]
-Reason = Literal["org_absent", "org_requested", "ceiling_outside", "no_policy_in_context"]
+Reason = Literal["org_absent", "org_requested", "ceiling_outside", "no_policy_in_context", "network_policy"]
 
 
 def normalize_host(raw: str, *, allow_wildcard: bool = False) -> str:
@@ -121,20 +124,32 @@ class Verdict:
 
 class EgressRefusedError(ChoregosError):
     """The platform would have called a host its organisation has not opened (or the deployment's
-    ceiling excludes)."""
+    ceiling excludes, or the organisation's network bounds refuse)."""
 
-    def __init__(self, host: str, port: int, family: str, reason: Reason, org: str = "") -> None:
+    def __init__(
+        self, host: str, port: int, family: str, reason: Reason, org: str = "", detail: str = ""
+    ) -> None:
         self.host = host
         self.port = port
         self.family = family
         self.reason = reason
         self.org = org
-        super().__init__(refusal_message(host, port, family, reason, org))
+        #: for `network_policy`: what refused it (`denied:<pattern>`, `not_allowed`)
+        self.detail = detail
+        super().__init__(refusal_message(host, port, family, reason, org, detail))
 
 
-def refusal_message(host: str, port: int, family: str, reason: Reason, org: str = "") -> str:
+def refusal_message(
+    host: str, port: int, family: str, reason: Reason, org: str = "", detail: str = ""
+) -> str:
     where = f"organisation {org}" if org else "this organisation"
     target = f"{host}:{port}" if port != 443 else host
+    if reason == "network_policy":
+        return (
+            f"egress refused: `{target}` is refused by the network policy of {where} "
+            f"({detail or 'denied'}) — an administrator changes its network access on the "
+            "Administration page"
+        )
     if reason == "org_requested":
         return (
             f"egress refused: `{target}` is requested in {where} but not approved yet — an "
@@ -153,8 +168,30 @@ def refusal_message(host: str, port: int, family: str, reason: Reason, org: str 
 
 
 @dataclass(frozen=True, slots=True)
+class NetworkBounds:
+    """The organisation's network bounds (ADR 0070): its ceiling's allowed set (`None` = no cap) and
+    the deny lists of the ceiling and the instance, in the host patterns of `choregos_core.network`."""
+
+    allow: tuple[str, ...] | None = None
+    deny: tuple[str, ...] = ()
+
+    def refusal(self, host: str) -> str | None:
+        """Why the bounds refuse a call to `host` (`denied:<p>`, `not_allowed`), or `None`. A `*.`
+        host (a rule, a connector reaching every subdomain) is refused when a deny covers it."""
+        from .network import covered, outside, platform_allowed
+
+        if host.startswith("*."):
+            if (hit := covered(host, self.deny)) is not None:
+                return f"denied:{hit}"
+            return "not_allowed" if outside([host], self.allow) else None
+        ok, why = platform_allowed(host, self.allow, self.deny)
+        return None if ok else why
+
+
+@dataclass(frozen=True, slots=True)
 class EgressPolicy:
-    """The organisation's allowlist for one pod family, a ceiling, and the enforcement mode."""
+    """The organisation's allowlist for one pod family, a ceiling, the enforcement mode, and the
+    organisation's network bounds (ADR 0070), which every mode enforces."""
 
     org: str = ""
     rules: tuple[AllowedRule, ...] = ()
@@ -163,6 +200,7 @@ class EgressPolicy:
     #: family -> host patterns; an empty or absent family is unknown (not checked)
     ceiling: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     mode: Mode = "enforce"
+    bounds: NetworkBounds | None = None
 
     def verdict(self, host: str, port: int = 443, family: str = "api") -> Verdict:
         host = normalize_host(host, allow_wildcard=True)
@@ -180,7 +218,12 @@ class EgressPolicy:
         return Verdict(host, port, family, org, ceiling)
 
     def check(self, host: str, port: int = 443, family: str = "api", origin: str = "") -> Verdict:
-        """Raises `EgressRefusedError` in `enforce`; logs and passes in `warn`; passes in `off`."""
+        """Raises `EgressRefusedError` in `enforce`; logs and passes in `warn`; passes in `off`. The
+        network bounds come first and refuse in every mode: a deny always wins."""
+        if self.bounds is not None:
+            name = normalize_host(host, allow_wildcard=True)
+            if (why := self.bounds.refusal(name)) is not None:
+                raise EgressRefusedError(name, port, family, "network_policy", self.org, why)
         verdict = self.verdict(host, port, family)
         if verdict.ok or self.mode == "off":
             return verdict

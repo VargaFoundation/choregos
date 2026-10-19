@@ -130,3 +130,46 @@ async def test_a_remote_agents_admission_reads_the_union_not_the_project_alone(s
             project=project, engine=SimpleNamespace(allow_domains=lambda: ["github.com"])
         )
         await check_remote_agent(session, bundle, runtime)
+
+
+@pytest.mark.asyncio
+async def test_a_runners_rule_the_ceiling_denies_does_not_join_the_run(setup: Fixture) -> None:
+    """ADR 0070, amended at integration: what the organisation opened for its runners joins a run as
+    an implied host, and the deny lists still win over it."""
+    from choregos_api.db.models import Organization, Project
+    from choregos_api.db.session import session_scope
+
+    await _rule(setup, "a2a.example.test", ["runners"])
+    await _rule(setup, "blocked.example.test", ["runners"])
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        org = await session.get(Organization, project.org_id)
+        assert org is not None
+        ceiling = {"network": {"deny_domains": ["blocked.example.test"]}}
+        org.settings = {**(org.settings or {}), "policy_ceiling": {"ceiling": ceiling}}
+    permissions = (await stage_activities.prepare_stage(_plan(setup)))["stage_input"]["permissions"]
+    assert "a2a.example.test" in permissions["allow_domains"]
+    assert "blocked.example.test" not in permissions["allow_domains"]
+    assert "blocked.example.test" in permissions["deny_domains"]
+
+
+@pytest.mark.asyncio
+async def test_a_remote_agents_host_a_deny_list_names_is_refused_even_when_opened(setup: Fixture) -> None:
+    from types import SimpleNamespace
+
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.remote import check_remote_agent
+    from temporalio.exceptions import ApplicationError
+
+    await _rule(setup, "a2a.example.test", ["runners"])
+    runtime = SimpleNamespace(
+        pinned_card=SimpleNamespace(url="https://a2a.example.test/v1/rpc"), credential=None
+    )
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        bundle = SimpleNamespace(project=project, engine=SimpleNamespace(allow_domains=lambda: []))
+        await check_remote_agent(session, bundle, runtime)
+        with pytest.raises(ApplicationError, match="denied by the network policy"):
+            await check_remote_agent(session, bundle, runtime, deny=["example.test"])

@@ -452,8 +452,10 @@ and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 ## Network access: the egress allowlist and its ceiling
 
 The organisation's administrator decides, in the console, which hosts the platform may call for
-the organisation ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). What only the
-operator sets is under `global.egress`, rendered as `CHOREGOS_EGRESS_MODE`,
+the organisation ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)), within the bounds of
+its policy ceiling's `network` section ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md),
+amended: one model). What only the operator sets is one `global.egress` block — the keys below and
+those of the per-run egress proxy (`enabled`, `denyDomains`…, further down) — rendered as `CHOREGOS_EGRESS_MODE`,
 `CHOREGOS_EGRESS_CEILING` and `CHOREGOS_EGRESS_PLATFORM_CHANGE` on the API and every worker:
 
 ```yaml

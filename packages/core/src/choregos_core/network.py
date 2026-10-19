@@ -100,6 +100,26 @@ def allowed(host: str, allow: Iterable[str], deny: Iterable[str] = ()) -> tuple[
     return False, "not_allowed"
 
 
+def is_internal(host: str) -> bool:
+    """An IP literal or a single-label name (`pfsense`): an organisation's own appliance, reached by
+    address, not a host on the internet."""
+    name = normalise_host(host)
+    return _is_ip(name) or "." not in name
+
+
+def platform_allowed(host: str, allow: Sequence[str] | None, deny: Iterable[str] = ()) -> tuple[bool, str]:
+    """Whether the PLATFORM may call `host` for an organisation under its network bounds (the
+    ceiling's `allow_domains`, `None` = no cap, and the deny lists), and why. An internal host is
+    not subject to the allowed set (the bounds govern the internet); only a deny entry that names it
+    refuses it. Used by the API's declaration and call checks and by the guarded transport of every
+    platform client (ADR 0070, amended: one decision for a platform call)."""
+    name = normalise_host(host)
+    deny = list(deny)
+    if is_internal(name):
+        return (False, "denied") if any(name == p for p in deny) else (True, "internal")
+    return allowed(name, ["*"] if allow is None else allow, deny)
+
+
 def pattern_within(inner: str, outer: str) -> bool:
     """Whether every host `inner` matches is also matched by `outer` (so `inner` only narrows)."""
     if outer == "*":
@@ -327,9 +347,11 @@ __all__ = [
     "covered",
     "effective_network",
     "host_matches",
+    "is_internal",
     "normalise_host",
     "outside",
     "pattern_within",
+    "platform_allowed",
     "repo_host",
     "unsatisfied",
     "validate_pattern",
