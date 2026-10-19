@@ -41,6 +41,10 @@ STAGE_RETRY = RetryPolicy(
 #: S37-15 (#714): a cancellation caught around a live case stops the matrix. Before it, the case
 #: was judged as a failure and the next one started; a history recorded then replays that way.
 CANCEL_STOPS_THE_MATRIX = "eval-cancel-stops-the-matrix"
+#: S37-15b: a cancellation during `prepare_stage` waits for it, then stops the run it prepared.
+#: `prepare_stage` does not heartbeat, so it may commit after the cancellation: a run row and a
+#: reserved gateway key stayed behind, holding budget.
+CANCEL_WAITS_FOR_PREPARE = "eval-cancel-waits-for-prepare"
 POLL_RETRY = RetryPolicy(
     initial_interval=timedelta(seconds=5),
     backoff_coefficient=2.0,
@@ -146,12 +150,7 @@ class EvalMatrix:
             return {**seeded, "fixture": fixture}
         plan = seeded["plan"]
         try:
-            prepared = await executer_activite(
-                stage_activities.prepare_stage,
-                plan,
-                start_to_close_timeout=timedelta(minutes=5),
-                retry_policy=STAGE_RETRY,
-            )
+            prepared = await self._prepare(plan)
         except ActivityError as exc:
             if is_cancelled_exception(exc) and workflow.patched(CANCEL_STOPS_THE_MATRIX):
                 raise  # the matrix is cancelled: no run was started, there is nothing to stop
@@ -213,6 +212,40 @@ class EvalMatrix:
             retry_policy=RETRY,
         )
         return verdict
+
+    async def _prepare(self, plan: dict[str, Any]) -> dict[str, Any]:
+        """`prepare_stage`; a cancellation meanwhile waits for it, then stops the run it made.
+
+        The activity cannot learn of the cancellation (no heartbeat) and may commit its run and
+        its key reservation anyway; stopping it before it ends could run `cancel_run` ahead of
+        that commit and miss it."""
+        if not workflow.patched(CANCEL_WAITS_FOR_PREPARE):
+            prepared: dict[str, Any] = await executer_activite(
+                stage_activities.prepare_stage,
+                plan,
+                start_to_close_timeout=timedelta(minutes=5),
+                retry_policy=STAGE_RETRY,
+            )
+            return prepared
+        preparing = asyncio.ensure_future(
+            executer_activite(
+                stage_activities.prepare_stage,
+                plan,
+                start_to_close_timeout=timedelta(minutes=5),
+                retry_policy=STAGE_RETRY,
+            )
+        )
+        try:
+            prepared = await asyncio.shield(preparing)
+        except asyncio.CancelledError:
+            try:
+                made = await preparing
+            except BaseException:  # it failed: nothing was prepared to stop
+                raise asyncio.CancelledError from None
+            if made.get("run_id"):
+                await self._stop_case({"project_id": plan["project_id"], "run_id": made["run_id"]})
+            raise
+        return prepared
 
     async def _stop_case(self, ids: dict[str, Any]) -> None:
         """The run of a cancelled case: archived, stopped on its executor, its spend booked and its
