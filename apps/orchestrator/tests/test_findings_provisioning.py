@@ -244,3 +244,40 @@ async def test_a_memory_timeout_does_not_undo_a_filed_finding(setup: Fixture) ->
     again = await findings_activities.triage_finding(payload)
     assert again.get("reused") is True, again
     assert tickets() == created_before + 1, "one finding, one ticket"
+
+
+async def test_a_failure_after_the_ticket_is_filed_files_it_once(setup: Fixture) -> None:
+    """A tracker error after `create_item` rolled the finding back to `pending`, and each retry
+    filed one more ticket (#744). The retry now answers with the ticket the first attempt filed."""
+    from choregos_api.db.models import Finding
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities import findings as findings_activities
+
+    async def unreachable(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("tracker 502 on link")
+
+    tracker = setup.adapters.tracker
+    tracker.link = unreachable  # type: ignore[method-assign]
+
+    def tickets() -> int:
+        return sum(1 for name, _ in tracker.calls if name == "create_item")
+
+    created_before = tickets()
+    finding_id = await _add_finding(setup, "Lint target skips the tests folder", "Makefile:12 lists src only")
+    payload = {"project_slug": setup.project_slug, "finding_id": finding_id}
+
+    outcome = await findings_activities.triage_finding(payload)
+    assert outcome["status"] == "created", outcome
+    assert outcome["linked"] is False, "the missing link must be said, not guessed"
+    async with session_scope() as session:
+        row = await session.get(Finding, finding_id)
+        assert row is not None and row.status == "created"
+
+    again = await findings_activities.triage_finding(payload)
+    assert again["reused"] is True, again
+    assert tickets() == created_before + 1, "one finding, one ticket"
+    # FindingsTriage reads these keys to start the new work item: a bare `created` stalled it.
+    assert again["status"] == "created"
+    assert again["work_item_key"] == outcome["work_item_key"]
+    assert again["work_item_id"] == outcome["work_item_id"]
+    assert again["agent_ready"] == outcome["agent_ready"]
