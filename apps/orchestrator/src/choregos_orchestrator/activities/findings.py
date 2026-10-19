@@ -148,19 +148,29 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                     severity="error" if row.severity == "critical" else "warning",
                 ),
             )
+        remembered: bool | None = None
         if bundle.engine.memory_enabled():
             from choregos_core import Fact, Provenance
 
-            await bundle.adapters.memory.write_fact(
-                bundle.slug,
-                Fact(
-                    kind="finding",
-                    subject=f"finding:{bundle.slug}:{row.id}",
-                    content=f"{row.title} — {row.evidence}",
-                    external_id=f"finding:{row.id}",
-                    provenance=Provenance(source="agent", run_id=row.origin_run_id),
-                ),
-            )
+            # A courtesy too (S22-35b): the ticket already exists. On the dev tenant, on 2026-10-18,
+            # the memory answered with a `ReadTimeout`, the activity rolled back the finding, and
+            # its retry filed the same ticket a second time (choregos-sandbox-dev#26 and #27).
+            try:
+                await bundle.adapters.memory.write_fact(
+                    bundle.slug,
+                    Fact(
+                        kind="finding",
+                        subject=f"finding:{bundle.slug}:{row.id}",
+                        content=f"{row.title} — {row.evidence}",
+                        external_id=f"finding:{row.id}",
+                        provenance=Provenance(source="agent", run_id=row.origin_run_id),
+                    ),
+                )
+                remembered = True
+            # Deliberately broad, as for the notifier: no memory failure may undo a filed ticket.
+            except Exception as exc:
+                activity.logger.warning("finding %s NOT written to memory: %s", row.id, exc)
+                remembered = False
         await persist_event(
             session,
             EventType.FINDING_CREATED,
@@ -178,6 +188,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
             "work_item_id": created.id,
             "agent_ready": auto,
             "notified": notified,
+            "remembered": remembered,
         }
 
 
