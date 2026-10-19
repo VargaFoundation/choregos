@@ -112,6 +112,15 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
         return await _appeler_le_connecteur(ctx, params)
 
 
+async def _within_the_network_bounds(ctx: ContexteEffet, instance: OrgConnector, label: str) -> None:
+    """The organisation's network bounds are read again at the moment of the call (ADR 0070): they
+    may have been tightened since the action was approved. A refusal is final, the action compensates."""
+    try:
+        await enforce_connector_call(ctx.session, instance, project=ctx.project, polite=False)
+    except PlatformNetworkRefused as refus:
+        raise EffetRefuse(f"{label} : {refus.message()}") from refus
+
+
 async def _appeler_le_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, Any]:
     """`connector.call` : une opération d'un connecteur de l'organisation, clé résolue ICI.
 
@@ -163,12 +172,7 @@ async def _appeler_le_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> 
         except jsonschema.ValidationError as exc:
             raise EffetRefuse(f"{nom}/{operation} : {exc.message}") from exc
     arguments.update(await _arguments_de_la_plateforme(ctx, instance, operation, arguments))
-    # The organisation's network policy is read again at the moment of the call (ADR 0070): it may
-    # have been tightened since the action was approved. A refusal is final, the action compensates.
-    try:
-        await enforce_connector_call(ctx.session, instance, project=ctx.project, polite=False)
-    except PlatformNetworkRefused as refus:
-        raise EffetRefuse(f"{nom}/{operation} : {refus.message()}") from refus
+    await _within_the_network_bounds(ctx, instance, f"{nom}/{operation}")
     try:
         config = await with_identity(
             ctx.session,
