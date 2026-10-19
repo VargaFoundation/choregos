@@ -69,6 +69,7 @@ def _prompt(config: ProjectConfig, agent: Any) -> str:
         body_snapshot="",
         documents={},
         allowed_paths=[],
+        fields={},
     )
     bundle = SimpleNamespace(config=config)
     return _render_playbook(plan, bundle, item, ContextPack.empty("q"), agent)  # type: ignore[arg-type]

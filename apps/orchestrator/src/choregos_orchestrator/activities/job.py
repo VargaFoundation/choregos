@@ -33,6 +33,7 @@ from choregos_core import utcnow
 from choregos_core.redaction import REDACTED
 from temporalio.exceptions import ApplicationError
 
+from ..org_egress import org_runner_hosts
 from .base import without_secrets
 from .images import named_image
 from .plan import StagePlan
@@ -129,7 +130,7 @@ async def prepare_job(
         allowed_paths=allowed_paths,
         playbook=PlaybookRef(ref=job_ref(command, image)),
         permissions=network_permissions(
-            run_network(bundle, None, settings),
+            run_network(bundle, None, settings, await org_runner_hosts(session, bundle.project.org_id)),
             write_paths=allowed_paths,
             deny_commands=engine.deny_commands(),
             dod_iterations=0,

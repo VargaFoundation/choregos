@@ -121,6 +121,11 @@ spec:
   replicas: {{ int (.Values.runner.warmPool.size | default 0) }}
   sandboxTemplateRef:
     name: choregos-runner
+  # A warm sandbox made from an older template is deleted at once, not handed to the next claim.
+  # The operator's default (`OnReplenish`) keeps it until it is claimed: after an upgrade, the
+  # first run of the new version ran in the previous version's runner (dev, 0.18.1 → 0.18.3).
+  updateStrategy:
+    type: Recreate
 {{- if ne $sandbox.assignmentNetworkPolicy false }}
 ---
 # Who may push an assignment to a warm sandbox: the orchestrator's `executor` workers, and no one

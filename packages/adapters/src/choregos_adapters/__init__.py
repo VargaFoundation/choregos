@@ -33,6 +33,7 @@ from .registry import (
     configuration_resolue,
     connector_types,
     deployment_default_type,
+    egress_hosts,
     fakes_enabled,
     operation_spec,
     register,
@@ -69,12 +70,23 @@ __all__ = [
     "configuration_resolue",
     "connector_types",
     "deployment_default_type",
+    "egress_hosts",
     "fakes_enabled",
     "operation_spec",
     "register",
     "spec_of",
     "type_par_defaut",
 ]
+
+
+def _confluence_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
+    """The site, plus `api.atlassian.com` when a scoped token is called through it."""
+    from choregos_core.egress import hosts_of_config
+
+    hosts = hosts_of_config(config)
+    if config.get("auth") == "scoped" and ("api.atlassian.com", 443) not in hosts:
+        hosts.append(("api.atlassian.com", 443))
+    return hosts
 
 
 def _github_client(config: dict[str, Any]) -> Any:
@@ -377,6 +389,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("base_url", "email"),
         ),
         ("api_token",),
+        egress=_confluence_egress,
     ),
     # A private git repository as a knowledge source (S39-18b): a token, or a GitHub App's short-lived
     # installation token. The credential is pinned to `host`.

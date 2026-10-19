@@ -239,6 +239,9 @@ class OrgConnectorCreate(Dto):
     #: Secret values typed in the console, field -> value: write-only (ADR 0058).
     secret_values: dict[str, str] = Field(default_factory=dict, repr=False)
     availability: Literal["all_projects", "selected_projects"] = "all_projects"
+    #: Open the connector's hosts in the organisation's egress allowlist in the same call (S39-22):
+    #: without it a missing host is a 409 `egress_required`. Needs `tools:grant`.
+    allow_egress: bool = False
 
 
 class OrgConnectorUpdate(Dto):
@@ -250,6 +253,7 @@ class OrgConnectorUpdate(Dto):
     secret_values: dict[str, str] | None = Field(default=None, repr=False)
     #: the organisation's administrator only (ADR 0074)
     availability: Literal["all_projects", "selected_projects"] | None = None
+    allow_egress: bool = False
 
 
 class ProjectOrgConnectorDto(Dto):

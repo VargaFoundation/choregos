@@ -142,8 +142,26 @@ def test_a_skill_without_any_licence_is_dropped() -> None:
 
 
 def test_a_binary_file_drops_the_skill_as_the_gate_does() -> None:
-    result = run({"demo/SKILL.md": skill_md("demo"), "demo/font.ttf": b"\xff\xfe\x00\x01", "LICENSE": MIT})
+    result = run({"demo/SKILL.md": skill_md("demo"), "demo/blob.bin": b"\xff\xfe\x00\x01", "LICENSE": MIT})
     assert isinstance(result, gen.Dropped) and result.reason.startswith("gate:") and "UTF-8" in result.reason
+
+
+def test_a_bundled_image_is_shipped_as_its_bytes_and_read_back_as_the_base64_it_is_stored_as(
+    tmp_path: pathlib.Path,
+) -> None:
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00\x01\x02\xff" * 8
+    files = {"demo/SKILL.md": skill_md("demo"), "demo/assets/logo.png": png, "LICENSE": MIT}
+    entry, licence = run(files, line={"name": "demo", "categories": ["engineering"], "delivery": "bundled"})
+    assert entry["delivery"] == "bundled"
+    assert entry["bytes"] == len(skill_md("demo").encode()) + len(png), "the image counts as its bytes"
+    stored = read_tarball(make_tar(files), "").skills[0].files
+    tree = gen.bundled_tree({"demo": {"entry": entry, "files": stored, "licence": licence}})
+    assert tree[pathlib.Path("demo/files/assets/logo.png")] == png, "the image, not its base64"
+    for relative, data in tree.items():
+        (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / relative).write_bytes(data)
+    bundle = skill_catalogue.read_bundled("demo", root=tmp_path)
+    assert bundle.files == stored and empreinte(bundle.files) == entry["digest"]
 
 
 def test_a_skill_declaring_permissions_is_dropped_as_the_gate_does() -> None:

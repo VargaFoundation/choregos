@@ -45,7 +45,7 @@ class ApiError(Exception):
         self.type = type_
         self.errors = errors or []
         self.retry_after = retry_after
-        #: Machine-readable extension members of the problem (RFC 9457 §3.2), e.g. `code`.
+        #: more members of the problem document (`code`, `verdicts`...), never overriding the standard ones
         self.extra = extra or {}
 
     def to_problem(self, instance: str = "") -> dict[str, Any]:

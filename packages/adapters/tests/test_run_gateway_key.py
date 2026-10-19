@@ -222,8 +222,13 @@ async def test_aca_passes_the_key_as_a_job_secret() -> None:
 async def test_local_docker_gives_the_container_the_key() -> None:
     calls: list[list[str]] = []
 
-    async def docker(*args: str, timeout: float = 120.0) -> tuple[int, str, str]:
+    envs_given: list[dict[str, str] | None] = []
+
+    async def docker(
+        *args: str, timeout: float = 120.0, env: dict[str, str] | None = None
+    ) -> tuple[int, str, str]:
         calls.append(list(args))
+        envs_given.append(env)
         return (1, "", "no such container") if args[0] == "inspect" else (0, "", "")
 
     executor = LocalDockerExecutor(network="net")
@@ -231,7 +236,9 @@ async def test_local_docker_gives_the_container_the_key() -> None:
     await executor.start(_spec())
     run = next(call for call in calls if call[0] == "run")
     envs = [run[i + 1] for i, arg in enumerate(run) if arg == "--env"]
-    assert f"{RUN_GATEWAY_KEY_ENV}={KEY}" in envs
+    # Named on the command line, valued in docker's own environment (#439).
+    assert RUN_GATEWAY_KEY_ENV in envs and KEY not in " ".join(run)
+    assert (envs_given[calls.index(run)] or {})[RUN_GATEWAY_KEY_ENV] == KEY
 
 
 # ─────────────────────────────── the fake ───────────────────────────────

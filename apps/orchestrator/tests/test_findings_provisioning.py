@@ -207,3 +207,40 @@ async def test_the_false_positive_alert_without_a_notifier_still_answers(setup: 
 
     assert outcome["alert"] is True, outcome
     assert outcome["notified"] is False, outcome
+
+
+# ──────── a memory failure never files a finding twice (S22-35b) ────────
+
+
+async def test_a_memory_timeout_does_not_undo_a_filed_finding(setup: Fixture) -> None:
+    """The memory's `ReadTimeout` rolled back the finding after its ticket was created, and the
+    activity's retry filed the same ticket again (dev tenant, 2026-10-18)."""
+    import httpx
+    from choregos_api.db.models import Finding
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities import findings as findings_activities
+
+    async def timeout(*args: Any, **kwargs: Any) -> None:
+        raise httpx.ReadTimeout("memory did not answer")
+
+    setup.adapters.memory.write_fact = timeout  # type: ignore[method-assign]
+    tracker = setup.adapters.tracker
+
+    def tickets() -> int:
+        return sum(1 for name, _ in tracker.calls if name == "create_item")
+
+    created_before = tickets()
+    finding_id = await _add_finding(setup, "Typecheck target runs no checker", "Makefile:20 prints a message")
+    payload = {"project_slug": setup.project_slug, "finding_id": finding_id}
+
+    outcome = await findings_activities.triage_finding(payload)
+    assert outcome["status"] == "created", outcome
+    assert outcome["remembered"] is False, "the silence must be said, not guessed"
+    async with session_scope() as session:
+        row = await session.get(Finding, finding_id)
+        assert row is not None and row.status == "created"
+
+    # What Temporal does after a failed attempt: the same payload once more.
+    again = await findings_activities.triage_finding(payload)
+    assert again.get("reused") is True, again
+    assert tickets() == created_before + 1, "one finding, one ticket"

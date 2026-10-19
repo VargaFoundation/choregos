@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import {
   EMPTY_DRAFT,
@@ -11,6 +12,7 @@ import {
   type SecretDraft,
 } from "@/components/secret-field";
 import { Button, Select } from "@/components/ui";
+import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import type { ConnectorDto, ConnectorType } from "@/lib/types";
 
 export type ConnectorBody = {
@@ -78,6 +80,15 @@ export function ConnectorForm({
           ))}
         </Select>
       </label>
+      {choisi && (
+        <div className="flex items-center gap-2">
+          <ProcedurePanel
+            target={connectorTarget(choisi.kind, choisi.type)}
+            preset={choisi.kind === "mcp" ? presetOfMcpUrl(config.url) : undefined}
+            autoOpen={!actuel}
+          />
+        </div>
+      )}
       <SchemaForm schema={schema} value={config} onChange={setConfig} />
       {(choisi?.secret_fields ?? []).length > 0 && (
         <fieldset className="space-y-2">

@@ -901,6 +901,9 @@ class SkillGitRequest(Dto):
     repo_url: str = Field(max_length=300)
     #: The folder of the repository holding one skill, or several skill folders; `""` is the root.
     path: str = Field(default="", max_length=300)
+    #: Open GitHub's (or GitLab's) hosts in the organisation's egress allowlist in the same call
+    #: (S39-22): without it a missing host is a 409 `egress_required`. Needs `tools:grant`.
+    allow_egress: bool = False
 
 
 class SkillGitPreviewRequest(SkillGitRequest):

@@ -10,7 +10,9 @@
 # appelle chacun à la construction. Les autres lignes décrivent des backends supportés dont
 # l'image ne porte pas le binaire.
 # OpenHands a été retiré le 2026-09-21 (docs/adr/0011-retrait-d-openhands.md).
-claude-agent-acp=0.16.2
+# npm `@agentclientprotocol/claude-agent-acp`, binary `claude-agent-acp` (#436); it replaces the
+# deprecated `@zed-industries/claude-code-acp`.
+claude-agent-acp=0.85.1
 codex-acp=0.4.2
 # renovate: datasource=github-releases depName=google-gemini/gemini-cli
 gemini-cli=0.60.0

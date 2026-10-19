@@ -26,6 +26,8 @@ from typing import Any
 import httpx
 from choregos_core.mcp import VERSIONS
 
+from ..http.egress import guarded
+
 #: Au-delà, un serveur qui pagine sans fin est une erreur, pas une liste.
 PAGES_MAX = 50
 
@@ -176,7 +178,7 @@ class ClientMcp:
         )
 
     def _http(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(timeout=self._timeout, transport=self._transport)
+        return httpx.AsyncClient(timeout=self._timeout, transport=guarded(self._transport))
 
     async def list_tools(self) -> list[OutilMcp]:
         async with self._http() as http:

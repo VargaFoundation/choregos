@@ -26,6 +26,7 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
+from ..http.egress import guarded
 from .base import Changes, SourceItem, SourceRefusedError
 
 USER_AGENT = "ChoregosKnowledge/1.0 (+https://choregos.dev)"
@@ -106,7 +107,10 @@ class WebCrawlSource:
         self._rate_delay = 60.0 / per_host_per_minute if per_host_per_minute else 0.0
         self._sleep = sleep
         self._http = httpx.AsyncClient(
-            timeout=20.0, transport=transport, follow_redirects=False, headers={"User-Agent": user_agent}
+            timeout=20.0,
+            transport=guarded(transport),
+            follow_redirects=False,
+            headers={"User-Agent": user_agent},
         )
         self._pages: dict[str, bytes] = {}
 

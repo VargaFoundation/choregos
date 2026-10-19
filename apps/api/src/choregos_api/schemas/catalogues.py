@@ -74,6 +74,8 @@ class McpCatalogueEntryDto(Dto):
     can: CataloguePermissions
     cannot_reason: str | None = None
     enablement: list[ConnectorEnablement] = Field(default_factory=list)
+    #: The setup procedure (`GET /procedures/{id}`) its install shows: its own, else the generic MCP one.
+    procedure: str | None = None
 
 
 class McpCatalogueDto(Dto):
@@ -89,6 +91,15 @@ class McpCatalogueInstall(Dto):
     auth_header: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{1,64}$")
     #: `all_projects` (the API default) or `selected_projects`: only the projects it is enabled for
     availability: Availability = "all_projects"
+    #: Open the server's host in the organisation's egress allowlist in the same call (S39-22);
+    #: without it a missing host is a 409 `egress_required`. Needs `tools:grant`.
+    allow_egress: bool = False
+
+
+class SkillCatalogueInstall(Dto):
+    #: Open the repository's hosts in the organisation's egress allowlist in the same call (S39-22),
+    #: for an entry delivered from git; without it a missing host is a 409 `egress_required`.
+    allow_egress: bool = False
 
 
 class SkillCatalogueSignalsDto(Dto):

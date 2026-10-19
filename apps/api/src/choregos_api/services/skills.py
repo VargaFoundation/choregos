@@ -8,7 +8,8 @@ Ce qui entre est vérifié ICI, une fois, avant d'être une version :
 - **aucune permission déclarée** : un champ `allowed-tools` est refusé. Ce qu'un agent peut appeler
   se décide par sa version et son projet, jamais par un fichier qu'il lit ;
 - an archive does not leave its folder (zip-slip), carries no symbolic link, fits in 256 files and
-  5 MiB (S32-06), and holds only text.
+  5 MiB (S32-06), and holds only text, or an inert binary (a font, an image: base64, magic bytes
+  checked, 512 KiB at most, `skill_files`).
 """
 
 from __future__ import annotations
@@ -22,7 +23,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import yaml
-from choregos_contracts import empreinte_de_skill
+from choregos_contracts import (
+    check_inert_binary,
+    empreinte_de_skill,
+    encode_binary,
+    is_inert_binary_path,
+    skill_file_bytes,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +62,29 @@ def chemin_sur(chemin: str) -> str:
     return normalise
 
 
+def file_value(chemin: str, donnees: bytes) -> str:
+    """The stored string of one imported file: base64 for an inert binary (checked), UTF-8 text
+    for anything else; the reason it is refused otherwise."""
+    if is_inert_binary_path(chemin):
+        try:
+            check_inert_binary(chemin, donnees)
+        except ValueError as erreur:
+            raise SkillRefusee(str(erreur)) from erreur
+        return encode_binary(donnees)
+    try:
+        return donnees.decode("utf-8")
+    except UnicodeDecodeError as erreur:
+        raise SkillRefusee(f"`{chemin}` is not UTF-8 text, nor an accepted font or image") from erreur
+
+
+def _size(chemin: str, valeur: str) -> int:
+    """The decoded size of a stored file, which is what the caps count."""
+    try:
+        return len(skill_file_bytes(chemin, valeur))
+    except ValueError as erreur:
+        raise SkillRefusee(str(erreur)) from erreur
+
+
 def lire_le_zip(contenu: bytes) -> dict[str, str]:
     """Les fichiers d'une archive, vérifiés ; un dossier racine commun est retiré."""
     return read_zip(contenu)[0]
@@ -84,10 +114,7 @@ def read_zip(contenu: bytes) -> tuple[dict[str, str], list[str]]:
             lus += len(donnees)
             if lus > MAX_OCTETS:
                 raise SkillRefusee(f"more than {MAX_OCTETS // 1024} KiB once uncompressed")
-            try:
-                fichiers[chemin] = donnees.decode("utf-8")
-            except UnicodeDecodeError as erreur:
-                raise SkillRefusee(f"`{chemin}` is not UTF-8 text") from erreur
+            fichiers[chemin] = file_value(chemin, donnees)
             if (info.external_attr >> 16) & 0o111:
                 executables.add(chemin)
     racines = {chemin.split("/", 1)[0] for chemin in fichiers}
@@ -122,7 +149,13 @@ def valider(fichiers: dict[str, str], slug: str | None = None) -> Entete:
     for chemin in fichiers:
         if chemin_sur(chemin) != chemin:
             raise SkillRefusee(f"`{chemin}`: path is not normalised")
-    if sum(len(texte.encode("utf-8")) for texte in fichiers.values()) > MAX_OCTETS:
+    for chemin, valeur in fichiers.items():
+        if is_inert_binary_path(chemin):
+            try:
+                check_inert_binary(chemin, skill_file_bytes(chemin, valeur))
+            except ValueError as erreur:
+                raise SkillRefusee(str(erreur)) from erreur
+    if sum(_size(chemin, valeur) for chemin, valeur in fichiers.items()) > MAX_OCTETS:
         raise SkillRefusee(f"more than {MAX_OCTETS // 1024} KiB")
     if "SKILL.md" not in fichiers:
         raise SkillRefusee("SKILL.md is missing at the root")

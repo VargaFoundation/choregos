@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -14,6 +15,8 @@ from choregos_quant.bars import read_bars
 from choregos_quant.cli import main
 from choregos_quant.errors import InputError
 from choregos_quant.snapshot import Fetched, FetchError, HttpFetcher, parse_response
+
+from .conftest import CAMPAIGN
 
 BAR = {"date": "2020-01-02", "open": 1, "high": 2, "low": 0.5, "close": 1.5, "adj_close": None, "volume": 100}
 
@@ -80,6 +83,38 @@ def test_the_cross_check_of_each_symbol_is_kept_and_counted(workdir: Path) -> No
     assert snap["cross_check"] == checks
     facts = json.loads((workdir / "snap" / "result.json").read_text())["facts"]
     assert (facts["cross_checked"], facts["diverging"]) == (2, 1)
+    assert facts["max_rel_diff"] == 0.2
+
+
+def test_the_excess_over_the_campaign_threshold_is_a_fact(workdir: Path) -> None:
+    """S38-14: `diverging_excess` is what the `t-snapshot` gate caps; the campaign's
+    `max_diverging_symbols` moves it, and a stored snapshot is judged against the same threshold."""
+    differ = {"source": "b", "common_days": 2, "max_rel_diff": 0.2, "diverging_days": 1}
+    checks = {"AAA": differ, "BBB": differ, "CCC": None}
+
+    def composite(symbol: str, start: str, end: str) -> Fetched:
+        return Fetched("a", [BAR], checks[symbol])
+
+    def excess() -> int:
+        facts = json.loads((workdir / "snap" / "result.json").read_text())["facts"]
+        return int(facts["diverging_excess"])
+
+    assert main(args(workdir), fetcher=composite) == 0
+    assert excess() == 2, "two symbols diverge, none is tolerated"
+    campaign = workdir / "campaign.json"
+    campaign.write_text(json.dumps({**CAMPAIGN, "max_diverging_symbols": 1}))
+    assert main(args(workdir), fetcher=composite) == 0
+    assert excess() == 1
+    campaign.write_text(json.dumps({**CAMPAIGN, "max_diverging_symbols": 5}))
+    shutil.copytree(workdir / "snap", workdir / "stored")
+
+    def never(symbol: str, start: str, end: str) -> Fetched:
+        raise AssertionError("the stored snapshot answers: nothing is fetched")
+
+    assert main(args(workdir, "--previous", str(workdir / "stored")), fetcher=never) == 0
+    assert excess() == 0
+    campaign.write_text(json.dumps({**CAMPAIGN, "max_diverging_symbols": -1}))
+    assert main(args(workdir), fetcher=composite) == 2
 
 
 def test_snapshot_missing_symbols_exit_3(workdir: Path) -> None:

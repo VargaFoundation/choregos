@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from choregos_contracts import SkillRef, empreinte_de_skill
+from choregos_contracts import SkillRef, empreinte_de_skill, is_inert_binary_path, skill_file_bytes
 
 REPLI = ".choregos/skills"
 
@@ -50,7 +50,13 @@ def poser(
         if skill is None:
             raise SkillInvalide(f"the skill `{ref.slug}@{ref.version}` was not delivered")
         fichiers: dict[str, str] = dict(skill.get("files") or {})
-        if empreinte_de_skill(fichiers) != ref.digest:
+        try:
+            digest = empreinte_de_skill(fichiers)
+        except ValueError as erreur:
+            raise SkillInvalide(
+                f"the skill `{ref.slug}@{ref.version}` carries a corrupt binary: {erreur}"
+            ) from erreur
+        if digest != ref.digest:
             raise SkillInvalide(
                 f"the skill `{ref.slug}@{ref.version}` does not have the digest the run expects"
             )
@@ -61,7 +67,12 @@ def poser(
             relatif = f"{racine}/{ref.slug}/{normalise}"
             cible = workspace / relatif
             cible.parent.mkdir(parents=True, exist_ok=True)
-            cible.write_text(texte, encoding="utf-8")
+            if is_inert_binary_path(normalise):
+                # A font or an image: the bytes, never an exec bit (a plain 0o644 file).
+                cible.write_bytes(skill_file_bytes(normalise, texte))
+                cible.chmod(0o644)
+            else:
+                cible.write_text(texte, encoding="utf-8")
             ecrits.append(relatif)
         if skills_dir is None:
             description = _description(fichiers.get("SKILL.md", ""))

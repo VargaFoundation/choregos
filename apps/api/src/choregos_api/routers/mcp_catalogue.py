@@ -13,6 +13,8 @@ from typing import Annotated, Literal
 
 from choregos_core import mcp_catalogue as catalogue
 from choregos_core.catalogues import CatalogueError
+from choregos_core.procedures import load as load_procedures
+from choregos_core.procedures import procedure_of_mcp_entry
 from fastapi import APIRouter, Path, Query, status
 from sqlalchemy import select
 
@@ -84,6 +86,7 @@ def _dto(
         state=state,
         installed_as=[name for name, _ in here],
         egress=egress_of(entry.egress_hosts, declared),
+        procedure=procedure_of_mcp_entry(load_procedures(get_settings().procedures_extra), entry.id),
     )
     refusal = _refusal_for(entry)
     here_enablement = [enablement[name] for name, _ in here if name in enablement]
@@ -219,6 +222,7 @@ async def install_mcp_catalogue_entry(
         secret_refs=secret_refs,
         secret_values=body.secret_values,
         availability=body.availability,
+        allow_egress=body.allow_egress,
     )
     return await declare_org_connector(
         session,

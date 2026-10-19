@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -59,11 +59,19 @@ async def test_sans_projet_mesurable_rien_n_est_poste(setup: Fixture) -> None:
     assert setup.adapters.notify.sent == []
 
 
-async def test_le_rapport_ne_part_qu_une_fois_par_semaine(
-    setup: Fixture, temporal_env: Any, worker_factory: Any
-) -> None:
-    """Deux cycles d'ingestion dans la même semaine ISO : un seul rapport."""
-    await _closed_tickets(setup.project_id, count=2, attempts=1, cost=1.0)
+async def _skip_to(temporal_env: Any, weekday: int, at: timedelta) -> None:
+    """#727: move the test server's clock, which starts at wall-clock time, to a fixed weekday.
+
+    `weekday` is ISO (1 = Monday), `at` the time of day (UTC). Without it, a run straddling Monday 00:00 UTC
+    sees two ISO weeks and the workflow rightly sends two reports.
+    """
+    now = await temporal_env.get_current_time()
+    days = (weekday - now.isoweekday()) % 7 or 7
+    target = datetime(now.year, now.month, now.day, tzinfo=UTC) + timedelta(days=days) + at
+    await temporal_env.sleep(target - now)
+
+
+async def _ingest_three_cycles(setup: Fixture, temporal_env: Any, worker_factory: Any) -> list[str]:
     async with worker_factory("test"):
         handle = await temporal_env.client.start_workflow(
             "MemoryIngestion",
@@ -79,8 +87,35 @@ async def test_le_rapport_ne_part_qu_une_fois_par_semaine(
         outcome = await handle.result()
 
     assert outcome["cycles"] == 3
-    rapports = [m.title for _, m in setup.adapters.notify.sent if "A/B report" in m.title]
+    return [m.title for _, m in setup.adapters.notify.sent if "A/B report" in m.title]
+
+
+async def test_le_rapport_ne_part_qu_une_fois_par_semaine(  # lang: fr-ok (test id kept)
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """Three ingestion cycles inside one ISO week (a Tuesday noon): one report."""
+    await _closed_tickets(setup.project_id, count=2, attempts=1, cost=1.0)
+    await _skip_to(temporal_env, weekday=2, at=timedelta(hours=12))
+
+    rapports = await _ingest_three_cycles(setup, temporal_env, worker_factory)
+
     assert len(rapports) == 1, rapports
+
+
+async def test_cycles_across_monday_midnight_report_once_per_week(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """#727: cycles at Sunday 23:59:30, Monday 00:00:30 and 00:01:30 UTC span two ISO weeks.
+
+    Two reports. This is the run that made the test above flaky; it is pinned here so
+    the clock positioning is proven to decide the count.
+    """
+    await _closed_tickets(setup.project_id, count=2, attempts=1, cost=1.0)
+    await _skip_to(temporal_env, weekday=7, at=timedelta(hours=23, minutes=58, seconds=30))
+
+    rapports = await _ingest_three_cycles(setup, temporal_env, worker_factory)
+
+    assert len(rapports) == 2, rapports
 
 
 async def test_the_report_without_a_notifier_is_still_returned(setup: Fixture) -> None:

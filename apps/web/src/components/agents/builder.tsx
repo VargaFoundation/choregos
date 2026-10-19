@@ -15,6 +15,7 @@
  * Loaded lazily (`next/dynamic`) by the pages that open it: it is the heaviest form of the console
  * and most visits never open it.
  */
+import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
@@ -467,6 +468,11 @@ export function AgentBuilder({
                 </Select>
               )}
             </Field>
+            {kind === "code" && (
+              <div className="flex items-center gap-2 sm:col-span-2">
+                <ProcedurePanel target="agent:code" autoOpen={mode.kind === "create"} />
+              </div>
+            )}
             {kind === "acp" ? (
               <Field label="Backend" hint="The agent runtime; empty: the project's default.">
                 {(id) =>

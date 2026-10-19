@@ -37,6 +37,11 @@ COPY apps/orchestrator apps/orchestrator
 # pas, et aucun projet à template ne pouvait être provisionné depuis un pod (état des
 # lieux du 2026-09-24, P1-4).
 COPY templates templates
+# The eval matrix's reference tickets and toy repositories (S12-01): `activities/evals.py` reads
+# them from `/app/tests/fixtures`. The image did not carry them, and a live matrix on dev played
+# nothing and published four empty cells (S37-13).
+COPY tests/fixtures/tickets tests/fixtures/tickets
+COPY tests/fixtures/repos tests/fixtures/repos
 # `uv sync` n'accepte qu'un seul `--package` : deux occurrences font échouer la construction
 # ("the argument '--package <PACKAGE>' cannot be used multiple times"). La cible `worker`
 # partage ce builder, donc il doit porter les deux applications — on synchronise l'espace de

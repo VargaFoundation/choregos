@@ -88,6 +88,64 @@ def test_calls_that_end_without_arguments_are_never_the_same_call() -> None:
     assert guard.tripped is None
 
 
+def _shell(n: int, status: str, command: str | None = None) -> dict[str, Any]:
+    """A shell call as opencode 1.18 reports it: its `rawInput` carries the working directory from
+    the announcement on, and the command only once the call runs."""
+    arguments: dict[str, Any] = {"cwd": "/workspace"}
+    if command is not None:
+        arguments["command"] = command
+    return {
+        "toolCallId": f"tc-{n}",
+        "title": command or "bash",
+        "kind": "execute",
+        "status": status,
+        "rawInput": arguments,
+    }
+
+
+def test_shell_calls_announced_with_their_cwd_only_are_not_one_call() -> None:
+    """#611: the verifier of sandbox-dev#22, stopped on `execute/bash:{"cwd": "/workspace"}` after
+    five different commands, each announced `pending` with the `cwd` opencode adds."""
+    guard = TurnGuard(loop_threshold=5)
+    for n, command in enumerate(["pytest -q", "ruff check .", "mypy src", "git diff", "pytest -x", "ls"]):
+        assert guard.observe(_shell(n, "pending")) is None
+        assert guard.observe(_shell(n, "in_progress", command)) is None
+        assert guard.observe({"toolCallId": f"tc-{n}", "status": "completed"}) is None
+    assert guard.tripped is None
+
+
+def test_shell_calls_announced_together_are_compared_on_their_commands() -> None:
+    """Parallel calls: every announcement comes before the first command is known."""
+    guard = TurnGuard(loop_threshold=5)
+    commands = ["pytest -q", "ruff check .", "mypy src", "git diff", "pytest -x"]
+    for n in range(len(commands)):
+        assert guard.observe(_shell(n, "pending")) is None
+    for n, command in enumerate(commands):
+        assert guard.observe(_shell(n, "in_progress", command)) is None
+    assert guard.tripped is None
+
+
+def test_the_same_shell_command_five_times_is_still_a_loop() -> None:
+    guard = TurnGuard(loop_threshold=5)
+    for n in range(4):
+        assert guard.observe(_shell(n, "pending")) is None
+        assert guard.observe(_shell(n, "in_progress", "pytest -q")) is None
+    assert guard.observe(_shell(4, "pending")) is None, "announced, command unknown: not compared yet"
+    assert guard.observe(_shell(4, "in_progress", "pytest -q")) == "loop"
+    assert '"command": "pytest -q"' in guard.detail
+
+
+def test_a_call_announced_with_all_its_arguments_is_compared_when_it_ends() -> None:
+    """An agent that sends the arguments with the announcement only (claude-agent-acp): its calls
+    are still compared — once they end, on what they were announced with."""
+    guard = TurnGuard(loop_threshold=3)
+    for n in range(2):
+        assert guard.observe(_call(n) | {"status": "pending"}) is None
+        assert guard.observe({"toolCallId": f"tc-{n}", "status": "completed"}) is None
+    assert guard.observe(_call(2) | {"status": "pending"}) is None
+    assert guard.observe({"toolCallId": "tc-2", "status": "completed"}) == "loop"
+
+
 async def _run(
     stage_input: StageInput,
     runner_settings: Any,
@@ -150,6 +208,40 @@ async def test_a_verifier_reading_different_files_the_opencode_way_is_not_stoppe
     _outcome, client = await _run(stage_input, runner_settings, [], max_turns=100, tool_calls=_reads(*paths))
     (result,) = client.results
     assert result.status.value == "done", result.summary
+
+
+def _shells(*commands: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "tool": "bash",
+            "kind": "execute",
+            "pending_input": {"cwd": "/workspace"},
+            "input": {"command": c, "cwd": "/workspace"},
+        }
+        for c in commands
+    ]
+
+
+async def test_a_verifier_running_different_commands_the_opencode_way_is_not_stopped(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """#611, end to end: shell calls announced with their `cwd` only."""
+    commands = ["pytest -q", "ruff check .", "mypy src", "git diff", "pytest -x", "ls"]
+    _outcome, client = await _run(
+        stage_input, runner_settings, [], max_turns=100, tool_calls=_shells(*commands)
+    )
+    (result,) = client.results
+    assert result.status.value == "done", result.summary
+
+
+async def test_the_same_command_run_the_opencode_way_eight_times_is_still_a_loop(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    _outcome, client = await _run(
+        stage_input, runner_settings, [], max_turns=100, tool_calls=_shells(*["pytest -q"] * 8)
+    )
+    (result,) = client.results
+    assert (result.status.value, result.reason) == ("failed", "loop")
 
 
 async def test_the_same_file_read_the_opencode_way_eight_times_is_still_a_loop(

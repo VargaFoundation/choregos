@@ -38,6 +38,9 @@ class CeilingBudgets(_Strict):
     max_minutes: dict[str, int] = Field(default_factory=dict)
     tool_calls_per_run: int | None = Field(default=None, ge=1)
     daily_project_usd: float | None = Field(default=None, gt=0)
+    #: What all the organisation's projects may spend in a calendar month (UTC). Not a field of a
+    #: project policy, so nothing is clamped: it enters every stage's reservation (S27-11).
+    monthly_org_usd: float | None = Field(default=None, gt=0)
 
 
 class CeilingAttempts(_Strict):

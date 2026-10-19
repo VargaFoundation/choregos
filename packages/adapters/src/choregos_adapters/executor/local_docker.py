@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import os
 import tarfile
 from collections.abc import AsyncIterator
 from typing import Any
@@ -17,6 +18,9 @@ from ..errors import UpstreamError
 
 RESULT_PATH = "/workspace/.choregos/result.json"
 PULL_TIMEOUT_S = 900.0
+#: How many finished run containers are kept for `docker logs` and the result (#439). The older
+#: ones are removed when a new run starts: by then the orchestrator has long read them.
+KEEP_FINISHED = 10
 
 
 class LocalDockerExecutor:
@@ -33,22 +37,49 @@ class LocalDockerExecutor:
     def _name(self, run_id: str) -> str:
         return f"choregos-run-{run_id}"[:60].lower()
 
-    async def _run_raw(self, *args: str, timeout: float = 120.0) -> tuple[int, bytes, str]:
+    async def _run_raw(
+        self, *args: str, timeout: float = 120.0, env: dict[str, str] | None = None
+    ) -> tuple[int, bytes, str]:
         process = await asyncio.create_subprocess_exec(
-            self.docker, *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            self.docker,
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, **env} if env else None,
         )
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         return process.returncode or 0, stdout, stderr.decode(errors="replace")
 
-    async def _run(self, *args: str, timeout: float = 120.0) -> tuple[int, str, str]:
-        code, stdout, stderr = await self._run_raw(*args, timeout=timeout)
+    async def _run(
+        self, *args: str, timeout: float = 120.0, env: dict[str, str] | None = None
+    ) -> tuple[int, str, str]:
+        code, stdout, stderr = await self._run_raw(*args, timeout=timeout, env=env)
         return code, stdout.decode(errors="replace"), stderr
+
+    async def _prune_finished(self) -> None:
+        """Remove the finished run containers beyond the newest `KEEP_FINISHED` (#439).
+
+        Each one holds its run's workspace; without this, every run left a container behind.
+        `docker ps` lists the newest first. A failure here never stops a run from starting.
+        """
+        filters = ("--filter", "label=choregos.run-id", "--filter", "status=exited")
+        code, stdout, _ = await self._run("ps", "--all", *filters, "--format", "{{.Names}}")
+        stale = stdout.split()[KEEP_FINISHED:] if code == 0 else []
+        if stale:
+            await self._run("rm", "--force", *stale)
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         name = self._name(spec.run_id)
         code, _, _ = await self._run("inspect", name)
         if code == 0:
             return ExecRef(kind=self.kind, name=name, run_id=spec.run_id)
+        await self._prune_finished()
+        secrets = {"CHOREGOS_RUN_TOKEN": spec.run_token}
+        # The run's gateway key next to its token (#523), never read from the run's input.
+        if spec.gateway_key:
+            secrets[RUN_GATEWAY_KEY_ENV] = spec.gateway_key
+        if spec.remote_token:
+            secrets[RUN_REMOTE_TOKEN_ENV] = spec.remote_token
         args = [
             "run",
             "--detach",
@@ -65,11 +96,9 @@ class LocalDockerExecutor:
             f"CHOREGOS_RUN_ID={spec.run_id}",
             "--env",
             f"CHOREGOS_API_URL={spec.api_url}",
-            "--env",
-            f"CHOREGOS_RUN_TOKEN={spec.run_token}",
-            # The run's gateway key next to its token (#523), never read from the run's input.
-            *(["--env", f"{RUN_GATEWAY_KEY_ENV}={spec.gateway_key}"] if spec.gateway_key else []),
-            *(["--env", f"{RUN_REMOTE_TOKEN_ENV}={spec.remote_token}"] if spec.remote_token else []),
+            # The secrets are named here and their values travel in docker's own environment
+            # (#439): a value on the command line is readable by anyone on the host (`ps`).
+            *(arg for key in secrets for arg in ("--env", key)),
             "--label",
             f"choregos.run-id={spec.run_id}",
             "--label",
@@ -80,7 +109,7 @@ class LocalDockerExecutor:
         args += [spec.runner_image, "run"]
         # The first run pulls the runner image (more than a gigabyte): two minutes are not enough,
         # and a `docker run` cut short keeps pulling, then collides with the retry on the name.
-        code, _stdout, stderr = await self._run(*args, timeout=PULL_TIMEOUT_S)
+        code, _stdout, stderr = await self._run(*args, timeout=PULL_TIMEOUT_S, env=secrets)
         if code != 0:
             raise UpstreamError("docker", f"démarrage impossible : {stderr[:300]}")
         self.containers[spec.run_id] = name

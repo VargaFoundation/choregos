@@ -202,6 +202,7 @@ from .plateforme import (
     GatewayKeyInfo,
     WebhookAck,
 )
+from .procedures import ProcedureDto, ProcedureSection, ProcedureSummary, VendorDocDto
 from .projets import (
     ConnectorCheck,
     ConnectorDiscovery,
@@ -441,6 +442,9 @@ __all__ = [
     "PolicyDto",
     "PolicyPut",
     "PriceOverride",
+    "ProcedureDto",
+    "ProcedureSection",
+    "ProcedureSummary",
     "ProjectAgentChannel",
     "ProjectAgentDto",
     "ProjectAgentPut",
@@ -513,6 +517,7 @@ __all__ = [
     "Totals",
     "TrainStatusDto",
     "UsableModel",
+    "VendorDocDto",
     "WebhookAck",
     "WorkItemAction",
     "WorkItemCreate",

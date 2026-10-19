@@ -1,0 +1,70 @@
+# The memo of ONE product a campaign found relevant, and the owner's decision on it. A campaign
+# opens one of these per relevant product (`spawn:` of `campaign.yaml`, ADR 0057): each is followed
+# on its own — its own memo, its own attested decision, its own audit — and the campaign resumes
+# once every one is settled.
+#
+# The numbers the memo may quote are the ones the campaign's backtest MEASURED for this product:
+# `numbers_measured` reads them in the PARENT's `metrics` document (this product's entry and the
+# campaign's facts), never in this work item's fields — a person can edit those, and a work item
+# created by hand has no parent, so its memo is refused. A memo of one product cannot quote
+# another's. The fields `product` and `facts` are a copy for the analyst to read, not a source.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: product-memo
+  version: 1
+  description: The memo and the decision for one product a research campaign found relevant.
+  inputs:
+    type: object
+    required: [symbol, product, facts, start, oos_start, end]
+    properties:
+      symbol: { type: string, title: Product (e.g. SPY.US) }
+      product: { type: object, title: What the backtest measured for this product (copied by the platform) }
+      facts: { type: object, title: What the backtest measured for the whole campaign (copied by the platform) }
+      start: { type: string, format: date, title: First day of data }
+      oos_start: { type: string, format: date, title: First out-of-sample day }
+      end: { type: string, format: date, title: Last day of data }
+      decision_note: { type: string, title: Why the owner adopted or rejected the product }
+initial: product
+actors:
+  analyst: { type: agent, role: memo, agent: quant-analyst, max_turns: 20, max_minutes: 15 }
+  owner: { type: human, group: owner, sla_hours: 72 }
+states:
+  product: { display: Relevant product }
+  memo_written: { display: Memo to decide, kind: wait }
+  to_review: { display: To review, kind: wait }
+  adopted: { display: Adopted for follow-up, terminal: true }
+  rejected: { display: Rejected, terminal: true }
+transitions:
+  - id: t-memo
+    from: product
+    to: memo_written
+    by: analyst
+    outputs: [memo_markdown]
+    gates:
+      - name: numbers_measured
+        params: { sources: [parent.metrics.products.$symbol, parent.metrics.facts], outputs: [memo_markdown] }
+    on_fail: { to: product, max_attempts: 2, escalate_to: to_review }
+
+  - id: t-decide
+    from: memo_written
+    to: adopted
+    by: owner
+    task:
+      title: Decide on the product
+      instructions: Read the memo. Adopting means following the product on paper, not trading it.
+      form:
+        type: object
+        required: [decision_note]
+        properties:
+          decision_note: { type: string, title: Why }
+      attest: I read the memo; this is an internal research decision, not advice
+    on_reject: rejected
+
+  - id: t-relaunch
+    from: to_review
+    to: product
+    by: owner
+    on_reject: rejected
+defaults:
+  from_any_agent_state: { on_question: to_review }

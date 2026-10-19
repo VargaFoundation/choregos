@@ -130,7 +130,7 @@ class LiteLlmGateway:
             logs = []
         tokens_in = sum(int(entry.get("prompt_tokens", 0)) for entry in logs)
         tokens_out = sum(int(entry.get("completion_tokens", 0)) for entry in logs)
-        cached = sum(int(entry.get("cache_read_input_tokens") or 0) for entry in logs)
+        cached = sum(_cache_read_tokens(entry) for entry in logs)
         models = sorted({str(entry.get("model", "")) for entry in logs if entry.get("model")})
         if not total and logs:
             total = sum(float(entry.get("spend", 0.0)) for entry in logs)
@@ -232,3 +232,15 @@ def _per_1k(per_token: Any) -> float | None:
     if per_token in (None, ""):
         return None
     return round(float(per_token) * 1000, 8)
+
+
+def _cache_read_tokens(entry: dict[str, Any]) -> int:
+    """The prompt tokens a spend log entry read from the provider's cache. LiteLLM writes them in
+    the request's usage (`metadata.usage_object`), not at the top of the entry (S37-16): Anthropic's
+    `cache_read_input_tokens`, else OpenAI's `prompt_tokens_details.cached_tokens`."""
+    if entry.get("cache_read_input_tokens"):
+        return int(entry["cache_read_input_tokens"])
+    usage = (entry.get("metadata") or {}).get("usage_object") or {}
+    if usage.get("cache_read_input_tokens"):
+        return int(usage["cache_read_input_tokens"])
+    return int((usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0)

@@ -161,7 +161,10 @@ the platform did not measure (a job's facts, `dod.facts`): a threshold on a numb
 wrote is not a guarantee. `numbers_measured` reads the numbers an agent writes in its outputs and
 requires each to be found in the `sources:` documents an earlier step produced — rounding, a
 percentage for a fraction and a dropped sign are tolerated; years, integers below `ignore_below`
-(default 10) and an explicit `allow:` list are skipped.
+(default 10) and an explicit `allow:` list are skipped. The source `fields` is the work item's own
+fields, which a person can edit; a child opened by a fan-out reads `parent.<doc>[.<key>...]` instead,
+the parent's measured document (a key `$name` is the child's own field `name`); a work item with no
+parent has no such source and is refused.
 
 `adr_number_free` guards numbered records: when the branch adds `docs/adr/NNNN-*.md` (the path
 pattern is the `pattern` parameter), it lists the records already on the default branch and refuses
@@ -275,8 +278,11 @@ work item goes to `on_budget_exceeded` (else `on_question`, else the retry polic
 a person decides. A stage stopped on budget is **never retried** — a retry would mint a fresh key.
 
 A run's key is minted at what is **left**: the smallest of the stage budget, the agent's run and day
-budgets, the ticket budget and the project's day budget (`daily_project_usd`), each minus what the
-cost ledger says was spent (models and tools) and minus the keys still open. Below
+budgets, the ticket budget, the project's day budget (`daily_project_usd`) and the organisation's
+month budget (`monthly_org_usd` in its policy ceiling), each minus what the cost ledger says was
+spent (models and tools) and minus the keys still open at that scope (an agent's open keys count
+against its day and month). Stages that reserve from the same scope are serialized (a PostgreSQL
+advisory lock), so two stages preparing at once cannot both take the same remainder. Below
 `CHOREGOS_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
 the work item goes to a person the same way.
 
@@ -304,3 +310,9 @@ More money is a decision. "Replay the stage" on a work item whose budget is spen
 unless it carries a top-up (`top_up_usd`, or `choregos items action <id> rerun_stage --top-up 5`);
 the top-up adds to the work item's budget and the audit log records who granted it
 (`workitem.budget_top_up`).
+
+"Replay the stage" does not give a stage a fresh attempts allowance either: it leaves it one attempt
+before its cap (`max_attempts`, lowered by the policy's `attempts.by_role`), so each rerun plays one more
+run and escalates again if it fails.
+An answer to a question that parked the work item resumes the stage the same way: one more
+attempt, not a new allowance.

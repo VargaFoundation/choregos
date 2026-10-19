@@ -102,6 +102,17 @@ def rendre(valeur: Any, contexte: dict[str, Any]) -> Any:
 
 
 async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, Any]:
+    """`connector.call` under the organisation's egress allowlist (S39-22): a governed action runs
+    for the workers, and a host the organisation has not opened is refused before it is called."""
+    from .services.egress import egress_scope_for_org
+
+    async with egress_scope_for_org(
+        ctx.session, ctx.project.org_id, "workers", f"connector:{params.get('connector', '')}"
+    ):
+        return await _appeler_le_connecteur(ctx, params)
+
+
+async def _appeler_le_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, Any]:
     """`connector.call` : une opération d'un connecteur de l'organisation, clé résolue ICI.
 
     L'action a été approuvée : une opération `approval` s'exécute donc ; une `forbidden` non."""
@@ -110,6 +121,7 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
     from choregos_adapters.errors import AdapterError, UpstreamError
     from choregos_adapters.mcp import ErreurMcp
     from choregos_contracts import ActionStatus
+    from choregos_core.egress import EgressRefusedError
 
     nom, operation = str(params.get("connector", "")), str(params.get("operation", ""))
     arguments = dict(params.get("arguments") or {})
@@ -189,6 +201,8 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
         if erreur.code in {401, 403}:
             raise EffetRefuse(f"{nom}/{operation} : {erreur}") from erreur
         raise
+    except EgressRefusedError as refus:
+        raise EffetRefuse(f"{nom}/{operation} : {refus}") from refus  # permanent: no retry
     except httpx.HTTPError:
         raise
     except AdapterError as refus:

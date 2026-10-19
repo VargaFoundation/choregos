@@ -1,6 +1,6 @@
 [project]
 name = "choregos-playbooks"
-version = "0.18.0"
+version = "0.18.8"
 description = "Choregos playbooks: prompts per role, and evals"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }

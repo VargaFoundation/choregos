@@ -112,10 +112,20 @@ import type {
   ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
+  EgressCheck,
+  EgressCheckResult,
+  EgressDecision,
+  EgressOverview,
+  EgressRequestCreate,
+  EgressRule,
+  EgressRuleCreate,
+  EgressVerdict,
   CostReport,
   DoraReport,
   Edition,
   Integrations,
+  Procedure,
+  ProcedureSummary,
   FindingPage,
   MeDto,
   Memory,
@@ -185,10 +195,12 @@ export type Problem = {
   detail?: string;
   errors?: unknown[];
   correlation_id?: string;
-  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12). */
+  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12), `egress_required` on the
+   * 409 of a governed "add" whose host the organisation has not opened (S39-22). */
   code?: string;
   latest_version?: number;
   latest_author?: string | null;
+  verdicts?: EgressVerdict[];
 };
 
 export class ApiError extends Error {
@@ -308,6 +320,14 @@ export const api = {
   edition: () => request<Edition>("/edition"),
   /** Où brancher un client MCP (ADR 0030) : l'URL de la porte, pour la page Integrations. */
   integrations: () => request<Integrations>("/integrations"),
+  /** The setup procedures (ADR 0067); `for` answers the one best for a target, a preset before the generic one. */
+  listProcedures: (query: { for?: string; card_host?: string; preset?: string } = {}) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
+    const q = params.toString();
+    return request<ProcedureSummary[]>(`/procedures${q ? `?${q}` : ""}`);
+  },
+  getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
   loginUrl: (next?: string, as?: string, reauth = false) => {
     const params = new URLSearchParams();
@@ -342,8 +362,11 @@ export const api = {
   /** Le registre d'agents de l'organisation (ADR 0033) : une version ne se modifie jamais. */
   agents: (org: string) => request<Agent[]>(`/orgs/${org}/agents`),
   agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
-  createAgent: (org: string, body: AgentCreate) =>
-    request<Agent>(`/orgs/${org}/agents`, { method: "POST", body: JSON.stringify(body) }),
+  createAgent: (org: string, body: AgentCreate, allowEgress = false) =>
+    request<Agent>(`/orgs/${org}/agents${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** A model drafts an agent from its description: a proposal, never saved (S39-05). */
   draftAgent: (org: string, body: AgentDraftRequest) =>
     request<AgentDraft>(`/orgs/${org}/agent-drafts`, { method: "POST", body: JSON.stringify(body) }),
@@ -361,13 +384,19 @@ export const api = {
   transferAgentOwnership: (org: string, slug: string, email: string) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
   /** The next version with its message, from the version the author read; 409 `stale_base` or `no_change` otherwise (S40-12). */
-  publishAgentVersionWithMessage: (org: string, slug: string, body: AgentVersionPublish) =>
-    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/publish`, { method: "POST", body: JSON.stringify(body) }),
+  publishAgentVersionWithMessage: (org: string, slug: string, body: AgentVersionPublish, allowEgress = false) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/publish${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** Copy version N as the next version; nothing is rewritten (S40-12). */
   restoreAgentVersion: (org: string, slug: string, version: number, body: AgentVersionRestore) =>
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/${version}/restore`, { method: "POST", body: JSON.stringify(body) }),
-  publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
-    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
+  publishAgentVersion: (org: string, slug: string, spec: AgentSpec, allowEgress = false) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(spec),
+    }),
   /** Channels (S40-02, ADR 0071): point production or testing at a revision; the history, the checklist. */
   releaseAgentVersion: (org: string, slug: string, body: AgentReleaseCreate) =>
     request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases`, { method: "POST", body: JSON.stringify(body) }),
@@ -404,8 +433,8 @@ export const api = {
     request<RemoteCredentialAuthorization>(`/orgs/${org}/remote-credentials/${name}/authorize`, { method: "POST" }),
   revokeRemoteCredential: (org: string, name: string) =>
     request<void>(`/orgs/${org}/remote-credentials/${name}`, { method: "DELETE" }),
-  discoverRemoteAgent: (org: string, cardUrl: string) =>
-    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover`, {
+  discoverRemoteAgent: (org: string, cardUrl: string, allowEgress = false) =>
+    request<RemoteAgentDiscovery>(`/orgs/${org}/agents/discover${allowEgress ? "?allow_egress=true" : ""}`, {
       method: "POST",
       body: JSON.stringify({ card_url: cardUrl }),
     }),
@@ -456,8 +485,11 @@ export const api = {
   skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
   /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
   skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
-  installSkillCatalogueEntry: (org: string, id: string) =>
-    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, { method: "POST" }),
+  installSkillCatalogueEntry: (org: string, id: string, allowEgress = false) =>
+    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, {
+      method: "POST",
+      ...(allowEgress && { body: JSON.stringify({ allow_egress: true }) }),
+    }),
   skill: (org: string, slug: string) => request<Skill>(`/orgs/${org}/skills/${slug}`),
   skillVersion: (org: string, slug: string, version: number) =>
     request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}`),
@@ -820,6 +852,20 @@ export const api = {
   /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
   budgetAlerts: (org: string, status: "open" | "acknowledged" | "all" = "open") =>
     request<BudgetAlert[]>(`/orgs/${org}/budget-alerts${query({ status })}`),
+  /** The organisation's egress allowlist: rules, requests, the deployment's ceiling (S39-22, ADR 0066). */
+  orgEgress: (org: string) => request<EgressOverview>(`/orgs/${org}/egress`),
+  checkOrgEgress: (org: string, body: EgressCheck) =>
+    request<EgressCheckResult>(`/orgs/${org}/egress/check`, { method: "POST", body: JSON.stringify(body) }),
+  createOrgEgressRule: (org: string, body: EgressRuleCreate) =>
+    request<EgressRule>(`/orgs/${org}/egress/rules`, { method: "POST", body: JSON.stringify(body) }),
+  revokeOrgEgressRule: (org: string, id: string) =>
+    request<EgressRule>(`/orgs/${org}/egress/rules/${id}`, { method: "DELETE" }),
+  requestOrgEgress: (org: string, body: EgressRequestCreate) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests`, { method: "POST", body: JSON.stringify(body) }),
+  approveOrgEgressRequest: (org: string, id: string, body: EgressDecision = {}) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests/${id}/approve`, { method: "POST", body: JSON.stringify(body) }),
+  refuseOrgEgressRequest: (org: string, id: string, body: EgressDecision = {}) =>
+    request<EgressRule>(`/orgs/${org}/egress/requests/${id}/refuse`, { method: "POST", body: JSON.stringify(body) }),
   acknowledgeBudgetAlert: (org: string, id: string) =>
     request<BudgetAlert>(`/orgs/${org}/budget-alerts/${id}/acknowledge`, { method: "POST" }),
   orgCostsCsvUrl: (org: string, groupBy = "day", filtre: CostFilter = {}) =>

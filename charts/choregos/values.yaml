@@ -8,7 +8,7 @@ global:
   publicUrl: ""
   apiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
-  imageTag: "0.18.0"
+  imageTag: "0.18.8"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -45,7 +45,8 @@ global:
   # yet — for example a plugin shipped inactive (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — without forking the
   # chart. A variable already set by the chart is REFUSED at render time: two values for the same
   # name, Kubernetes keeps the last one without saying anything, and the chart's setting would be replaced
-  # silently. Plain values only: a secret goes through a `Secret`, never through here.
+  # silently. Each entry has exactly one of `value` or `valueFrom` (refused otherwise); a secret is
+  # mapped by `valueFrom.secretKeyRef`, never written as a plain `value` (S38-18).
   extraEnv: []
   #   - name: CHOREGOS_ESSAI_ONTOLOGIE
   #     value: "1"
@@ -102,13 +103,37 @@ global:
     jobs: {}
     agents: {}
     requireDigest: true
-  # The per-run egress proxy `choregos-egress` (ADR 0070), in the release namespace, from the API image.
-  # A runner presents its run id and token as proxy credentials; the proxy asks the API what THAT run
-  # may reach and lets a tunnel through or refuses. Off by default: nothing changes for an existing
-  # install. When on, `choregos-orchestrator.runner.egressProxy` MUST name it (the chart refuses
-  # otherwise) and the orchestrator tells runners to authenticate (`CHOREGOS_RUNNER_EGRESS_AUTH=run`).
-  # It lives under `global` because the API and the orchestrator read it too.
+  # Network egress, one model (ADR 0066 and ADR 0070, amended): the organisation decides in the
+  # console which hosts it OPENS (its egress allowlist) and the BOUNDS nothing may cross (its policy
+  # ceiling's network section); this block is what only the operator sets. It lives under `global`
+  # because the API and the orchestrator read it too.
   egress:
+    # The organisation egress allowlist (S39-22, ADR 0066), as the platform's own outbound clients
+    # (API, workers) enforce it: enforce | warn (log `egress.would_refuse` and pass) | off. The
+    # organisation's network bounds (deny list, allowed set) are enforced in every mode.
+    mode: enforce
+    # What the cluster's network lets through, per pod family, as host patterns. An absent or empty
+    # family is unknown: the ceiling is not checked and the organisation's list alone governs.
+    #   ceiling:
+    #     api: [api.github.com, github.com]
+    #     workers: [api.github.com, "*.atlassian.net"]
+    #     runners: [github.com, pypi.org]
+    ceiling: {}
+    # How the console renders "what the platform must still open" for a host the ceiling excludes
+    # (or does not know). Choregos cannot change the cluster's network policy: it shows the change.
+    #   platformChange:
+    #     format: text            # cilium-fqdn | kubernetes-networkpolicy | text
+    #     owner: "the platform team, #platform"
+    #     template: "add {{hosts_csv}} to the {{family}} egress"   # mustache: see docs/deployment.md
+    #     issueUrl: ""            # optional, same placeholders, URL-encoded
+    #     entries: {}             # family -> the name of the platform's egress entry, as template data
+    platformChange: {}
+    # The per-run egress proxy `choregos-egress` (ADR 0070), in the release namespace, from the API
+    # image. A runner presents its run id and token as proxy credentials; the proxy asks the API what
+    # THAT run may reach (its effective network, the hosts the organisation opened for its runners
+    # included) and lets a tunnel through or refuses. Off by default: nothing changes for an existing
+    # install. When on, `choregos-orchestrator.runner.egressProxy` MUST name it (the chart refuses
+    # otherwise) and the orchestrator tells runners to authenticate (`CHOREGOS_RUNNER_EGRESS_AUTH=run`).
     enabled: false
     # Rates are counted per replica: keep one replica unless a rate that is N times looser is fine.
     replicas: 1

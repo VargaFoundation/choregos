@@ -160,6 +160,9 @@ class KnowledgeSourceCreate(Dto):
     refresh_cron: str | None = Field(default=None, max_length=100)
     #: an IANA name, for example `Europe/Paris`
     refresh_timezone: str = Field(default="UTC", max_length=64)
+    #: Open the source's hosts in the organisation's egress allowlist in the same call (S39-22):
+    #: without it a missing host is a 409 `egress_required`. Needs `tools:grant`.
+    allow_egress: bool = False
 
 
 class KnowledgeSourcePatch(Dto):
@@ -169,6 +172,7 @@ class KnowledgeSourcePatch(Dto):
     refresh_mode: RefreshMode | None = None
     refresh_cron: str | None = Field(default=None, max_length=100)
     refresh_timezone: str | None = Field(default=None, max_length=64)
+    allow_egress: bool = False
 
 
 class KnowledgeSourceDto(Dto):

@@ -83,9 +83,11 @@ import type {
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
+import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
 import skillCatalogueFile from "./skill-catalogue.json";
+import { proceduresApi } from "./procedures";
 
 export { peopleOpsFixtures };
 
@@ -1064,8 +1066,8 @@ export function mockCostReport(path: string): CostReport {
 }
 
 export const budgetAlerts: BudgetAlert[] = [
-  { id: "ba1", scope: "project", subject: "billing-api", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 80, spent_usd: 121.4, budget_usd: 150, status: "open", created_at: iso(35) },
-  { id: "ba2", scope: "agent", subject: "onboarding-coordinator", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 100, spent_usd: 20.3, budget_usd: 20, status: "open", created_at: iso(12) },
+  { id: "ba1", scope: "project", subject: "billing-api", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 80, spent_usd: 121.4, budget_usd: 150, status: "open", created_at: iso(35), can_acknowledge: true },
+  { id: "ba2", scope: "agent", subject: "onboarding-coordinator", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 100, spent_usd: 20.3, budget_usd: 20, status: "open", created_at: iso(12), can_acknowledge: true },
 ];
 
 export const dora: DoraReport = {
@@ -2050,6 +2052,7 @@ export const connectorTypes: ConnectorType[] = [
     capabilities: ["documents"],
     secret_fields: ["client_secret"],
   },
+  { kind: "mcp", type: "mcp", display: "MCP server (Streamable HTTP)", config_schema: objet({ url: { type: "string" } }, ["url"]), capabilities: ["mcp"], secret_fields: ["token"] },
 ];
 
 /**
@@ -2124,6 +2127,8 @@ export function mcpCatalogue(): McpCatalogue {
       const selected = installed.some((c) => c.availability === "selected_projects");
       const base = {
         ...entry,
+        // What the API adds: the setup procedure the install shows (Atlassian's has its own).
+        procedure: entry.id === "atlassian" ? "connector.mcp.mcp.atlassian-rovo" : "connector.mcp.mcp",
         can: {
           install: entry.install === "installable",
           configure_projects: [],
@@ -2467,6 +2472,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   await new Promise((resolve) => setTimeout(resolve, 40));
   const body: unknown = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
   if (method !== "GET") recordWrite(method, path, body);
+  const procedures = proceduresApi(method, path);
+  if (procedures !== undefined) return procedures as T;
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
   const bare = path.split("?")[0] ?? path;
@@ -2482,6 +2489,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (typeof window !== "undefined") (window as unknown as { __mockAgents?: Agent[] }).__mockAgents = agents;
   const channels = agentReleasesApi(method, path.split("?")[0] ?? path, path.split("?")[1] ?? "", body, agents, me.email);
   if (channels !== undefined) return structuredClone(channels) as T;
+  const network = egressApi(method, path.split("?")[0] ?? path, body);
+  if (network !== undefined) return network as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).

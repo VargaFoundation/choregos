@@ -5,8 +5,8 @@ Installations of the deployment's GitHub App, discovered rather than typed, and 
 Choregos organisation. Under forced RLS: a claimed row is readable by its organisation, an
 unclaimed one only in the platform scope.
 
-Revision ID: d4f6a8c0e2b4
-Revises: a4c6e8b0d2f4
+Revision ID: b3d5f7a9c1e4
+Revises: c5e7a9b1d3f6
 Create Date: 2026-10-16 11:00:00+00:00
 """
 
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "d4f6a8c0e2b4"
-down_revision: str | None = "a4c6e8b0d2f4"
+revision: str = "b3d5f7a9c1e4"
+down_revision: str | None = "c5e7a9b1d3f6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

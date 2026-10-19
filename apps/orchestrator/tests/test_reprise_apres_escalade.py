@@ -7,6 +7,9 @@ trois tickets escaladés n'avaient d'autre sortie que l'abandon, et « Replay th
 
 from __future__ import annotations
 
+import json
+import os
+import pathlib
 from typing import Any
 
 import pytest
@@ -17,6 +20,7 @@ from .test_interpreter import _runs, _ticket, _wait_state, _wait_until, scripted
 
 pytestmark = pytest.mark.asyncio
 
+HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 ECHEC = StageResult(status=StageStatus.FAILED, summary="le clone a échoué", reason="agent_error")
 
 
@@ -35,28 +39,106 @@ async def _demandes(setup: Fixture) -> list[Any]:
 async def test_replay_the_stage_reprend_un_ticket_escalade(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Deux échecs épuisent `t-refine`, le ticket escalade ; « Replay the stage » le ramène à
-    l'étape, avec un budget de tentatives NEUF — sans lui, le premier échec suivant réescaladerait."""
-    scripted(setup.adapters, ECHEC, ECHEC, ECHEC, refine_result("spec"))
+    """Two failures exhaust `t-refine` and the work item escalates; "Replay the stage" brings it
+    back for ONE more attempt (S27-13): it succeeds and the spec arrives."""
+    scripted(setup.adapters, ECHEC, ECHEC, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
-        await _wait_until(handle, "l'abandon est proposé", lambda s: s["pending_request"])
+        await _wait_until(handle, "abandon is offered", lambda s: s["pending_request"])
         assert await _runs(setup) == 2
 
         await handle.signal("control", {"action": "rerun_stage", "by": "vincent"})
-        # Un échec, puis la spec : la reprise a rendu ses deux tentatives à l'étape.
         await _wait_state(handle, "awaiting_spec_approval")
         status = await handle.query("status")
-        assert await _runs(setup) == 4
+        assert await _runs(setup) == 3
         # Les numéros de tentative ne repartent pas de 1 : ils font l'identifiant du run.
-        assert status["attempts"]["t-refine"] == 4, status["attempts"]
+        assert status["attempts"]["t-refine"] == 3, status["attempts"]
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
     abandons = [d for d in await _demandes(setup) if d.transition_id == "t-abandon"]
     assert abandons, "l'escalade proposait l'abandon"
     assert all(d.decided_at is not None for d in abandons), "l'abandon proposé est clos par la reprise"
+
+
+async def test_a_rerun_buys_one_attempt_not_a_new_allowance(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """S27-13: `max_attempts` is 2. Each rerun is ONE more attempt: a rerun whose attempt fails
+    escalates again at once (before: it had two fresh attempts, and the third failure of the
+    script would have been played), and every click pays for exactly one run."""
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.worker import Replayer
+
+    scripted(setup.adapters, ECHEC, ECHEC, ECHEC, ECHEC, ECHEC, refine_result("spec"))
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "needs_human")
+        await _wait_until(handle, "abandon is offered", lambda s: s["pending_request"])
+        assert await _runs(setup) == 2
+        for expected in (3, 4):
+            await handle.signal("control", {"action": "rerun_stage", "by": "vincent"})
+            await _wait_until(
+                handle, "the rerun is played", lambda s, n=expected: s["attempts"]["t-refine"] == n
+            )
+            await _wait_state(handle, "needs_human")
+            await _wait_until(handle, "the new abandon is proposed", lambda s: s["pending_request"])
+            assert await _runs(setup) == expected, "a rerun plays one run, not a new allowance"
+        status = await handle.query("status")
+        assert status["state"] == "needs_human", status
+        await handle.signal("control", {"action": "stop"})
+        await handle.result()
+        history = await handle.fetch_history()
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
+    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+        target = HISTORIES / "wi-rerun-one-attempt-S27-13.json"
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
+
+
+async def test_an_answer_buys_one_attempt_not_a_new_allowance(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """S27-04: `max_attempts` is 2. A failure, then a question on the second attempt; the answer is
+    ONE more attempt: it fails and the work item escalates after three runs (before: the answer
+    reset the attempts, and a fourth run was played)."""
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.worker import Replayer
+
+    question = StageResult(
+        status=StageStatus.NEEDS_HUMAN,
+        summary="which currency?",
+        reason="question",
+        questions=[{"text": "Which currency for credit notes?", "options": ["EUR", "order currency"]}],
+    )
+    scripted(setup.adapters, ECHEC, question, ECHEC, ECHEC, refine_result("spec"))
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "needs_human")
+        await _wait_until(handle, "the question is asked", lambda s: s["pending_request"])
+        assert await _runs(setup) == 2
+        asked = next(d for d in await _demandes(setup) if d.kind == "question")
+        await handle.signal(
+            "human_decision",
+            {
+                "request_id": asked.id,
+                "kind": "question",
+                "approved": False,
+                "answer": "the order currency",
+                "decided_by": "vincent",
+            },
+        )
+        await _wait_until(handle, "the answer is played", lambda s: s["attempts"]["t-refine"] == 3)
+        await _wait_state(handle, "needs_human")
+        await _wait_until(handle, "the abandon is offered", lambda s: s["pending_request"])
+        assert await _runs(setup) == 3, "an answer plays one run, not a new allowance"
+        await handle.signal("control", {"action": "stop"})
+        await handle.result()
+        history = await handle.fetch_history()
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
+    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+        target = HISTORIES / "wi-answer-one-attempt-S27-04.json"
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
 async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
@@ -73,7 +155,7 @@ async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
-        await _wait_until(handle, "l'abandon est proposé", lambda s: s["pending_request"])
+        await _wait_until(handle, "abandon is offered", lambda s: s["pending_request"])
         posee = next(d for d in await _demandes(setup) if d.kind == "question")
 
         await handle.signal(
@@ -139,7 +221,7 @@ async def test_une_relance_qui_ne_peut_pas_jouer_ne_boucle_pas(
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
-        await _wait_until(handle, "l'abandon est proposé", lambda s: s["pending_request"])
+        await _wait_until(handle, "abandon is offered", lambda s: s["pending_request"])
         await handle.signal("control", {"action": "rerun_stage"})
         import asyncio
 

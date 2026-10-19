@@ -14,7 +14,7 @@ from ..audit import record
 from ..db.models import BudgetAlert, Organization
 from ..deps import Db, Me
 from ..errors import conflict, forbidden, not_found
-from ..rbac import Permission
+from ..rbac import Permission, Principal
 from ..schemas import BudgetAlertDto
 
 router = APIRouter(tags=["costs"])
@@ -29,8 +29,16 @@ async def _organisation(session: Db, slug: str) -> Organization:
     return organisation
 
 
-def _dto(alert: BudgetAlert) -> BudgetAlertDto:
-    return BudgetAlertDto.model_validate(alert)
+def _may_acknowledge(principal: Principal, org: str, alert: BudgetAlert) -> bool:
+    """A project's alert against that project, an agent's (organisation-wide) against the org role."""
+    project = alert.subject if alert.scope == "project" else None
+    return principal.can(Permission.PROJECT_WRITE, org, project)
+
+
+def _dto(alert: BudgetAlert, principal: Principal, org: str) -> BudgetAlertDto:
+    dto = BudgetAlertDto.model_validate(alert)
+    dto.can_acknowledge = alert.status == "open" and _may_acknowledge(principal, org, alert)
+    return dto
 
 
 @router.get("/orgs/{org}/budget-alerts", response_model=list[BudgetAlertDto], operation_id="listBudgetAlerts")
@@ -48,7 +56,7 @@ async def list_budget_alerts(
     if status != "all":
         query = query.where(BudgetAlert.status == status)
     rows = (await session.execute(query.order_by(BudgetAlert.created_at.desc(), BudgetAlert.id))).scalars()
-    return [_dto(row) for row in rows]
+    return [_dto(row, principal, org) for row in rows]
 
 
 @router.post(
@@ -57,13 +65,21 @@ async def list_budget_alerts(
     operation_id="acknowledgeBudgetAlert",
 )
 async def acknowledge_budget_alert(org: str, alert_id: str, session: Db, principal: Me) -> BudgetAlertDto:
-    """Someone has seen it: it leaves the inbox. The next threshold, or the next day, raises a new one."""
-    if not principal.can(Permission.ITEM_DECIDE, org):
-        raise forbidden("acknowledging a budget alert needs the developer role or above")
+    """Someone has seen it: it leaves the inbox. The next threshold, or the next day, raises a new one.
+
+    Only a project owner or an organisation administrator may (decision of 2026-10-16): acknowledging
+    takes the alert out of everyone's inbox, so it belongs to whoever can act on the budget. A
+    project's alert is checked against that project; an agent's, which spans the organisation,
+    against the organisation role.
+    """
+    if not principal.can(Permission.PROJECT_READ, org):
+        raise forbidden(f"acknowledging a budget alert of {org} requires being a member of it")
     organisation = await _organisation(session, org)
     alert = await session.get(BudgetAlert, alert_id)
     if alert is None or alert.org_id != organisation.id:
         raise not_found("Budget alert", alert_id)
+    if not _may_acknowledge(principal, org, alert):
+        raise forbidden("acknowledging a budget alert needs the project owner role or above")
     if alert.status != "open":
         raise conflict("this budget alert is already acknowledged")
     alert.status = "acknowledged"
@@ -81,4 +97,4 @@ async def acknowledge_budget_alert(org: str, alert_id: str, session: Db, princip
         subject=alert.subject,
         threshold=alert.threshold,
     )
-    return _dto(alert)
+    return _dto(alert, principal, org)

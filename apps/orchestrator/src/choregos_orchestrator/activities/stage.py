@@ -49,6 +49,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..context_reduction import forced_context, resolve_context, stage_input_payload
+from ..org_egress import org_runner_hosts
 from .base import db, load_work_item, org_memory, project_bundle, without_secrets
 from .bilan import collect_spend, record_run_outcome
 from .execution import (
@@ -158,15 +159,24 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         if agent is not None and plan.trial_spec is None:
             await _budget_du_jour(session, bundle, agent)
         # ADR 0070: an agent that needs a host its project or the organisation does not allow does
-        # not start — before any key is reserved or minted.
-        admit_network(bundle, agent, settings)
+        # not start — before any key is reserved or minted. What the organisation opened for its
+        # runners (S39-22d) joins the run as implied hosts; every deny list still wins.
+        admit_network(
+            bundle, agent, settings, org_hosts := await org_runner_hosts(session, bundle.project.org_id)
+        )
         if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
         code_runtime = _code_runtime(agent)
         remote_runtime = a2a_runtime(agent)
         # Before any budget is reserved: a remote agent the project cannot reach, or whose
         # credential is gone, never gets a reservation or a pod (ADR 0062).
-        await check_remote_agent(session, bundle, remote_runtime)
+        await check_remote_agent(
+            session,
+            bundle,
+            remote_runtime,
+            deny=run_network(bundle, None, settings).deny,
+            org_hosts=org_hosts,
+        )
         # Before any budget is reserved: an image the operator did not name never reaches a pod.
         agent_image = named_image(settings, "agent", code_runtime.image) if code_runtime else None
         # The organisation's model catalogue (ADR 0060): a model it disabled after the agent was
@@ -305,7 +315,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             skills=[] if remote_runtime is not None else await _skills_de_l_agent(session, bundle, agent),
             knowledge=[] if remote_runtime is not None else await _knowledge_of_agent(session, bundle, agent),
             permissions=network_permissions(
-                run_network(bundle, agent.spec.network if agent is not None else None, settings),
+                run_network(bundle, agent.spec.network if agent is not None else None, settings, org_hosts),
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
                 dod_iterations=engine.dod_iterations(),
@@ -441,29 +451,66 @@ async def _reservation(
     trial: bool = False,
 ) -> Any:
     """What this run may spend (ADR 0047): the smallest of what is left under the stage budget, the
-    agent's run, day and month budgets, the ticket budget and the project's day budget. A trial has
-    no day or month budget: its runs belong to no agent, so no spend is counted against one (S32-03)."""
+    agent's run, day and month budgets, the ticket budget, the project's day budget and the
+    organisation's month budget. What is left under a scope is its cap, minus the ledger, minus the
+    keys still open at that scope (S27-11). A trial has no day or month budget: its runs belong to
+    no agent, so no spend is counted against one (S32-03).
+
+    Serialized per scope: the scopes this stage reserves from are locked until the transaction ends
+    (`lock_budget_scopes`), so a second stage reads the first one's reservation instead of the same
+    remainder."""
+    from choregos_api.db.models import Organization
     from choregos_api.services.agents import depense_du_jour, depense_du_mois
     from choregos_api.services.budgets import (
+        lock_budget_scopes,
         open_reservations,
+        org_spent_since,
         project_spent_since,
         reserve,
         start_of_day,
+        start_of_month,
         ticket_budget,
         ticket_spent,
     )
+    from choregos_api.services.definitions import ceiling_of
 
     engine = bundle.engine
+    org_id = bundle.project.org_id
+    org_cap = None
+    if (ceiling := ceiling_of(await session.get(Organization, org_id))) is not None:
+        org_cap = ceiling.budgets.monthly_org_usd
+    agent_slug = agent.agent.slug if agent is not None and not trial else None
+    agent_capped = (
+        agent is not None
+        and not trial
+        and (agent.spec.budget.daily_usd is not None or agent.spec.budget.monthly_usd is not None)
+    )
+    scopes = [f"ticket:{item.id}"]
+    if engine.daily_budget() is not None:
+        scopes.append(f"project:{bundle.project.id}")
+    if org_cap is not None:
+        scopes.append(f"org:{org_id}")
+    if agent_capped:
+        scopes.append(f"agent:{org_id}:{agent_slug}")
+    await lock_budget_scopes(session, scopes)
+
     left: dict[str, float | None] = {"stage": stage_usd}
     if agent is not None:
         left["agent_run"] = agent.spec.budget.run_usd
         if agent.spec.budget.daily_usd is not None and not trial:
-            spent = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
-            left["agent_day"] = agent.spec.budget.daily_usd - spent
+            spent = await depense_du_jour(session, org_id, agent.agent.slug)
+            held = await open_reservations(
+                session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
+            )
+            left["agent_day"] = agent.spec.budget.daily_usd - spent - held
         if agent.spec.budget.monthly_usd is not None and not trial:
-            # The monthly cap is a reservation too (S27-09): a run cannot spend past it.
-            month = await depense_du_mois(session, bundle.project.org_id, agent.agent.slug)
-            left["agent_month"] = agent.spec.budget.monthly_usd - month
+            # The monthly cap is a reservation too (S27-09): a run cannot spend past it, nor can
+            # the agent's runs in flight, each of which may still spend its key's cap (S27-11).
+            month = await depense_du_mois(session, org_id, agent.agent.slug)
+            held = await open_reservations(
+                session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
+            )
+            left["agent_month"] = agent.spec.budget.monthly_usd - month - held
     left["ticket"] = (
         ticket_budget(engine, item)
         - await ticket_spent(session, item.id)
@@ -474,6 +521,12 @@ async def _reservation(
             day
             - await project_spent_since(session, bundle.project.id, start_of_day())
             - await open_reservations(session, project_id=bundle.project.id, exclude_run=run_id)
+        )
+    if org_cap is not None:
+        left["org_month"] = (
+            org_cap
+            - await org_spent_since(session, org_id, start_of_month())
+            - await open_reservations(session, org_id=org_id, exclude_run=run_id)
         )
     return reserve(left)
 
@@ -755,7 +808,14 @@ def _rendre_le_playbook(
 
     documents = item.documents or {}
     variables = {
-        "ticket": {"key": item.tracker_key, "title": item.title, "body": item.body_snapshot or ""},
+        # `fields`: what the work item was born with (ADR 0031) — a child opened by a fan-out holds
+        # there what its parent measured for it (ADR 0057, S38-15).
+        "ticket": {
+            "key": item.tracker_key,
+            "title": item.title,
+            "body": item.body_snapshot or "",
+            "fields": dict(item.fields or {}),
+        },
         "spec": documents.get("spec_markdown", ""),
         "plan_markdown": documents.get("plan_markdown", ""),
         # Les entrées que la transition déclare (`inputs: [profils]`), lues sous leur nom :

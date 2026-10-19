@@ -3,12 +3,14 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useState } from "react";
 import { Statut, propose } from "@/components/actions/statut";
 import { DecisionBar } from "@/components/decision-bar";
 import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { libelleDeDemande, phraseDeBudget, resumeDeDemande, useADecider } from "@/lib/a-decider";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
+import { FAMILY_LABEL } from "@/lib/egress";
 import { useSession } from "@/lib/session";
 
 /**
@@ -21,6 +23,9 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
   const { org } = useSession();
   const queryClient = useQueryClient();
   const boite = useADecider(org, project);
+  // A developer sees the alert but is not offered the gesture (`can_acknowledge`); should the role
+  // change between the read and the click, the API's refusal is shown, not swallowed.
+  const [refus, setRefus] = useState<string | null>(null);
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -138,11 +143,68 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         )}
       </Card>
 
+      {!project && (
+        <Card title="Network access" action={<span className="text-xs text-ink-muted">{boite.egressRequests.length} waiting</span>}>
+          <p className="mb-3 max-w-3xl text-sm text-ink-muted">
+            A host somebody needs Choregos to call for the organisation — an MCP server, a git repository, a web site.
+            An administrator allows it, or refuses it; the person asked retries once it is approved.
+          </p>
+          {!boite.pret ? (
+            <p className="text-sm text-ink-muted">Reading…</p>
+          ) : boite.egressRequests.length === 0 ? (
+            <Empty title="No request waits">Nobody is waiting for a host to be opened.</Empty>
+          ) : (
+            <ul className="space-y-2" data-testid="egress-requests">
+              {boite.egressRequests.map((rule) => (
+                <li key={rule.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm" data-testid={`egress-${rule.id}`}>
+                  <span className="font-medium" data-donnee>
+                    {rule.host}
+                  </span>
+                  <Badge tone="neutral">{rule.used_by.map((f) => FAMILY_LABEL[f]).join(", ")}</Badge>
+                  <span className="text-xs text-ink-muted">
+                    {rule.reason ? `${rule.reason} · ` : ""}
+                    {rule.origin ? <OriginLink origin={rule.origin} /> : null} · asked by {rule.requested_by ?? "someone"}
+                    {rule.requested_at ? ` ${relative(rule.requested_at)}` : ""}
+                  </span>
+                  {boite.canDecideEgress ? (
+                    <span className="flex gap-2">
+                      <Button
+                        size="sm"
+                        tone="primary"
+                        onClick={async () => {
+                          await api.approveOrgEgressRequest(org, rule.id);
+                          await queryClient.invalidateQueries({ queryKey: ["egress", org] });
+                        }}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          await api.refuseOrgEgressRequest(org, rule.id);
+                          await queryClient.invalidateQueries({ queryKey: ["egress", org] });
+                        }}
+                      >
+                        Refuse
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-ink-muted">an administrator decides</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
       <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{boite.budgets.length} open</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           A project&apos;s or an agent&apos;s daily budget that reached the policy&apos;s alert share (80 % by default)
-          or the whole budget. One item per budget, threshold and day.
+          or the whole budget. One item per budget, threshold and day. Acknowledging one takes it out of everyone&apos;s
+          inbox, so it needs the project owner role or above.
         </p>
+        {refus && <ErrorNote>{refus}</ErrorNote>}
         {!boite.pret ? (
           <p className="text-sm text-ink-muted">Reading…</p>
         ) : boite.budgets.length === 0 ? (
@@ -156,15 +218,29 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                 <Link href={alerte.scope === "agent" ? `/agents/${alerte.subject}` : `/costs?project=${alerte.subject}`} className="text-xs">
                   {alerte.scope === "agent" ? "The agent" : "Its spend"}
                 </Link>
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    await api.acknowledgeBudgetAlert(org, alerte.id);
-                    await queryClient.invalidateQueries({ queryKey: ["budget-alerts", org] });
-                  }}
-                >
-                  Acknowledge
-                </Button>
+                {alerte.can_acknowledge ? (
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      setRefus(null);
+                      try {
+                        await api.acknowledgeBudgetAlert(org, alerte.id);
+                      } catch (erreur) {
+                        setRefus(erreur instanceof Error ? erreur.message : String(erreur));
+                        return;
+                      }
+                      await queryClient.invalidateQueries({ queryKey: ["budget-alerts", org] });
+                    }}
+                  >
+                    Acknowledge
+                  </Button>
+                ) : (
+                  <span className="text-xs text-ink-muted" data-testid={`budget-owner-${alerte.id}`}>
+                    {alerte.scope === "agent"
+                      ? "An organisation owner or administrator acknowledges it."
+                      : "A project owner acknowledges it."}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -172,4 +248,12 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
       </Card>
     </div>
   );
+}
+
+/** Where a request came from, so the inbox links back to the thing waiting for it. */
+function OriginLink({ origin }: { origin: string }) {
+  if (origin.startsWith("org-connector:")) return <Link href="/admin/connectors">connector {origin.slice(14)}</Link>;
+  if (origin.startsWith("skill-import:")) return <Link href="/skills">skills from {origin.slice(13)}</Link>;
+  if (origin.startsWith("knowledge-source:")) return <Link href="/knowledge">source {origin.slice(17)}</Link>;
+  return <span>{origin}</span>;
 }

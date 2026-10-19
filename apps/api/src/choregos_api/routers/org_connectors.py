@@ -56,6 +56,7 @@ from ..services.connector_secrets import (
     refs_with_values,
     require_store,
 )
+from ..services.egress import egress_gate_for_connector, egress_scope
 from ..services.platform_network import (
     PlatformNetworkRefused,
     check_connector_declaration,
@@ -206,6 +207,17 @@ async def declare_org_connector(
     )
     store = require_store(body.secret_values)
     await check_connector_declaration(session, organisation.id, body.config, body.name)
+    await egress_gate_for_connector(
+        session,
+        principal,
+        organisation,
+        kind,
+        body.type,
+        body.config,
+        body.name,
+        body.allow_egress,
+        origin=f"mcp-catalogue:{catalogue_entry}" if catalogue_entry else None,
+    )
     deja = (
         await session.execute(
             select(OrgConnector.id).where(OrgConnector.org_id == organisation.id, OrgConnector.name == name)
@@ -290,6 +302,10 @@ async def update_org_connector(
     verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
     store = require_store(values)
     await check_connector_declaration(session, organisation.id, config, name)
+    if body.config is not None:
+        await egress_gate_for_connector(
+            session, principal, organisation, instance.kind, instance.type, config, name, body.allow_egress
+        )
     before = dict(instance.secret_refs or {})
     after = refs_with_values({**before, **refs_in}, prefix, values)
     metas = await put_values(session, store, organisation.id, prefix, values, principal.email)
@@ -517,7 +533,8 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
         if lister is None:
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
-        outils = await lister()
+        async with egress_scope(session, organisation, "api", f"org-connector:{name}"):
+            outils = await lister()
     except (ErreurMcp, SecretIntrouvable, httpx.HTTPError) as panne:
         instance.status, instance.last_check_at = "error", utcnow()
         instance.last_error = redact(str(panne))[:1000]

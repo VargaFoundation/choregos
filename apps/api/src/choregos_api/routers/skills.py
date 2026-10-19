@@ -11,14 +11,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
+from choregos_contracts import skill_file_bytes
+from choregos_core.egress import EgressRefusedError
 from fastapi import APIRouter, Path, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
+from ..config import Settings
 from ..db.models import Agent, AgentVersion, Connector, Organization, Project, Skill, SkillVersion
 from ..deps import Config, Db, Me
-from ..errors import conflict, forbidden, not_found, unprocessable, upstream
+from ..errors import ApiError, conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
 from ..schemas import (
     SkillCandidate,
@@ -33,6 +36,7 @@ from ..schemas import (
     SkillUpdate,
     SkillVersionDto,
 )
+from ..services.egress import egress_scope, ensure_or_409, skill_import_targets
 from ..services.platform_network import check_platform_host, user_agent
 from ..services.skill_gate import assess
 from ..services.skill_sources import (
@@ -286,6 +290,28 @@ def _may_import(principal: Me, org: str, source: GitSource, permis: bool, exista
         )
 
 
+async def _egress_gate(
+    session: AsyncSession,
+    principal: Me,
+    organisation: Organization,
+    source: GitSource,
+    allow_egress: bool,
+    settings: Settings,
+) -> None:
+    """The hosts a git import calls must be in the organisation's egress allowlist (S39-22): the
+    modal's 409, or, for an administrator who says so, opened in this same transaction."""
+    await ensure_or_409(
+        session,
+        principal,
+        organisation,
+        skill_import_targets(source.url),
+        allow_egress=allow_egress,
+        origin=f"skill-import:{source.key}",
+        reason=f"importing skills from {source.key}",
+        settings=settings,
+    )
+
+
 def _source(repo_url: str, path: str) -> tuple[GitSource, str]:
     try:
         return parse_repo_url(repo_url), folder(path)
@@ -294,10 +320,19 @@ def _source(repo_url: str, path: str) -> tuple[GitSource, str]:
 
 
 async def _network_gate(session: AsyncSession, org_id: str, source: GitSource) -> str:
-    """The organisation's network policy applies to the fetch (ADR 0070): 422 when it refuses the
-    repository's host. Returns the User-Agent the fetch carries."""
+    """The organisation's network bounds apply to the fetch (ADR 0070): 422 when its ceiling refuses
+    the repository's host, before the egress gate's 409. Returns the User-Agent the fetch carries."""
     await check_platform_host(session, org_id, source.url, "skill source")
     return await user_agent(session, org_id)
+
+
+def _unavailable(source: GitSource, panne: SourceUnavailable) -> ApiError:
+    """An egress refusal is the organisation's to fix (422, naming the host and who opens it), not
+    an upstream failure (502)."""
+    refusal = panne.__cause__
+    if isinstance(refusal, EgressRefusedError):
+        return unprocessable(str(refusal))
+    return upstream(source.host, str(panne))
 
 
 async def _resolve(fetcher: SourceFetcher, source: GitSource, ref: str, agent: str = "") -> str:
@@ -306,7 +341,7 @@ async def _resolve(fetcher: SourceFetcher, source: GitSource, ref: str, agent: s
     except SourceRefused as refus:
         raise unprocessable(str(refus)) from refus
     except SourceUnavailable as panne:
-        raise upstream(source.host, str(panne)) from panne
+        raise _unavailable(source, panne) from panne
 
 
 async def _snapshot(
@@ -317,7 +352,7 @@ async def _snapshot(
     except SourceRefused as refus:
         raise unprocessable(str(refus)) from refus
     except SourceUnavailable as panne:
-        raise upstream(source.host, str(panne)) from panne
+        raise _unavailable(source, panne) from panne
 
 
 async def _latest_versions(
@@ -377,9 +412,11 @@ async def preview_skills_from_git(
     permis = allowed(source, sources)
     _may_import(principal, org, source, permis, [])
     agent = await _network_gate(session, organisation.id, source)
+    await _egress_gate(session, principal, organisation, source, body.allow_egress, settings)
     fetcher = get_fetcher(settings.fakes)
-    sha = await _resolve(fetcher, source, body.ref, agent)
-    snapshot = await _snapshot(fetcher, source, sha, base, agent)
+    async with egress_scope(session, organisation, "api", f"skill-import:{source.key}", settings):
+        sha = await _resolve(fetcher, source, body.ref, agent)
+        snapshot = await _snapshot(fetcher, source, sha, base, agent)
     existantes = await _latest_versions(
         session, organisation, [skill.name for skill in snapshot.skills if skill.name]
     )
@@ -399,7 +436,7 @@ async def preview_skills_from_git(
                 name=skill.name,
                 description=skill.description,
                 files=len(skill.files),
-                bytes=sum(len(texte.encode("utf-8")) for texte in skill.files.values()),
+                bytes=sum(len(skill_file_bytes(chemin, texte)) for chemin, texte in skill.files.items()),
                 licence=_licence(skill, snapshot),
                 problem=skill.problem,
                 existing_version=existantes.get(skill.name or ""),
@@ -436,7 +473,9 @@ async def import_skills_from_git(
     existantes = await _latest_versions(session, organisation, noms)
     _may_import(principal, org, source, allowed(source, sources), sorted(existantes))
     agent = await _network_gate(session, organisation.id, source)
-    snapshot = await _snapshot(get_fetcher(settings.fakes), source, body.sha, base, agent)
+    await _egress_gate(session, principal, organisation, source, body.allow_egress, settings)
+    async with egress_scope(session, organisation, "api", f"skill-import:{source.key}", settings):
+        snapshot = await _snapshot(get_fetcher(settings.fakes), source, body.sha, base, agent)
     choisies: list[FoundSkill] = []
     for nom in noms:
         trouvees = [skill for skill in snapshot.skills if skill.name == nom]
@@ -501,14 +540,16 @@ async def check_skill_update(
     source, chemin = _source(origine.repo, origine.path)
     agent = await _network_gate(session, organisation.id, source)
     fetcher = get_fetcher(settings.fakes)
-    sha = await _resolve(fetcher, source, ref, agent)
+    async with egress_scope(session, organisation, "api", f"skill-import:{source.key}", settings):
+        sha = await _resolve(fetcher, source, ref, agent)
     reponse = SkillUpdate(
         slug=slug, version=derniere.version, source=origine, ref=ref, sha=sha, up_to_date=sha == origine.sha
     )
     if reponse.up_to_date:
         reponse.digest = derniere.digest
         return reponse
-    snapshot = await _snapshot(fetcher, source, sha, chemin, agent)
+    async with egress_scope(session, organisation, "api", f"skill-import:{source.key}", settings):
+        snapshot = await _snapshot(fetcher, source, sha, chemin, agent)
     trouvee = next((s for s in snapshot.skills if s.path == chemin), None)
     if trouvee is None:
         reponse.problem = f"there is no skill at `{chemin or '/'}` any more at {sha[:12]}"

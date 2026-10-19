@@ -62,6 +62,25 @@ deployment really provides: `runtime` (its executor), `gateway` and `memory`. An
 capability with no connector reads **Not connected**, whatever adapter the factory would build
 with an empty configuration. Connectors of the organisation are not tested on save yet.
 
+**Network access.** The platform calls an MCP server, a git repository or a web site from its own
+pods, for your organisation, and only for hosts the organisation has opened
+([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). Declaring an `mcp` connector, importing
+skills from git or adding a web or git knowledge source checks the hosts first. If one is missing the
+console opens a **network access** modal listing each host, whether this organisation allows it
+(`allowed` / `requested by X` / `not allowed`) and whether the platform's network does (`declared
+open` / `outside the declared ceiling` / `not declared by this deployment`). An administrator
+presses *Allow and install*: the hosts are opened and the connector created in one call. Anyone else
+sees who the administrators are and presses *Ask an administrator*; the request waits in the
+administrators' inbox and the person retries once it is approved. When the cluster's network also
+needs a change, the modal shows it (a snippet to copy, and a prefilled issue when the deployment
+configures one): Choregos cannot apply it. `/admin/egress` lists the rules, the requests and the
+ceiling. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
+The list is one half of the organisation's network policy; the other half is its **bounds**, the
+`network` section of its policy ceiling (see *Network access* below, [ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
+a host the ceiling denies, or that lies outside its allowed set, is refused before any opening is
+asked for (422 at the add, 403 at the call, in every egress mode), and cannot be opened at all.
+The hosts opened for `runners` join every run's network as implied hosts, under the same deny lists.
+
 **Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
@@ -114,6 +133,12 @@ pattern. A name outside it is a `422` at write and a connector in error at use. 
 organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
 refused. **Breaking:** a reference written before this rule that is outside the pattern stops
 resolving; rename the variable (or widen the pattern) and rewrite the reference.
+
+**Every type has its procedure**, in the app and here. Choosing a type in a form opens a side panel with
+what to create at the vendor, which permissions to give, where to paste each value, how to test it and what
+the usual failures mean, with this platform's webhook and callback addresses filled in. The same text is in
+[`docs/procedures/`](procedures/README.md), generated from the same files
+([ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)); `GET /procedures` serves it.
 
 **The organisation's connectors.** A directory, a device manager, an MCP server is declared once
 by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
@@ -894,8 +919,11 @@ Choregos' spend ledger.
 
 A skill **declares no permission**: an `allowed-tools` field is refused, because what an agent may
 call is decided by its version and its project, never by a file it reads. An archive that leaves
-its folder (`../`), holds a symbolic link, more than 256 files or 5 MiB, or a file that is not
-UTF-8 text is refused. Versions never change; a skill says which agents carry it.
+its folder (`../`), holds a symbolic link, more than 256 files or 5 MiB, or a file that is neither
+UTF-8 text nor an inert binary is refused. Inert binaries are fonts and images (`png`, `jpg`, `jpeg`,
+`gif`, `webp`, `ico`, `ttf`, `otf`, `woff`, `woff2`): at most 512 KiB each, their first bytes must
+match their extension, and they are stored as base64 (SVG is text). Any other binary refuses the
+skill. Versions never change; a skill says which agents carry it.
 
 Every version passes a **supply-chain gate** ([ADR 0050](adr/0050-skill-supply-chain-gate.md)): a
 risk tier — `low` (a `SKILL.md` alone), `medium` (references, assets), `high` (a script, an
@@ -947,9 +975,10 @@ supply-chain gate's **risk** at generation time, and its **delivery**:
 
 What is **not** listed, on purpose: Anthropic's `docx`, `pdf`, `pptx` and `xlsx` (governed by an
 agreement with Anthropic, not an open licence), skills without a licence file, skills that declare
-`allowed-tools`, skills that carry binary files, repositories whose owner is not on the publisher list
-(`tools/catalogues/skills/publishers.yaml`: a vendor, or a maintainer with at least 1 000 stars and a
-repository that is not archived), and a few that only make sense inside one coding assistant. A
+`allowed-tools`, skills that carry binary files other than fonts and images, repositories whose
+owner is not on the publisher list (`tools/catalogues/skills/publishers.yaml`: a vendor, or a
+maintainer with at least 1 000 stars and a repository that is not archived), and a few that only
+make sense inside one coding assistant. A
 person with the right to use a skill that is not listed can still import it by hand, above, where
 the gate flags its licence and a person decides.
 
@@ -1534,11 +1563,14 @@ Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting p
 
 ```json
 {"budgets": {"ticket_usd": {"M": 20}, "stage_usd": {"default": {"M": 6}}, "max_turns": {"default": 60},
-             "max_minutes": {"implement": 45}, "tool_calls_per_run": 50, "daily_project_usd": 100},
+             "max_minutes": {"implement": 45}, "tool_calls_per_run": 50, "daily_project_usd": 100,
+             "monthly_org_usd": 5000},
  "attempts": {"default_max": 2, "by_role": {"implement": 2}},
  "scope": {"max_diff_lines": 2000}, "findings": {"max_per_run": 3}}
 ```
 
+`monthly_org_usd` is the one cap that is not a project policy field: what all the organisation's
+projects may spend in a calendar month (UTC). Nothing is clamped; it enters every stage's reservation.
 A per-role table's `default` caps every role the ceiling does not name; a cap left out leaves projects
 free. Values are compared as the engine applies them — a project policy that omits `ticket_usd` gets
 the platform's defaults, and those are compared too. Saving a project policy above the ceiling is
@@ -1783,7 +1815,11 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   **Project** filter (`/inbox?project=<slug>`) narrows to one project, and each project's own
   (`/p/<slug>/inbox`, the **Inbox** entry of the project's sidebar), which lists and counts only
   that project's tickets, actions and project budget alerts. An agent's budget alert stays in the
-  organisation's inbox, because an agent serves several projects.
+  organisation's inbox, because an agent serves several projects. Acknowledging a budget alert takes
+  it out of everyone's inbox, so it needs the **project owner** role or above: on that project for a
+  project's alert, in the organisation for an agent's. Every member still sees it; the
+  **Acknowledge** button appears only to those who may (`can_acknowledge` on each alert), the
+  others read who can.
 
 The core ships two effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP

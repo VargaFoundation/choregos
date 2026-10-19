@@ -332,8 +332,9 @@ Options:
   --template <str>
   --org <str>
   --language <str>  [default: python]
-  --tracker <str>   `internal`: requests are filed in Choregos  [default:
-                    internal]
+  --tracker <str>   `internal`: requests are filed in Choregos. Without
+                    `--repo` the default is `internal`; with `--repo` it is
+                    written only when given
   --help            Show this message and exit.
 ```
 

@@ -29,6 +29,7 @@ Variables :
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -69,6 +70,35 @@ ISSUES = {
     ),
 }
 TERMINAUX = {"verified", "adopted", "abandoned"}
+#: The first line of the commit that puts the three defects back in the sandbox (see the README).
+SEED_COMMIT = "chore(seed):"
+
+
+def consumed_by(title: str, merged: list[dict[str, Any]], seeded_at: str | None) -> dict[str, Any] | None:
+    """The pull request that already resolved this issue since the sandbox was last seeded, if any.
+
+    Each issue asks for a change the sandbox was seeded without; once a pull request carrying its
+    title is merged, the change is on `main` and a new issue would have nothing to do. GitHub
+    timestamps are ISO 8601 in UTC, so they compare as strings.
+    """
+    for pull in merged:
+        if pull["title"] == title and (seeded_at is None or pull["mergedAt"] > seeded_at):
+            return pull
+    return None
+
+
+def _gh_json(*arguments: str) -> Any:
+    # `gh`, already signed in on the workstation: fixed arguments, no shell.
+    sortie = subprocess.run(["gh", *arguments], check=True, capture_output=True, text=True)  # noqa: S603, S607
+    return json.loads(sortie.stdout)
+
+
+def _seeded_at() -> str | None:
+    commits = _gh_json("api", f"repos/{DEPOT}/commits?per_page=100")
+    for commit in commits:
+        if commit["commit"]["message"].startswith(SEED_COMMIT):
+            return str(commit["commit"]["committer"]["date"])
+    return None
 
 
 def exiger(nom: str) -> str:
@@ -160,6 +190,14 @@ def exigences() -> None:
 def ouvrir(sorte: str) -> None:
     """Une issue dans le bac à sable, étiquetée comme le routage l'attend : le webhook la fait naître."""
     etiquettes, titre, corps = ISSUES[sorte]
+    merged = _gh_json("pr", "list", "--repo", DEPOT, "--state", "merged", "--limit", "100",
+                      "--json", "number,title,mergedAt,url")  # fmt: skip
+    pull = consumed_by(titre, merged, _seeded_at())
+    if pull:
+        sys.exit(
+            f"{sorte}: already resolved on {DEPOT} by {pull['url']} — reseed the sandbox first "
+            "(essai/projet-dev/README.md, 'Reseeding the sandbox')"
+        )
     # `gh`, déjà authentifié sur le poste : des arguments fixes, aucun shell.
     commande = ["gh", "issue", "create", "--repo", DEPOT, "--title", titre, "--body", corps]
     commande += [arg for etiquette in etiquettes for arg in ("--label", etiquette)]

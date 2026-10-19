@@ -92,6 +92,11 @@ spec:
             - name: CHOREGOS_PLAYBOOKS_DIR
               value: {{ $.Values.global.playbooks.mountPath | quote }}
             {{- end }}
+            {{- with .Values.proceduresExtra }}
+            # Site notes and extra setup procedures, one Markdown file each (ADR 0067).
+            - name: CHOREGOS_PROCEDURES_EXTRA
+              value: /etc/choregos/procedures
+            {{- end }}
             {{- with .Values.global.agents }}
             {{- if .defaultBackend }}
             # The backend and the profiles a new project inherits (#245).
@@ -247,6 +252,9 @@ spec:
             {{- with .Values.global.playbooks.configMap }}
             - { name: playbooks, mountPath: {{ $.Values.global.playbooks.mountPath }}, readOnly: true }
             {{- end }}
+            {{- with .Values.proceduresExtra }}
+            - { name: procedures-extra, mountPath: /etc/choregos/procedures, readOnly: true }
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -268,9 +276,13 @@ spec:
         - name: playbooks
           configMap: { name: {{ . }} }
         {{- end }}
+        {{- with .Values.proceduresExtra }}
+        - name: procedures-extra
+          configMap: { name: {{ . }} }
+        {{- end }}
         {{- /* Volumes the chart owns: a name of `extraVolumes` that collides with one of them would
              give an invalid pod, or worse, silently replace a mount. */}}
-        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" }}
+        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" "procedures-extra" }}
         {{- range (.Values.extraVolumes | default list) }}
         {{- if has .name $owned }}
         {{- fail (printf "extraVolumes: %q is a volume of the chart; pick another name" .name) }}

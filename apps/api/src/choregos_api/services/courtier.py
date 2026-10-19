@@ -351,10 +351,27 @@ async def appeler(
     run: Run | None = None,
     project: Project | None = None,
 ) -> tuple[int, dict[str, Any]]:
-    """`tools/call` on the server, with the connector's key resolved HERE — never in the pod.
+    """`tools/call` on the server, with the connector's key resolved HERE, never in the pod.
 
-    The organisation's network policy is read FIRST (ADR 0070): a host it refuses (403) or that the
-    organisation already called too often this minute (429) never receives the call."""
+    Two halves of one network policy hold it (ADR 0070, amended): the organisation's network bounds
+    are read FIRST, so a host its ceiling refuses (403) or that the organisation already called too
+    often this minute (429) never receives the call; then every request runs under the
+    organisation's egress allowlist (S39-22, ADR 0066), so a host it has not opened is a tool error
+    that says so, not a timeout."""
+    from .egress import egress_scope_for_org
+
+    async with egress_scope_for_org(session, outil.connecteur.org_id, "api", f"mcp:{outil.connecteur.name}"):
+        return await _appeler(session, outil, arguments, run=run, project=project)
+
+
+async def _appeler(
+    session: AsyncSession,
+    outil: OutilDuCourtier,
+    arguments: dict[str, Any],
+    *,
+    run: Run | None = None,
+    project: Project | None = None,
+) -> tuple[int, dict[str, Any]]:
     import httpx
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError

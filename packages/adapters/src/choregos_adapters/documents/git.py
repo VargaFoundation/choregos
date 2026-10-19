@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from choregos_core.egress import check_current
+
 from .base import Changes, SourceItem, SourceRefusedError
 
 DEFAULT_PATHS = ("*.md", "**/*.md")
@@ -115,9 +117,25 @@ class GitSource:
         self._checkout = Path(tempfile.mkdtemp(prefix="choregos-kb-git-"))
         await self._git(self._checkout, "init", "-q")
         token = await self._token()
+        # A subprocess cannot go through the guarded transport: its host is checked up front, and a
+        # redirect (which would reach another host) is refused (S39-22).
+        parts = urlsplit(self.url)
+        if parts.scheme == "https" and parts.hostname:
+            check_current(parts.hostname, parts.port or 443)
         agent = ["-c", f"http.userAgent={self.user_agent}"] if self.user_agent else []
         await self._git(
-            self._checkout, *agent, "fetch", "-q", "--depth", "1", "--", self.url, self.ref, token=token
+            self._checkout,
+            "-c",
+            "http.followRedirects=false",
+            *agent,
+            "fetch",
+            "-q",
+            "--depth",
+            "1",
+            "--",
+            self.url,
+            self.ref,
+            token=token,
         )
         commit = (await self._git(self._checkout, "rev-parse", "FETCH_HEAD")).strip()
         if (cursor or {}).get("commit") == commit:

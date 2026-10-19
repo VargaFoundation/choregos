@@ -84,6 +84,19 @@ def test_template_and_pool_fit_the_pinned_crds() -> None:
 
 
 @needs_helm
+def test_a_warm_sandbox_of_an_older_template_is_not_handed_to_a_run() -> None:
+    """S35-02b: on dev, the pool kept a 0.18.1 sandbox after the template moved to 0.18.3, and
+    the next claim would have run in it — the operator's default `OnReplenish` replaces a stale
+    sandbox only once it is claimed. `Recreate` deletes it when the template changes."""
+    pool = _objects()["SandboxWarmPool/choregos-runner"]
+    assert pool["spec"]["updateStrategy"] == {"type": "Recreate"}
+    crds = _crds()
+    assert crds.problems(pool) == []
+    pool["spec"]["updateStrategy"]["type"] = "Recreated"
+    assert crds.problems(pool) != [], "the pinned CRD knows the strategy's values"
+
+
+@needs_helm
 def test_the_validator_does_refuse_a_pruned_field() -> None:
     """The check above is worth something only if a typo makes it fail."""
     template = _objects()["SandboxTemplate/choregos-runner"]

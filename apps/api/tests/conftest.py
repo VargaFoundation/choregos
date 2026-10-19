@@ -15,6 +15,8 @@ from httpx import ASGITransport, AsyncClient
 
 os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
+# The egress allowlist (S39-22) only warns in the suites: the tests that prove it ask for `enforce`.
+os.environ.setdefault("CHOREGOS_EGRESS_MODE", "warn")
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
 # Une écriture d'un run est une action gouvernée que joue Temporal (#241) ; ici `FakeTemporal` ne la

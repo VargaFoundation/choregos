@@ -102,15 +102,24 @@ class FakeTemporal:
     queries: dict[str, Any] = field(default_factory=dict)
     cancelled: list[str] = field(default_factory=list)
     described: dict[str, WorkflowState] = field(default_factory=dict)
+    #: workflows that no longer run: a signal to one is NOT_FOUND, as the real server answers (#679)
+    gone: set[str] = field(default_factory=set)
 
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started.setdefault(workflow_id, payload)  # ID déterministe ⇒ démarrage idempotent
+        state = self.described.get(workflow_id)
+        if state is None or state.status != "COMPLETED":  # ALLOW_DUPLICATE_FAILED_ONLY, as the real one
+            self.gone.discard(workflow_id)
         return workflow_id
 
     async def describe(self, workflow_id: str) -> WorkflowState | None:
         return self.described.get(workflow_id)
 
     async def signal(self, workflow_id: str, name: str, payload: Any) -> None:
+        if workflow_id in self.gone:
+            from temporalio.service import RPCError, RPCStatusCode
+
+            raise RPCError("workflow execution already completed", RPCStatusCode.NOT_FOUND, b"")
         self.signals.append((workflow_id, name, payload))
 
     async def query(self, workflow_id: str, name: str) -> Any:
@@ -171,6 +180,7 @@ class RealTemporal:
         return self._client
 
     async def _start(self, workflow: str, workflow_id: str, payload: dict[str, Any]) -> str:
+        from temporalio.exceptions import WorkflowAlreadyStartedError
         from temporalio.service import RPCError
 
         client = await self.client()
@@ -183,6 +193,12 @@ class RealTemporal:
                 id_reuse_policy=2,  # ALLOW_DUPLICATE_FAILED_ONLY : pas de doublon sur un même ticket
             )
             return str(handle.id)
+        except WorkflowAlreadyStartedError:
+            # Already running under this id: the expected case (one loop per source, one interpreter
+            # per ticket). The SDK raises this, not an RPCError: before S39-29 a second "sync now"
+            # on a knowledge source answered 500 on the dev tenant.
+            logger.info("workflow already started", workflow_id=workflow_id)
+            return workflow_id
         except RPCError as exc:  # déjà démarré : c'est le comportement voulu
             if "already" in str(exc).lower():
                 logger.info("workflow déjà démarré", workflow_id=workflow_id)
@@ -307,10 +323,33 @@ def set_temporal(gateway: TemporalGateway | None) -> None:
     _gateway = gateway
 
 
+class InterpreterNotRunningError(Exception):
+    """A work item's interpreter does not run any more: Temporal answered NOT_FOUND to a signal (#679).
+
+    It ended (completed, stopped, failed, terminated) or never started. Nothing received the signal;
+    the caller says so instead of answering 500.
+    """
+
+    def __init__(self, workflow_id: str, cause: str) -> None:
+        super().__init__(f"{workflow_id}: {cause}")
+        self.workflow_id = workflow_id
+        self.cause = cause
+
+
+async def _signal_interpreter(project_slug: str, tracker_key: str, name: str, payload: Any) -> None:
+    from temporalio.service import RPCError, RPCStatusCode
+
+    workflow_id = interpreter_id(project_slug, tracker_key)
+    try:
+        await get_temporal().signal(workflow_id, name, payload)
+    except RPCError as exc:
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            raise
+        raise InterpreterNotRunningError(workflow_id, str(exc)) from exc
+
+
 async def deliver_decision(project_slug: str, tracker_key: str, decision: HumanDecision) -> None:
-    await get_temporal().signal(
-        interpreter_id(project_slug, tracker_key), "human_decision", decision.model_dump(mode="json")
-    )
+    await _signal_interpreter(project_slug, tracker_key, "human_decision", decision.model_dump(mode="json"))
 
 
 async def deliver_inbound(project_slug: str, tracker_key: str, event: InboundEvent) -> None:
@@ -320,6 +359,4 @@ async def deliver_inbound(project_slug: str, tracker_key: str, event: InboundEve
 
 
 async def deliver_control(project_slug: str, tracker_key: str, control: Control) -> None:
-    await get_temporal().signal(
-        interpreter_id(project_slug, tracker_key), "control", control.model_dump(mode="json")
-    )
+    await _signal_interpreter(project_slug, tracker_key, "control", control.model_dump(mode="json"))

@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 from choregos_adapters.a2a import AUTH_BEARER, AUTH_NONE, AUTH_OAUTH, AgentCard, CardError, fetch_card
+from choregos_core.egress import EgressRefusedError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,14 +32,19 @@ def set_a2a_transport(transport: httpx.AsyncBaseTransport | None) -> None:
         _TRANSPORT.append(transport)
 
 
-def a2a_transport() -> httpx.AsyncBaseTransport | None:
-    return _TRANSPORT[0] if _TRANSPORT else None
+def a2a_transport() -> httpx.AsyncBaseTransport:
+    """Every outbound A2A/OAuth call goes through the organisation's egress guard (S39-22)."""
+    from choregos_adapters.http.egress import guarded
+
+    return guarded(_TRANSPORT[0] if _TRANSPORT else None)
 
 
 async def read_card(url: str) -> AgentCard:
     """The card at `url`, or 422 with why."""
     try:
         return await fetch_card(url, transport=a2a_transport())
+    except EgressRefusedError as exc:
+        raise unprocessable(str(exc)) from exc
     except CardError as exc:
         raise unprocessable(f"the agent card cannot be used: {exc}") from exc
     except httpx.HTTPError as exc:
@@ -59,7 +65,10 @@ async def pin_remote_runtime(session: AsyncSession, org_id: str, spec: AgentSpec
     runtime = spec.runtime
     if not isinstance(runtime, A2aRuntime):
         return spec
-    card = await read_card(runtime.card_url)
+    from .egress import egress_scope_for_org
+
+    async with egress_scope_for_org(session, org_id, "api", f"remote-agent:{runtime.card_url}"):
+        card = await read_card(runtime.card_url)
     problems: list[dict[str, Any]] = []
     if runtime.skill is not None and card.skill(runtime.skill) is None:
         known = ", ".join(s.id for s in card.skills) or "none"

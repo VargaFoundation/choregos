@@ -39,3 +39,17 @@ Ce qu'on attend : le bogue arrive à `verified` sans une décision humaine ; l'�
 fonctionnalité attend trois fois une personne, passe par staging, puis attend son capitaine.
 
 Le jeton d'API (`CHOREGOS_DEV_TOKEN`) ne s'écrit nulle part : il vient de l'environnement.
+
+## Reseeding the sandbox
+
+Each issue is played against a defect the sandbox was seeded with; once its pull request is merged,
+the defect is gone and `ouvrir` refuses to open the same issue again (it would cost a run to find
+nothing to change). Putting the three defects back is a commit on the sandbox's `main` whose first
+line starts with `chore(seed):` — `ouvrir` only counts the pull requests merged after it:
+
+    git checkout 9c3492c6 -- src tests docs/adr
+    git rm docs/adr/0001-keep-synchronous-invoice-sending.md
+    git commit -s -m "chore(seed): put the credits, currencies and ADR defects back"
+
+`9c3492c6` is the last commit before the first ticket ran: `compute_total` ignores the credits,
+there is no `compute_totals`, and no ADR 0001.

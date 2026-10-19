@@ -20,14 +20,16 @@ from typing import Any
 from choregos_adapters.documents.base import Changes, DocumentSource, ItemUnreadableError, SourceItem
 from choregos_adapters.registry import build, fakes_enabled
 from choregos_core import utcnow
+from choregos_core.egress import pop_scope, push_scope
 from choregos_core.redaction import redact
 from sqlalchemy import delete, func, select
 
 from ..config import get_settings
-from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, OrgConnector
+from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, Organization, OrgConnector
 from ..db.session import session_scope
 from ..logging import get_logger
 from ..secret_store import resolved_configuration
+from ..services.egress import load_policy
 from ..services.platform_network import (
     PlatformNetworkRefused,
     ceiling_network,
@@ -202,9 +204,26 @@ async def _deleted(changes: Changes, known: dict[str, KnowledgeDocument]) -> set
     return gone & set(known)
 
 
-async def sync_source(org: str, source_id: str, *, adapter: DocumentSource | None = None) -> dict[str, Any]:
-    """One sync of one source; returns its summary. A source removed meanwhile answers `gone`."""
+async def _enter_egress_scope(session: Any, org: str, family: str, source: KnowledgeSource) -> Any:
+    """Every call this sync makes is checked against the organisation's egress allowlist (S39-22)."""
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        return None
+    policy = await load_policy(session, organisation)
+    return push_scope(policy, family, f"knowledge-source:{source.name}")
+
+
+async def sync_source(
+    org: str, source_id: str, *, adapter: DocumentSource | None = None, family: str = "workers"
+) -> dict[str, Any]:
+    """One sync of one source; returns its summary. A source removed meanwhile answers `gone`.
+
+    `family` is the pod family that makes the calls (the worker's, by default): it is the one the
+    organisation's egress rules and the deployment's ceiling are read for."""
     settings = get_settings()
+    scope_token: Any = None
     cap = settings.knowledge_max_upload_mib * 1024 * 1024
     async with session_scope(orgs=[org]) as session:
         source = await session.get(KnowledgeSource, source_id)
@@ -219,6 +238,7 @@ async def sync_source(org: str, source_id: str, *, adapter: DocumentSource | Non
             base = await session.get(KnowledgeBase, source.knowledge_base_id) if source else None
             if source is None or base is None:
                 return {"status": "gone"}
+            scope_token = await _enter_egress_scope(session, org, family, source)
             adapter = adapter or await open_source(session, source)
             changes = await adapter.changes(source.cursor)
             known = {
@@ -266,6 +286,8 @@ async def sync_source(org: str, source_id: str, *, adapter: DocumentSource | Non
         )
         raise
     finally:
+        if scope_token is not None:
+            pop_scope(scope_token)
         close = getattr(adapter, "close", None)
         if callable(close):
             close()

@@ -71,3 +71,20 @@ refuses beyond it (`reason="budget"`, to a person, never a retry).
   minted the whole remainder, so the month can be overshot by the keys in flight at the
   moment. The 100 % suspension bounds the overshoot to those runs; it does not remove it.
   Closing it means summing the agent's open reservations, as the ticket cap does for tickets.
+
+## Addendum: serialized per scope, every scope subtracts its open keys (S27-11)
+
+The limit stated above is closed.
+
+- `prepare_stage` locks the scopes it reserves from (the work item, the project when it has a day
+  budget, the organisation when its ceiling has `monthly_org_usd`, the agent when it has a day or
+  month cap) until its transaction ends, in a fixed order. PostgreSQL: `pg_advisory_xact_lock`;
+  SQLite (dev, tests): an in-process lock released when the transaction ends. A second stage
+  therefore reads the first one's `reserved:<run_id>` row instead of the same remainder, and is
+  refused below the floor like any other.
+- The organisation's month is a new cap, `budgets.monthly_org_usd` of the policy ceiling: what all
+  its projects may spend in a calendar month. Its remainder is the cap, minus the ledger of the
+  organisation's projects since the first of the month, minus the open keys of those projects.
+- `agent_day` and `agent_month` subtract the open keys of the agent's runs too.
+- Cost: the lock is held until `prepare_stage` commits, which includes building the context pack.
+  Stages of one organisation contend only when a scope they share has a cap.

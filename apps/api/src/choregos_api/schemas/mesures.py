@@ -114,6 +114,9 @@ class BudgetAlertDto(Dto):
     created_at: datetime | None = None
     acknowledged_by: str | None = None
     acknowledged_at: datetime | None = None
+    #: Whether the person reading may acknowledge it (project owner or above, S29-04c): the console
+    #: offers the gesture only to them. The acknowledge endpoint checks again.
+    can_acknowledge: bool = False
 
 
 class DoraMetric(Dto):

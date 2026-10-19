@@ -22,7 +22,9 @@ from ..deps import Config, Db, Me
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
 from ..schemas import CatalogueMetaDto, SkillCatalogueDto, SkillCatalogueEntryDto, SkillDto
+from ..schemas.catalogues import SkillCatalogueInstall
 from ..services.catalogues import egress_of
+from ..services.egress import egress_scope, ensure_or_409, skill_import_targets
 from ..services.skill_sources import GitSource, SourceRefused, allowed, get_fetcher, parse_repo_url
 from ..services.skills import empreinte, publish_version
 from .skills import _dto, _lire, _organisation, _skill_sources, _snapshot
@@ -145,7 +147,12 @@ async def list_skill_catalogue(
     operation_id="installSkillCatalogueEntry",
 )
 async def install_skill_catalogue_entry(
-    org: str, entry_id: EntryId, session: Db, principal: Me, settings: Config
+    org: str,
+    entry_id: EntryId,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    body: SkillCatalogueInstall | None = None,
 ) -> SkillDto:
     """Publishes the entry as a skill (v1) or, when the catalogue pins a newer one, its next version."""
     entry = catalogue.entry(entry_id)
@@ -166,7 +173,20 @@ async def install_skill_catalogue_entry(
         if existing.digest == entry.digest:
             raise conflict(f"`{entry.id}` is already installed at this version (v{existing.version})")
 
-    files, executables, repo_licences = await _files_of(entry, source, settings.fakes)
+    if entry.delivery != "bundled":
+        # Fetched from git: the repository's hosts must be open (S39-22), as for an import.
+        await ensure_or_409(
+            session,
+            principal,
+            organisation,
+            skill_import_targets(source.url),
+            allow_egress=body.allow_egress if body else False,
+            origin=f"skill-catalogue:{entry.id}",
+            reason=f"installing the skill {entry.id} from {source.key}",
+            settings=settings,
+        )
+    async with egress_scope(session, organisation, "api", f"skill-catalogue:{entry.id}", settings):
+        files, executables, repo_licences = await _files_of(entry, source, settings.fakes)
     if empreinte(files) != entry.digest:
         raise unprocessable(
             f"`{entry.id}` is not what the catalogue pinned (digest mismatch): the catalogue is regenerated "

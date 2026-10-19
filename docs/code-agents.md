@@ -126,6 +126,9 @@ what your code can reach, exactly as it bounds the shell of a coding agent.
 
 ## Ship it
 
+The console shows this checklist as a procedure when you choose the **Code** runtime in the agent builder; it
+is also [here](procedures/agent.code.md).
+
 1. **Build the image FROM the runner image.** The runner is the entrypoint; your agent is the
    subprocess it starts. Give the agent its own virtualenv so its dependencies never shadow the
    runner's. See `examples/agents/plain/Dockerfile`.

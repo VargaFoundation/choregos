@@ -68,7 +68,7 @@ REPO_V1 = {
     "skills/greedy/SKILL.md": _skill_md("greedy", "allowed-tools: [Bash]\n"),
     "skills/linked/SKILL.md": _skill_md("linked"),
     "skills/fonts/SKILL.md": _skill_md("fonts"),
-    "skills/fonts/font.ttf": b"\x00\x01\xff\xfe",
+    "skills/fonts/blob.bin": b"\x00\x01\xff\xfe",
 }
 REPO_V2 = {
     **REPO_V1,

@@ -160,4 +160,28 @@ DEFAULT_PERMISSIONS = {
     "metadata": "read",
 }
 
+#: What the GitHub App must be granted for the adapters to work (ADR 0067). The setup procedure of
+#: the GitHub connectors renders this list and a test compares them, so a call the adapters start
+#: making cannot go without the procedure learning of it. `DEFAULT_PERMISSIONS` (what a token asks
+#: for) must stay inside it. `organization_projects` is the organisation's Projects v2 (GraphQL).
+APP_PERMISSIONS = {
+    "contents": "write",
+    "issues": "write",
+    "pull_requests": "write",
+    "checks": "write",
+    "metadata": "read",
+    "organization_projects": "write",
+}
+
+#: The webhook events the platform parses (`tracker/github_events.py`).
+APP_EVENTS = (
+    "issues",
+    "issue_comment",
+    "projects_v2_item",
+    "pull_request",
+    "pull_request_review",
+    "check_suite",
+    "check_run",
+)
+
 RUNNER_PERMISSIONS = {"contents": "write", "metadata": "read"}

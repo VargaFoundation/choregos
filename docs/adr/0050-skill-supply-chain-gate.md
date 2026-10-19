@@ -61,8 +61,8 @@ update applied by itself, hands the agents to whoever controls that branch.
 
 - A skill no longer changes because its upstream branch did; following upstream is a decision a
   person takes with the diff in front of them.
-- Private repositories are not fetched yet (no token is sent); a skill with a binary file (a font,
-  an image) is refused, as for a zip.
+- Private repositories are not fetched yet (no token is sent); a skill with a binary file other than a
+  font or an image is refused, as for a zip (amendment of 2026-10-16: fonts and images are accepted).
 - A version is judged by what it contains before any agent reads it; a high-risk one costs a second
   person's attention, which is the point. The scan is a set of patterns, not a sandbox: it finds
   the documented tricks, not every one — the runner's closed network and the digest check stay the
@@ -80,3 +80,28 @@ second administrator, and an update is a new catalogue release plus a person cli
 entry, vendored in the image with its licence and a sha256 provenance, is shipped by the platform and
 approved as such (§7) only when its licence is permissive and the gate calls it low or medium; its
 files are verified against the provenance at install, and a mismatch is refused.
+
+## Amendment — inert binaries (S32-05b, 2026-10-16)
+
+Decision D12c relaxes one rule and keeps the other two: a skill is still imported only at a pinned
+SHA, and a project owner still imports from the allowlist only. What changes is §3, "a file that is
+not UTF-8 text refuses the skill": **an inert binary, a font or an image, is accepted under a cap**;
+any other binary still refuses the skill.
+
+- The accepted extensions are `png`, `jpg`, `jpeg`, `gif`, `webp`, `ico`, `ttf`, `otf`, `woff`,
+  `woff2`. SVG is text and stays text.
+- A file's first bytes must match its extension (a `.png` that is not a PNG refuses the skill), and
+  it is at most 512 KiB once decoded. The total cap (5 MiB) counts decoded bytes.
+- Files stay `dict[str, str]` end to end. The extension alone decides the encoding: for those
+  extensions the value is **always** standard base64, for every other path it is UTF-8 text. A text
+  file starting with `base64:` or an unusual byte can therefore never be mistaken for a binary.
+- The digest is computed over each file's decoded bytes (`choregos_contracts.skill_files`), shared
+  by the API and the runner, so digests of text-only skills are unchanged. The runner decodes and
+  writes bytes with mode `0o644`; a corrupt base64 value or a digest mismatch stops the run.
+- The gate does not text-scan a binary (nothing to read); a skill with one is at least `medium`.
+- The console shows `binary, N bytes` in place of the content.
+- This is a `contract-change`: the `files` maps of the API describe the rule.
+
+Not covered: a font or image is not parsed beyond its magic bytes, so a crafted file that a
+consumer's decoder mishandles is not detected; the closed network of the runner and the human
+review remain the guard.

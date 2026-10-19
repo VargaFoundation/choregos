@@ -119,6 +119,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             added_text=ajoute,
             documents=dict(item.documents or {}),
             fields=dict(item.fields or {}),
+            parent_documents=await _parent_documents(session, item),
             branch_pushed=branch_pushed,
         )
         outcomes = [await _juger(gate, context, bundle, diff is not None, perimetre_du_run) for gate in gates]
@@ -136,6 +137,21 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             }
             for o in outcomes
         ]
+
+
+async def _parent_documents(session: Any, item: Any) -> dict[str, Any] | None:
+    """The documents of the work item that opened this one by a fan-out, read from the parent's own
+    row; `None` for a work item nobody spawned. `documents.parent` is written by the platform
+    only (the API never accepts documents from a person), so a hand-made child has none (S38-17)."""
+    from .children import PARENT
+
+    link = (item.documents or {}).get(PARENT)
+    if not isinstance(link, dict) or not link.get("work_item_id"):
+        return None
+    parent = await load_work_item(session, link["work_item_id"])
+    if parent.project_id != item.project_id:
+        return None
+    return dict(parent.documents or {})
 
 
 def empty_diff_of_unchanged_run(

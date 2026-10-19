@@ -66,10 +66,15 @@ proj-{slug}-runners
 
 {{/* Common environment variables: 12-factor configuration, secrets by reference. */}}
 {{- define "choregos.commonEnv" -}}
-{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRET_ENV_PATTERN" "CHOREGOS_EXECUTOR_KIND" "CHOREGOS_EXECUTORS_ALLOWED" }}
+{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_EGRESS_MODE" "CHOREGOS_EGRESS_CEILING" "CHOREGOS_EGRESS_PLATFORM_CHANGE" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRET_ENV_PATTERN" "CHOREGOS_EXECUTOR_KIND" "CHOREGOS_EXECUTORS_ALLOWED" }}
 {{- range (.Values.global.extraEnv | default list) }}
 {{- if has .name $poses }}
 {{- fail (printf "global.extraEnv: %s is already set by the chart; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
+{{- end }}
+{{- /* S38-18: `value` or `valueFrom`, exactly one — an entry with neither rendered `value: ""`, a
+     key that reached every pod empty without anything saying so. */}}
+{{- if eq (hasKey . "value") (hasKey . "valueFrom") }}
+{{- fail (printf "global.extraEnv: %s needs exactly one of value or valueFrom" .name) }}
 {{- end }}
 {{- end }}
 - name: CHOREGOS_ENV
@@ -80,6 +85,17 @@ proj-{slug}-runners
   value: {{ .Values.global.logLevel | quote }}
 - name: CHOREGOS_FAKES
   value: {{ .Values.global.fakes | quote }}
+{{- $egress := .Values.global.egress | default dict }}
+- name: CHOREGOS_EGRESS_MODE
+  value: {{ $egress.mode | default "enforce" | quote }}
+{{- with $egress.ceiling }}
+- name: CHOREGOS_EGRESS_CEILING
+  value: {{ toJson . | quote }}
+{{- end }}
+{{- with $egress.platformChange }}
+- name: CHOREGOS_EGRESS_PLATFORM_CHANGE
+  value: {{ toJson . | quote }}
+{{- end }}
 - name: CHOREGOS_TEMPORAL_ADDRESS
   value: {{ include "choregos.temporalAddress" . | quote }}
 - name: CHOREGOS_TEMPORAL_NAMESPACE
@@ -158,7 +174,12 @@ proj-{slug}-runners
 {{- end }}
 {{- range (.Values.global.extraEnv | default list) }}
 - name: {{ .name }}
+{{- if hasKey . "valueFrom" }}
+  valueFrom:
+    {{- toYaml .valueFrom | nindent 4 }}
+{{- else }}
   value: {{ .value | quote }}
+{{- end }}
 {{- end }}
 {{- end -}}
 

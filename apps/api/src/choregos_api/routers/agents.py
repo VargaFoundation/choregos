@@ -106,6 +106,7 @@ from ..services.agents import (
     erreurs_d_une_version,
     resoudre_l_agent,
 )
+from ..services.egress import egress_gate_for_remote_agent
 from ..services.memory_access import check_bindings_at_publish
 from ..services.network import check_agent_network
 from ..services.remote_agents import pin_remote_runtime
@@ -333,7 +334,9 @@ async def list_agents(
     status_code=status.HTTP_201_CREATED,
     operation_id="createAgent",
 )
-async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) -> AgentDto:
+async def create_agent(
+    org: str, body: AgentCreate, session: Db, principal: Me, allow_egress: bool = False
+) -> AgentDto:
     _exiger(decide(principal, org, None, Action.CREATE, project_slug=body.project, target_scope=body.scope))
     if body.kind == "external" and body.scope != "org":
         raise unprocessable("an external agent carries an organisation credential: it is an `org` agent")
@@ -344,6 +347,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project) if body.project else None
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
+    await egress_gate_for_remote_agent(session, principal, organisation, body.spec, allow_egress)
     body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
@@ -455,11 +459,13 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     message: str | None,
     restored_from: AgentVersion | None = None,
     base_version: int | None = None,
+    allow_egress: bool = False,
 ) -> AgentVersion:
     """The one way a version is appended (S40-12, ADR 0076): who may publish, the spec's own checks,
     the eval gate — and, when `base_version` is given, the two refusals that make a publication
     deliberate: the latest moved since the author read it (`stale_base`), or nothing changed
-    (`no_change`). A restore carries the source's exact spec and checksum. Nothing is ever rewritten."""
+    (`no_change`). A restore carries the source's exact spec and checksum. Nothing is ever rewritten.
+    A remote agent's card host is opened first (S39-22, ADR 0066), with `allow_egress`."""
     _exiger(decide(principal, org, sujet, Action.PUBLISH))
     erreurs_d_une_version(spec)
     await check_agent_network(session, organisation.id, spec)
@@ -470,6 +476,7 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     except ValueError as erreur:
         raise unprocessable(str(erreur)) from erreur
     await check_bindings_at_publish(session, principal, organisation, spec, project_slug=sujet.project_slug)
+    await egress_gate_for_remote_agent(session, principal, organisation, spec, allow_egress)
     spec = await pin_remote_runtime(session, organisation.id, spec)
     if agent.status == "revoked":
         raise conflict(f"agent `{agent.slug}` is revoked: it can no longer publish")
@@ -532,12 +539,14 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     operation_id="publishAgentVersion",
 )
 async def publish_version(
-    org: str, slug: Slug, body: AgentSpec, session: Db, principal: Me
+    org: str, slug: Slug, body: AgentSpec, session: Db, principal: Me, allow_egress: bool = False
 ) -> AgentVersionDto:
     """The next version; none is ever rewritten. Superseded by `publishAgentVersionWithMessage`
     (a message, a base): kept as is for the clients written before, which publish with no message."""
     organisation, agent, sujet = await _charger(session, principal, org, slug)
-    ligne = await _append_version(session, principal, org, organisation, agent, sujet, body, message=None)
+    ligne = await _append_version(
+        session, principal, org, organisation, agent, sujet, body, message=None, allow_egress=allow_egress
+    )
     return _version_dto(ligne, agent)
 
 
@@ -548,7 +557,7 @@ async def publish_version(
     operation_id="publishAgentVersionWithMessage",
 )
 async def publish_version_with_message(
-    org: str, slug: Slug, body: AgentVersionPublish, session: Db, principal: Me
+    org: str, slug: Slug, body: AgentVersionPublish, session: Db, principal: Me, allow_egress: bool = False
 ) -> AgentVersionDto:
     """The next version, with the author's message, from the version they read: 409 `stale_base` when
     the latest moved meanwhile, 409 `no_change` when the spec equals the latest's (S40-12)."""
@@ -563,6 +572,7 @@ async def publish_version_with_message(
         body.spec,
         message=body.message,
         base_version=body.base_version,
+        allow_egress=allow_egress,
     )
     return _version_dto(ligne, agent)
 
@@ -1643,6 +1653,13 @@ async def install_catalogue_agent(
         )
     elif not (body and body.upgrade):
         raise conflict(f"`{slug}` is already installed: ask for `upgrade` to publish the catalogue's version")
+    elif etat.divergent:
+        raise conflict(
+            f"`{slug}` comes from the catalogue but {org} has published its own text since: the upgrade "
+            f"would publish catalogue version {proposition.version} over it, so it is left untouched. "
+            "Publish the catalogue's text as the next version by hand (`POST …/agents/<slug>/versions`) "
+            "if that is what you want"
+        )
     else:
         await catalogue.mettre_a_jour(session, organisation.id, proposition, principal)
     return await _dto(session, await _agent(session, organisation, slug), principal, org, avec_versions=True)

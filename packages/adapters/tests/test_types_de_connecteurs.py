@@ -111,3 +111,26 @@ def test_github_types_never_ask_an_installation_id() -> None:
         properties = types[key].config_schema["properties"]
         assert "installation_id" not in properties, f"{key} still asks for an installation id"
         assert properties["repo"]["format"] == "github-repo", f"{key}: the repository is a picker"
+
+
+def test_a_project_without_a_tracker_connector_gets_the_internal_tracker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#704: the default was `github-issues`, whose factory needs a `repo` nobody gave: KeyError.
+
+    `le_tracker_est_interne` already reads "no tracker connector" as internal; the adapters agree.
+    """
+    from choregos_adapters.tracker.interne import InternalTracker
+
+    kinds = ("scm", "ci", "cd", "runtime", "memory", "gateway", "notify")
+    try:
+        for kind in kinds:
+            register(kind, "probe")(lambda cfg: object())
+        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+        adapters = AdapterSet.from_connectors({kind: {"type": "probe"} for kind in kinds})
+    finally:
+        for kind in kinds:
+            _REGISTRY.pop((kind, "probe"), None)
+            _SPECS.pop((kind, "probe"), None)
+    assert isinstance(adapters.tracker, InternalTracker)
+    assert type_par_defaut("tracker") == "internal"

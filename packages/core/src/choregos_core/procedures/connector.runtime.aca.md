@@ -1,0 +1,62 @@
+---
+id: connector.runtime.aca
+title: Run agent stages as Azure Container Apps jobs
+applies_to: {connector: runtime/aca}
+audience: operator
+version: 1
+reviewed: 2026-10-16
+vendor_docs:
+  - {title: "Jobs in Azure Container Apps", url: "https://learn.microsoft.com/en-us/azure/container-apps/jobs"}
+egress: [management.azure.com, login.microsoftonline.com, api.loganalytics.io]
+fields:
+  subscription_id: "the Azure subscription"
+  resource_group: "the resource group of the jobs"
+  environment_id: "the Container Apps environment's resource id"
+  tenant_id: "the Entra tenant"
+  client_id: "the service principal's application id"
+  client_secret: "the service principal's secret, typed once"
+  token: "an Azure Resource Manager access token you already hold, instead of tenant_id, client_id and client_secret"
+  identity_id: "the managed identity the job uses to pull its image"
+  registry_server: "the container registry's host"
+  log_analytics_workspace_id: "where the job's logs are read"
+---
+
+## Before you start
+
+- An Azure subscription, a resource group and a **Container Apps environment**, and a registry that holds
+  the runner image.
+- A **user-assigned managed identity** with pull rights on the registry: the job pulls its image with it,
+  so no cloud credential is held by the runner.
+- See the deployment guide and the `github-aca` template.
+
+## At Azure
+
+1. Create an app registration (service principal) for the platform and a client secret; note the tenant
+   id, client id and the secret's **Value**.
+2. Give it a role that can create and start jobs in the resource group (for example a custom role on
+   `Microsoft.App/jobs/*`; check Azure's built-in roles for the narrowest that fits).
+3. Note the environment's resource id, the managed identity's resource id and the registry host.
+4. Optional: a Log Analytics workspace, so the platform can read the job's logs. Without it, logs say
+   where to look instead of showing nothing.
+
+## Permissions
+
+The service principal creates and starts jobs; the managed identity only pulls images. The run's token is
+a job secret referenced by `secretRef`, never an environment variable in clear.
+
+## In Choregos
+
+Set `runner.executor: aca` in the chart and declare the connector: `subscription_id`, `resource_group`,
+`environment_id` (required), `location` (default `westeurope`), `tenant_id`, `client_id`, `client_secret`
+(password field; or a ready `token` instead of the three identity fields), `identity_id`, `registry_server` and `log_analytics_workspace_id`.
+
+## Test it
+
+Start a run on a test project: the job appears in the resource group and its execution finishes.
+
+## When it fails
+
+- `AuthorizationFailed`: the service principal's role does not cover the resource group.
+- The job cannot pull its image: the managed identity lacks pull rights on the registry.
+- No logs: no Log Analytics workspace is configured.
+- A timeout: the egress allowlist must open `management.azure.com` and `login.microsoftonline.com`.

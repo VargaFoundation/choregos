@@ -21,6 +21,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
+from choregos_contracts.skill_files import encode_binary, is_inert_binary_path
 from pydantic import BaseModel, ConfigDict
 
 from choregos_core.catalogues import CatalogueMeta, meta_of, read_catalogue
@@ -122,7 +123,8 @@ def read_bundled(entry_id: str, root: Path | None = None) -> BundledSkill:
         data = path.read_bytes()
         if _sha256(data) != expected[relative]:
             raise BundleTamperedError(f"{entry_id}: {relative} does not match its recorded sha256")
-        files[relative] = data.decode("utf-8")
+        # a font or an image goes back to the base64 it is stored as, so the digest still matches
+        files[relative] = encode_binary(data) if is_inert_binary_path(relative) else data.decode("utf-8")
     licence = provenance["licence_file"]
     repo_licences: dict[str, str] = {}
     if licence["scope"] == "repository":

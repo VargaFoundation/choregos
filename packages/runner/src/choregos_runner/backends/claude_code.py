@@ -25,15 +25,14 @@ class ClaudeCodeBackend(Backend):
     model_constraint: ClassVar[tuple[str, ...]] = ("claude", "anthropic")
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
-        # `@zed-industries/claude-code-acp` installe un binaire `claude-code-acp` — et rien
-        # d'autre. Le défaut nommait `claude-agent-acp`, qui est la clé de `versions.lock`,
-        # pas un exécutable : sans `agent.launch.command` explicite, le lancement échouait
-        # sur « command not found ».
-        command = list(stage_input.agent.launch.command) or ["claude-code-acp"]
+        # `@agentclientprotocol/claude-agent-acp` installs the `claude-agent-acp` binary (#436). The
+        # image also links `claude-code-acp`, the name of the deprecated Zed package, for a stage
+        # input that still names it.
+        command = list(stage_input.agent.launch.command) or ["claude-agent-acp"]
         settings: dict[str, Any] = {
-            # The ACP adapter (0.16.2, `getAvailableModels`) calls `setModel()` with the first model
-            # of the SDK's list unless the settings name one: without this, the run's model was
-            # replaced by Claude Code's built-in default (see `model_env`).
+            # Without a `model` here the adapter selects its own default (0.16.2, `setModel()` with
+            # the first model of the SDK's list): the run's model was replaced by Claude Code's
+            # built-in default (see `model_env`).
             "model": stage_input.model.litellm_model,
             "permissions": {
                 "deny": [f"Bash({command})" for command in stage_input.permissions.deny_commands],

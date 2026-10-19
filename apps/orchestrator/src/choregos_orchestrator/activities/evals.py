@@ -76,10 +76,21 @@ class Check:
 
 @activity.defn(name="list_fixtures")
 async def list_fixtures(payload: dict[str, Any]) -> list[str]:
-    """Tickets de référence livrés dans `tests/fixtures/tickets` (S12-01)."""
-    if not TICKETS.is_dir():
-        return []
-    return sorted(path.stem for path in TICKETS.glob("*.yaml"))
+    """The reference tickets shipped in `tests/fixtures/tickets` (S12-01).
+
+    None is a broken image, not an empty matrix: the 0.18.1 orchestrator image did not carry them,
+    and a live matrix played nothing, then published four cells of zero cases (S37-13).
+    """
+    from temporalio.exceptions import ApplicationError
+
+    found = sorted(path.stem for path in TICKETS.glob("*.yaml")) if TICKETS.is_dir() else []
+    if not found:
+        raise ApplicationError(
+            f"no reference ticket in {TICKETS}: the image does not carry tests/fixtures",
+            type="EvalFixturesMissing",
+            non_retryable=True,
+        )
+    return found
 
 
 @activity.defn(name="run_eval_cell")

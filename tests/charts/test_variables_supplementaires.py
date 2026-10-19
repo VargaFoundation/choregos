@@ -77,3 +77,53 @@ def test_the_env_reference_pattern_reaches_every_process_when_set() -> None:
     lecteurs, porteurs = _porteurs(rendu.stdout, "CHOREGOS_SECRET_ENV_PATTERN")
     assert lecteurs and porteurs == lecteurs, f"without the variable: {sorted(lecteurs - porteurs)}"
     assert "CHOREGOS_SECRET_ENV_PATTERN" not in _rendre().stdout
+
+
+def _secret_ref(rendu: str, nom: str) -> list[dict[str, object]]:
+    """The `valueFrom` of every `nom` entry of a container that reads the platform's settings."""
+    refs: list[dict[str, object]] = []
+    for doc in yaml.safe_load_all(rendu):
+        if not doc or doc.get("kind") not in {"Deployment", "Job"}:
+            continue
+        for conteneur in doc["spec"]["template"]["spec"].get("containers", []):
+            for v in conteneur.get("env") or []:
+                if v["name"] == nom:
+                    refs.append(v.get("valueFrom") or {"value": v.get("value")})
+    return refs
+
+
+def test_a_secret_is_mapped_by_value_from_into_every_process() -> None:
+    """S38-18: a connector key (`env:CONNECTOR_…`) comes from a Secret. The chart rendered only
+    `value`, so `valueFrom` gave every pod an EMPTY key without anything saying so."""
+    rendu = _rendre(
+        "global.extraEnv[0].name=CONNECTOR_ALPHAVANTAGE_API_KEY",
+        "global.extraEnv[0].valueFrom.secretKeyRef.name=choregos-app-secrets",
+        "global.extraEnv[0].valueFrom.secretKeyRef.key=CONNECTOR_ALPHAVANTAGE_API_KEY",
+        "global.extraEnv[0].valueFrom.secretKeyRef.optional=true",
+    )
+    assert rendu.returncode == 0, rendu.stderr[-400:]
+    lecteurs, porteurs = _porteurs(rendu.stdout, "CONNECTOR_ALPHAVANTAGE_API_KEY")
+    assert lecteurs and porteurs == lecteurs, f"without the variable: {sorted(lecteurs - porteurs)}"
+    expected = {
+        "secretKeyRef": {
+            "name": "choregos-app-secrets",
+            "key": "CONNECTOR_ALPHAVANTAGE_API_KEY",
+            "optional": True,
+        }
+    }
+    refs = _secret_ref(rendu.stdout, "CONNECTOR_ALPHAVANTAGE_API_KEY")
+    assert refs and all(r == expected for r in refs), refs
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        (),
+        ("global.extraEnv[0].value=x", "global.extraEnv[0].valueFrom.secretKeyRef.name=s"),
+    ],
+    ids=["neither", "both"],
+)
+def test_an_entry_needs_exactly_one_of_value_or_value_from(extra: tuple[str, ...]) -> None:
+    rendu = _rendre("global.extraEnv[0].name=CONNECTOR_X", *extra)
+    assert rendu.returncode != 0, "the chart rendered an extraEnv entry it cannot fill"
+    assert "exactly one of value or valueFrom" in rendu.stderr

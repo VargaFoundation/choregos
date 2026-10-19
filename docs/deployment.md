@@ -119,9 +119,9 @@ included (drawn once, then re-read). It exists for a
 bench and says so; never use it in production.
 
 **Connector secrets by `env:NAME`.** A secret a connector references (`secret_refs: {api_token:
-env:CONNECTOR_JIRA_TOKEN}`) must be mapped into the API and worker pods (`global.extraEnv`, from a
-Secret) under a name matching `global.secrets.envPattern` — by default `^CONNECTOR_[A-Z0-9_]+$`,
-set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CHOREGOS_*`,
+env:CONNECTOR_JIRA_TOKEN}`) must be mapped into the API and worker pods (`global.extraEnv` with
+`valueFrom: {secretKeyRef: …}`, from a Secret) under a name matching `global.secrets.envPattern` —
+by default `^CONNECTOR_[A-Z0-9_]+$`, set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CHOREGOS_*`,
 `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*` and `TEMPORAL_*` stay refused whatever it says. After
 an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
 rename its variable or widen the pattern.
@@ -260,6 +260,11 @@ A finished run's sandbox keeps its workspace volume for `ttlSecondsAfterFinished
 the controller deletes it. Until then the volume counts against the namespace's quota: size
 `storage` × (runs finished in that window + warm pool) against it. At 3600, one ticket's six
 stages filled the dev tenant's 10 PVCs / 50Gi, and the next claim found no volume.
+
+The warm pool is rendered with `updateStrategy: Recreate`: when the template changes (an
+upgrade changes the runner image), the controller deletes the unclaimed warm sandboxes and makes
+new ones. With the operator's default, `OnReplenish`, a stale sandbox stays in the pool until a
+claim takes it, so the first run after an upgrade ran in the previous version's runner.
 
 The chart also renders `choregos-runner-assignment`, a NetworkPolicy that lets only the
 orchestrator's `executor` workers reach the assignment port. Where the platform lays the
@@ -444,6 +449,46 @@ A project declares what it calls in its own configuration (`tools: [verifier_adr
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
+## Network access: the egress allowlist and its ceiling
+
+The organisation's administrator decides, in the console, which hosts the platform may call for
+the organisation ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). What only the
+operator sets is under `global.egress`, rendered as `CHOREGOS_EGRESS_MODE`,
+`CHOREGOS_EGRESS_CEILING` and `CHOREGOS_EGRESS_PLATFORM_CHANGE` on the API and every worker:
+
+```yaml
+global:
+  egress:
+    mode: enforce          # enforce | warn | off
+    ceiling:               # mirror the cluster's network policy, per pod family
+      api: [api.github.com, github.com]
+      workers: [api.github.com, "*.atlassian.net"]
+      runners: [github.com, pypi.org]
+    platformChange:
+      format: text         # cilium-fqdn | kubernetes-networkpolicy | text
+      owner: "the platform team"
+      entries: {api: api-github, workers: provisioning, runners: runner}   # opaque template data
+      template: |
+        platform/tenant-base/values-choregos-dev.yaml, entry `{{entry}}` (selector {{selector}}), add:
+        {{#hosts}}  - {{.}}
+        {{/hosts}}Reason: {{reason}} (requested by {{requested_by}}, origin {{origin}}).
+      issueUrl: "https://github.com/ACME/platform/issues/new?title=egress%3A%20{{hosts_csv}}&body={{snippet_urlencoded}}"
+```
+
+- **`ceiling`** is what the cluster lets through. An absent or empty family is *unknown*: it is not
+  checked and the organisation's list alone governs. Keep it in step with the cluster's policy:
+  nothing verifies the mirror.
+- **`template`** is mustache: `{{family}}`, `{{selector}}`, `{{entry}}`, `{{hosts_csv}}`,
+  `{{ports}}`, `{{reason}}`, `{{origin}}`, `{{requested_by}}`, `{{#hosts}}…{{.}}…{{/hosts}}` and
+  `{{#fqdns}}` (`matchName: "h"` lines). Without one, the console shows a neutral Cilium `toFQDNs`
+  fragment per family. `issueUrl` takes the same placeholders, URL-encoded, plus
+  `{{snippet_urlencoded}}`. Choregos can prefill an issue; it cannot open a pull request.
+- **`mode`**: `enforce` refuses a host the organisation has not allowed (and a call with no policy
+  in context); `warn` logs `egress.would_refuse` and passes; the code default under
+  `CHOREGOS_FAKES=1` is `warn`.
+- **Upgrading**: the migration seeds an `allowed` rule for every host an organisation already calls
+  (connectors, web and git knowledge sources, skill sources). Review them in `/admin/egress`.
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
@@ -487,6 +532,33 @@ belong to the deployment:
 A server that authenticates per user with OAuth is listed but cannot be installed yet, and a server
 that runs as a local process (stdio) is listed with what to run: neither is something an install
 button can do.
+
+## Site notes on the setup procedures
+
+The console shows a setup procedure beside every "add" form (a connector, a knowledge source, an
+external agent): what to create at the vendor, then where to paste what, with this platform's webhook
+and callback addresses. They ship with the platform ([`procedures/`](procedures/README.md),
+[ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)). A deployment adds what is true only
+here: who registers an Entra app on this platform, where an egress change is requested, how secrets
+are handled.
+
+Put one Markdown file per procedure in a ConfigMap and name it in the API's values:
+
+```yaml
+choregos-api:
+  proceduresExtra: choregos-procedures   # a ConfigMap; mounted read-only at /etc/choregos/procedures
+```
+
+- `<id>.site.md` appends an **On this platform** section to the procedure `<id>`
+  (`connector.documents.sharepoint.site.md`). Plain Markdown, no front matter; a leading
+  `## On this platform` heading is dropped. Placeholders such as `{{api_url}}` work. A link must be
+  `https` and appear in the procedure's `vendor_docs`, otherwise the file is refused.
+- `<new-id>.md` adds a whole procedure for a type the platform does not know (a plugin's), with the
+  front matter of the shipped ones. It cannot replace a shipped id.
+
+A refused file is logged (`procedures.file.refused`) and skipped: the API still starts and the other
+files still apply. A plugin can supply the same directory through a `choregos.procedures` entry point
+whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EXTRA`.
 
 ## Multi-tenant installations
 
