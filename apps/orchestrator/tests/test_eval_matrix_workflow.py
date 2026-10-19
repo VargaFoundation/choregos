@@ -221,6 +221,10 @@ async def _cancel_live(blocking: str) -> tuple[list[str], list[dict[str, Any]], 
             )
             await asyncio.wait_for(waiting.wait(), timeout=30)
             await handle.cancel()
+            if blocking == "prepare_stage":
+                # The activity does not know of the cancellation: it commits its run after it.
+                await asyncio.sleep(1)
+                release.set()
             try:
                 await asyncio.wait_for(handle.result(), timeout=60)
             except WorkflowFailureError as exc:
@@ -243,10 +247,22 @@ async def test_cancelling_a_live_matrix_stops_the_run_in_flight_and_starts_no_ot
     assert isinstance(error.__cause__, CancelledError), "the matrix ends cancelled, not failed"
 
 
-async def test_cancelling_while_a_stage_is_prepared_starts_no_run_and_no_other_case() -> None:
+async def test_cancelling_while_a_stage_is_prepared_waits_for_it_then_stops_its_run() -> None:
+    """S37-15b: `prepare_stage` commits a run and a key reservation after the cancellation; the
+    workflow waits for it, then `cancel_run` revokes them. No run starts, no other case."""
     from temporalio.exceptions import CancelledError
 
-    calls, stopped, error, _ = await _cancel_live("prepare_stage")
-    assert calls == ["seed_eval_ticket", "prepare_stage"]
-    assert stopped == []
-    assert isinstance(error.__cause__, CancelledError)
+    calls, stopped, error, history = await _cancel_live("prepare_stage")
+    assert calls == ["seed_eval_ticket", "prepare_stage", "cancel_run"]
+    assert stopped == [{"project_id": "p", "run_id": "r1"}], "the run it prepared is stopped"
+    assert isinstance(error.__cause__, CancelledError), "the matrix ends cancelled, not failed"
+    _archive(history, "evals-cancelled-in-prepare-S37-15b")
+
+
+def _archive(history: Any, name: str) -> None:
+    """`RECORD_HISTORY_DIR=tests/replay/histories` re-records the history the replay test plays."""
+    import os
+    from pathlib import Path
+
+    if directory := os.environ.get("RECORD_HISTORY_DIR"):
+        (Path(directory) / f"{name}.json").write_text(history.to_json(), encoding="utf-8")
