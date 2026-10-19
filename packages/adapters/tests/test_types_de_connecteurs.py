@@ -101,3 +101,26 @@ def test_le_type_par_defaut_est_celui_que_prend_un_projet(monkeypatch: pytest.Mo
     assert type_par_defaut("runtime") == "k8s_job"
     assert type_par_defaut("scm") == "github"
     assert type_par_defaut("identity") is None
+
+
+def test_a_project_without_a_tracker_connector_gets_the_internal_tracker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#704: the default was `github-issues`, whose factory needs a `repo` nobody gave: KeyError.
+
+    `le_tracker_est_interne` already reads "no tracker connector" as internal; the adapters agree.
+    """
+    from choregos_adapters.tracker.interne import InternalTracker
+
+    kinds = ("scm", "ci", "cd", "runtime", "memory", "gateway", "notify")
+    try:
+        for kind in kinds:
+            register(kind, "probe")(lambda cfg: object())
+        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+        adapters = AdapterSet.from_connectors({kind: {"type": "probe"} for kind in kinds})
+    finally:
+        for kind in kinds:
+            _REGISTRY.pop((kind, "probe"), None)
+            _SPECS.pop((kind, "probe"), None)
+    assert isinstance(adapters.tracker, InternalTracker)
+    assert type_par_defaut("tracker") == "internal"

@@ -109,7 +109,9 @@ _SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {}
 
 #: Le type qu'un projet obtient pour une sorte qu'il ne configure pas.
 TYPES_PAR_DEFAUT: dict[str, str] = {
-    "tracker": "github-issues",
+    # A project without a tracker connector files its requests in Choregos, as
+    # `le_tracker_est_interne` says (#704): `github-issues` with no `repo` could only crash.
+    "tracker": "internal",
     "scm": "github",
     "ci": "tekton",
     "cd": "argocd",

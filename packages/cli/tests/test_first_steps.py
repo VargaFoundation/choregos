@@ -63,6 +63,36 @@ def test_a_project_without_a_repository_then_a_request(profile: Path) -> None:
 
 
 @respx.mock
+def test_tracker_is_written_with_a_repository_too(profile: Path) -> None:
+    """#704: with `--repo`, `--tracker internal` was dropped and the project had no tracker."""
+    respx.post(f"{API}/api/v1/orgs/acme/projects").mock(
+        return_value=Response(201, json={"id": "p-2", "slug": "evals", "name": "evals"})
+    )
+    tracker = respx.put(f"{API}/api/v1/projects/p-2/connectors/tracker").mock(
+        return_value=Response(200, json={})
+    )
+    repo = "https://github.com/acme/sandbox"
+    result = _run("projects", "create", "evals", "--repo", repo, "--tracker", "internal")
+    assert result.exit_code == 0, result.output
+    assert json.loads(respx.calls[0].request.content)["config"]["repo"]["url"] == repo
+    assert tracker.called and json.loads(tracker.calls[0].request.content)["type"] == "internal"
+
+
+@respx.mock
+def test_with_a_repository_and_no_tracker_option_no_tracker_is_imposed(profile: Path) -> None:
+    """The template, or a later connector call, says which tracker a repository uses."""
+    respx.post(f"{API}/api/v1/orgs/acme/projects").mock(
+        return_value=Response(201, json={"id": "p-3", "slug": "billing", "name": "billing"})
+    )
+    tracker = respx.put(f"{API}/api/v1/projects/p-3/connectors/tracker").mock(
+        return_value=Response(200, json={})
+    )
+    result = _run("projects", "create", "billing", "--repo", "https://github.com/acme/billing")
+    assert result.exit_code == 0, result.output
+    assert not tracker.called
+
+
+@respx.mock
 def test_a_token_is_minted_and_shown_only_once(profile: Path) -> None:
     respx.post(f"{API}/api/v1/me/tokens").mock(
         return_value=Response(

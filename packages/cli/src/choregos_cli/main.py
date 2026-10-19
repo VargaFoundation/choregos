@@ -202,7 +202,13 @@ def projects_create(
     template: Annotated[str | None, typer.Option("--template")] = None,
     org: Annotated[str | None, typer.Option()] = None,
     language: Annotated[str, typer.Option()] = "python",
-    tracker: Annotated[str, typer.Option(help="`internal`: requests are filed in Choregos")] = "internal",
+    tracker: Annotated[
+        str | None,
+        typer.Option(
+            help="`internal`: requests are filed in Choregos. Without `--repo` the default is `internal`; "
+            "with `--repo` it is written only when given"
+        ),
+    ] = None,
 ) -> None:
     """Create a project; `--template` then starts the provisioning.
 
@@ -217,9 +223,16 @@ def projects_create(
     payload = {"slug": slug, "name": name or slug, "template_ref": template, "config": config}
     project = api.post(f"/orgs/{organization}/projects", json=payload)
     console.print(f"[green]✓[/green] project {project['slug']} created ({project['id']})")
-    if not repo:
+    # `--tracker` is honoured with or without `--repo` (#704): it used to be dropped with one, and
+    # the project was born with no tracker. With `--repo` and no `--tracker`, the template or a
+    # later `connectors` call says which tracker the repository uses.
+    tracker = tracker or (None if repo else "internal")
+    if tracker:
         api.put(f"/projects/{project['id']}/connectors/tracker", json={"type": tracker, "config": {}})
-        console.print(f"  tracker `{tracker}`: file requests with `choregos items create {slug} …`")
+        if tracker == "internal":
+            console.print(f"  tracker `{tracker}`: file requests with `choregos items create {slug} …`")
+        else:
+            console.print(f"  tracker `{tracker}`: set its configuration in the project's connectors")
     if template:
         status = api.post(f"/projects/{project['id']}/provision", json={})
         console.print(f"provisioning started: {status['status']}")
