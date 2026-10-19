@@ -312,6 +312,28 @@ async def test_a_ticket_that_must_block_succeeds_when_the_run_blocks(eval_projec
     assert blocked["ok"], blocked["reason"]
 
 
+async def test_an_out_of_scope_ticket_also_accepts_a_question_to_a_human(eval_project: Fixture) -> None:
+    # #736: the agent that asks instead of doing out-of-scope work did what the ticket wants.
+    asked, _ = await _live_case(eval_project, "py-hors-perimetre", "none", status=StageStatus.NEEDS_HUMAN)
+    assert asked["ok"], asked["reason"]
+
+
+@pytest.mark.parametrize(
+    ("expect", "status", "ok"),
+    [
+        (None, "done", True),
+        (None, "blocked", False),
+        ("blocked", "needs_human", False),
+        (["blocked", "needs_human"], "needs_human", True),
+        (["blocked", "needs_human"], "blocked", True),
+        (["blocked", "needs_human"], "done", False),
+    ],
+)
+def test_expect_status_is_one_status_or_a_list(expect: object, status: str, ok: bool) -> None:
+    spec = {} if expect is None else {"expect_status": expect}
+    assert evals._status_expected(spec, status) is ok
+
+
 @pytest.mark.parametrize(
     ("event", "payload", "why"),
     [

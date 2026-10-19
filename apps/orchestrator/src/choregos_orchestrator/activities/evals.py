@@ -231,13 +231,12 @@ async def _judge(
     missing_tools = [c for c in checks if c.ok is None]
     if missing_tools and not blocking:
         return _skip(missing_tools[0].detail)
-    expected_blocked = spec.get("expect_status") == "blocked"
     declared = str(patch.get("status", "done"))
-    ok = not blocking and (declared == "blocked") == expected_blocked
+    ok = not blocking and _status_expected(spec, declared)
     reason = (
         blocking[0].label + " — " + blocking[0].detail
         if blocking
-        else ("" if ok else f"statut attendu {spec.get('expect_status', 'done')}, obtenu {declared}")
+        else ("" if ok else f"expected status {' or '.join(_expected_statuses(spec))}, got {declared}")
     )
     return {"ok": ok, "skipped": False, "reason": reason}
 
@@ -562,6 +561,20 @@ def _unfaithful(run: Run, events: list[RunEvent], asked: dict[str, str]) -> str:
     return ""
 
 
+def _expected_statuses(spec: dict[str, Any]) -> list[str]:
+    """`expect_status`: one status or a list of them, `done` when absent."""
+    expected = spec.get("expect_status", "done")
+    return [str(s) for s in expected] if isinstance(expected, list) else [str(expected)]
+
+
+def _status_expected(spec: dict[str, Any], status: str) -> bool:
+    """A ticket that expects the agent to stop (`blocked`, `needs_human`) wants one of those
+    statuses; one that expects `done` only refuses `blocked`, as before S37-17. An out-of-scope
+    ticket may accept both ways of not doing the work: declaring itself blocked, or asking (#736)."""
+    stops = [s for s in _expected_statuses(spec) if s != "done"]
+    return status in stops if stops else status != "blocked"
+
+
 def _verdict(spec: dict[str, Any], result: dict[str, Any] | None, failure: str) -> dict[str, Any]:
     if not result:
         return {"ok": False, "skipped": False, "reason": failure or "the run posted no result"}
@@ -573,11 +586,11 @@ def _verdict(spec: dict[str, Any], result: dict[str, Any] | None, failure: str) 
     if missing_tool:
         return _skip(f"a tool the ticket needs is missing on the runner ({missing_tool[0]})")
     false = [name for name in asked if facts.get(name) is not True]
-    expected = str(spec.get("expect_status", "done"))
     status = str(result.get("status", ""))
     if false:
         return {"ok": False, "skipped": False, "reason": f"{false[0]} is not true"}
-    if (status == "blocked") != (expected == "blocked"):
+    if not _status_expected(spec, status):
+        expected = " or ".join(_expected_statuses(spec))
         return {"ok": False, "skipped": False, "reason": f"expected status {expected}, got {status}"}
     return {"ok": True, "skipped": False, "reason": ""}
 
