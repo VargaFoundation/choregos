@@ -81,3 +81,19 @@ with the same fields.
 | 1 | `t-snapshot` | the job ran in the warm pool and called `marketdata__get_bars` through the API; **every call took 123.2 s** and the job timed out at 900 s (`job exited with 124`) | `campaign → to_review`, an approval to relaunch waits; cost 0 |
 | 2 | why | from the API pod, `query1.finance.yahoo.com` and `www.alphavantage.co` answer `ConnectError [Errno 101] Network is unreachable`: the tenant's Cilium egress (`DiametralGroup/infra`, `tenant-base`) opens only GitHub, Atlassian and diametral.com to the API | the data sources need their FQDNs opened on dev (infra change, Vincent) |
 | 3 | what a user sees | `job exited with 124: timed out (900 s)`; nothing says that the 20 calls each hit a network wall | the connector's failure reaches the job only after its own timeouts; to record with #750 |
+
+## 2026-10-20 — `RESEARCH-2` relaunched, the egress open (DiametralGroup/infra#1201)
+
+| # | Step | Result | Consequence |
+|---|---|---|---|
+| 1 | `t-snapshot`, attempt 2 | the 20 `get_bars` answered: 20 symbols, 39,180 rows, `bars_sha256=2a4737a3…`, `missing=0`, **`cross_checked=0`** (as expected: the free Alpha Vantage key has no `full` history), 16.6 s | the data path works for real, through the platform; 20 of the day's 25 Alpha Vantage requests spent for no cross-check |
+| 2 | storing `bars` | `PUT /internal/runs/…/outputs/bars` → **503 "Object store unavailable"** after 60 s; the run fails `missing_outputs` and the campaign goes back to `to_review` | the dev tenant has **no object store**: `objectStore.endpoint` is empty (AWS), with no `secretRef`; no artifact of any workflow can be stored there |
+
+To go further, the tenant needs an S3 bucket it can reach: a Ceph RGW user and bucket for
+`choregos` (the namespace's egress already opens the RGW, `10.204.40.10:7480`), its keys in a
+Secret through Infisical, and `global.objectStore.endpoint` / `secretRef` in
+`values-diametral-dev.yaml`. Until then S38-13 cannot pass the snapshot.
+
+Also to fix in the template: with the free key, cross-checking spends the quota for nothing over a
+multi-year range. The connector can be set `cross_check: false`, or keep Alpha Vantage as a
+fallback only.
