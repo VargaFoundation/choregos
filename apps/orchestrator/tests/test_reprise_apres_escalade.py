@@ -96,6 +96,51 @@ async def test_a_rerun_buys_one_attempt_not_a_new_allowance(
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
+async def test_an_answer_buys_one_attempt_not_a_new_allowance(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """S27-04: `max_attempts` is 2. A failure, then a question on the second attempt; the answer is
+    ONE more attempt: it fails and the work item escalates after three runs (before: the answer
+    reset the attempts, and a fourth run was played)."""
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.worker import Replayer
+
+    question = StageResult(
+        status=StageStatus.NEEDS_HUMAN,
+        summary="which currency?",
+        reason="question",
+        questions=[{"text": "Which currency for credit notes?", "options": ["EUR", "order currency"]}],
+    )
+    scripted(setup.adapters, ECHEC, question, ECHEC, ECHEC, refine_result("spec"))
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "needs_human")
+        await _wait_until(handle, "the question is asked", lambda s: s["pending_request"])
+        assert await _runs(setup) == 2
+        asked = next(d for d in await _demandes(setup) if d.kind == "question")
+        await handle.signal(
+            "human_decision",
+            {
+                "request_id": asked.id,
+                "kind": "question",
+                "approved": False,
+                "answer": "the order currency",
+                "decided_by": "vincent",
+            },
+        )
+        await _wait_until(handle, "the answer is played", lambda s: s["attempts"]["t-refine"] == 3)
+        await _wait_state(handle, "needs_human")
+        await _wait_until(handle, "the abandon is offered", lambda s: s["pending_request"])
+        assert await _runs(setup) == 3, "an answer plays one run, not a new allowance"
+        await handle.signal("control", {"action": "stop"})
+        await handle.result()
+        history = await handle.fetch_history()
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
+    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+        target = HISTORIES / "wi-answer-one-attempt-S27-04.json"
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
+
+
 async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
