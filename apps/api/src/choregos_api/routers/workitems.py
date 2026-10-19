@@ -14,7 +14,7 @@ from sqlalchemy import select
 from ..audit import record
 from ..db.models import HumanRequest, Project, Run, WorkflowDef, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
-from ..errors import conflict, forbidden, not_found, unprocessable
+from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..greffons import DemandeDeGeste, controler
 from ..logging import get_logger
 from ..object_store import object_store
@@ -53,7 +53,13 @@ from ..services.artifacts import (
 from ..services.human_groups import decider_group_verdict, group_of_the_step
 from ..services.recus import passages_du_ticket
 from ..services.routage import valider_les_champs
-from ..temporal import deliver_control, deliver_decision, get_temporal, interpreter_id
+from ..temporal import (
+    InterpreterNotRunningError,
+    deliver_control,
+    deliver_decision,
+    get_temporal,
+    interpreter_id,
+)
 
 router = APIRouter(tags=["work-items"])
 logger = get_logger("choregos.work_items")
@@ -376,7 +382,13 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
     request_row.decided_by = principal.email
     request_row.decision = decision.model_dump(mode="json")
 
-    await deliver_decision(project.slug, item.tracker_key, decision)
+    try:
+        await deliver_decision(project.slug, item.tracker_key, decision)
+    except InterpreterNotRunningError as gone:
+        # The request transaction rolls back: the request stays pending, and the same request is
+        # answered once the interpreter runs again. Restarting it here would undo a `stop`, and would
+        # not restart one that completed (ALLOW_DUPLICATE_FAILED_ONLY) while saying it had.
+        raise await _interpreter_not_running(gone, "this decision") from gone
     await persist_event(
         session,
         EventType.WORKITEM_HUMAN_DECIDED,
@@ -462,6 +474,34 @@ async def _grant_top_up(
         target_id=item.id,
         top_up_usd=top_up_usd,
         total_top_up_usd=item.budget_top_up_usd,
+    )
+
+
+async def _interpreter_not_running(gone: InterpreterNotRunningError, what: str) -> ApiError:
+    """409, not 500, when the interpreter a signal is for has ended (#679): the cause, and what to do."""
+    state = await get_temporal().describe(gone.workflow_id)
+    logger.warning(
+        "signal to an interpreter that is not running",
+        workflow_id=gone.workflow_id,
+        status=state.status if state else None,
+        error=gone.cause,
+    )
+    if state is not None and state.status == "COMPLETED":
+        detail = (
+            f"the interpreter of this work item has completed: nothing received {what}, and a completed "
+            "interpreter is not started again under the same id, so this work item no longer waits for it"
+        )
+    else:
+        how = f"its last run is {state.status}" if state is not None else "Temporal has no run of it"
+        detail = (
+            f"the interpreter of this work item is not running ({how}): nothing received {what}; send the "
+            f"action `mark_agent_ready` to start it again, then send {what} again"
+        )
+    return ApiError(
+        status.HTTP_409_CONFLICT,
+        "Interpreter not running",
+        detail,
+        errors=[{"code": "interpreter_not_running", "msg": detail}],
     )
 
 
