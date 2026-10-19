@@ -480,7 +480,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S39-28 | S39 | 🟡 | #694 | a web knowledge source's start URL is checked after the egress gate and inside the organisation's policy: on the dev tenant (0.18.3, `enforce`) `choregos knowledge apply` was refused with "no egress policy in context" — the check ran before `allow_egress` opened the host and outside any egress scope (fakes skip it, so no test saw it). Proves: `test_egress_enforced.py::test_creating_a_web_source_checks_its_start_url_inside_the_organisations_policy`, red without the scope; knowledge and egress API tests green. Does not prove: the dev tenant until redeployed. |
 | S39-29 | S39 | 🟡 | #701 | starting a workflow that already runs is not an error in the API: on the dev tenant (0.18.4) "sync now" on a knowledge source whose loop already ran answered 500 — the SDK raises `WorkflowAlreadyStartedError`, which is not an `RPCError`, and `RealTemporal._start` caught only the latter (the orchestrator's `start_workflow_once` already handled it). Proves: `test_temporal_already_started.py` — every `start_*` of `RealTemporal` returns the id on an already-started workflow (red without the fix), another failure still raises. Does not prove: the dev tenant until redeployed. |
 
-**Total** : 312 livrées, 142 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+**Total** : 313 livrées, 142 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
