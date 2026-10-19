@@ -260,3 +260,5 @@ the top-up adds to the work item's budget and the audit log records who granted 
 "Replay the stage" does not give a stage a fresh attempts allowance either: it leaves it one attempt
 before its cap (`max_attempts`, lowered by the policy's `attempts.by_role`), so each rerun plays one more
 run and escalates again if it fails.
+An answer to a question that parked the work item resumes the stage the same way: one more
+attempt, not a new allowance.
