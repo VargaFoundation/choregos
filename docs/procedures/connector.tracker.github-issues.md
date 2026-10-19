@@ -2,7 +2,7 @@
 
 # Use GitHub Issues and Projects v2 as the board
 
-For a project owner. Procedure `connector.tracker.github-issues`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For a project owner. Procedure `connector.tracker.github-issues`, version 1, reviewed 2026-10-19 against the vendor's own pages.
 
 ## Before you start
 
@@ -19,8 +19,10 @@ For a project owner. Procedure `connector.tracker.github-issues`, version 1, rev
    platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform
    refuses an unsigned one.
 3. Set the permissions and events below, then create the App and generate a **private key**.
-4. **Install** the App on the repositories Choregos works in. The installation's number is at the end of
-   its address (`…/settings/installations/<number>`).
+4. **Install** the App on the repositories Choregos works in, from the console: the repository field's
+   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is
+   discovered by the platform (ADR 0073): there is no number to copy. The App's **Setup URL** is the
+   platform's `/api/v1/github/setup`.
 
 ## Permissions
 
@@ -44,7 +46,8 @@ refuses such a push.
 ## In Choregos
 
 1. Project settings, Connectors, **Tracker**, type **GitHub Issues + Projects v2**.
-2. `repo`: `owner/repo`. `installation_id`: the installation's number.
+2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation
+   see), or type `owner/repo` when the list cannot be read.
 3. For a board: `org` and `project_number` (the number in the board's address).
 4. Label a ticket `agent-ready`: the platform starts one workflow per ticket.
 
@@ -55,8 +58,9 @@ Press **Test** on the connector: it reads the repository through the App. Then l
 
 ## When it fails
 
-- `404` on the repository: the App is not installed on it. Install it, or add the repository to the
-  installation.
+- `404` on the repository, or the repository missing from the list: the App is not installed on it, or
+  its installation is not claimed by your organisation. Press **Install on GitHub** (or add the
+  repository to the installation), then **Refresh**.
 - `403` and a permission named: grant it in the App's settings and **accept** the new permissions on the
   installation (GitHub asks the owner to approve a change).
 - Webhook deliveries refused with `401`: the secret on the App differs from the platform's
@@ -69,10 +73,9 @@ Press **Test** on the connector: it reads the repository through the App. Then l
 
 | Field | What to put in it |
 | :-- | :-- |
-| `installation_id` | the number at the end of the installation's address |
 | `org` | the organisation that owns the Projects v2 board |
 | `project_number` | the number in the Projects v2 board's address |
-| `repo` | owner/repo |
+| `repo` | owner/repo, picked from the repositories the App's installations show |
 | `webhook_secret` | not used by the GitHub webhook endpoint: the App's own webhook secret is set on the platform |
 
 ## Network egress

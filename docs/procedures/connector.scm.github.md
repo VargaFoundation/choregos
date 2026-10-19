@@ -2,7 +2,7 @@
 
 # Use GitHub for branches, pull requests and checks
 
-For a project owner. Procedure `connector.scm.github`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For a project owner. Procedure `connector.scm.github`, version 1, reviewed 2026-10-19 against the vendor's own pages.
 
 ## Before you start
 
@@ -14,7 +14,9 @@ For a project owner. Procedure `connector.scm.github`, version 1, reviewed 2026-
 ## At GitHub
 
 1. Create the App with the **Webhook URL** `<api_url>/api/v1/webhooks/github`, or reuse the platform's.
-2. **Install** it on the repository.
+2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's
+   install page and brings you back. The installation is discovered by the platform (ADR 0073): there
+   is no number to copy.
 3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).
    Without one, set `merge_queue` to false.
 
@@ -39,7 +41,8 @@ Add `workflows: write` only if agents edit `.github/workflows`.
 ## In Choregos
 
 1. Project settings, Connectors, **SCM**, type **GitHub (App)**.
-2. `repo`: `owner/repo`. `installation_id`: the installation's number.
+2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation
+   see), or type `owner/repo` when the list cannot be read.
 3. `merge_queue`: true (the default) enqueues through the merge queue; `merge_method`: `SQUASH` (the
    default), `MERGE` or `REBASE`.
 
@@ -50,7 +53,8 @@ the write permissions.
 
 ## When it fails
 
-- `404` on the repository: the App is not installed on it.
+- `404` on the repository, or the repository missing from the list: the App is not installed on it, or
+  its installation is not claimed by your organisation. Press **Install on GitHub**, or **Refresh**.
 - `403` on a branch, a pull request or a check: a permission above is missing or its upgrade was not
   accepted on the installation.
 - A merge that never happens: the merge queue is not enabled on the branch, or a required check is red.
@@ -61,10 +65,9 @@ the write permissions.
 
 | Field | What to put in it |
 | :-- | :-- |
-| `installation_id` | the number at the end of the installation's address |
 | `merge_method` | MERGE, SQUASH or REBASE |
 | `merge_queue` | true to enqueue pull requests in the repository's merge queue |
-| `repo` | owner/repo |
+| `repo` | owner/repo, picked from the repositories the App's installations show |
 
 ## Network egress
 

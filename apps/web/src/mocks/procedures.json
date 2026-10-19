@@ -2368,7 +2368,7 @@
       "connector": "scm/github"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-19",
     "sections": [
       {
         "key": "before",
@@ -2378,7 +2378,7 @@
       {
         "key": "at",
         "title": "At GitHub",
-        "markdown": "1. Create the App with the **Webhook URL** `https://choregos.example.com/api/v1/webhooks/github`, or reuse the platform's.\n2. **Install** it on the repository.\n3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).\n   Without one, set `merge_queue` to false."
+        "markdown": "1. Create the App with the **Webhook URL** `https://choregos.example.com/api/v1/webhooks/github`, or reuse the platform's.\n2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's\n   install page and brings you back. The installation is discovered by the platform (ADR 0073): there\n   is no number to copy.\n3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).\n   Without one, set `merge_queue` to false."
       },
       {
         "key": "permissions",
@@ -2388,7 +2388,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Project settings, Connectors, **SCM**, type **GitHub (App)**.\n2. `repo`: `owner/repo`. `installation_id`: the installation's number.\n3. `merge_queue`: true (the default) enqueues through the merge queue; `merge_method`: `SQUASH` (the\n   default), `MERGE` or `REBASE`."
+        "markdown": "1. Project settings, Connectors, **SCM**, type **GitHub (App)**.\n2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation\n   see), or type `owner/repo` when the list cannot be read.\n3. `merge_queue`: true (the default) enqueues through the merge queue; `merge_method`: `SQUASH` (the\n   default), `MERGE` or `REBASE`."
       },
       {
         "key": "test",
@@ -2398,7 +2398,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `404` on the repository: the App is not installed on it.\n- `403` on a branch, a pull request or a check: a permission above is missing or its upgrade was not\n  accepted on the installation.\n- A merge that never happens: the merge queue is not enabled on the branch, or a required check is red.\n- A push refused for a workflow file: the App lacks `workflows: write`.\n- A timeout: the egress allowlist must open `api.github.com`."
+        "markdown": "- `404` on the repository, or the repository missing from the list: the App is not installed on it, or\n  its installation is not claimed by your organisation. Press **Install on GitHub**, or **Refresh**.\n- `403` on a branch, a pull request or a check: a permission above is missing or its upgrade was not\n  accepted on the installation.\n- A merge that never happens: the merge queue is not enabled on the branch, or a required check is red.\n- A push refused for a workflow file: the App lacks `workflows: write`.\n- A timeout: the egress allowlist must open `api.github.com`."
       }
     ],
     "values": {
@@ -2408,8 +2408,7 @@
       "api.github.com"
     ],
     "fields": {
-      "repo": "owner/repo",
-      "installation_id": "the number at the end of the installation's address",
+      "repo": "owner/repo, picked from the repositories the App's installations show",
       "merge_queue": "true to enqueue pull requests in the repository's merge queue",
       "merge_method": "MERGE, SQUASH or REBASE"
     },
@@ -2489,7 +2488,7 @@
       "connector": "tracker/github-issues"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-19",
     "sections": [
       {
         "key": "before",
@@ -2499,7 +2498,7 @@
       {
         "key": "at",
         "title": "At GitHub",
-        "markdown": "1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in. The installation's number is at the end of\n   its address (`…/settings/installations/<number>`)."
+        "markdown": "1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in, from the console: the repository field's\n   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is\n   discovered by the platform (ADR 0073): there is no number to copy. The App's **Setup URL** is the\n   platform's `/api/v1/github/setup`."
       },
       {
         "key": "permissions",
@@ -2509,7 +2508,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Project settings, Connectors, **Tracker**, type **GitHub Issues + Projects v2**.\n2. `repo`: `owner/repo`. `installation_id`: the installation's number.\n3. For a board: `org` and `project_number` (the number in the board's address).\n4. Label a ticket `agent-ready`: the platform starts one workflow per ticket."
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **GitHub Issues + Projects v2**.\n2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation\n   see), or type `owner/repo` when the list cannot be read.\n3. For a board: `org` and `project_number` (the number in the board's address).\n4. Label a ticket `agent-ready`: the platform starts one workflow per ticket."
       },
       {
         "key": "test",
@@ -2519,7 +2518,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `404` on the repository: the App is not installed on it. Install it, or add the repository to the\n  installation.\n- `403` and a permission named: grant it in the App's settings and **accept** the new permissions on the\n  installation (GitHub asks the owner to approve a change).\n- Webhook deliveries refused with `401`: the secret on the App differs from the platform's\n  `github-webhook-secret`.\n- Nothing starts when a ticket is labelled: check the App's **Recent deliveries**; the URL must be this\n  platform's and reachable from GitHub.\n- A timeout: the egress allowlist must open `api.github.com`."
+        "markdown": "- `404` on the repository, or the repository missing from the list: the App is not installed on it, or\n  its installation is not claimed by your organisation. Press **Install on GitHub** (or add the\n  repository to the installation), then **Refresh**.\n- `403` and a permission named: grant it in the App's settings and **accept** the new permissions on the\n  installation (GitHub asks the owner to approve a change).\n- Webhook deliveries refused with `401`: the secret on the App differs from the platform's\n  `github-webhook-secret`.\n- Nothing starts when a ticket is labelled: check the App's **Recent deliveries**; the URL must be this\n  platform's and reachable from GitHub.\n- A timeout: the egress allowlist must open `api.github.com`."
       }
     ],
     "values": {
@@ -2529,10 +2528,9 @@
       "api.github.com"
     ],
     "fields": {
-      "repo": "owner/repo",
+      "repo": "owner/repo, picked from the repositories the App's installations show",
       "project_number": "the number in the Projects v2 board's address",
       "org": "the organisation that owns the Projects v2 board",
-      "installation_id": "the number at the end of the installation's address",
       "webhook_secret": "not used by the GitHub webhook endpoint: the App's own webhook secret is set on the platform"
     },
     "vendor_docs": [
