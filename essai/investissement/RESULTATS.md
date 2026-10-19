@@ -55,7 +55,7 @@ administrator's API token, `campaign_dev.py prepare` made the org connector `mar
 |---|---|---|---|
 | 1 | `prepare` | connector, project, internal tracker, opencode and model profiles: all accepted; `/requirements` shows nothing missing | the setup is the API's, no hand edit in the database |
 | 2 | `t-snapshot` | **never started**: the executor refuses `start_run` five times — the policy (`preset:regulated`) asks for RuntimeClass `gvisor`, the warm pool runs the cluster default, and the dev cluster has no `gvisor` RuntimeClass | the campaign stays `queued`; no data fetched, no Alpha Vantage request spent, no cost |
-| 3 | what a user sees | a timeline with one `run: queued` event; the reason is only in the executor's log | finding #750 |
+| 3 | what a user sees | the work item says `workflow_status: FAILED` with the executor's message in `failure`; but its run reads `queued` forever and the timeline shows only `run: queued` | finding #750 |
 
 ## Not proven, still
 
@@ -68,3 +68,16 @@ administrator's API token, `campaign_dev.py prepare` made the org connector `mar
   so `cross_checked` will read 0 while each symbol still spends one of the 25 daily requests.
   Setting `cross_check: false` on the connector saves the quota; a cross-check needs a range within
   100 days or a paid key.
+
+## 2026-10-19, later — `RESEARCH-2`, the project's policy without gVisor
+
+Vincent set the project's policy to `regulated-without-gvisor` (`sandbox.runtime: default`, the
+rest of `preset:regulated` unchanged, network still closed): the dev cluster has no gVisor
+RuntimeClass. `RESEARCH-1` stays `FAILED` (the interpreter does not restart); `RESEARCH-2` opened
+with the same fields.
+
+| # | Step | Result | Consequence |
+|---|---|---|---|
+| 1 | `t-snapshot` | the job ran in the warm pool and called `marketdata__get_bars` through the API; **every call took 123.2 s** and the job timed out at 900 s (`job exited with 124`) | `campaign → to_review`, an approval to relaunch waits; cost 0 |
+| 2 | why | from the API pod, `query1.finance.yahoo.com` and `www.alphavantage.co` answer `ConnectError [Errno 101] Network is unreachable`: the tenant's Cilium egress (`DiametralGroup/infra`, `tenant-base`) opens only GitHub, Atlassian and diametral.com to the API | the data sources need their FQDNs opened on dev (infra change, Vincent) |
+| 3 | what a user sees | `job exited with 124: timed out (900 s)`; nothing says that the 20 calls each hit a network wall | the connector's failure reaches the job only after its own timeouts; to record with #750 |
