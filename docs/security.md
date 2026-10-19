@@ -151,7 +151,8 @@ project's memory is not sent to a remote agent.
   `reserved:<run_id>`); `start_run` mints it and the executor puts it in the run's Secret next to
   the run token (`k8s_job`, `tekton`: Secret key `gateway-key`; `agent_sandbox`: sealed in the
   assignment, and given afresh on `resume`; `aca`: a job secret; `local_docker`: the container's
-  environment). The runner reads it from `CHOREGOS_RUN_GATEWAY_KEY`. It is never stored in
+  environment, handed to `docker run` through its own environment so the value never shows in the
+  host's process list, #439). The runner reads it from `CHOREGOS_RUN_GATEWAY_KEY`. It is never stored in
   `runs.stage_input` and never carried by a Temporal payload (#519, #523).
 - The key is revoked however the run ends: `collect_spend` at the end of a stage; `cancel_run`;
   and `record_workflow_failure` when the interpreter dies — cancelled, or `await_run` gave up —

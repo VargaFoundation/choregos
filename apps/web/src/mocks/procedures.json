@@ -2287,7 +2287,7 @@
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Start a run: `docker ps` shows a container named `choregos-run-<id>`."
+        "markdown": "Start a run: `docker ps` shows a container named `choregos-run-<id>`.\n\nA finished run keeps its container, so `docker logs choregos-run-<id>` still works. The ten newest\nfinished containers are kept; older ones are removed when the next run starts."
       },
       {
         "key": "fails",
