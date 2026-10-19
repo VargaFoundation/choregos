@@ -81,11 +81,14 @@ export function ConnectorForm({
         </Select>
       </label>
       {choisi && (
-        <div className="flex items-center gap-2">
+        // The form lives in the connector card's drawer (S40-06c): the procedure (S39-23) opens in the
+        // drawer's own flow, as the MCP catalogue's install does, not as a side panel over it.
+        <div className="flex flex-wrap items-center gap-2" data-testid="connector-procedure">
           <ProcedurePanel
             target={connectorTarget(choisi.kind, choisi.type)}
             preset={choisi.kind === "mcp" ? presetOfMcpUrl(config.url) : undefined}
             autoOpen={!actuel}
+            inline
           />
         </div>
       )}

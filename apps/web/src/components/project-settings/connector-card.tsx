@@ -153,16 +153,20 @@ export function ConnectorCard({
         </Button>
       </div>
       <Drawer open={ouvert} onClose={() => setOuvert(false)} title={`${titre}${nomDuType ? ` · ${nomDuType}` : ""}`}>
-        <ConnectorForm
-          types={types}
-          actuel={actuel}
-          onSecret={onSecret}
-          onClearSecret={onClearSecret}
-          onSave={async (corps) => {
-            await onSave(corps);
-            setOuvert(false);
-          }}
-        />
+        {/* Mounted while the drawer is open only: the native dialog keeps its children in the page,
+            and the form's setup procedure (S39-23) opens when the form is shown, not at page load. */}
+        {ouvert && (
+          <ConnectorForm
+            types={types}
+            actuel={actuel}
+            onSecret={onSecret}
+            onClearSecret={onClearSecret}
+            onSave={async (corps) => {
+              await onSave(corps);
+              setOuvert(false);
+            }}
+          />
+        )}
       </Drawer>
     </li>
   );
