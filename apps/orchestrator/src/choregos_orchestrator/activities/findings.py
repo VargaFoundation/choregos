@@ -53,7 +53,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
         if row is None:
             return {"status": "unknown"}
         if row.status != "pending":
-            return {"status": row.status, "reused": True}
+            return await _already_triaged(session, bundle, row)
 
         threshold = bundle.engine.dedupe_threshold()
         signature = embed(f"{row.title} {row.evidence} {row.suggested_fix or ''}")
@@ -127,14 +127,35 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
         )
         row.created_work_item_id = created.id
         row.status = "created"
+        await persist_event(
+            session,
+            EventType.FINDING_CREATED,
+            project_id=bundle.project.id,
+            project_slug=bundle.slug,
+            subject=row.id,
+            finding_id=row.id,
+            work_item_key=key,
+            severity=row.severity,
+        )
+        # The ticket exists outside: the finding says so NOW (#744). Committed at the end, a failure
+        # in any later step rolled it back to `pending`, and Temporal's retry filed the ticket again.
+        # A retry now finds it `created` and answers with the ticket it already has.
+        await session.commit()
 
+        linked: bool | None = None
         if origin is not None:
-            await bundle.adapters.tracker.link(key, origin.tracker_key, "origin")
-            await bundle.adapters.tracker.comment(
-                origin.tracker_key,
-                f"<!-- choregos:finding -->\nFinding filed during this work item: {key} "
-                f"({row.type}, {row.severity}).",
-            )
+            # After the commit, a raise would only lose these: a retry no longer reaches them.
+            try:
+                await bundle.adapters.tracker.link(key, origin.tracker_key, "origin")
+                await bundle.adapters.tracker.comment(
+                    origin.tracker_key,
+                    f"<!-- choregos:finding -->\nFinding filed during this work item: {key} "
+                    f"({row.type}, {row.severity}).",
+                )
+                linked = True
+            except Exception as exc:
+                activity.logger.warning("finding %s NOT linked to %s: %s", key, origin.tracker_key, exc)
+                linked = False
         notified: bool | None = None
         if bundle.engine.notify_finding(row.severity):
             # A courtesy: raising here rolled back the finding after its ticket was created.
@@ -171,25 +192,35 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
             except Exception as exc:
                 activity.logger.warning("finding %s NOT written to memory: %s", row.id, exc)
                 remembered = False
-        await persist_event(
-            session,
-            EventType.FINDING_CREATED,
-            project_id=bundle.project.id,
-            project_slug=bundle.slug,
-            subject=row.id,
-            finding_id=row.id,
-            work_item_key=key,
-            severity=row.severity,
-        )
         auto = bundle.engine.auto_agent_ready(row.estimate)
         return {
             "status": "created",
             "work_item_key": key,
             "work_item_id": created.id,
             "agent_ready": auto,
+            "linked": linked,
             "notified": notified,
             "remembered": remembered,
         }
+
+
+async def _already_triaged(session: Any, bundle: Any, row: Finding) -> dict[str, Any]:
+    """A finding triaged before, by an earlier attempt of this activity or by another run (#744).
+
+    `created` answers with its ticket, as the first attempt did: `FindingsTriage` reads
+    `work_item_key`, and starts the work item's interpreter when it is agent ready.
+    """
+    if row.status == "created" and row.created_work_item_id:
+        item = await session.get(WorkItem, row.created_work_item_id)
+        if item is not None:
+            return {
+                "status": "created",
+                "work_item_key": item.tracker_key,
+                "work_item_id": item.id,
+                "agent_ready": bundle.engine.auto_agent_ready(row.estimate),
+                "reused": True,
+            }
+    return {"status": row.status, "reused": True}
 
 
 def _ticket_body(row: Finding, origin: WorkItem | None, public_url: str, slug: str) -> str:
