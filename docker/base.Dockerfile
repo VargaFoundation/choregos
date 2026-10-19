@@ -1,6 +1,6 @@
 # Image de base Python de la plateforme : dépendances système, utilisateur non-root, uv.
 # Publiée sous `ghcr.io/vargafoundation/choregos-python-base`.
-FROM python:3.12-slim-bookworm AS base
+FROM python:3.14-slim-bookworm AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

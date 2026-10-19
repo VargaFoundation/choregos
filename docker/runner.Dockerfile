@@ -5,7 +5,7 @@
 #   2. **versions épinglées** — les agents ACP viennent de `versions.lock`, Renovate propose
 #      les montées, la suite de conformité les valide ;
 #   3. **non-root, sans capacité** — le sandbox du cluster fait le reste.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.14-slim-bookworm AS builder
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
 WORKDIR /app
@@ -23,7 +23,7 @@ RUN mkdir -p apps/api/src apps/orchestrator/src \
 # arm64 under QEMU. So arm64 is cross-compiled against bookworm's glibc. The runtime stage below
 # runs the result. BuildKit sets `BUILDPLATFORM`. The legacy builder (no buildx) does not, and
 # falls back to an amd64 build host.
-FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.91-slim-bookworm AS rtk
+FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.99-slim-bookworm AS rtk
 ARG TARGETARCH
 COPY packages/runner/src/choregos_runner/backends/versions.lock /tmp/versions.lock
 WORKDIR /src
@@ -58,7 +58,7 @@ RUN set -eux; \
 # never meets the runner's. `--require-hashes` checks every wheel against
 # `docker/headroom/requirements.txt` (`make headroom-lock`). The Kompress model is fetched here, at
 # the revision headroom pins, then loaded again with the network forbidden: a run never downloads it.
-FROM python:3.12-slim-bookworm AS headroom
+FROM python:3.14-slim-bookworm AS headroom
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 HF_HOME=/opt/headroom/models
 COPY docker/headroom/requirements.txt /tmp/headroom-requirements.txt
@@ -70,7 +70,7 @@ RUN set -eux; \
     /opt/headroom/bin/python -c "$warm" online; \
     HEADROOM_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /opt/headroom/bin/python -c "$warm" offline
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 ARG NODE_VERSION=22
 # `RTK_TELEMETRY_DISABLED`: rtk carries an HTTP client for its usage telemetry, and a runner
 # reports to nobody but Choregos. `HEADROOM_OFFLINE`: headroom's one switch for all its egress
