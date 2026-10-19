@@ -119,9 +119,12 @@ COPY packages/runner/src/choregos_runner/backends/versions.lock /etc/choregos/ve
 RUN set -eux; \
     version() { grep "^$1=" /etc/choregos/versions.lock | cut -d= -f2; }; \
     npm install -g --allow-scripts=opencode-ai,@github/keytar,node-pty \
-      "@zed-industries/claude-code-acp@$(version claude-agent-acp)" \
+      "@agentclientprotocol/claude-agent-acp@$(version claude-agent-acp)" \
       "@google/gemini-cli@$(version gemini-cli)" \
-      "opencode-ai@$(version opencode)"
+      "opencode-ai@$(version opencode)"; \
+    # The deprecated `@zed-industries/claude-code-acp` installed `claude-code-acp` (#436): a stage
+    # input that still names it (`agent.launch.command`) starts the adapter that replaced it.
+    ln -s "$(command -v claude-agent-acp)" /usr/local/bin/claude-code-acp
 
 # OpenHands n'est plus installé (docs/adr/0011-openhands-removed.md). Il n'exposait aucun
 # agent ACP en ligne de commande, et il pesait le plus lourd de l'image : son arbre Python
@@ -141,6 +144,7 @@ RUN set -eux; \
 # script was not run ». D'où `--allow-scripts` ci-dessus, et un contrôle qui **appelle** chaque
 # agent au lieu de constater sa présence.
 RUN set -eux; \
+    timeout 30 claude-agent-acp --version >/dev/null </dev/null; \
     timeout 30 claude-code-acp --version >/dev/null </dev/null; \
     timeout 30 gemini --version >/dev/null; \
     timeout 30 opencode --version >/dev/null; \

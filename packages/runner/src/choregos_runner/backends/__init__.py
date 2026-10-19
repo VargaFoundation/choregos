@@ -59,9 +59,9 @@ def known_backends() -> list[str]:
     return sorted(set(BACKENDS) - RUNTIME_BACKENDS)
 
 
-# Nom du backend → **clé de `versions.lock`**, qui n'est ni le nom du backend ni celui du
-# binaire : `claude-code` est épinglé sous `claude-agent-acp` et s'exécute en
-# `claude-code-acp`, `gemini-cli` est épinglé sous `gemini-cli` et s'exécute en `gemini`.
+# Backend name → **`versions.lock` key**, which is neither the backend's name nor always its
+# binary's: `claude-code` is pinned and runs as `claude-agent-acp`, `gemini-cli` is pinned as
+# `gemini-cli` and runs as `gemini`.
 BACKEND_BINARIES: dict[str, str] = {
     "claude-code": "claude-agent-acp",
     "codex": "codex-acp",

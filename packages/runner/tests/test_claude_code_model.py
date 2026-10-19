@@ -9,6 +9,11 @@ to its built-in Sonnet: on the local install on 2026-10-12 the gateway was asked
 `ANTHROPIC_MODEL` alone does not survive `setModel`. The aliases do, through
 `ANTHROPIC_DEFAULT_{SONNET,OPUS,HAIKU}_MODEL`: each one is pinned to the run's model, and the
 settings file names it too.
+
+On 2026-10-19 (#436) both adapters were driven through ACP in the built image against a fake
+Messages API: 0.16.2 with `ANTHROPIC_MODEL` alone asked for `claude-sonnet-4-5-20250929`;
+`@agentclientprotocol/claude-agent-acp` 0.85.1 asked for the run's model with `ANTHROPIC_MODEL`
+alone. The pins stay: that probe played one plain turn, no subagent, no background model call.
 """
 
 from __future__ import annotations
