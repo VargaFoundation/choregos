@@ -270,13 +270,37 @@ async def _wait_until(handle: Any, description: str, predicat: Any, *, timeout: 
     échoue selon la charge de la machine ne dit rien sur le code.
     """
     import asyncio
+    import time
 
-    for _ in range(timeout * 10):
-        status = await handle.query("status")
-        if predicat(status):
+    deadline = time.monotonic() + timeout
+    status: Any = None
+    while time.monotonic() < deadline:
+        status = await _query_status(handle)
+        if status is not None and predicat(status):
             return
         await asyncio.sleep(0.1)
-    raise AssertionError(f"{description} : jamais vrai (status : {await handle.query('status')})")
+    raise AssertionError(f"{description}: never true (last status: {status})")
+
+
+async def _query_status(handle: Any) -> Any:
+    """One `status` query, or None when it outlasted its deadline (#492, #496).
+
+    On a loaded machine the time-skipping test server can reject a workflow-task completion
+    ("invalid history builder state for action"); until the task is retried, a query hangs. The
+    server then answers DEADLINE_EXCEEDED, and our own `rpc_timeout` ends it as CANCELLED
+    ("Timeout expired"). That says nothing about the workflow, so the query gets a short deadline
+    and the caller asks again until its own timeout.
+    """
+    from datetime import timedelta
+
+    from temporalio.service import RPCError, RPCStatusCode
+
+    try:
+        return await handle.query("status", rpc_timeout=timedelta(seconds=10))
+    except RPCError as error:
+        if error.status not in (RPCStatusCode.DEADLINE_EXCEEDED, RPCStatusCode.CANCELLED):
+            raise
+        return None
 
 
 async def _wait_state(handle: Any, state: str, *, timeout: int = 60) -> None:
@@ -287,6 +311,39 @@ async def _wait_state(handle: Any, state: str, *, timeout: int = 60) -> None:
     un historique à coups de scrutin serait précisément la même illusion.
     """
     await _wait_until(handle, f"état `{state}`", lambda s: s["state"] == state, timeout=timeout)
+
+
+async def test_a_query_past_its_deadline_is_asked_again() -> None:
+    """A `status` query that outlasts its deadline is retried, not raised (#492, #496)."""
+    from temporalio.service import RPCError, RPCStatusCode
+
+    class SlowThenAnswering:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def query(self, name: str, **kwargs: Any) -> Any:
+            self.calls += 1
+            if self.calls == 1:
+                raise RPCError("query deadline exceeded", RPCStatusCode.DEADLINE_EXCEEDED, b"")
+            if self.calls == 2:
+                raise RPCError("Timeout expired", RPCStatusCode.CANCELLED, b"")
+            return {"state": "awaiting_spec_approval"}
+
+    handle = SlowThenAnswering()
+    await _wait_state(handle, "awaiting_spec_approval", timeout=5)
+    assert handle.calls == 3
+
+
+async def test_any_other_query_error_still_fails() -> None:
+    """Only DEADLINE_EXCEEDED is retried: a workflow that is gone still fails the test."""
+    from temporalio.service import RPCError, RPCStatusCode
+
+    class Gone:
+        async def query(self, name: str, **kwargs: Any) -> Any:
+            raise RPCError("workflow not found", RPCStatusCode.NOT_FOUND, b"")
+
+    with pytest.raises(RPCError):
+        await _wait_state(Gone(), "awaiting_spec_approval", timeout=5)
 
 
 # ───────────────────────── un ticket mort se voit (2026-09-24) ─────────────────────────
