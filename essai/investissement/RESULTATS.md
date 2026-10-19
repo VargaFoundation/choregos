@@ -42,3 +42,29 @@ Run: `uv run python essai/investissement/sources.py` from a workstation, window 
 
 1. A free Alpha Vantage key in the tenant's secret (`alphavantage_api_key`).
 2. The dev tenant with the platform built from this branch, to run a campaign with a real model.
+
+## 2026-10-19 — the first campaign on the dev tenant (`campaign_dev.py`)
+
+The tenant runs 0.18.8 and its pods hold the free Alpha Vantage key (choregos-deploy#60). With an
+administrator's API token, `campaign_dev.py prepare` made the org connector `marketdata`
+(`composite`, yahoo → alphavantage, key by `env:CONNECTOR_ALPHAVANTAGE_API_KEY`) and the project
+`varga:research` from the template, then `open` started `RESEARCH-1`: 20 US products, 2019-01-02 to
+2026-10-16, out of sample from 2025-07-01.
+
+| # | Step | Result | Consequence |
+|---|---|---|---|
+| 1 | `prepare` | connector, project, internal tracker, opencode and model profiles: all accepted; `/requirements` shows nothing missing | the setup is the API's, no hand edit in the database |
+| 2 | `t-snapshot` | **never started**: the executor refuses `start_run` five times — the policy (`preset:regulated`) asks for RuntimeClass `gvisor`, the warm pool runs the cluster default, and the dev cluster has no `gvisor` RuntimeClass | the campaign stays `queued`; no data fetched, no Alpha Vantage request spent, no cost |
+| 3 | what a user sees | a timeline with one `run: queued` event; the reason is only in the executor's log | finding #750 |
+
+## Not proven, still
+
+- A real model, a 20-product campaign run to its verdict, the ledger cost: blocked by row 2. Two
+  ways out, both Vincent's call: the project's policy without gVisor on dev (`sandbox.runtime:
+  default`, network still closed — a weaker sandbox, to state in STATUS), or gVisor installed on the
+  dev cluster with `runner.runtimeClass: gvisor` (every dev project would then run under it).
+- The free Alpha Vantage key serves `compact` only (the last 100 days); `full` is premium and comes
+  back as `RateLimited`. Over a multi-year range the composite's cross-check by Alpha Vantage fails,
+  so `cross_checked` will read 0 while each symbol still spends one of the 25 daily requests.
+  Setting `cross_check: false` on the connector saves the quota; a cross-check needs a range within
+  100 days or a paid key.
