@@ -76,7 +76,7 @@ needs a change, the modal shows it (a snippet to copy, and a prefilled issue whe
 configures one): Choregos cannot apply it. `/admin/egress` lists the rules, the requests and the
 ceiling. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
 The list is one half of the organisation's network policy; the other half is its **bounds**, the
-`network` section of its policy ceiling (see *Network access* below, [ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
+`network` section of its policy ceiling (see *The ceiling's `network` section* below, [ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
 a host the ceiling denies, or that lies outside its allowed set, is refused before any opening is
 asked for (422 at the add, 403 at the call, in every egress mode), and cannot be opened at all.
 The hosts opened for `runners` join every run's network as implied hosts, under the same deny lists.

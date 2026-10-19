@@ -9,7 +9,9 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1800);
+// 2026-10-19 (merge of main 0.18.8): 1800 -> 1850 kB. Main stood at 1650 (S39-22's egress modal, S39-23's
+// procedure panel); the union measures 1833 kB.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1850);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {
