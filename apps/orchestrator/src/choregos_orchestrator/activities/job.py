@@ -21,7 +21,6 @@ from choregos_contracts import (
     EventType,
     JobSpec,
     ModelRef,
-    Permissions,
     PlaybookRef,
     ProjectRef,
     RepoRef,
@@ -34,10 +33,11 @@ from choregos_core import utcnow
 from choregos_core.redaction import REDACTED
 from temporalio.exceptions import ApplicationError
 
-from ..org_egress import merged_domains, org_runner_hosts
+from ..org_egress import org_runner_hosts
 from .base import without_secrets
 from .images import named_image
 from .plan import StagePlan
+from .run_network import network_permissions, run_network
 
 #: What `agent.backend` and `run.backend` say for a job: there is no agent backend.
 JOB_BACKEND = "job"
@@ -129,12 +129,10 @@ async def prepare_job(
         budget=budget,
         allowed_paths=allowed_paths,
         playbook=PlaybookRef(ref=job_ref(command, image)),
-        permissions=Permissions(
+        permissions=network_permissions(
+            run_network(bundle, None, settings, await org_runner_hosts(session, bundle.project.org_id)),
             write_paths=allowed_paths,
             deny_commands=engine.deny_commands(),
-            allow_domains=merged_domains(
-                engine.allow_domains(), await org_runner_hosts(session, bundle.project.org_id)
-            ),
             dod_iterations=0,
             max_findings=engine.max_findings_per_run(),
             unknown_requests=bundle.policy.sandbox.unknown_requests,

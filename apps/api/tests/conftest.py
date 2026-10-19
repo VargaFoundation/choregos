@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import os
 import pathlib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
@@ -217,3 +217,18 @@ async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
         await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
         set_temporal(None)
         reset_settings_cache()
+
+
+# ───────────────────────── a GitHub App, scriptable (S40-04, ADR 0073) ─────────────────────────
+
+
+@pytest.fixture
+def github() -> Iterator[Any]:
+    """A deployment that HAS a GitHub App, scriptable; reset around the test."""
+    from choregos_adapters.fakes.github_app import FakeGitHubApp
+
+    fake = FakeGitHubApp.shared()
+    fake.reset()
+    fake.configured = True
+    yield fake
+    fake.reset()

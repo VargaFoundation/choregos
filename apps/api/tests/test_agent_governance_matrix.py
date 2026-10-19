@@ -73,6 +73,11 @@ CELLS: list[tuple[Action, str, dict[str, str | None], set[str]]] = [
     (Action.MANAGE, "org", {}, ADMIN),
     (Action.MANAGE, "project", {}, {"admin", "owner_dev", "self_owner_dev"}),
     (Action.MANAGE, "personal", {}, {"admin", "developer", "self_owner_dev"}),
+    # release (S40-02, ADR 0071): the same people as publish
+    (Action.RELEASE, "platform", {}, ADMIN),
+    (Action.RELEASE, "org", {}, ADMIN),
+    (Action.RELEASE, "project", {}, {"admin", "owner_dev", "self_owner_dev"}),
+    (Action.RELEASE, "personal", {}, {"admin", "developer", "self_owner_dev"}),
     # create (no agent yet: the scope asked)
     (Action.CREATE, "none", {"target_scope": "org"}, ADMIN),
     (Action.CREATE, "none", {"target_scope": "platform"}, ADMIN),
@@ -196,7 +201,7 @@ def test_every_action_has_its_rule_and_its_cells() -> None:
     assert set(TABLE) == set(Action)
     assert {cell[0] for cell in CELLS} == set(Action), "an action has no cell in the matrix"
     for scope in ("platform", "org", "project", "personal"):
-        assert {cell[0] for cell in CELLS if cell[1] == scope} >= {Action.SEE, Action.PUBLISH}
+        assert {cell[0] for cell in CELLS if cell[1] == scope} >= {Action.SEE, Action.PUBLISH, Action.RELEASE}
 
 
 def test_a_pin_that_cannot_be_is_unprocessable_not_forbidden() -> None:

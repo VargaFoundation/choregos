@@ -10,6 +10,8 @@ from typing import Any
 import httpx
 import jwt
 
+from ..errors import ConfigurationError
+
 GITHUB_API = "https://api.github.com"
 TOKEN_SAFETY_MARGIN_S = 60
 
@@ -36,12 +38,66 @@ class GitHubAppAuth:
     app_id: str
     private_key: str
     base_url: str = GITHUB_API
+    #: The installation the platform claimed for the connector's organisation (ADR 0073). When set,
+    #: it is used instead of discovering the installation from the repository, so a repository the
+    #: organisation did not install the App on never gets a token. Injected server-side.
+    pinned_installation: int | None = None
+    #: The GitHub account (owner) of the pinned installation; a repository of another owner is refused.
+    pinned_account: str | None = None
     _cache: dict[tuple[str, str], InstallationToken] = field(default_factory=dict)
 
     def app_jwt(self, ttl_s: int = 540) -> str:
         now = int(time.time())
         payload = {"iat": now - 60, "exp": now + ttl_s, "iss": self.app_id}
         return jwt.encode(payload, self.private_key, algorithm="RS256")
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.app_jwt()}", "Accept": "application/vnd.github+json"}
+
+    async def _paginate(
+        self, client: httpx.AsyncClient, url: str, headers: dict[str, str], key: str | None
+    ) -> list[dict[str, Any]]:
+        """Every item of a paginated GitHub list (`per_page=100`, until a short page)."""
+        out: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            response = await client.get(url, headers=headers, params={"per_page": 100, "page": page})
+            response.raise_for_status()
+            body = response.json()
+            items = body[key] if key else body
+            out.extend(items)
+            if len(items) < 100:
+                return out
+            page += 1
+
+    async def app_info(self, client: httpx.AsyncClient) -> dict[str, Any]:
+        """`GET /app`: the App's slug and name (never configured, so never stale)."""
+        response = await client.get(f"{self.base_url}/app", headers=self._headers())
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def list_installations(self, client: httpx.AsyncClient) -> list[dict[str, Any]]:
+        """`GET /app/installations` (App JWT), every page."""
+        return await self._paginate(client, f"{self.base_url}/app/installations", self._headers(), None)
+
+    async def installation_repositories(
+        self, client: httpx.AsyncClient, installation_id: int
+    ) -> list[dict[str, Any]]:
+        """The repositories an installation can see: an installation token without a repository
+        restriction, then `GET /installation/repositories`, every page."""
+        response = await client.post(
+            f"{self.base_url}/app/installations/{installation_id}/access_tokens",
+            headers=self._headers(),
+            json={"permissions": {"metadata": "read"}},
+        )
+        response.raise_for_status()
+        headers = {
+            "Authorization": f"Bearer {response.json()['token']}",
+            "Accept": "application/vnd.github+json",
+        }
+        return await self._paginate(
+            client, f"{self.base_url}/installation/repositories", headers, "repositories"
+        )
 
     async def installation_id_for(self, client: httpx.AsyncClient, repo: str) -> int:
         owner, name = repo.split("/", 1)
@@ -62,6 +118,14 @@ class GitHubAppAuth:
         ttl_s: int = 3600,
     ) -> InstallationToken:
         scope = ",".join(f"{k}={v}" for k, v in sorted((permissions or {}).items()))
+        if installation_id is None and self.pinned_installation is not None:
+            owner = repo.split("/", 1)[0]
+            if self.pinned_account and owner.lower() != self.pinned_account.lower():
+                raise ConfigurationError(
+                    f"the GitHub installation of this connector belongs to `{self.pinned_account}`, "
+                    f"not to `{owner}`: no token is issued for {repo}"
+                )
+            installation_id = self.pinned_installation
         cache_key = (repo, scope)
         cached = self._cache.get(cache_key)
         if cached is not None and not cached.expired:

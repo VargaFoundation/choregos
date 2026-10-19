@@ -20,12 +20,30 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
+import { diffSpecs } from "@/lib/agent-diff";
 import { ApiError, api } from "@/lib/api";
+import { type CeilingNetwork, flaggedByCeiling, isDefaultNetwork, networkMode, parseHosts } from "@/lib/network";
 import { scopeHint, scopeLabel } from "./registre";
+import { refusalSentence, MAX_MESSAGE } from "./history";
+import { ChangeList } from "./spec-changes";
+import { TagEditor } from "./tags";
+import { openByDefault, sectionSummaries, type SectionId } from "./spec-summary";
+import { MemoryBindingsEditor } from "./memory-bindings";
+import { describe, effectiveBindings, writesTo, labelOf, type Binding } from "@/lib/memories";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
-import type { Agent, AgentSpec, CodeRuntime, UsableModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
+import type {
+  Agent,
+  AgentNetwork,
+  AgentSpec,
+  CodeRuntime,
+  UsableModel,
+  KnowledgeBase,
+  MemoryStore,
+  OrgConnector,
+  Skill,
+} from "@/lib/types";
 
 /** The model profiles a project maps to models (its settings, `models.yaml`). */
 export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as const;
@@ -33,12 +51,7 @@ export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as cons
 /** Statuses of a skill that cannot be carried: archived, or not yet approved (S32-06). */
 const SKILL_UNUSABLE = new Set(["archived", "pending_review", "rejected", "quarantined"]);
 
-/** Whose memory a run reads and writes (S32-02); the API's default is the project's. */
-export const MEMORY_SCOPES = {
-  project: "The project's shared memory",
-  agent: "Its own, within the project",
-  none: "None",
-} as const;
+export { openByDefault, sectionSummaries, type SectionId };
 
 /** Who a knowledge base is served to: an agent reading it runs only in those projects. */
 export function servedTo(base: KnowledgeBase): string {
@@ -118,8 +131,13 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     skills: spec.skills ?? [],
     mcp_servers: (spec.mcp_servers ?? []).filter((s) => s.connector),
     knowledge: spec.knowledge ?? [],
-    memory: spec.memory ?? "project",
+    // The console writes `memories` only (S40-11): the legacy `memory` is read when a version has no list,
+    // then left at its default — the API refuses both.
+    memories: effectiveBindings(spec),
+    memory: "project",
     evals: (spec.evals ?? []).filter((c) => c.name.trim()),
+    // Nothing written is the default: the API keeps the version's digest as it was.
+    network: isDefaultNetwork(spec.network) ? undefined : spec.network,
   };
 }
 
@@ -152,49 +170,18 @@ export function slugProblem(slug: string): string | null {
   return null;
 }
 
-export type SectionId = "model" | "limits" | "skills" | "tools" | "knowledge" | "memory" | "evals";
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-/** One line per folded section: what it holds now, so a closed section still tells. */
-export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
-  const limits = [
-    spec.limits?.max_turns != null ? plural(spec.limits.max_turns, "turn", "turns") : null,
-    spec.limits?.max_minutes != null ? `${spec.limits.max_minutes} min` : null,
-    spec.budget?.run_usd != null ? `${usd(spec.budget.run_usd)} a run` : null,
-    spec.budget?.daily_usd != null ? `${usd(spec.budget.daily_usd)} a day` : null,
-    spec.budget?.monthly_usd != null ? `${usd(spec.budget.monthly_usd)} a month` : null,
-  ].filter((part): part is string => part !== null);
-  const skills = (spec.skills ?? []).length;
-  const servers = (spec.mcp_servers ?? []).filter((s) => s.connector).length;
-  const bases = (spec.knowledge ?? []).length;
-  const cases = (spec.evals ?? []).length;
-  return {
-    model: `${spec.model || "the project's profile"} · ${spec.backend || "the project's backend"}`,
-    limits: limits.length ? limits.join(" · ") : "the role's defaults",
-    skills: skills ? `${skills} attached` : "none",
-    tools: servers ? plural(servers, "MCP server", "MCP servers") : "none",
-    knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
-    memory: MEMORY_SCOPES[spec.memory ?? "project"].toLowerCase(),
-    evals: plural(cases, "case", "cases"),
-  };
-}
-
-/** A section starts open when it holds something other than the default. */
-export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
-  const spent = [spec.budget?.run_usd, spec.budget?.daily_usd, spec.budget?.monthly_usd, spec.limits?.max_turns, spec.limits?.max_minutes];
-  return {
-    model: Boolean(spec.model || spec.backend),
-    limits: spent.some((v) => v != null),
-    skills: (spec.skills ?? []).length > 0,
-    tools: (spec.mcp_servers ?? []).length > 0,
-    knowledge: (spec.knowledge ?? []).length > 0,
-    memory: Boolean(spec.memory && spec.memory !== "project"),
-    evals: (spec.evals ?? []).length > 0,
-  };
-}
 
 type Mode = { kind: "create" } | { kind: "version"; agent: Agent };
+
+/** Where a saved revision went, from the answer's `channels` (S40-02): the sentence is the server's fact, not a guess. */
+export function publishedSentence(published: { version: number; channels?: Array<"stable" | "candidate"> }, agent: Pick<Agent, "stable_version">): string {
+  const channels = published.channels ?? [];
+  if (channels.includes("stable")) return `v${published.version} is in production`;
+  if (channels.includes("candidate")) return `v${published.version} saved and sent to testing`;
+  return agent.stable_version != null
+    ? `v${published.version} saved; production still runs v${agent.stable_version}`
+    : `v${published.version} saved`;
+}
 
 export function AgentBuilder({
   org,
@@ -206,6 +193,7 @@ export function AgentBuilder({
   onDone,
   onCreated,
   onBack,
+  onCancel,
 }: {
   org: string;
   mode: Mode;
@@ -225,6 +213,8 @@ export function AgentBuilder({
   onCreated?: (agent: Agent) => void;
   /** Create mode: the way back to the first step. */
   onBack?: () => void;
+  /** Version mode: leave the editor without publishing (S40-12). */
+  onCancel?: () => void;
 }) {
   const client = useQueryClient();
   const [name, setName] = useState(initial?.display_name ?? "");
@@ -232,6 +222,7 @@ export function AgentBuilder({
   // The slug follows the name until a person edits it: it never changes once the agent exists.
   const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [tags, setTags] = useState<string[]>([]);
   const wanted = scopes?.options.find((s) => s === initial?.scope) ?? scopes?.options[0];
   const [scope, setScope] = useState<"org" | "project" | "personal" | undefined>(wanted);
   const [project, setProject] = useState(initial?.project ?? "");
@@ -243,12 +234,23 @@ export function AgentBuilder({
     skills: [...(start.skills ?? [])],
     mcp_servers: (start.mcp_servers ?? []).map((s) => ({ ...s, tools: [...(s.tools ?? [])] })),
     knowledge: (start.knowledge ?? []).map((k) => ({ ...k })),
+    // The bindings the version has, or what its legacy `memory` means: the editor works on the list.
+    memories: effectiveBindings(start),
+    memory: "project",
     evals: (start.evals ?? []).map((c) => ({ ...c })),
   }));
   const [error, setError] = useState<string | null>(null);
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState<"try" | "costs">("try");
+  const [panel, setPanel] = useState<"try" | "costs" | "changes">("try");
+  // Version mode (S40-12): the version the author started from is what `base_version` names, kept until
+  // they publish on top of a newer one on purpose; the message is required.
+  const [base, setBase] = useState(mode.kind === "version" ? mode.agent.latest_version : 0);
+  const [message, setMessage] = useState("");
+  const [stale, setStale] = useState<{ latest: number; author: string | null } | null>(null);
+  const [discarding, setDiscarding] = useState(false);
+  // New organisation and project agents are released through testing unless the author says otherwise (S40-02, ADR 0071).
+  const [viaTesting, setViaTesting] = useState(true);
 
   // Only the models the organisation lets an agent use (`/admin/models`, ADR 0060).
   const models = useQuery({ queryKey: ["usable-models", org], queryFn: () => usableModels(org, { usage: "agent" }), retry: false });
@@ -256,7 +258,13 @@ export function AgentBuilder({
   const images = useQuery({ queryKey: ["platform-agent-images"], queryFn: () => api.agentImages(), retry: false });
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
   const library = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
+  const registry = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org), enabled: mode.kind === "create", retry: false });
+  const knownTags = [...new Set((registry.data ?? []).flatMap((a) => a.tags ?? []))].sort();
+  // The organisation's network ceiling flags a host before the API refuses it; a member who cannot read it sees no flag.
+  const ceiling = useQuery({ queryKey: ["policy-ceiling", org], queryFn: () => api.policyCeiling(org), retry: false });
   const bases = useQuery({ queryKey: ["knowledge", org], queryFn: () => api.knowledgeBases(org), retry: false });
+  const globalMemories = useQuery({ queryKey: ["memories", org, "global"], queryFn: () => api.memories(org, { scope: "global" }), retry: false });
+  const projectMemories = useQuery({ queryKey: ["memories", org, "project"], queryFn: () => api.memories(org, { scope: "project" }), retry: false });
 
   const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
   const set = (patch: Partial<AgentSpec>) => setSpec((s) => ({ ...s, ...patch }));
@@ -280,13 +288,16 @@ export function AgentBuilder({
         : rest;
     });
 
-  async function submit(lifecycle: "active" | "draft" = "active") {
+  const changes = mode.kind === "version" ? diffSpecs(start, cleanSpec(spec)) : [];
+
+  async function submit(lifecycle: "active" | "draft" = "active", onTopOf?: number) {
     setError(null);
     setFailing([]);
     if (kind === "code" && (!code?.image || !(code.command ?? []).some((a) => a.trim()))) {
       setError("A code agent needs an image and a command.");
       return;
     }
+    setStale(null);
     setBusy(true);
     try {
       if (mode.kind === "create") {
@@ -295,20 +306,34 @@ export function AgentBuilder({
           kind: "internal",
           display_name: name || slug,
           description: description.trim() || null,
+          ...(tags.length > 0 ? { tags } : {}),
           spec: cleanSpec(spec),
           lifecycle,
           ...(scope ? { scope, project: scope === "project" ? projectChoice : null } : {}),
+          ...(scope && scope !== "personal" && viaTesting
+            ? { release_policy: { on_publish: "candidate" as const, stable: { require_candidate: true } } }
+            : {}),
         });
         await client.invalidateQueries({ queryKey: ["agents", org] });
         onDone?.(`${agent.display_name} registered as v${agent.latest_version}${lifecycle === "draft" ? ", as a draft" : ""}`);
         onCreated?.(agent);
       } else {
-        const published = await api.publishAgentVersion(org, mode.agent.slug, cleanSpec(spec));
-        onDone?.(`v${published.version} published: projects keep the version they pinned`);
+        const published = await api.publishAgentVersionWithMessage(org, mode.agent.slug, {
+          spec: cleanSpec(spec),
+          message: message.trim(),
+          base_version: onTopOf ?? base,
+        });
+        onDone?.(`${publishedSentence(published, mode.agent)}; projects keep the version they pinned`);
         await client.invalidateQueries({ queryKey: ["agent", org, mode.agent.slug] });
+        await client.invalidateQueries({ queryKey: ["agents", org] });
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Refused");
+      if (cause instanceof ApiError && cause.problem.code === "stale_base" && cause.problem.latest_version != null) {
+        // The form keeps its content: the author compares, then publishes on top on purpose.
+        setStale({ latest: cause.problem.latest_version, author: cause.problem.latest_author ?? null });
+        return;
+      }
+      setError(refusalSentence(cause));
       // A failing eval names its case (S32-03): the publication is refused, the case said.
       const errors = cause instanceof ApiError ? ((cause.problem.errors ?? []) as { loc?: unknown[]; msg?: string }[]) : [];
       setFailing(
@@ -328,7 +353,7 @@ export function AgentBuilder({
         aria-label={creating ? "New agent" : `New version of ${mode.agent.display_name}`}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy && !(creating && (!slug || problem))) void submit("active");
+          if (!busy && !(creating && (!slug || problem)) && (creating || message.trim())) void submit("active");
         }}
       >
         {creating && (
@@ -394,6 +419,7 @@ export function AgentBuilder({
                 <Textarea id={id} rows={3} maxLength={4000} value={description} onChange={(e) => setDescription(e.target.value)} />
               )}
             </Field>
+            <TagEditor value={tags} onChange={setTags} suggestions={knownTags} />
             <InstructionsField spec={spec} set={set} />
           </Section>
         )}
@@ -519,27 +545,22 @@ export function AgentBuilder({
 
         <McpSection connectors={mcpConnectors} spec={spec} set={set} summary={summaries.tools} defaultOpen={opened.tools} />
 
+        <NetworkSection
+          spec={spec}
+          set={set}
+          ceiling={((ceiling.data?.ceiling ?? {}) as { network?: CeilingNetwork }).network}
+          summary={summaries.network}
+          defaultOpen={opened.network}
+        />
+
         <KnowledgeSection bases={bases.data ?? []} spec={spec} set={set} summary={summaries.knowledge} defaultOpen={opened.knowledge} />
 
         <Disclosure title="Memory" summary={summaries.memory} defaultOpen={opened.memory}>
-          <Field
-            label="Memory scope"
-            hint="What a run remembers from earlier runs, and where it writes what it learns. Memory is data in the context, never instructions."
-          >
-            {(id) => (
-              <Select
-                id={id}
-                value={spec.memory ?? "project"}
-                onChange={(e) => set({ memory: e.target.value as keyof typeof MEMORY_SCOPES })}
-              >
-                {Object.entries(MEMORY_SCOPES).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+          <MemoryBindingsEditor
+            value={effectiveBindings(spec)}
+            onChange={(memories) => set({ memories })}
+            options={{ global: globalMemories.data ?? [], project: projectMemories.data ?? [] }}
+          />
         </Disclosure>
 
         <Disclosure title="Limits and budget" summary={summaries.limits} defaultOpen={opened.limits}>
@@ -610,6 +631,24 @@ export function AgentBuilder({
         <Disclosure title="Eval suite" summary={summaries.evals} defaultOpen={opened.evals || failing.length > 0}>
           <EvalSuiteEditor cases={spec.evals ?? []} onChange={(evals) => set({ evals })} />
         </Disclosure>
+        {creating && scope && scope !== "personal" && (
+          <Disclosure
+            title="Release"
+            summary={viaTesting ? "through testing (recommended)" : "straight to production"}
+            id="release-section"
+          >
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={viaTesting} onChange={(e) => setViaTesting(e.target.checked)} className="mt-1" />
+              <span>
+                Release through testing (recommended)
+                <span className="block text-xs text-ink-muted">
+                  A saved revision goes to testing first, and production only takes a revision that was tested. Untick it and
+                  every saved revision goes to production at once. Changeable later, on the agent&apos;s Lifecycle tab.
+                </span>
+              </span>
+            </label>
+          </Disclosure>
+        )}
 
         {error && <ErrorNote>{error}</ErrorNote>}
         {failing.length > 0 && (
@@ -639,11 +678,71 @@ export function AgentBuilder({
               )}
             </>
           ) : (
-            <Button type="submit" tone="primary" disabled={busy}>
-              {`Publish v${mode.agent.latest_version + 1}`}
-            </Button>
+            <>
+              <div className="min-w-[16rem] flex-1">
+                <label htmlFor="revision-message" className="block text-xs text-ink-muted">
+                  What changed and why
+                </label>
+                <Input
+                  id="revision-message"
+                  value={message}
+                  maxLength={MAX_MESSAGE}
+                  placeholder="Tighten the run budget"
+                  aria-describedby="revision-message-count"
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                <span id="revision-message-count" className="text-xs text-ink-muted">
+                  {message.length} of {MAX_MESSAGE}
+                </span>
+              </div>
+              <Button type="submit" tone="primary" disabled={busy || !message.trim()}>
+                {`Publish v${mode.agent.latest_version + 1}`}
+              </Button>
+              {onCancel &&
+                (discarding ? (
+                  <span className="inline-flex items-center gap-2 text-sm">
+                    Discard {changes.length} change{changes.length === 1 ? "" : "s"}?
+                    <Button size="sm" tone="danger" onClick={onCancel}>
+                      Discard
+                    </Button>
+                    <Button size="sm" onClick={() => setDiscarding(false)}>
+                      Keep editing
+                    </Button>
+                  </span>
+                ) : (
+                  <Button onClick={() => (changes.length > 0 ? setDiscarding(true) : onCancel())}>Discard</Button>
+                ))}
+            </>
           )}
         </div>
+        {stale && mode.kind === "version" && (
+          <div role="alert" className="space-y-2 rounded-md border border-line p-3 text-sm" data-testid="stale-base">
+            <p>
+              v{stale.latest} was published{stale.author ? ` by ${stale.author}` : ""} since you started from v{base}.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={`/agents/${mode.agent.slug}?tab=history&compare=${base}..${stale.latest}`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                {`Compare v${base} \u2192 v${stale.latest}`}
+                <span className="sr-only"> (opens in a new tab: your changes stay here)</span>
+              </a>
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setBase(stale.latest);
+                  void submit("active", stale.latest);
+                }}
+              >
+                {`Publish on top of v${stale.latest}`}
+              </Button>
+            </div>
+          </div>
+        )}
       </form>
 
       <aside
@@ -657,7 +756,8 @@ export function AgentBuilder({
             [
               ["try", "Try it"],
               ["costs", "What it costs and allows"],
-            ] as const
+              ...(creating ? [] : ([["changes", `Changes (${changes.length})`]] as const)),
+            ] as ReadonlyArray<readonly [typeof panel, string]>
           ).map(([id, label]) => (
             <button
               key={id}
@@ -681,6 +781,11 @@ export function AgentBuilder({
             initialSample={initialSample}
           />
         </div>
+        {!creating && (
+          <div role="tabpanel" id="builder-panel-changes" aria-labelledby="builder-tab-changes" hidden={panel !== "changes"}>
+            <ChangeList changes={changes} empty="Nothing changed yet: edit a field and it shows here, against the version you started from." />
+          </div>
+        )}
         <div role="tabpanel" id="builder-panel-costs" aria-labelledby="builder-tab-costs" hidden={panel !== "costs"}>
           <BuilderSummary
             spec={spec}
@@ -688,6 +793,7 @@ export function AgentBuilder({
             connectors={mcpConnectors}
             library={library.data ?? []}
             bases={bases.data ?? []}
+            memories={[...(globalMemories.data ?? []), ...(projectMemories.data ?? [])]}
           />
         </div>
       </aside>
@@ -915,12 +1021,129 @@ function McpSection({
       {connectors.length === 0 && (
         <p className="text-xs text-ink-muted">
           No MCP connector in the organisation yet: an administrator declares one, or installs one from{" "}
-          <Link href="/admin/connectors/catalogue" className="underline">
+          <Link href="/catalogue/mcp-servers" className="underline">
             the MCP catalogue
           </Link>
           .
         </p>
       )}
+    </Disclosure>
+  );
+}
+
+/**
+ * What the agent may reach on the internet (ADR 0070). It can only narrow the project's and the
+ * organisation's network: a host they do not allow refuses the publication (422) and the run.
+ */
+function NetworkSection({
+  spec,
+  set,
+  ceiling,
+  summary,
+  defaultOpen,
+}: {
+  spec: AgentSpec;
+  set: (patch: Partial<AgentSpec>) => void;
+  ceiling: CeilingNetwork | undefined;
+  summary: string;
+  defaultOpen: boolean;
+}) {
+  const network = spec.network ?? {};
+  // "Only these hosts" with nothing typed yet is `[]` on the wire, which reads as "No internet": the radio
+  // remembers the choice until a host is named.
+  const [listing, setListing] = useState(false);
+  const mode = listing && (network.domains ?? []).length === 0 ? "listed" : networkMode(spec.network);
+  const [text, setText] = useState(() => (network.domains ?? []).join("\n"));
+  const patch = (next: AgentNetwork) => set({ network: { ...network, ...next } });
+  const typed = parseHosts(text);
+  const flagged = mode === "listed" ? flaggedByCeiling(typed.hosts, ceiling) : [];
+  const choose = (value: "project" | "none" | "listed") => {
+    setListing(value === "listed");
+    if (value === "project") patch({ domains: null });
+    else if (value === "none") patch({ domains: [] });
+    else patch({ domains: typed.hosts });
+  };
+  return (
+    <Disclosure title="Network access" summary={summary} defaultOpen={defaultOpen}>
+      <p className="text-xs text-ink-muted">
+        Which hosts a run of this agent may reach. It can only narrow the project&apos;s policy and the organisation&apos;s
+        network access, never widen them.
+      </p>
+      <fieldset className="space-y-1.5" data-testid="agent-network-mode">
+        <legend className="text-xs font-medium text-ink-muted">Hosts</legend>
+        {(
+          [
+            ["project", "Same as the project's policy"],
+            ["none", "No internet"],
+            ["listed", "Only these hosts"],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value} className="flex items-center gap-2 text-sm">
+            <input type="radio" name="agent-network" checked={mode === value} onChange={() => choose(value)} />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+      {mode === "listed" && (
+        <Field label="Allowed hosts" hint="One per line. A host name covers its subdomains; *.example.com covers the subdomains only.">
+          {(id) => (
+            <Textarea
+              id={id}
+              rows={4}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                patch({ domains: parseHosts(e.target.value).hosts });
+              }}
+              placeholder={"pypi.org\napi.github.com"}
+            />
+          )}
+        </Field>
+      )}
+      {mode === "listed" && typed.hosts.length === 0 && typed.problems.length === 0 && (
+        <p className="text-xs text-ink-muted">Name at least one host: with none, the agent has no internet.</p>
+      )}
+      {mode === "listed" && typed.problems.length > 0 && (
+        <ul className="list-disc pl-5 text-xs text-danger" data-testid="agent-network-problems">
+          {typed.problems.map((problem) => (
+            <li key={problem}>{problem}</li>
+          ))}
+        </ul>
+      )}
+      {flagged.length > 0 && (
+        <ul className="list-disc pl-5 text-xs text-failed-ink" data-testid="agent-network-flagged">
+          {flagged.map((f) => (
+            <li key={f.host}>
+              <span className="font-mono">{f.host}</span>: {f.reason} — the publication would be refused.
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Requests per minute, per host" hint="Politeness: new connections a run opens to one host. Empty: the project's.">
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              min={1}
+              value={network.per_host_per_minute ?? ""}
+              onChange={(e) => patch({ per_host_per_minute: e.target.value ? Number(e.target.value) : null })}
+            />
+          )}
+        </Field>
+        <Field label="Built-in web tools" hint="The agent CLI's own WebFetch and WebSearch. They only ever narrow: off here, off for this agent.">
+          {(id) => (
+            <Select
+              id={id}
+              value={network.builtin_web_tools === false ? "off" : ""}
+              onChange={(e) => patch({ builtin_web_tools: e.target.value === "off" ? false : null })}
+            >
+              <option value="">As the policy says</option>
+              <option value="off">Off</option>
+            </Select>
+          )}
+        </Field>
+      </div>
     </Disclosure>
   );
 }
@@ -1006,13 +1229,16 @@ export function BuilderSummary({
   connectors,
   library,
   bases = [],
+  memories = [],
 }: {
   spec: AgentSpec;
   models: UsableModel[];
   connectors: OrgConnector[];
   library: Skill[];
   bases?: KnowledgeBase[];
+  memories?: MemoryStore[];
 }) {
+  const bindings: Binding[] = effectiveBindings(spec);
   const model = models.find((m) => m.model_name === spec.model);
   const servers = spec.mcp_servers ?? [];
   return (
@@ -1136,13 +1362,24 @@ export function BuilderSummary({
       </div>
       <div className="space-y-1">
         <h4 className="text-xs font-medium text-ink-muted">Memory</h4>
-        <p data-testid="memoire-resolue">
-          {spec.memory === "none"
-            ? "No memory: a run neither reads nor writes what earlier runs learnt."
-            : spec.memory === "agent"
-              ? "Its own memory within each project: what it learns stays with it."
-              : "The project's shared memory: it reads and adds to what every agent of the project learnt."}
-        </p>
+        <div data-testid="memoire-resolue">
+          {bindings.length === 0 ? (
+            <p>No memory: a run neither reads nor writes what earlier runs learnt.</p>
+          ) : (
+            <>
+              <ol className="list-decimal space-y-0.5 pl-5 text-xs">
+                {bindings.map((b) => (
+                  <li key={labelOf(b)}>
+                    {describe(b, memories)} — {b.mode === "write" ? "read and written" : "read"}
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-1 text-xs text-ink-muted">
+                In this order: the earlier memory wins a subject two share. It {writesTo(bindings, memories)}.
+              </p>
+            </>
+          )}
+        </div>
       </div>
     </section>
   );

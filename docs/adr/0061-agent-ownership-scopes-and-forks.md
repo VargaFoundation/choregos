@@ -1,5 +1,9 @@
 # 0061 — Agent ownership scopes and forks
 
+> **Amended by [ADR 0071](0071-an-agent-version-reaches-production-through-channels.md)**: the matrix
+> has one more action, `release` (send a revision to testing or production, roll back), on the row of
+> publish, edit and life.
+
 - **Status**: accepted, 2026-10-15
 - **Concerns**: the `agents` table (`scope`, `project_id`, `forked_from_*`), the agent registry API
   (`AgentCreate`, `AgentDto`, `forkAgent`, `changeAgentScope`, the `scope` and `project` filters of
@@ -122,6 +126,11 @@ The console, meanwhile, offers editing to whoever opens the page and lets the AP
   `project:write` for any scope, so a stale pin can always be removed.
 - The console (S39-09b) reads `can`, `cannot_reason`, `scope` and `forked_from`; until it lands, the
   API alone enforces the matrix.
+
+## Update — 2026-10-16 (S40-10)
+
+A fork copies the source's **tags** (§4, "inherits nothing else", is amended by this one line): they are
+metadata, not a version, and the fork's owner edits them afterwards.
 
 ## Amendment 2026-10-16 (S39-25, #674): provenance of a catalogue agent installed by a template
 

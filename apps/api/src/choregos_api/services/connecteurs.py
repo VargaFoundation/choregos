@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import ConnectorOperation, OrgConnector, Project, ProjectOperationPolicy
 from ..errors import unprocessable
+from .catalogue_rights import connector_enabled_for
 
 #: Le rang de chaque politique : un projet ne peut que monter (ADR 0034).
 RANG = {politique: rang for rang, politique in enumerate(POLITIQUES)}
@@ -41,6 +42,24 @@ def spec_du_type(kind: str, type_name: str) -> ConnectorTypeSpec:
             f"no type `{type_name}` for `{kind}` (known: {', '.join(available(kind)) or 'none'})"
         )
     return spec
+
+
+def check_runtime_allowed(type_name: str) -> None:
+    """Refuse a `runtime` connector the deployment does not run (ADR 0072).
+
+    A project could pick `tekton` on a cluster without Tekton, and its first run died. The
+    deployment declares what it runs (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`);
+    when it declares nothing (a bare dev server) nothing is refused."""
+    from choregos_adapters.registry import allowed_executor_kinds, executors_declared
+
+    if not executors_declared():
+        return
+    allowed = allowed_executor_kinds()
+    if type_name not in allowed:
+        raise unprocessable(
+            f"this deployment runs agents on `{allowed[0]}`; allowed: {', '.join(allowed)}. "
+            f"Ask the platform operator to add `{type_name}` to `global.runner.allowedExecutors`."
+        )
 
 
 def verifier_les_secrets(
@@ -131,6 +150,8 @@ async def politique_pour_le_projet(
     if ligne is None:
         return "forbidden"
     trouvee, instance = ligne
+    if not await connector_enabled_for(session, instance, projet):
+        return "forbidden"
     groupes = {str(g) for g in ((projet.config or {}).get("groups") or [])}
     if trouvee.groups and not groupes & set(trouvee.groups):
         return "forbidden"

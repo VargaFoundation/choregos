@@ -6,12 +6,40 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator, model_validator
+from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
+from choregos_core.network import validate_pattern
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    computed_field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from .base import Dto
 from .identite import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
+
+#: A tag (S40-10): a lowercase slug of at most 32 characters; an agent carries at most `MAX_TAGS`.
+TAG = r"^[a-z0-9][a-z0-9-]{0,31}$"
+MAX_TAGS = 10
+AgentTag = Annotated[str, Field(pattern=TAG)]
+
+#: The longest message a version carries (S40-12).
+MESSAGE_MAX = 500
+
+
+def _no_duplicate_tags(tags: list[str] | None) -> list[str] | None:
+    if tags is not None:
+        seen: set[str] = set()
+        for tag in tags:
+            if tag in seen:
+                raise ValueError(f"duplicate tag: {tag}")
+            seen.add(tag)
+    return tags
+
 
 #: Who owns an agent (ADR 0061). `platform` is never asked for: a common agent comes from the catalogue.
 AgentScope = Literal["platform", "org", "project", "personal"]
@@ -50,6 +78,18 @@ class AgentKnowledgeRef(Dto):
     slug: str = Field(pattern=SLUG)
 
 
+class AgentMemoryBinding(Dto):
+    """A memory an agent version binds (S40-11, ADR 0075): global to the organisation, or a memory of
+    whichever project the run is in; read, or read and write (at most one write in a list)."""
+
+    scope: Literal["global", "project"]
+    slug: str = Field(pattern=SLUG)
+    mode: Literal["read", "write"] = "read"
+
+    def to_binding(self) -> Binding:
+        return Binding(self.scope, self.slug, self.mode)
+
+
 class AgentSampleInput(Dto):
     """A sample work item an agent is tried or evaluated on (S32-03)."""
 
@@ -64,6 +104,12 @@ class AgentEvalCase(Dto):
     input: AgentSampleInput = Field(default_factory=AgentSampleInput)
     must_contain: list[str] = Field(default_factory=list)
     must_not_contain: list[str] = Field(default_factory=list)
+    #: A live case (S40-02d) runs as a capped trial on the real model and asserts on what the run
+    #: produced; the level-1 gate leaves it out (it has no output to read before a run).
+    live: bool = False
+    #: The status the run's result must have (a case may expect the agent to stop and ask).
+    expect_status: Literal["done", "blocked"] = "done"
+    max_cost_usd: float | None = Field(default=None, gt=0, le=0.5)
 
 
 class AgentEvalResult(Dto):
@@ -149,6 +195,37 @@ class A2aRuntime(Dto):
 AgentRuntime = Annotated[AcpRuntime | CodeRuntime | A2aRuntime, Field(discriminator="kind")]
 
 
+class AgentNetwork(Dto):
+    """What one agent version may reach (ADR 0070). It only ever narrows the project's network and
+    the organisation's: a host they do not allow refuses the publication and the run.
+
+    Every field defaults to `None`, and a version that leaves them all there carries no `network`
+    in its digest: versions published before the field existed keep theirs."""
+
+    #: `None`: the project's list; `[]`: no internet; a list: only these hosts.
+    domains: list[str] | None = None
+    #: New connections a run may open to one host per minute.
+    per_host_per_minute: int | None = Field(default=None, ge=1)
+    #: `False` switches the agent CLI's own web tools off; `None` or `True`: as the policy says.
+    builtin_web_tools: bool | None = None
+
+    @field_validator("domains")
+    @classmethod
+    def _patterns(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        errors: list[str] = []
+        patterns: list[str] = []
+        for entry in value:
+            try:
+                patterns.append(validate_pattern(entry))
+            except ValueError as error:
+                errors.append(str(error))
+        if errors:
+            raise ValueError("; ".join(errors))
+        return list(dict.fromkeys(patterns))
+
+
 class AgentSpec(Dto):
     """Ce qu'une version d'agent EST. Elle ne se modifie jamais : un changement publie la suivante."""
 
@@ -168,6 +245,40 @@ class AgentSpec(Dto):
     #: Whose memory a run reads and writes (S32-02): `project` (shared, the default), `agent` (its
     #: own, within the project) or `none`.
     memory: Literal["none", "project", "agent"] = "project"
+    #: The hosts the agent may reach and how fast (ADR 0070).
+    network: AgentNetwork = Field(default_factory=AgentNetwork)
+
+    #: The memories a run reads and writes (S40-11, ADR 0075), in precedence order; at most 8, one
+    #: `write`. Absent, the legacy `memory` field decides (`project` -> the project's shared memory).
+    memories: list[AgentMemoryBinding] | None = Field(default=None, max_length=8)
+
+    @model_validator(mode="after")
+    def _memories_are_coherent(self) -> AgentSpec:
+        if self.memories is None:
+            return self
+        if self.memory != "project":
+            raise ValueError("`memory` is superseded by `memories`: send one of them, not both")
+        if problems := binding_problems([binding.to_binding() for binding in self.memories]):
+            raise ValueError("; ".join(problems))
+        return self
+
+    @model_serializer(mode="wrap")
+    def _leave_out_absent_memories(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """`memories` is left out while it is unset: a version published before the field existed keeps
+        its stored spec, its digest and its response byte for byte."""
+        data: dict[str, object] = handler(self)
+        if data.get("memories") is None:
+            data.pop("memories", None)
+        return data
+
+    def effective_memories(self) -> list[AgentMemoryBinding]:
+        """What a run binds: `memories`, or what the legacy `memory` means."""
+        return [
+            AgentMemoryBinding(scope=b.scope, slug=b.slug, mode=b.mode)
+            for b in effective_bindings(
+                None if self.memories is None else [m.to_binding() for m in self.memories], self.memory
+            )
+        ]
 
     @model_validator(mode="after")
     def _one_way_to_say_the_backend(self) -> AgentSpec:
@@ -191,6 +302,196 @@ class AgentSpec(Dto):
         ):
             raise ValueError("`backend` and `runtime.backend` disagree: set only one")
         return self
+
+
+# ───────────────────────────── release channels (S40-02, ADR 0071) ─────────────────────────────
+
+Channel = Literal["stable", "candidate"]
+ReleaseKind = Literal["publish", "promote", "rollback", "withdraw", "baseline"]
+ReleaseStatus = Literal["done", "pending_approval", "rejected", "cancelled", "superseded"]
+
+
+class AgentStableGates(Dto):
+    """What a revision must satisfy before it reaches production (a rollback skips them)."""
+
+    #: The revision must be the current candidate.
+    require_candidate: bool = False
+    #: Finished runs of the candidate since it became candidate.
+    min_candidate_runs: int = Field(default=0, ge=0, le=10_000)
+    min_success_rate: float | None = Field(default=None, ge=0, le=1)
+    min_soak_hours: int | None = Field(default=None, ge=0, le=720)
+    #: How recent the human's authentication must be, in minutes.
+    step_up_minutes: int = Field(default=10, ge=1, le=120)
+    #: The latest finished live evaluation of the revision must score at least this (S40-02d).
+    min_live_score: float | None = Field(default=None, ge=0, le=1)
+    #: People other than the requester who must approve a promotion before production moves (S40-02b).
+    approvals: int = Field(default=0, ge=0, le=3)
+    #: Neither the requester nor the revision's author may approve.
+    separation_of_duties: bool = True
+
+
+class AgentCandidateGates(Dto):
+    """What a revision must satisfy before it is sent to testing by hand (not when saving does it)."""
+
+    min_live_score: float | None = Field(default=None, ge=0, le=1)
+
+
+class AgentReleasePolicy(Dto):
+    """What saving a revision does, and the gates of production."""
+
+    #: `stable`: it goes to production (today's behaviour); `candidate`: to testing; `none`: nowhere.
+    on_publish: Literal["stable", "candidate", "none"] = "stable"
+    stable: AgentStableGates = Field(default_factory=AgentStableGates)
+    candidate: AgentCandidateGates = Field(default_factory=AgentCandidateGates)
+    #: The most one live evaluation may spend in all, in dollars.
+    max_eval_usd: float = Field(default=2.0, gt=0, le=10)
+
+    @model_validator(mode="after")
+    def _a_revision_published_to_production_is_never_a_candidate(self) -> AgentReleasePolicy:
+        gates = self.stable
+        if self.on_publish == "stable" and (
+            gates.require_candidate
+            or gates.min_candidate_runs > 0
+            or gates.min_success_rate is not None
+            or gates.min_soak_hours is not None
+            or gates.min_live_score is not None
+        ):
+            raise ValueError(
+                "`on_publish: stable` sends a revision straight to production, so it is never a candidate: "
+                "it cannot be combined with `require_candidate` or a candidate threshold"
+            )
+        return self
+
+
+class AgentEvaluationCreate(Dto):
+    """Run a revision's live cases as capped trials, in one project."""
+
+    project: str = Field(min_length=1)
+
+
+class AgentEvaluationCase(Dto):
+    name: str
+    run_id: str
+    status: Literal["running", "passed", "failed", "not_run"]
+    passed: bool | None = None
+    budget_usd: float = 0.0
+    cost_usd: float = 0.0
+    reason: str | None = None
+
+
+class AgentEvaluation(Dto):
+    id: str
+    version: int
+    project: str
+    status: Literal["running", "passed", "failed", "not_run"]
+    #: Passed cases over live cases; `None` while running and when nothing ran.
+    score: float | None = None
+    budget_usd: float
+    started_by: str | None = None
+    started_at: datetime
+    cases: list[AgentEvaluationCase] = Field(default_factory=list)
+
+
+class AgentReleaseCreate(Dto):
+    """Point a channel at a revision."""
+
+    channel: Channel
+    #: `null` with `candidate` withdraws the candidate; `null` with `stable` promotes the current candidate.
+    version: int | None = Field(default=None, ge=1)
+    #: Candidate only: the share of work items served the candidate; absent keeps the current share.
+    percent: int | None = Field(default=None, ge=0, le=100)
+    reason: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _the_share_belongs_to_testing(self) -> AgentReleaseCreate:
+        if self.percent is not None and self.channel != "candidate":
+            raise ValueError("`percent` only applies to the `candidate` channel")
+        return self
+
+
+class AgentReleaseCheck(Dto):
+    name: str
+    required: bool = True
+    #: `None`: not applicable.
+    passed: bool | None = None
+    detail: str | None = None
+
+
+class AgentReleaseVote(Dto):
+    """One person's answer to a release that waits for approval."""
+
+    by: str
+    decision: Literal["approve", "reject", "cancel"]
+    reason: str | None = None
+    at: datetime
+    #: How old the person's sign-in was, in seconds, when they decided.
+    auth_age_seconds: int | None = None
+
+
+class AgentReleaseDecision(Dto):
+    decision: Literal["approve", "reject", "cancel"]
+    #: Required for a rejection.
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AgentReleaseDto(Dto):
+    id: str
+    agent: str
+    channel: Channel
+    kind: ReleaseKind
+    version: int | None = None
+    previous_version: int | None = None
+    percent: int | None = None
+    status: ReleaseStatus = "done"
+    #: How many other people must approve before production moves; 0 for a release that did not wait.
+    approvals_required: int = 0
+    decisions: list[AgentReleaseVote] = Field(default_factory=list)
+    requested_by: str | None = None
+    requested_at: datetime
+    done_at: datetime | None = None
+    reason: str | None = None
+    checks: list[AgentReleaseCheck] = Field(default_factory=list)
+
+
+class AgentChannelStats(Dto):
+    version: int
+    runs: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    success_rate: float | None = None
+    since: datetime | None = None
+
+
+class AgentReleaseReadiness(Dto):
+    """What releasing a revision to a channel would check, without doing it."""
+
+    version: int
+    channel: Channel
+    kind: ReleaseKind
+    ready: bool
+    checks: list[AgentReleaseCheck] = Field(default_factory=list)
+    candidate: AgentChannelStats | None = None
+    production: AgentChannelStats | None = None
+
+
+class AgentExposedProject(Dto):
+    project: str
+    source: Literal["pin", "pin_channel", "project_channel"]
+    channel: Channel | None = None
+    version: int
+
+
+class AgentExposure(Dto):
+    """Who is served what: production, testing, and the projects that chose their own."""
+
+    stable_version: int | None = None
+    candidate_version: int | None = None
+    candidate_percent: int = 0
+    projects: list[AgentExposedProject] = Field(default_factory=list)
+
+
+class ProjectAgentChannel(Dto):
+    channel: Channel
 
 
 class AgentTrialCreate(Dto):
@@ -240,6 +541,14 @@ class AgentCreate(Dto):
     scope: CreatableScope = "org"
     #: The project's slug: required for, and only for, a `project` agent.
     project: str | None = Field(default=None, min_length=1)
+    #: Labels people find the agent by (S40-10); never part of a version.
+    tags: list[AgentTag] = Field(default_factory=list, max_length=MAX_TAGS)
+    #: Why version 1 exists (S40-12); absent, `Created`.
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
+
+    _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
+    #: What saving a revision does (S40-02); absent, the defaults: it goes to production.
+    release_policy: AgentReleasePolicy | None = None
 
     @model_validator(mode="after")
     def _a_project_agent_names_its_project(self) -> AgentCreate:
@@ -269,6 +578,8 @@ class AgentFork(Dto):
     project: str | None = Field(default=None, min_length=1)
     #: The source version to copy; absent, its latest.
     version: int | None = Field(default=None, ge=1)
+    #: Why version 1 exists (S40-12); absent, `Forked from <slug>@<version>`.
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
 
     @model_validator(mode="after")
     def _a_project_fork_names_its_project(self) -> AgentFork:
@@ -313,6 +624,8 @@ class AgentPermissions(Dto):
     manage: bool = False
     #: Pin it on a project the caller owns.
     pin: bool = False
+    #: Move its channels: send a revision to testing, to production, roll back (S40-02).
+    release: bool = False
     #: The scopes the caller may fork it into.
     fork_scopes: list[CreatableScope] = Field(default_factory=list)
 
@@ -351,6 +664,8 @@ class AgentCatalogueEntry(Dto):
     summary: str
     version: int
     skills: list[str] = Field(default_factory=list)
+    #: Labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed.
+    tags: list[str] = Field(default_factory=list)
     #: Pour un client externe : son identifiant sur la page des clients, et d'où il appelle.
     client: str | None = None
     reach: Literal["always", "cloud"] | None = None
@@ -393,6 +708,10 @@ class AgentPatch(Dto):
     #: `revoked` est définitif ; `suspended` se lève.
     status: Literal["active", "suspended", "revoked"] | None = None
     expires_at: datetime | None = None
+    #: Replaces the agent's tags; absent or null leaves them as they are (S40-10).
+    tags: list[AgentTag] | None = Field(default=None, max_length=MAX_TAGS)
+
+    _tags_are_unique = field_validator("tags")(_no_duplicate_tags)
 
 
 class AgentVersionDto(Dto):
@@ -401,6 +720,49 @@ class AgentVersionDto(Dto):
     checksum: str
     created_by: str | None = None
     created_at: datetime | None = None
+    #: Why the version exists, in its author's words; absent for a version published before messages.
+    message: str | None = None
+    #: The version this one copies, when it is a restore.
+    restored_from: int | None = None
+    #: The projects the caller may see that pin this version.
+    pinned_by: list[str] = Field(default_factory=list)
+    #: The channels this revision sits on now (S40-02).
+    channels: list[Channel] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def effective_memories(self) -> list[AgentMemoryBinding]:
+        """The memories a run of this version binds, derived from `memory` when `memories` is absent."""
+        return self.spec.effective_memories()
+
+
+class AgentVersionPublish(Dto):
+    """Publish the next version from the one the author read: refused when the latest has moved (S40-12)."""
+
+    spec: AgentSpec
+    message: str = Field(min_length=1, max_length=MESSAGE_MAX)
+    #: The latest version the author started from (0 for an agent with none).
+    base_version: int = Field(ge=0)
+
+    @field_validator("message")
+    @classmethod
+    def _message_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a message says what changed and why")
+        return value
+
+
+class AgentVersionRestore(Dto):
+    """Copy an older version as the next one; nothing is rewritten or deleted (S40-12)."""
+
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX)
+    base_version: int = Field(ge=1)
+
+    @field_validator("message")
+    @classmethod
+    def _message_is_stripped(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
 
 
 class AgentDto(Dto):
@@ -408,6 +770,8 @@ class AgentDto(Dto):
     kind: Literal["internal", "external", "remote"]
     display_name: str
     description: str | None = None
+    #: Labels people find the agent by (S40-10); apart from its versions.
+    tags: list[str] = Field(default_factory=list)
     status: str
     owner: str | None = None
     expires_at: datetime | None = None
@@ -431,6 +795,14 @@ class AgentDto(Dto):
     #: What the caller may do, and the server's own sentence for what they may not.
     can: AgentPermissions = Field(default_factory=AgentPermissions)
     cannot_reason: str | None = None
+    #: Production and testing (S40-02, ADR 0071).
+    stable_version: int | None = None
+    candidate_version: int | None = None
+    candidate_percent: int = 0
+    candidate_since: datetime | None = None
+    release_policy: AgentReleasePolicy = Field(default_factory=AgentReleasePolicy)
+    #: The release waiting for approval, if any (S40-02b).
+    pending_release: AgentReleaseDto | None = None
 
 
 class AgentOverrides(Dto):
@@ -443,13 +815,24 @@ class AgentOverrides(Dto):
 
 
 class ProjectAgentPut(Dto):
-    version: int = Field(ge=1)
+    #: Exactly one of `version` (a fixed revision) and `channel` (follow production or testing).
+    version: int | None = Field(default=None, ge=1)
+    channel: Channel | None = None
     overrides: AgentOverrides = Field(default_factory=AgentOverrides)
+
+    @model_validator(mode="after")
+    def _a_pin_is_a_revision_or_a_channel(self) -> ProjectAgentPut:
+        if (self.version is None) == (self.channel is None):
+            raise ValueError("give exactly one of `version` (a fixed revision) and `channel`")
+        return self
 
 
 class ProjectAgentDto(Dto):
     agent: str
+    #: The revision served now (the channel's, for a channel pin).
     version: int
+    #: Set when the pin follows a channel; `None` for a fixed revision.
+    channel: Channel | None = None
     overrides: AgentOverrides
     #: La version épinglée, surcharges appliquées : ce qui tournera.
     effective: AgentSpec
@@ -600,6 +983,15 @@ class AgentProjectMetrics(Dto):
     cost_usd: float
 
 
+class AgentVersionMetrics(Dto):
+    version: int
+    runs: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    success_rate: float | None = None
+    cost_usd: float = 0.0
+
+
 class AgentMetrics(Dto):
     """Ce qu'un agent a fait sur la période : ses runs, leur issue, ce qu'ils ont coûté."""
 
@@ -615,7 +1007,9 @@ class AgentMetrics(Dto):
     cost_by_kind: dict[str, float] = Field(default_factory=dict)
     by_project: list[AgentProjectMetrics] = Field(default_factory=list)
     spent_today_usd: float = 0.0
+    #: Production's daily budget (S40-02).
     daily_budget_usd: float | None = None
+    by_version: list[AgentVersionMetrics] = Field(default_factory=list)
 
 
 class AgentMetricsSummary(Dto):
@@ -637,6 +1031,14 @@ class AgentResolution(Dto):
     version: int | None = None
     #: True when the version comes from the project's pin (no explicit `@N` in the reference).
     pinned: bool = False
+    #: Why this revision (S40-02): the reference, a pin, a channel pin, the project's switch, a canary
+    #: share, production, or the latest (an agent that has no production pointer).
+    source: (
+        Literal["explicit", "pin", "pin_channel", "project_channel", "canary", "stable", "latest"] | None
+    ) = None
+    channel: Channel | None = None
+    candidate_version: int | None = None
+    candidate_percent: int | None = None
     display_name: str | None = None
     lifecycle: str | None = None
     #: For `not_installed`: publishing the workflow installs the agent from the catalogue (ADR 0040).

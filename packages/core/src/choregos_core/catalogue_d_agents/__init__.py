@@ -48,6 +48,8 @@ class EntreeDuCatalogue:
     tools: tuple[str, ...] = field(default_factory=tuple)
     #: Its result informs a decision that people make: a workflow sends it to a human next.
     human_gate_after: bool = False
+    #: Labels people find the agent by (S40-10); installed with it, added on upgrade, never removed.
+    tags: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def empreinte(self) -> str:
@@ -81,6 +83,7 @@ def _lire(chemin: Path) -> EntreeDuCatalogue:
         outputs=tuple(str(o) for o in meta.get("outputs") or []),
         tools=tuple(str(t) for t in meta.get("tools") or []),
         human_gate_after=bool(meta.get("human_gate_after", False)),
+        tags=tuple(str(t) for t in document.get("tags") or []),
     )
 
 

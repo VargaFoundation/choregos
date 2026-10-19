@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from choregos_core import utcnow
 from fastapi import APIRouter, Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +16,6 @@ from ..deps import Db, ProjectContext, ProjectCtx
 from ..errors import not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
-    ConnectorCheck,
     ConnectorDto,
     ConnectorTestResult,
     ConnectorType,
@@ -25,7 +23,8 @@ from ..schemas import (
     ProjectRequirement,
     SecretValue,
 )
-from ..secret_store import derived_project_name, resolved_configuration, secret_states
+from ..secret_store import derived_project_name, secret_states
+from ..services.connector_health import check_connector
 from ..services.connector_secrets import (
     drop_replaced_store_values,
     put_values,
@@ -124,8 +123,16 @@ async def put_connector(
             "the `direct` gateway is refused in this environment: it measures no cost and "
             "enforces no cap. Use `litellm`."
         )
-    from ..services.connecteurs import spec_du_type, verifier_les_secrets
+    from ..services.connecteurs import check_runtime_allowed, spec_du_type, verifier_les_secrets
+    from ..services.github_app import checked_config
+    from ..services.platform_network import check_connector_declaration
 
+    await check_connector_declaration(session, ctx.project.org_id, body.config, kind)
+    if kind == "runtime":
+        check_runtime_allowed(body.type)
+    body = body.model_copy(
+        update={"config": await checked_config(session, ctx.project.org_id, kind, body.type, body.config)}
+    )
     prefix = _prefix(ctx, kind)
     verifier_les_secrets(
         spec_du_type(kind, body.type),
@@ -160,6 +167,8 @@ async def put_connector(
     row.secret_refs = after or None
     row.status = "unknown"
     await session.flush()
+    # Saving tests (S40-05): a failing test is kept on the card, it does not refuse the save.
+    await check_connector(session, ctx, row)
     await record(
         session,
         ctx.principal,
@@ -213,6 +222,7 @@ async def set_connector_secret(
     row.secret_refs = refs_with_values(row.secret_refs, prefix, {field: body.value})
     row.status = "unknown"
     await session.flush()
+    await check_connector(session, ctx, row)
     await _audit_secrets(session, ctx, row, "connector.secret.set", {field: metas[field].version})
     return await _dto(session, ctx, row)
 
@@ -236,6 +246,7 @@ async def clear_connector_secret(
     row.secret_refs = after or None
     row.status = "unknown"
     await session.flush()
+    await check_connector(session, ctx, row)
     await _audit_secrets(session, ctx, row, "connector.secret.clear", {field: None})
     return await _dto(session, ctx, row)
 
@@ -248,7 +259,7 @@ async def clear_connector_secret(
 async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequirement]:
     """Ce que les workflows actifs du projet exigent de ses connecteurs, et pourquoi (ADR 0034) :
     un projet sans dépôt ni train n'a rien à faire d'un `scm`, d'une `ci` ou d'un `cd`."""
-    from choregos_adapters import type_par_defaut
+    from choregos_adapters import deployment_default_type
     from choregos_core.dsl.exigences import exigences
 
     from ..db.models import WorkflowDef
@@ -268,7 +279,7 @@ async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequ
             capability=e.capacite,
             reasons=list(e.raisons),
             connector=await _dto(session, ctx, configures[e.capacite]) if e.capacite in configures else None,
-            default_type=None if e.capacite in configures else type_par_defaut(e.capacite),
+            default_type=None if e.capacite in configures else deployment_default_type(e.capacite),
         )
         for e in exigences(workflow_model(row) for row in actifs)
     ]
@@ -286,39 +297,4 @@ async def test_connector(ctx: ProjectCtx, kind: Annotated[str, Path()], session:
     if row is None:
         raise not_found("Connector", kind)
 
-    from choregos_adapters import build, fakes_enabled
-    from choregos_core.redaction import redact, redact_known
-
-    checks: list[ConnectorCheck] = []
-    try:
-        # Les secrets RÉSOLUS ici, dans ce processus : une référence qu'il ne sait pas lire est
-        # un échec de test qui la nomme, pas un adaptateur qui retombe sur sa valeur par défaut.
-        config = await resolved_configuration(
-            session, ctx.project.org_id, kind, row.type, row.config, row.secret_refs, row.secret_ref
-        )
-        adapter = build(kind, row.type, config)
-        checks.append(ConnectorCheck(name="construction", ok=True, detail=type(adapter).__name__))
-        tester = getattr(adapter, "test", None)
-        if tester is not None:
-            result = await tester()
-            checks.append(
-                ConnectorCheck(
-                    name="connection", ok=bool(result.get("ok", True)), detail=redact_known(str(result))
-                )
-            )
-        else:
-            checks.append(
-                ConnectorCheck(
-                    name="connection",
-                    ok=True,
-                    detail="fakes active" if fakes_enabled() else "no specific test for this type",
-                )
-            )
-    except Exception as exc:  # une erreur de connecteur n'est jamais une erreur 500
-        checks.append(ConnectorCheck(name="connection", ok=False, detail=redact(str(exc))[:500]))
-
-    ok = all(check.ok for check in checks)
-    row.status = "ok" if ok else "error"
-    row.last_check_at = utcnow()
-    row.last_error = None if ok else redact("; ".join(c.detail or "" for c in checks if not c.ok))[:1000]
-    return ConnectorTestResult(ok=ok, checks=checks)
+    return await check_connector(session, ctx, row)

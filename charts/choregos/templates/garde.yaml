@@ -32,3 +32,15 @@ network side. It is said here, where the value is written.
 {{- fail (printf "global.environment=%s refused: %s. These values are those of a bench (values/local.yaml); a serious environment brings its own dependencies and secrets." $g.environment (join ", " $fautes)) }}
 {{- end }}
 {{- end }}
+{{- /*
+The per-run egress proxy exists to be used: runners reach it through `runner.egressProxy`. Rendering
+the proxy with an empty value would leave a Deployment nobody sends traffic to, and every run would
+still get out (or not) by the old path — silently. Say which value is missing.
+*/ -}}
+{{- $eg := $g.egress | default dict }}
+{{- if $eg.enabled }}
+{{- $runner := (index .Values "choregos-orchestrator" | default dict).runner | default dict }}
+{{- if not $runner.egressProxy }}
+{{- fail "global.egress.enabled=true needs choregos-orchestrator.runner.egressProxy (e.g. http://choregos-egress.<release-namespace>.svc:3128): the proxy would exist and no runner would use it." }}
+{{- end }}
+{{- end }}

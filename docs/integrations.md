@@ -6,8 +6,8 @@ agent lists your projects, reads workflows, opens and follows work items, and te
 for a decision. It acts with **your** rights, never more, and it **never decides**: a decision needs
 you, signed in again, in the console ([ADR 0030](adr/0030-an-mcp-door-for-external-clients.md)).
 
-The console has the same instructions, pre-filled with your platform's address: **Integrations**,
-in the top bar, and the **integrations** tab of each project.
+The console has the same instructions, pre-filled with your platform's address: **Integrations**
+(in the sidebar's *Organisation* group; inside a project, *Configure → Integrations*).
 
 ## The door
 

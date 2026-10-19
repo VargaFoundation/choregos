@@ -12,11 +12,13 @@ is replayed — and no new error type reaches `workflows/`.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fnmatch import fnmatch
 from typing import Any
 from urllib.parse import urlsplit
 
 from choregos_contracts import Budget, DeclaredCost, RemoteCall, StageInput
+from choregos_core import network
 from temporalio.exceptions import ApplicationError
 
 from ..org_egress import merged_domains, org_runner_hosts
@@ -70,12 +72,19 @@ def host_allowed(host: str, domains: list[str]) -> bool:
     return False
 
 
-def check_egress(runtime: Any, domains: list[str]) -> None:
-    """Admission: the pod may only reach the hosts the project's policy allows (ADR 0062 §8)."""
+def check_egress(runtime: Any, domains: list[str], deny: Iterable[str] = ()) -> None:
+    """Admission: the pod may only reach the hosts the project's policy allows (ADR 0062 §8), and
+    never a host a deny list of the instance, the organisation's ceiling or the project names
+    (ADR 0070: a deny always wins, over an organisation's opening too)."""
     pinned = runtime.pinned_card
     if pinned is None:
         raise refuse("the remote agent version carries no pinned card: publish it again")
     host = urlsplit(pinned.url).hostname or ""
+    if (hit := next((p for p in deny if network.host_matches(host, p)), None)) is not None:
+        raise refuse(
+            f"the remote agent's host `{host}` is denied by the network policy (`{hit}`): the "
+            "organisation's ceiling, the project's sandbox.network.deny_domains or the instance"
+        )
     if not host_allowed(host, domains):
         raise refuse(
             f"the remote agent's host `{host}` is not in the project's `sandbox.network.allow_domains`: "
@@ -144,11 +153,20 @@ def declared_cost_usd(stage_input: StageInput, seconds: float) -> float:
     return round((cost.per_task_usd or 0.0) + (cost.per_minute_usd or 0.0) * max(seconds, 0.0) / 60.0, 6)
 
 
-async def check_remote_agent(session: Any, bundle: Any, runtime: Any) -> None:
-    """The two admission checks of a remote agent; nothing for any other runtime."""
+async def check_remote_agent(
+    session: Any,
+    bundle: Any,
+    runtime: Any,
+    *,
+    deny: Iterable[str] = (),
+    org_hosts: list[str] | None = None,
+) -> None:
+    """The two admission checks of a remote agent; nothing for any other runtime. `deny` is the run's
+    effective deny list (`run_network(...).deny`)."""
     if runtime is None:
         return
     # The project's own allowlist, plus what the organisation opened for its runners (S39-22d).
-    org_hosts = await org_runner_hosts(session, bundle.project.org_id)
-    check_egress(runtime, merged_domains(bundle.engine.allow_domains(), org_hosts))
+    if org_hosts is None:
+        org_hosts = await org_runner_hosts(session, bundle.project.org_id)
+    check_egress(runtime, merged_domains(bundle.engine.allow_domains(), org_hosts), deny)
     await check_credential(session, bundle.project.org_id, runtime)

@@ -22,8 +22,10 @@ from ..errors import unprocessable
 from ..logging import get_logger
 from ..rbac import SYSTEM
 from ..schemas.agents import AgentCreate
+from .agent_releases import after_publish
 from .agents import empreinte as empreinte_de_l_agent
 from .agents import erreurs_d_une_version
+from .network import check_agent_network
 from .skill_gate import platform_columns
 from .skills import SkillRefusee, empreinte, valider
 
@@ -48,6 +50,16 @@ async def installer_ce_que_livre_le_gabarit(
     installes |= {"extensions": [], "sans_greffon": []}
     await _installer_les_extensions(session, projet, livree, auteur, installes)
     return installes
+
+
+def _install_message(auteur: str) -> str:
+    """The message of the version 1 the platform writes when it installs an agent (S40-12)."""
+    source, _, name = auteur.partition(":")
+    if source == "catalogue":
+        return f"Installed from the catalogue ({name})"
+    if source == "template":
+        return f"Installed from the template {name}"
+    return f"Installed by {auteur}"
 
 
 async def installer_skills_et_agents(
@@ -99,6 +111,7 @@ async def installer_skills_et_agents(
     for document in agents:
         corps = AgentCreate.model_validate(document)
         erreurs_d_une_version(corps.spec)
+        await check_agent_network(session, org_id, corps.spec)
         if (
             await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == corps.slug))
         ).first():
@@ -110,6 +123,7 @@ async def installer_skills_et_agents(
             kind=corps.kind,
             display_name=corps.display_name,
             description=corps.description,
+            tags=list(corps.tags),
             owner_id=None,
             status="active",
             # What the built-in catalogue installs is common to everyone (ADR 0061); a template's
@@ -126,8 +140,11 @@ async def installer_skills_et_agents(
                 spec=corps.spec.model_dump(mode="json"),
                 checksum=empreinte_de_l_agent(corps.spec),
                 created_by=provenance,
+                message=_install_message(provenance),
             )
         )
+        await session.flush()
+        await after_publish(session, None, agent, 1, auteur)
         await record(session, SYSTEM, "agent.create", org_id=org_id, target_type="agent",
                      target_id=agent.id, via=auteur)  # fmt: skip
         installes["agents"].append(corps.slug)

@@ -90,3 +90,23 @@ async def test_a_stranger_gets_what_the_implicit_agents_endpoint_gives(
         resolution = await anonymous.get(f"{base}/agent-resolution", params={"ref": "developer"})
     assert reference.status_code in {401, 403, 404}
     assert resolution.status_code == reference.status_code
+
+
+async def test_a_canary_agent_says_why_and_how_much(client: AsyncClient, project: dict[str, Any]) -> None:
+    """S40-02: the answer carries the source, the channel and the testing share (ADR 0071)."""
+    await _agent(
+        client,
+        "canary-agent",
+        release_policy={"on_publish": "candidate", "stable": {"require_candidate": True}},
+    )
+    assert (await client.post(f"{ORG}/agents/canary-agent/versions", json={})).status_code == 201
+    sent = await client.post(
+        f"{ORG}/agents/canary-agent/releases", json={"channel": "candidate", "version": 2, "percent": 10}
+    )
+    assert sent.status_code == 201, sent.text
+    answer = (await _resolve(client, project["id"], "canary-agent", "canary-agent@2")).json()
+    production, explicit = answer
+    assert (production["version"], production["source"], production["channel"]) == (1, "stable", "stable")
+    assert (production["candidate_version"], production["candidate_percent"]) == (2, 10)
+    assert production["pinned"] is False
+    assert (explicit["version"], explicit["source"], explicit["channel"]) == (2, "explicit", None)

@@ -38,6 +38,8 @@ export function CatalogueCard({
   badges,
   facts,
   footer,
+  icon,
+  titleLevel = "h2",
 }: {
   id: string;
   title: string;
@@ -46,7 +48,12 @@ export function CatalogueCard({
   badges?: ReactNode;
   facts?: ReactNode;
   footer?: ReactNode;
+  /** Drawn before the title (a connector's icon, ADR 0074); decorative, the title names the entry. */
+  icon?: ReactNode;
+  /** The heading level of the title: h3 when the cards sit under a heading of their own. */
+  titleLevel?: "h2" | "h3";
 }) {
+  const Title = titleLevel;
   return (
     <article
       className="raised flex w-full flex-col gap-3 rounded-md border border-line p-4"
@@ -54,9 +61,10 @@ export function CatalogueCard({
       aria-labelledby={`entry-title-${id}`}
     >
       <header className="space-y-1">
-        <h2 id={`entry-title-${id}`} className="text-sm font-semibold text-ink" data-donnee>
+        <Title id={`entry-title-${id}`} className="flex items-center gap-2 text-sm font-semibold text-ink" data-donnee>
+          {icon}
           {title}
-        </h2>
+        </Title>
         <p className="text-xs text-ink-muted" data-donnee>
           {publisher}
         </p>

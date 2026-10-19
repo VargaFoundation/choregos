@@ -4,6 +4,7 @@ catalogue:
   summary: Writes user-facing release notes from the specification and the diff; changes no file.
 agent:
   slug: release-notes-writer
+  tags: [release-notes, documentation, release]
   display_name: Release notes writer
   description: Writes the release notes of a change in a user's words — new, fixed, technical — and changes no file.
   spec:

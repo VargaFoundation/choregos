@@ -4,6 +4,7 @@ catalogue:
   summary: Drafts an agent (instructions, suggested skills, knowledge and connectors, a sample, eval cases) from a person's description; a person reviews it.
 agent:
   slug: agent-drafter
+  tags: [agent-authoring, drafting]
   display_name: Agent drafter
   description: Turns a description of what an agent should do into a first draft of its configuration. The draft is a proposal, never saved until a person creates the agent.
   spec:

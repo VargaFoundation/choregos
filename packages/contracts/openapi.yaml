@@ -197,6 +197,20 @@ paths:
       tags: [projects]
       operationId: suspendProject
       responses: { "200": { description: Suspended, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } } }
+  /projects/{id}/readiness:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [projects]
+      operationId: getProjectReadiness
+      description: |
+        What the project still lacks to run, computed by the API from stored state (provisioning, workflow,
+        each required capability, secrets, the GitHub installation, repository and measured checks, backend,
+        model profiles, budgets, people and human groups, notifications, a first request), each item saying who
+        can fix it. It reads the last connector tests and makes no network call, so a read is fast. The settings
+        page, the overview, the CLI and the MCP door all show this one list. Needs `project:read`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectReadiness" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/connectors:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -261,6 +275,85 @@ paths:
       description: What the project's active workflows require of its connectors, and why; the connector that covers each capability, otherwise the platform's default type (ADR 0034).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectRequirement" } } } } }
+  /orgs/{org}/github:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [connectors]
+      operationId: getGitHubAppStatus
+      description: |
+        The Choregos GitHub App as this organisation sees it (ADR 0073): whether the deployment has an App,
+        the link that installs it, and the installations this organisation has claimed. An installation
+        another organisation claimed is never listed. Nobody types an installation id: it is discovered.
+        Needs `connector:write` on a project of the organisation, or the organisation's administrator.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppStatus" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/github/refresh:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [connectors]
+      operationId: refreshGitHubInstallations
+      description: Resync the App's installations from GitHub (`GET /app/installations`), then answer the status. Same permission as the status.
+      responses:
+        "200": { description: Resynced, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppStatus" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { description: "GitHub did not answer, or refused the App's credentials" }
+  /orgs/{org}/github/repositories:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: q, in: query, description: "Substring of the repository's full name", schema: { type: string } }
+      - { name: installation, in: query, description: "Restrict to one installation id", schema: { type: integer } }
+      - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    get:
+      tags: [connectors]
+      operationId: listGitHubRepositories
+      description: The repositories the organisation's claimed installations can see. It feeds the repository picker of a connector form. Same permission as the status.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubRepositoryPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/github/install-link:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [connectors]
+      operationId: createGitHubInstallLink
+      description: |
+        The URL that installs the App on a GitHub account. It carries a short-lived signed `state`
+        (organisation, project, user, `return_to`) that GitHub hands back to the Setup URL
+        (`GET /github/setup`). Same permission as the status. 409 when the deployment has no App.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/GitHubInstallLinkRequest" } } }
+      responses:
+        "200": { description: The link, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubInstallLink" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /github/setup:
+    get:
+      tags: [connectors]
+      operationId: githubAppSetup
+      description: |
+        The GitHub App's Setup URL: a browser redirect after an installation. GitHub sends
+        `installation_id`, `setup_action`, our `state` and, when the App requests user authorization,
+        `code`. The API checks the state (signature, expiry, the session's user), upserts the
+        installation, claims it for the organisation in the state (ADR 0073), and redirects to the
+        state's `return_to`. Not a JSON endpoint.
+      security:
+        - session: []
+      parameters:
+        - { name: installation_id, in: query, required: true, schema: { type: integer } }
+        - { name: setup_action, in: query, schema: { type: string, enum: [install, update, request] } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, description: "OAuth code, present when the App requests user authorization during installation", schema: { type: string } }
+      responses:
+        "302": { description: "Redirect to the state's `return_to` (the claim's outcome is carried in the `github` query parameter)" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -354,7 +447,7 @@ paths:
     get:
       tags: [connectors]
       operationId: listMcpCatalogue
-      description: The catalogue of well-known MCP servers shipped with the platform (ADR 0065) and, for each, what it means in this organisation — available, installed (the connectors that carry it) or updatable. Listing enables nothing. Its members can read it.
+      description: The catalogue of well-known MCP servers shipped with the platform (ADR 0065) and, for each, what it means in this organisation — available, installed (the connectors that carry it) or updatable. Listing enables nothing. Any member of the organisation can read it (an organisation role or only a project role); each entry says what the caller may do (ADR 0074).
       parameters:
         - { name: q, in: query, required: false, schema: { type: string }, description: "free text over the id, the title, the publisher and the description" }
         - { name: category, in: query, required: false, schema: { type: string } }
@@ -379,6 +472,49 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/connector-catalogue:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [connectors]
+      operationId: listConnectorCatalogue
+      description: The connector types the platform knows (the adapter registry, platform plumbing and test fakes left out), by family, with where each is installed or configured in this organisation and what the caller may do with it (ADR 0074). Any member of the organisation can read it; it holds no secret.
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: "free text over the kind, the type, the display name and the family" }
+        - { name: family, in: query, required: false, schema: { type: string } }
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [organisation, project] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorCatalogue" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /projects/{id}/org-connectors:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [connectors]
+      operationId: listProjectOrgConnectors
+      description: The organisation's connectors and whether each is on for this project, with what the caller may switch (ADR 0074). The project's members can read it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectOrgConnector" } } } } }
+  /projects/{id}/org-connectors/{connector}/enablement:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: connector, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [connectors]
+      operationId: enableOrgConnector
+      description: Turns an organisation connector on for this project (idempotent). Only for a connector whose availability is `selected_projects` (409 otherwise). The project's owner or the organisation's administrator (ADR 0074).
+      responses:
+        "200": { description: On, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectOrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [connectors]
+      operationId: disableOrgConnector
+      description: Turns it off for this project; turning off one that is not on changes nothing (204). 409 when the connector is available to every project.
+      responses:
+        "204": { description: Off }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/connectors/{name}/operations/{operation}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -649,6 +785,18 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyDef" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/network:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [workflows]
+      operationId: getProjectNetwork
+      description: >-
+        What the project's runs may reach (ADR 0070): the project's own `sandbox.network`, the organisation's network
+        ceiling, and the effective allow and deny lists (the repository host is implied) after the ceiling is applied.
+        `clamps` lists what the ceiling brought down.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectNetwork" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /platform/models:
     get:
       tags: [models]
@@ -1133,6 +1281,8 @@ paths:
         - { name: q, in: query, required: true, schema: { type: string } }
         - { name: k, in: query, schema: { type: integer, default: 10, maximum: 100 } }
         - { name: kinds, in: query, schema: { type: array, items: { type: string } }, style: form, explode: false }
+        - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
+        - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
   /projects/{id}/memory/pending:
@@ -1140,11 +1290,17 @@ paths:
     get:
       tags: [memory]
       operationId: listPendingMemory
+      parameters:
+        - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
+        - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
     post:
       tags: [memory]
       operationId: decidePendingMemory
+      parameters:
+        - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
+        - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/MemoryDecision" } } }
@@ -1167,6 +1323,125 @@ paths:
         - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 52, default: 4 } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAbReport" } } } }
+  /orgs/{org}/memories:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [memory]
+      operationId: listMemories
+      description: "The named memories the caller sees (S40-11, ADR 0075): global ones with their reach, project ones of their projects. `used_by` lists the agents whose latest version binds each."
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [global, project] } }
+        - { name: project, in: query, schema: { type: string }, description: only the memories of this project (a project memory) or reaching it }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MemoryStore" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [memory]
+      operationId: createGlobalMemory
+      description: A global memory, curated by an organisation administrator (`agent:manage`), with a reach. `shared` and `own` are reserved.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStoreCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/memories/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [memory]
+      operationId: getMemory
+      description: A global memory. One the caller may not see is 404.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [memory]
+      operationId: updateMemory
+      description: Renames it, changes its reach, archives it. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStorePatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/memories/{slug}/search:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [memory]
+      operationId: searchGlobalMemory
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: k, in: query, schema: { type: integer, default: 10, maximum: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/memories/{slug}/pending:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [memory]
+      operationId: listGlobalPendingMemory
+      description: What agents proposed to this global memory, waiting for an administrator (`agent:manage`). A global memory only ever receives proposals.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [memory]
+      operationId: decideGlobalPendingMemory
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryDecision" } } }
+      responses:
+        "200": { description: OK }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/memories:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [memory]
+      operationId: listProjectMemories
+      description: "What a run of this project may bind (S40-11): the implicit `shared` and `own` (`implicit: true`), the project's named memories, and the global ones that reach it."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MemoryStore" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [memory]
+      operationId: createProjectMemory
+      description: A named memory of this project, read by its runs only. `project:write`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectMemoryCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/memories/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [memory]
+      operationId: updateProjectMemory
+      description: Renames or archives a named memory of this project (`project:write`). It has no reach to change.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStorePatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStore" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/costs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1461,6 +1736,22 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyCeilingState" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/network-activity:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getNetworkActivity
+      description: >-
+        Which hosts the organisation's runs reached or were refused (ADR 0070), grouped by host, layer, decision and
+        reason. `org_admin` or `audit:read`.
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time }, description: "defaults to the last 24 hours" }
+        - { name: decision, in: query, schema: { type: string, enum: [allowed, denied, rate_limited, unreachable] } }
+        - { name: project, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/NetworkActivity" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /orgs/{org}/members:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1506,6 +1797,7 @@ paths:
       parameters:
         - { name: scope, in: query, required: false, schema: { type: string, enum: [platform, org, project, personal] } }
         - { name: project, in: query, required: false, schema: { type: string }, description: "a project's slug: only the agents that project owns" }
+        - { name: tag, in: query, required: false, style: form, explode: true, schema: { type: array, items: { type: string } }, description: "repeatable: only the agents carrying every tag given (AND, S40-10); applied after visibility, so a tag never reveals an agent the caller cannot see" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
     post:
@@ -1799,13 +2091,50 @@ paths:
       operationId: publishAgentVersion
       parameters:
         - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open a remote agent's card host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
-      description: Publish the next version; none is ever rewritten.
+      description: "Superseded by `publishAgentVersionWithMessage` (a message, a base version); kept as is for the clients written before, which publish with no message. Publish the next version; none is ever rewritten."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSpec" } } }
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
         "409": { description: "A case of the agent's eval suite fails (S32-03): `errors` names each failing case; or, for a remote agent, `code: egress_required` when its card host is not yet allowed", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/agents/{slug}/versions/publish:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: publishAgentVersionWithMessage
+      parameters:
+        - { name: allow_egress, in: query, schema: { type: boolean, default: false }, description: "open a remote agent's card host in the organisation's egress allowlist in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
+      description: "Publish the next version with the author's message, from the version they read (`base_version`). 409 `stale_base` when the latest is no longer that version (the problem carries `latest_version` and `latest_author`); 409 `no_change` when the spec's checksum equals the latest's; 409 `eval_failed` when a case of the eval suite fails. Same rights and checks as `publishAgentVersion`. Audited (`agent.publish`)."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersionPublish" } } }
+      responses:
+        "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`code` is `stale_base`, `no_change`, `eval_failed` or, for a remote agent whose card host is not yet allowed, `egress_required`", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/versions/{version}/restore:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [agents]
+      operationId: restoreAgentVersion
+      description: "Copy version N byte for byte (same spec, same checksum) as the next version, with `restored_from` = N and a default message `Restore vN`. Nothing is rewritten or deleted: a restore appends. Same 409s and eval gate as a publication; restoring the current spec is `no_change`. An unknown version is a 404. Audited (`agent.publish` with `restored_from`)."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersionRestore" } } }
+      responses:
+        "201": { description: The new version, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`code` is `stale_base`, `no_change` or `eval_failed`", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/versions/{version}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1816,6 +2145,151 @@ paths:
       operationId: getAgentVersion
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/releases:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listAgentReleases
+      description: Every move of the agent's channels, newest first — the release history (ADR 0071).
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200": { description: The history, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentRelease" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [agents]
+      operationId: releaseAgentVersion
+      description: >-
+        Point a channel at a revision (ADR 0071). `candidate` sends it to testing, with a canary share;
+        `version: null` withdraws the candidate. `stable` releases to production: it checks the eval suite
+        again, the candidate's record against the agent's gates, needs a person (human session) with a
+        sign-in younger than the policy's `step_up_minutes` (not for a personal agent), and the plugin
+        gesture `agent.release`. Rolling back to a revision that was in production skips the gates. 409
+        lists the failing checks in `errors` (`type: release_check_failed`); 401 `step_up_required` asks
+        for a fresh sign-in. With `release_policy.stable.approvals` above 0, a promotion (not a rollback)
+        is stored as `pending_approval` and production does not move until enough people approve
+        (`409` if one already waits). Audited (`agent.release`, or `agent.release.request`). Needs the
+        right to release the agent.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseCreate" } } }
+      responses:
+        "201": { description: The move, as recorded, content: { application/json: { schema: { $ref: "#/components/schemas/AgentRelease" } } } }
+        "401": { description: A fresh authentication is needed (`step_up_required`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/releases/{release_id}/decision:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: release_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: decideAgentRelease
+      description: >-
+        Approve, reject or cancel a release that waits for approval (ADR 0071). Needs the right to release
+        the agent and a human session. Approving also needs a sign-in younger than `step_up_minutes` and,
+        with `separation_of_duties`, being neither the requester nor the revision's author (`422`); a
+        person approves once (`409`). The last approval re-checks the revision and moves production from
+        the revision the request saw: production moved meanwhile gives `409` and the request becomes
+        `superseded`. A rejection needs a reason; the requester or an org_admin cancels. Audited
+        (`agent.release.decide`, then `agent.release`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseDecision" } } }
+      responses:
+        "200": { description: The release after the decision, content: { application/json: { schema: { $ref: "#/components/schemas/AgentRelease" } } } }
+        "401": { description: A fresh authentication is needed (`step_up_required`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agent-releases:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listOrgAgentReleases
+      description: Releases of the agents the caller may see, newest first; `status=pending_approval` is the approver's inbox.
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [done, pending_approval, rejected, cancelled, superseded] } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200": { description: The releases, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentRelease" } } } } }
+  /orgs/{org}/agents/{slug}/versions/{version}/readiness:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [agents]
+      operationId: getAgentReleaseReadiness
+      description: What releasing this revision to a channel would check, without doing it — the checklist the console shows before "Promote".
+      parameters:
+        - { name: channel, in: query, required: false, schema: { type: string, enum: [stable, candidate], default: stable } }
+      responses:
+        "200": { description: The checks, content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleaseReadiness" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/versions/{version}/evaluations:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [agents]
+      operationId: startAgentEvaluation
+      description: >-
+        Run the revision's `live` eval cases as capped trials in a project (ADR 0071, live evaluation).
+        Needs the right to try the agent in that project. Each trial is capped at the case's
+        `max_cost_usd` (0.25 $ by default, 0.50 $ at most); `409` when the cases together could spend
+        more than the policy's `max_eval_usd`, when the revision has no live case, or more than 10.
+        Without a model to call (no gateway key) the evaluation is `not_run`. Audited
+        (`agent.evaluation.start`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentEvaluationCreate" } } }
+      responses:
+        "201": { description: The evaluation, started, content: { application/json: { schema: { $ref: "#/components/schemas/AgentEvaluation" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    get:
+      tags: [agents]
+      operationId: listAgentEvaluations
+      description: The live evaluations of the revision, newest first, each judged from its runs as they stand.
+      responses:
+        "200": { description: The evaluations, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentEvaluation" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/release-policy:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [agents]
+      operationId: setAgentReleasePolicy
+      description: What saving a revision does (`on_publish`) and the gates of production. Loosening the policy needs a person with a fresh sign-in. Audited (`agent.release_policy`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleasePolicy" } } }
+      responses:
+        "200": { description: The agent, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "401": { description: A fresh authentication is needed (`step_up_required`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/exposure:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgentExposure
+      description: Production, testing and the projects (among those the caller may read) that chose their own revision.
+      responses:
+        "200": { description: Who is served what, content: { application/json: { schema: { $ref: "#/components/schemas/AgentExposure" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agent-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -2307,8 +2781,9 @@ paths:
       operationId: resolveProjectAgents
       description: >-
         Which agent version a run would load for each reference (`slug` or `slug@N`), through the
-        runtime's own resolver: an explicit `@N`, else the project's pin, else the latest version
-        (ADR 0033). Read only. The console builds the list from the `agent` of the process steps,
+        runtime's own resolver: an explicit `@N`, else the project's fixed pin, else its pin on a channel,
+        else the project's "follow testing" switch, else production (ADR 0071; a canary share depends on
+        the work item, so it is reported in `candidate_percent`, not applied). Read only. The console builds the list from the `agent` of the process steps,
         so it works on a draft too (S39-13).
       parameters:
         - name: ref
@@ -2323,6 +2798,24 @@ paths:
         "200": { description: One answer per reference, in the order asked, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentResolution" } } } } }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/agent-channel:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [agents]
+      operationId: getProjectAgentChannel
+      description: Which channel of the agents the project runs when it pins nothing (ADR 0071).
+      responses:
+        "200": { description: The channel, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentChannel" } } } }
+    put:
+      tags: [agents]
+      operationId: setProjectAgentChannel
+      description: Make the project run the agents' testing revisions (`candidate`) or their production (`stable`). `project:write`. Audited (`project.agent_channel`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentChannel" } } }
+      responses:
+        "200": { description: The channel, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentChannel" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /projects/{id}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -2330,7 +2823,7 @@ paths:
     put:
       tags: [agents]
       operationId: pinProjectAgent
-      description: "Pin a version; an override that widens the version gets 422, and so does a personal agent or another project's agent (ADR 0061). 403 carries the reason; an agent the caller may not see is a 404."
+      description: "Pin a fixed revision (`version`) or follow a channel (`channel`), exactly one of the two; an override that widens the revision gets 422, and so does a personal agent or another project's agent (ADR 0061). 403 carries the reason; an agent the caller may not see is a 404."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentPut" } } }
@@ -2614,6 +3107,19 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchRequest" } } }
       responses:
         "200": { description: Citations, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchResult" } } } }
+  /internal/runs/{id}/memory/search:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: searchRunMemory
+      description: "The sidecar's `search_memory` (S40-11, ADR 0075): searches the memories the run's StageInput resolved, and no others, each under the read timeout (one that fails contributes nothing). `memory` names one by label; a label the run does not read is 404."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RunMemorySearch" } } }
+      responses:
+        "200": { description: Hits, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RunMemoryHit" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/runs/{id}/ticket:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2644,6 +3150,37 @@ paths:
                     version: { type: integer }
                     digest: { type: string }
                     files: { type: object, additionalProperties: { type: string }, description: "path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text" }
+  /internal/runs/{id}/network:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunNetwork
+      description: >-
+        The network THIS run may use (ADR 0070): the agent's hosts narrowed by the project's and the organisation's,
+        plus the repository host. Read by the egress proxy with the run's own token; a token of another run is refused.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunNetwork" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /internal/runs/{id}/network/decisions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunNetworkDecisions
+      description: >-
+        What the egress proxy or the runner let through or refused for this run. Counters are CUMULATIVE per
+        (layer, host, decision, reason): a replayed batch replaces the totals and never adds twice. The first
+        `denied` of a host for the run is journaled as `choregos.network.denied`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/NetworkDecisionBatch" } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { type: object, required: [accepted], properties: { accepted: { type: integer } } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /internal/runs/{id}/inputs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3004,6 +3541,9 @@ components:
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }
+        code: { type: string, description: "A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12)" }
+        latest_version: { type: integer, description: "On `stale_base` and `no_change`: the agent's latest version" }
+        latest_author: { type: [string, "null"], description: "On `stale_base`: who published the latest version" }
     PageMeta:
       type: object
       required: [has_more]
@@ -3171,6 +3711,60 @@ components:
               name: { type: string }
               ok: { type: boolean }
               detail: { type: [string, "null"] }
+    GitHubInstallation:
+      type: object
+      required: [id, account_login, account_type, repository_selection, suspended, claimed, settings_url]
+      properties:
+        id: { type: integer, description: "GitHub's installation id; discovered, never typed" }
+        account_login: { type: string }
+        account_type: { type: string, enum: [Organization, User] }
+        repository_selection: { type: string, enum: [all, selected] }
+        suspended: { type: boolean }
+        claimed: { type: boolean, description: "Claimed by the organisation asking" }
+        settings_url: { type: string, description: "Where to change the installation's repositories on github.com" }
+    GitHubAppStatus:
+      type: object
+      required: [configured, multi_org_claim, installations]
+      properties:
+        configured: { type: boolean, description: "The deployment has a GitHub App (`CHOREGOS_GITHUB_APP_ID` and key)" }
+        app_slug: { type: [string, "null"], description: "Read from GitHub (`GET /app`), never configured" }
+        app_name: { type: [string, "null"] }
+        install_url: { type: [string, "null"], description: "Installs the App on a GitHub account, without a state; use install-link to come back to the console" }
+        multi_org_claim:
+          type: string
+          enum: [implicit, oauth, unavailable]
+          description: "How an installation is claimed: implicit (a single-organisation instance), oauth (several organisations, proof by GitHub user authorization), unavailable (several organisations and no OAuth client secret)"
+        installations:
+          type: array
+          items: { $ref: "#/components/schemas/GitHubInstallation" }
+    GitHubRepository:
+      type: object
+      required: [full_name, private, default_branch, installation_id]
+      properties:
+        full_name: { type: string, description: "owner/repo" }
+        private: { type: boolean }
+        default_branch: { type: string }
+        installation_id: { type: integer }
+    GitHubRepositoryPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/GitHubRepository" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    GitHubInstallLinkRequest:
+      type: object
+      required: [return_to]
+      additionalProperties: false
+      properties:
+        project: { type: [string, "null"], description: "Project slug the person came from" }
+        return_to: { type: string, description: "A path of the console (starts with `/`), where the setup callback sends the person back" }
+    GitHubInstallLink:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
     ConnectorType:
       type: object
       required: [kind, type, display, config_schema]
@@ -3218,6 +3812,60 @@ components:
         created_by: { type: [string, "null"] }
         catalogue_entry: { type: [string, "null"], description: "`<id>@<catalogue_version>` when it was installed from the MCP catalogue (ADR 0065)" }
         operations: { type: array, items: { $ref: "#/components/schemas/ConnectorOperation" } }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
+        enabled_projects: { type: array, items: { type: string }, description: "the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074)" }
+    ConnectorAvailability:
+      type: string
+      enum: [all_projects, selected_projects]
+      description: "`all_projects`: every project whose groups match reaches it (the default). `selected_projects`: only the projects it is enabled for (ADR 0074)."
+    CataloguePermissions:
+      type: object
+      description: What the caller may do with a catalogue entry, decided by the server (ADR 0074). The console never derives it from a role.
+      required: [install, configure_projects, enable_projects]
+      properties:
+        install: { type: boolean, description: "declare it in the organisation" }
+        configure_projects: { type: array, items: { type: string }, description: "project-scope types: the projects whose settings the caller may set" }
+        enable_projects: { type: array, items: { type: string }, description: "the projects where the caller may turn an installed organisation connector on or off" }
+    ConnectorEnablement:
+      type: object
+      required: [connector, availability, enabled_projects]
+      properties:
+        connector: { type: string }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
+        enabled_projects: { type: array, items: { type: string }, description: "among the projects the caller sees; empty with all_projects" }
+    ConnectorCatalogueEntry:
+      type: object
+      required: [kind, type, display, family, scope, capabilities, secret_fields, operations, installed_as, configured_in, enablement, can]
+      properties:
+        kind: { type: string }
+        type: { type: string }
+        display: { type: string }
+        family: { type: string, description: "Source code, Work trackers, CI, Deployment, Documents, Directory, Network operations, Notifications, MCP servers, or Other" }
+        scope: { type: string, enum: [organisation, project], description: "an organisation connector is installed by the administrator; a project connector is configured in the project's settings" }
+        capabilities: { type: array, items: { type: string } }
+        secret_fields: { type: array, items: { type: string }, description: "field names only, never values" }
+        operations: { type: integer, description: "operations the type declares; an MCP server discovers its own (0)" }
+        installed_as: { type: array, items: { type: string }, description: "names of the organisation connectors of this type" }
+        configured_in: { type: array, items: { type: string }, description: "slugs of the projects, among those the caller sees, that configure this type" }
+        enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" } }
+        can: { $ref: "#/components/schemas/CataloguePermissions" }
+        cannot_reason: { type: [string, "null"], description: "the server's sentence when the caller may do nothing here" }
+    ConnectorCatalogue:
+      type: object
+      required: [entries]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/ConnectorCatalogueEntry" } }
+    ProjectOrgConnector:
+      type: object
+      required: [name, kind, type, availability, enabled, can_toggle]
+      properties:
+        name: { type: string }
+        kind: { type: string }
+        type: { type: string }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
+        enabled: { type: boolean }
+        can_toggle: { type: boolean, description: "the caller may turn it on or off here: availability is selected_projects and the caller owns the project or administers the organisation" }
+        cannot_reason: { type: [string, "null"] }
     CatalogueMeta:
       type: object
       description: Provenance shared by the platform's catalogues (ADR 0065) — which file, built when, from what.
@@ -3240,7 +3888,7 @@ components:
         protocol: { type: string, enum: [streamable-http, sse] }
     McpCatalogueEntry:
       type: object
-      required: [id, title, description, publisher, official, reference, transport, auth, install, categories, state, egress]
+      required: [id, title, description, publisher, official, reference, transport, auth, install, categories, state, egress, can]
       properties:
         id: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
         title: { type: string }
@@ -3266,6 +3914,9 @@ components:
         state: { type: string, enum: [available, installed, update] }
         installed_as: { type: array, items: { type: string }, description: "names of the org connectors created from this entry" }
         egress: { type: string, enum: [open, undeclared, unknown], description: "whether the deployment declares the host reachable from the API" }
+        can: { $ref: "#/components/schemas/CataloguePermissions" }
+        cannot_reason: { type: [string, "null"], description: "why the entry cannot be installed by the caller: the server's sentence" }
+        enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" }, description: "one per installed instance of this entry" }
         procedure: { type: [string, "null"], description: "the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067)" }
     McpCatalogueInstall:
       type: object
@@ -3274,6 +3925,7 @@ components:
         secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a literal is refused" }
         secret_values: { type: object, additionalProperties: { type: string }, description: "the credential typed once, sealed at rest and never returned (ADR 0058); give this or `secret_refs.token`" }
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability", description: "defaults to all_projects through the API; the console proposes selected_projects (ADR 0074)" }
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     SkillCatalogueInstall:
       type: object
@@ -3326,6 +3978,7 @@ components:
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
         secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058)" }
+        availability: { $ref: "#/components/schemas/ConnectorAvailability" }
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     OrgConnectorUpdate:
       type: object
@@ -3334,6 +3987,7 @@ components:
         config: { type: [object, "null"], additionalProperties: true }
         secret_refs: { type: [object, "null"], additionalProperties: { type: string } }
         secret_values: { type: [object, "null"], additionalProperties: { type: string }, writeOnly: true }
+        availability: { oneOf: [{ $ref: "#/components/schemas/ConnectorAvailability" }, { type: "null" }], description: "the organisation's administrator only; switching to selected_projects turns it on for no project (ADR 0074)" }
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     OperationPatch:
       type: object
@@ -3433,6 +4087,44 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
         journal: { type: array, items: { $ref: "#/components/schemas/ActionEffect" } }
+    ReadinessFix:
+      type: object
+      required: [by]
+      properties:
+        href: { type: [string, "null"], description: "Where it is fixed: a console path, with an `#anchor` to the field" }
+        by:
+          type: string
+          enum: [project_owner, org_admin, platform_operator, external]
+          description: "Who can do it: the project's owner, the organisation's administrator, the platform's operator, or someone outside Choregos (an identity provider, a vendor)"
+    ReadinessItem:
+      type: object
+      required: [id, section, title, state, detail, fix]
+      properties:
+        id: { type: string, description: "Stable, e.g. `provisioned`, `connector-cd`, `connector-cd-secrets`, `people-release-captain`, `notifications`" }
+        section: { type: string, enum: [general, connections, agents, guardrails, people, notifications, tools] }
+        title: { type: string }
+        state:
+          type: string
+          enum: [done, check, todo, not_needed]
+          description: "done: nothing to do. check: works but deserves a look (a demo stand-in, a stale test, an unmeasured check). todo: the project cannot run as intended. not_needed: its workflows do not need it"
+        detail: { type: string, description: "Why, in a sentence" }
+        fix: { $ref: "#/components/schemas/ReadinessFix" }
+    ReadinessSummary:
+      type: object
+      required: [done, check, todo]
+      properties:
+        done: { type: integer, minimum: 0 }
+        check: { type: integer, minimum: 0 }
+        todo: { type: integer, minimum: 0 }
+    ProjectReadiness:
+      type: object
+      required: [ready, summary, items]
+      properties:
+        ready: { type: boolean, description: "No item is `todo`" }
+        summary: { $ref: "#/components/schemas/ReadinessSummary" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReadinessItem" }
     ProjectRequirement:
       type: object
       required: [capability, reasons]
@@ -3603,7 +4295,13 @@ components:
         mcp_servers: { type: array, items: { type: object, required: [connector], properties: { connector: { type: string }, tools: { type: array, items: { type: string } } } } }
         knowledge: { type: array, description: "the knowledge bases the agent reads (ADR 0051); each must be served to the run's project", items: { type: object, required: [slug], properties: { slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } } } }
         evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalCase" }, description: "The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published" }
-        memory: { type: string, enum: [none, project, agent], default: project, description: "whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none" }
+        memory: { type: string, enum: [none, project, agent], default: project, description: "SUPERSEDED by `memories` (S40-11): read only when `memories` is absent. Whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none" }
+        memories:
+          oneOf:
+            - { type: array, maxItems: 8, items: { $ref: "#/components/schemas/AgentMemoryBinding" } }
+            - { type: "null" }
+          description: "The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422."
+        network: { $ref: "#/components/schemas/AgentNetwork" }
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
@@ -3720,6 +4418,157 @@ components:
       properties:
         name: { type: string }
         digest_pinned: { type: boolean, description: "the reference carries an `@sha256:` digest" }
+    AgentMemoryBinding:
+      type: object
+      required: [scope, slug]
+      properties:
+        scope: { type: string, enum: [global, project], description: "`global`: the organisation's memory; `project`: a memory of whichever project the run is in (`shared`, `own`, or a named one)" }
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        mode: { type: string, enum: [read, write], default: read }
+    RunMemorySearch:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query: { type: string, minLength: 1, maxLength: 2000 }
+        k: { type: integer, minimum: 1, maximum: 20, default: 5 }
+        memory: { type: [string, "null"], description: "one memory of the run, by label (`global:security-lessons`); absent, all of them" }
+    RunMemoryHit:
+      type: object
+      required: [memory, kind, subject, content]
+      properties:
+        memory: { type: string, description: the label of the memory the hit came from }
+        kind: { type: string }
+        subject: { type: string }
+        content: { type: string }
+        score: { type: [number, "null"] }
+    MemoryStoreUser:
+      type: object
+      required: [agent, version]
+      properties:
+        agent: { type: string }
+        version: { type: integer }
+    MemoryStore:
+      type: object
+      required: [slug, display_name, scope]
+      properties:
+        slug: { type: string }
+        display_name: { type: string }
+        description: { type: [string, "null"] }
+        scope: { type: string, enum: [global, project] }
+        project: { type: [string, "null"], description: "the project's slug, for a project memory" }
+        reach: { type: [string, "null"], enum: [org, projects, null], description: "for a global memory: whose runs read it" }
+        projects: { type: array, items: { type: string } }
+        status: { type: string, enum: [active, archived], default: active }
+        implicit: { type: boolean, default: false, description: "`shared` and `own`: every project has them, they are not rows" }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        used_by: { type: array, items: { $ref: "#/components/schemas/MemoryStoreUser" }, description: "visible agents whose latest version binds it" }
+    MemoryStoreCreate:
+      type: object
+      required: [slug, display_name]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        reach: { type: string, enum: [org, projects], default: org }
+        projects: { type: array, items: { type: string }, description: "required, non-empty, when `reach` is `projects`" }
+    ProjectMemoryCreate:
+      type: object
+      required: [slug, display_name]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+    MemoryStorePatch:
+      type: object
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        reach: { type: string, enum: [org, projects] }
+        projects: { type: array, items: { type: string } }
+        status: { type: string, enum: [active, archived] }
+    AgentNetwork:
+      type: object
+      description: >-
+        What one agent version may reach (ADR 0070). It can only narrow the project's and the organisation's network:
+        a host they do not allow refuses the publication (422) and the run.
+      properties:
+        domains: { type: [array, "null"], items: { type: string }, description: "null: the project's list; []: no internet; a list: only these hosts (`example.com` = it and its subdomains, `*.example.com` = subdomains only)" }
+        per_host_per_minute: { type: [integer, "null"], minimum: 1, description: "new connections a run may open to one host per minute" }
+        builtin_web_tools: { type: [boolean, "null"], description: "false switches the agent CLI's own WebFetch and WebSearch off; null or true: as the policy says" }
+    RunNetwork:
+      type: object
+      required: [run_id, allow, deny, implied, builtin_web_tools, listed, org, project]
+      properties:
+        run_id: { type: string }
+        allow: { type: array, items: { type: string } }
+        deny: { type: array, items: { type: string } }
+        implied: { type: array, items: { type: string }, description: "hosts the run needs to work at all (the project's repository host)" }
+        per_host_per_minute: { type: [integer, "null"] }
+        per_run_per_minute: { type: [integer, "null"] }
+        org_per_host_per_minute: { type: [integer, "null"], description: "the organisation's cap, counted across all its runs" }
+        builtin_web_tools: { type: boolean }
+        listed: { type: boolean, description: "always true today: an empty allow list means no internet" }
+        org: { type: string }
+        project: { type: string }
+        agent: { type: [string, "null"] }
+    NetworkDecisionIn:
+      type: object
+      required: [layer, host, decision]
+      properties:
+        layer: { type: string, enum: [proxy, runner] }
+        host: { type: string, maxLength: 253 }
+        port: { type: integer, minimum: 0, maximum: 65535, default: 0 }
+        decision: { type: string, enum: [allowed, denied, rate_limited, unreachable] }
+        reason: { type: string, maxLength: 200, default: "" }
+        count: { type: integer, minimum: 1, default: 1 }
+        bytes_up: { type: integer, minimum: 0, default: 0 }
+        bytes_down: { type: integer, minimum: 0, default: 0 }
+        first_at: { type: [string, "null"], format: date-time }
+        last_at: { type: [string, "null"], format: date-time }
+    NetworkDecisionBatch:
+      type: object
+      required: [decisions]
+      properties:
+        decisions: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/NetworkDecisionIn" } }
+    EffectiveNetwork:
+      type: object
+      required: [allow, deny, implied, builtin_web_tools]
+      properties:
+        allow: { type: array, items: { type: string } }
+        deny: { type: array, items: { type: string } }
+        implied: { type: array, items: { type: string } }
+        per_host_per_minute: { type: [integer, "null"] }
+        per_run_per_minute: { type: [integer, "null"] }
+        org_per_host_per_minute: { type: [integer, "null"] }
+        builtin_web_tools: { type: boolean }
+    ProjectNetwork:
+      type: object
+      required: [policy, effective, clamps]
+      properties:
+        policy: { type: object, additionalProperties: true, description: "the project's `sandbox.network`, as stored" }
+        ceiling: { type: [object, "null"], additionalProperties: true, description: "the organisation's `network` ceiling, null when it sets none" }
+        effective: { $ref: "#/components/schemas/EffectiveNetwork" }
+        clamps: { type: array, items: { type: string } }
+    NetworkActivityRow:
+      type: object
+      required: [host, layer, decision, reason, count, runs, projects, agents, last_at]
+      properties:
+        host: { type: string }
+        layer: { type: string, description: "proxy, runner, broker or platform" }
+        decision: { type: string }
+        reason: { type: string }
+        count: { type: integer }
+        runs: { type: integer }
+        projects: { type: array, items: { type: string } }
+        agents: { type: array, items: { type: string } }
+        last_at: { type: string, format: date-time }
+    NetworkActivity:
+      type: object
+      required: [rows]
+      properties:
+        rows: { type: array, items: { $ref: "#/components/schemas/NetworkActivityRow" } }
     AgentEvalCase:
       type: object
       description: A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not.
@@ -3729,6 +4578,9 @@ components:
         input: { $ref: "#/components/schemas/AgentSampleInput" }
         must_contain: { type: array, items: { type: string } }
         must_not_contain: { type: array, items: { type: string } }
+        live: { type: boolean, default: false, description: "a live case runs as a capped trial on the real model and asserts on the run's result (S40-02d); the level-1 gate leaves it out" }
+        expect_status: { type: string, enum: [done, blocked], default: done, description: the status the run's result must have }
+        max_cost_usd: { type: [number, "null"], exclusiveMinimum: 0, maximum: 0.5, description: "what this case's trial may spend; absent, 0.25 $" }
     AgentSampleInput:
       type: object
       description: A sample work item an agent is tried or evaluated on.
@@ -3764,6 +4616,12 @@ components:
         budget_usd: { type: number }
         status: { type: string }
         evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalResult" } }
+    AgentTags:
+      type: array
+      maxItems: 10
+      uniqueItems: true
+      items: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,31}$" }
+      description: Labels people find the agent by (S40-10); never part of a version
     AgentCreate:
       type: object
       required: [slug, display_name]
@@ -3776,6 +4634,9 @@ components:
         lifecycle: { type: string, enum: [draft, active], default: active, description: a draft is neither pinned nor run until it is activated }
         scope: { type: string, enum: [org, project, personal], default: org, description: "who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue" }
         project: { type: [string, "null"], description: "the project's slug: required for, and only for, a `project` agent" }
+        tags: { $ref: "#/components/schemas/AgentTags" }
+        message: { type: [string, "null"], maxLength: 500, description: "why version 1 exists; absent, `Created` (S40-12)" }
+        release_policy: { oneOf: [{ $ref: "#/components/schemas/AgentReleasePolicy" }, { type: "null" }], description: "what saving a revision does (ADR 0071); absent, the defaults: it goes to production" }
     AgentFork:
       type: object
       required: [slug, scope]
@@ -3785,6 +4646,7 @@ components:
         scope: { type: string, enum: [org, project, personal] }
         project: { type: [string, "null"], description: "required for, and only for, a `project` fork" }
         version: { type: [integer, "null"], minimum: 1, description: "the source version to copy; absent, its latest" }
+        message: { type: [string, "null"], maxLength: 500, description: "why version 1 exists; absent, `Forked from <slug>@<version>` (S40-12)" }
     AgentScopeChange:
       type: object
       required: [scope]
@@ -3809,6 +4671,7 @@ components:
         publish: { type: boolean, description: "publish a version, edit it, move it through its life" }
         manage: { type: boolean, description: "suspend, revoke, change its owner, attach clients" }
         pin: { type: boolean, description: pin it on a project the caller owns }
+        release: { type: boolean, description: "send a revision to testing or production, roll back (ADR 0071)" }
         fork_scopes: { type: array, items: { type: string, enum: [org, project, personal] } }
     AgentDraftRequest:
       type: object
@@ -3841,6 +4704,7 @@ components:
         summary: { type: string }
         version: { type: integer, description: the catalogue's version of the entry }
         skills: { type: array, items: { type: string } }
+        tags: { type: array, items: { type: string }, description: "labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed" }
         client: { type: [string, "null"], description: "an external client's id on the AI clients page" }
         reach: { type: [string, "null"], enum: [always, cloud, null], description: "`cloud`: it calls from its vendor's cloud" }
         installed: { type: boolean }
@@ -3873,6 +4737,7 @@ components:
         description: { type: [string, "null"] }
         status: { type: [string, "null"], enum: [active, suspended, revoked, null] }
         expires_at: { type: [string, "null"], format: date-time }
+        tags: { oneOf: [{ $ref: "#/components/schemas/AgentTags" }, { type: "null" }], description: "replaces the agent's tags; absent or null leaves them as they are (S40-10)" }
     AgentVersion:
       type: object
       required: [version, spec, checksum]
@@ -3882,6 +4747,24 @@ components:
         checksum: { type: string }
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
+        message: { type: [string, "null"], description: "why the version exists, in its author's words (S40-12); null for a version published before messages or through the bare-spec endpoint" }
+        restored_from: { type: [integer, "null"], description: "the version this one copies, when it is a restore" }
+        pinned_by: { type: array, items: { type: string }, description: "the slugs of the projects the caller may see that pin this version" }
+        effective_memories: { type: array, items: { $ref: "#/components/schemas/AgentMemoryBinding" }, description: "what a run of this version binds: `spec.memories`, or what the legacy `spec.memory` means (S40-11)" }
+        channels: { type: array, items: { type: string, enum: [stable, candidate] }, description: "the channels this revision sits on now (ADR 0071)" }
+    AgentVersionPublish:
+      type: object
+      required: [spec, message, base_version]
+      properties:
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+        message: { type: string, minLength: 1, maxLength: 500, description: what changed and why }
+        base_version: { type: integer, minimum: 0, description: "the latest version the author started from (0 for an agent with none)" }
+    AgentVersionRestore:
+      type: object
+      required: [base_version]
+      properties:
+        message: { type: [string, "null"], maxLength: 500, description: "absent, `Restore vN`" }
+        base_version: { type: integer, minimum: 1, description: the latest version the author saw }
     Agent:
       type: object
       required: [slug, kind, display_name, status, latest_version]
@@ -3890,6 +4773,7 @@ components:
         kind: { type: string, enum: [internal, external, remote] }
         display_name: { type: string }
         description: { type: [string, "null"] }
+        tags: { $ref: "#/components/schemas/AgentTags" }
         status: { type: string }
         owner: { type: [string, "null"] }
         expires_at: { type: [string, "null"], format: date-time }
@@ -3906,6 +4790,161 @@ components:
         forked_from: { oneOf: [{ $ref: "#/components/schemas/AgentUpstream" }, { type: "null" }], description: set on a fork }
         can: { $ref: "#/components/schemas/AgentPermissions" }
         cannot_reason: { type: [string, "null"], description: "the server's sentence for what the caller may not do: shown as is, never guessed from roles" }
+        stable_version: { type: [integer, "null"], description: "the revision in production (ADR 0071)" }
+        candidate_version: { type: [integer, "null"], description: "the revision in testing" }
+        candidate_percent: { type: integer, minimum: 0, maximum: 100, default: 0, description: "the share of work items, of projects that follow production, served the candidate" }
+        candidate_since: { type: [string, "null"], format: date-time }
+        release_policy: { $ref: "#/components/schemas/AgentReleasePolicy" }
+        pending_release: { oneOf: [{ $ref: "#/components/schemas/AgentRelease" }, { type: "null" }], description: the release waiting for approval, if any }
+    AgentReleaseDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject, cancel] }
+        reason: { type: [string, "null"], maxLength: 500, description: required for a rejection }
+    AgentStableGates:
+      type: object
+      description: What a revision must satisfy before it reaches production; a rollback skips them.
+      properties:
+        require_candidate: { type: boolean, default: false, description: the revision must be the current candidate }
+        min_candidate_runs: { type: integer, minimum: 0, maximum: 10000, default: 0, description: finished runs of the candidate since it became the candidate }
+        min_success_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+        min_soak_hours: { type: [integer, "null"], minimum: 0, maximum: 720 }
+        step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10, description: how recent the person's sign-in must be }
+        min_live_score: { type: [number, "null"], minimum: 0, maximum: 1, description: "the latest finished live evaluation of the revision must score at least this; a rollback skips it" }
+        approvals: { type: integer, minimum: 0, maximum: 3, default: 0, description: "people other than the requester who must approve a promotion before production moves; a rollback never waits (ADR 0071)" }
+        separation_of_duties: { type: boolean, default: true, description: "neither the requester nor the revision's author may approve" }
+    AgentCandidateGates:
+      type: object
+      description: What a revision must satisfy before it is sent to testing by hand (saving it to testing under `on_publish` is the owner's stated policy and is not gated).
+      properties:
+        min_live_score: { type: [number, "null"], minimum: 0, maximum: 1 }
+    AgentEvaluationCreate:
+      type: object
+      required: [project]
+      properties:
+        project: { type: string, description: "the project's slug: the trials run there (needs the right to try an agent in it)" }
+    AgentEvaluation:
+      type: object
+      description: A live evaluation of one revision, judged from its trial runs as they stand. `not_run` (no model to call) is never `passed`.
+      required: [id, version, project, status, budget_usd, started_at]
+      properties:
+        id: { type: string }
+        version: { type: integer }
+        project: { type: string }
+        status: { type: string, enum: [running, passed, failed, not_run], description: "`passed` when every case finished and the score reaches the policy's minimum (every case when none is set)" }
+        score: { type: [number, "null"], description: passed cases over live cases }
+        budget_usd: { type: number, description: the most the evaluation may spend in all }
+        started_by: { type: [string, "null"] }
+        started_at: { type: string, format: date-time }
+        cases:
+          type: array
+          items:
+            type: object
+            required: [name, run_id, status]
+            properties:
+              name: { type: string }
+              run_id: { type: string, description: "read it at `GET /runs/{id}`" }
+              status: { type: string, enum: [running, passed, failed, not_run] }
+              passed: { type: [boolean, "null"] }
+              budget_usd: { type: number }
+              cost_usd: { type: number }
+              reason: { type: [string, "null"], description: why it failed or did not run }
+    AgentReleasePolicy:
+      type: object
+      description: "What saving a revision does, and the gates of production (ADR 0071). `on_publish: stable` cannot be combined with `require_candidate` or a candidate threshold (422): a revision published straight to production is never a candidate."
+      properties:
+        on_publish: { type: string, enum: [stable, candidate, none], default: stable, description: "`stable`: a saved revision goes to production (the behaviour before channels); `candidate`: to testing; `none`: nowhere" }
+        stable: { $ref: "#/components/schemas/AgentStableGates" }
+        candidate: { $ref: "#/components/schemas/AgentCandidateGates" }
+        max_eval_usd: { type: number, exclusiveMinimum: 0, maximum: 10, default: 2.0, description: the most one live evaluation may spend in all, in dollars }
+    AgentReleaseCreate:
+      type: object
+      required: [channel]
+      properties:
+        channel: { type: string, enum: [candidate, stable] }
+        version: { type: [integer, "null"], minimum: 1, description: "`null` with `candidate` withdraws the candidate; `null` with `stable` releases the current candidate" }
+        percent: { type: [integer, "null"], minimum: 0, maximum: 100, description: "candidate only: the share of work items served the candidate; absent keeps the current share (0 for a new candidate)" }
+        reason: { type: [string, "null"], maxLength: 500 }
+    AgentReleaseCheck:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve)" }
+        required: { type: boolean, default: true }
+        passed: { type: [boolean, "null"], description: "null: not applicable" }
+        detail: { type: [string, "null"] }
+    AgentRelease:
+      type: object
+      required: [id, agent, channel, kind, status, requested_at]
+      properties:
+        id: { type: string }
+        agent: { type: string }
+        channel: { type: string, enum: [candidate, stable] }
+        kind: { type: string, enum: [publish, promote, rollback, withdraw, baseline] }
+        version: { type: [integer, "null"] }
+        previous_version: { type: [integer, "null"] }
+        percent: { type: [integer, "null"] }
+        status: { type: string, enum: [done, pending_approval, rejected, cancelled, superseded], description: "`pending_approval`: waits for `approvals_required` people; `superseded`: production moved meanwhile" }
+        approvals_required: { type: integer, description: "how many other people must approve before production moves; 0 for a release that did not wait" }
+        decisions:
+          type: array
+          items:
+            type: object
+            required: [by, decision, at]
+            properties:
+              by: { type: string }
+              decision: { type: string, enum: [approve, reject, cancel] }
+              reason: { type: [string, "null"] }
+              at: { type: string, format: date-time }
+              auth_age_seconds: { type: [integer, "null"], description: how old the person's sign-in was when they decided }
+        requested_by: { type: [string, "null"] }
+        requested_at: { type: string, format: date-time }
+        done_at: { type: [string, "null"], format: date-time }
+        reason: { type: [string, "null"] }
+        checks: { type: array, items: { $ref: "#/components/schemas/AgentReleaseCheck" }, description: the checks as they were evaluated (a snapshot) }
+    AgentChannelStats:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer }
+        runs: { type: integer, description: finished runs }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        success_rate: { type: [number, "null"] }
+        since: { type: [string, "null"], format: date-time }
+    AgentReleaseReadiness:
+      type: object
+      required: [version, channel, kind, ready]
+      properties:
+        version: { type: integer }
+        channel: { type: string, enum: [candidate, stable] }
+        kind: { type: string, enum: [publish, promote, rollback, withdraw, baseline] }
+        ready: { type: boolean, description: every required check passes }
+        checks: { type: array, items: { $ref: "#/components/schemas/AgentReleaseCheck" } }
+        candidate: { oneOf: [{ $ref: "#/components/schemas/AgentChannelStats" }, { type: "null" }] }
+        production: { oneOf: [{ $ref: "#/components/schemas/AgentChannelStats" }, { type: "null" }] }
+    AgentExposure:
+      type: object
+      properties:
+        stable_version: { type: [integer, "null"] }
+        candidate_version: { type: [integer, "null"] }
+        candidate_percent: { type: integer }
+        projects:
+          type: array
+          items:
+            type: object
+            required: [project, source, version]
+            properties:
+              project: { type: string }
+              source: { type: string, enum: [pin, pin_channel, project_channel] }
+              channel: { type: [string, "null"], enum: [stable, candidate, null] }
+              version: { type: integer }
+    ProjectAgentChannel:
+      type: object
+      required: [channel]
+      properties:
+        channel: { type: string, enum: [stable, candidate], description: "which channel of the agents the project runs when it pins nothing" }
     AgentLifecycleChange:
       type: object
       required: [to]
@@ -3941,7 +4980,18 @@ components:
         cost_by_kind: { type: object, additionalProperties: { type: number } }
         by_project: { type: array, items: { type: object, required: [project, runs, cost_usd], properties: { project: { type: string }, runs: { type: integer }, cost_usd: { type: number } } } }
         spent_today_usd: { type: number }
-        daily_budget_usd: { type: [number, "null"] }
+        daily_budget_usd: { type: [number, "null"], description: "production's daily budget" }
+        by_version: { type: array, items: { $ref: "#/components/schemas/AgentVersionMetrics" } }
+    AgentVersionMetrics:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer }
+        runs: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        success_rate: { type: [number, "null"] }
+        cost_usd: { type: number }
     AgentMetricsSummary:
       type: object
       description: An agent's line in the registry over a period.
@@ -3967,7 +5017,11 @@ components:
             `unavailable`: it exists but a run would not start (`reason`: draft, retired, expired,
             disabled, no such version).
         version: { type: [integer, "null"] }
-        pinned: { type: boolean, description: True when the version comes from the project's pin rather than from the reference or the latest. }
+        pinned: { type: boolean, description: "True when the version comes from the project's pin (fixed or by channel) rather than from the reference or from the agent's channels." }
+        source: { type: [string, "null"], enum: [explicit, pin, pin_channel, project_channel, canary, stable, latest, null], description: "why this revision (ADR 0071); `latest` only for an agent that has no production pointer" }
+        channel: { type: [string, "null"], enum: [stable, candidate, null] }
+        candidate_version: { type: [integer, "null"], description: "the revision in testing, if any: the console says `v4, 10 % of work items run v5`" }
+        candidate_percent: { type: [integer, "null"] }
         display_name: { type: [string, "null"] }
         lifecycle: { type: [string, "null"] }
         in_catalogue: { type: boolean }
@@ -4015,16 +5069,18 @@ components:
         tools: { type: [array, "null"], items: { type: string } }
     ProjectAgentPut:
       type: object
-      required: [version]
+      description: "Exactly one of `version` (a fixed revision) and `channel` (follow production or testing); the server answers 422 otherwise."
       properties:
-        version: { type: integer, minimum: 1 }
+        version: { type: [integer, "null"], minimum: 1 }
+        channel: { type: [string, "null"], enum: [stable, candidate, null] }
         overrides: { $ref: "#/components/schemas/AgentOverrides" }
     ProjectAgent:
       type: object
       required: [agent, version, overrides, effective]
       properties:
         agent: { type: string }
-        version: { type: integer }
+        version: { type: integer, description: "the revision served now (the channel's, for a channel pin)" }
+        channel: { type: [string, "null"], enum: [stable, candidate, null], description: "set when the pin follows a channel" }
         overrides: { $ref: "#/components/schemas/AgentOverrides" }
         effective: { $ref: "#/components/schemas/AgentSpec" }
         warning: { type: [string, "null"], description: said when the agent is deprecated }

@@ -6,7 +6,10 @@
   chart (`global.egress`), the console's "add" gestures; amends
   [ADR 0050](0050-skill-supply-chain-gate.md) §4 (the skill-source allowlist stays a trust list of
   repositories; the network is this list) and, once the MCP catalogue lands,
-  ADR 0065 (its `egress` field reads this list and the ceiling)
+  ADR 0065 (its `egress` field reads this list and the ceiling); **amended by**
+  [ADR 0070](0070-network-access-is-bounded-and-enforced-per-run.md) §"Amendment 2026-10-19": this
+  list is the half of the organisation's network policy that *opens* hosts, the policy ceiling's
+  `network` section the half that *bounds* them, read first and in every mode
 
 ## Context
 

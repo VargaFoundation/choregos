@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     run_token_issuer: str = "choregos-api"
     run_token_audience: str = "internal"
 
+    #: Hosts no run of this deployment may reach, whatever an organisation or a project says (ADR 0070):
+    #: a comma-separated list of host patterns (`CHOREGOS_NETWORK_INSTANCE_DENY`).
+    network_instance_deny: str = ""
+    #: Where an operator can reach this deployment, written into the User-Agent of what the platform
+    #: fetches (`CHOREGOS_USER_AGENT_CONTACT`); an organisation's own contact wins (ADR 0070).
+    user_agent_contact: str = ""
+
     # Services
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
@@ -174,6 +181,8 @@ class Settings(BaseSettings):
     knowledge_max_markdown_mib: int = 8
     #: A conversion runs in a child process, killed past this delay.
     knowledge_conversion_timeout_s: float = 120.0
+    #: How long a connector's connection test may take, when it runs on save (S40-05).
+    connector_test_timeout_s: float = 10.0
     #: How many conversions run at once in one API replica. One by default: the API pod has one CPU
     #: (S39-26), a second converter would only share it.
     knowledge_conversion_concurrency: int = 1
@@ -189,6 +198,10 @@ class Settings(BaseSettings):
     github_webhook_secret: str = ""
     github_app_id: str = ""
     github_app_private_key: str = ""
+    #: The App's OAuth client (optional): only needed to prove, on an instance with several
+    #: organisations, that the person who installs the App manages that installation (ADR 0073).
+    github_app_client_id: str = ""
+    github_app_client_secret: str = ""
     #: Secret partagé des webhooks non signés (ArgoCD, Alertmanager, Jira, GitLab). VIDE par
     #: défaut : `verify_shared_secret` refuse alors tout, et c'est voulu — la valeur par
     #: défaut d'avant était publiée dans ce dépôt, et le chart ne l'injectait pas.

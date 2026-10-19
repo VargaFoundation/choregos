@@ -19,9 +19,10 @@ from choregos_api.db.session import TOUT, session_scope
 from choregos_api.services import default_workflow, policy_model, workflow_model
 from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
 from choregos_api.services.definitions import ceiling_of
+from choregos_api.services.github_app import pin_for_runtime
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import Message, PolicyEngine
-from choregos_core.policy_ceiling import clamp
+from choregos_core.policy_ceiling import PolicyCeiling, clamp
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
@@ -46,6 +47,11 @@ class ProjectBundle:
     adapters: AdapterSet
     #: La version de ce défaut, pour épingler un ticket à sa naissance.
     workflow_def_id: str | None = None
+    #: The adapter of the organisation's global memories (S40-11); built on first use by `org_memory`.
+    org_memory_adapter: Any = None
+    #: The organisation's policy ceiling, if it set one: its `network` section bounds the run's
+    #: network (ADR 0070). `policy` above is already brought down to it.
+    ceiling: PolicyCeiling | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -94,6 +100,12 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     # The sealed `store:` values of the project's connectors, read here with the organisation's
     # context (the sync adapter factory cannot): `from_connectors` receives them as `resolved`.
     sealed = {c.kind: await _sealed_values(session, project.org_id, c) for c in connectors}
+    # A GitHub connector builds with the installation its organisation claimed, injected here and
+    # never stored (ADR 0073); on a multi-organisation instance an unclaimed owner raises.
+    configs = {
+        c.kind: await pin_for_runtime(session, project.org_id, c.kind, c.type, dict(c.config or {}))
+        for c in connectors
+    }
     return ProjectBundle(
         project=project,
         org_slug=org.slug if org else "",
@@ -102,6 +114,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         workflow_def_id=workflow_row.id if workflow_row is not None else None,
         # The policy that runs: the project's, brought down to its organisation's ceiling (S27-05).
         policy=clamp(policy_model(policy_row), ceiling_of(org))[0],
+        ceiling=ceiling_of(org),
         adapters=AdapterSet.from_connectors(
             {
                 # La mémoire `lexical` vit dans les tables de l'API : elle doit dire depuis
@@ -109,7 +122,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
                 # plateforme, il voit tout (`*`) — comme ses propres sessions (`db()`).
                 c.kind: {
                     "type": c.type,
-                    "config": {**c.config, "org": TOUT} if c.kind == "memory" else c.config,
+                    "config": {**configs[c.kind], "org": TOUT} if c.kind == "memory" else configs[c.kind],
                     # Des RÉFÉRENCES (ADR 0034) : `from_connectors` les résout en construisant.
                     "secret_refs": c.secret_refs or {},
                     "secret_ref": c.secret_ref,
@@ -188,6 +201,57 @@ async def project_bundle(session: AsyncSession, project_id: str) -> ProjectBundl
     if override is not None:
         bundle.adapters = override
     return bundle
+
+
+async def org_memory(session: AsyncSession, bundle: ProjectBundle) -> Any:
+    """The adapter that serves the organisation's global memories (S40-11, ADR 0075), built once per bundle.
+
+    The organisation's `memory` connector when it declared one, else the deployment default — the
+    adapter a project without a memory connector gets. Under fakes it is the bundle's own memory
+    fake, which keys facts by namespace, so a global memory never mixes with a project's.
+    """
+    if bundle.org_memory_adapter is not None:
+        return bundle.org_memory_adapter
+    from choregos_adapters import build, configuration_resolue, fakes_enabled
+    from choregos_adapters.registry import TYPES_PAR_DEFAUT
+    from choregos_api.db.models import OrgConnector
+
+    if fakes_enabled() or adapters_override() is not None:
+        bundle.org_memory_adapter = bundle.adapters.memory
+        return bundle.org_memory_adapter
+    row = (
+        (
+            await session.execute(
+                select(OrgConnector)
+                .where(OrgConnector.org_id == bundle.project.org_id, OrgConnector.kind == "memory")
+                .order_by(OrgConnector.name)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    type_name = row.type if row is not None else TYPES_PAR_DEFAUT["memory"]
+    config = dict(row.config or {}) if row is not None else {}
+    # As the project's own memory: a platform process, seen from every organisation (`*`).
+    config = {**config, "org": TOUT}
+    sealed = await _sealed_org_values(session, bundle.project.org_id, row) if row is not None else {}
+    resolved = configuration_resolue(
+        "memory", type_name, config, row.secret_refs if row is not None else None, None, preresolved=sealed
+    )
+    bundle.org_memory_adapter = build("memory", type_name, resolved)
+    return bundle.org_memory_adapter
+
+
+async def _sealed_org_values(session: AsyncSession, org_id: str, connector: Any) -> dict[str, str]:
+    from choregos_api.secret_store import resolve_store_fields
+    from choregos_core.secrets import SecretIntrouvable
+
+    try:
+        return await resolve_store_fields(
+            session, org_id, connector.kind, connector.type, connector.secret_refs, None
+        )
+    except SecretIntrouvable:
+        return {}
 
 
 def as_dict(value: Any) -> dict[str, Any]:

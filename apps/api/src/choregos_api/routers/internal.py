@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from types import SimpleNamespace
 from typing import Annotated, Any
 
 from choregos_adapters.storage import ObjectStoreError
@@ -29,7 +30,7 @@ from sqlalchemy import func, select
 from ..catalogue import appeler as appeler_outil
 from ..catalogue import outils_du_projet
 from ..config import get_settings
-from ..db.models import CostLedger, HumanRequest, Project, Run, RunEvent, WorkItem
+from ..db.models import CostLedger, HumanRequest, Organization, Project, Run, RunEvent, WorkItem
 from ..db.models import Finding as FindingRow
 from ..deps import Db, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
@@ -47,7 +48,9 @@ from ..schemas import (
     ScopeChangeRequestIn,
 )
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
-from ..services import effective_policy, persist_event, ranger_les_sorties
+from ..schemas.memory import RunMemoryHit, RunMemorySearch
+from ..schemas.network import NetworkDecisionBatch, RunNetwork
+from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch
 from ..services.artifacts import (
     ArtifactCorruptedError,
     filename_of,
@@ -59,6 +62,7 @@ from ..services.artifacts import (
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
 from ..services.couts import dimensions_of
+from ..services.network import record_decisions, run_network
 from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner, record_digests
 from ..services.tickets import sorties_a_ranger
 from ..temporal import get_temporal, interpreter_id
@@ -123,6 +127,26 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
             last_seq=max(e.seq for e in body.events),
         )
     return {"accepted": written}
+
+
+@router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")
+async def get_run_network(id: str, session: Db, claims: RunAuth) -> RunNetwork:
+    """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token."""
+    run, _, _ = await _run_and_item(session, id)
+    return await run_network(session, run)
+
+
+@router.post(
+    "/runs/{id}/network/decisions",
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="postRunNetworkDecisions",
+)
+async def post_network_decisions(
+    id: str, body: NetworkDecisionBatch, session: Db, claims: RunAuth
+) -> dict[str, int]:
+    """What the proxy or the runner let through or refused: cumulative totals, replay-safe."""
+    run, _, project = await _run_and_item(session, id)
+    return {"accepted": await record_decisions(session, run, project, body)}
 
 
 @router.post("/runs/{id}/result", operation_id="postRunResult")
@@ -556,6 +580,38 @@ async def search_knowledge(
     )
 
 
+@router.post(
+    "/runs/{id}/memory/search",
+    response_model=list[RunMemoryHit],
+    operation_id="searchRunMemory",
+)
+async def search_memory(id: str, body: RunMemorySearch, session: Db, claims: RunAuth) -> list[RunMemoryHit]:
+    """`search_memory` of the sidecar (S40-11): the memories the run's `StageInput` names, and no others.
+
+    The run token proves the run; what it may read is what its `StageInput` resolved when it was
+    prepared. A label that is not one of them is 404. Each memory is searched under the read timeout.
+    """
+    from ..services.memory_access import search_run_memories
+
+    run, _, project = await _run_and_item(session, id)
+    policy = await effective_policy(session, project.id)
+    if not policy.memory.enabled:
+        return []
+    organisation = await session.get(Organization, project.org_id)
+    org_slug = organisation.slug if organisation is not None else ""
+    hits = await search_run_memories(
+        session,
+        run,
+        project,
+        org_slug,
+        body.query,
+        body.k,
+        body.memory,
+        policy.memory.read_timeout_ms / 1000 * 10,
+    )
+    return [RunMemoryHit.model_validate(hit) for hit in hits]
+
+
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
 async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
     run, item, project = await _run_and_item(session, id)
@@ -608,7 +664,9 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     import httpx
     from choregos_adapters.github import RUNNER_PERMISSIONS, GitHubAppAuth
 
-    run, _item, _project = await _run_and_item(session, id)
+    from ..services.github_app import claimed_installation_for, implicit_claim_enabled
+
+    run, _item, project_row = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("result already posted for this run")
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
@@ -617,7 +675,19 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     cle = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
     if depot is None or not app_id or not cle:
         return GitToken(token=None, repository=depot)
-    auth = GitHubAppAuth(app_id=app_id, private_key=cle)
+    # The installation THIS organisation claimed on the repository's owner, never another's (ADR 0073).
+    # Without a claim, a single-organisation instance still discovers it from the repository; with
+    # several organisations a repository outside the claims gets no token.
+    owner = depot.split("/", 1)[0]
+    claimed = await claimed_installation_for(session, project_row.org_id, owner)
+    if claimed is None and not await implicit_claim_enabled(session):
+        return GitToken(token=None, repository=depot)
+    auth = GitHubAppAuth(
+        app_id=app_id,
+        private_key=cle,
+        pinned_installation=claimed.id if claimed else None,
+        pinned_account=owner if claimed else None,
+    )
     async with httpx.AsyncClient(timeout=20) as client:
         # Cloner et pousser sa branche : `contents: write`, rien d'autre — la PR, la plateforme l'ouvre.
         jeton = await auth.token_for(client, depot, permissions=RUNNER_PERMISSIONS, ttl_s=3600)
@@ -695,11 +765,21 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     # sélectionne et que la politique permet. Leur nom (`connecteur__opération`) ne peut pas
     # rencontrer celui d'un outil du catalogue.
     du_courtier = await outils_du_courtier(session, run, project)
+    # The governed way to read the web (S40-01f, ADR 0070): offered when the run's network allows a host.
+    # Its name cannot be taken by another tool: a masked tool is an agent calling the wrong one.
+    web = [web_fetch.announcement()] if await web_fetch.offered(session, run) else []
+    if web and (
+        web_fetch.TOOL_NAME in du_courtier
+        or web_fetch.TOOL_NAME in des_greffons
+        or any(o.name == web_fetch.TOOL_NAME for o in outils)
+    ):
+        raise conflict(f"tool `{web_fetch.TOOL_NAME}` is built in: another tool cannot take its name")
     return {
         "tools": [
             *({"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils),
             *(outil for _, outil in des_greffons.values()),
             *(outil.annonce() for outil in du_courtier.values()),
+            *web,
         ]
     }
 
@@ -716,7 +796,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     outil = next((o for o in du_catalogue if o.name == name), None)
     des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
     du_courtier = await outils_du_courtier(session, run, project)
-    if outil is None and name not in des_greffons and name not in du_courtier:
+    is_web = name == web_fetch.TOOL_NAME and await web_fetch.offered(session, run)
+    if is_web and (outil is not None or name in des_greffons or name in du_courtier):
+        raise conflict(f"tool `{name}` is built in: another tool cannot take its name")
+    if outil is None and name not in des_greffons and name not in du_courtier and not is_web:
         # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
         # le catalogue du déploiement en essayant des noms.
         raise not_found("Tool", name)
@@ -739,7 +822,13 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
 
     suspicions: list[dict[str, str]] = []
     prix_usd = 0.0
-    if outil is not None:
+    if is_web:
+        code, corps, fournisseur = await _web_fetch(session, run, project, body or {})
+        prix = 0.0
+        code, corps, suspicions = await _garde_contre_l_injection(
+            session, run, project, SimpleNamespace(nom=name), code, corps
+        )
+    elif outil is not None:
         code, corps = await appeler_outil(outil, body or {})
         fournisseur, prix = outil.provider, outil.price_eur
     elif name in du_courtier and du_courtier[name].sous_validation:
@@ -771,23 +860,27 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         greffon = des_greffons[name][0]
         code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
         fournisseur, prix = f"greffon:{greffon}", 0.0
-    session.add(
-        CostLedger(
-            project_id=project.id,
-            work_item_id=item.id,
-            run_id=run.id,
-            # `ts` n'a pas de défaut côté modèle : la colonne est NOT NULL et l'oublier
-            # fait échouer l'INSERT, pas la lecture.
-            ts=utcnow(),
-            kind="tool",
-            provider=fournisseur,
-            model=name,
-            cost_eur=prix,
-            cost_usd=prix_usd,
-            stage_role=run.stage_role,
-            **await dimensions_of(session, run.id),
+    # A call the organisation's network policy stopped never reached the server: it is not counted
+    # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
+    refused_by_network = isinstance(corps, dict) and corps.get("type") in {"network_policy", "rate_limited"}
+    if not refused_by_network:
+        session.add(
+            CostLedger(
+                project_id=project.id,
+                work_item_id=item.id,
+                run_id=run.id,
+                # `ts` has no model-side default: the column is NOT NULL and forgetting it
+                # fails the INSERT, not the read.
+                ts=utcnow(),
+                kind="tool",
+                provider=fournisseur,
+                model=name,
+                cost_eur=prix,
+                cost_usd=prix_usd,
+                stage_role=run.stage_role,
+                **await dimensions_of(session, run.id),
+            )
         )
-    )
     await check_after_spend(session, run.id)
     await persist_event(
         session,
@@ -812,6 +905,25 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     }
 
 
+async def _web_fetch(
+    session: Any, run: Run, project: Project, arguments: dict[str, Any]
+) -> tuple[int, Any, str]:
+    """`web_fetch` (S40-01f): arguments checked against the announced schema BEFORE anything is read
+    (400, nothing counted by the schema), then the governed read (`services/web_fetch.py`)."""
+    import jsonschema
+
+    try:
+        jsonschema.validate(arguments, web_fetch.INPUT_SCHEMA)
+    except jsonschema.ValidationError as exc:
+        where = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            "Arguments refused",
+            f"argument refused by the schema of web_fetch at {where}: {exc.message}",
+        ) from exc
+    return await web_fetch.fetch(session, run, project, arguments, fakes=get_settings().fakes)
+
+
 async def _par_le_courtier(
     session: Any, run: Run, project: Project, outil: Any, arguments: dict[str, Any]
 ) -> tuple[int, Any, list[dict[str, str]]]:
@@ -824,7 +936,7 @@ async def _par_le_courtier(
         verifier_les_arguments(outil, arguments)
     except ArgumentsRefuses as refus:
         raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
-    code, corps = await appeler(session, outil, arguments)
+    code, corps = await appeler(session, outil, arguments, run=run, project=project)
     return await _garde_contre_l_injection(session, run, project, outil, code, corps)
 
 

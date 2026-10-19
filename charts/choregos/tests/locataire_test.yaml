@@ -9,9 +9,23 @@ templates:
   - charts/choregos-api/templates/deployment.yaml
   - charts/choregos-web/templates/deployment.yaml
   - charts/choregos-orchestrator/templates/deployments.yaml
+# Offline rendering: the default executor (agent_sandbox, ADR 0072) refuses to render without its
+# operator among the cluster's API versions, which a unit test does not have.
+set:
+  choregos-orchestrator.runner.skipOperatorCheck: true
 tests:
-  - it: by default, the API reads PipelineRuns through a ClusterRole
+  - it: by default (agent_sandbox), the API has no Tekton ClusterRole
     template: charts/choregos-api/templates/service.yaml
+    asserts:
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+        not: true
+
+  - it: with Tekton, the API reads PipelineRuns through a ClusterRole
+    template: charts/choregos-api/templates/service.yaml
+    set:
+      global.runner.executor: tekton
     asserts:
       - containsDocument:
           kind: ClusterRole
@@ -25,6 +39,7 @@ tests:
   - it: without cluster-scoped rights, neither ClusterRole nor ClusterRoleBinding
     template: charts/choregos-api/templates/service.yaml
     set:
+      global.runner.executor: tekton
       global.rbac.clusterScoped: false
     asserts:
       - hasDocuments:
@@ -82,7 +97,7 @@ tests:
   - it: with the k8s_job executor, the runners' account exists and mounts no token
     template: charts/choregos-orchestrator/templates/deployments.yaml
     set:
-      choregos-orchestrator.runner.executor: k8s_job
+      global.runner.executor: k8s_job
     asserts:
       - containsDocument:
           kind: ServiceAccount
@@ -98,6 +113,8 @@ tests:
 
   - it: with Tekton, no runner account in the platform namespace
     template: charts/choregos-orchestrator/templates/deployments.yaml
+    set:
+      global.runner.executor: tekton
     asserts:
       - containsDocument:
           kind: ServiceAccount

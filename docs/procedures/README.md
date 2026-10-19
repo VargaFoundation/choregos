@@ -39,9 +39,9 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Run agent stages as Kubernetes Jobs](connector.runtime.k8s_job.md) | the person who operates the platform | `runtime/k8s_job` | 2026-10-16 |
 | [Run agent stages in local Docker (development)](connector.runtime.local_docker.md) | the person who operates the platform | `runtime/local_docker` | 2026-10-16 |
 | [Run agent stages as Tekton PipelineRuns](connector.runtime.tekton.md) | the person who operates the platform | `runtime/tekton` | 2026-10-16 |
-| [Use GitHub for branches, pull requests and checks](connector.scm.github.md) | a project owner | `scm/github` | 2026-10-16 |
+| [Use GitHub for branches, pull requests and checks](connector.scm.github.md) | a project owner | `scm/github` | 2026-10-19 |
 | [The demo carrier (demonstration only)](connector.shipping.demo.md) | anyone | `shipping/demo` | 2026-10-16 |
-| [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-10-16 |
+| [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-10-19 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
 | [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-16 |

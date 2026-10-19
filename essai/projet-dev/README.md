@@ -25,7 +25,7 @@ vraies décisions. Le même parcours, sur des faux et en temps accéléré, est
 1. `preparer` : le projet `dev` né du gabarit, ses connecteurs (`github-issues`, `github` sans file
    de fusion, `cd: demo` vers les faux), le backend et les profils que le dev sert, le fait
    `smoke_ok` (`python -m invoices.smoke`) ; puis `exigences`, qui sort en erreur s'il manque un
-   connecteur.
+   connecteur. Saving a connector tests it (S40-05): after `preparer`, `cd: demo` reads Connected, not Unknown.
 2. `ouvrir bug`, `ouvrir adr`, `ouvrir feature` : une issue étiquetée dans le bac à sable — le
    webhook la fait naître dans le bon workflow.
 3. `suivre <id>` : l'état, et l'adresse où décider. **Les décisions se prennent dans la console**,

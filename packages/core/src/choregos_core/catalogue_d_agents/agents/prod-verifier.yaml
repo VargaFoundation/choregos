@@ -4,6 +4,7 @@ catalogue:
   summary: After the release train has deployed, checks production read-only and gives a go or no-go.
 agent:
   slug: prod-verifier
+  tags: [production, verification, release]
   display_name: Production verifier
   description: Checks a production release read-only — measured smoke facts, and the service indicators when the project has a source of them — against the acceptance criteria, and gives a go or no-go. It never deploys.
   spec:

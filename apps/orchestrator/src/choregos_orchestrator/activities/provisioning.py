@@ -381,7 +381,10 @@ async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -
 
 def _remediation(step: str) -> str:
     return {
-        "github.install_app": "Install the GitHub App `choregos-bot` on the repository, then retry.",
+        "github.install_app": (
+            "Install the Choregos GitHub App from the console (Settings, Connections, Install on GitHub), "
+            "then retry. The installation is discovered: nobody types an installation id."
+        ),
         "github.ensure_project_board": "Create the Projects v2 board and give its number to the connector.",
         "gitops.write_project_manifests": "Check the write rights on `choregos-infra`.",
         "argocd.wait_synced": "Look at the application in Argo CD: a manual sync is possible.",

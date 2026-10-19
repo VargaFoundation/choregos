@@ -32,6 +32,7 @@ from .registry import (
     build,
     configuration_resolue,
     connector_types,
+    deployment_default_type,
     egress_hosts,
     fakes_enabled,
     operation_spec,
@@ -68,6 +69,7 @@ __all__ = [
     "charger_les_greffons",
     "configuration_resolue",
     "connector_types",
+    "deployment_default_type",
     "egress_hosts",
     "fakes_enabled",
     "operation_spec",
@@ -96,7 +98,21 @@ def _github_client(config: dict[str, Any]) -> Any:
     app_id = config.get("app_id") or os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
     private_key = config.get("private_key") or os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
     token = config.get("token") or os.environ.get("CHOREGOS_GITHUB_TOKEN", "")
-    auth = GitHubAppAuth(app_id=app_id, private_key=private_key) if app_id and private_key else None
+    # `installation_id` is never typed (ADR 0073): the API injects the one this organisation claimed.
+    # Without it (a single-organisation instance, a repository outside the claims) the installation
+    # is discovered from the repository, as before.
+    pinned = config.get("installation_id")
+    owner = str(config.get("repo") or "").split("/", 1)[0] or None
+    auth = (
+        GitHubAppAuth(
+            app_id=app_id,
+            private_key=private_key,
+            pinned_installation=int(pinned) if pinned else None,
+            pinned_account=owner if pinned else None,
+        )
+        if app_id and private_key
+        else None
+    )
     return GitHubClient(
         auth=auth, token=token or None, base_url=config.get("api_url", "https://api.github.com")
     )
@@ -165,10 +181,13 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("tracker",),
         _objet(
             {
-                "repo": {"type": "string", "description": "owner/repo"},
+                "repo": {
+                    "type": "string",
+                    "format": "github-repo",
+                    "description": "owner/repo, picked among the repositories the App can see",
+                },
                 "project_number": _ENTIER,
                 "org": _TEXTE,
-                "installation_id": _ENTIER,
             },
             ("repo",),
         ),
@@ -202,8 +221,11 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("scm",),
         _objet(
             {
-                "repo": _TEXTE,
-                "installation_id": _ENTIER,
+                "repo": {
+                    "type": "string",
+                    "format": "github-repo",
+                    "description": "owner/repo, picked among the repositories the App can see",
+                },
                 "merge_queue": {"type": "boolean", "default": True},
                 "merge_method": {
                     "type": "string",
@@ -615,6 +637,7 @@ def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
         username=cfg.get("username", ""),
         auth_header=cfg.get("auth_header", "Authorization"),
         transport=FAUX_MCP.transport(),
+        user_agent=str(cfg.get("user_agent", "")),
     )
 
 
@@ -1086,6 +1109,7 @@ def _register_builtins() -> None:
             username=cfg.get("username", ""),
             auth_header=cfg.get("auth_header", "Authorization"),
             timeout_s=float(cfg.get("timeout_s", 30)),
+            user_agent=str(cfg.get("user_agent", "")),
         )
     )
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(

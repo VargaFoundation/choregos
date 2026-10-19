@@ -140,7 +140,7 @@ async def incarner_l_agent(
     suivant. Ses droits sont ceux de l'humain — le principal ne change pas — intersectés avec les
     outils de la porte que sa version nomme (`mcp_servers` d'un connecteur `choregos`).
     """
-    from ..db.models import Agent, AgentCredential, AgentVersion
+    from ..db.models import Agent, AgentCredential
 
     condition = (
         AgentCredential.api_token_id == jeton_id
@@ -167,14 +167,10 @@ async def incarner_l_agent(
             f"agent `{agent.slug}` is {etat}: this client is no longer allowed in",
             erreur="invalid_token",
         )
-    spec = (
-        await session.execute(
-            select(AgentVersion.spec)
-            .where(AgentVersion.agent_id == agent.id)
-            .order_by(AgentVersion.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none() or {}
+    # The tool patterns of the revision in production (ADR 0071), not of the latest saved one.
+    from ..services.agent_releases import production_spec
+
+    spec = await production_spec(session, agent) or {}
     motifs = [
         outil
         for serveur in spec.get("mcp_servers", [])

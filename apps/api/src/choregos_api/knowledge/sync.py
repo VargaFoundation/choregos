@@ -30,6 +30,13 @@ from ..db.session import session_scope
 from ..logging import get_logger
 from ..secret_store import resolved_configuration
 from ..services.egress import load_policy
+from ..services.platform_network import (
+    PlatformNetworkRefused,
+    ceiling_network,
+    decide,
+    host_of,
+    user_agent,
+)
 from .conversion import PENDING, convert_document
 from .formats import FORMATS, DocumentRefusedError, accept
 
@@ -79,6 +86,22 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
         return build("documents", connector.type, resolved).source(  # type: ignore[no-any-return]
             dict(config), key=source.id
         )
+    agent, per_host = "", None
+    if source.kind in {"web", "git"}:
+        # The organisation's network policy is read at every sync, not only when the source was
+        # declared (ADR 0070): the ceiling may have been tightened since.
+        host = host_of(str(config.get("url") or ""))
+        net = await ceiling_network(session, source.org_id)
+        if host is not None:
+            ok, reason = decide(host, net)
+            if not ok:
+                logger.warning(
+                    "network.refused", org=source.org_id, source=source.id, host=host, reason=reason
+                )
+                raise SourceUnavailableError(
+                    PlatformNetworkRefused(host, reason, f"knowledge source `{source.name}`").message()
+                )
+        agent, per_host = await user_agent(session, source.org_id), (net.per_host_per_minute if net else None)
     if fakes_enabled():
         from choregos_adapters.fakes.documents import fake_source
 
@@ -91,12 +114,17 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             max_depth=int(config.get("max_depth", 2)),
             max_pages=int(config.get("max_pages", 50)),
             exclude=config.get("exclude"),
+            user_agent=agent,
+            per_host_per_minute=per_host,
         )
     if source.kind == "git":
         from choregos_adapters.documents.git import GitSource
 
         return GitSource(
-            url=str(config["url"]), ref=str(config.get("ref", "main")), paths=config.get("paths")
+            url=str(config["url"]),
+            ref=str(config.get("ref", "main")),
+            paths=config.get("paths"),
+            user_agent=agent,
         )
     raise SourceUnavailableError(f"unknown source kind `{source.kind}`")
 

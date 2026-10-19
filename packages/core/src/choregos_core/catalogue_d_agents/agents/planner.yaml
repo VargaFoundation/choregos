@@ -4,6 +4,7 @@ catalogue:
   summary: Writes the implementation plan — ordered steps, files, the test that proves each step, rollback.
 agent:
   slug: planner
+  tags: [planning, software]
   display_name: Planner
   description: Writes the implementation plan from the approved specification. It writes no code.
   spec:

@@ -59,6 +59,9 @@ from ..schemas import (
     AgentTrialCreate,
     AgentUpstream,
     AgentVersionDto,
+    AgentVersionMetrics,
+    AgentVersionPublish,
+    AgentVersionRestore,
     ApiTokenCreated,
     ImplicitAgent,
     ProjectAgentDto,
@@ -86,6 +89,14 @@ from ..services.agent_lifecycle import (
     running_work_items,
     unused,
 )
+from ..services.agent_releases import (
+    after_publish,
+    pending_release,
+    policy_of,
+    production_spec,
+    release_dto,
+    served,
+)
 from ..services.agents import (
     AgentIndisponible,
     depense_du_jour,
@@ -96,6 +107,8 @@ from ..services.agents import (
     resoudre_l_agent,
 )
 from ..services.egress import egress_gate_for_remote_agent
+from ..services.memory_access import check_bindings_at_publish
+from ..services.network import check_agent_network
 from ..services.remote_agents import pin_remote_runtime
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
@@ -131,14 +144,43 @@ async def _versions(session: AsyncSession, agent: Agent) -> list[AgentVersion]:
     return list(lignes.scalars())
 
 
-def _version_dto(ligne: AgentVersion) -> AgentVersionDto:
+def _version_dto(
+    ligne: AgentVersion, agent: Agent | None = None, pins: dict[int, list[str]] | None = None
+) -> AgentVersionDto:
+    channels: list[Literal["stable", "candidate"]] = []
+    if agent is not None:
+        if agent.stable_version == ligne.version:
+            channels.append("stable")
+        if agent.candidate_version == ligne.version:
+            channels.append("candidate")
     return AgentVersionDto(
         version=ligne.version,
         spec=AgentSpec.model_validate(ligne.spec),
         checksum=ligne.checksum,
         created_by=ligne.created_by,
         created_at=ligne.created_at,
+        message=ligne.message,
+        restored_from=ligne.restored_from,
+        pinned_by=sorted((pins or {}).get(ligne.version, [])),
+        channels=channels,
     )
+
+
+async def _pins(session: AsyncSession, principal: Me, org: str, agent: Agent) -> dict[int, list[str]]:
+    """Version -> the slugs of the projects pinning it that the caller may see: an organisation admin
+    sees them all, anyone else the projects they belong to (S40-12)."""
+    rows = await session.execute(
+        select(ProjectAgent.version, Project.slug)
+        .join(Project, Project.id == ProjectAgent.project_id)
+        .where(ProjectAgent.agent_id == agent.id)
+    )
+    pins: dict[int, list[str]] = {}
+    for version, slug in rows:
+        if version is None:  # a pin on a channel (ADR 0071) names no revision: the channel badges tell
+            continue
+        if is_admin(principal, org) or principal.role_for(org, slug) is not None:
+            pins.setdefault(version, []).append(slug)
+    return pins
 
 
 async def _upstream(session: AsyncSession, agent: Agent, principal: Me, org: str) -> AgentUpstream | None:
@@ -169,6 +211,7 @@ async def _dto(
     proprietaire = await session.get(User, agent.owner_id) if agent.owner_id else None
     dernier = await last_run_at(session, agent.org_id, agent.slug)
     sujet = await subject_of(session, agent)
+    pins = await _pins(session, principal, org, agent) if avec_versions else None
     droits, raison = permissions_of(principal, org, sujet)
     return AgentDto(
         scope=agent.scope,
@@ -180,17 +223,26 @@ async def _dto(
         kind=agent.kind,
         display_name=agent.display_name,
         description=agent.description,
+        tags=list(agent.tags or []),
         status=agent.status,
         owner=proprietaire.email if proprietaire else None,
         expires_at=agent.expires_at,
         revoked_at=agent.revoked_at,
         latest_version=versions[0].version if versions else 0,
         created_at=agent.created_at,
-        versions=[_version_dto(v) for v in versions] if avec_versions else None,
+        versions=[_version_dto(v, agent, pins) for v in versions] if pins is not None else None,
         lifecycle=agent.lifecycle or "active",
         retired_at=agent.retired_at,
         last_run_at=dernier,
         unused=unused(agent, dernier),
+        stable_version=agent.stable_version,
+        candidate_version=agent.candidate_version,
+        candidate_percent=agent.candidate_percent or 0,
+        candidate_since=agent.candidate_since,
+        release_policy=policy_of(agent),
+        pending_release=release_dto(waiting, agent.slug)
+        if (waiting := await pending_release(session, agent))
+        else None,
     )
 
 
@@ -258,8 +310,10 @@ async def list_agents(
     principal: Me,
     scope: Annotated[Literal["platform", "org", "project", "personal"] | None, Query()] = None,
     project: Annotated[str | None, Query()] = None,
+    tag: Annotated[list[str] | None, Query(description="every tag given (AND)")] = None,
 ) -> list[AgentDto]:
-    """The agents the caller may see (ADR 0061), optionally of one scope or one project."""
+    """The agents the caller may see (ADR 0061), optionally of one scope or one project, and carrying
+    every tag given (S40-10; applied after visibility, so a tag never reveals an invisible agent)."""
     _lire(principal, org)
     organisation = await _organisation(session, org)
     requete = select(Agent).where(
@@ -270,7 +324,8 @@ async def list_agents(
     if project is not None:
         requete = requete.where(Agent.project_id == (await _projet(session, organisation, project)).id)
     agents = (await session.execute(requete.order_by(Agent.slug))).scalars()
-    return [await _dto(session, agent, principal, org) for agent in agents]
+    wanted = set(tag or [])
+    return [await _dto(session, agent, principal, org) for agent in agents if wanted <= set(agent.tags or [])]
 
 
 @router.post(
@@ -289,12 +344,20 @@ async def create_agent(
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
     organisation = await _organisation(session, org)
+    await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project) if body.project else None
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
     await egress_gate_for_remote_agent(session, principal, organisation, body.spec, allow_egress)
     body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
+    await check_bindings_at_publish(
+        session,
+        principal,
+        organisation,
+        body.spec,
+        project_slug=body.project if body.scope == "project" else None,
+    )
     existant = (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -308,11 +371,13 @@ async def create_agent(
         kind=body.kind,
         display_name=body.display_name,
         description=body.description,
+        tags=list(body.tags),
         owner_id=principal.user_id,
         status="active",
         lifecycle=body.lifecycle,
         scope=body.scope,
         project_id=projet.id if projet else None,
+        release_policy=body.release_policy.model_dump(mode="json") if body.release_policy else None,
     )
     session.add(agent)
     await session.flush()
@@ -324,9 +389,11 @@ async def create_agent(
             spec=body.spec.model_dump(mode="json"),
             checksum=empreinte(body.spec),
             created_by=principal.email,
+            message=(body.message or "").strip() or "Created",
         )
     )
     await session.flush()
+    await after_publish(session, principal, agent, 1, principal.email)
     await record(
         session,
         principal,
@@ -336,6 +403,7 @@ async def create_agent(
         target_id=agent.id,
         scope=agent.scope,
         project=body.project,
+        tags=agent.tags,
     )
     return await _dto(session, agent, principal, org, avec_versions=True)
 
@@ -379,44 +447,72 @@ async def get_agent(org: str, slug: Slug, session: Db, principal: Me) -> AgentDt
     return await _dto(session, agent, principal, org, avec_versions=True)
 
 
-@router.post(
-    "/orgs/{org}/agents/{slug}/versions",
-    response_model=AgentVersionDto,
-    status_code=status.HTTP_201_CREATED,
-    operation_id="publishAgentVersion",
-)
-async def publish_version(
-    org: str, slug: Slug, body: AgentSpec, session: Db, principal: Me, allow_egress: bool = False
-) -> AgentVersionDto:
-    """La version suivante ; aucune n'est jamais réécrite."""
-    organisation, agent, sujet = await _charger(session, principal, org, slug)
+async def _append_version(  # noqa: PLR0913 - the actors and the three ways a version is made
+    session: AsyncSession,
+    principal: Me,
+    org: str,
+    organisation: Organization,
+    agent: Agent,
+    sujet: Subject,
+    spec: AgentSpec,
+    *,
+    message: str | None,
+    restored_from: AgentVersion | None = None,
+    base_version: int | None = None,
+    allow_egress: bool = False,
+) -> AgentVersion:
+    """The one way a version is appended (S40-12, ADR 0076): who may publish, the spec's own checks,
+    the eval gate — and, when `base_version` is given, the two refusals that make a publication
+    deliberate: the latest moved since the author read it (`stale_base`), or nothing changed
+    (`no_change`). A restore carries the source's exact spec and checksum. Nothing is ever rewritten.
+    A remote agent's card host is opened first (S39-22, ADR 0066), with `allow_egress`."""
     _exiger(decide(principal, org, sujet, Action.PUBLISH))
-    erreurs_d_une_version(body)
-    await _skills_usable(session, organisation, body)
-    await _model_allowed(session, organisation, body)
+    erreurs_d_une_version(spec)
+    await check_agent_network(session, organisation.id, spec)
+    await _skills_usable(session, organisation, spec)
+    await _model_allowed(session, organisation, spec)
     try:
-        check_remote_kind(agent.kind, body)
+        check_remote_kind(agent.kind, spec)
     except ValueError as erreur:
         raise unprocessable(str(erreur)) from erreur
-    await egress_gate_for_remote_agent(session, principal, organisation, body, allow_egress)
-    body = await pin_remote_runtime(session, organisation.id, body)
+    await check_bindings_at_publish(session, principal, organisation, spec, project_slug=sujet.project_slug)
+    await egress_gate_for_remote_agent(session, principal, organisation, spec, allow_egress)
+    spec = await pin_remote_runtime(session, organisation.id, spec)
     if agent.status == "revoked":
-        raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
+        raise conflict(f"agent `{agent.slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":
-        raise conflict(f"agent `{slug}` is retired: it can no longer publish")
+        raise conflict(f"agent `{agent.slug}` is retired: it can no longer publish")
+    versions = await _versions(session, agent)
+    derniere = versions[0] if versions else None
+    numero = derniere.version if derniere else 0
+    checksum = restored_from.checksum if restored_from is not None else empreinte(spec)
+    if base_version is not None:
+        if base_version != numero:
+            author = derniere.created_by if derniere and derniere.created_by else "someone"
+            raise conflict(
+                f"v{numero} of `{agent.slug}` was published by {author} "
+                f"since you started from v{base_version}",
+                extra={
+                    "code": "stale_base",
+                    "latest_version": numero,
+                    "latest_author": derniere.created_by if derniere else None,
+                },
+            )
+        if derniere is not None and checksum == derniere.checksum:
+            raise conflict(
+                f"nothing changed since v{numero}", extra={"code": "no_change", "latest_version": numero}
+            )
     # The published version's eval suite, and the new one's, gate the publication (S32-03).
-    publiee = (await _versions(session, agent))[:1]
-    gate(body, AgentSpec.model_validate(publiee[0].spec) if publiee else None)
-    derniere = (
-        await session.execute(select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == agent.id))
-    ).scalar() or 0
+    gate(spec, AgentSpec.model_validate(derniere.spec) if derniere else None)
     ligne = AgentVersion(
         agent_id=agent.id,
         org_id=organisation.id,
-        version=derniere + 1,
-        spec=body.model_dump(mode="json"),
-        checksum=empreinte(body),
+        version=numero + 1,
+        spec=restored_from.spec if restored_from is not None else spec.model_dump(mode="json"),
+        checksum=checksum,
         created_by=principal.email,
+        message=message,
+        restored_from=restored_from.version if restored_from is not None else None,
     )
     session.add(ligne)
     await session.flush()
@@ -428,8 +524,91 @@ async def publish_version(
         target_type="agent",
         target_id=agent.id,
         version=ligne.version,
+        **({"restored_from": ligne.restored_from} if ligne.restored_from else {}),
+        **({"message_chars": len(message)} if message else {}),
     )
-    return _version_dto(ligne)
+    # What saving a revision does to the channels is the agent's policy (ADR 0071).
+    await after_publish(session, principal, agent, ligne.version, principal.email)
+    return ligne
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/versions",
+    response_model=AgentVersionDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="publishAgentVersion",
+)
+async def publish_version(
+    org: str, slug: Slug, body: AgentSpec, session: Db, principal: Me, allow_egress: bool = False
+) -> AgentVersionDto:
+    """The next version; none is ever rewritten. Superseded by `publishAgentVersionWithMessage`
+    (a message, a base): kept as is for the clients written before, which publish with no message."""
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    ligne = await _append_version(
+        session, principal, org, organisation, agent, sujet, body, message=None, allow_egress=allow_egress
+    )
+    return _version_dto(ligne, agent)
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/versions/publish",
+    response_model=AgentVersionDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="publishAgentVersionWithMessage",
+)
+async def publish_version_with_message(
+    org: str, slug: Slug, body: AgentVersionPublish, session: Db, principal: Me, allow_egress: bool = False
+) -> AgentVersionDto:
+    """The next version, with the author's message, from the version they read: 409 `stale_base` when
+    the latest moved meanwhile, 409 `no_change` when the spec equals the latest's (S40-12)."""
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    ligne = await _append_version(
+        session,
+        principal,
+        org,
+        organisation,
+        agent,
+        sujet,
+        body.spec,
+        message=body.message,
+        base_version=body.base_version,
+        allow_egress=allow_egress,
+    )
+    return _version_dto(ligne, agent)
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/versions/{version}/restore",
+    response_model=AgentVersionDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="restoreAgentVersion",
+)
+async def restore_version(
+    org: str, slug: Slug, version: int, body: AgentVersionRestore, session: Db, principal: Me
+) -> AgentVersionDto:
+    """Copy version N, byte for byte (same spec, same checksum), as the next version. It is a new
+    version that remembers where it came from; nothing is rewritten or deleted (S40-12)."""
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    source = (
+        await session.execute(
+            select(AgentVersion).where(AgentVersion.agent_id == agent.id, AgentVersion.version == version)
+        )
+    ).scalar_one_or_none()
+    if source is None:
+        raise not_found("Agent version", f"{slug}@{version}")
+    ligne = await _append_version(
+        session,
+        principal,
+        org,
+        organisation,
+        agent,
+        sujet,
+        AgentSpec.model_validate(source.spec),
+        message=body.message or f"Restore v{version}",
+        restored_from=source,
+        base_version=body.base_version,
+    )
+    return _version_dto(ligne, agent)
 
 
 @router.get(
@@ -446,7 +625,7 @@ async def get_version(org: str, slug: Slug, version: int, session: Db, principal
     ).scalar_one_or_none()
     if ligne is None:
         raise not_found("Agent version", f"{slug}@{version}")
-    return _version_dto(ligne)
+    return _version_dto(ligne, agent, await _pins(session, principal, org, agent))
 
 
 FINIS = {"succeeded", "failed", "timed_out", "cancelled"}
@@ -465,9 +644,18 @@ async def agent_metrics(
     depuis = utcnow() - timedelta(days=days)
     runs = (
         await session.execute(
-            select(Run.id, Run.status, Project.slug)
+            select(Run.id, Run.status, Project.slug, Run.agent_version)
             .join(Project, Project.id == Run.project_id)
             .where(Run.agent_slug == slug, Project.org_id == organisation.id, Run.created_at >= depuis)
+        )
+    ).all()
+    couts_par_version = (
+        await session.execute(
+            select(Run.agent_version, func.sum(CostLedger.cost_usd))
+            .join(Run, Run.id == CostLedger.run_id)
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug == slug, Project.org_id == organisation.id, CostLedger.ts >= depuis)
+            .group_by(Run.agent_version)
         )
     ).all()
     couts = (
@@ -479,23 +667,27 @@ async def agent_metrics(
             .group_by(CostLedger.kind, Project.slug)
         )
     ).all()
-    reussis = sum(1 for _, statut, _ in runs if statut == "succeeded")
-    termines = sum(1 for _, statut, _ in runs if statut in FINIS)
+    reussis = sum(1 for _, statut, _, _ in runs if statut == "succeeded")
+    termines = sum(1 for _, statut, _, _ in runs if statut in FINIS)
     par_sorte: dict[str, float] = {}
     par_projet: dict[str, list[float]] = {}
     for sorte, projet, montant in couts:
         par_sorte[sorte] = par_sorte.get(sorte, 0.0) + float(montant or 0.0)
         par_projet.setdefault(projet, [0, 0.0])[1] += float(montant or 0.0)
-    for _, _, projet in runs:
+    for _, _, projet, _ in runs:
         par_projet.setdefault(projet, [0, 0.0])[0] += 1
-    derniere = (
-        await session.execute(
-            select(AgentVersion.spec)
-            .where(AgentVersion.agent_id == agent.id)
-            .order_by(AgentVersion.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    par_version: dict[int, list[int]] = {}
+    for _, statut, _, numero in runs:
+        if numero is None:
+            continue
+        ligne_v = par_version.setdefault(int(numero), [0, 0, 0])
+        if statut in FINIS:
+            ligne_v[0] += 1
+            ligne_v[1] += 1 if statut == "succeeded" else 0
+        ligne_v[2] += 1
+    cout_de_version = {int(v): float(c or 0.0) for v, c in couts_par_version if v is not None}
+    # The budget shown is production's: it is the revision most runs use (ADR 0071).
+    en_production = await production_spec(session, agent)
     return AgentMetrics(
         agent=slug,
         days=days,
@@ -510,7 +702,18 @@ async def agent_metrics(
             for projet, (n, c) in sorted(par_projet.items())
         ],
         spent_today_usd=round(await depense_du_jour(session, organisation.id, slug), 6),
-        daily_budget_usd=AgentSpec.model_validate(derniere or {}).budget.daily_usd,
+        daily_budget_usd=AgentSpec.model_validate(en_production or {}).budget.daily_usd,
+        by_version=[
+            AgentVersionMetrics(
+                version=numero,
+                runs=total_v,
+                succeeded=reussis_v,
+                failed=finis_v - reussis_v,
+                success_rate=round(reussis_v / finis_v, 4) if finis_v else None,
+                cost_usd=round(cout_de_version.get(numero, 0.0), 6),
+            )
+            for numero, (finis_v, reussis_v, total_v) in sorted(par_version.items())
+        ],
     )
 
 
@@ -616,6 +819,8 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
     for champ in ("display_name", "description", "expires_at"):
         if champ in body.model_fields_set:
             setattr(agent, champ, getattr(body, champ))
+    if body.tags is not None:
+        agent.tags = list(body.tags)
     if body.status is not None and body.status != agent.status:
         agent.status = body.status
         if body.status == "revoked":
@@ -628,6 +833,7 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
         target_type="agent",
         target_id=agent.id,
         status=agent.status,
+        tags=agent.tags,
     )
     return await _dto(session, agent, principal, org)
 
@@ -762,6 +968,14 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
         copiee = next((v for v in versions if v.version == body.version), None)
     if copiee is None:
         raise not_found("Agent version", f"{slug}@{body.version or 'latest'}")
+    # The copy binds the same memories: the forker must see the global ones (S40-11).
+    await check_bindings_at_publish(
+        session,
+        principal,
+        organisation,
+        AgentSpec.model_validate(copiee.spec),
+        project_slug=body.project if body.scope == "project" else None,
+    )
     if (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -774,6 +988,7 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
         kind=source.kind,
         display_name=body.display_name or f"{source.display_name} (fork)",
         description=source.description,
+        tags=list(source.tags or []),
         owner_id=principal.user_id,
         status="active",
         scope=body.scope,
@@ -792,9 +1007,11 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
             spec=copiee.spec,
             checksum=copiee.checksum,
             created_by=principal.email,
+            message=(body.message or "").strip() or f"Forked from {source.slug}@{copiee.version}",
         )
     )
     await session.flush()
+    await after_publish(session, principal, fork, 1, principal.email)
     await record(
         session,
         principal,
@@ -882,12 +1099,26 @@ async def _version_de(session: AsyncSession, agent: Agent, version: int) -> Agen
     return ligne
 
 
+async def _latest(session: AsyncSession, agent: Agent) -> int:
+    return (
+        await session.execute(select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == agent.id))
+    ).scalar() or 1
+
+
+async def _served_version(session: AsyncSession, agent: Agent, epingle: ProjectAgent | None) -> int:
+    """The revision a pin serves now: its fixed one, or the one of the channel it follows."""
+    version, _, _ = served(agent, pin=epingle, project_channel="stable", work_item_id=None)
+    return version if version is not None else await _latest(session, agent)
+
+
 async def _projet_dto(session: AsyncSession, epingle: ProjectAgent, agent: Agent) -> ProjectAgentDto:
-    spec = AgentSpec.model_validate((await _version_de(session, agent, epingle.version)).spec)
+    version = await _served_version(session, agent, epingle)
+    spec = AgentSpec.model_validate((await _version_de(session, agent, version)).spec)
     surcharges = AgentOverrides.model_validate(epingle.overrides or {})
     return ProjectAgentDto(
         agent=agent.slug,
-        version=epingle.version,
+        version=version,
+        channel=epingle.channel,
         overrides=surcharges,
         effective=effective(spec, surcharges),
         warning=(
@@ -959,7 +1190,9 @@ async def resolve_project_agents(
     """Which agent version a run of this project would load for each reference (S39-13).
 
     It delegates to the runtime's own resolver, so the console shows exactly what a run loads: an
-    explicit `@N`, else the project's pin, else the latest version. Read only, no audit record."""
+    explicit `@N`, else the project's pin, else the project's channel, else production (ADR 0071).
+    A canary share depends on the work item, so it is reported (`candidate_percent`), not applied.
+    Read only, no audit record."""
     from choregos_core.catalogue_d_agents import entree
 
     reponses: list[AgentResolution] = []
@@ -1002,6 +1235,12 @@ async def resolve_project_agents(
                 status="resolved",
                 version=resolu.version,
                 pinned=resolu.pinned,
+                source=resolu.source,
+                channel=resolu.channel,
+                candidate_version=resolu.agent.candidate_version,
+                candidate_percent=(
+                    resolu.agent.candidate_percent if resolu.agent.candidate_version is not None else None
+                ),
                 display_name=resolu.agent.display_name,
                 lifecycle=resolu.agent.lifecycle,
             )
@@ -1024,7 +1263,13 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
         raise conflict(f"agent `{slug}` is {agent.status}: it cannot be pinned")
     if agent.lifecycle in {"draft", "retired"}:
         raise conflict(f"agent `{slug}` is {agent.lifecycle}: it cannot be pinned")
-    spec = AgentSpec.model_validate((await _version_de(session, agent, body.version)).spec)
+    if body.version is not None:
+        pinned_version = body.version
+    elif body.channel == "candidate" and agent.candidate_version is not None:
+        pinned_version = agent.candidate_version
+    else:
+        pinned_version = agent.stable_version or await _latest(session, agent)
+    spec = AgentSpec.model_validate((await _version_de(session, agent, pinned_version)).spec)
     ecarts = elargissements(spec, body.overrides)
     if ecarts:
         raise unprocessable(
@@ -1044,6 +1289,7 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
         )
         session.add(epingle)
     epingle.version = body.version
+    epingle.channel = body.channel
     epingle.overrides = body.overrides.model_dump(mode="json")
     await session.flush()
     await record(
@@ -1055,6 +1301,7 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
         target_id=agent.id,
         project=ctx.project.slug,
         version=body.version,
+        channel=body.channel,
     )
     return await _projet_dto(session, epingle, agent)
 
@@ -1138,12 +1385,14 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     _exiger(decide(principal, org, sujet, Action.TRIAL, project_slug=body.project))
     erreurs_d_une_version(body.spec)
     await _model_allowed(session, organisation, body.spec)
+    await check_bindings_at_publish(session, principal, organisation, body.spec)
+    await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:
         agent = await _agent(session, organisation, body.agent)
-        versions = await _versions(session, agent)
-        publiee = AgentSpec.model_validate(versions[0].spec) if versions else None
+        en_production = await production_spec(session, agent)
+        publiee = AgentSpec.model_validate(en_production) if en_production is not None else None
     plafonds = [TRIAL_CAP_USD, body.budget_usd or TRIAL_DEFAULT_USD]
     if body.spec.budget.run_usd is not None:
         plafonds.append(body.spec.budget.run_usd)
@@ -1355,6 +1604,7 @@ async def list_agent_catalogue(
                 summary=proposition.resume,
                 version=proposition.version,
                 skills=list(proposition.skills),
+                tags=list(proposition.tags),
                 client=proposition.client,
                 reach=proposition.portee,
                 installed=etat.installe,

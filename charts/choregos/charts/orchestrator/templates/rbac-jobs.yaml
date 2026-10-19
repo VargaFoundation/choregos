@@ -42,7 +42,7 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
-  {{- if eq .Values.runner.executor "agent_sandbox" }}
+  {{- if eq (include "choregos.executorKind" .) "agent_sandbox" }}
   # The `agent_sandbox` executor (ADR 0016): one SandboxClaim per run, created, read and
   # deleted; `patch` marks a claim once its run is assigned. `patch` on sandboxes suspends and
   # resumes one around a human question. The pool and the template are read, never written:

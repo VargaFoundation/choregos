@@ -12,7 +12,9 @@ import type {
   ConnectorOperation,
   OperationPatch,
   McpCatalogue,
+  ConnectorCatalogue,
   McpCatalogueInstall,
+  ProjectOrgConnector,
   SkillCatalogue,
   OrgConnector,
   OrgConnectorCreate,
@@ -34,6 +36,14 @@ import type {
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentMetrics,
+  AgentEvaluation,
+  AgentExposure,
+  AgentRelease,
+  AgentReleaseCreate,
+  AgentReleaseDecision,
+  AgentReleasePolicy,
+  AgentReleaseReadiness,
+  ProjectAgentChannel,
   AgentTrial,
   AgentTrialCreate,
   AgentMetricsSummary,
@@ -42,6 +52,8 @@ import type {
   AgentPatch,
   AgentSpec,
   AgentVersion,
+  AgentVersionPublish,
+  AgentVersionRestore,
   ProjectAgent,
   ProjectAgentPut,
   Skill,
@@ -81,6 +93,10 @@ import type {
   ModelCuratePreview,
   ModelSyncResult,
   UsableModel,
+  GitHubAppStatus,
+  GitHubInstallLink,
+  GitHubInstallLinkRequest,
+  GitHubRepositoryPage,
   HandOff,
   Membership,
   MembershipUpsert,
@@ -113,11 +129,19 @@ import type {
   FindingPage,
   MeDto,
   Memory,
+  MemoryStore,
+  MemoryStoreCreate,
+  MemoryStorePatch,
+  ProjectMemoryCreate,
   ModelMatrix,
   PolicyDef,
   PolicyCeilingState,
+  NetworkActivity,
+  ProjectNetwork,
   ProjectDto,
   ProjectPage,
+  ProjectReadiness,
+  ProjectUpdate,
   ProvisionStatus,
   ReleasePage,
   Run,
@@ -171,8 +195,11 @@ export type Problem = {
   detail?: string;
   errors?: unknown[];
   correlation_id?: string;
-  /** `egress_required` on the 409 of a governed "add" whose host the organisation has not opened (S39-22). */
+  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12), `egress_required` on the
+   * 409 of a governed "add" whose host the organisation has not opened (S39-22). */
   code?: string;
+  latest_version?: number;
+  latest_author?: string | null;
   verdicts?: EgressVerdict[];
 };
 
@@ -356,11 +383,46 @@ export const api = {
     request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),
   transferAgentOwnership: (org: string, slug: string, email: string) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
+  /** The next version with its message, from the version the author read; 409 `stale_base` or `no_change` otherwise (S40-12). */
+  publishAgentVersionWithMessage: (org: string, slug: string, body: AgentVersionPublish, allowEgress = false) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/publish${allowEgress ? "?allow_egress=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Copy version N as the next version; nothing is rewritten (S40-12). */
+  restoreAgentVersion: (org: string, slug: string, version: number, body: AgentVersionRestore) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions/${version}/restore`, { method: "POST", body: JSON.stringify(body) }),
   publishAgentVersion: (org: string, slug: string, spec: AgentSpec, allowEgress = false) =>
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions${allowEgress ? "?allow_egress=true" : ""}`, {
       method: "POST",
       body: JSON.stringify(spec),
     }),
+  /** Channels (S40-02, ADR 0071): point production or testing at a revision; the history, the checklist. */
+  releaseAgentVersion: (org: string, slug: string, body: AgentReleaseCreate) =>
+    request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases`, { method: "POST", body: JSON.stringify(body) }),
+  agentReleases: (org: string, slug: string, limit = 50) =>
+    request<AgentRelease[]>(`/orgs/${org}/agents/${slug}/releases?limit=${limit}`),
+  agentReleaseReadiness: (org: string, slug: string, version: number, channel: "stable" | "candidate") =>
+    request<AgentReleaseReadiness>(`/orgs/${org}/agents/${slug}/versions/${version}/readiness?channel=${channel}`),
+  setAgentReleasePolicy: (org: string, slug: string, body: AgentReleasePolicy) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/release-policy`, { method: "PUT", body: JSON.stringify(body) }),
+  /** A live evaluation: the revision's `live` cases run as capped trials in a project (S40-02d). */
+  startAgentEvaluation: (org: string, slug: string, version: number, project: string) =>
+    request<AgentEvaluation>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`, {
+      method: "POST",
+      body: JSON.stringify({ project }),
+    }),
+  agentEvaluations: (org: string, slug: string, version: number) =>
+    request<AgentEvaluation[]>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`),
+  agentExposure: (org: string, slug: string) => request<AgentExposure>(`/orgs/${org}/agents/${slug}/exposure`),
+  decideAgentRelease: (org: string, slug: string, id: string, body: AgentReleaseDecision) =>
+    request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
+  /** The approvers' inbox: releases of the agents one may see, by status. */
+  orgAgentReleases: (org: string, status?: AgentRelease["status"]) =>
+    request<AgentRelease[]>(`/orgs/${org}/agent-releases${status ? `?status=${status}` : ""}`),
+  projectAgentChannel: (id: string) => request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`),
+  setProjectAgentChannel: (id: string, channel: ProjectAgentChannel["channel"]) =>
+    request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`, { method: "PUT", body: JSON.stringify({ channel }) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
   /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
@@ -538,6 +600,11 @@ export const api = {
 
   projects: (org: string = DEFAULT_ORG) => request<ProjectPage>(`/orgs/${org}/projects`),
   project: (id: string) => request<ProjectDto>(`/projects/${qualify(id)}`),
+  /** What the project still lacks to run, computed by the API from stored state (S40-06). */
+  projectReadiness: (id: string) => request<ProjectReadiness>(`/projects/${qualify(id)}/readiness`),
+  /** `PATCH /projects/{id}`: the name and/or the WHOLE configuration (the API validates it as a `ProjectConfig`). */
+  updateProject: (id: string, body: ProjectUpdate) =>
+    request<ProjectDto>(`/projects/${qualify(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   createProject: (org: string, body: unknown) =>
     request<ProjectDto>(`/orgs/${org}/projects`, { method: "POST", body: JSON.stringify(body) }),
   provision: (id: string) => request<ProvisionStatus>(`/projects/${qualify(id)}/provision`, { method: "POST", body: "{}" }),
@@ -606,6 +673,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** The connector types of the registry, by family, with the caller's rights (ADR 0074). */
+  connectorCatalogue: (org: string) => request<ConnectorCatalogue>(`/orgs/${org}/connector-catalogue`),
+  /** The organisation's connectors as one project sees them: on or off, and may the caller switch. */
+  projectOrgConnectors: (id: string) => request<ProjectOrgConnector[]>(`/projects/${qualify(id)}/org-connectors`),
+  enableOrgConnector: (id: string, name: string) =>
+    request<ProjectOrgConnector>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "PUT" }),
+  disableOrgConnector: (id: string, name: string) =>
+    request<void>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "DELETE" }),
   /** Un serveur MCP dit ses outils ; un nouveau naît fermé, un schéma qui dérive le referme. */
   discoverConnectorOperations: (org: string, name: string) =>
     request<ConnectorDiscovery>(`/orgs/${org}/connectors/${name}/discover`, { method: "POST" }),
@@ -632,6 +707,15 @@ export const api = {
     request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}/secrets/${field}`, { method: "DELETE" }),
   testConnector: (id: string, kind: string) =>
     request<ConnectorTestResult>(`/projects/${qualify(id)}/connectors/${kind}/test`, { method: "POST" }),
+
+  /** The Choregos GitHub App as the organisation sees it: its installations, never an installation id to type (ADR 0073). */
+  githubStatus: (org: string) => request<GitHubAppStatus>(`/orgs/${org}/github`),
+  githubRefresh: (org: string) => request<GitHubAppStatus>(`/orgs/${org}/github/refresh`, { method: "POST" }),
+  /** The repositories of the installations the organisation claimed, filtered by `q`. */
+  githubRepositories: (org: string, q = "") =>
+    request<GitHubRepositoryPage>(`/orgs/${org}/github/repositories${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  githubInstallLink: (org: string, body: GitHubInstallLinkRequest) =>
+    request<GitHubInstallLink>(`/orgs/${org}/github/install-link`, { method: "POST", body: JSON.stringify(body) }),
 
   workflow: (id: string) => request<WorkflowDef>(`/projects/${qualify(id)}/workflow`),
   putWorkflow: (id: string, yaml: string) =>
@@ -683,6 +767,12 @@ export const api = {
   putPolicyCeiling: (org: string, ceiling: Record<string, unknown> | null) =>
     request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`, { method: "PUT", body: JSON.stringify({ ceiling }) }),
 
+  /** What a project's runs really get (ADR 0070): its policy under the organisation's ceiling, and what was clamped. */
+  projectNetwork: (id: string) => request<ProjectNetwork>(`/projects/${qualify(id)}/network`),
+  /** Refusals and traffic per host, for the organisation's administrators. */
+  networkActivity: (org: string, params?: Record<string, string>) =>
+    request<NetworkActivity>(`/orgs/${org}/network-activity${query(params)}`),
+
   workItems: (id: string, params?: Record<string, string>) =>
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),
   workItem: (id: string) => request<WorkItemDto>(`/work-items/${id}`),
@@ -721,13 +811,38 @@ export const api = {
   findingAction: (findingId: string, action: string) =>
     request<unknown>(`/findings/${findingId}/actions`, { method: "POST", body: JSON.stringify({ action }) }),
 
-  memorySearch: (id: string, q: string) => request<Memory[]>(`/projects/${qualify(id)}/memory/search${query({ q })}`),
-  memoryPending: (id: string) => request<Memory[]>(`/projects/${qualify(id)}/memory/pending`),
-  memoryDecide: (id: string, memoryId: string, action: "accept" | "reject") =>
-    request<unknown>(`/projects/${qualify(id)}/memory/pending`, {
+  /** `which` picks the project's memory to read (S40-11): `shared` (the default), `own` with an agent, or a named one. */
+  memorySearch: (id: string, q: string, which?: MemoryChoice) =>
+    request<Memory[]>(`/projects/${qualify(id)}/memory/search${query({ q, ...memoryParams(which) })}`),
+  memoryPending: (id: string, which?: MemoryChoice) =>
+    request<Memory[]>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`),
+  memoryDecide: (id: string, memoryId: string, action: "accept" | "reject", which?: MemoryChoice) =>
+    request<unknown>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`, {
       method: "POST",
       body: JSON.stringify({ id: memoryId, action }),
     }),
+  /** Named memories (S40-11, ADR 0075): the organisation's, global and project, with who uses each. */
+  memories: (org: string, filter: { scope?: "global" | "project"; project?: string } = {}) =>
+    request<MemoryStore[]>(`/orgs/${org}/memories${query(compact(filter))}`),
+  memory: (org: string, slug: string) => request<MemoryStore>(`/orgs/${org}/memories/${slug}`),
+  createGlobalMemory: (org: string, body: MemoryStoreCreate) =>
+    request<MemoryStore>(`/orgs/${org}/memories`, { method: "POST", body: JSON.stringify(body) }),
+  updateMemory: (org: string, slug: string, body: MemoryStorePatch) =>
+    request<MemoryStore>(`/orgs/${org}/memories/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  searchGlobalMemory: (org: string, slug: string, q: string) =>
+    request<Memory[]>(`/orgs/${org}/memories/${slug}/search${query({ q })}`),
+  globalMemoryPending: (org: string, slug: string) => request<Memory[]>(`/orgs/${org}/memories/${slug}/pending`),
+  decideGlobalMemory: (org: string, slug: string, memoryId: string, action: "accept" | "reject") =>
+    request<unknown>(`/orgs/${org}/memories/${slug}/pending`, {
+      method: "POST",
+      body: JSON.stringify({ id: memoryId, action }),
+    }),
+  /** What a run of the project may bind: `shared`, `own`, its named memories, the global ones that reach it. */
+  projectMemories: (id: string) => request<MemoryStore[]>(`/projects/${qualify(id)}/memories`),
+  createProjectMemory: (id: string, body: ProjectMemoryCreate) =>
+    request<MemoryStore>(`/projects/${qualify(id)}/memories`, { method: "POST", body: JSON.stringify(body) }),
+  updateProjectMemory: (id: string, slug: string, body: MemoryStorePatch) =>
+    request<MemoryStore>(`/projects/${qualify(id)}/memories/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   costs: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
@@ -769,8 +884,18 @@ export const api = {
 
 export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" };
 
-function compact(filtre: CostFilter): Record<string, string> {
+function compact(filtre: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(filtre).filter(([, v]) => v)) as Record<string, string>;
+}
+
+/** Which of a project's memories a review reads (S40-11): absent, the shared one. */
+export type MemoryChoice = { memory?: string; agent?: string };
+
+function memoryParams(which?: MemoryChoice): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (which?.memory && which.memory !== "shared") out.memory = which.memory;
+  if (which?.memory === "own" && which.agent) out.agent = which.agent;
+  return out;
 }
 
 function query(params?: Record<string, string>): string {

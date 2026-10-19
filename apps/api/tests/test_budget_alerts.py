@@ -151,3 +151,23 @@ async def test_an_unknown_status_filter_is_refused(client: AsyncClient, admin: s
     assert (
         await client.get("/api/v1/orgs/varga/budget-alerts", params={"status": status})
     ).status_code == 422
+
+
+async def test_a_run_is_judged_against_the_budget_of_the_revision_it_used(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """S40-02: a revision published after the run, with a tighter budget, does not make the run's day
+    cross a threshold: the run is judged against its own revision (red with the "latest" query)."""
+    created = await client.post(
+        "/api/v1/orgs/varga/agents",
+        json={"slug": "coordinator", "display_name": "Coordinator", "spec": {"budget": {"daily_usd": 10}}},
+    )
+    assert created.status_code == 201, created.text
+    tighter = await client.post(
+        "/api/v1/orgs/varga/agents/coordinator/versions", json={"budget": {"daily_usd": 1}}
+    )
+    assert tighter.status_code == 201, tighter.text
+    # The run below used v1 (10 $ a day): 3.5 $ is far below 80 %. v2 (1 $) is the latest AND
+    # production's, so a query on either would raise an alert.
+    await _spend(project["id"], 3.5, agent="coordinator")
+    assert await _alerts(client) == []

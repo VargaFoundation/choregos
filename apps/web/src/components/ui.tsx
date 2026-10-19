@@ -179,7 +179,9 @@ export function Lead({ className, ...props }: HTMLAttributes<HTMLParagraphElemen
 /** A dense table: 13 px, rows of about 32 px, headers in a small sans caption. */
 export function Table({ className, ...props }: HTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto">
+    // Focusable, so that a keyboard can scroll a table that is wider than its screen (axe: scrollable-region-focusable).
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scroller must be reachable by keyboard
+    <div className="w-full overflow-x-auto" tabIndex={0}>
       <table className={cn("w-full border-collapse text-left text-[13px] tabular-nums", className)} {...props} />
     </div>
   );
@@ -716,9 +718,12 @@ export function Button({
   title,
   size = "md",
   "aria-describedby": decritPar,
+  "aria-label": etiquette,
 }: {
   children: ReactNode;
   onClick?: () => void;
+  /** A name for a button whose text alone is not enough (an arrow, a bare "Remove" in a list). */
+  "aria-label"?: string;
   /** Ce qui explique le bouton — pourquoi il attend, ce qu'il va faire. */
   "aria-describedby"?: string;
   /**
@@ -738,6 +743,7 @@ export function Button({
       disabled={disabled}
       title={title}
       aria-describedby={decritPar}
+      aria-label={etiquette}
       // Au doigt, 44 px de haut au moins (WCAG 2.5.8, S23-11) : `buttonClasses` les porte.
       className={buttonClasses(TONE_TO_VARIANT[tone], size)}
     >

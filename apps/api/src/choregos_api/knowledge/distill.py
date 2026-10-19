@@ -133,17 +133,9 @@ async def instructions_for(session: Any, org_id: str, base: KnowledgeBase) -> st
     from choregos_core.catalogue_d_agents import entree
     from choregos_core.instructions import rendre_les_instructions
 
-    from ..db.models import Agent, AgentVersion
+    from ..services.agent_releases import production_spec_of
 
-    source = (
-        await session.execute(
-            select(AgentVersion.spec)
-            .join(Agent, Agent.id == AgentVersion.agent_id)
-            .where(Agent.org_id == org_id, Agent.slug == AGENT, Agent.status == "active")
-            .order_by(AgentVersion.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    source = await production_spec_of(session, org_id, AGENT, active_only=True)
     text = str((source or {}).get("instructions") or entree(AGENT).document["spec"]["instructions"])  # type: ignore[union-attr]
     return rendre_les_instructions(
         text,

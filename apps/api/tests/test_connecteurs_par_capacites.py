@@ -57,7 +57,21 @@ async def test_un_projet_rh_n_affiche_ni_depot_ni_ci_ni_train(
     exigences = (await client.get(f"/api/v1/projects/{pid}/requirements")).json()
     assert [r["capability"] for r in exigences] == ["tracker", "runtime", "gateway"]
     assert any("arrivee: the agent coordinateur" in raison for raison in exigences[1]["reasons"])
-    assert exigences[0]["connector"] is None and exigences[0]["default_type"]
+    assert exigences[0]["connector"] is None
+    assert exigences[0]["default_type"] is None, "a tracker is not provided by the deployment (S40-05)"
+    assert exigences[1]["default_type"], "the runtime is"
+
+
+async def test_only_what_the_deployment_provides_is_a_platform_default(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S40-05: `cd` said "Platform default: argocd" and `ci` "tekton" with nothing behind them."""
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    pid = project["id"]
+    items = {r["capability"]: r for r in (await client.get(f"/api/v1/projects/{pid}/requirements")).json()}
+    assert {"scm", "cd", "runtime"} <= set(items)
+    assert items["cd"]["default_type"] is None and items["scm"]["default_type"] is None
+    assert items["runtime"]["default_type"] == "k8s_job"
 
 
 async def test_un_secret_en_clair_recoit_422(client: AsyncClient, project: dict[str, Any]) -> None:

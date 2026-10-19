@@ -60,7 +60,7 @@ test("une étape s'ajoute depuis la vue processus, sans passer par la carte (S23
 });
 
 test("une skill se rattache à un agent dans sa nouvelle version (S23-13)", async ({ page }) => {
-  await page.goto("/agents/onboarding-coordinator?tab=definition");
+  await page.goto("/agents/onboarding-coordinator?tab=definition&edit=1");
   const skills = page.getByTestId("skills-de-la-version");
   await expect(skills).toContainText("onboarding-procedure@1");
   await skills.getByRole("button", { name: "Remove onboarding-procedure" }).click();
@@ -69,9 +69,10 @@ test("une skill se rattache à un agent dans sa nouvelle version (S23-13)", asyn
   await expect(skills.getByLabel("Version")).toHaveValue("");
   await skills.getByRole("button", { name: "Attach" }).click();
   await expect(skills).toContainText("onboarding-procedure (latest)");
+  await page.getByLabel("What changed and why").fill("Follow the latest procedure");
   await page.getByRole("button", { name: /^Publish v\d+$/ }).click();
-  await expect(page.getByRole("status")).toContainText("published");
+  await expect(page.getByRole("status")).toContainText("sent to testing");
   // La version publiée porte la skill, sans version : la dernière, lue à chaque run.
-  await expect(page.getByTestId("version")).toContainText("onboarding-procedure");
-  await expect(page.getByTestId("version")).not.toContainText("onboarding-procedure@1");
+  await expect(page.getByTestId("definition-groups")).toContainText("onboarding-procedure");
+  await expect(page.getByTestId("definition-groups")).not.toContainText("onboarding-procedure@1");
 });

@@ -3,12 +3,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AgentCatalogue } from "@/components/agents/catalogue";
+import { ChannelBadges } from "@/components/agents/channels";
 import { LifecycleBadges } from "@/components/agents/lifecycle";
 import { ScopeBadge, ScopeFilter } from "@/components/agents/governance";
 import { resumeDeLaVersion, scopeLabel, type AgentScope } from "@/components/agents/registre";
+import { TagFilter, TagList, withTags } from "@/components/agents/tags";
 import { Glossaire } from "@/components/glossaire";
 import {
   Badge,
@@ -47,12 +49,36 @@ export default function AgentsPage() {
 function Agents() {
   const { org } = useSession();
   // `/agents?catalogue=1`: the way back from the new-agent page's "add one from the catalogue".
-  const catalogue = useSearchParams().get("catalogue") === "1";
+  const search = useSearchParams();
+  const router = useRouter();
+  const catalogue = search.get("catalogue") === "1";
+  // `/agents?tag=madr&tag=design`: a filtered list is a link (S40-10); an agent must carry every tag.
+  const tags = search.getAll("tag");
+  function selectTags(next: string[]) {
+    const query = new URLSearchParams(search.toString());
+    query.delete("tag");
+    for (const tag of next) query.append("tag", tag);
+    const text = query.toString();
+    router.replace(text ? `/agents?${text}` : "/agents");
+  }
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   const metrics = useQuery({ queryKey: ["agent-metrics", org], queryFn: () => api.agentMetricsList(org) });
+  // Releases waiting for approval: the approver's inbox (S40-02b), as a filter chip.
+  const waiting = useQuery({
+    queryKey: ["agent-releases-pending", org],
+    queryFn: () => api.orgAgentReleases(org, "pending_approval"),
+    retry: false,
+  });
+  const awaiting = new Set((waiting.data ?? []).map((r) => r.agent));
+  const [onlyAwaiting, setOnlyAwaiting] = useState(false);
   const [scope, setScope] = useState<AgentScope | null>(null);
   const [drawer, setDrawer] = useState<"catalogue" | null>(catalogue ? "catalogue" : null);
-  const shown = (agents.data ?? []).filter((a) => scope === null || (a.scope ?? "org") === scope);
+  const shown = withTags(
+    (agents.data ?? []).filter(
+      (a) => (scope === null || (a.scope ?? "org") === scope) && (!onlyAwaiting || awaiting.has(a.slug)),
+    ),
+    tags,
+  );
   const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
@@ -74,7 +100,23 @@ function Agents() {
         </div>
       </div>
       <Glossaire ici="agents" />
-      {agents.data && agents.data.length > 0 && <ScopeFilter agents={agents.data} value={scope} onChange={setScope} />}
+      {agents.data && agents.data.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <ScopeFilter agents={agents.data} value={scope} onChange={setScope} />
+          {awaiting.size > 0 && (
+            <button
+              type="button"
+              aria-pressed={onlyAwaiting}
+              onClick={() => setOnlyAwaiting(!onlyAwaiting)}
+              data-testid="awaiting-chip"
+              className={`rounded-full border px-3 py-1 text-xs ${onlyAwaiting ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+            >
+              Awaiting approval ({awaiting.size})
+            </button>
+          )}
+        </div>
+      )}
+      {agents.data && <TagFilter agents={agents.data} value={tags} onChange={selectTags} />}
       <Card title="Registry" padding="none" className="overflow-hidden">
         {agents.error ? (
           <div className="p-5">
@@ -88,7 +130,16 @@ function Agents() {
           </div>
         ) : shown.length === 0 ? (
           <div className="p-5">
-            <Empty title={`No ${scopeLabel(scope ?? undefined).toLowerCase()} agent`}>Pick another scope, or clear the filter.</Empty>
+            {tags.length > 0 ? (
+              <Empty title={`No agent tagged ${tags.join(" + ")}`}>
+                <button type="button" className="underline" onClick={() => selectTags([])}>
+                  Clear the tags
+                </button>
+                {(scope !== null || onlyAwaiting) && " or pick another scope."}
+              </Empty>
+            ) : (
+              <Empty title={onlyAwaiting && scope === null ? "No release is waiting for approval" : `No ${scopeLabel(scope ?? undefined).toLowerCase()} agent`}>Pick another scope, or clear the filter.</Empty>
+            )}
           </div>
         ) : (
           <Table data-testid="registre">
@@ -98,6 +149,7 @@ function Agents() {
                 <TH>Owner</TH>
                 <TH>Status</TH>
                 <TH>Version</TH>
+                <TH>Production / Testing</TH>
                 <TH align="right">Runs (30 days)</TH>
                 <TH align="right">Cost (30 days)</TH>
                 <TH align="right">Success rate</TH>
@@ -121,6 +173,11 @@ function Agents() {
                           {agent.kind === "remote" ? "Remote · A2A" : "External"}
                         </Badge>
                       )}
+                      {(agent.tags ?? []).length > 0 && (
+                        <div className="mt-1">
+                          <TagList tags={agent.tags} />
+                        </div>
+                      )}
                     </TD>
                     <TD className="text-xs text-ink-muted">{agent.owner ?? "—"}</TD>
                     <TD>
@@ -132,6 +189,9 @@ function Agents() {
                       <span className="ml-2 font-sans text-xs text-ink-muted">
                         {resumeDeLaVersion(agent.versions?.find((v) => v.version === agent.latest_version)?.spec)}
                       </span>
+                    </TD>
+                    <TD>
+                      <ChannelBadges agent={agent} pending={awaiting.has(agent.slug) || agent.pending_release != null} />
                     </TD>
                     <TD align="right" className="font-mono">
                       {m ? m.runs : "—"}

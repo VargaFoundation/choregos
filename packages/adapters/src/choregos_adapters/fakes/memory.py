@@ -108,13 +108,18 @@ class FakeMemory:
         return memory.id
 
     async def propose_fact(self, project: str, fact: Fact, provenance: Provenance) -> str:
+        if fact.external_id:
+            # Idempotent, as the real adapters: the same proposal twice is one proposal.
+            for known in self.pending.get(project, []):
+                if known.provenance.get("external_id") == fact.external_id:
+                    return known.id
         memory = Memory(
             id=self._new_id(),
             kind=fact.kind,
             subject=fact.subject,
             content=fact.content,
             status="pending",
-            provenance=provenance.model_dump(mode="json"),
+            provenance={**provenance.model_dump(mode="json"), "external_id": fact.external_id},
             proposed_by=provenance.run_id,
         )
         self.pending.setdefault(project, []).append(memory)

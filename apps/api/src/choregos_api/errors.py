@@ -75,8 +75,8 @@ def unauthorized(detail: str = "authentication required") -> ApiError:
     return ApiError(status.HTTP_401_UNAUTHORIZED, "Not authenticated", detail)
 
 
-def conflict(detail: str) -> ApiError:
-    return ApiError(status.HTTP_409_CONFLICT, "State conflict", detail)
+def conflict(detail: str, *, extra: dict[str, Any] | None = None) -> ApiError:
+    return ApiError(status.HTTP_409_CONFLICT, "State conflict", detail, extra=extra)
 
 
 def unprocessable(detail: str, errors: list[dict[str, Any]] | None = None) -> ApiError:

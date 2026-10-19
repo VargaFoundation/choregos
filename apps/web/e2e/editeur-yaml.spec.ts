@@ -57,6 +57,7 @@ test("à largeur lg, la validation se tient à côté de l'éditeur, pas dessous
 test("l'éditeur de la politique d'un projet se rend aussi, sous la même CSP", async ({ page }) => {
   const bilan = await surveiller(page);
   await page.goto("/p/billing-api/settings");
+  await page.locator("#policy summary").click(); // the policy sits behind a disclosure (S40-03b)
   await expect(page.getByLabel("Policy YAML")).toBeVisible();
   await expect(page.getByLabel("Policy YAML")).toContainText("per_ticket_usd");
   expect(await bilan()).toEqual({ violations: [], dehors: [] });

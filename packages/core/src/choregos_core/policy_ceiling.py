@@ -18,10 +18,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from typing import Literal
 
 from choregos_contracts import Policy
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .network import covered, outside, validate_pattern
 from .policy import DEFAULT_STAGE_USD, DEFAULT_TICKET_USD, PolicyEngine
 
 
@@ -57,6 +59,26 @@ class CeilingFindings(_Strict):
     max_per_run: int | None = Field(default=None, ge=0)
 
 
+class CeilingNetwork(_Strict):
+    """The organisation's network bound (ADR 0070): no project or agent goes beyond it."""
+
+    #: The widest set of hosts a project may allow; `None`: no cap. `["*"]`: any public host.
+    allow_domains: list[str] | None = None
+    #: Hosts no run may reach, whatever a project or an agent says.
+    deny_domains: list[str] = Field(default_factory=list)
+    per_host_per_minute: int | None = Field(default=None, ge=1)
+    per_run_per_minute: int | None = Field(default=None, ge=1)
+    builtin_web_tools: Literal["allow", "deny"] | None = None
+    #: Where an operator can reach the organisation, written into the User-Agent of what the
+    #: platform fetches for it.
+    user_agent_contact: str | None = Field(default=None, max_length=200)
+
+    @field_validator("allow_domains", "deny_domains")
+    @classmethod
+    def _patterns(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else list(dict.fromkeys(validate_pattern(p) for p in value))
+
+
 class PolicyCeiling(_Strict):
     """The caps an organisation sets on every project policy."""
 
@@ -64,6 +86,7 @@ class PolicyCeiling(_Strict):
     attempts: CeilingAttempts = Field(default_factory=CeilingAttempts)
     scope: CeilingScope = Field(default_factory=CeilingScope)
     findings: CeilingFindings = Field(default_factory=CeilingFindings)
+    network: CeilingNetwork = Field(default_factory=CeilingNetwork)
 
 
 @dataclass(frozen=True)
@@ -71,11 +94,17 @@ class Excess:
     """One value of a policy above its cap, and how to bring it down."""
 
     field: str
-    value: float | None
-    cap: float
+    value: float | str | None
+    cap: float | str | None
     lower: Callable[[Policy], None]
+    #: A ready-made sentence, for what is not a number against a number (a host, a setting).
+    text: str | None = None
 
     def message(self) -> str:
+        if self.text is not None:
+            return f"{self.field}: {self.text}"
+        assert isinstance(self.cap, int | float)
+        assert not isinstance(self.value, str)
         shown = "unlimited" if self.value is None else _number(self.value)
         return f"{self.field}: {shown} exceeds the organisation's ceiling of {_number(self.cap)}"
 
@@ -193,9 +222,64 @@ def _other_excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
             yield Excess(f"{section}.{name}", value, bound, _set_value(section, name, bound))
 
 
+def _drop_domain(domain: str) -> Callable[[Policy], None]:
+    def lower(p: Policy) -> None:
+        net = p.sandbox.network
+        net.allow_domains = [d for d in net.allow_domains if d != domain]
+
+    return lower
+
+
+def _set_network(name: str, cap: float | str) -> Callable[[Policy], None]:
+    def lower(p: Policy) -> None:
+        setattr(p.sandbox.network, name, cap)
+
+    return lower
+
+
+def _network_excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
+    bound = ceiling.network
+    net = policy.sandbox.network
+    for domain in net.allow_domains:
+        try:
+            pattern = validate_pattern(domain)
+        except ValueError:
+            continue  # a badly written entry matches nothing at run time: not an excess
+        if (hit := covered(pattern, bound.deny_domains)) is not None:
+            yield Excess(
+                "network.allow_domains",
+                domain,
+                hit,
+                _drop_domain(domain),
+                f"`{domain}` is denied by the organisation (`{hit}`)",
+            )
+        elif outside([pattern], bound.allow_domains):
+            yield Excess(
+                "network.allow_domains",
+                domain,
+                None,
+                _drop_domain(domain),
+                f"`{domain}` is outside the organisation's allowed hosts",
+            )
+    for name in ("per_host_per_minute", "per_run_per_minute"):
+        limit: int | None = getattr(bound, name)
+        current: int | None = getattr(net, name)
+        if limit is not None and (current is None or current > limit):
+            yield Excess(f"network.{name}", current, limit, _set_network(name, limit))
+    if bound.builtin_web_tools == "deny" and net.builtin_web_tools == "allow":
+        yield Excess(
+            "network.builtin_web_tools",
+            "allow",
+            "deny",
+            _set_network("builtin_web_tools", "deny"),
+            "`allow` is refused, the organisation switches built-in web tools off",
+        )
+
+
 def _excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
     yield from _budget_excesses(policy, ceiling)
     yield from _other_excesses(policy, ceiling)
+    yield from _network_excesses(policy, ceiling)
 
 
 def widenings(policy: Policy, ceiling: PolicyCeiling | None) -> list[str]:
@@ -218,7 +302,12 @@ def clamp(policy: Policy, ceiling: PolicyCeiling | None) -> tuple[Policy, list[s
             break
         said.append(excess.message())
         excess.lower(clamped)
+    # The organisation's deny list holds for every run: it is merged in, not an excess.
+    denied = clamped.sandbox.network.deny_domains
+    merged = list(dict.fromkeys([*denied, *ceiling.network.deny_domains]))
+    if merged != denied:
+        clamped.sandbox.network.deny_domains = merged
     return clamped, said
 
 
-__all__ = ["PolicyCeiling", "clamp", "widenings"]
+__all__ = ["CeilingNetwork", "PolicyCeiling", "clamp", "widenings"]

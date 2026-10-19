@@ -22,9 +22,9 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations: {{- toYaml .Values.global.serviceAccount.annotations | nindent 4 }}
 automountServiceAccountToken: true
-{{- if .Values.global.rbac.clusterScoped }}
+{{- if and .Values.global.rbac.clusterScoped (eq (include "choregos.executorKind" .) "tekton") }}
 ---
-# The API only reads the state of projects' PipelineRuns: it creates nothing in the cluster.
+# Tekton only (ADR 0072): the API only reads the state of projects' PipelineRuns: it creates nothing in the cluster.
 # A tenant without cluster-scoped rights (`global.rbac.clusterScoped: false`) does without it:
 # run state then reaches it through the executor's events, not through the Tekton API.
 apiVersion: rbac.authorization.k8s.io/v1

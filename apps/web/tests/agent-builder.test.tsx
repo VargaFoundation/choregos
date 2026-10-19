@@ -15,7 +15,7 @@ import {
 } from "@/components/agents/builder";
 import { resumeDeLaVersion } from "@/components/agents/registre";
 import { api } from "@/lib/api";
-import type { AgentSpec, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
+import type { AgentSpec, KnowledgeBase, MemoryStore, OrgConnector, Skill } from "@/lib/types";
 
 /** The agent builder (S32-01): every field of a version is editable, with what it costs and allows. */
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
@@ -47,6 +47,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
       orgConnectors: vi.fn(),
       skills: vi.fn(),
       knowledgeBases: vi.fn(),
+      memories: vi.fn(async (_org: string, filter: { scope?: string } = {}) => STORES.filter((m) => !filter.scope || m.scope === filter.scope)),
+      policyCeiling: vi.fn().mockResolvedValue({ ceiling: null }),
     },
   };
 });
@@ -65,6 +67,11 @@ const CONNECTOR: OrgConnector = {
 const SKILLS: Skill[] = [
   { slug: "onboarding-procedure", status: "active", latest_version: 2 },
   { slug: "unreviewed-script", status: "pending_review", latest_version: 1 },
+];
+
+const STORES: MemoryStore[] = [
+  { slug: "security-lessons", display_name: "Security lessons", scope: "global", reach: "org", projects: [], status: "active" },
+  { slug: "decisions", display_name: "Decisions", scope: "project", project: "billing-api", projects: ["billing-api"], status: "active" },
 ];
 
 const BASES: KnowledgeBase[] = [
@@ -89,6 +96,9 @@ describe("the builder's rules", () => {
     expect(servedTo(BASES[1]!)).toBe("every project of the organisation");
     expect(servedTo({ ...BASES[0]!, scope: "groups", groups: ["network"] })).toBe("the projects of network");
     expect(cleanSpec({}).memory).toBe("project");
+    expect(cleanSpec({}).memories).toEqual([{ scope: "project", slug: "shared", mode: "write" }]);
+    // A version that still says `memory: agent` is sent as its explicit list, the legacy field back at its default.
+    expect(cleanSpec({ memory: "agent" })).toMatchObject({ memory: "project", memories: [{ scope: "project", slug: "own", mode: "write" }] });
   });
 });
 
@@ -99,8 +109,9 @@ describe("the folded sections", () => {
       limits: "the role's defaults",
       skills: "none",
       tools: "none",
+      network: "the project's hosts",
       knowledge: "none",
-      memory: "the project's shared memory",
+      memory: "1 project · writes to the project's shared memory",
       evals: "0 cases",
     });
     const spec = {
@@ -117,7 +128,7 @@ describe("the folded sections", () => {
       limits: "1 turn · 20 min · US$0.50 a run",
       skills: "2 attached",
       tools: "1 MCP server",
-      memory: "none",
+      memory: "none · reads and writes nothing",
       evals: "1 case",
     });
     expect(Object.values(openByDefault({})).some(Boolean)).toBe(false);
@@ -184,7 +195,11 @@ describe("the builder", () => {
     fireEvent.change(base, { target: { value: "network-runbooks" } });
     fireEvent.click(within(builder).getByRole("button", { name: "Read it" }));
     expect(within(base).queryByRole("option", { name: "Network runbooks (index)" })).toBeNull();
-    fireEvent.change(within(builder).getByLabelText("Memory scope"), { target: { value: "agent" } });
+    // Memory: an organisation memory read first, then the project's shared memory, written to.
+    await within(builder).findByRole("option", { name: /Security lessons/ });
+    fireEvent.change(within(builder).getByLabelText("Add a memory"), { target: { value: "global:security-lessons" } });
+    fireEvent.click(within(builder).getByRole("button", { name: "Add it" }));
+    fireEvent.click(within(builder).getByRole("button", { name: "Move global:security-lessons up" }));
     // What it costs and allows, next to the form.
     const summary = screen.getByTestId("ce-que-ca-permet");
     expect(summary).toHaveTextContent("platform/cheap");
@@ -196,7 +211,10 @@ describe("the builder", () => {
     expect(within(summary).getByTestId("connaissances-resolues")).toHaveTextContent(
       "network-runbooks — searched with knowledge_search; served to projects netops.",
     );
-    expect(within(summary).getByTestId("memoire-resolue")).toHaveTextContent("Its own memory within each project");
+    expect(within(summary).getByTestId("memoire-resolue")).toHaveTextContent(
+      "Security lessons (organisation) — readThe project's shared memory — read and written",
+    );
+    expect(within(summary).getByTestId("memoire-resolue")).toHaveTextContent("It writes to the project's shared memory");
 
     fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
     await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
@@ -215,7 +233,11 @@ describe("the builder", () => {
         skills: [{ slug: "onboarding-procedure", version: 2 }],
         mcp_servers: [{ connector: "supplier", tools: ["track_*"] }],
         knowledge: [{ slug: "network-runbooks" }],
-        memory: "agent",
+        memories: [
+          { scope: "global", slug: "security-lessons", mode: "read" },
+          { scope: "project", slug: "shared", mode: "write" },
+        ],
+        memory: "project",
         evals: [],
       },
     });
@@ -330,3 +352,45 @@ describe("the builder", () => {
     expect(resumeDeLaVersion(code)).toBe("code · ticket-triager");
   });
 });
+
+describe("the release section of a new agent (S40-02c)", () => {
+  const open = (scope: "org" | "personal") =>
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder
+          org="acme"
+          mode={{ kind: "create" }}
+          initial={{ display_name: "Triage", scope }}
+          scopes={{ options: ["org", "personal"], projects: [] }}
+        />
+      </QueryClientProvider>,
+    );
+  beforeEach(() => {
+    vi.mocked(api.createAgent).mockClear();
+    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.skills).mockResolvedValue([]);
+    vi.mocked(api.knowledgeBases).mockResolvedValue([]);
+  });
+
+  it("an organisation agent is released through testing unless the box is unticked", async () => {
+    open("org");
+    const builder = screen.getByTestId("agent-builder");
+    expect(within(builder).getByLabelText(/Release through testing \(recommended\)/)).toBeChecked();
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createAgent).mock.calls[0]![1]).toMatchObject({
+      scope: "org",
+      release_policy: { on_publish: "candidate", stable: { require_candidate: true } },
+    });
+  });
+
+  it("a personal agent carries no release policy: saving it is releasing it", async () => {
+    open("personal");
+    const builder = screen.getByTestId("agent-builder");
+    expect(within(builder).queryByLabelText(/Release through testing/)).toBeNull();
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createAgent).mock.calls[0]![1]).not.toHaveProperty("release_policy");
+  });
+});
+

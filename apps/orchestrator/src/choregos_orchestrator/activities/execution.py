@@ -72,6 +72,9 @@ def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
     sert qu'à sortir. Sans `runner_egress_proxy`, rien n'est ajouté.
     """
     env = dict(settings.runner_env)
+    if str(getattr(settings, "runner_egress_auth", "") or "") == "run":
+        # The runner adds the run id and token to the proxy URL itself, before any child starts.
+        env["CHOREGOS_EGRESS_AUTH"] = "run"
     proxy = str(getattr(settings, "runner_egress_proxy", "") or "").format(namespace=namespace)
     if proxy:
         env.setdefault("HTTP_PROXY", proxy)
@@ -176,6 +179,19 @@ async def snapshot_live(executor: Any, run: Run | None, ref: ExecRef, status: Ex
         run.log_archive = snapshot.model_dump(mode="json")
 
 
+def _capabilities_for(executor: Any, ref: ExecRef, default: list[str]) -> list[str]:
+    """What the executor that took THIS run can do: a routing executor has two, the second one lesser."""
+    capabilities_for = getattr(executor, "capabilities_for", None)
+    return sorted(capabilities_for(ref)) if capabilities_for is not None else default
+
+
+def _capabilities_of_run(executor: Any, run: Run, namespace: str) -> list[str]:
+    ref = ExecRef(
+        kind=run.executor_kind or "fake", name=run.executor_ref or run.id, namespace=namespace, run_id=run.id
+    )
+    return _capabilities_for(executor, ref, sorted(getattr(executor, "capabilities", frozenset())))
+
+
 @activity.defn(name="start_run")
 async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
     """Démarre l'exécution (Tekton, Job K8s, Docker local, fake) — idempotent par `run_id`."""
@@ -188,6 +204,10 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
         # `suspend` and `resume` make it keep a sandbox across a person's answer (S35-03).
         capabilities = sorted(getattr(bundle.adapters.executor, "capabilities", frozenset()))
         if run is not None and run.executor_ref:
+            # A run on the second executor (S40-03c) does what THAT executor does.
+            capabilities = _capabilities_of_run(
+                bundle.adapters.executor, run, _runner_namespace(settings, bundle.slug)
+            )
             return {
                 "executor_ref": run.executor_ref,
                 "kind": run.executor_kind,
@@ -238,6 +258,7 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             },
         )
         ref = await bundle.adapters.executor.start(spec)
+        capabilities = _capabilities_for(bundle.adapters.executor, ref, capabilities)
         # Un exécuteur qui sait mettre en file (`queue`) a pu créer le run SANS pod, parce
         # que le plafond de simultanéité était atteint. Le marquer « running » ferait
         # mentir le board, la page du run et les mesures : rien ne tourne. On lui demande

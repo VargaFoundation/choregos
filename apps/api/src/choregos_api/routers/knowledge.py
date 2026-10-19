@@ -60,6 +60,7 @@ from ..schemas.knowledge import (
     ProjectKnowledgeBaseCreate,
 )
 from ..services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
+from ..services.platform_network import check_platform_host
 from ..temporal import get_temporal, knowledge_sync_id
 
 router = APIRouter(tags=["knowledge"])
@@ -794,7 +795,12 @@ async def _checked_source_config(
         if not connector:
             raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
         await _documents_connector(session, organisation, connector, kind)
-    return _SOURCE_VALIDATORS[kind](config)
+    checked = _SOURCE_VALIDATORS[kind](config)
+    if kind in {"web", "git"}:
+        # The organisation's network bounds (ADR 0070): a site its ceiling denies is not crawled, and
+        # the refusal comes now (422, nothing an opening could fix), before the egress gate's 409.
+        await check_platform_host(session, organisation.id, str(checked["url"]), f"{kind} source")
+    return checked
 
 
 async def _reachable_start(

@@ -51,10 +51,19 @@ def _installer(racine: pathlib.Path, nom: str, source: str) -> None:
 
 @pytest.fixture
 def chemin_temporaire(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
+    from choregos_adapters import registry
+
+    # The plugins register connector types in module-level tables: restore them, or `tracker/maison`
+    # outlives the test and `tests/web`'s icon fixture check fails in a full run.
+    before = (dict(registry._REGISTRY), dict(registry._SPECS))
     sys.path.insert(0, str(tmp_path))
     try:
         yield tmp_path
     finally:
+        registry._REGISTRY.clear()
+        registry._REGISTRY.update(before[0])
+        registry._SPECS.clear()
+        registry._SPECS.update(before[1])
         sys.path.remove(str(tmp_path))
         for module in [m for m in sys.modules if m.startswith("greffon_")]:
             del sys.modules[module]

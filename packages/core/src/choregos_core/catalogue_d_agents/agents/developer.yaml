@@ -4,6 +4,7 @@ catalogue:
   summary: Implements the specification inside the allowed paths, test first, small conventional commits.
 agent:
   slug: developer
+  tags: [implementation, coding, software]
   display_name: Developer
   description: Implements the work item within its allowed paths, runs the repository's tests, lint and type check, and commits in small conventional commits.
   spec:

@@ -22,16 +22,25 @@ from ..config import get_settings
 from ..db.models import OrgConnector
 from ..deps import Db, Me
 from ..errors import forbidden, not_found, unprocessable
-from ..rbac import Permission
 from ..schemas import (
     CatalogueMetaDto,
+    CataloguePermissions,
+    ConnectorEnablement,
     McpCatalogueDto,
     McpCatalogueEntryDto,
     McpCatalogueInstall,
     OrgConnectorCreate,
     OrgConnectorDto,
 )
+from ..services.catalogue_rights import (
+    SELECTED_PROJECTS,
+    CatalogueAction,
+    decide,
+    projects_where,
+    visible_projects,
+)
 from ..services.catalogues import egress_of
+from ..services.connector_catalogue import enablement_by_connector
 from .org_connectors import _administrer, _organisation, declare_org_connector
 
 router = APIRouter(tags=["connectors"])
@@ -60,6 +69,11 @@ def _dto(
     version: str,
     installed: dict[str, list[tuple[str, str]]],
     declared: list[str],
+    *,
+    can_install: bool,
+    install_reason: str | None,
+    enable_in: list[str],
+    enablement: dict[str, ConnectorEnablement],
 ) -> McpCatalogueEntryDto:
     here = installed.get(entry.id, [])
     state: Literal["available", "installed", "update"] = "available"
@@ -74,6 +88,16 @@ def _dto(
         egress=egress_of(entry.egress_hosts, declared),
         procedure=procedure_of_mcp_entry(load_procedures(get_settings().procedures_extra), entry.id),
     )
+    refusal = _refusal_for(entry)
+    here_enablement = [enablement[name] for name, _ in here if name in enablement]
+    selected = any(e.availability == SELECTED_PROJECTS for e in here_enablement)
+    body["can"] = CataloguePermissions(
+        install=can_install and entry.install == "installable",
+        configure_projects=[],
+        enable_projects=enable_in if selected else [],
+    ).model_dump()
+    body["cannot_reason"] = install_reason or refusal
+    body["enablement"] = [e.model_dump() for e in here_enablement]
     return McpCatalogueEntryDto.model_validate(body)
 
 
@@ -110,15 +134,29 @@ async def list_mcp_catalogue(
     official: Annotated[bool | None, Query()] = None,
 ) -> McpCatalogueDto:
     """The shipped catalogue and what each entry means in this organisation. Its members can read it."""
-    if not principal.can(Permission.PROJECT_READ, org):
-        raise forbidden(f"the MCP catalogue is readable by the members of {org}")
+    seeing = decide(principal, org, CatalogueAction.SEE)
+    if not seeing.allowed:
+        raise forbidden(seeing.reason or "refused")
     organisation = await _organisation(session, org)
     loaded = _catalogue()
     declared = get_settings().api_egress_hosts
     installed = await _installed(session, organisation.id)
     version = loaded.meta.catalogue_version
+    installing = decide(principal, org, CatalogueAction.INSTALL)
+    visible = await visible_projects(session, principal, organisation.id, org)
+    enable_in = projects_where(principal, org, CatalogueAction.ENABLE, visible)
+    enablement = await enablement_by_connector(session, principal, organisation)
     entries = [
-        _dto(e, version, installed, declared)
+        _dto(
+            e,
+            version,
+            installed,
+            declared,
+            can_install=installing.allowed,
+            install_reason=installing.reason,
+            enable_in=enable_in,
+            enablement=enablement,
+        )
         for e in loaded.entries
         if _matches(e, q or "")
         and (category is None or category in e.categories)
@@ -183,6 +221,7 @@ async def install_mcp_catalogue_entry(
         config=config,
         secret_refs=secret_refs,
         secret_values=body.secret_values,
+        availability=body.availability,
         allow_egress=body.allow_egress,
     )
     return await declare_org_connector(

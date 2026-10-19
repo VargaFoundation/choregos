@@ -1,6 +1,6 @@
 # 0034 — Connectors by capability, a policy per operation; a discovered MCP tool is born closed
 
-- **Status**: accepted, 2026-10-05; amended 2026-10-06 (§7, a write is always a governed action)
+- **Status**: accepted, 2026-10-05; amended 2026-10-06 (§7, a write is always a governed action); amended by [ADR 0074](0074-catalogue-rights.md) (availability per project)
 - **Concerns**: the connector registry (`register`), the `connectors` table, `GET /connectors/types`,
   project settings, a new `connector_operations` table, the internal tool broker, the tool
   catalogue of [ADR 0014](0014-a-platform-held-tool-catalogue.md) (amended), the MCP
@@ -65,3 +65,14 @@ a device manager, a carrier, badge readers, a supplier's agent — would do with
 - An operation set to `approval` turns a tool call into a governed action (ADR 0035) that waits
   for a person; a write set to `allowed` turns it into one that the policy approves (§7).
 - The connector pages are generated, so a connector type a plugin adds needs no console change.
+
+## Amendment (S40-05): a platform default is claimed only for what the deployment provides
+
+`GET /projects/{id}/requirements` returned `default_type = type_par_defaut(kind)` for a capability
+with no connector: `argocd` for `cd`, `tekton` for `ci`, `slack` for `notify`. Those are the types the
+adapter factory would build with an empty configuration, which provide nothing (no GitOps repository,
+no token), yet the console printed "Platform default: argocd" and marked the getting-started step done.
+`default_type` now comes from `deployment_default_type(kind)`: the deployment's executor for
+`runtime`, `CHOREGOS_GATEWAY_TYPE` for `gateway`, `ecphoria`/`lexical` for `memory`, and null for every
+other kind. `type_par_defaut` keeps its meaning for the factory, so run behaviour does not change.
+A connector is also tested when saved, so its status is no longer `unknown` until somebody presses *Test*.

@@ -31,13 +31,13 @@ class EgressRefusedHttpError(EgressRefusedError, AdapterError, httpx.ConnectErro
 
     def __init__(self, refusal: EgressRefusedError) -> None:
         EgressRefusedError.__init__(
-            self, refusal.host, refusal.port, refusal.family, refusal.reason, refusal.org
+            self, refusal.host, refusal.port, refusal.family, refusal.reason, refusal.org, refusal.detail
         )
         # `httpx.RequestError.__init__` is skipped on purpose: `request` stays unset.
         self._request = None
 
     def __str__(self) -> str:
-        return refusal_message(self.host, self.port, self.family, self.reason, self.org)
+        return refusal_message(self.host, self.port, self.family, self.reason, self.org, self.detail)
 
 
 class GuardedTransport(httpx.AsyncBaseTransport):

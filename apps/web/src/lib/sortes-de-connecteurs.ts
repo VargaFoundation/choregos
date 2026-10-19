@@ -13,12 +13,31 @@ const LIBELLES: Record<string, string> = {
   tracker: "work tracker",
   scm: "source code",
   ci: "CI pipelines",
-  cd: "deployment",
+  cd: "deployment (CD)",
   runtime: "agent runtime",
   gateway: "model gateway",
   memory: "memory",
   notify: "notifications",
 };
+
+/** The title of a connector card (S40-03b): what the system is for, as a person would name it. */
+const TITRES: Record<string, string> = {
+  tracker: "Work tracker",
+  scm: "Source code",
+  ci: "CI pipelines",
+  cd: "Deployment (CD)",
+  runtime: "Agent runtime",
+  gateway: "Model gateway",
+  memory: "Memory",
+  notify: "Notifications",
+};
+
+export function titreDeSorte(kind: string): string {
+  const titre = TITRES[kind];
+  if (titre) return titre;
+  const libelle = LIBELLES[kind] ?? kind;
+  return libelle.charAt(0).toUpperCase() + libelle.slice(1);
+}
 
 /** Ce qu'une sorte désigne ; une sorte qu'un greffon apporte garde son propre nom. */
 export function libelleDeSorte(kind: string): string {

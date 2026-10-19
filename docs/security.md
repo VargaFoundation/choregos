@@ -15,11 +15,12 @@ organisations must assume **a member of one will try to read another**.
 | Threat | Mechanism | Where |
 | :-- | :-- | :-- |
 | writing outside the allowed paths | ACP permission refused → diff verified after the run → revert → gate `scope_respected` | `guardrails.py`, `scope.py`, `gates/` |
-| exfiltrating data | egress denied by default; the only way out is a **per-project Squid proxy** whose allowlist is the policy's `allow_domains`, non-root, read-only, `CONNECT` to 443 only; the agent's own guardrails refuse the same domains first | `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
+| exfiltrating data, or polluting the internet | egress is closed and bounded in three scopes that only narrow one another — organisation ceiling, project policy, agent version — with a deny list that always wins and IP literals refused (ADR 0070). **Enforced by layer**: a **per-run egress proxy** (S40-01c) is the wall for host, port and connection rate; the tool broker and the platform's own fetchers (MCP connectors, knowledge crawls, git skill sources) are a wall for what the platform requests: the ceiling is read at declaration and again at every call, a refusal is a 403 journaled with layer `broker`, calls to one host are throttled organisation-wide and carry an identifying User-Agent (S40-01d); the built-in `web_fetch` tool is the one place where method, robots.txt, User-Agent and politeness hold for what an agent reads (S40-01f); the runner's guardrails and the backend's settings are a net (S40-01b). Every decision is journaled per run (`network_decisions`), and `network` is part of an agent version's digest only when set. The per-project Squid of the GitOps provisioning (allowlist = `allow_domains`, `CONNECT` to 443 only) stays for per-project namespaces: host-level, project-level | `choregos_core/network.py`, `services/network.py`, `services/platform_network.py`, `services/web_fetch.py`, `tests/test_platform_network.py`, `tests/test_web_fetch_tool.py`, `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
 | using credentials | there are none in the workspace; the run token only authenticates the agent **to us**, and never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py` |
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
 | leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
 | spending without limit | one virtual key per run with a hard cap, a budget per ticket, tool calls in the same ledger | ADR 0004, ADR 0014 |
+| a connector reaching a project that did not ask for it | an organisation connector is `all_projects` or `selected_projects`; a selected one reaches only the projects an owner or an administrator enabled, enforced in the broker, in the project policy behind governed actions and in the project's operations list (ADR 0074) | `services/catalogue_rights.py`, `tests/test_connector_enablement.py` |
 | touching production | `prod.requires_train` in the DSL, release train, Argo windows, GitHub Environment | ADR 0006 |
 | changing what an agent does | an agent has a scope — common, organisation, project or personal — and one server-side function decides who may publish, suspend or pin it, with the reason for every refusal: common and organisation agents are an `org_admin`'s, a project's agent its `project_owner`'s, a personal agent its owner's (and an `org_admin`'s); an agent you may not see is a 404; a personal agent or another project's agent can neither be pinned nor named in a workflow nor run in one (ADR 0061) | `services/agent_governance.py`, `routers/agents.py`, `services/agents.py`, `tests/test_agent_governance_matrix.py` |
 | changing its own configuration | `.choregos/**` refused for writing (except `result.json`) | `guardrails.py` |
@@ -42,6 +43,21 @@ organisations must assume **a member of one will try to read another**.
   `sandbox.unknown_requests: reject` (the `regulated` preset) it is **refused**, with a
   message that names the legitimate tools (`report_finding`, `request_scope_change`). The
   hard mechanisms remain the sandbox and the diff check after the run.
+- **The network policy is a wall only where the layer is.** The egress proxy sees a TLS tunnel, not
+  what is inside it: **method, path, headers and User-Agent are invisible to it**, and one tunnel can
+  carry many HTTP/2 requests, so its rate limit is a *connection* rate, not a request rate. robots.txt
+  and method rules can hold only where the platform makes the request (the broker, the crawlers, the
+  governed `web_fetch` tool). Claude Code's own `WebSearch` runs **at the model provider**, outside
+  every Choregos network layer: the only lever is to deny the tool (`builtin_web_tools`), and that is
+  a setting in the pod, not a wall. The runner's guardrails are a **net**: the agent shares the pod,
+  and a `curl` from Bash is not a URL permission request. On the Diametral tenant the infra's FQDN
+  policy lets runner pods reach eight hosts directly and its baseline policy lets every pod of the
+  namespace reach every other one (PostgreSQL and Temporal included): until infra changes that, the
+  Choregos proxy is bypassable for those hosts.
+- **`choregos-egress` limits.** Its rate limits count per replica and per connection; it stops a
+  name that resolves to a private address and connects to the address it resolved (one resolution), but
+  a wall also needs the chart's NetworkPolicies (or the platform's) to stop runner pods going out
+  another way. The per-project Squid of per-project namespaces stays host-level and project-level.
 - **Row-level security needs a non-superuser role.** A PostgreSQL superuser ignores every
   policy. The API refuses to start as one in `staging` and `prod`; the embedded PostgreSQL
   creates `choregos_app` at initdb for that reason.
@@ -52,7 +68,12 @@ organisations must assume **a member of one will try to read another**.
 
 The platform makes outbound calls for a tenant (the MCP broker and discovery, the git skill fetch,
 the knowledge sources, a remote agent's card). Three layers decide whether one may leave
-([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)):
+([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)), after the organisation's **network
+bounds** — the deny list and allowed set of its policy ceiling's `network` section, with the
+instance's deny list — which are read first, in every mode, by the same guarded transport and by the
+declaration and call checks: a deny always wins, over an opened host too, and a host the bounds
+refuse cannot be opened (ADR 0070, amendment of 2026-10-19: one model, the list opens, the ceiling
+bounds):
 
 1. **The organisation's list** (`/admin/egress`): hosts, ports and the pod family that calls them,
    decided by the organisation's administrator (`tools:grant`), requested by anyone, audited.
@@ -72,10 +93,12 @@ redirects, because a subprocess cannot be wrapped. **Not guarded**: the deployme
 dependencies (gateway, Temporal, memory, object store, OIDC issuer, the platform's GitHub App) and,
 until phase 2, the REST connectors (Jira, GitLab, Slack…).
 
-**Runners.** A rule whose pod family is `runners` joins the project policy's `sandbox.network.allow_domains`
-for every run of the organisation (the runner's own guard, from the stage input) and for the egress
-proxy the provisioning renders, so an administrator's "allow this host for agent pods" works in every
-project without editing each policy. A wildcard rule (`*.x.test`) becomes the domain `x.test`, which the
+**Runners.** A rule whose pod family is `runners` joins every run of the organisation as an implied
+host of its effective network (ADR 0070, amended): the runner's own guard reads it from the stage
+input, the per-run egress proxy from `GET /internal/runs/{id}/network`, the per-project proxy the
+provisioning renders from the project's union; every deny list (instance, organisation ceiling,
+project) still wins over it. An administrator's "allow this host for agent pods" therefore works in
+every project without editing each policy. A wildcard rule (`*.x.test`) becomes the domain `x.test`, which the
 guard and the proxy read as the name and its subdomains. The proxy is rendered when a project is
 provisioned: a host opened later reaches the guard at the next run and the proxy at the next
 provisioning render. A project whose own list is empty gets exactly what its organisation opened.
@@ -101,6 +124,32 @@ tool call and every write through the runner's permission path; that path is the
 the user's code, makes the call. It is a convention the SDK keeps, not a wall: Python code in the pod
 can open a socket or run a command like any program, and is bounded by the sandbox, not by the SDK.
 Cosign verification of agent images is not built yet.
+
+## What a run remembers
+
+A run reads only the memories its agent version binds **and** that reach its project
+([ADR 0075](adr/0075-an-agent-reads-several-memories.md)): a global memory with reach `projects` is
+invisible to the runs of the others, a project memory to every other project, and an unresolvable
+binding is skipped, not read from elsewhere. A namespace that is not the project's shared or own form is
+never read as the shared one (`split_namespace` refuses it). What an agent writes to a **global**
+memory is a proposal: nothing it says becomes a fact the whole organisation reads until an
+administrator accepts it. Publishing a version that binds a global memory needs to see it; a memory a
+caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
+Facts carry their organisation and sit under forced row-level security.
+
+## Decisions that need a fresh sign-in
+
+Some gestures are too consequential to be made from a browser left open: the session must have been
+authenticated recently (`step_up_minutes`; the API answers `401 step_up_required` and the console
+signs the person in again). They are made by a person in a session, never by an API token or an MCP
+client, which propose and do not decide:
+
+- deciding a governed action (approving one; [ADR 0035](adr/0035-governed-actions-in-the-core.md));
+- **releasing an agent revision to production, or to a canary share, and loosening the release
+  policy of an agent** ([ADR 0071](adr/0071-an-agent-version-reaches-production-through-channels.md);
+  default 10 minutes; a personal agent is exempt; an edition can add its own rule through the
+  `agent.release` gesture check). A release also runs the eval suite again and keeps a history of
+  every move.
 
 ## Injection through context
 
@@ -181,6 +230,13 @@ project's memory is not sent to a remote agent.
   adapter (values it resolved are masked in logs and error texts). A `store:` reference is derived by
   the platform and refused when written by hand, so a connector cannot point at another's secret.
   A database dump or backup alone reveals nothing; losing the KEK loses the values.
+- GitHub App installations are tenant boundaries ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
+  one App serves the deployment, so a token for `owner/repo` is minted only through an installation
+  **claimed** by the organisation of the connector or run. With several organisations the claim needs
+  GitHub user authorization (the person must manage the installation, checked with the App's OAuth
+  client); without it, typing another company's repository name yields no token, for a connector or
+  for a runner's clone. The callback's `installation_id` is never trusted alone, and the install
+  `state` is HMAC-signed, short-lived and bound to the signed-in person.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
 - Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).
@@ -203,6 +259,7 @@ reference, tools born closed); a skill is assessed by the supply-chain gate agai
 high-risk one waits for a second administrator, and a bundled one is checked against its sha256
 provenance. A skill enters the catalogue only from a listed publisher, under an open licence, at a pinned
 commit; Anthropic's proprietary document skills and anything unlicensed are never listed or bundled.
+Who sees, installs and enables is decided by one server function (ADR 0074): every member sees a catalogue, only the organisation's administrator installs, and a project owner or the administrator enables an installed connector for a project.
 A changed upstream reaches an organisation only when a catalogue release is merged **and** an
 administrator updates the skill: two people, as ADR 0050 asks against bait-and-switch.
 

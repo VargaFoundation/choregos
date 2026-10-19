@@ -37,7 +37,15 @@ from ..db.models import (
     Run,
 )
 from ..secret_store import resolved_configuration
+from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
 from .connecteurs import human_floor, plus_stricte
+from .platform_network import (
+    WHERE,
+    PlatformNetworkRefused,
+    PlatformRateLimited,
+    enforce_connector_call,
+    with_identity,
+)
 
 SEPARATEUR = "__"
 #: L'espace des identifiants d'une écriture appelée par un run : le même appel (run, outil,
@@ -119,8 +127,12 @@ async def outils_du_courtier(session: AsyncSession, run: Run, project: Project) 
             )
         ).scalars()
     }
+    allumes = await enabled_ids(session, project)
     outils: dict[str, OutilDuCourtier] = {}
     for operation, connecteur in lignes:
+        # ADR 0074: an organisation connector restricted to selected projects reaches only those.
+        if connecteur.availability == SELECTED_PROJECTS and connecteur.id not in allumes:
+            continue
         effective = human_floor(
             connecteur, operation.name, plus_stricte(operation.policy, resserres.get(operation.id))
         )
@@ -332,20 +344,33 @@ def verifier_les_arguments(outil: OutilDuCourtier, arguments: dict[str, Any]) ->
 
 
 async def appeler(
-    session: AsyncSession, outil: OutilDuCourtier, arguments: dict[str, Any]
+    session: AsyncSession,
+    outil: OutilDuCourtier,
+    arguments: dict[str, Any],
+    *,
+    run: Run | None = None,
+    project: Project | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """`tools/call` on the server, with the connector's key resolved HERE, never in the pod.
 
-    Under the organisation's egress allowlist (S39-22): a host it has not opened is a tool error
+    Two halves of one network policy hold it (ADR 0070, amended): the organisation's network bounds
+    are read FIRST, so a host its ceiling refuses (403) or that the organisation already called too
+    often this minute (429) never receives the call; then every request runs under the
+    organisation's egress allowlist (S39-22, ADR 0066), so a host it has not opened is a tool error
     that says so, not a timeout."""
     from .egress import egress_scope_for_org
 
     async with egress_scope_for_org(session, outil.connecteur.org_id, "api", f"mcp:{outil.connecteur.name}"):
-        return await _appeler(session, outil, arguments)
+        return await _appeler(session, outil, arguments, run=run, project=project)
 
 
 async def _appeler(
-    session: AsyncSession, outil: OutilDuCourtier, arguments: dict[str, Any]
+    session: AsyncSession,
+    outil: OutilDuCourtier,
+    arguments: dict[str, Any],
+    *,
+    run: Run | None = None,
+    project: Project | None = None,
 ) -> tuple[int, dict[str, Any]]:
     import httpx
     from choregos_adapters import build
@@ -356,8 +381,24 @@ async def _appeler(
 
     instance = outil.connecteur
     try:
-        config = await resolved_configuration(
-            session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        await enforce_connector_call(
+            session,
+            instance,
+            project=project,
+            run_id=run.id if run else None,
+            agent_slug=run.agent_slug if run else None,
+        )
+    except PlatformNetworkRefused as refus:
+        return 403, {"error": f"{refus.message()}: {WHERE}", "type": "network_policy"}
+    except PlatformRateLimited as limite:
+        return 429, {"error": str(limite), "type": "rate_limited"}
+    try:
+        config = await with_identity(
+            session,
+            instance.org_id,
+            await resolved_configuration(
+                session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+            ),
         )
         client = build(instance.kind, instance.type, config)
         if hasattr(client, "call_tool"):

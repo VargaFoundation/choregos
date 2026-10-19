@@ -8,6 +8,7 @@ catalogue:
   tools: ["connector:loki (read-only, optional)", "connector:prometheus (read-only, optional)", "connector:grafana (read-only, optional)"]
 agent:
   slug: devops
+  tags: [devops, release, observability]
   display_name: DevOps
   description: Before a release, checks its readiness and writes the rollout plan; after the release train has deployed, reads logs and metrics through read-only connectors and says go or no-go. It never deploys.
   spec:

@@ -23,8 +23,11 @@ from ..audit import record
 from ..db.models import Agent, AgentVersion, Skill, SkillVersion
 from ..rbac import SYSTEM
 from ..schemas import AgentSpec
+from ..schemas.agents import MAX_TAGS
+from .agent_releases import after_publish
 from .agents import empreinte, erreurs_d_une_version
 from .installation import installer_skills_et_agents
+from .network import check_agent_network
 from .skill_gate import platform_columns
 from .skills import empreinte as empreinte_de_skill
 
@@ -110,6 +113,7 @@ async def mettre_a_jour(
     ).scalar_one()
     spec = spec_de(entree_)
     erreurs_d_une_version(spec)
+    await check_agent_network(session, org_id, spec)
     derniere = (
         (
             await session.execute(
@@ -121,6 +125,10 @@ async def mettre_a_jour(
         .scalars()
         .first()
     )
+    # A tag-only change of the catalogue still reaches an upgraded agent (S40-10): the entry's tags are
+    # added, an organisation's own are never removed, and the cap holds (its own come first).
+    nouveaux = [t for t in entree_.tags if t not in (agent.tags or [])]
+    agent.tags = [*(agent.tags or []), *nouveaux][:MAX_TAGS]
     if derniere is not None and derniere.checksum == empreinte(spec):
         return None
     version = (derniere.version if derniere else 0) + 1
@@ -132,11 +140,14 @@ async def mettre_a_jour(
             spec=spec.model_dump(mode="json"),
             checksum=empreinte(spec),
             created_by=auteur(entree_),
+            message=f"Catalogue update to {entree_.slug}@{entree_.version}",
         )
     )
     await session.flush()
     await record(session, principal, "agent.publish", org_id=org_id, target_type="agent", target_id=agent.id,
                  version=version, via=auteur(entree_))  # fmt: skip
+    # What an upgrade does to the channels is the agent's policy (ADR 0071).
+    await after_publish(session, principal, agent, version, auteur(entree_))
     return version
 
 

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..db.models import Agent, AgentVersion, BudgetAlert, CostLedger, Project, Run
 from ..schemas import AgentSpec
+from .agent_releases import production_spec_of
 from .agents import depense_du_jour, depense_du_mois
 
 #: The thresholds, in the order they are crossed: the policy's `alert_at_ratio` (0.8 by default), then
@@ -130,15 +131,23 @@ async def check_after_spend(session: AsyncSession, run_id: str | None) -> list[B
             raised.append(alert)
 
     if run.agent_slug:
-        spec_row: Any = (
-            await session.execute(
-                select(AgentVersion.spec)
-                .join(Agent, Agent.id == AgentVersion.agent_id)
-                .where(Agent.org_id == project.org_id, Agent.slug == run.agent_slug)
-                .order_by(AgentVersion.version.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
+        # The revision the run used — not the latest: once testing and production differ, the latest
+        # is the revision nobody may be running (ADR 0071). Production for a run that recorded none.
+        spec_row: Any = None
+        if run.agent_version is not None:
+            spec_row = (
+                await session.execute(
+                    select(AgentVersion.spec)
+                    .join(Agent, Agent.id == AgentVersion.agent_id)
+                    .where(
+                        Agent.org_id == project.org_id,
+                        Agent.slug == run.agent_slug,
+                        AgentVersion.version == run.agent_version,
+                    )
+                )
+            ).scalar_one_or_none()
+        if spec_row is None:
+            spec_row = await production_spec_of(session, project.org_id, run.agent_slug)
         budget = AgentSpec.model_validate(spec_row or {}).budget.daily_usd
         spent_agent = await depense_du_jour(session, project.org_id, run.agent_slug)
         for percent in crossed(spent_agent, budget, thresholds(policy.alert_at_ratio)):

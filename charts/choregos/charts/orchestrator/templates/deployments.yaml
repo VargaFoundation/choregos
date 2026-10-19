@@ -64,9 +64,7 @@ spec:
               # agent pod in ErrImagePull that nothing else explains.
               value: {{ $root.Values.global.imageRegistry }}/{{ $root.Values.runner.image }}:{{ $root.Values.runner.tag | default $root.Values.global.imageTag }}
             - name: CHOREGOS_RUNNER_NAMESPACE_PATTERN
-              value: {{ $root.Values.runner.namespacePattern | quote }}
-            - name: CHOREGOS_EXECUTOR_KIND
-              value: {{ $root.Values.runner.executor | quote }}
+              value: {{ include "choregos.runnerNamespacePattern" $root | quote }}
             {{- with $root.Values.global.playbooks.configMap }}
             - name: CHOREGOS_PLAYBOOKS_DIR
               value: {{ $root.Values.global.playbooks.mountPath | quote }}
@@ -117,6 +115,14 @@ spec:
               value: {{ $root.Values.runner.egressProxy | default "" | quote }}
             - name: CHOREGOS_EGRESS_IMAGE
               value: {{ $root.Values.runner.egressImage | default "" | quote }}
+            {{- if (($root.Values.global.egress | default dict).enabled) }}
+            # The per-run egress proxy of the release namespace (ADR 0070): runners present their run
+            # id and token as proxy credentials, and the deployment's deny list applies to every run.
+            - name: CHOREGOS_RUNNER_EGRESS_AUTH
+              value: "run"
+            - name: CHOREGOS_NETWORK_INSTANCE_DENY
+              value: {{ join "," (($root.Values.global.egress).denyDomains | default list) | quote }}
+            {{- end }}
             # The RuntimeClass of agent pods when the policy imposes none: a
             # cluster that has gVisor or Kata says so here once. Empty: the cluster's.
             - name: CHOREGOS_RUNNER_RUNTIME_CLASS
@@ -136,13 +142,17 @@ spec:
             - name: CHOREGOS_REQUIRE_IMAGE_DIGEST
               value: {{ .requireDigest | default false | quote }}
             {{- end }}
-            {{- if eq $root.Values.runner.executor "agent_sandbox" }}
+            {{- if eq (include "choregos.executorKind" $root) "agent_sandbox" }}
             # The warm pool the `agent_sandbox` executor claims from, and the port its warm
             # runners listen on for their one assignment (sandbox.yaml renders both).
             - name: CHOREGOS_SANDBOX_WARM_POOL
               value: "choregos-runner"
             - name: CHOREGOS_SANDBOX_ASSIGNMENT_PORT
               value: {{ (($root.Values.runner.sandbox | default dict).assignmentPort | default 8765) | quote }}
+            # A step that names its own image cannot run in a pool made from one image (ADR 0072):
+            # it goes to this executor. Empty keeps the sandbox executor's refusal.
+            - name: CHOREGOS_CUSTOM_IMAGE_EXECUTOR
+              value: {{ $root.Values.runner.customImageExecutor | default "" | quote }}
             # How long a finished sandbox keeps its workspace volume before the controller
             # deletes it: every second of it counts against the namespace's storage quota.
             - name: CHOREGOS_SANDBOX_TTL_SECONDS
@@ -181,7 +191,7 @@ metadata:
   name: choregos-orchestrator
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations: {{- toYaml .Values.global.serviceAccount.annotations | nindent 4 }}
-{{- if has .Values.runner.executor (list "k8s_job" "agent_sandbox") }}
+{{- if has (include "choregos.executorKind" .) (list "k8s_job" "agent_sandbox") }}
 ---
 # Same account for `agent_sandbox`: the SandboxTemplate names it, with no token mounted.
 # The `k8s_job` executor launches runners in THIS namespace under this account: without it,

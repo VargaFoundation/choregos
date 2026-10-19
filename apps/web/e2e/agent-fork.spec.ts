@@ -30,7 +30,7 @@ test("a common agent is read only with the server's reason, and can be forked in
   await expect(page.getByRole("button", { name: "Suspend" })).toBeDisabled();
 
   await page.goto("/agents/developer?tab=definition");
-  await expect(page.getByRole("button", { name: "Publish v3" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeDisabled();
   await expect(page.getByTestId("why-readonly")).toContainText("Fork it into your project");
 
   await page.getByRole("button", { name: "Fork" }).click();

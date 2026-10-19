@@ -11,6 +11,10 @@ suite: API Choregos
 templates:
   - charts/choregos-api/templates/deployment.yaml
   - charts/choregos-api/templates/migrations-job.yaml
+# Offline rendering: the default executor (agent_sandbox, ADR 0072) refuses to render without its
+# operator among the cluster's API versions, which a unit test does not have.
+set:
+  choregos-orchestrator.runner.skipOperatorCheck: true
 tests:
   - it: sets a non-root security context
     template: charts/choregos-api/templates/deployment.yaml

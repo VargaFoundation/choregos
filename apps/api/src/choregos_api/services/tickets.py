@@ -281,8 +281,11 @@ async def tracker_du_projet(session: AsyncSession, project: Project) -> tuple[Co
         return row, None
     from choregos_adapters import build, configuration_resolue
 
+    from .github_app import pin_installation
+
     try:
-        config = configuration_resolue("tracker", row.type, row.config, row.secret_refs, row.secret_ref)
+        pinned = await pin_installation(session, project.org_id, "tracker", row.type, row.config)
+        config = configuration_resolue("tracker", row.type, pinned, row.secret_refs, row.secret_ref)
         return row, build("tracker", row.type, config)
     except (AdapterError, SecretIntrouvable, ValueError, KeyError) as erreur:
         raise upstream(row.type, f"the tracker connector cannot be built: {erreur}") from erreur

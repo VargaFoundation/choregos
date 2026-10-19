@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from .app import GitHubApp, GitHubAppPort
 from .auth import (
     APP_EVENTS,
     APP_PERMISSIONS,
@@ -18,7 +19,9 @@ __all__ = [
     "APP_PERMISSIONS",
     "DEFAULT_PERMISSIONS",
     "RUNNER_PERMISSIONS",
+    "GitHubApp",
     "GitHubAppAuth",
+    "GitHubAppPort",
     "GitHubClient",
     "InstallationToken",
 ]

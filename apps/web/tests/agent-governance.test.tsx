@@ -29,6 +29,9 @@ vi.mock("@/lib/api", async (importOriginal) => {
       agent: vi.fn(),
       agents: vi.fn(),
       agentMetrics: vi.fn().mockResolvedValue({ agent: "x", days: 30, runs: 0, succeeded: 0, failed: 0, cost_usd: 0 }),
+      agentReleases: vi.fn().mockResolvedValue([]),
+      agentExposure: vi.fn().mockResolvedValue({ projects: [] }),
+      agentReleaseReadiness: vi.fn().mockResolvedValue({ version: 3, channel: "candidate", kind: "promote", ready: true, checks: [] }),
       forkAgent: vi.fn(),
       changeAgentScope: vi.fn(),
       projects: vi.fn().mockResolvedValue({ items: [{ slug: "dev" }, { slug: "ops" }], meta: { has_more: false } }),
@@ -98,25 +101,34 @@ describe("an agent the caller may not change", () => {
     await open(page());
     expect((await screen.findByTestId("cannot-reason")).textContent).toContain(REASON);
     expect((await screen.findByTestId("scope")).textContent).toBe("Common");
-    // The lifecycle controls are held back too.
-    expect(screen.getByRole("button", { name: "Deprecate" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Suspend" })).toBeDisabled();
   });
 
-  it("the Definition tab holds the publish button back with the reason, and no builder", async () => {
+  it("holds the lifecycle controls of the Lifecycle tab back too", async () => {
+    const search = vi.spyOn(URLSearchParams.prototype, "get").mockImplementation((k) => (k === "tab" ? "lifecycle" : null));
+    vi.mocked(api.agent).mockResolvedValue(common());
+    await open(page());
+    expect(await screen.findByRole("button", { name: "Deprecate" })).toBeDisabled();
+    search.mockRestore();
+  });
+
+  it("the Definition tab holds the Edit button back with the reason, and no builder", async () => {
     window.history.replaceState(null, "", "/agents/developer?tab=definition");
     const search = vi.spyOn(URLSearchParams.prototype, "get").mockImplementation((k) => (k === "tab" ? "definition" : null));
     vi.mocked(api.agent).mockResolvedValue(common());
     await open(page());
-    expect(await screen.findByRole("button", { name: "Publish v4" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeDisabled();
     expect(screen.getByTestId("why-readonly").textContent).toBe(REASON);
+    expect(screen.queryByRole("button", { name: /^Publish v/ })).toBeNull();
     search.mockRestore();
   });
 
   it("nothing is held back when the server sends no `can` (an API without governance)", async () => {
+    const search = vi.spyOn(URLSearchParams.prototype, "get").mockImplementation((k) => (k === "tab" ? "lifecycle" : null));
     vi.mocked(api.agent).mockResolvedValue(common({ can: undefined, cannot_reason: null, scope: undefined }));
     await open(page());
     expect(await screen.findByRole("button", { name: "Deprecate" })).toBeEnabled();
+    search.mockRestore();
     expect(screen.queryByTestId("cannot-reason")).toBeNull();
   });
 });
