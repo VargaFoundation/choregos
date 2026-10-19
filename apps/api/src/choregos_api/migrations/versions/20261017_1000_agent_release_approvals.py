@@ -25,6 +25,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        # The migration job runs as the application role, under forced RLS: without this, every
+        # data step below sees zero rows (S39-27).
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     with op.batch_alter_table("agent_releases") as batch:
         batch.add_column(sa.Column("approvals_required", sa.Integer(), server_default="0", nullable=False))
         batch.add_column(sa.Column("decisions", Json(), nullable=True))

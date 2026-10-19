@@ -36,6 +36,10 @@ def _postgres() -> bool:
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        # The migration job runs as the application role, under forced RLS: without this, every
+        # data step below sees zero rows (S39-27).
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     with op.batch_alter_table("agents") as batch:
         batch.add_column(sa.Column("stable_version", sa.Integer(), nullable=True))
         batch.add_column(sa.Column("candidate_version", sa.Integer(), nullable=True))

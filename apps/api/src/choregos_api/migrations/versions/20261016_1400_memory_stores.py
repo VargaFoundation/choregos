@@ -45,6 +45,10 @@ def _policy(table: str, visible: str) -> None:
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        # The migration job runs as the application role, under forced RLS: without this, every
+        # data step below sees zero rows (S39-27).
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     op.create_table(
         STORES,
         sa.Column("id", sa.String(length=36), nullable=False),
