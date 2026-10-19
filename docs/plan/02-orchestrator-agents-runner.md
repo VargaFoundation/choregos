@@ -171,7 +171,7 @@ Sorties standardisées : code 0 (résultat posté, quel que soit `status`), 10 (
 | Backend | `launch_spec` | `model_env` | Notes |
 | :-- | :-- | :-- | :-- |
 | ~~`openhands`~~ **retiré** | aucun agent ACP en ligne de commande (0.59 : `serve`/`cli` ; 1.x : `agent-server` HTTP) — [ADR 0011](../adr/0011-retrait-d-openhands.md) ; le défaut est `claude-code` | — | — |
-| `claude-code` | `claude-agent-acp` (adaptateur Zed) ; `CLAUDE.md` → lien vers `AGENTS.md` ; `settings.json` projet avec hooks de secours | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL` | Modèle Claude uniquement (validation projet) |
+| `claude-code` | `claude-agent-acp` (`@agentclientprotocol/claude-agent-acp`, pinned in `versions.lock`; the image keeps a `claude-code-acp` link for stages that name the old Zed package, #436); `CLAUDE.md` → link to `AGENTS.md`; project `settings.json` with fallback hooks | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL` | Claude models only (project validation) |
 | `codex` | `codex-acp` ; `AGENTS.md` natif | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, modèle via config | |
 | `gemini-cli` | `gemini --acp` (`--experimental-acp` déprécié depuis 0.39) | `GOOGLE_GEMINI_BASE_URL` (via LiteLLM), clé | |
 | `goose` | `goose acp` | provider `openai` pointé sur LiteLLM | |
