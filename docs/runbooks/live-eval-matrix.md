@@ -40,6 +40,11 @@ cells to `GET /models/matrix` and the settings page.
 - Each case is a work item `EVAL-<digest>` with label `eval:<ticket>` and one run: its page shows
   the context reduction card (what ran, what headroom says it removed, *inferred*) next to the
   gateway's cost (*observed*).
+- The cell's cost is the gateway's. Check first that the gateway gives a price to cache reads and
+  writes (`cache_read_input_token_cost`, `cache_creation_input_token_cost` in the model's
+  `model_info`). Without them, a Claude Code run, which reads most of its input from the cache,
+  costs mostly its output. That is the result the 2026-10-19 matrix got: ADR 0055 says how it was
+  priced again from the spend logs.
 - A `skipped` case is not a failure and is not in the rate. Its reason says why: a tool missing on
   the runner, headroom unavailable, a backend without a shell-filter hook (rtk on anything but
   Claude Code), a stage that could not be prepared.
