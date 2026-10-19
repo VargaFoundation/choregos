@@ -57,7 +57,8 @@ global:
   # yet — for example a plugin shipped inactive (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — without forking the
   # chart. A variable already set by the chart is REFUSED at render time: two values for the same
   # name, Kubernetes keeps the last one without saying anything, and the chart's setting would be replaced
-  # silently. Plain values only: a secret goes through a `Secret`, never through here.
+  # silently. Each entry has exactly one of `value` or `valueFrom` (refused otherwise); a secret is
+  # mapped by `valueFrom.secretKeyRef`, never written as a plain `value` (S38-18).
   extraEnv: []
   #   - name: CHOREGOS_ESSAI_ONTOLOGIE
   #     value: "1"

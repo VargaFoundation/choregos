@@ -118,9 +118,9 @@ included (drawn once, then re-read). It exists for a
 bench and says so; never use it in production.
 
 **Connector secrets by `env:NAME`.** A secret a connector references (`secret_refs: {api_token:
-env:CONNECTOR_JIRA_TOKEN}`) must be mapped into the API and worker pods (`global.extraEnv`, from a
-Secret) under a name matching `global.secrets.envPattern` — by default `^CONNECTOR_[A-Z0-9_]+$`,
-set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CHOREGOS_*`,
+env:CONNECTOR_JIRA_TOKEN}`) must be mapped into the API and worker pods (`global.extraEnv` with
+`valueFrom: {secretKeyRef: …}`, from a Secret) under a name matching `global.secrets.envPattern` —
+by default `^CONNECTOR_[A-Z0-9_]+$`, set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CHOREGOS_*`,
 `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*` and `TEMPORAL_*` stay refused whatever it says. After
 an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
 rename its variable or widen the pattern.

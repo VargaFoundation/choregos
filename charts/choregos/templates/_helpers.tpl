@@ -39,6 +39,11 @@ only its `image.digest` or its tag count.
 {{- if has .name $poses }}
 {{- fail (printf "global.extraEnv: %s is already set by the chart; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
 {{- end }}
+{{- /* S38-18: `value` or `valueFrom`, exactly one — an entry with neither rendered `value: ""`, a
+     key that reached every pod empty without anything saying so. */}}
+{{- if eq (hasKey . "value") (hasKey . "valueFrom") }}
+{{- fail (printf "global.extraEnv: %s needs exactly one of value or valueFrom" .name) }}
+{{- end }}
 {{- end }}
 - name: CHOREGOS_ENV
   value: {{ .Values.global.environment | quote }}
@@ -133,7 +138,12 @@ only its `image.digest` or its tag count.
 {{- end }}
 {{- range (.Values.global.extraEnv | default list) }}
 - name: {{ .name }}
+{{- if hasKey . "valueFrom" }}
+  valueFrom:
+    {{- toYaml .valueFrom | nindent 4 }}
+{{- else }}
   value: {{ .value | quote }}
+{{- end }}
 {{- end }}
 {{- end -}}
 
