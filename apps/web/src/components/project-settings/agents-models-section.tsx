@@ -131,11 +131,13 @@ export function backendProblem(defaultBackend: string, allowed: string[]): strin
 function BackendCard({ slug }: { slug: string }) {
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const backends = useQuery({ queryKey: ["backends"], queryFn: () => api.backends() });
+  // Above the form a save re-seeds, so that its "saved" line survives the remount.
+  const saving = useProjectConfigPatch(slug);
   if (!project.data) return null;
   return (
     <BackendForm
+      saving={saving}
       key={JSON.stringify((project.data.config as ProjectConfigValue).agent ?? {})}
-      slug={slug}
       project={project.data}
       backends={backends.data ?? []}
       loading={backends.isLoading}
@@ -145,20 +147,20 @@ function BackendCard({ slug }: { slug: string }) {
 }
 
 function BackendForm({
-  slug,
   project,
   backends,
   loading,
   failed,
+  saving,
 }: {
-  slug: string;
   project: ProjectDto;
   backends: AgentBackendInfo[];
   loading: boolean;
   failed: string | null;
+  saving: ReturnType<typeof useProjectConfigPatch>;
 }) {
   const agent = (project.config as ProjectConfigValue).agent ?? {};
-  const { patch, pending, message, error } = useProjectConfigPatch(slug);
+  const { patch, pending, message, error } = saving;
   const [defaultBackend, setDefaultBackend] = useState(agent.default_backend ?? "claude-code");
   const [allowed, setAllowed] = useState<string[]>(agent.allowed_backends ?? []);
   const usable = usableBackends(backends);

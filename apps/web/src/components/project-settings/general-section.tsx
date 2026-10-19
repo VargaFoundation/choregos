@@ -37,6 +37,9 @@ const blank = (value: string): string | undefined => (value.trim() === "" ? unde
 export function GeneralSection({ slug }: { slug: string }) {
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const templates = useQuery({ queryKey: ["templates"], queryFn: () => api.templates() });
+  // Held here, above the form the save re-seeds: the form remounts with the saved data, and its
+  // "saved" line must survive it.
+  const saving = useProjectConfigPatch(slug);
   return (
     <SettingsSection
       id="general"
@@ -48,18 +51,26 @@ export function GeneralSection({ slug }: { slug: string }) {
         // Re-seeded from the server after each save, never while a person is typing.
         <GeneralForm
           key={`${project.data.name}|${JSON.stringify(project.data.config)}`}
-          slug={slug}
           project={project.data}
           templates={templates.data ?? []}
+          saving={saving}
         />
       )}
     </SettingsSection>
   );
 }
 
-function GeneralForm({ slug, project, templates }: { slug: string; project: ProjectDto; templates: TemplateSummary[] }) {
+function GeneralForm({
+  project,
+  templates,
+  saving,
+}: {
+  project: ProjectDto;
+  templates: TemplateSummary[];
+  saving: ReturnType<typeof useProjectConfigPatch>;
+}) {
   const config = project.config as ProjectConfigValue;
-  const { patch, pending, message, error } = useProjectConfigPatch(slug);
+  const { patch, pending, message, error } = saving;
   const [name, setName] = useState(project.name);
   const [envs, setEnvs] = useState<string[]>(config.envs ?? []);
   const [newEnv, setNewEnv] = useState("");
