@@ -147,7 +147,8 @@ the six reference tickets each, so 24 real runs. Every case was metered; none wa
   toy repositories, whose command outputs are short.
 - **Success.** 5/6 in every cell. The one failure is the same ticket everywhere
   (`py-hors-perimetre`): the agent asks a human (`needs_human`) where the ticket expects
-  `blocked`. It does not separate the contexts.
+  `blocked`. It does not separate the contexts. Since S37-17 the ticket accepts both (#736): not doing
+  the work is what it measures.
 
 **Decision for `claude-code`: no reduction on by default.** headroom costs more, outside the
 interval. rtk does not show a lower cost: its interval contains zero. `Policy.context` stays off
