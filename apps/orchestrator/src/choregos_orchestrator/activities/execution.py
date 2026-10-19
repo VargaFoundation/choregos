@@ -106,6 +106,11 @@ def classe_d_execution(settings: Any, policy: Any) -> str | None:
 #: une nuit de pointe, pas une éternité.
 FILE_MAX_MINUTES = 360
 
+#: How many polls in a row the executor may answer that it no longer knows a run before the wait
+#: ends (S35-02c). One is not enough: an API server hiccup or a claim being replaced is not a lost
+#: run. Three polls at the default interval is three minutes, against a stage budget of 35 or more.
+LOST_POLLS = 3
+
 
 async def archive_once(
     executor: Any, run: Run | None, ref: ExecRef, status: ExecStatus | None = None
@@ -307,6 +312,7 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
     en_file = 0.0
     interval = float(payload.get("poll_seconds", settings.heartbeat_seconds))
     a_tourne = False
+    lost = 0
     while waited <= deadline:
         async with db() as session:
             bundle = await project_bundle(session, payload["project_id"])
@@ -406,6 +412,14 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                     reason=status.state,
                 ).model_dump(mode="json", by_alias=True),
             }
+        # The executor no longer knows the run: its claim, Job or container is gone. Nothing will
+        # bring it back, and `unknown` is not `finished`: the wait went on to the end of the stage
+        # budget, then started over on each Temporal retry. On the dev tenant, on 2026-10-18, a
+        # review whose claim had been collected (`ttlSecondsAfterFinished`) while the executor was
+        # being redeployed waited 1 h 32 for a 35 min budget, with nothing running.
+        lost = lost + 1 if status.state == "unknown" else 0
+        if lost >= LOST_POLLS:
+            return await _lost_run(payload["project_id"], run_id, ref, status)
         with contextlib.suppress(RuntimeError):  # hors contexte Temporal (tests unitaires)
             activity.heartbeat({"run_id": run_id, "waited_s": waited, "en_file_s": en_file})
         await asyncio.sleep(interval)
@@ -435,6 +449,30 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
         "status": "timed_out",
         "result": StageResult(
             status=StageStatus.FAILED, summary=f"over {timeout_minutes:g} min", reason="timeout"
+        ).model_dump(mode="json", by_alias=True),
+    }
+
+
+async def _lost_run(project_id: str, run_id: str, ref: ExecRef, status: ExecStatus) -> dict[str, Any]:
+    """Ends the wait for a run the executor no longer knows (S35-02c).
+
+    Its journal first: a claim collected after the runner journaled its result lost nothing.
+    """
+    async with db() as session:
+        run = await session.get(Run, run_id)
+        fetched = await result_from_journal(session, run_id)
+        if fetched is not None:
+            payload_result = fetched.model_dump(mode="json", by_alias=True)
+            if run is not None:
+                run.result = payload_result
+            return {"status": "finished", "result": payload_result}
+    await _abandonner(project_id, run_id, ref)
+    return {
+        "status": "lost",
+        "result": StageResult(
+            status=StageStatus.FAILED,
+            summary=f"the executor no longer knows this run ({status.message or 'not found'})",
+            reason="lost",
         ).model_dump(mode="json", by_alias=True),
     }
 
