@@ -115,5 +115,45 @@ store holds plaintext originals.
   rate is "with the checks' feedback", not a blind one.
 - A lossy filter can hide the line an agent needed: `rtk_exclude_commands` and `per_role` let a
   policy keep raw output where it matters (a reviewer, a security stage).
-- Not decided here: a context reduction for the other backends' native hooks (after the matrix), and
-  any gain figure — none is claimed before the matrix has run on real models.
+- Not decided here: a context reduction for the other backends' native hooks (they have not been
+  measured).
+
+## Measurement (2026-10-19, S37-10)
+
+The live matrix `evals-live-20261019b` ran on the dev tenant (Choregos 0.18.7): backend
+`claude-code`, model `platform/claude-sonnet` (Claude Sonnet 5.5), memory off, the four contexts,
+the six reference tickets each, so 24 real runs. Every case was metered; none was skipped.
+
+| Context | Success | Median cost | Mean cost vs `none`, paired (95 % CI) | Median cache read | Median cache write | Median uncached input | Median output |
+|:--|:--|--:|:--|--:|--:|--:|--:|
+| `none` | 5/6 | $0.224 | — | 329,568 | 49,786 | 2,556 | 2,958 |
+| `rtk` | 5/6 | $0.232 | −3 % (−$0.024 … +$0.015) | 330,083 | 50,194 | 2,556 | 3,025 |
+| `headroom` | 5/6 | $0.324 | **+43 %** (+$0.083 … +$0.117) | 251,707 | 92,618 | 8,572 | 2,960 |
+| `rtk+headroom` | 5/6 | $0.316 | **+47 %** (+$0.081 … +$0.133) | 231,484 | 92,112 | 8,400 | 2,853 |
+
+- **How the cost was computed.** The tokens are the gateway's spend logs of each run's key
+  (observed). The gateway's own cost could not be used: neither the dev LiteLLM nor the platform
+  gateway gives a price to cache reads and writes, so it counted $1.01 for the 24 runs, mostly
+  output. Each case is priced here at the platform gateway's rates for this model ($2 per million
+  input tokens, $10 per million output tokens), with Anthropic's cache ratios (a cache read 0.1×
+  the input price, a cache write 1.25×): $6.78 for the 24 runs. The ratios are an assumption about
+  the provider's bill, not read from it. The confidence interval is a bootstrap of the mean paired
+  difference, ticket by ticket, over the six tickets.
+- **Where the money goes.** About 85 % of a run's input is read from the provider's prompt cache.
+  headroom compresses tool results and history, and that changes the prompt's prefix from one
+  request to the next. The cache is then written again: about 92 k tokens written per run instead
+  of 50 k, and three times as many uncached tokens. The tokens it removes are mostly cache reads,
+  the cheapest kind. rtk changes the Bash output only, and its effect is within the noise on these
+  toy repositories, whose command outputs are short.
+- **Success.** 5/6 in every cell. The one failure is the same ticket everywhere
+  (`py-hors-perimetre`): the agent asks a human (`needs_human`) where the ticket expects
+  `blocked`. It does not separate the contexts.
+
+**Decision for `claude-code`: no reduction on by default.** headroom costs more, outside the
+interval. rtk does not show a lower cost: its interval contains zero. `Policy.context` stays off
+unless a project asks for it.
+
+**Not measured, so not decided:** the other backends; other models; real repositories, where
+command outputs and files are longer and rtk may count; headroom with a mode that keeps the cache
+prefix stable. Six tickets per cell can show a 43 % cost difference, not a few points of success
+rate. The ledger did not count cache reads during this matrix (S37-16).
