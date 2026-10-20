@@ -98,3 +98,56 @@ async def test_the_fake_is_an_object_store_and_can_be_tampered_with() -> None:
     store.forget("a/b")
     with pytest.raises(ObjectNotFoundError):
         await store.get("a/b")
+
+
+async def test_s3_check_is_a_signed_head_on_the_bucket_and_says_why_it_fails() -> None:
+    seen: list[httpx.Request] = []
+    status = {"code": 200}
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(status["code"], text="<Error>SECRET-BODY</Error>")
+
+    store = S3ObjectStore(
+        "s3://choregos/artifacts",
+        endpoint="http://localhost:9000",
+        access_key="AKEY",
+        secret_key="SKEY",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(answer)),
+    )
+    await store.check()
+    assert [(r.method, r.url.path) for r in seen] == [("HEAD", "/choregos")], "the bucket, nothing written"
+    assert "Authorization" in seen[0].headers
+    for code, words in ((403, "refused the credentials"), (404, "does not exist"), (500, "answered 500")):
+        status["code"] = code
+        with pytest.raises(ObjectStoreError, match=words) as raised:
+            await store.check()
+        assert "SECRET-BODY" not in str(raised.value) and "SKEY" not in str(raised.value)
+
+
+async def test_s3_check_without_keys_says_so_and_an_unreachable_store_is_an_error() -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403)
+
+    anonymous = S3ObjectStore(
+        "s3://choregos", client=httpx.AsyncClient(transport=httpx.MockTransport(refuse))
+    )
+    with pytest.raises(ObjectStoreError, match="no access key is set"):
+        await anonymous.check()
+
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route")
+
+    unreachable = S3ObjectStore(
+        "s3://choregos", client=httpx.AsyncClient(transport=httpx.MockTransport(down))
+    )
+    with pytest.raises(ObjectStoreError, match="unreachable"):
+        await unreachable.check()
+
+
+async def test_the_fake_check_answers_and_can_be_scripted_to_fail() -> None:
+    store = FakeObjectStore()
+    await store.check()
+    store.fail_next("down")
+    with pytest.raises(ObjectStoreError, match="down"):
+        await store.check()

@@ -8,6 +8,7 @@ from typing import Any
 from choregos_api.services.readiness import (
     ConnectorFact,
     Facts,
+    ObjectStoreFact,
     evaluate,
     item_backend,
     item_budgets,
@@ -17,6 +18,7 @@ from choregos_api.services.readiness import (
     item_github_app,
     item_models,
     item_notifications,
+    item_object_store,
     item_people,
     item_provisioned,
     item_repository,
@@ -292,3 +294,22 @@ def test_ready_means_no_item_is_to_do_and_the_summary_counts_the_states() -> Non
         i.fix.by in {"project_owner", "org_admin", "platform_operator", "external"} for i in broken.items
     )
     assert len({i.id for i in broken.items}) == len(broken.items), "item ids are unique"
+
+
+# ── object store (S38-13c) ──
+
+
+def test_a_workflow_with_no_file_output_asks_nothing_of_the_object_store() -> None:
+    assert item_object_store(facts()) == []
+
+
+def test_a_file_output_and_a_store_that_fails_its_probe_is_to_do_naming_the_cause() -> None:
+    failed = ObjectStoreFact(error="object store https://s3.example: the store refused the credentials")
+    (item,) = item_object_store(facts(file_outputs=("bars", "report"), object_store=failed))
+    assert item.state == "todo" and item.fix.by == "platform_operator"
+    assert "`bars`" in item.detail and "refused the credentials" in item.detail
+
+
+def test_a_file_output_and_a_store_that_answers_is_done() -> None:
+    (item,) = item_object_store(facts(file_outputs=("bars",), object_store=ObjectStoreFact()))
+    assert item.state == "done"

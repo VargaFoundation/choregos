@@ -67,6 +67,10 @@ Only the API reads and writes the object store: a runner hands its files to the 
 under its run token and never holds the store's keys. Under `CHOREGOS_FAKES=1` (or with a
 `memory://` URL) the store is in memory and lost on restart.
 
+An empty `endpoint` means AWS, and without `secretRef` the calls are unsigned: nothing fails at install, and
+the first run that writes a file loses its run. The project's readiness (`object-store` item, `docs/usage.md`)
+probes the bucket when a workflow declares a file output and names the cause.
+
 Turning all four on gives a self-contained bench on a single node:
 `-f charts/choregos/values/local.yaml`.
 
