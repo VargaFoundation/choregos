@@ -74,6 +74,15 @@ def test_a_failing_stream_fails_cleanly(api_url: str) -> None:
     _assert_clean(result, api_url)
 
 
+def test_login_with_a_refused_token_still_says_sign_in_refused(api_url: str) -> None:
+    """The transport guard keeps `login`'s own message for an API error."""
+    with respx.mock(base_url=api_url) as mock:
+        mock.get("/api/v1/me").mock(return_value=httpx.Response(401, json={"detail": "bad token"}))
+        result = _run("login", "--api-url", api_url, "--token", "chg_bad")
+    assert result.exit_code == 1, result.output
+    assert "sign-in refused" in " ".join(result.output.split())
+
+
 def test_login_help_says_the_first_token_comes_from_the_console() -> None:
     result = _run("login", "--help")
     flat = " ".join(result.output.split())

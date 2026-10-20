@@ -106,7 +106,7 @@ def login(
     profile = Profile(api_url=api_url, token=token, org=org)
     path = profile.save()
     try:
-        me = _ReadableClient(profile).get("/me")
+        me = TransportSafeClient(profile).get("/me")
     except ApiError as exc:
         fail(f"sign-in refused: {exc}")
         return
