@@ -151,10 +151,29 @@ async def test_an_acp_runtime_names_the_backend(setup: Fixture, images: None) ->
     assert prepared["stage_input"]["agent"]["backend"] == "opencode"
 
 
+async def test_a_prompt_agent_is_carried_by_the_runners_own_loop(setup: Fixture, images: None) -> None:
+    await _agent(setup, {"kind": "prompt", "tool_choice": "required", "response_format": "json_object"})
+    prepared = await stage_activities.prepare_stage(_plan(setup))
+    stage_input = prepared["stage_input"]
+    assert stage_input["agent"]["backend"] == "prompt" and stage_input["agent"]["image"] is None
+    assert stage_input["prompt"]["tool_choice"] == "required"
+    assert stage_input["prompt"]["response_format"] == "json_object"
+    assert stage_input["budget"]["max_turns"] == 9
+    assert stage_input["model"]["api_format"] == "openai", "the loop speaks chat completions"
+
+
+async def test_an_actor_backend_on_a_prompt_agent_is_refused(setup: Fixture, images: None) -> None:
+    await _agent(setup, {"kind": "prompt"})
+    with pytest.raises(ApplicationError) as raised:
+        await stage_activities.prepare_stage(_plan(setup, backend="claude"))
+    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert "prompt agent" in str(raised.value)
+    assert setup.adapters.gateway.keys == {}
+
+
 @pytest.mark.parametrize(
     ("runtime", "reason"),
     [
-        ({"kind": "prompt"}, "not yet"),
         ({"kind": "voice"}, "only as a session"),
         ({"kind": "hosted", "source": {"type": "image", "ref": "ghcr.io/acme/triager:1"}}, "not yet"),
     ],

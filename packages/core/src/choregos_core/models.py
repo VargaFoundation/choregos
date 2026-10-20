@@ -46,6 +46,8 @@ BACKEND_API_FORMAT: dict[str, ApiFormat] = {
     "copilot-cli": ApiFormat.OPENAI,
     # An agent written in code (ADR 0063): OpenAI-compatible unless its runtime says `anthropic`.
     "code": ApiFormat.OPENAI,
+    # A prompt agent (ADR 0080): the runner's tool loop speaks chat completions.
+    "prompt": ApiFormat.OPENAI,
 }
 
 # Contraintes dures d'un backend sur la famille de modèles.
@@ -67,8 +69,9 @@ KNOWN_BACKEND_NAMES: tuple[str, ...] = (
 
 
 #: The backends a runtime fixes, never chosen by rotation (`profile:by_size`, cross-backend review):
-#: an agent written in code runs only as the `code` runtime of its version (ADR 0063).
-RUNTIME_BACKENDS: tuple[str, ...] = ("code",)
+#: an agent written in code runs only as the `code` runtime of its version (ADR 0063), a prompt agent
+#: only as the runner's tool loop (ADR 0080).
+RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt")
 
 
 USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval")

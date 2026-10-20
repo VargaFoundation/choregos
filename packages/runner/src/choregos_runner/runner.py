@@ -48,6 +48,7 @@ from .knowledge import KnowledgeInvalidError, lay_out
 from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
 from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_outputs
+from .prompt import run_prompt
 from .remote import (
     REPORT_CARD,
     REPORT_ENDPOINT,
@@ -147,6 +148,9 @@ class Runner:
         self.client = client
         #: For tests only: the transport the A2A client and the card fetch go through (ADR 0062).
         self.remote_transport: Any = None
+        #: For tests only: the transports a prompt step's model and MCP calls go through (ADR 0080).
+        self.model_transport: Any = None
+        self.mcp_transport: Any = None
         self.started = time.monotonic()
         #: L'index des skills qu'un backend ne lit pas lui-même, ajouté au prompt.
         self.index_des_skills = ""
@@ -232,10 +236,10 @@ class Runner:
         context = await self._context(client)
         if (refus := await self._write_context(client, journal, stage_input, workspace, context)) is not None:
             return refus
-        if stage_input.job is not None:
-            return await self._execute_job(client, journal, stage_input, workspace, base, depart)
-        if stage_input.remote is not None:
-            return await self._execute_remote(client, journal, stage_input, workspace, base, depart)
+        if (
+            carried := await self._carried(client, journal, stage_input, workspace, base, depart)
+        ) is not None:
+            return carried
 
         # The agent reaches its model through the run's proxy, if the run asks for one.
         if (refusal := await self._compress(stage_input, journal)) is not None:
@@ -533,6 +537,25 @@ class Runner:
             "context.savings", {"compression": "headroom", "provenance": "inferred", **counts}
         )
 
+    async def _carried(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        base: str,
+        depart: str,
+    ) -> RunOutcome | None:
+        """A step no ACP agent carries — a job, a remote agent, a prompt agent — run its own way;
+        `None` for an ACP step."""
+        if stage_input.job is not None:
+            return await self._execute_job(client, journal, stage_input, workspace, base, depart)
+        if stage_input.remote is not None:
+            return await self._execute_remote(client, journal, stage_input, workspace, base, depart)
+        if stage_input.prompt is not None:
+            return await self._execute_prompt(client, journal, stage_input, workspace, base, depart)
+        return None
+
     async def _execute_remote(
         self,
         client: InternalClient,
@@ -599,6 +622,68 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _execute_prompt(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        base: str,
+        depart: str,
+    ) -> RunOutcome:
+        """A step a prompt agent carries (ADR 0080): the runner's tool loop instead of an ACP agent,
+        with the same skills, knowledge, checks and publication. Stopped at `max_turns` model calls."""
+        if (
+            refus := await self._poser_les_skills(
+                client, journal, stage_input, get_backend("prompt"), workspace
+            )
+            or await self._lay_out_knowledge(client, journal, stage_input, workspace)
+        ) is not None:
+            return refus
+        guards = GuardRails(
+            stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
+        )
+        step = await run_prompt(
+            stage_input,
+            workspace.path,
+            self._prompt(stage_input, workspace.path),
+            journal.record,
+            guards,
+            model_transport=self.model_transport,
+            mcp_transport=self.mcp_transport,
+            timeout_s=stage_input.budget.max_minutes * 60,
+        )
+        report = await run_checks(stage_input, workspace.path)
+        outcome = step.outcome
+        diagnostics = Diagnostics(
+            turns=outcome.turns if outcome else 0,
+            tool_calls=outcome.tool_calls if outcome else 0,
+            permission_denials=step.denials,
+            duration_s=round(time.monotonic() - self.started, 2),
+            agent_exit={"max_turns": "limit", "timeout": "timeout", "model_error": "crashed"}.get(
+                step.reason or "", "normal"
+            ),
+        )
+        code = Exit.OK
+        if step.result is not None:
+            result = step.result
+        elif step.refused:
+            code = Exit.BUDGET_EXCEEDED
+            result = fallback_result(BUDGET_REASON, f"the gateway refused the run's key: {step.refused}")
+        else:
+            await journal.record("run.stopped", {"reason": step.reason, "detail": (step.error or "")[:500]})
+            if step.reason not in {"max_turns", "timeout"}:
+                code = Exit.INVALID_RESULT
+            result = fallback_result(step.reason or "invalid_result", step.error or "no result")
+        final = complete_result(
+            result,
+            measured=report.evidence(),
+            artifacts=Artifacts(branch=stage_input.repo.work_branch if stage_input.repo else None),
+            diagnostics=diagnostics,
+        )
+        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        return RunOutcome(code, final, transcript_path=journal.path, detail=step.error or "")
 
     async def _poser_les_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any
