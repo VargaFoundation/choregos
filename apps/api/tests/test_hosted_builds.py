@@ -241,3 +241,21 @@ def test_only_a_zip_version_has_a_build() -> None:
     assert zip_build_key({"runtime": {"kind": "hosted", "source": image}}) is None
     assert zip_build_key({"runtime": {"kind": "prompt"}}) is None
     assert zip_build_key(None) is None
+
+
+def test_the_deployment_hands_buildkit_its_address_and_tls_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    from choregos_adapters.oci import BuildctlBuilder
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.services import hosted_builds
+
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.setenv("CHOREGOS_BUILDKIT_ADDRESS", "tcp://choregos-buildkitd:1234")
+    monkeypatch.setenv("CHOREGOS_BUILDKIT_TLS_DIR", "/etc/choregos/buildkit")
+    reset_settings_cache()
+    hosted_builds.set_image_builder(None)
+    try:
+        builder = hosted_builds.image_builder()
+    finally:
+        reset_settings_cache()
+    assert isinstance(builder, BuildctlBuilder)
+    assert builder.address == "tcp://choregos-buildkitd:1234" and builder.tls_dir == "/etc/choregos/buildkit"

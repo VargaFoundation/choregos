@@ -172,7 +172,9 @@ The platform writes the Dockerfile itself — a `Dockerfile` in the zip is not r
 runtime's base image pinned by digest (`python:3.12-slim-bookworm` and `python:3.13-slim-bookworm`
 from Docker Hub; the operator replaces them with `CHOREGOS_HOSTED_BASE_IMAGES`, and a base without a
 digest is refused), the dependencies installed as root, the files in `/app`, `USER 1000`, the port,
-and the entry point in exec form. The version gets `build: {status: pending, key, provenance}`: the
+and the entry point in exec form. Template 2 (S41-13) has no `# syntax=` line, which pulled the
+floating `docker/dockerfile:1` frontend at each build (the daemon's own frontend parses it), and
+passes `SOURCE_DATE_EPOCH` to `RUN`. The version gets `build: {status: pending, key, provenance}`: the
 key is the hash of that Dockerfile and of the zip, so any input that changes (the zip, the runtime,
 the dependency mode, the entry point, the port, the base image, the template's version) changes it,
 and nothing else does; a `build` the caller writes is replaced. A step refuses the version until a
@@ -197,9 +199,34 @@ as `build-<key>` and run by its digest; without a repository the build fails, sa
 - A failed build is not retried (the same inputs fail the same way). Publishing a version of the
   same zip again starts the next attempt; the previous attempt, replayed, builds nothing.
 - `CHOREGOS_HOSTED_BUILDER`: `buildkit` (`buildctl` against `CHOREGOS_BUILDKIT_ADDRESS`, a rootless
-  `buildkitd`) or `local_docker` (`docker build` and `docker push`, a laptop). The chart passes
-  `global.images.hostedBuilder` and `buildkitAddress` to the workers but deploys no `buildkitd` yet
-  (S41-13); the zip never leaves the platform, its archive is the build context.
+  `buildkitd`) or `local_docker` (`docker build` and `docker push`, a laptop). The zip never leaves
+  the platform: its archive is the build context.
+
+**The builder (S41-13).** With `global.images.hostedBuilder: buildkit` and a `buildRegistry`, the
+chart deploys `choregos-buildkitd`, a rootless BuildKit (`global.buildkitd`: its image pinned by
+digest, its port, its resources), and points the workers at it; `global.images.buildkitAddress`
+names a daemon of the operator's instead, and the chart then deploys none. The orchestrator image
+carries `buildctl`, copied from the very image the chart deploys.
+
+- **Same zip, same digest.** `buildctl` sets `SOURCE_DATE_EPOCH=0` and pushes with
+  `rewrite-timestamp=true`: every file and the image's dates are clamped to the epoch, so a zip
+  built again from an empty cache gives the image it gave the first time. Without
+  it, "already built" would only mean "built once on this daemon".
+- **Push credential**: `global.buildkitd.pushSecret`, a `kubernetes.io/dockerconfigjson` Secret
+  mounted in the builder only; the worker that sends the build holds none.
+- **Mutual TLS**: `global.buildkitd.tls.serverSecret` and `clientSecret`, two `kubernetes.io/tls`
+  Secrets carrying `ca.crt` (cert-manager writes them so). The worker then gets
+  `CHOREGOS_BUILDKIT_TLS_DIR` and passes `--tlscacert`, `--tlscert`, `--tlskey`; without them the
+  gRPC is plain and the NetworkPolicy alone keeps other pods off it.
+- **Network**: the builder admits the orchestrator alone, on its port, and reaches DNS and the
+  Internet's `egressPorts` (443, 80), never a private range; a registry inside the network is named
+  by `registryCidrs` and `registryPorts`.
+- **Its weaker profile** (seccomp and AppArmor `Unconfined`, privilege escalation, SETUID/SETGID) and
+  the Kyverno exception that names it are in [security](security.md#the-builder-of-hosted-zips).
+
+The `hosted-build` CI job runs the chart's daemon image with the chart's profile, builds the
+reference zip into a real registry, finds it again under its key, rebuilds it after `buildctl prune
+--all` to the same digest, and runs the image through `make conformance-hosted`.
 
 Not yet: a trial of a zip version runs only once a published version of the same zip is built
 (`hosted_build_not_ready` before); the first zip version of an agent leaves it without a production
@@ -319,5 +346,5 @@ at, and the build of a zip: pending, building, built (with its image) or failed 
 While the latest version's build is pending or building, the page asks again every 3 seconds, and
 stops once it has ended.
 
-The rest of the stream — the real builder, signatures, live voice, the cluster proofs — is planned
-in [`docs/plan/`](plan/STATUS.md) as S41-13 to S41-21.
+The rest of the stream — signatures, live voice, the cluster proofs — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-14 to S41-21.

@@ -182,10 +182,10 @@ BASE_313 = (
     "@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641"
 )
 GOLDEN = f"""\
-# syntax=docker/dockerfile:1
-# Written by Choregos (ADR 0080 §9, template 1). The zip's own Dockerfile,
+# Written by Choregos (ADR 0080 §9, template 2). The zip's own Dockerfile,
 # if it has one, is not read.
 FROM {BASE_313}
+ARG SOURCE_DATE_EPOCH
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PORT=8088
 RUN useradd --uid 1000 --create-home agent
 WORKDIR /app
@@ -224,7 +224,9 @@ def test_the_dockerfile_follows_the_dependency_mode_and_never_the_zips_own() -> 
     assert "RUN pip" not in bundled and "ENV PYTHONPATH=/app/site-packages" in bundled
     for text in (pyproject, bundled):
         assert "evil.example" not in text and "USER root" not in text
-        assert text.splitlines()[3].startswith("FROM docker.io/library/python:3.13-slim-bookworm@sha256:")
+        (base,) = [line for line in text.splitlines() if line.startswith("FROM")]
+        assert base.startswith("FROM docker.io/library/python:3.13-slim-bookworm@sha256:")
+        assert "# syntax=" not in text, "a frontend image pulled at build time is unpinned code"
         assert "USER 1000" in text
     argv = dockerfile(_hosted(entry_point=["python", "main.py", '--name="a b"']), read_source(AGENT_ZIP))
     assert argv.endswith('ENTRYPOINT ["python", "main.py", "--name=\\"a b\\""]\n'), "exec form, JSON-quoted"

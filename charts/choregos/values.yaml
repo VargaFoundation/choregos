@@ -120,10 +120,40 @@ global:
     # `registry/path` (tagged `build-<key>`, run by digest). Empty: a zip version publishes, and its
     # build fails with the reason. The orchestrator's executor worker pushes there.
     buildRegistry: ""
-    # buildkit (`buildctl` against `buildkitAddress`) | local_docker (`docker build` + `push`, a
-    # laptop). The chart does not deploy a buildkitd yet (S41-13): point the address at one.
+    # buildkit (`buildctl` against a `buildkitd`) | local_docker (`docker build` + `push`, a laptop).
+    # With `buildkit` and a `buildRegistry`, the chart deploys its own rootless `buildkitd`
+    # (`global.buildkitd`, S41-13); `buildkitAddress` names another one instead, and the chart then
+    # deploys none.
     hostedBuilder: buildkit
     buildkitAddress: ""
+  # The `buildkitd` that builds hosted zips (S41-13, ADR 0080 §9), rendered only when
+  # `images.hostedBuilder` is `buildkit`, `images.buildRegistry` is set and `images.buildkitAddress`
+  # is empty. Rootless: uid 1000, no service account token, every capability dropped but SETUID and
+  # SETGID; its user namespaces need seccomp and AppArmor `Unconfined` and privilege escalation (the
+  # setuid `newuidmap`), which is why it runs in a pod of its own that takes traffic from the
+  # orchestrator only and reaches the Internet, never the platform (docs/security.md).
+  buildkitd:
+    enabled: true
+    # The image's `buildctl` is the one the worker image copies (docker/api.Dockerfile): bump both.
+    image: moby/buildkit:v0.33.1-rootless@sha256:f8a833b2de9d68e27f0815e4a737abdfaf8a2e4c615650557df11025101557b4
+    port: 1234
+    # A `kubernetes.io/dockerconfigjson` Secret: the push credential of `buildRegistry`, the only
+    # credential the builder holds. Empty: the registry takes anonymous pushes (a bench).
+    pushSecret: ""
+    # Mutual TLS between the worker and the daemon, from two `kubernetes.io/tls` Secrets that carry
+    # `ca.crt` too (cert-manager writes them so): the daemon's, and the worker's client one. Without
+    # them the gRPC is plain, and the NetworkPolicy alone keeps other pods off it.
+    tls:
+      serverSecret: ""
+      clientSecret: ""
+    # The Internet ports the builder may reach (`pip install`, base images), outside private ranges.
+    egressPorts: [443, 80]
+    # Private ranges the build registry lives in, when it is inside the cluster or the network.
+    registryCidrs: []
+    registryPorts: [443, 5000]
+    resources:
+      requests: { cpu: 500m, memory: 1Gi }
+      limits: { cpu: "2", memory: 4Gi, ephemeral-storage: 20Gi }
   # Network egress, one model (ADR 0066 and ADR 0070, amended): the organisation decides in the
   # console which hosts it OPENS (its egress allowlist) and the BOUNDS nothing may cross (its policy
   # ceiling's network section); this block is what only the operator sets. It lives under `global`

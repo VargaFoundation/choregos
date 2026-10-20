@@ -9,10 +9,12 @@ again. A replayed activity, a second version with the same inputs, a worker rest
 build, one image.
 
 `BuildctlBuilder` sends the context to a `buildkitd` the chart deploys, rootless, over its gRPC
-address; the zip never leaves the platform's own processes and the build sandbox holds no
-object-store credential, only the build repository's push credential. `LocalDockerBuilder` runs
-`docker build` and `docker push` for `docker compose` and `make dev-up`. Both run a command, so a
-test gives them a scripted one.
+address (mutual TLS when the chart gives it certificates); the zip never leaves the platform's own
+processes and the build sandbox holds no object-store credential, only the build repository's push
+credential. Its builds are reproducible (S41-13): every timestamp is the epoch, so the same zip on
+the same base image gives the same digest, whatever the daemon's cache held. `LocalDockerBuilder`
+runs `docker build` and `docker push` for `docker compose` and `make dev-up`. Both run a command, so
+a test gives them a scripted one.
 """
 
 from __future__ import annotations
@@ -137,9 +139,18 @@ class _CommandBuilder:
         return output
 
 
+#: The certificates `buildctl` reads from a TLS directory, as the chart mounts a client Secret.
+TLS_FILES = {"--tlscacert": "ca.crt", "--tlscert": "tls.crt", "--tlskey": "tls.key"}
+
+
 class BuildctlBuilder(_CommandBuilder):
     """`buildctl` against the deployment's `buildkitd`: the context goes over the session, the image
-    is pushed by the daemon, and the digest is read from the metadata file it writes."""
+    is pushed by the daemon, and the digest is read from the metadata file it writes.
+
+    `SOURCE_DATE_EPOCH=0` and `rewrite-timestamp=true` clamp every timestamp of the image (its
+    config, its history, the files of each layer) to the epoch: without them a rebuild after a cache
+    prune stamps the build time and the digest changes, so "already built" would mean "built once
+    on this daemon". `tls_dir`, when set, holds the client certificate and the CA of the daemon."""
 
     name = "buildkit"
 
@@ -149,19 +160,26 @@ class BuildctlBuilder(_CommandBuilder):
         registry: RegistryClient | None = None,
         *,
         binary: str = "buildctl",
+        tls_dir: str = "",
         run: Runner | None = None,
     ) -> None:
         super().__init__(registry, run=run)
         self.address = address
         self.binary = binary
+        self.tls_dir = tls_dir
+
+    def _connection(self) -> list[str]:
+        argv = [self.binary, "--addr", self.address]
+        if self.tls_dir:
+            for flag, name in TLS_FILES.items():
+                argv += [flag, str(Path(self.tls_dir) / name)]
+        return argv
 
     async def _build(self, request: BuildRequest, root: Path) -> tuple[str, str]:
         metadata = root / "metadata.json"
         log = await self._check(
             [
-                self.binary,
-                "--addr",
-                self.address,
+                *self._connection(),
                 "build",
                 "--frontend",
                 "dockerfile.v0",
@@ -169,8 +187,10 @@ class BuildctlBuilder(_CommandBuilder):
                 f"context={root / 'context'}",
                 "--local",
                 f"dockerfile={root / 'dockerfile'}",
+                "--opt",
+                "build-arg:SOURCE_DATE_EPOCH=0",
                 "--output",
-                f"type=image,name={request.reference},push=true",
+                f"type=image,name={request.reference},push=true,rewrite-timestamp=true",
                 "--metadata-file",
                 str(metadata),
             ],

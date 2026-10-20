@@ -59,7 +59,7 @@ def image_builder() -> ImageBuilder:
     registry = OciRegistryClient()
     if settings.hosted_builder == "local_docker":
         return LocalDockerBuilder(registry)
-    return BuildctlBuilder(settings.buildkit_address, registry)
+    return BuildctlBuilder(settings.buildkit_address, registry, tls_dir=settings.buildkit_tls_dir)
 
 
 def zip_build_key(spec: AgentSpec | Mapping[str, Any] | None) -> str | None:

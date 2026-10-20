@@ -2,7 +2,8 @@
 Docker, a key built once, and a failure that says why.
 
 The commands are scripted: what is proved is the argv each builder runs, how it reads the digest,
-and that it runs nothing for a key already in the registry. A real `buildkitd` is S41-13.
+and that it runs nothing for a key already in the registry. A real `buildkitd` builds the reference
+zip twice in `tests/build` (S41-13, the `hosted-build` CI job).
 """
 
 from __future__ import annotations
@@ -77,9 +78,38 @@ async def test_buildkit_builds_the_zip_with_the_platforms_dockerfile_and_pushes_
     assert result.image == f"{REPOSITORY}@{DIGEST}" and result.built and result.builder == "buildkit"
     (argv,) = script.calls
     assert argv[:4] == ["buildctl", "--addr", "tcp://choregos-buildkitd:1234", "build"]
-    assert f"type=image,name={REPOSITORY}:build-{'b' * 64},push=true" in argv
+    assert f"type=image,name={REPOSITORY}:build-{'b' * 64},push=true,rewrite-timestamp=true" in argv
     assert script.context == {"main.py": "print(1)", "pkg/util.py": "x = 1"}
     assert script.dockerfile == DOCKERFILE, "the Dockerfile is the platform's, outside the context"
+
+
+async def test_buildkit_clamps_every_timestamp_so_a_rebuild_gives_the_same_digest() -> None:
+    script = Script((0, "#1 DONE"))
+    await BuildctlBuilder("tcp://b:1234", run=script).build(_request())
+    (argv,) = script.calls
+    assert argv[argv.index("--opt") + 1] == "build-arg:SOURCE_DATE_EPOCH=0"
+    output = argv[argv.index("--output") + 1].split(",")
+    assert "rewrite-timestamp=true" in output, "the layers' files too, not only the image config"
+
+
+async def test_buildkit_speaks_mutual_tls_only_when_given_certificates() -> None:
+    plain = Script((0, ""))
+    await BuildctlBuilder("tcp://b:1234", run=plain).build(_request())
+    assert not [a for a in plain.calls[0] if a.startswith("--tls")]
+    tls = Script((0, ""))
+    await BuildctlBuilder("tcp://b:1234", tls_dir="/etc/buildkit/tls", run=tls).build(_request())
+    argv = tls.calls[0]
+    assert argv[: argv.index("build")] == [
+        "buildctl",
+        "--addr",
+        "tcp://b:1234",
+        "--tlscacert",
+        "/etc/buildkit/tls/ca.crt",
+        "--tlscert",
+        "/etc/buildkit/tls/tls.crt",
+        "--tlskey",
+        "/etc/buildkit/tls/tls.key",
+    ], "the connection flags go before the subcommand, where buildctl reads them"
 
 
 async def test_local_docker_builds_pushes_and_reads_the_repository_digest() -> None:

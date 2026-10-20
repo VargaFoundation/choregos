@@ -114,6 +114,11 @@ FROM commun AS worker
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends git \
  && rm -rf /var/lib/apt/lists/*
+# `buildctl`: the executor worker builds hosted zips through the chart's `buildkitd` (S41-13, ADR
+# 0080 §9). The client of the very image the chart deploys, pinned by digest: a client and a daemon
+# of two releases apart is a combination nobody tested. A bump moves both, and
+# `tests/paquets/test_buildctl_in_the_worker_image.py` refuses one without the other.
+COPY --from=moby/buildkit:v0.33.1-rootless@sha256:f8a833b2de9d68e27f0815e4a737abdfaf8a2e4c615650557df11025101557b4 /usr/bin/buildctl /usr/local/bin/buildctl
 USER 1000
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 
