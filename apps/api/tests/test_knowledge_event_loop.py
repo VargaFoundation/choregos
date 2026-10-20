@@ -22,6 +22,8 @@ BASE = "/api/v1/orgs/varga/knowledge"
 #: How long the deliberately CPU-bound step spins, and what a concurrent request may wait.
 SPIN_S = 1.5
 BUDGET_S = 0.5
+#: Light requests that must be answered before a heavy search ends (an order, not a duration).
+LIGHT_BEFORE_END = 3
 
 
 def _mark() -> None:
@@ -105,6 +107,34 @@ async def _answers_meanwhile(client: AsyncClient, work: Any) -> float:
     return worst
 
 
+async def _answered_before_it_ended(client: AsyncClient, work: Any) -> int:
+    """How many light GETs were answered while `work()` was still running (an ordering, not a time).
+
+    A loop that is free answers them in between the heavy step's turns, whatever the machine's load;
+    a loop the heavy step blocks answers none until `work()` has ended. `work()` is started first
+    and the light GETs are only sent once it has begun.
+    """
+    ended = asyncio.Event()
+
+    async def job() -> None:
+        try:
+            await work()
+        finally:
+            ended.set()
+
+    task = asyncio.create_task(job())
+    await asyncio.sleep(0)  # `work()` starts: an inline heavy step would run to its end right here
+    answered_first = 0
+    while not ended.is_set():
+        reply = await client.get(f"{BASE}/heavy")
+        assert reply.status_code == 200
+        if not ended.is_set():  # this answer came back before the heavy work ended
+            answered_first += 1
+        await asyncio.sleep(0.02)
+    await task
+    return answered_first
+
+
 def _spin(seconds: float) -> None:
     """Pure-Python CPU work (holds the GIL between its periodic releases), not a sleep."""
     end = time.monotonic() + seconds
@@ -151,10 +181,13 @@ async def test_a_cpu_heavy_search_does_not_starve_other_requests(
         found = await client.post(f"{BASE}/heavy/search", json={"query": "tls"})
         assert found.status_code == 200, found.text
 
-    worst = await _answers_meanwhile(client, search)
+    answered_first = await _answered_before_it_ended(client, search)
     if index.get_settings().is_sqlite:  # the in-process ranking is the SQLite one
         assert (tmp_path / "heavy").exists(), "the heavy step ran"
-        assert worst < BUDGET_S, f"a request waited {worst:.2f} s during a search"
+        assert answered_first >= LIGHT_BEFORE_END, (
+            f"only {answered_first} light request(s) were answered before the search ended: "
+            "the search held the event loop"
+        )
 
 
 async def test_the_converter_runs_at_a_low_priority() -> None:
