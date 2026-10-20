@@ -160,3 +160,31 @@ unless a project asks for it.
 command outputs and files are longer and rtk may count; headroom with a mode that keeps the cache
 prefix stable. Six tickets per cell can show a 43 % cost difference, not a few points of success
 rate. The ledger did not count cache reads during this matrix (S37-16).
+
+## Second measurement (2026-10-20, S37-10)
+
+`evals-live-20261019c` ran the same matrix again on the dev tenant, on Choregos 0.19.0, with
+S37-16 (the ledger counts cache reads) and S37-17 (the out-of-scope ticket accepts `needs_human`).
+It used the same input: `claude-code`, `platform/claude-sonnet`, memory off, the four contexts,
+six tickets each. That makes 24 real runs. Every case was metered and none was skipped.
+
+| Context | Success | Median cost | Mean cost vs `none`, paired (95 % CI) | Median cache read | Median input not read from the cache | Median output |
+|:--|:--|--:|:--|--:|--:|--:|
+| `none` | 6/6 | $0.218 | — | 287,340 | 53,312 | 2,800 |
+| `rtk` | 6/6 | $0.248 | +5 % (−$0.019 … +$0.040) | 383,229 | 53,070 | 3,708 |
+| `headroom` | 6/6 | $0.339 | **+49 %** (+$0.094 … +$0.137) | 254,426 | 102,310 | 2,990 |
+| `rtk+headroom` | 6/6 | $0.336 | **+50 %** (+$0.092 … +$0.145) | 252,998 | 101,585 | 3,415 |
+
+- **How the cost was computed.** The tokens come from the run's ledger (observed). The ledger now
+  counts cache reads, but not cache writes. "Input not read from the cache" is therefore cache
+  writes plus uncached input, and it is priced here as cache writes (1.25× the input price).
+  Cache reads are priced at 0.1×. The rates are those of the first measurement. The 24 runs come
+  to $7.00, or $6.08 if that input is priced as uncached; the conclusions do not change.
+- **The gateway's own cost is still not usable.** The cost the run records from the gateway is
+  $1.03 for the 24 runs, about the output alone, the same as before #737 was closed. Where the
+  cache price is lost (the gateway, or how the cost is read) is not established here (#773).
+- **Success.** 6/6 in every cell. `py-hors-perimetre` now passes everywhere with S37-17.
+
+The decision holds. headroom costs more, outside the interval, again because the cache is
+rewritten: the input not read from the cache doubles (about 102 k tokens per run instead of
+53 k). rtk's interval still contains zero.
