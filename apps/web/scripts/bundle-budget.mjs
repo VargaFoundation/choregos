@@ -11,7 +11,9 @@ import { join } from "node:path";
 const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-10-19 (merge of main 0.18.8): 1800 -> 1850 kB. Main stood at 1650 (S39-22's egress modal, S39-23's
 // procedure panel); the union measures 1833 kB.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1850);
+// 2026-10-20 (S41-22): 1850 -> 1875 kB. Main at ea273dd0 measures 1833 kB; the project's network form and
+// its YAML splice (`@lezer/yaml`, already shipped with the policy editor, now in a shared chunk) bring 1854 kB.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1875);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {

@@ -82,6 +82,7 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
+import { readSandboxNetwork } from "@/lib/policy-network";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
@@ -869,7 +870,7 @@ export const memories: Memory[] = [
     id: "m1",
     kind: "decision",
     subject: "decision:billing:totals-rounding",
-    content: "Totals are rounded to the cent when an invoice is issued, never when it is displayed (ADR-0007).",
+    content: "Totals are rounded to the cent when an invoice is issued, never when it is displayed (decision record on invoice rounding).",
     status: "active",
     valid_from: iso(60 * 24 * 180),
     provenance: { source: "scm", ref: "docs/adr/0007-rounding.md" },
@@ -2482,32 +2483,58 @@ let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string;
   ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
 };
 
-/** The hosts the demo project's own policy allows. */
-const PROJECT_ALLOW = ["github.com", "pypi.org", "files.pythonhosted.org", "registry.npmjs.org"];
+/** The demo project's policy, kept for the time of the page: the network card and the Policy editor write it (S41-22). */
+let mockPolicyYaml = [
+  "budgets:",
+  "  per_ticket_usd: 25",
+  "release_train:",
+  "  prod:",
+  "    mode: train",
+  "  staging:",
+  "    mode: train",
+  "sandbox:",
+  "  network:",
+  "    allow_domains:",
+  "      - github.com",
+  "      - pypi.org",
+  "      - files.pythonhosted.org",
+  "      - registry.npmjs.org",
+  "    deny_domains: []",
+  "    builtin_web_tools: allow",
+  "",
+].join("\n");
+
+/** The tighter of two caps, `null` being no cap. */
+function lowest(a: number | null | undefined, b: number | null | undefined): number | null {
+  const caps = [a, b].filter((c): c is number => typeof c === "number");
+  return caps.length === 0 ? null : Math.min(...caps);
+}
 
 /** The demo project's effective network: its policy under the ceiling, plus the repository host (ADR 0070). */
 function mockProjectNetwork(): ProjectNetwork {
+  const own = readSandboxNetwork(mockPolicyYaml) ?? {};
+  const ownAllow = own.allow_domains ?? [];
   const net = ((mockCeiling.ceiling ?? {}) as { network?: { allow_domains?: string[] | null; deny_domains?: string[]; per_host_per_minute?: number | null; per_run_per_minute?: number | null; builtin_web_tools?: string | null } }).network ?? {};
   const within = (host: string, outer: string) => outer === "*" || host === outer || host.endsWith(`.${outer}`);
   const cap = net.allow_domains;
-  const outside = cap == null ? [] : PROJECT_ALLOW.filter((h) => !cap.some((o) => within(h, o)));
+  const outside = cap == null ? [] : ownAllow.filter((h) => !cap.some((o) => within(h, o)));
   const deny = net.deny_domains ?? [];
   const denied = (h: string) => deny.some((d) => within(h, d));
   return {
-    policy: { allow_domains: PROJECT_ALLOW, deny_domains: [], builtin_web_tools: "allow" },
+    policy: own,
     ceiling: (mockCeiling.ceiling as { network?: Record<string, unknown> } | null)?.network ?? null,
     effective: {
-      allow: PROJECT_ALLOW.filter((h) => !outside.includes(h) && !denied(h)),
-      deny,
+      allow: ownAllow.filter((h) => !outside.includes(h) && !denied(h)),
+      deny: [...new Set([...deny, ...(own.deny_domains ?? [])])],
       implied: denied("github.com") ? [] : ["github.com"],
-      per_host_per_minute: net.per_host_per_minute ?? null,
-      per_run_per_minute: net.per_run_per_minute ?? null,
+      per_host_per_minute: lowest(own.per_host_per_minute, net.per_host_per_minute),
+      per_run_per_minute: lowest(own.per_run_per_minute, net.per_run_per_minute),
       org_per_host_per_minute: net.per_host_per_minute ?? null,
-      builtin_web_tools: net.builtin_web_tools !== "deny",
+      builtin_web_tools: net.builtin_web_tools !== "deny" && own.builtin_web_tools !== "deny",
     },
     clamps: [
       ...outside.map((h) => `network.allow_domains: \`${h}\` is outside the organisation's allowed hosts`),
-      ...PROJECT_ALLOW.filter(denied).map((h) => `network.allow_domains: \`${h}\` is denied by the organisation`),
+      ...ownAllow.filter(denied).map((h) => `network.allow_domains: \`${h}\` is denied by the organisation`),
     ],
   };
 }
@@ -2548,6 +2575,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return structuredClone(mockCeiling) as T;
   }
   if (method === "GET" && /^\/projects\/[^/]+\/network$/.test(bare)) return mockProjectNetwork() as T;
+  if (method === "PUT" && /^\/projects\/[^/]+\/policy$/.test(bare)) mockPolicyYaml = (body as { yaml: string }).yaml;
   if (method === "GET" && /^\/orgs\/[^/]+\/network-activity$/.test(bare)) return structuredClone(mockNetworkActivity) as T;
   // The release channels of the agents (S40-02): production, testing, the checks, the history.
   if (typeof window !== "undefined") (window as unknown as { __mockAgents?: Agent[] }).__mockAgents = agents;
@@ -3254,7 +3282,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       {
         name: "solo",
         version: 1,
-        yaml: "budgets:\n  per_ticket_usd: 25\nrelease_train:\n  prod:\n    mode: train\n  staging:\n    mode: train\n",
+        yaml: mockPolicyYaml,
         // the trains page lists these environments (S26-05)
         json: {
           apiVersion: "choregos/v1",

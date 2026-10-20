@@ -56,7 +56,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         <SettingsSection
           id="network"
           title="Network"
-          lead="The hosts this project's runs may reach, under the organisation's ceiling (ADR 0070)."
+          lead="The hosts this project's runs may reach, within what the organisation allows."
         >
           <ProjectNetworkCard slug={slug} />
         </SettingsSection>
