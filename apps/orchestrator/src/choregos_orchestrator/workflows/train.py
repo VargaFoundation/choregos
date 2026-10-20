@@ -104,6 +104,14 @@ EMPTY_TRAIN_DROPS_DEPARTURE = "empty-train-drops-departure"
 #: wakes it, so the hotfix leaves as express as soon as the train is unfrozen, as before the freeze.
 #: Same discipline: the condition first, `patched` second.
 FROZEN_TRAIN_DOES_NOT_SPIN = "frozen-train-does-not-spin"
+#: A `freeze` handled BEFORE the body of `run` (a start signal, or one right behind the start) is kept
+#: (#763, S22-36b). Before this marker `run` did `self.frozen = params.frozen`, which overwrote it while
+#: `freeze_reason` stayed: a train showing a reason but not frozen, which could depart. `unfreeze`,
+#: `abort`, `express` and `depart_now` were checked: `run` never overwrites them (`express` is only
+#: raised, never lowered), so only the freeze needed the marker. An `unfreeze` before the body of a
+#: train relayed frozen is still lost (one bit cannot tell it from the relay's own `frozen`): the
+#: train stays frozen, the safe side, and whoever unfreezes sends it again.
+FREEZE_BEFORE_RUN_IS_KEPT = "freeze-before-run-is-kept"
 #: Le seuil (en événements d'historique) au-delà duquel le train se relaie — au repos, après un départ
 #: et après une synchro `auto_sync`. 2 000 : le rejeu coûte ~2 ms par événement sur le pod (33,9 s pour
 #: 16 000), soit ~4 s, sous les 10 s de la tâche de workflow avec une marge pour un CPU disputé par les
@@ -275,7 +283,10 @@ class ReleaseTrain:
             for item in deja_embarques:
                 self.merged(item)
         self.batch_no = params.batch_no
-        self.frozen = params.frozen
+        if workflow.patched(FREEZE_BEFORE_RUN_IS_KEPT):
+            self.frozen = params.frozen or self.frozen
+        else:
+            self.frozen = params.frozen
         if params.express:
             self.express = True
             self.depart_requested = True
