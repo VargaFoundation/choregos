@@ -21,17 +21,11 @@ from typing import Any
 import httpx
 from choregos_adapters.mcp.client import ClientMcp
 from choregos_contracts import StageInput, StageResult
-from choregos_core.egress import (
-    AllowedRule,
-    EgressPolicy,
-    NetworkBounds,
-    host_port_of,
-    normalize_host,
-    use_policy,
-)
+from choregos_core.egress import use_policy
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
 
 from .budget import gateway_budget_refusal
+from .egress import step_policy
 from .guardrails import GuardRails
 from .outputs import OUTPUTS_DIR, expected_files
 from .result import load_result
@@ -92,20 +86,6 @@ def _auth(env: dict[str, str]) -> dict[str, str]:
             return {"token": value.removeprefix("Bearer ").strip()}
         return {"token": value, "auth_header": header}
     return {}
-
-
-def step_policy(stage_input: StageInput) -> EgressPolicy:
-    """What the runner's own calls of a prompt step may reach: the MCP servers the step was granted
-    and its `allow_domains`, never a host of `deny_domains`. The model gateway is the platform's own
-    address, not a call the agent chooses, and does not go through the guarded transport."""
-    granted = [hp for ref in stage_input.tools.mcp.values() if (hp := host_port_of(ref.url))]
-    rules = [AllowedRule(host, (port,)) for host, port in granted]
-    rules += [AllowedRule(normalize_host(host)) for host in stage_input.permissions.allow_domains]
-    return EgressPolicy(
-        rules=tuple(rules),
-        mode="enforce",
-        bounds=NetworkBounds(deny=tuple(stage_input.permissions.deny_domains)),
-    )
 
 
 class PromptRun:
