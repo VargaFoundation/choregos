@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
 
 import httpx
@@ -74,6 +74,11 @@ DEFAULT_MAX_TURNS = 20
 #: The `gateway_keys.run_id` of a session's key.
 KEY_PREFIX = "session:"
 
+SessionRuntime = Literal["prompt", "voice"]
+_DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime"}
+#: The reasons a session ends that are not failures.
+_CLEAN_ENDS = {"closed", "expired", "max_minutes"}
+
 #: The gateway's own words for a spent key, as `choregos_runner.budget` reads them.
 _BUDGET_SIGNATURES = ("budget_exceeded", "budgetexceedederror", "exceededbudget", "budget has been exceeded")
 
@@ -95,7 +100,7 @@ def set_model_transport(transport: httpx.AsyncBaseTransport | None) -> None:
         _OVERRIDES["transport"] = transport
 
 
-async def _gateway(session: AsyncSession, org_id: str) -> GatewayAdapter:
+async def session_gateway(session: AsyncSession, org_id: str) -> GatewayAdapter:
     if "gateway" in _OVERRIDES:
         found: GatewayAdapter = _OVERRIDES["gateway"]
         return found
@@ -134,8 +139,11 @@ async def open_session(
     project: Project,
     *,
     max_usd: float | None,
+    runtime: SessionRuntime = "prompt",
 ) -> AgentSessionRecord:
-    """A new session of the agent in the project: its version, its model, its reservation, its key."""
+    """A new session of the agent in the project: its version, its model, its reservation, its key.
+
+    `runtime` is the door it opens at: `prompt` on `/responses`, `voice` on `/realtime` (S41-10)."""
     from .agents import AgentIndisponible, resoudre_l_agent
 
     await sweep_expired(session, project.id)
@@ -145,15 +153,17 @@ async def open_session(
         raise conflict(str(refusal)) from refusal
     spec = resolved.spec
     kind = spec.runtime.kind if spec.runtime is not None else None
-    if kind != "prompt":
-        # A voice session is a realtime WebSocket (S41-10); a hosted one, a pod of its own (S41-11).
+    if kind != runtime:
+        # A hosted session is a pod of its own (S41-11).
         raise unprocessable(
-            f"`{agent_slug}` is not a prompt agent (runtime `{kind or 'none'}`): "
-            "only a prompt agent answers on `/responses`",
+            f"`{agent_slug}` is not a {runtime} agent (runtime `{kind or 'none'}`): "
+            f"only a {runtime} agent answers on `{_DOORS[runtime]}`",
             [{"loc": ["agent", "runtime"], "msg": f"runtime `{kind or 'none'}` has no session here"}],
         )
+    # A voice session lives as long as its agent lets it speak, its key with it.
+    ttl_s = max(SESSION_TTL_S, getattr(spec.runtime, "max_session_minutes", 0) * 60 + 60)
     config = ProjectConfig.model_validate(project.config or {})
-    gateway = await _gateway(session, organisation.id)
+    gateway = await session_gateway(session, organisation.id)
     model = await _resolve_model(session, organisation.id, gateway, spec, config)
 
     record = AgentSessionRecord(
@@ -169,7 +179,7 @@ async def open_session(
         responses=0,
         tool_calls=0,
         cost_usd=0.0,
-        expires_at=utcnow() + timedelta(seconds=SESSION_TTL_S),
+        expires_at=utcnow() + timedelta(seconds=ttl_s),
     )
     session.add(record)
     await session.flush()
@@ -195,7 +205,7 @@ async def open_session(
             "user": principal.user_id,
         },
         budget_usd=reservation.usd,
-        ttl_s=SESSION_TTL_S,
+        ttl_s=ttl_s,
         models=[model.litellm_model],
         team_id=team_id,
     )
@@ -212,7 +222,7 @@ async def open_session(
     await get_secret_store().put(
         session, organisation.id, secret_name(record.id), str(key.key), principal.email
     )
-    await _journal(
+    await journal(
         session,
         record,
         "session.opened",
@@ -323,11 +333,11 @@ async def respond(
     runtime = spec.runtime
     keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
     key = keys.get(secret_name(record.id), "")
-    tools = await _session_tools(session, spec, project)
+    tools = await session_tools(session, spec, project)
     messages = list(record.messages or [])
     for text in inputs:
         messages.append({"role": "user", "content": text})
-        await _journal(session, record, "input.text", {"text": text[:2000]})
+        await journal(session, record, "input.text", {"text": text[:2000]})
     response_id = f"resp_{uuid4().hex}"
 
     async def complete(body: dict[str, Any]) -> dict[str, Any]:
@@ -346,10 +356,10 @@ async def respond(
         return parsed
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
-        return await _call_tool(session, record, project, tools[name], arguments)
+        return await call_session_tool(session, record, project, tools[name], arguments)
 
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
-        await _journal(session, record, type_, payload)
+        await journal(session, record, type_, payload)
 
     outcome: LoopOutcome | None = None
     error: AgentResponseError | None = None
@@ -364,7 +374,7 @@ async def respond(
             ),
             messages,
             [
-                LoopTool(t.nom, str(t.annonce().get("description") or ""), _parameters(t))
+                LoopTool(t.nom, str(t.annonce().get("description") or ""), tool_parameters(t))
                 for t in tools.values()
             ],
             complete,
@@ -388,7 +398,7 @@ async def respond(
         tool_calls=outcome.tool_calls if outcome else 0,
     )
     status = "failed" if error is not None else "completed"
-    await _journal(
+    await journal(
         session,
         record,
         f"response.{status}",
@@ -408,12 +418,12 @@ async def respond(
     )
 
 
-def _parameters(tool: OutilDuCourtier) -> dict[str, Any]:
+def tool_parameters(tool: OutilDuCourtier) -> dict[str, Any]:
     schema = tool.annonce().get("inputSchema")
     return dict(schema) if isinstance(schema, dict) else {"type": "object", "properties": {}}
 
 
-async def _session_tools(
+async def session_tools(
     session: AsyncSession, spec: AgentSpec, project: Project
 ) -> dict[str, OutilDuCourtier]:
     """The read tools the agent's `mcp_servers` grant in the project: a write or an approval is a
@@ -424,7 +434,7 @@ async def _session_tools(
     return {name: tool for name, tool in granted.items() if not tool.ecriture and not tool.sous_validation}
 
 
-async def _call_tool(
+async def call_session_tool(
     session: AsyncSession,
     record: AgentSessionRecord,
     project: Project,
@@ -504,7 +514,7 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
     from .couts import record_cost
     from .model_catalogue import priced_spend
 
-    gateway = await _gateway(session, record.org_id)
+    gateway = await session_gateway(session, record.org_id)
     settings = get_settings()
     key_row = None
     if record.gateway_key_id:
@@ -548,10 +558,10 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
             key_row.revoked = revoked
             key_row.spend_usd = spend.cost_usd
     await get_secret_store().delete(session, record.org_id, secret_name(record.id))
-    record.status = "closed" if reason in {"closed", "expired"} else "failed"
+    record.status = "closed" if reason in _CLEAN_ENDS else "failed"
     record.reason = reason
     record.closed_at = utcnow()
-    await _journal(session, record, "session.closed", {"reason": reason, "cost_usd": record.cost_usd})
+    await journal(session, record, "session.closed", {"reason": reason, "cost_usd": record.cost_usd})
     log.info("agent_session.closed", session_id=record.id, reason=reason, cost_usd=record.cost_usd)
 
 
@@ -576,7 +586,7 @@ async def sweep_expired(session: AsyncSession, project_id: str) -> int:
 # ───────────────────────────── the journal ─────────────────────────────
 
 
-async def _journal(
+async def journal(
     session: AsyncSession, record: AgentSessionRecord, type_: str, payload: dict[str, Any]
 ) -> None:
     """One event of the transcript, numbered in order: text only, never audio."""
@@ -632,12 +642,17 @@ __all__ = [
     "DEFAULT_SESSION_USD",
     "SESSION_TTL_S",
     "budget_refusal",
+    "call_session_tool",
     "close_session",
+    "journal",
     "open_session",
     "respond",
     "secret_name",
     "session_dto",
+    "session_gateway",
+    "session_tools",
     "set_model_transport",
     "set_session_gateway",
     "sweep_expired",
+    "tool_parameters",
 ]

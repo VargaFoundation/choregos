@@ -125,6 +125,9 @@ class Settings(BaseSettings):
     #: The gateway adapter the deployment uses (`litellm`, `openai-compatible`, `direct`...).
     gateway_type: str = "litellm"
     gateway_master_key: str = ""
+    #: The model a voice session has the gateway transcribe the caller's speech with (ADR 0080 §10):
+    #: the transcript is what is kept of it, never the audio. Empty: the caller's words are not kept.
+    realtime_transcription_model: str = "gpt-4o-mini-transcribe"
     # Ce que CE déploiement sait faire tourner (#245) : un projet neuf en hérite quand sa demande
     # n'en dit rien. Sans eux, il part sur `claude-code` et aucun profil de modèle — sur le dev, qui
     # sert opencode derrière la passerelle, le premier agent du gabarit RH n'a jamais atteint le

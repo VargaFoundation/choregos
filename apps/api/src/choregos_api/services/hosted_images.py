@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import get_settings
 from ..errors import unprocessable
 from ..logging import get_logger
-from ..schemas import AgentSpec, HostedImageSource, HostedRuntime
+from ..schemas import AgentSpec, HostedImageSource, HostedRuntime, VoiceRuntime
 
 log = get_logger(__name__)
 
@@ -95,8 +95,15 @@ def allowlisted_ref(source: HostedImageSource) -> ImageRef:
 async def pin_hosted_runtime(session: AsyncSession, org_id: str, spec: AgentSpec) -> AgentSpec:
     """The spec with its image's `digest` set from the registry, after the allowlist and the
     signature policy. A digest the caller wrote is never trusted: it is resolved again. A zip source:
-    its `build` is written from the stored zip (`hosted_sources`). Not hosted: the spec as it is."""
+    its `build` is written from the stored zip (`hosted_sources`). A voice agent: refused unless the
+    organisation's gateway relays the realtime API. Otherwise: the spec as it is."""
     runtime = spec.runtime
+    if isinstance(runtime, VoiceRuntime):
+        # Not an image, but the other check of a runtime that needs the organisation (S41-10).
+        from .agent_realtime import require_realtime_gateway
+
+        await require_realtime_gateway(session, org_id)
+        return spec
     if isinstance(runtime, HostedRuntime) and runtime.source.type == "zip":
         from ..object_store import object_store
         from .hosted_sources import pin_zip_runtime
