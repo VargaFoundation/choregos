@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
+from choregos_adapters.executor.agent_sandbox import runtime_class_refusal
 from choregos_api.services.readiness import (
     ConnectorFact,
     Facts,
     ObjectStoreFact,
+    RuntimeFact,
     evaluate,
     item_backend,
     item_budgets,
@@ -22,11 +25,13 @@ from choregos_api.services.readiness import (
     item_people,
     item_provisioned,
     item_repository,
+    item_runtime_class,
     item_stale_tests,
     item_tools,
     item_workflow,
+    runtime_fact,
 )
-from choregos_contracts import ProjectConfig
+from choregos_contracts import Policy, ProjectConfig
 
 NOW = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
 
@@ -313,3 +318,79 @@ def test_a_file_output_and_a_store_that_fails_its_probe_is_to_do_naming_the_caus
 def test_a_file_output_and_a_store_that_answers_is_done() -> None:
     (item,) = item_object_store(facts(file_outputs=("bars",), object_store=ObjectStoreFact()))
     assert item.state == "done"
+
+
+# ── warm pool runtime (S38-13d) ──
+
+
+def _policy(runtime: str) -> Policy:
+    return Policy.model_validate({"metadata": {"name": "p", "version": "1"}, "sandbox": {"runtime": runtime}})
+
+
+@pytest.fixture
+def real_deployment(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "agent_sandbox")
+    monkeypatch.delenv("CHOREGOS_RUNNER_RUNTIME_CLASS", raising=False)
+    monkeypatch.delenv("CHOREGOS_SANDBOX_WARM_POOL", raising=False)
+    return monkeypatch
+
+
+def test_the_executor_and_the_readiness_item_share_one_comparison() -> None:
+    assert runtime_class_refusal("gvisor", "gvisor", "pool") is None
+    assert runtime_class_refusal(None, "gvisor", "pool") is None
+    message = runtime_class_refusal("gvisor", "", "pool")
+    assert message is not None and "`gvisor`" in message and "cluster default" in message
+    assert "runner.runtimeClass" in message
+
+
+def test_a_gvisor_policy_on_a_pool_with_the_cluster_default_is_to_do(
+    real_deployment: pytest.MonkeyPatch,
+) -> None:
+    real_deployment.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "")
+    fact = runtime_fact({}, _policy("gvisor"))
+    assert fact is not None and fact.refusal is not None
+    (item,) = item_runtime_class(facts(runtime=fact))
+    assert item.state == "todo" and item.fix.by == "platform_operator"
+    for wanted in (
+        "sandbox.runtime: gvisor",
+        "choregos-runner",
+        "the cluster default",
+        "runner.runtimeClass",
+    ):
+        assert wanted in item.detail
+    assert evaluate(facts(runtime=fact)).ready is False
+
+
+def test_a_gvisor_policy_on_a_gvisor_pool_is_done(real_deployment: pytest.MonkeyPatch) -> None:
+    real_deployment.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "gvisor")
+    (item,) = item_runtime_class(facts(runtime=runtime_fact({}, _policy("gvisor"))))
+    assert item.state == "done"
+
+
+def test_nothing_is_judged_when_it_cannot_be_judged(real_deployment: pytest.MonkeyPatch) -> None:
+    """No false alarm: a policy that asks nothing, an executor that is not the warm pool, fakes,
+    and a deployment that never said which RuntimeClass its pool runs."""
+    gvisor, default = _policy("gvisor"), _policy("default")
+    real_deployment.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "")
+    assert runtime_fact({}, default) is None
+    real_deployment.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    assert runtime_fact({}, gvisor) is None, "a Job sets runtimeClassName per run"
+    real_deployment.setenv("CHOREGOS_EXECUTOR_KIND", "agent_sandbox")
+    job = connector("runtime", "k8s_job")
+    assert runtime_fact({"runtime": job}, gvisor) is None, "the project's own runtime connector decides"
+    real_deployment.setenv("CHOREGOS_FAKES", "1")
+    assert runtime_fact({}, gvisor) is None
+    real_deployment.setenv("CHOREGOS_FAKES", "0")
+    real_deployment.delenv("CHOREGOS_RUNNER_RUNTIME_CLASS")
+    assert runtime_fact({}, gvisor) is None, "unknown pool runtime: no judgment"
+    assert item_runtime_class(facts()) == []
+
+
+def test_a_sandbox_connector_with_its_own_runtime_class_is_judged_on_it(
+    real_deployment: pytest.MonkeyPatch,
+) -> None:
+    real_deployment.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "")
+    pool = connector("runtime", "agent_sandbox", config={"runtime_class": "gvisor", "warm_pool": "mine"})
+    fact = runtime_fact({"runtime": pool}, _policy("gvisor"))
+    assert fact == RuntimeFact("gvisor", None)

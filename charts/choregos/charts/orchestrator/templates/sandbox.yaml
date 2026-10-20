@@ -63,7 +63,7 @@ spec:
       serviceAccountName: choregos-runner
       automountServiceAccountToken: false
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
-      {{- with .Values.runner.runtimeClass }}
+      {{- with (include "choregos.runtimeClass" .) }}
       runtimeClassName: {{ . | quote }}
       {{- end }}
       securityContext:

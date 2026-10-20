@@ -87,6 +87,16 @@ class ObjectStoreFact:
 
 
 @dataclass(frozen=True)
+class RuntimeFact:
+    """The project's policy asks for a RuntimeClass and the deployment's warm pool is known.
+
+    `refusal` is the executor's own message (`runtime_class_refusal`), None when the pool runs it."""
+
+    asked: str
+    refusal: str | None = None
+
+
+@dataclass(frozen=True)
 class Facts:
     slug: str
     status: str
@@ -123,6 +133,9 @@ class Facts:
     file_outputs: tuple[str, ...] = ()
     #: the probe of the object store; None when no workflow declares a file output (nothing asked)
     object_store: ObjectStoreFact | None = None
+    #: the policy's RuntimeClass against the warm pool's; None when nothing is asked, the pool is not
+    #: the executor in use, or the deployment did not say which RuntimeClass it runs
+    runtime: RuntimeFact | None = None
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -547,6 +560,28 @@ def item_object_store(f: Facts) -> list[ReadinessItem]:
     ]
 
 
+def item_runtime_class(f: Facts) -> list[ReadinessItem]:
+    if f.runtime is None:
+        return []
+    title = "Warm pool runs the policy's runtime"
+    fix = ReadinessFix(href=None, by="platform_operator")
+    if f.runtime.refusal is None:
+        return [
+            _item("runtime-class", "connections", title, "done", f"the pool runs `{f.runtime.asked}`.", fix)
+        ]
+    return [
+        _item(
+            "runtime-class",
+            "connections",
+            title,
+            "todo",
+            f"the policy asks for `sandbox.runtime: {f.runtime.asked}` and every run would be refused: "
+            f"{f.runtime.refusal}.",
+            fix,
+        )
+    ]
+
+
 ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_provisioned,
     item_workflow,
@@ -561,6 +596,7 @@ ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_people,
     item_notifications,
     item_object_store,
+    item_runtime_class,
     item_tools,
     item_first_work_item,
 )
@@ -703,6 +739,33 @@ async def probe_object_store() -> ObjectStoreFact:
     return fact
 
 
+def runtime_fact(connectors: dict[str, ConnectorFact], policy: Any) -> RuntimeFact | None:
+    """Does the warm pool run the RuntimeClass the policy asks for? Judged only when it can be.
+
+    No judgment (None) when the policy asks for no gVisor (the orchestrator then gives a run the
+    pool's own class), when the executor in use is not the warm pool (a Job sets `runtimeClassName`
+    per run), under fakes, or when the deployment never told the API its pool's class
+    (`CHOREGOS_RUNNER_RUNTIME_CLASS` unset; an empty value means "the cluster default")."""
+    import os
+
+    from choregos_adapters import fakes_enabled
+    from choregos_adapters.executor.agent_sandbox import runtime_class_refusal
+    from choregos_adapters.registry import default_executor_kind
+
+    # `classe_d_execution` (orchestrator): a `gvisor` policy is never bypassed, nothing else is asked.
+    if policy.sandbox.runtime != "gvisor" or fakes_enabled():
+        return None
+    runtime = connectors.get("runtime")
+    if (runtime.type if runtime else default_executor_kind()) != "agent_sandbox":
+        return None
+    config = runtime.config if runtime else {}
+    pool = config.get("runtime_class", os.environ.get("CHOREGOS_RUNNER_RUNTIME_CLASS"))
+    if pool is None:
+        return None
+    warm_pool = config.get("warm_pool") or os.environ.get("CHOREGOS_SANDBOX_WARM_POOL") or "choregos-runner"
+    return RuntimeFact("gvisor", runtime_class_refusal("gvisor", str(pool), str(warm_pool)))
+
+
 def _file_outputs(workflows: list[Any]) -> tuple[str, ...]:
     names: set[str] = set()
     for workflow in workflows:
@@ -767,6 +830,7 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
     return Facts(
         file_outputs=file_outputs,
         object_store=await probe_object_store() if file_outputs else None,
+        runtime=runtime_fact(connectors, policy),
         slug=project.slug,
         status=project.status,
         provision_failure=(f"{failed.get('name')}: {failed.get('message')}" if failed else None),

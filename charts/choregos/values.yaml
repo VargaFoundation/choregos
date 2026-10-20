@@ -31,6 +31,12 @@ global:
   # `aca`, `local_docker`. Upgrading from <= 0.17, which defaulted to `tekton`: set `tekton`.
   runner:
     executor: agent_sandbox
+    # The RuntimeClass (gVisor, Kata) of the `agent_sandbox` warm pool's template and of the agent
+    # pods when the project's policy imposes none (`sandbox.runtime: gvisor` takes precedence).
+    # Empty: the cluster's runtime. Read by the API too, which tells a project in `/readiness` that
+    # its policy asks for a runtime this pool does not run. Set it HERE, not under
+    # `choregos-orchestrator.runner`, which may only repeat it.
+    runtimeClass: ""
     # What the API lets a project choose as its `runtime` connector. Empty: only `executor`.
     # Add `k8s_job` for the steps that name their own image.
     allowedExecutors: []
@@ -382,8 +388,8 @@ choregos-orchestrator:
     limits:
       cpu: "2"
       memory: 6Gi
-    # The RuntimeClass (gVisor, Kata) of each agent pod when the project's policy
-    # imposes none (`sandbox.runtime: gvisor` takes precedence). Empty: the cluster's runtime.
+    # May only repeat `global.runner.runtimeClass`, the one setting (a different value is
+    # refused at render). Leave empty.
     runtimeClass: ""
     # `executor: agent_sandbox` only (ADR 0016; needs the agent-sandbox operator and a
     # `namespacePattern` naming this namespace). `warmPool.size` sandboxes wait, made from the

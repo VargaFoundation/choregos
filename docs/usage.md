@@ -323,6 +323,7 @@ vendor). `ready` is true when no item is `todo`.
 | `connector-<kind>-secrets` | a secret field of the type is not set (webhook secrets excepted) | |
 | `connector-<kind>-stale` | | the last passing test is older than 7 days |
 | `github-app-<kind>` | the repository's owner has no installation claimed by the organisation ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)); `not_needed` without an App | |
+| `runtime-class` | the policy says `sandbox.runtime: gvisor` and the `agent_sandbox` warm pool runs another RuntimeClass (`global.runner.runtimeClass`): every run would be refused at start. Not listed for another executor, under fakes, or when the policy asks for none | |
 | `repository` | a repository is needed and has no URL | |
 | `repository-checks` | | no `repo.test_command` and no `dod.facts`: the runner measures nothing |
 | `backend` | the default backend is not enabled on the deployment | |

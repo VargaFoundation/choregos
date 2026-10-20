@@ -50,6 +50,23 @@ there would bring back the two answers, so the render refuses it).
 {{- end -}}
 
 {{/*
+The RuntimeClass of the warm pool's template (gVisor, Kata), one answer for every pod: the
+orchestrator renders the template and the executor from it, and the API compares it with what a
+project's policy asks (`/readiness`, S38-13d). `global.runner.runtimeClass` is the setting; the
+orchestrator sub-chart's own `runner.runtimeClass` may only repeat it (a different value would
+hide the pool's real runtime from the API, so the render refuses it). Empty: the cluster's default.
+*/}}
+{{- define "choregos.runtimeClass" -}}
+{{- $global := (.Values.global.runner | default dict).runtimeClass | default "" -}}
+{{- $local := "" -}}
+{{- with .Values.runner }}{{- $local = .runtimeClass | default "" -}}{{- end -}}
+{{- if and $local (ne $local $global) -}}
+{{- fail (printf "runner.runtimeClass=%s on the orchestrator differs from global.runner.runtimeClass=%q. Set the RuntimeClass once, in global.runner.runtimeClass: the API and the warm pool must agree on it." $local $global) -}}
+{{- end -}}
+{{- $global -}}
+{{- end -}}
+
+{{/*
 The namespace pattern the runs go to. Empty (the default) follows the executor: the release
 namespace for `agent_sandbox`, whose SandboxTemplate lives there, `proj-{slug}-runners` otherwise.
 An explicit value always wins.
@@ -66,7 +83,7 @@ proj-{slug}-runners
 
 {{/* Common environment variables: 12-factor configuration, secrets by reference. */}}
 {{- define "choregos.commonEnv" -}}
-{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_EGRESS_MODE" "CHOREGOS_EGRESS_CEILING" "CHOREGOS_EGRESS_PLATFORM_CHANGE" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRET_ENV_PATTERN" "CHOREGOS_EXECUTOR_KIND" "CHOREGOS_EXECUTORS_ALLOWED" }}
+{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_EGRESS_MODE" "CHOREGOS_EGRESS_CEILING" "CHOREGOS_EGRESS_PLATFORM_CHANGE" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRET_ENV_PATTERN" "CHOREGOS_EXECUTOR_KIND" "CHOREGOS_RUNNER_RUNTIME_CLASS" "CHOREGOS_EXECUTORS_ALLOWED" }}
 {{- range (.Values.global.extraEnv | default list) }}
 {{- if has .name $poses }}
 {{- fail (printf "global.extraEnv: %s is already set by the chart; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
@@ -102,6 +119,9 @@ proj-{slug}-runners
   value: {{ .Values.global.temporal.namespace | quote }}
 - name: CHOREGOS_EXECUTOR_KIND
   value: {{ include "choregos.executorKind" . | quote }}
+# The warm pool's RuntimeClass, for the API and the workers alike. Empty: the cluster's default.
+- name: CHOREGOS_RUNNER_RUNTIME_CLASS
+  value: {{ include "choregos.runtimeClass" . | quote }}
 - name: CHOREGOS_EXECUTORS_ALLOWED
   value: {{ (.Values.global.runner | default dict).allowedExecutors | default list | join "," | quote }}
 - name: CHOREGOS_GATEWAY_TYPE
