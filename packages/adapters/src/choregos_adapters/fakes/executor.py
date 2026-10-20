@@ -48,6 +48,8 @@ class FakeExecutor:
         self.run_logs: dict[str, list[str]] = {}
         self.start_calls_by_run: dict[str, int] = {}
         self._crashes: list[tuple[ExecStatus, list[str]]] = []
+        #: Raised by every `start` while set: an executor that refuses the run (e.g. `ConfigurationError`).
+        self.start_error: Exception | None = None
 
     def queue_result(self, result: StageResult) -> None:
         self._queue.append(result)
@@ -78,6 +80,8 @@ class FakeExecutor:
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent par `run_id` : deux démarrages du même run ne produisent qu'une exécution."""
         self.start_calls_by_run[spec.run_id] = self.start_calls_by_run.get(spec.run_id, 0) + 1
+        if self.start_error is not None:
+            raise self.start_error
         if spec.run_id in self.statuses:
             return ExecRef(
                 kind=self.kind, name=f"fake-{spec.run_id}", namespace=spec.namespace, run_id=spec.run_id
