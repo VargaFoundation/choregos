@@ -92,6 +92,9 @@ transitions:
     by: strategist
     inputs: [universe_profile]
     outputs: [strategies]
+    # `json`: the engine reads `strategies.json`. A model that answers the document as a string is
+    # stored as that document, not as markdown the job cannot find (S38-13, RESEARCH-2 on dev).
+    output_types: { strategies: json }
     gates:
       - name: output_schema
         params:

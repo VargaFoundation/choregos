@@ -8,6 +8,7 @@ digest, and bytes that no longer match are refused.
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 import pytest
@@ -33,6 +34,7 @@ async def _run(
     role: str,
     *,
     outputs: list[str] | None = None,
+    output_types: dict[str, str] | None = None,
     agent: tuple[str, int] | None = None,
     attempt: int = 1,
 ) -> dict[str, str]:
@@ -51,7 +53,7 @@ async def _run(
                 status="running",
                 agent_slug=agent[0] if agent else None,
                 agent_version=agent[1] if agent else None,
-                stage_input={"transition": {"outputs": outputs or []}},
+                stage_input={"transition": {"outputs": outputs or [], "output_types": output_types or {}}},
             )
         )
     token = mint_run_token(
@@ -103,6 +105,31 @@ async def test_each_output_becomes_a_typed_artifact_traced_to_its_run(
     )
     assert spec.storage_url is None, "an inline artifact stays in the database"
     assert (rows["profiles"].type, rows["profiles"].media_type) == ("json", "application/json")
+
+
+async def test_json_written_as_text_is_stored_as_the_document_it_spells(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """RESEARCH-2 on dev (S38-13): the model answered `strategies` as a JSON string, the gate
+    validated it parsed, the artifact was typed markdown, and the backtest found no
+    `strategies.json`. Declared `json`, text that parses is that document, not a JSON string."""
+    item = await _work_item(client, project)
+    headers = await _run(
+        item,
+        project,
+        "run-strategize",
+        "strategize",
+        outputs=["strategies", "notes"],
+        output_types={"strategies": "json", "notes": "json"},
+    )
+    strategies = {"strategies": [{"id": "s1", "family": "sma_cross", "params": {"fast": 20, "slow": 100}}]}
+    outputs = {"strategies": json.dumps(strategies), "notes": "not json"}
+    await _post(client, "run-strategize", headers, outputs)
+
+    rows = {row.name: row for row in await _rows(item["id"])}
+    assert (rows["strategies"].type, rows["strategies"].media_type) == ("json", "application/json")
+    assert rows["strategies"].content == strategies, "the document, not the string that spells it"
+    assert rows["notes"].content == "not json", "text that does not parse is kept as written"
 
 
 async def test_a_new_content_is_a_new_version_and_the_same_content_is_not(

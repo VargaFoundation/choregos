@@ -205,8 +205,10 @@ async def _child_fields(stage_input: StageInput) -> dict[str, Any]:
 
 
 async def strategist(stage_input: StageInput) -> StageResult:
+    # As a real model answers it on dev (RESEARCH-2, S38-13): the document as a JSON string. The
+    # backtest still reads `strategies.json` because the template declares it `json`.
     return StageResult(
-        status=StageStatus.DONE, summary="three hypotheses", outputs={"strategies": STRATEGIES}
+        status=StageStatus.DONE, summary="three hypotheses", outputs={"strategies": json.dumps(STRATEGIES)}
     )
 
 
