@@ -56,6 +56,41 @@ async def _forget_the_parking(setup: Fixture) -> None:
             row.payload = {k: v for k, v in (row.payload or {}).items() if k != "parked"}
 
 
+async def _wait_mirrored(setup: Fixture, state: str, *, timeout: int = 60) -> None:
+    """Waits until the DATABASE holds `state` and has applied the runs' decisions.
+
+    `status` answers from the interpreter's memory, which moves before `mirror_state` commits. An
+    interpreter terminated in that window leaves the database half-way: a restart reads the state
+    (`load_context`) before the commit and the attempts after it, and plays a second run (#748).
+    A test that kills an interpreter waits for the commit, not for the query.
+    """
+    import time
+
+    from choregos_api.db.models import Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import func, select
+
+    deadline = time.monotonic() + timeout
+    seen: tuple[str | None, int] = (None, -1)
+    while time.monotonic() < deadline:
+        async with session_scope() as session:
+            item = await session.get(WorkItem, setup.work_item_id)
+            undecided = await session.scalar(
+                select(func.count())
+                .select_from(Run)
+                .where(
+                    Run.work_item_id == setup.work_item_id,
+                    Run.status == "succeeded",
+                    Run.decided_at.is_(None),
+                )
+            )
+        seen = (item.state if item else None, int(undecided or 0))
+        if seen == (state, 0):
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"`{state}` never committed with every decision applied (last: {seen})")
+
+
 async def _escalate_then_restart(temporal_env: Any, setup: Fixture, *, legacy: bool = False) -> Any:
     """Two failures escalate `t-refine`; the interpreter dies; a new one starts from the database."""
     first = await start(temporal_env, setup)
@@ -210,6 +245,7 @@ async def test_a_replay_on_a_work_item_that_did_not_escalate_is_still_dropped(
     async with worker_factory():
         first = await start(temporal_env, setup)
         await _wait_state(first, "awaiting_spec_approval")
+        await _wait_mirrored(setup, "awaiting_spec_approval")  # not the query: it runs ahead (#748)
         await first.terminate(reason="the interpreter died (#497)")
         handle = await start(temporal_env, setup)
         await _wait_until(handle, "the restarted interpreter waits", lambda s: s["pending_request"])
