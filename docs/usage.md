@@ -771,6 +771,11 @@ what lands in the agent's context, so the broker holds every result, read or wri
 
 The cap is the deployment's, for every operation; a per-operation cap does not exist yet.
 
+A YAML catalogue tool and a plugin's tool answer through the same cap and the same masking (#759):
+an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, over the cap,
+becomes `{text: <its JSON, cut, with the marker>, truncated}`. Neither declares an output schema,
+and the injection guard does not read their answers yet.
+
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
 
