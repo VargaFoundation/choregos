@@ -132,13 +132,15 @@ the six reference tickets each, so 24 real runs. Every case was metered; none wa
 | `rtk+headroom` | 5/6 | $0.316 | **+47 %** (+$0.081 … +$0.133) | 231,484 | 92,112 | 8,400 | 2,853 |
 
 - **How the cost was computed.** The tokens are the gateway's spend logs of each run's key
-  (observed). The gateway's own cost could not be used: neither the dev LiteLLM nor the platform
-  gateway gives a price to cache reads and writes, so it counted $1.01 for the 24 runs, mostly
-  output. Each case is priced here at the platform gateway's rates for this model ($2 per million
+  (observed). The gateway's own cost could not be used: during the matrix, neither the dev
+  LiteLLM nor the platform gateway gave a price to cache reads and writes, so it counted $1.01
+  for the 24 runs, mostly output. Each case is priced here at the platform gateway's rates for this model ($2 per million
   input tokens, $10 per million output tokens), with Anthropic's cache ratios (a cache read 0.1×
   the input price, a cache write 1.25×): $6.78 for the 24 runs. The ratios are an assumption about
-  the provider's bill, not read from it. The confidence interval is a bootstrap of the mean paired
-  difference, ticket by ticket, over the six tickets.
+  the provider's bill, not read from it. Both gateways price cache reads and writes since
+  2026-10-19 (#737), at these ratios: a later matrix reads its cost from the gateway. The
+  confidence interval is a bootstrap of the mean paired difference, ticket by ticket, over the
+  six tickets.
 - **Where the money goes.** About 85 % of a run's input is read from the provider's prompt cache.
   headroom compresses tool results and history, and that changes the prompt's prefix from one
   request to the next. The cache is then written again: about 92 k tokens written per run instead
