@@ -15,6 +15,7 @@ platform's back, a value edited in the database — are refused, never served.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -117,6 +118,16 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
     raise RuntimeError(f"artifact `{name}`: could not take a version after {_ROUNDS} attempts")
 
 
+def _parsed(raw: Any) -> Any:
+    """Text that parses as JSON is the document it spells; anything else is kept as it is."""
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return raw
+    return raw
+
+
 async def record_inline_outputs(
     session: AsyncSession,
     *,
@@ -128,16 +139,18 @@ async def record_inline_outputs(
 ) -> list[ArtifactRecord]:
     """One artifact revision per present output of a step, typed by its declaration or its value.
 
-    A declared inline type (`markdown`, `json`) is kept when the value fits it; a value that does
-    not fit — text declared `json`, a list declared `markdown` — is typed by what it is."""
+    A declared inline type (`markdown`, `json`) is kept; a list declared `markdown` is JSON. Text
+    declared `json` that parses is the document it spells, not a JSON string: a model often answers
+    JSON as text, `output_schema` validates it parsed, and the next step reads `<name>.json` (S38-13)."""
     recorded: list[ArtifactRecord] = []
-    for name, value in outputs.items():
-        if not _present(value):
+    for name, raw in outputs.items():
+        if not _present(raw):
             continue
         if not _NAME.fullmatch(name):
             log.warning("artifact name refused", work_item=item.tracker_key, name=name)
             continue
         declared = (types or {}).get(name)
+        value = _parsed(raw) if declared == "json" else raw
         type_ = declared if declared in {"markdown", "json"} else type_of_value(value)
         if type_ == "markdown" and not isinstance(value, str):
             type_ = "json"
