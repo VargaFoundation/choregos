@@ -20,6 +20,8 @@ from urllib.parse import quote
 import httpx
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+#: Seconds a readiness probe waits: a store that does not answer by then is not ready.
+CHECK_TIMEOUT = 5.0
 
 
 class ObjectStoreError(RuntimeError):
@@ -44,6 +46,11 @@ class ObjectStore(Protocol):
 
     async def get(self, key: str) -> bytes:
         """Reads the object; `ObjectNotFoundError` when it is absent."""
+        ...
+
+    async def check(self) -> None:
+        """A cheap probe that creates nothing: returns when the store answers for its bucket, raises
+        `ObjectStoreError` (never carrying a key or a secret) when it does not."""
         ...
 
 
@@ -133,11 +140,19 @@ class S3ObjectStore:
         return f"s3://{self.bucket}/{self._full_key(key)}"
 
     async def _request(
-        self, method: str, key: str, data: bytes = b"", media_type: str = ""
+        self,
+        method: str,
+        key: str | None,
+        data: bytes = b"",
+        media_type: str = "",
+        *,
+        timeout: float | None = None,
     ) -> httpx.Response:
+        """`key=None` addresses the bucket itself."""
         base = httpx.URL(self.endpoint)
         base_path = base.path.rstrip("/")
-        path = quote(f"{base_path}/{self.bucket}/{self._full_key(key)}", safe="/-_.~")
+        target = f"{base_path}/{self.bucket}" + ("" if key is None else f"/{self._full_key(key)}")
+        path = quote(target, safe="/-_.~")
         host = base.host + (f":{base.port}" if base.port else "")
         payload = hashlib.sha256(data).hexdigest() if data else EMPTY_SHA256
         extra = {"content-type": media_type} if media_type else {}
@@ -157,7 +172,7 @@ class S3ObjectStore:
                 )
             )
         url = f"{base.scheme}://{host}{path}"
-        client = self._client or httpx.AsyncClient(timeout=self._timeout)
+        client = self._client or httpx.AsyncClient(timeout=timeout or self._timeout)
         try:
             return await client.request(method, url, content=data or None, headers=headers)
         except httpx.HTTPError as exc:
@@ -183,6 +198,19 @@ class S3ObjectStore:
                 f"object store refused GET {self.url_of(key)}: {response.status_code} {response.text[:300]}"
             )
         return response.content
+
+    async def check(self) -> None:
+        """A `HEAD` on the bucket, signed like any call, with a short timeout: it writes nothing."""
+        response = await self._request("HEAD", None, timeout=CHECK_TIMEOUT)
+        if response.status_code < 300:
+            return
+        hint = "" if self.access_key else "; no access key is set"
+        reasons = {
+            403: "the store refused the credentials",
+            404: f"bucket `{self.bucket}` does not exist",
+        }
+        reason = reasons.get(response.status_code, f"it answered {response.status_code}")
+        raise ObjectStoreError(f"object store {self.endpoint}: {reason}{hint}")
 
 
 __all__ = [

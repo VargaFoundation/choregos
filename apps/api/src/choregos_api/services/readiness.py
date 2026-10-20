@@ -2,18 +2,24 @@
 """What a project still lacks to run, computed from stored state (S40-06).
 
 `load_facts` reads everything once; each `item_*` function is pure over the resulting `Facts`, so a
-unit test needs no database. Nothing here calls the network: a connector's state is the one its last
-test left, which keeps the read fast and lets the CLI and the MCP door show the same list as the console.
+unit test needs no database. Nothing here calls the network except one probe: when an active workflow
+declares a file output, the
+object store is asked once (a `HEAD` on its bucket, 5 s at most, cached for a minute) because a store
+that cannot be written to is otherwise found by the first run that writes a file (S38-13c). A connector's
+state is the one its last test left, which keeps the read fast and lets the CLI and the MCP door show the
+same list as the console.
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from choregos_contracts import ProjectConfig
+from choregos_adapters.storage import ObjectStoreError
+from choregos_contracts import ARTIFACT_TYPES, ProjectConfig
 from choregos_core import ModelResolutionError
 from choregos_core.models import ModelResolver
 from sqlalchemy import func, select
@@ -29,6 +35,7 @@ from ..db.models import (
     WorkflowDef,
     WorkItem,
 )
+from ..object_store import object_store
 from ..schemas.readiness import ProjectReadiness, ReadinessFix, ReadinessItem, ReadinessSummary
 from . import github_app
 from .definitions import active_policy, policy_model, workflow_model
@@ -73,6 +80,13 @@ class ConnectorFact:
 
 
 @dataclass(frozen=True)
+class ObjectStoreFact:
+    """What the probe of the object store found: `error` is None when the store answered."""
+
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class Facts:
     slug: str
     status: str
@@ -105,6 +119,10 @@ class Facts:
     #: findings or memory reviews announce themselves to the notification channel
     announces: bool = False
     work_items: int = 0
+    #: names of the outputs an active workflow declares with a file type (kept in the object store)
+    file_outputs: tuple[str, ...] = ()
+    #: the probe of the object store; None when no workflow declares a file output (nothing asked)
+    object_store: ObjectStoreFact | None = None
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -508,6 +526,27 @@ def item_first_work_item(f: Facts) -> list[ReadinessItem]:
     ]
 
 
+def item_object_store(f: Facts) -> list[ReadinessItem]:
+    if not f.file_outputs:
+        return []
+    title = "Object store reachable"
+    fix = ReadinessFix(href=None, by="platform_operator")
+    shown = ", ".join(f"`{n}`" for n in f.file_outputs[:3]) + (", ..." if len(f.file_outputs) > 3 else "")
+    if f.object_store is None or f.object_store.error is None:
+        return [_item("object-store", "connections", title, "done", f"it answers for {shown}.", fix)]
+    return [
+        _item(
+            "object-store",
+            "connections",
+            title,
+            "todo",
+            f"a workflow writes files ({shown}) and the object store fails its probe: "
+            f"{f.object_store.error}. Set `global.objectStore` (endpoint, secretRef).",
+            fix,
+        )
+    ]
+
+
 ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_provisioned,
     item_workflow,
@@ -521,6 +560,7 @@ ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_budgets,
     item_people,
     item_notifications,
+    item_object_store,
     item_tools,
     item_first_work_item,
 )
@@ -639,6 +679,41 @@ def _model_facts(
     return tuple(unknown), tuple(unvalidated), len(requested)
 
 
+#: How long a probe's answer is reused: a readiness page is read often, a bucket HEAD need not be.
+PROBE_TTL = 60.0
+_probe: tuple[float, ObjectStoreFact] | None = None
+
+
+def forget_object_store_probe() -> None:
+    global _probe  # noqa: PLW0603 - one cached answer per process, like the store itself
+    _probe = None
+
+
+async def probe_object_store() -> ObjectStoreFact:
+    """Asks the store whether it answers; the answer is cached for `PROBE_TTL` seconds."""
+    global _probe  # noqa: PLW0603 - one cached answer per process, like the store itself
+    if _probe is not None and time.monotonic() - _probe[0] < PROBE_TTL:
+        return _probe[1]
+    try:
+        await object_store().check()
+        fact = ObjectStoreFact()
+    except (ObjectStoreError, ValueError) as exc:
+        fact = ObjectStoreFact(error=str(exc))
+    _probe = (time.monotonic(), fact)
+    return fact
+
+
+def _file_outputs(workflows: list[Any]) -> tuple[str, ...]:
+    names: set[str] = set()
+    for workflow in workflows:
+        for transition in workflow.transitions:
+            for name, type_ in transition.output_types.items():
+                declared = ARTIFACT_TYPES.get(type_)
+                if declared is not None and not declared.inline:
+                    names.add(name)
+    return tuple(sorted(names))
+
+
 async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> Facts:
     from choregos_core.dsl.exigences import exigences
 
@@ -687,8 +762,11 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
     unknown_profiles, unvalidated_profiles, used = _model_facts(workflows, config, validated)
     state = project.provision_state or {}
     failed = next((s for s in state.get("steps", []) if s.get("status") == "failed"), None)
+    file_outputs = _file_outputs(workflows)
     capabilities = {c for c, _ in requirements} | set(connectors)
     return Facts(
+        file_outputs=file_outputs,
+        object_store=await probe_object_store() if file_outputs else None,
         slug=project.slug,
         status=project.status,
         provision_failure=(f"{failed.get('name')}: {failed.get('message')}" if failed else None),

@@ -169,3 +169,59 @@ async def test_a_github_owner_without_an_installation_is_to_do(
         await session.execute(delete(GitHubInstallation))
     body = await _readiness(client, pid)
     assert "github-app-scm" in _by_state(body, "todo")
+
+
+async def test_the_probe_of_the_object_store_is_cached_and_reports_its_failure() -> None:
+    """A store that fails is named; the answer is reused for a minute; the fake answers."""
+    from choregos_adapters.fakes import FakeObjectStore
+    from choregos_api.object_store import use_object_store
+    from choregos_api.services import readiness
+
+    store = FakeObjectStore()
+    use_object_store(store)
+    readiness.forget_object_store_probe()
+    try:
+        store.fail_next("object store unreachable (https://s3.example): refused")
+        failed = await readiness.probe_object_store()
+        assert failed.error is not None and "unreachable" in failed.error
+        assert (await readiness.probe_object_store()) is failed, "cached"
+        readiness.forget_object_store_probe()
+        assert (await readiness.probe_object_store()).error is None
+        assert store.puts == 0 and not store.objects, "the probe creates nothing"
+    finally:
+        use_object_store(None)
+        readiness.forget_object_store_probe()
+
+
+async def test_readiness_of_a_project_that_writes_files_lists_the_object_store(
+    client: AsyncClient, admin: str
+) -> None:
+    from choregos_adapters.fakes import FakeObjectStore
+    from choregos_api.object_store import use_object_store
+    from choregos_api.services import readiness
+
+    store = FakeObjectStore()
+    use_object_store(store)
+    readiness.forget_object_store_probe()
+    try:
+        created = await client.post(
+            "/api/v1/orgs/varga/projects",
+            json={
+                "slug": "quant",
+                "name": "Quant",
+                "template_ref": "investment-research@0.1.0",
+                "config": {"slug": "quant", "org": "varga"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        pid = created.json()["id"]
+        await _activate(pid)
+        item = next(i for i in (await _readiness(client, pid))["items"] if i["id"] == "object-store")
+        assert item["state"] == "done"
+        store.fail_next("object store unreachable (https://s3.example): refused")
+        readiness.forget_object_store_probe()
+        item = next(i for i in (await _readiness(client, pid))["items"] if i["id"] == "object-store")
+        assert item["state"] == "todo" and "unreachable" in item["detail"]
+    finally:
+        use_object_store(None)
+        readiness.forget_object_store_probe()

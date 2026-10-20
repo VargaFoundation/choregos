@@ -306,7 +306,7 @@ the turn and minute budgets still hold.
 
 `GET /projects/{id}/readiness` (`choregos projects readiness <slug>`, exit code 1 while something is
 to do) says what a project still lacks to run. It is computed from stored state only: the last connector
-tests, the policy, the members, the workflows. It makes no network call, so a read is fast, and it does not
+tests, the policy, the members, the workflows. It makes no network call (but one: the object store, when a workflow writes files, see `object-store`), so a read is fast, and it does not
 prove live connectivity: *Test now* (the connector test endpoint) refreshes what it reads.
 
 Each item has a `state` (`done`; `check`: it works but deserves a look; `todo`: the project cannot run as
@@ -331,6 +331,7 @@ vendor). `ready` is true when no item is `todo`.
 | `people-owner`, `people-release-captain` | nobody is `project_owner`; a release train and nobody is `release_captain` | |
 | `people-group-<group>` | | a human actor's group was never carried by anyone at sign-in |
 | `notifications` | a release train announces and there is no notify connector, channel or e-mail | findings or memory reviews announce and nothing is set, or the connector was never tested |
+| `object-store` | an active workflow declares a file output (`output_types` other than `markdown`/`json`) and a `HEAD` on the store's bucket fails: unreachable, credentials refused, bucket missing, no access key set. The probe writes nothing, waits 5 s at most and is cached for a minute. Not listed when no workflow writes a file. Not part of `/readyz`: an unreachable store does not take the API out of service | |
 | `tools` | never: informational | |
 | `first-item` | | nothing filed yet |
 

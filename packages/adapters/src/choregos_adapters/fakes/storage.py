@@ -33,6 +33,9 @@ class FakeObjectStore:
         except KeyError:
             raise ObjectNotFoundError(f"no object at {self.url_of(key)}") from None
 
+    async def check(self) -> None:
+        self._maybe_fail()
+
     # ───────── staging ─────────
 
     def tamper(self, key: str, data: bytes) -> None:
