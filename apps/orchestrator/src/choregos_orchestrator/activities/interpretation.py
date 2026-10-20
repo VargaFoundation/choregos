@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_api.db.models import Event, Run, WorkflowDef
+from choregos_api.db.models import Event, Run, WorkflowDef, WorkItem
 from choregos_api.services import persist_event, workflow_du_ticket, workflow_model
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_contracts import EventType
@@ -41,10 +41,11 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
         if item.workflow_def_id is None and ligne is not None:
             item.workflow_def_id = ligne.id
         workflow = workflow_model(ligne)
+        state, spent = await consistent_progress(session, item.id)
         return {
             "workflow": workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
             "workflow_def_id": item.workflow_def_id,
-            "state": item.state,
+            "state": state,
             "ticket_budget_usd": ticket_budget(bundle.engine, item),
             # What the ticket has cost so far, models and tools (S27-03): a restart keeps it.
             "ticket_cost_usd": await ticket_spent(session, item.id),
@@ -56,9 +57,36 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             # par le signal `fields_changed`.
             "fields": dict(item.fields or {}),
             # The attempts each transition already spent, read from its runs (#550).
-            "attempts_spent": await attempts_spent(session, item.id),
+            "attempts_spent": spent,
         }
 
+
+async def consistent_progress(session: Any, work_item_id: str) -> tuple[str, dict[str, int]]:
+    """The work item's state and the attempts its runs spent, as ONE moment of the database (#748).
+
+    `mirror_state` commits the state and the runs' `decided_at` together. Read in two statements,
+    a commit between them gave a restarted interpreter the OLD state with the NEW attempts, and it
+    played the stage again as attempt 2. Reordering the reads is not enough (the opposite mix
+    leaves the attempts one short, and a later pass would be handed the old run back), and an
+    isolation level is not portable (SQLite has no REPEATABLE READ, and no snapshot outside WAL).
+    So both are read twice, until two successive reads agree: a commit that moved one moved the
+    other, so agreeing reads straddle no commit. Works the same on PostgreSQL and SQLite.
+    """
+    latest: tuple[str, dict[str, int]] | None = None
+    for _ in range(_CONSISTENT_READS):
+        state = str(
+            (await session.execute(select(WorkItem.state).where(WorkItem.id == work_item_id))).scalar_one()
+        )
+        read = (state, await attempts_spent(session, work_item_id))
+        if read == latest:
+            return read
+        latest = read
+    assert latest is not None
+    return latest  # still moving after several reads: the last one, as before
+
+
+#: How many times the state and the attempts are read before giving up on a quiet moment.
+_CONSISTENT_READS = 5
 
 #: A run in one of these states is over: awaiting it again only reads its old result back.
 FINISHED_RUNS = frozenset({"succeeded", "failed", "cancelled", "timed_out"})
