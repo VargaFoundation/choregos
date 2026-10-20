@@ -89,11 +89,19 @@ with the same fields.
 | 1 | `t-snapshot`, attempt 2 | the 20 `get_bars` answered: 20 symbols, 39,180 rows, `bars_sha256=2a4737a3…`, `missing=0`, **`cross_checked=0`** (as expected: the free Alpha Vantage key has no `full` history), 16.6 s | the data path works for real, through the platform; 20 of the day's 25 Alpha Vantage requests spent for no cross-check |
 | 2 | storing `bars` | `PUT /internal/runs/…/outputs/bars` → **503 "Object store unavailable"** after 60 s; the run fails `missing_outputs` and the campaign goes back to `to_review` | the dev tenant has **no object store**: `objectStore.endpoint` is empty (AWS), with no `secretRef`; no artifact of any workflow can be stored there |
 
-To go further, the tenant needs an S3 bucket it can reach: a Ceph RGW user and bucket for
-`choregos` (the namespace's egress already opens the RGW, `10.204.40.10:7480`), its keys in a
-Secret through Infisical, and `global.objectStore.endpoint` / `secretRef` in
-`values-diametral-dev.yaml`. Until then S38-13 cannot pass the snapshot.
+The object store was then given to the tenant (RGW tenant user `choregos$choregos-app`, 20G quota,
+bucket `choregos`, keys through Infisical `/app`; DiametralGroup/choregos-deploy#78).
 
-Also to fix in the template: with the free key, cross-checking spends the quota for nothing over a
-multi-year range. The connector can be set `cross_check: false`, or keep Alpha Vantage as a
-fallback only.
+## 2026-10-20, after the object store — the real model runs, the backtest cannot read it
+
+| # | Step | Result | Consequence |
+|---|---|---|---|
+| 3 | `t-snapshot`, attempt 3 | 20 symbols, 39,180 rows, `cross_checked=0`, stored: `bars` 3.2 MB, `sha256:e35b79cb…` | `bars_sha256` differs from attempt 2 (`2a4737a3…`) for the same request: Yahoo's adjusted history moved overnight. The snapshot freezes one version, which is the point of storing it |
+| 4 | `t-profile` (job) | 20 products, 3 clusters, 1,631 in-sample days | — |
+| 5 | `t-strategize`, real model (`platform/standard`) | 4 strategies in the closed grammar (`rsi_reversion`, `ema_trend`, `momentum`, `donchian_breakout`), no ticker named; **39,371 tokens in, 2,195 out, $0.265 (€0.244) on the ledger**, 46 s | the first real-model cost of the use case |
+| 6 | `t-backtest` (job) | exit 2: `strategies.json` not found | the model answered the document as a JSON **string**: `output_schema` validated it parsed, the artifact was typed `markdown`. Fixed in VargaFoundation/choregos#766 (template declares `strategies: json`, text declared json is stored parsed); the e2e strategist now answers a string |
+
+Not reached: backtest, verdict, memo. They need #766 deployed on dev (a release after 0.19.0).
+
+With the free Alpha Vantage key, cross-checking spends 20 of the day's 25 requests for nothing over a
+multi-year range: the connector can be set `cross_check: false`, or keep Alpha Vantage as a fallback.
