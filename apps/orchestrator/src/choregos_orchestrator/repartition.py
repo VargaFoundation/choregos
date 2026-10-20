@@ -39,6 +39,9 @@ ACTIVITES_PAR_FILE: dict[str, tuple[str, ...]] = {
         "record_run_outcome",
         # A build pushes to the build repository: the executor holds that credential (S41-08).
         "build_hosted_image",
+        # A hosted session's pod (S41-11): started and stopped by the executor, as a run's.
+        "start_session_pod",
+        "stop_session_pod",
     ),
     "tracker": (
         "mirror_state",

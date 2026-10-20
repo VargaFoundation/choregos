@@ -76,8 +76,10 @@ KEY_PREFIX = "session:"
 
 SessionRuntime = Literal["prompt", "voice"]
 _DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime"}
+#: The runtimes each door serves: a hosted agent answers on `/responses` too, from its pod (S41-11).
+_SERVED: dict[str, set[str]] = {"prompt": {"prompt", "hosted"}, "voice": {"voice"}}
 #: The reasons a session ends that are not failures.
-_CLEAN_ENDS = {"closed", "expired", "max_minutes"}
+_CLEAN_ENDS = {"closed", "expired", "max_minutes", "idle"}
 
 #: The gateway's own words for a spent key, as `choregos_runner.budget` reads them.
 _BUDGET_SIGNATURES = ("budget_exceeded", "budgetexceedederror", "exceededbudget", "budget has been exceeded")
@@ -153,13 +155,22 @@ async def open_session(
         raise conflict(str(refusal)) from refusal
     spec = resolved.spec
     kind = spec.runtime.kind if spec.runtime is not None else None
-    if kind != runtime:
-        # A hosted session is a pod of its own (S41-11).
+    if kind not in _SERVED[runtime]:
         raise unprocessable(
             f"`{agent_slug}` is not a {runtime} agent (runtime `{kind or 'none'}`): "
-            f"only a {runtime} agent answers on `{_DOORS[runtime]}`",
+            f"only a {' or '.join(sorted(_SERVED[runtime]))} agent answers on `{_DOORS[runtime]}`",
             [{"loc": ["agent", "runtime"], "msg": f"runtime `{kind or 'none'}` has no session here"}],
         )
+    if kind == "hosted":
+        from .agent_hosted_sessions import hosted_protocol
+
+        if hosted_protocol(spec) is None:
+            # Relaying a container's own socket is S41-21's.
+            raise unprocessable(
+                f"`{agent_slug}` serves only `invocations_ws`: a session reaches a hosted agent by "
+                "`responses` or `invocations`",
+                [{"loc": ["agent", "runtime", "protocols"], "msg": "no protocol a session speaks"}],
+            )
     # A voice session lives as long as its agent lets it speak, its key with it.
     ttl_s = max(SESSION_TTL_S, getattr(spec.runtime, "max_session_minutes", 0) * 60 + 60)
     config = ProjectConfig.model_validate(project.config or {})
@@ -331,6 +342,10 @@ async def respond(
     )
     spec: AgentSpec = resolved.spec
     runtime = spec.runtime
+    if runtime is not None and runtime.kind == "hosted":
+        from .agent_hosted_sessions import respond_hosted
+
+        return await respond_hosted(session, record, project, spec, inputs)
     keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
     key = keys.get(secret_name(record.id), "")
     tools = await session_tools(session, spec, project)
@@ -558,6 +573,10 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
             key_row.revoked = revoked
             key_row.spend_usd = spend.cost_usd
     await get_secret_store().delete(session, record.org_id, secret_name(record.id))
+    if record.pod is not None:
+        from .agent_hosted_sessions import stop_pod
+
+        await stop_pod(record, reason)
     record.status = "closed" if reason in _CLEAN_ENDS else "failed"
     record.reason = reason
     record.closed_at = utcnow()

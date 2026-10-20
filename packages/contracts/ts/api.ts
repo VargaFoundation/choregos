@@ -1173,6 +1173,47 @@ export type AgentSession = {
   events?: Array<AgentSessionEvent>;
 };
 
+/** A response a hosted session's person asked for, waiting for the session's pod (S41-11). */
+export type AgentSessionTurn = {
+  turn_id: string;
+  input: string;
+  protocol: "responses" | "invocations";
+};
+
+export type AgentSessionPodEvent = {
+  type: string;
+  payload?: {
+    [key: string]: unknown;
+  };
+};
+
+/** How the session's container answered a turn. */
+export type AgentSessionTurnResult = {
+  status: "answered" | "failed" | "not_ready" | "timeout" | "max_turns" | "budget_exceeded";
+  text?: string;
+  error?: string | null;
+  response_id?: string | null;
+  turns?: number;
+  tool_calls?: number;
+  events?: Array<AgentSessionPodEvent>;
+};
+
+export type AgentSessionTools = {
+  tools?: Array<{
+    [key: string]: unknown;
+  }>;
+};
+
+export type AgentSessionToolCall = {
+  arguments?: {
+    [key: string]: unknown;
+  };
+};
+
+export type AgentSessionToolAnswer = {
+  text: string;
+};
+
 /** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */
 export type A2aDeclaredCost = {
   per_task_usd?: number | null;
@@ -3522,6 +3563,7 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  callAgentSessionTool: { method: "POST"; path: "/internal/agent-sessions/{id}/tools/{name}"; body: AgentSessionToolCall; response: AgentSessionToolAnswer };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
   [key: string]: unknown;
 }; response: {
@@ -3606,6 +3648,7 @@ export interface Operations {
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };
   getAgentSession: { method: "GET"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: AgentSession };
+  getAgentSessionInput: { method: "GET"; path: "/internal/agent-sessions/{id}/input"; body: never; response: StageInput };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };
@@ -3763,6 +3806,7 @@ export interface Operations {
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
+  listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
@@ -3807,7 +3851,12 @@ export interface Operations {
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
+  nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
+  postAgentSessionTurnResult: { method: "POST"; path: "/internal/agent-sessions/{id}/turns/{turn_id}"; body: AgentSessionTurnResult; response: {
+  status: "recorded" | "already_recorded";
+  turn_id: string;
+} };
   postDecision: { method: "POST"; path: "/work-items/{id}/decisions"; body: DecisionRequest; response: HumanRequest };
   postFindingAction: { method: "POST"; path: "/findings/{id}/actions"; body: FindingAction; response: FindingRecord };
   postRunEvents: { method: "POST"; path: "/internal/runs/{id}/events"; body: {
