@@ -205,5 +205,37 @@ Not yet: a trial of a zip version runs only once a published version of the same
 (`hosted_build_not_ready` before); the first zip version of an agent leaves it without a production
 version until its image is built.
 
-The rest of the stream — the sessions, the console and the real builder — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-09 to S41-21.
+**A person talks to a prompt agent directly (S41-09).** `POST /orgs/{org}/agents/{slug}/responses`
+takes the Responses API's shape (`input` as a string or user messages, `stream`) plus the `project`
+the session works in and an optional `max_usd`. Without `session_id` it opens a session; with it,
+the next turn. The answer is a `response` object (`status`, `output`, `output_text`, `usage`, and an
+`error` with its `code` when it failed); `GET` and `DELETE /orgs/{org}/agent-sessions/{id}` read
+the session with its transcript and close it.
+
+- **Who**: the caller needs `item.control` in the project (a developer or above), and the agent must
+  work there: an organisation's agent, or that project's own. A personal agent works in no project
+  (422). A session is its opener's: anyone else is answered 404.
+- **What it runs**: the version the project is served (its pin, channel and overrides), its
+  instructions verbatim as the system message (no `{{ ticket.* }}` rendering: there is no work
+  item), its model, and the prompt loop of a workflow step. Only a `prompt` agent answers here; a
+  voice session is S41-10, a hosted one S41-11 (422 today).
+- **Budget**: the session reserves the smallest of what is left under its `max_usd` (1 USD by
+  default), the agent's run, day and month budgets, the project's day and the organisation's month,
+  and mints **one** gateway key at that amount for an hour, sealed in the secret store and never
+  returned. The key's row in `gateway_keys` (`session:<id>`) counts as an open reservation while
+  the session lives. A turn the gateway refuses for budget fails with `budget_exceeded` and closes
+  the session; another model error fails the turn and leaves the session open.
+- **Closing** (`DELETE`, the hour elapsed, or a spent key) reads the key's spend, books it in the
+  ledger with `session_id` and the agent's version, revokes the key and forgets its secret. Closing
+  twice books once. An expired session is closed by the next session opened in its project.
+- **Tools**: the reads the agent's `mcp_servers` grant in the project, through the courtier as a
+  run's (the policy's call cap, the schema, the injection guard of `sandbox.prompt_injection`, a
+  ledger line per call). A write or an approval tool is not offered: it needs a work item.
+- **Transcript**: `agent_session_events`, numbered, text only: inputs, the loop's turns and tool
+  calls, each response, opening and closing.
+- With `stream`, the turn is computed first and sent as server-sent events `response.created`,
+  `response.output_text.delta` and `response.completed` (or `response.failed`): the text arrives in
+  one delta, not token by token.
+
+The rest of the stream — voice and hosted sessions, the console and the real builder — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-10 to S41-21.

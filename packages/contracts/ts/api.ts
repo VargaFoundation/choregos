@@ -1087,6 +1087,92 @@ export type HostedBuild = {
   };
 };
 
+/** One turn of a direct conversation (ADR 0080 §10). The agent's spec decides the model, the instructions and the tools. */
+export type AgentResponseCreate = {
+  /** the project the session works in: its budget pays, its grants bound the tools */
+  project: string;
+  input: string | Array<AgentInputMessage>;
+  session_id?: string | null;
+  stream?: boolean;
+  /** the caller's cap on the whole session, when it opens; the project's budgets still bind */
+  max_usd?: number | null;
+};
+
+export type AgentInputMessage = {
+  role?: "user";
+  content: string;
+};
+
+export type AgentOutputText = {
+  type?: "output_text";
+  text: string;
+};
+
+export type AgentOutputMessage = {
+  type?: "message";
+  role?: "assistant";
+  content: Array<AgentOutputText>;
+};
+
+export type AgentResponseError = {
+  /** `budget_exceeded`, `model_error`, `max_turns` */
+  code: string;
+  message: string;
+};
+
+export type AgentResponseUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  turns?: number;
+  tool_calls?: number;
+};
+
+/** The part of the Responses API's shape a client reads. */
+export type AgentResponse = {
+  id: string;
+  object?: "response";
+  session_id: string;
+  status: "completed" | "failed";
+  output?: Array<AgentOutputMessage>;
+  output_text?: string;
+  usage?: AgentResponseUsage;
+  error?: AgentResponseError | null;
+};
+
+/** A `response.output_text.delta` event. */
+export type AgentDelta = {
+  type?: "response.output_text.delta";
+  response_id: string;
+  delta: string;
+};
+
+export type AgentSessionEvent = {
+  seq: number;
+  type: string;
+  ts: string;
+  payload?: {
+    [key: string]: unknown;
+  };
+};
+
+/** A direct conversation with an agent (ADR 0080 §10), next to runs: its key, its spend and its transcript. */
+export type AgentSession = {
+  id: string;
+  agent: string;
+  agent_version: number;
+  project: string;
+  status: "open" | "closed" | "failed";
+  reason?: string | null;
+  model: string;
+  responses: number;
+  tool_calls: number;
+  cost_usd: number;
+  created_at: string;
+  expires_at: string;
+  closed_at?: string | null;
+  events?: Array<AgentSessionEvent>;
+};
+
 /** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */
 export type A2aDeclaredCost = {
   per_task_usd?: number | null;
@@ -3449,9 +3535,11 @@ export interface Operations {
   checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
   clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
+  closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
+  createAgentResponse: { method: "POST"; path: "/orgs/{org}/agents/{slug}/responses"; body: AgentResponseCreate; response: AgentResponse };
   createGitHubInstallLink: { method: "POST"; path: "/orgs/{org}/github/install-link"; body: GitHubInstallLinkRequest; response: GitHubInstallLink };
   createGlobalMemory: { method: "POST"; path: "/orgs/{org}/memories"; body: MemoryStoreCreate; response: MemoryStore };
   createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
@@ -3517,6 +3605,7 @@ export interface Operations {
   getAgentExposure: { method: "GET"; path: "/orgs/{org}/agents/{slug}/exposure"; body: never; response: AgentExposure };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };
+  getAgentSession: { method: "GET"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: AgentSession };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };

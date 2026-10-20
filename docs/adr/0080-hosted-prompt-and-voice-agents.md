@@ -151,6 +151,11 @@ agent cannot be a workflow step).
     the agent's grant **intersected** with the caller's rights; every event is journaled; a
     transcript is kept, audio never is. The client of a voice session cannot change the session's
     configuration (`session.update` is answered with an error and dropped): the agent owns it.
+    *As delivered for prompt agents (S41-09)*: "the caller's rights" are `item.control` in the
+    session's project, and a session is offered only the **read** tools of the grant (a write or an
+    approval needs a work item to be governed); the key's budget is the smallest of the caps a run
+    would meet plus the caller's `max_usd`; its spend is booked with `cost_ledger.session_id` when
+    the session closes; streaming sends the computed turn as events, not token deltas yet.
 
 ## Consequences
 
