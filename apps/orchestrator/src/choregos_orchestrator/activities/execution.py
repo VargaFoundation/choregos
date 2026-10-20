@@ -14,6 +14,7 @@ from datetime import timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
+from choregos_adapters.errors import ConfigurationError
 from choregos_adapters.executor.log_archive import archive_run_logs
 from choregos_api.db.models import Run, RunEvent, WorkItem
 from choregos_api.db.session import limiter_aux_organisations
@@ -24,6 +25,7 @@ from choregos_core import ExecRef, ExecStatus, StageJobSpec, utcnow
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from ..config import get_settings
 from ..gitops import PLAGES_PRIVEES
@@ -31,6 +33,9 @@ from .base import db, project_bundle, without_secrets
 from .bilan import close_run_spend
 from .remote import mint_remote_token
 from .run_key import mint_run_key
+
+#: The `ApplicationError` type of an executor that refuses a run on its configuration: not retried.
+START_REFUSED = "executor_configuration_refused"
 
 
 def _runner_namespace(settings: Any, slug: str) -> str:
@@ -257,7 +262,11 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
                 "choregos/work-item": stage_input.work_item.key.replace("/", "_").replace("#", "-"),
             },
         )
-        ref = await bundle.adapters.executor.start(spec)
+        try:
+            ref = await bundle.adapters.executor.start(spec)
+        except ConfigurationError as refusal:
+            await _fail_run_on_configuration(session, bundle, run, payload, stage_input.run_id, refusal)
+            raise ApplicationError(str(refusal), type=START_REFUSED, non_retryable=True) from refusal
         capabilities = _capabilities_for(bundle.adapters.executor, ref, capabilities)
         # Un exécuteur qui sait mettre en file (`queue`) a pu créer le run SANS pod, parce
         # que le plafond de simultanéité était atteint. Le marquer « running » ferait
@@ -292,6 +301,32 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             "queued": en_file,
             "capabilities": capabilities,
         }
+
+
+async def _fail_run_on_configuration(
+    session: Any, bundle: Any, run: Run | None, payload: dict[str, Any], run_id: str, refusal: Exception
+) -> None:
+    """The executor refused the run on the deployment's configuration (#750): retrying cannot
+    change it, so the run is closed as failed with the message as its reason (`run.result`, which
+    the API already serves as `runs[].result`), and the timeline says so. Committed here, because
+    the error that follows rolls the session back."""
+    message = str(refusal)
+    if run is not None:
+        run.status = "failed"
+        run.ended_at = run.ended_at or utcnow()
+        run.result = StageResult.failure(message[:4000], START_REFUSED).model_dump(mode="json", by_alias=True)
+    await persist_event(
+        session,
+        EventType.RUN_FINISHED,
+        project_id=bundle.project.id,
+        work_item_id=payload["work_item_id"],
+        project_slug=bundle.slug,
+        subject=run_id,
+        run_id=run_id,
+        status="failed",
+        reason=message[:300],
+    )
+    await session.commit()
 
 
 async def _gateway_key(session: Any, bundle: Any, run: Run | None, stage_input: StageInput) -> str | None:
