@@ -94,3 +94,27 @@ def test_the_build_repository_and_the_builder_reach_every_worker_not_the_api() -
         assert env["CHOREGOS_HOSTED_BUILD_REPOSITORY"] == "registry.internal/choregos-builds", name
         assert env["CHOREGOS_HOSTED_BUILDER"] == "local_docker", name
         assert env["CHOREGOS_BUILDKIT_ADDRESS"] == "tcp://buildkitd.builds:1234", name
+
+
+def _rendered_for(kube_version: str, *overrides: str) -> dict[str, str]:
+    command = ["helm", "template", "choregos", str(CHART), "--kube-version", kube_version]
+    for override in overrides:
+        command += ["--set", override]
+    rendered = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert rendered.returncode == 0, rendered.stderr
+    for document in (d for d in yaml.safe_load_all(rendered.stdout) if d):
+        if document.get("kind") == "Deployment" and document["metadata"]["name"] == "choregos-api":
+            container = document["spec"]["template"]["spec"]["containers"][0]
+            return {e["name"]: e["value"] for e in container.get("env", []) if "value" in e}
+    raise AssertionError("no API deployment")
+
+
+def test_the_cluster_version_reaches_the_api_from_the_cluster_or_the_operator() -> None:
+    """S41-16: the API refuses a hosted version below 1.29 from the version the chart renders for."""
+    assert _rendered_for("1.28.3")["CHOREGOS_CLUSTER_VERSION"] == "v1.28.3"
+    assert _rendered_for("1.30.1")["CHOREGOS_CLUSTER_VERSION"] == "v1.30.1"
+    overridden = _rendered_for("1.33.0", "global.kubernetesVersion=v1.28.9-eks-abc")
+    assert overridden["CHOREGOS_CLUSTER_VERSION"] == "v1.28.9-eks-abc"
+    assert all(
+        "CHOREGOS_CLUSTER_VERSION" not in env for name, env in _envs().items() if name != "choregos-api"
+    )

@@ -50,8 +50,8 @@ SESSION_MCP = "choregos"
 DEFAULT_MAX_TURNS = 20
 
 
-def _refused(message: str) -> ApplicationError:
-    return ApplicationError(message, type=POD_REFUSED, non_retryable=True)
+def _refused(message: str, kind: str = POD_REFUSED) -> ApplicationError:
+    return ApplicationError(message, type=kind, non_retryable=True)
 
 
 def _minutes_left(expires_at: datetime) -> int:
@@ -153,7 +153,8 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             ref = await bundle.adapters.executor.start(spec)
         except ConfigurationError as refusal:
-            raise _refused(str(refusal)) from refusal
+            # A refusal that names itself (`hosted_unsupported_cluster`, S41-16) keeps its name.
+            raise _refused(str(refusal), getattr(refusal, "code", POD_REFUSED)) from refusal
         from choregos_api.services.agent_sessions import journal
 
         record = await session.get(AgentSessionRecord, session_id)

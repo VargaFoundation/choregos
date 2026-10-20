@@ -162,3 +162,30 @@ async def test_a_zip_version_published_pending_runs_the_image_its_build_row_reco
         found.status, found.image = "ready", built
     prepared = await stage_activities.prepare_stage(_plan(setup))
     assert prepared["stage_input"]["hosted"]["image"] == built
+
+
+async def test_a_cluster_older_than_1_29_fails_the_hosted_run_without_a_retry(setup: Fixture) -> None:
+    """S41-16: below 1.29 the sidecar would be a plain init container the pod never gets past."""
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+
+    setup.adapters.executor.server_version = "v1.28.9-gke.1200"
+    await _agent(setup, _hosted())
+    prepared = await stage_activities.prepare_stage(_plan(setup))
+    with pytest.raises(ApplicationError) as raised:
+        await _start(setup, prepared)
+    assert raised.value.type == "hosted_unsupported_cluster" and raised.value.non_retryable
+    assert "Kubernetes 1.29" in str(raised.value) and "runs 1.28" in str(raised.value)
+    assert setup.adapters.executor.started == []
+    async with session_scope() as session:
+        run = await session.get(Run, prepared["stage_input"]["run_id"])
+        assert run is not None and run.status == "failed"
+        assert run.result is not None and run.result["reason"] == "hosted_unsupported_cluster"
+
+
+@pytest.mark.parametrize("version", ["v1.29.3-eks-abc", "1.30+", "v1.33.1"])
+async def test_a_cluster_from_1_29_runs_the_hosted_step(setup: Fixture, version: str) -> None:
+    setup.adapters.executor.server_version = version
+    await _agent(setup, _hosted())
+    spec = await _start(setup, await stage_activities.prepare_stage(_plan(setup)))
+    assert spec.agent_container is not None

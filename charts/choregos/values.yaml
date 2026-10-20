@@ -24,6 +24,11 @@ global:
   # healthy and refusing the second organization weeks later.
   edition: community
   fakes: false
+  # The cluster's Kubernetes version, as the API reads it to refuse a hosted agent's version below
+  # 1.29, which cannot run its native sidecar (S41-16). Empty: the version Helm or Argo CD renders
+  # for (`.Capabilities.KubeVersion`, the cluster's own on `helm install`). Set it when rendering
+  # offline for an older cluster. The executor checks the API server itself at every start anyway.
+  kubernetesVersion: ""
   # What runs agent stages (ADR 0072): one setting for the API and for the workers.
   # `agent_sandbox` (kubernetes-sigs/agent-sandbox) is the default of a real deployment; the
   # chart refuses to render without its operator. Every other executor is chosen here, by name:

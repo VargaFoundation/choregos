@@ -276,3 +276,38 @@ def test_the_deployment_decides_whether_the_transparency_log_is_checked(
         assert ("--insecure-ignore-tlog=true" in argv) is skipped
     finally:
         reset_settings_cache()
+
+
+def _cluster(monkeypatch: pytest.MonkeyPatch, version: str) -> None:
+    from choregos_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_CLUSTER_VERSION", version)
+    reset_settings_cache()
+
+
+async def test_on_a_cluster_older_than_1_29_a_hosted_version_is_refused(
+    client: AsyncClient, admin: str, registry: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S41-16: the agent would be a plain init container, and no run of it would ever start."""
+    registry[0].push(REF, "image one")
+    _cluster(monkeypatch, "v1.28.9-eks-abc")
+    refused = await _create(client, _spec())
+    assert refused.status_code == 422, refused.text
+    error = refused.json()["errors"][0]
+    assert error["loc"] == ["runtime"]
+    assert error["msg"].startswith("hosted_unsupported_cluster:") and "runs 1.28" in error["msg"]
+    assert registry[0].resolved == [], "nothing is fetched for a version no cluster here can run"
+    plain = await client.post(
+        AGENTS, json={"slug": "plain", "display_name": "Plain", "spec": {"instructions": "Answer."}}
+    )
+    assert plain.status_code == 201, "an agent the runner carries alone runs on any cluster"
+
+
+@pytest.mark.parametrize("version", ["v1.29.3-eks-abc", "1.30+", ""])
+async def test_from_1_29_or_without_a_cluster_a_hosted_version_is_published(
+    client: AsyncClient, admin: str, registry: Any, monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    registry[0].push(REF, "image one")
+    _cluster(monkeypatch, version)
+    created = await _create(client, _spec())
+    assert created.status_code == 201, created.text

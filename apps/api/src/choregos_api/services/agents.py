@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 
 from choregos_core import utcnow
+from choregos_core.hosted import native_sidecars_refusal
 from choregos_core.instructions import erreurs_des_instructions
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +71,15 @@ def erreurs_d_une_version(spec: AgentSpec) -> None:
                 ],
             )
     if isinstance(spec.runtime, HostedRuntime):
+        cluster = get_settings().cluster_version
+        refusal = native_sidecars_refusal(cluster) if cluster else None
+        if refusal is not None:
+            # The executor refuses the start too, from the API server itself; this tells the author
+            # now rather than at the first run.
+            raise unprocessable(
+                "this cluster cannot run a hosted agent",
+                [{"loc": ["runtime"], "msg": f"{refusal} (upgrade the cluster to publish this version)"}],
+            )
         if isinstance(spec.runtime.source, HostedImageSource):
             # ADR 0080 §8: under the operator's allowlist; the digest is resolved where the version
             # is written (`pin_hosted_runtime`), never taken from the caller.
