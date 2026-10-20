@@ -265,6 +265,16 @@ class HostedBuild(Dto):
     provenance: dict[str, str] = Field(default_factory=dict)
 
 
+class HostedSourceDto(Dto):
+    """An uploaded source zip (ADR 0080 §9): what a zip version's `source.sha256` names."""
+
+    sha256: str
+    size_bytes: int
+    files: list[str]
+    #: `requirements.txt` or `pyproject.toml` when the zip declares its dependencies at its root.
+    dependencies: str | None = None
+
+
 #: The runner's loopback listeners (model, MCP, egress): a hosted container cannot take them.
 LOOPBACK_PORTS = frozenset({4001, 4002, 4003})
 #: What a version's `env` cannot set: the platform's, the model SDKs' and the proxy variables.

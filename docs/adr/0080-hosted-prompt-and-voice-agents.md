@@ -112,7 +112,8 @@ agent cannot be a workflow step).
    records the failure; `off` skips it.
 9. **A zip source is built at publication, never at run start** — ADR 0063's refusal of installing
    code when a run starts stands. The zip is flat, at most 64 MiB and 2,000 entries, refused on a
-   symlink, an absolute or `..` path, or a missing entry point; it is stored by its sha256. The
+   symlink, an absolute or `..` path, or a missing entry point; it is stored by its sha256
+   (`POST /orgs/{org}/hosted-sources`, before the version that names it). The
    platform writes the Dockerfile itself, from a platform base image pinned by digest
    (`python_3_12`, `python_3_13`, `python_3_14`, `node_22`, `dotnet_10`). `remote_build` installs the
    declared dependencies (`requirements.txt`, `package-lock.json`, `*.csproj`) through the build's

@@ -83,7 +83,7 @@ async def test_a_version_that_contradicts_its_runtime_is_refused(
         ({"type": "image", "ref": "ghcr.io/acme/triager:1.2"}, "under no allowed prefix"),
         (
             {"type": "zip", "sha256": DIGEST, "runtime": "python_3_13", "entry_point": ["python", "main.py"]},
-            "not delivered",
+            "upload it first",
         ),
     ],
 )

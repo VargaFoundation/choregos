@@ -1057,13 +1057,22 @@ export type HostedImageSource = {
 
 export type HostedZipSource = {
   type: "zip";
-  /** the uploaded source (`POST /agents/{slug}/sources`) */
+  /** the uploaded source (`POST /orgs/{org}/hosted-sources`) */
   sha256: string;
   runtime: "python_3_12" | "python_3_13" | "python_3_14" | "node_22" | "dotnet_10";
   /** the argv started in the built image, e.g. [python, main.py] */
   entry_point: Array<string>;
   /** `remote_build` installs the declared dependencies at build time; `bundled`: the zip carries them */
   dependency_resolution?: "remote_build" | "bundled";
+};
+
+/** An uploaded source zip (ADR 0080 §9). */
+export type HostedSource = {
+  sha256: string;
+  size_bytes: number;
+  files: Array<string>;
+  /** the file at the root that declares the dependencies `remote_build` installs */
+  dependencies?: "requirements.txt" | "pyproject.toml" | null;
 };
 
 /** The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice. */
@@ -3510,6 +3519,7 @@ export interface Operations {
   getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
+  getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
@@ -3805,6 +3815,7 @@ export interface Operations {
   updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
+  uploadHostedSource: { method: "POST"; path: "/orgs/{org}/hosted-sources"; body: void; response: HostedSource };
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };
   validateProjectWorkflow: { method: "POST"; path: "/projects/{id}/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
   validateWorkflow: { method: "POST"; path: "/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };

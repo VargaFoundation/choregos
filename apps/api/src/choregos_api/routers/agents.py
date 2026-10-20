@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
+from choregos_adapters.storage import ObjectStoreError
 from choregos_core import utcnow
-from fastapi import APIRouter, Path, Query, Response, status
+from fastapi import APIRouter, Path, Query, Request, Response, status
 from pydantic import StringConstraints
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,7 @@ from ..db.models import (
 )
 from ..deps import Config, Db, Me, ProjectCtx
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable, upstream
+from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import (
     AgentCatalogueConnect,
@@ -63,6 +65,7 @@ from ..schemas import (
     AgentVersionPublish,
     AgentVersionRestore,
     ApiTokenCreated,
+    HostedSourceDto,
     ImplicitAgent,
     ProjectAgentDto,
     ProjectAgentPut,
@@ -77,6 +80,7 @@ from ..services.agent_governance import (
     decide,
     is_admin,
     is_member,
+    may_create_somewhere,
     permissions_of,
     subject_of,
     visible_clause,
@@ -108,6 +112,14 @@ from ..services.agents import (
 )
 from ..services.egress import egress_gate_for_remote_agent
 from ..services.hosted_images import pin_hosted_runtime
+from ..services.hosted_sources import (
+    MAX_BYTES,
+    SourceArchive,
+    SourceRefused,
+    dependency_file,
+    load_source,
+    store_source,
+)
 from ..services.memory_access import check_bindings_at_publish
 from ..services.network import check_agent_network
 from ..services.remote_agents import pin_remote_runtime
@@ -441,6 +453,69 @@ async def draft_agent(org: str, body: AgentDraftRequest, session: Db, principal:
         notes=len(proposal.notes),
     )
     return proposal
+
+
+def _source_dto(archive: SourceArchive) -> HostedSourceDto:
+    return HostedSourceDto(
+        sha256=archive.sha256,
+        size_bytes=archive.size_bytes,
+        files=list(archive.files),
+        dependencies=dependency_file(archive),
+    )
+
+
+@router.post(
+    "/orgs/{org}/hosted-sources",
+    response_model=HostedSourceDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="uploadHostedSource",
+)
+async def upload_hosted_source(org: str, request: Request, session: Db, principal: Me) -> HostedSourceDto:
+    """A hosted agent's source zip (ADR 0080 §9), checked and stored under its sha256, which a zip
+    version's `source.sha256` then names. The same bytes uploaded twice are one source."""
+    if not may_create_somewhere(principal, org):
+        raise forbidden("uploading a hosted source asks the right to create an agent in the organisation")
+    organisation = await _organisation(session, org)
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > MAX_BYTES:
+            raise unprocessable(f"the archive is larger than {MAX_BYTES // (1024 * 1024)} MiB")
+    try:
+        archive = await store_source(object_store(), organisation.id, bytes(data))
+    except SourceRefused as exc:
+        raise unprocessable(str(exc)) from exc
+    except ObjectStoreError as exc:
+        raise upstream("object-store", str(exc)) from exc
+    await record(
+        session,
+        principal,
+        "agent.hosted_source_upload",
+        org_id=organisation.id,
+        target_type="hosted_source",
+        # `target_id` is 64 characters: the hex digest fits it, its `sha256:` prefix does not.
+        target_id=archive.sha256.removeprefix("sha256:"),
+        size_bytes=archive.size_bytes,
+        files=len(archive.files),
+    )
+    return _source_dto(archive)
+
+
+@router.get(
+    "/orgs/{org}/hosted-sources/{sha256}",
+    response_model=HostedSourceDto,
+    operation_id="getHostedSource",
+)
+async def get_hosted_source(org: str, sha256: str, session: Db, principal: Me) -> HostedSourceDto:
+    if not is_member(principal, org):
+        raise forbidden("not a member of the organisation")
+    organisation = await _organisation(session, org)
+    try:
+        return _source_dto(await load_source(object_store(), organisation.id, sha256))
+    except SourceRefused as exc:
+        raise not_found("Hosted source", sha256) from exc
+    except ObjectStoreError as exc:
+        raise upstream("object-store", str(exc)) from exc
 
 
 @router.get("/orgs/{org}/agents/{slug}", response_model=AgentDto, operation_id="getAgent")

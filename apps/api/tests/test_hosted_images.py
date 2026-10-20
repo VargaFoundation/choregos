@@ -158,10 +158,3 @@ async def test_with_signatures_off_nothing_is_verified(
     registry[0].push(REF, "image one")
     assert (await _create(client, _spec())).status_code == 201
     assert registry[1].verified == []
-
-
-async def test_a_zip_source_is_still_refused(client: AsyncClient, admin: str, registry: Any) -> None:
-    zipped = {"type": "zip", "sha256": FORGED, "runtime": "python_3_13", "entry_point": ["python", "main.py"]}
-    refused = await _create(client, {**_spec(), "runtime": {"kind": "hosted", "source": zipped}})
-    assert refused.status_code == 422, refused.text
-    assert "no zip source is accepted yet" in refused.text

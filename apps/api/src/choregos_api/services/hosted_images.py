@@ -94,9 +94,14 @@ def allowlisted_ref(source: HostedImageSource) -> ImageRef:
 
 async def pin_hosted_runtime(session: AsyncSession, org_id: str, spec: AgentSpec) -> AgentSpec:
     """The spec with its image's `digest` set from the registry, after the allowlist and the
-    signature policy. A digest the caller wrote is never trusted: it is resolved again. Not a hosted
-    image: the spec as it is."""
+    signature policy. A digest the caller wrote is never trusted: it is resolved again. A zip source:
+    its `build` is written from the stored zip (`hosted_sources`). Not hosted: the spec as it is."""
     runtime = spec.runtime
+    if isinstance(runtime, HostedRuntime) and runtime.source.type == "zip":
+        from ..object_store import object_store
+        from .hosted_sources import pin_zip_runtime
+
+        return await pin_zip_runtime(object_store(), org_id, spec)
     if not isinstance(runtime, HostedRuntime) or not isinstance(runtime.source, HostedImageSource):
         return spec
     ref = allowlisted_ref(runtime.source)
