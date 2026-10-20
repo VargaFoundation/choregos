@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Annotated, Any
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -44,15 +45,39 @@ app.add_typer(knowledge_app, name="knowledge")
 console = Console()
 
 
-class _ReadableClient(Client):
-    """The same client, but an API error becomes a red line and exit code 1."""
+class TransportSafeClient(Client):
+    """The same client, but an unreachable API becomes a red line and exit code 1."""
+
+    def _unreachable(self, exc: httpx.TransportError) -> None:
+        reason = str(exc) or type(exc).__name__
+        fail(
+            f"cannot reach {self.profile.api_url}: {reason} — "
+            "run `choregos login --api-url …` to point the CLI at a running API"
+        )
+
+    def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        try:
+            return super().request(method, path, **kwargs)
+        except httpx.TransportError as exc:  # connect error, timeout, dropped connection…
+            self._unreachable(exc)
+            return None  # `fail` raises; for the type checker
+
+    def stream_sse(self, path: str, **kwargs: Any) -> Any:
+        try:
+            yield from super().stream_sse(path, **kwargs)
+        except httpx.TransportError as exc:
+            self._unreachable(exc)
+
+
+class _ReadableClient(TransportSafeClient):
+    """Also: an API error becomes a red line and exit code 1."""
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             return super().request(method, path, **kwargs)
         except ApiError as exc:
             fail(str(exc))
-            return None  # `fail` raises; for the type checker
+            return None
 
 
 def client() -> Client:
@@ -73,11 +98,15 @@ def login(
     token: Annotated[str, typer.Option(prompt=True, hide_input=True)] = "",
     org: Annotated[str, typer.Option()] = "varga",
 ) -> None:
-    """Save the connection profile (`~/.config/choregos/config.json`)."""
+    """Save the connection profile (`~/.config/choregos/config.json`).
+
+    The CLI cannot issue the first token (`tokens create` itself needs one): get it from the
+    console, under `/admin` (API tokens), then pass it with `--token`.
+    """
     profile = Profile(api_url=api_url, token=token, org=org)
     path = profile.save()
     try:
-        me = Client(profile).get("/me")
+        me = _ReadableClient(profile).get("/me")
     except ApiError as exc:
         fail(f"sign-in refused: {exc}")
         return
