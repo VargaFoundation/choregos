@@ -1697,10 +1697,16 @@ wall: see [security](security.md).
   tools (**As the policy says** or **Off**). A host the organisation does not allow, or denies, is flagged
   under the list; the publication would be refused (422). The folded section says its value in one line,
   and opens by itself when it holds something. The agent's page shows a **Network** line in its definition.
-- *The project's* — **Settings → Network access**, read-only: the hosts its runs really get (the project's
+- *The project's* — **Settings → Network access**: first the hosts its runs really get (the project's
   policy under the organisation's ceiling, the repository host marked as implied), the denied hosts, the
-  rates, the built-in web tools and what the ceiling clamped. The project's own side is `sandbox.network`
-  in the policy editor under it.
+  rates, the built-in web tools and what the ceiling clamped; then the project's own side, edited in
+  place: the allowed and denied hosts (one per line), the two per-minute caps (empty: no cap of the
+  project's own) and the built-in web tools. Saving writes `sandbox.network` into the project's policy
+  YAML and keeps every other line, comments included; a policy that does not parse, holds several
+  documents or writes `sandbox` in flow style is refused, to be edited in the **Policy** editor. A bad
+  host, and what the organisation's ceiling would refuse (a host outside or denied, a cap missing or above
+  the ceiling's, web tools the ceiling switches off), are said before anything is sent; the server stays
+  the judge (422).
 - *What happened* — **Administration → Network activity** (`org_admin`): per host, where it was seen
   (egress proxy, runner, tool broker, platform), the decision, the reason, the counts and the projects;
   **Refused only** is on by default, the period is the last 24 hours or 7 days.
