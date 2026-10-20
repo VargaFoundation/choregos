@@ -35,6 +35,15 @@ spec:
                   capabilities:
                     drop:
                       - ALL
+            # Same container-level rules for init containers (native sidecars included);
+            # optional anchor so a pod without any still passes.
+            =(initContainers):
+              - securityContext:
+                  allowPrivilegeEscalation: false
+                  =(privileged): false
+                  capabilities:
+                    drop:
+                      - ALL
     - name: pas-de-hostpath
       match:
         any:

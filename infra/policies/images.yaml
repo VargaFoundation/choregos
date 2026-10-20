@@ -52,3 +52,7 @@ spec:
           spec:
             containers:
               - image: "!*:latest"
+            # Init containers (native sidecars included) pull images too; optional anchor so
+            # a pod without any still passes.
+            =(initContainers):
+              - image: "!*:latest"
