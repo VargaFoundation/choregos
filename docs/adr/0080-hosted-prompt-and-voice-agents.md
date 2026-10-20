@@ -191,6 +191,10 @@ agent cannot be a workflow step).
   executor.
 - A deployment needs a registry the builder can push to, and Kubernetes 1.29 for native sidecars;
   without either, hosted agents are refused with an explicit reason, not run in a degraded way.
+- Under a policy that asks for gVisor, the hosted container shares the runner's sandbox: the
+  RuntimeClass is the pod's, so one sentry holds both, and the agent's syscalls never reach the node's
+  kernel. The conformance suite is run with the agent inside gVisor (S41-17), so a framework that
+  needs a syscall the sentry lacks is found before a project asks for it.
 
 ## Alternatives discarded
 
