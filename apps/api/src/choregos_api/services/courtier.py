@@ -278,7 +278,9 @@ async def ecrire_par_une_action(
         await asyncio.sleep(0.2)
     await session.refresh(action)
     if action.status == ActionStatus.SUCCEEDED.value:
-        return 200, await _resultat_de_l_action(session, action), nouvelle
+        # The write is done: its result is masked and capped like a read's (#755), never refused —
+        # a 422 would tell the agent that an effect that happened did not.
+        return 200, bounded_result(await _resultat_de_l_action(session, action)), nouvelle
     if action.status in finies:
         refus = {"error": action.error or f"action {action.status}", "action": action.id}
         return 422, refus, nouvelle
@@ -414,7 +416,103 @@ async def _appeler(
         return 422, {"error": redact(str(refus))}
     except (SecretIntrouvable, httpx.HTTPError) as panne:
         return 502, {"error": redact(f"{instance.name} unreachable: {panne}")}
-    return (200 if not resultat.get("isError") else 422), resultat
+    refusal = output_refusal(outil, resultat)
+    if refusal is not None:
+        return 422, {"error": refusal, "type": "output_schema"}
+    return (200 if not resultat.get("isError") else 422), bounded_result(resultat)
+
+
+#: The marker a capped result ends with: the agent knows it did not read everything.
+TRUNCATED = "[truncated by the platform: {returned} of {total} bytes; ask for less]"
+
+
+def output_refusal(outil: OutilDuCourtier, resultat: dict[str, Any]) -> str | None:
+    """Why a successful result breaks the `outputSchema` its server declared, or None (#755).
+
+    A server that declares one and answers outside it is not answering the operation the
+    organisation opened: the agent gets a 422 that names where, not the payload."""
+    schema = outil.operation.output_schema
+    if not schema or resultat.get("isError"):
+        return None
+    import jsonschema
+
+    if "structuredContent" not in resultat:
+        return (
+            f"result of {outil.nom} refused: its server declares an output schema"
+            " and sent no structuredContent"
+        )
+    try:
+        jsonschema.validate(resultat["structuredContent"], schema)
+    except jsonschema.ValidationError as exc:
+        where = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+        # The rule broken, never `exc.message`: it quotes the value, and the value is the payload.
+        rule = f"{exc.validator} {json.dumps(exc.validator_value, default=str)[:200]}"
+        return f"result of {outil.nom} refused by its output schema at {where}: fails `{rule}`"
+    except jsonschema.SchemaError as exc:
+        return f"result of {outil.nom} refused: its server declares an invalid output schema ({exc.message})"
+    return None
+
+
+def bounded_result(resultat: dict[str, Any]) -> dict[str, Any]:
+    """A tool result as the agent may read it (#755): secrets masked in what it says, and no larger
+    than `broker_result_max_bytes`. A larger one keeps its text, cut, with `TRUNCATED` at the end;
+    its `structuredContent` is dropped, since half an object is not the object."""
+    from ..config import get_settings
+
+    masked = _masked(resultat)
+    limit = get_settings().broker_result_max_bytes
+    total = len(_json(masked).encode("utf-8"))
+    if total <= limit:
+        return masked
+    kept = {k: v for k, v in masked.items() if k not in ("content", "structuredContent")}
+    whole = texte_du_resultat(masked).encode("utf-8")
+    room = limit
+    while True:
+        text = whole[:room].decode("utf-8", errors="ignore")
+        returned = len(text.encode("utf-8"))
+        note = {"type": "text", "text": f"{text}\n{TRUNCATED.format(returned=returned, total=total)}"}
+        cut = {**kept, "content": [note], "truncated": {"returned_bytes": returned, "total_bytes": total}}
+        # JSON escapes what it quotes: shrink by what is still over, until it fits.
+        over = len(_json(cut).encode("utf-8")) - limit
+        if over <= 0 or room == 0:
+            return cut
+        room = max(0, room - over)
+
+
+def _masked(resultat: dict[str, Any]) -> dict[str, Any]:
+    """`redact` on every text the agent reads: text blocks, embedded text resources, and the strings
+    of `structuredContent`. Binary blocks (images, audio) are left as they are: base64 is not prose."""
+    from choregos_core.redaction import redact
+
+    def strings(valeur: Any) -> Any:
+        if isinstance(valeur, str):
+            return redact(valeur)
+        if isinstance(valeur, list):
+            return [strings(v) for v in valeur]
+        if isinstance(valeur, dict):
+            return {k: strings(v) for k, v in valeur.items()}
+        return valeur
+
+    def block(bloc: Any) -> Any:
+        if not isinstance(bloc, dict):
+            return bloc
+        if bloc.get("type") == "text" and isinstance(bloc.get("text"), str):
+            return {**bloc, "text": redact(bloc["text"])}
+        resource = bloc.get("resource")
+        if (
+            bloc.get("type") == "resource"
+            and isinstance(resource, dict)
+            and isinstance(resource.get("text"), str)
+        ):
+            return {**bloc, "resource": {**resource, "text": redact(resource["text"])}}
+        return bloc
+
+    masked = dict(resultat)
+    if isinstance(masked.get("content"), list):
+        masked["content"] = [block(b) for b in masked["content"]]
+    if "structuredContent" in masked:
+        masked["structuredContent"] = strings(masked["structuredContent"])
+    return masked
 
 
 def _json(valeur: Any) -> str:
