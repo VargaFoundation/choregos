@@ -307,6 +307,12 @@ conformance-agent:  ## The 7 conformance checks of a code agent inside an image:
 	CHOREGOS_CONFORMANCE_CODE_AGENTS='{"image": {"image": "$(IMAGE)", "command": $(COMMAND)}}' \
 	  $(UV) run pytest tests/conformance/backends/test_code_agents.py -m conformance -q -k code_agent_passes
 
+.PHONY: conformance-hosted
+conformance-hosted:  ## The 8 checks of a hosted agent (ADR 0080): IMAGE=<ref>, or AGENT=<examples/hosted dir> [PYTHON=<interpreter>]
+	@test -n '$(IMAGE)$(AGENT)' || { echo "usage: make conformance-hosted IMAGE=<ref> | AGENT=<dir of examples/hosted> [PYTHON=<interpreter>]"; exit 2; }
+	CHOREGOS_CONFORMANCE_HOSTED_AGENTS='$(if $(IMAGE),{"image": {"image": "$(IMAGE)"}},{"$(AGENT)": {"command": ["$(or $(PYTHON),python3)", "responses_server.py"], "cwd": "$(CURDIR)/examples/hosted/$(AGENT)"}})' \
+	  $(UV) run pytest tests/conformance/hosted/test_hosted_agents.py -m conformance -q -k passes_every_check
+
 .PHONY: evals
 evals:  ## Evals of the playbooks and of the catalogue agents
 	$(UV) run python -m choregos_playbooks.evals.runner --all
