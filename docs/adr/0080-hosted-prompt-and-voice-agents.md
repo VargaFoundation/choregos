@@ -98,9 +98,14 @@ agent cannot be a workflow step).
    task as `input`, the run and transition ids in `metadata`. A final text that parses as a JSON
    object with the transition's outputs fills `outputs`; otherwise it is the `summary`. Files the
    container writes under `/outputs` become the step's artifacts. With `workspace: none` (the
-   default) the repository is not mounted; `read` mounts it read-only, `write` lets the container
-   change it and the runner commits and pushes under the same path rules as any agent (S41-18): the
-   container never holds a git credential.
+   default) the repository is not cloned. `read` and `write` (S41-18) give the container a **copy**
+   of the working tree in a volume of its own (`/workspace`, read-only under `read`), never the
+   runner's checkout: no `.git`, no runner file, no git credential. Under `write` the runner brings
+   back each changed file through the guard rails (`check_write`, plus refusals of `.git` paths,
+   escaping symlinks, non-regular files, paths through a repository symlink, and `.choregos/` outside
+   `outputs/`), then commits and pushes as for any agent. A mount of the checkout itself was
+   discarded: the container would hold the `.git` the runner pushes with (hooks, `config`), and a
+   symlink it plants would be followed by the runner's own commands.
 
 ### The supply chain
 
@@ -186,6 +191,10 @@ agent cannot be a workflow step).
   hosted agent's *own* actions inside its container (files it writes, processes it starts) are not
   permission-gated; they are bounded by the container's sandbox, its network and the absence of any
   credential.
+- Under `workspace: write` the runner runs no project command (tests, lint, typecheck): the tree
+  holds the container's code, and running it in the runner would put it beside the run token, the
+  gateway key and the git credential. Such a step is judged by its pull request's CI, not by the
+  runner's Definition of Done.
 - `agent_sandbox`, `aca` and `tekton` refuse a hosted step until they can run a second container;
   `k8s_job` and `local_docker` run it, and the routing executor sends hosted steps to the custom-image
   executor.

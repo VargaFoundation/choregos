@@ -171,8 +171,12 @@ RUN chmod +x /usr/local/bin/choregos-refuse \
       ln -sf /usr/local/bin/choregos-refuse /usr/local/bin/$binary; \
     done
 
+# `/hosted-workspace`: the copy of the working tree a hosted container works in (S41-18). Docker
+# gives a new named volume the ownership and mode of the directory it is mounted on; the setgid bit
+# keeps what the container writes in group 1000, which the runner reads back.
 RUN useradd --uid 1000 --create-home --home-dir /workspace --shell /bin/bash choregos \
- && mkdir -p /workspace && chown -R 1000:1000 /workspace /etc/choregos
+ && mkdir -p /workspace /hosted-workspace && chown -R 1000:1000 /workspace /hosted-workspace /etc/choregos \
+ && chmod 2775 /hosted-workspace
 
 # nginx, for `validate_nginx_config` only (ADR 0052): `nginx -t` parses a configuration of the
 # workspace and stops; nothing is started, nothing listens. It runs as uid 1000, so the paths a

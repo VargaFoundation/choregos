@@ -6,13 +6,19 @@ over real loopback sockets, with nothing but its environment: `OPENAI_BASE_URL` 
 `CHOREGOS_MCP_URL`, `HTTPS_PROXY`. Each `POST /responses` (or `/invocations`) plays the script —
 model calls, MCP tool calls, tunnels — and answers `answer`, streamed as Responses events. It is
 ready after `ready_after` readiness probes; `None` never.
+
+With `workspace` (S41-18), the shared copy of the working tree the container sees at `/workspace`:
+the actions `read`, `write`, `delete` and `symlink` work in it as a container's code would.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
+import shutil
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -23,7 +29,11 @@ import httpx
 class FakeHostedAgent:
     env: dict[str, str] = field(default_factory=dict)
     #: ("model", text) | ("mcp", server, tool, arguments) | ("tunnel", host, port) | ("direct", url)
+    #: | ("read", path) | ("write", path, text) | ("delete", path) | ("symlink", path, target)
+    #: | ("fifo", path)
     script: list[tuple[Any, ...]] = field(default_factory=list)
+    #: The shared working tree, where the executor mounts it; `None` for `workspace: none`.
+    workspace: Path | None = None
     #: The final answer: a text, or a JSON object (sent as its JSON text).
     answer: str | dict[str, Any] = "Done."
     ready_after: int | None = 0
@@ -71,6 +81,8 @@ class FakeHostedAgent:
         return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body.encode())
 
     async def _play(self, action: tuple[Any, ...]) -> Any:
+        if action[0] in ("read", "write", "delete", "symlink", "fifo"):
+            return self._in_workspace(action)
         async with httpx.AsyncClient(trust_env=False, timeout=30) as http:
             if action[0] == "model":
                 answer = await http.post(
@@ -100,6 +112,28 @@ class FakeHostedAgent:
                     return f"unreachable: {type(exc).__name__}"
                 return "reached"
         raise ValueError(f"unknown action {action[0]!r}")
+
+    def _in_workspace(self, action: tuple[Any, ...]) -> Any:
+        if self.workspace is None:
+            return "no workspace"
+        target = self.workspace / str(action[1])
+        if action[0] == "read":
+            return target.read_text() if target.is_file() else None
+        if action[0] == "delete":
+            if target.is_dir() and not target.is_symlink():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+            return "deleted"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if action[0] == "symlink":
+            target.symlink_to(str(action[2]))
+            return "linked"
+        if action[0] == "fifo":
+            os.mkfifo(target)
+            return "made"
+        target.write_text(str(action[2]))
+        return "written"
 
     async def _tunnel(self, host: str, port: int) -> str:
         proxy = urlsplit(self.env["HTTPS_PROXY"])

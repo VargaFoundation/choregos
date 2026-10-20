@@ -32,7 +32,7 @@ from choregos_core.domain import (
     ExecStatus,
     StageJobSpec,
 )
-from choregos_core.hosted import native_sidecars_refusal
+from choregos_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER, native_sidecars_refusal
 from choregos_core.sorties import explication
 
 from ..errors import UnsupportedClusterError
@@ -48,6 +48,8 @@ from .tekton import (
 BATCH_API = "/apis/batch/v1"
 #: The name of a hosted agent's container in the run's pod (ADR 0080).
 AGENT_CONTAINER = "agent"
+#: The volume a hosted container shares with the runner, the copy of the working tree (S41-18).
+HOSTED_WORKSPACE_VOLUME = "hosted-workspace"
 RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernetes.io/component": "runner"}
 
 
@@ -351,8 +353,24 @@ class KubernetesJobExecutor:
         container with `restartPolicy: Always` starts before the runner, shares its loopback, and is
         stopped when the runner ends, so the Job completes on the runner's exit alone.
 
-        It gets plain values only: no `secretKeyRef`, no `envFrom`, no volume. The runner's token,
-        gateway key and MCP credentials stay in the runner container."""
+        It gets plain values only: no `secretKeyRef`, no `envFrom`, no volume of the runner's. The
+        runner's token, gateway key and MCP credentials stay in the runner container. A version that
+        asks for the workspace (S41-18) gets one more volume, which the runner fills with a copy of
+        the working tree: the clone and its `.git` stay in the runner's `workspace` volume."""
+        mounts: list[dict[str, Any]] = []
+        if agent.workspace != "none":
+            pod_spec["volumes"].append({"name": HOSTED_WORKSPACE_VOLUME, "emptyDir": {"sizeLimit": "10Gi"}})
+            runner = next(c for c in pod_spec["containers"] if c["name"] == "runner")
+            runner["volumeMounts"].append(
+                {"name": HOSTED_WORKSPACE_VOLUME, "mountPath": SHARED_WORKSPACE_RUNNER}
+            )
+            mounts.append(
+                {
+                    "name": HOSTED_WORKSPACE_VOLUME,
+                    "mountPath": SHARED_WORKSPACE_AGENT,
+                    "readOnly": agent.workspace == "read",
+                }
+            )
         pod_spec["initContainers"] = [
             {
                 "name": AGENT_CONTAINER,
@@ -360,6 +378,7 @@ class KubernetesJobExecutor:
                 "restartPolicy": "Always",
                 "env": [{"name": key, "value": value} for key, value in sorted(agent.env.items())],
                 "ports": [{"name": "agent", "containerPort": agent.port}],
+                **({"volumeMounts": mounts} if mounts else {}),
                 "resources": {
                     "requests": {"cpu": agent.cpu, "memory": agent.memory},
                     "limits": {"cpu": agent.cpu, "memory": agent.memory},

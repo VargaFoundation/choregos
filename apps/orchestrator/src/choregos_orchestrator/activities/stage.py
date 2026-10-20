@@ -309,8 +309,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 clone_depth=depot.clone_depth,
             )
             # A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062); nor
-            # does a hosted one, whose container never sees the workspace (`workspace: none`).
-            if depot and remote_runtime is None and hosted is None
+            # does a hosted one published with `workspace: none` (S41-18).
+            if depot and remote_runtime is None and (hosted is None or hosted.workspace != "none")
             else None,
             agent=AgentRef(
                 backend=backend,
@@ -1127,8 +1127,7 @@ def _hosted_call(agent: Any, builds: Mapping[str, Any] | None = None) -> HostedC
     """The step a hosted agent carries (ADR 0080), from its version's runtime; `None` for any other.
 
     Refused, never retried, when no pod could run it as published: an image without a digest, a zip
-    whose build is not `ready`, a version that serves only `invocations_ws`, or a workspace the
-    container would read or write (S41-18)."""
+    whose build is not `ready`, or a version that serves only `invocations_ws`."""
     from temporalio.exceptions import ApplicationError
 
     runtime = getattr(getattr(agent, "spec", None), "runtime", None)
@@ -1143,20 +1142,13 @@ def _hosted_call(agent: Any, builds: Mapping[str, Any] | None = None) -> HostedC
             type="hosted_protocol_unsupported",
             non_retryable=True,
         )
-    if runtime.workspace != "none":
-        raise ApplicationError(
-            f"the hosted agent {who} asks for the workspace (`{runtime.workspace}`), which a hosted "
-            "container is not given yet (S41-18): publish it with `workspace: none`",
-            type="hosted_workspace_unsupported",
-            non_retryable=True,
-        )
     return HostedCall(
         protocol=protocol,
         image=_hosted_image(runtime, who, builds),
         port=runtime.port,
         readiness_timeout_s=runtime.readiness_timeout_s,
         termination_grace_s=runtime.termination_grace_s,
-        workspace="none",
+        workspace=runtime.workspace,
         env=dict(runtime.env),
         agent_slug=agent.agent.slug,
         agent_version=agent.version,

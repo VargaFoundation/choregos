@@ -64,6 +64,21 @@ async def test_the_pod_runs_the_runner_and_the_agent_beside_it_without_any_secre
     assert not {name for name in agent.env if "TOKEN" in name or "GATEWAY_KEY" in name}
 
 
+@pytest.mark.parametrize("workspace", ["read", "write"])
+async def test_a_hosted_agent_that_asks_for_the_workspace_gets_the_repository(
+    setup: Fixture, workspace: str
+) -> None:
+    """S41-18: the runner clones the repository and gives the container a copy of it; under
+    `write` it commits and pushes what came back, so the step names its branch."""
+    await _agent(setup, _hosted(workspace=workspace))
+    spec = await _start(setup, prepared := await stage_activities.prepare_stage(_plan(setup)))
+    stage_input = prepared["stage_input"]
+    assert stage_input["hosted"]["workspace"] == workspace
+    assert stage_input["repo"] is not None and stage_input["repo"]["work_branch"]
+    assert spec.agent_container is not None and spec.agent_container.workspace == workspace
+    assert spec.agent_container.env["CHOREGOS_WORKSPACE"] == "/workspace"
+
+
 async def test_an_actor_backend_on_a_hosted_agent_is_refused(setup: Fixture) -> None:
     await _agent(setup, _hosted())
     with pytest.raises(ApplicationError) as raised:
@@ -111,7 +126,6 @@ async def test_an_actor_backend_on_a_hosted_agent_is_refused(setup: Fixture) -> 
             "hosted_build_not_ready",
         ),
         (_hosted(protocols=["invocations_ws"]), "hosted_protocol_unsupported"),
-        (_hosted(workspace="write"), "hosted_workspace_unsupported"),
     ],
 )
 async def test_a_hosted_step_no_pod_could_run_is_refused_before_any_key(

@@ -8,7 +8,7 @@ import pytest
 from choregos_adapters.errors import ConfigurationError, UnsupportedClusterError, UpstreamError
 from choregos_adapters.executor.aca import AcaExecutor
 from choregos_adapters.executor.agent_sandbox import AgentSandboxExecutor
-from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
+from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, HOSTED_WORKSPACE_VOLUME, KubernetesJobExecutor
 from choregos_adapters.executor.routing import RoutingExecutor
 from choregos_adapters.executor.tekton import TektonExecutor
 from choregos_adapters.fakes.executor import FakeExecutor
@@ -195,3 +195,35 @@ async def test_the_fake_refuses_as_the_job_executor_does() -> None:
         await fake.start(_spec().model_copy(update={"run_id": "r-2"}))
     await fake.start(_spec(hosted=False).model_copy(update={"run_id": "r-3"}))
     assert [s.run_id for s in fake.started] == ["r-1", "r-3"]
+
+
+def _working(workspace: str) -> StageJobSpec:
+    spec = _spec()
+    assert spec.agent_container is not None
+    agent = spec.agent_container.model_copy(update={"workspace": workspace})
+    return spec.model_copy(update={"agent_container": agent})
+
+
+@pytest.mark.parametrize(("workspace", "read_only"), [("read", True), ("write", False)])
+async def test_a_hosted_agent_that_asks_for_the_workspace_gets_the_copy_and_never_the_clone(
+    workspace: str, read_only: bool
+) -> None:
+    """S41-18: the container sees a copy of the working tree in a volume of its own; the runner's
+    `workspace` volume, the clone and its `.git`, is never mounted in it."""
+    pod = await _pod(_working(workspace))
+    shared = [v for v in pod["volumes"] if v["name"] == HOSTED_WORKSPACE_VOLUME]
+    assert shared == [{"name": HOSTED_WORKSPACE_VOLUME, "emptyDir": {"sizeLimit": "10Gi"}}]
+    [agent] = pod["initContainers"]
+    assert agent["volumeMounts"] == [
+        {"name": HOSTED_WORKSPACE_VOLUME, "mountPath": "/workspace", "readOnly": read_only}
+    ]
+    runner = pod["containers"][0]
+    assert {"name": HOSTED_WORKSPACE_VOLUME, "mountPath": "/hosted-workspace"} in runner["volumeMounts"]
+    assert any(m["name"] == "workspace" for m in runner["volumeMounts"]), "the runner keeps its clone"
+
+
+async def test_a_hosted_agent_without_the_workspace_gets_no_volume() -> None:
+    pod = await _pod(_working("none"))
+    assert all(v["name"] != HOSTED_WORKSPACE_VOLUME for v in pod["volumes"])
+    assert "volumeMounts" not in pod["initContainers"][0]
+    assert all(m["name"] != HOSTED_WORKSPACE_VOLUME for m in pod["containers"][0]["volumeMounts"])

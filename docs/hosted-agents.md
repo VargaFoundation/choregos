@@ -95,16 +95,38 @@ The answer: a JSON object with a `status` is the step's result, validated like `
 other text is the summary of a step that declares no output, and `hosted_result_invalid` otherwise.
 A container never ready fails the step `hosted_not_ready`; a failed response, `hosted_failed`; no
 answer within `max_minutes`, `timeout`. The result reports `hosted_image`, `hosted_provenance`
-(`hosted:<slug>@<version>`) and the response id. Only the project's fact commands run as checks: the
-container does not work in the repository yet (`workspace: write` is S41-18).
+(`hosted:<slug>@<version>`) and the response id. Only the project's fact commands run as checks,
+and under `workspace: write` none does (see below).
+
+**A container that works in the repository (S41-18).** `workspace` says what the container sees:
+
+- `none` (the default): no repository; the step is not cloned.
+- `read`: the runner clones, then copies the working tree into a volume the two containers share,
+  mounted read-only at `/workspace` (`CHOREGOS_WORKSPACE`). The copy has no `.git` and none of the
+  runner's files (`transcript.jsonl`, `result.json`, `acp-session.json`); the task is there.
+- `write`: the same copy, writable. After the answer the runner brings back what changed, one file
+  at a time, each judged as an ACP agent's write is (the allowed paths, the sensitive files). A
+  write the guard refuses, a `.git` path, a symlink to an absolute path or out of the tree, anything
+  but a regular file or symlink, a path through a symlink of the repository, a directory turned into
+  a file, and under `.choregos/` anything but `.choregos/outputs/` stay in the volume, are journaled
+  `hosted.write_refused` and count as permission denials. What the repository ignores
+  (`__pycache__/`) is neither judged nor brought back. Deletions are mirrored under the same rules.
+  The runner commits and pushes as for any agent; the clone, its `.git` and the git credential never
+  leave the runner's container.
+
+Under `write` the runner runs **no** project command (tests, lint, typecheck): they would run the
+container's code inside the runner, beside the run token, the gateway key and the git credential.
+The step journals `checks.skipped` and its evidence says `skipped`; the pull request's own CI judges
+the change. A session (S41-11) has no repository: its pod gets `workspace: none` whatever the
+version asks.
 
 **The executor starts the container beside the runner (S41-05).** The orchestrator accepts a hosted
 step when the version's image is pinned: an `image` source runs `ref@digest` (no digest,
 `hosted_image_unpinned`); a `zip` source runs its build's image once the build is `ready`
 (otherwise `hosted_build_not_ready`). A version that serves only `invocations_ws`
-(`hosted_protocol_unsupported`) or asks for a workspace (`hosted_workspace_unsupported`, until
-S41-18) is refused, so is a stage whose actor names another backend. These refusals are not retried
-and come before any gateway key. A hosted step has no repository and no skills.
+(`hosted_protocol_unsupported`) is refused, so is a stage whose actor names another backend. These
+refusals are not retried and come before any gateway key. A hosted step has no skills, and a
+repository only when its version asks for the workspace.
 
 The run's pod then holds two containers:
 

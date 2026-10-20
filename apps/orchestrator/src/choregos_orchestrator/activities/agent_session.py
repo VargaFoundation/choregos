@@ -91,6 +91,8 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
         hosted = _hosted_call(agent, builds)
         if hosted is None:
             raise _refused(f"the agent {served} is not a hosted agent")
+        # A session works on no repository: whatever the version asks, its container gets no tree.
+        hosted = hosted.model_copy(update={"workspace": "none"})
         run_id = session_run_id(session_id)
         minutes = _minutes_left(record.expires_at)
         org_hosts = await org_runner_hosts(session, record.org_id)

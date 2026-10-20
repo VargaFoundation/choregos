@@ -13,6 +13,7 @@ from typing import Any
 
 from choregos_contracts import ExecutorKind, StageResult
 from choregos_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
+from choregos_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER
 
 from ..errors import UpstreamError
 
@@ -67,6 +68,8 @@ class LocalDockerExecutor:
         stale = stdout.split()[KEEP_FINISHED:] if code == 0 else []
         if stale:
             await self._run("rm", "--force", *stale)
+            # The copy a hosted container worked in (S41-18), when there was one.
+            await self._run("volume", "rm", "--force", *(_workspace_volume(name) for name in stale))
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         name = self._name(spec.run_id)
@@ -106,6 +109,8 @@ class LocalDockerExecutor:
         ]
         for key, value in spec.env.items():
             args += ["--env", f"{key}={value}"]
+        if spec.agent_container is not None and spec.agent_container.workspace != "none":
+            args += ["--volume", f"{_workspace_volume(name)}:{SHARED_WORKSPACE_RUNNER}"]
         args += [spec.runner_image, *spec.runner_command]
         # The first run pulls the runner image (more than a gigabyte): two minutes are not enough,
         # and a `docker run` cut short keeps pulling, then collides with the retry on the name.
@@ -120,7 +125,9 @@ class LocalDockerExecutor:
     async def _start_agent(self, spec: StageJobSpec, runner: str) -> None:
         """A hosted agent's container (ADR 0080) in the runner's network namespace, as the pod's
         sidecar is: it reaches the runner's loopback listeners and has no network of its own. Its
-        variables are not secret (`sidecar_env`); the runner's are never given to it."""
+        variables are not secret (`sidecar_env`); the runner's are never given to it. With a
+        workspace (S41-18), the runner's copy of the working tree, in the runner's group (1000) as
+        the pod's `fsGroup` puts it, so that it can change the files the runner copied."""
         agent = spec.agent_container
         assert agent is not None
         args = [
@@ -141,6 +148,10 @@ class LocalDockerExecutor:
         ]
         for key, value in sorted(agent.env.items()):
             args += ["--env", f"{key}={value}"]
+        if agent.workspace != "none":
+            mode = ":ro" if agent.workspace == "read" else ""
+            args += ["--volume", f"{_workspace_volume(runner)}:{SHARED_WORKSPACE_AGENT}{mode}"]
+            args += ["--group-add", "1000"]
         code, _stdout, stderr = await self._run(*args, agent.image, timeout=PULL_TIMEOUT_S)
         if code != 0:
             await self._run("rm", "--force", runner)
@@ -194,3 +205,7 @@ class LocalDockerExecutor:
 
 def _agent_name(runner: str) -> str:
     return f"{runner}-agent"
+
+
+def _workspace_volume(runner: str) -> str:
+    return f"{runner}-workspace"
