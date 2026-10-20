@@ -37,6 +37,8 @@ ACTIVITES_PAR_FILE: dict[str, tuple[str, ...]] = {
         "resume_run",
         "collect_spend",
         "record_run_outcome",
+        # A build pushes to the build repository: the executor holds that credential (S41-08).
+        "build_hosted_image",
     ),
     "tracker": (
         "mirror_state",

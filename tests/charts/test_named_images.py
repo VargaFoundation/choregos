@@ -74,3 +74,23 @@ def test_hosted_registries_and_the_signature_mode_reach_the_api_only() -> None:
     ]
     assert envs["choregos-api"]["CHOREGOS_HOSTED_COSIGN"] == "enforce"
     assert all("CHOREGOS_HOSTED_COSIGN" not in env for name, env in envs.items() if name != "choregos-api")
+
+
+def test_the_build_repository_and_the_builder_reach_every_worker_not_the_api() -> None:
+    """S41-08: the executor worker builds and pushes a hosted zip's image; the API only starts it."""
+    default = _envs()
+    workers = {name: env for name, env in default.items() if name != "choregos-api"}
+    assert all("CHOREGOS_HOSTED_BUILD_REPOSITORY" not in env for env in workers.values())
+    assert all(env["CHOREGOS_HOSTED_BUILDER"] == "buildkit" for env in workers.values())
+    envs = _envs(
+        "global.images.buildRegistry=registry.internal/choregos-builds",
+        "global.images.hostedBuilder=local_docker",
+        "global.images.buildkitAddress=tcp://buildkitd.builds:1234",
+    )
+    for name, env in envs.items():
+        if name == "choregos-api":
+            assert "CHOREGOS_HOSTED_BUILD_REPOSITORY" not in env
+            continue
+        assert env["CHOREGOS_HOSTED_BUILD_REPOSITORY"] == "registry.internal/choregos-builds", name
+        assert env["CHOREGOS_HOSTED_BUILDER"] == "local_docker", name
+        assert env["CHOREGOS_BUILDKIT_ADDRESS"] == "tcp://buildkitd.builds:1234", name

@@ -36,7 +36,7 @@ three runtimes; the stage input carries `hosted` and `prompt` steps. Nothing run
 - `CHOREGOS_HOSTED_COSIGN`: `enforce` refuses an image without a trusted signature, `warn` publishes it
   and logs `hosted.signature_unverified`, `off` (the default) does not ask. No real verifier is wired
   yet (S41-14): under `enforce` every image is refused outside the fakes;
-- a hosted **zip** source names a zip uploaded first (S41-07, below); it is built in S41-08;
+- a hosted **zip** source names a zip uploaded first (S41-07, below); publication builds it (S41-08);
 - a step whose agent is hosted stops before any key is minted, with the reason (`AgentIndisponible`,
   not retried); voice agents are never steps.
 
@@ -179,5 +179,31 @@ and nothing else does; a `build` the caller writes is replaced. A step refuses t
 build is `ready` (`hosted_build_not_ready`). Node, .NET and Python 3.14 have no base image yet
 (S41-20): such a version is refused.
 
-The rest of the stream — the builds, the sessions and the console — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-08 to S41-21.
+**Publication builds the zip's image; a channel waits for it (S41-08).** A version is immutable,
+so the build's state lives in its own row (`hosted_builds`, one per organisation and build key),
+shared by every version of the same zip; the API's answers show it in `runtime.build` (`pending`,
+`building`, `ready` with its `image`, or `failed` with its `error`, the end of the build's log). The
+first publication of a key starts the `HostedImageBuild` workflow: it claims the build, builds on
+the orchestrator's `executor` queue (the worker that holds the push credential), and records the
+outcome. The image is pushed to `CHOREGOS_HOSTED_BUILD_REPOSITORY` (`global.images.buildRegistry`)
+as `build-<key>` and run by its digest; without a repository the build fails, saying so.
+
+- A version of a key already built starts nothing and moves its channels at once; a replayed build
+  finds `build-<key>` in the registry and runs no builder.
+- Until its build is `ready`, a version enters no channel: the moves its publication asked for are
+  applied once it is built, and a release names the `hosted_build` check (409); the readiness of
+  the version shows it. An older build finishing after a newer version reached production leaves
+  production where it is.
+- A failed build is not retried (the same inputs fail the same way). Publishing a version of the
+  same zip again starts the next attempt; the previous attempt, replayed, builds nothing.
+- `CHOREGOS_HOSTED_BUILDER`: `buildkit` (`buildctl` against `CHOREGOS_BUILDKIT_ADDRESS`, a rootless
+  `buildkitd`) or `local_docker` (`docker build` and `docker push`, a laptop). The chart passes
+  `global.images.hostedBuilder` and `buildkitAddress` to the workers but deploys no `buildkitd` yet
+  (S41-13); the zip never leaves the platform, its archive is the build context.
+
+Not yet: a trial of a zip version runs only once a published version of the same zip is built
+(`hosted_build_not_ready` before); the first zip version of an agent leaves it without a production
+version until its image is built.
+
+The rest of the stream — the sessions, the console and the real builder — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-09 to S41-21.

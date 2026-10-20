@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""OCI images: references, the registry's digest for a tag, and signature verdicts (ADR 0080)."""
+"""OCI images: references, the registry's digest for a tag, signature verdicts and builds (ADR 0080)."""
 
+from .builder import (
+    BuildctlBuilder,
+    BuildError,
+    BuildRequest,
+    BuildResult,
+    LocalDockerBuilder,
+)
 from .registry import (
     DOCKER_HUB,
     ImageRef,
@@ -13,7 +20,12 @@ from .signatures import SignatureVerdict, UnconfiguredVerifier
 
 __all__ = [
     "DOCKER_HUB",
+    "BuildError",
+    "BuildRequest",
+    "BuildResult",
+    "BuildctlBuilder",
     "ImageRef",
+    "LocalDockerBuilder",
     "OciRegistryClient",
     "RegistryError",
     "SignatureVerdict",

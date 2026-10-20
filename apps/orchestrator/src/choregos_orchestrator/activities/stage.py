@@ -10,6 +10,7 @@ de les lire ici.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
@@ -17,6 +18,7 @@ from typing import Any
 from choregos_api.db.models import Run
 from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
+from choregos_api.services.hosted_builds import builds_for
 from choregos_api.services.model_catalogue import load_policy
 from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
 from choregos_contracts import (
@@ -170,7 +172,14 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             plan = _plan_de_l_agent(plan, agent.spec)
         # The runtime that carries the step, if not an ACP agent. `_hosted_call` refuses here, before
         # any budget is reserved, a hosted image without a digest or a build not ready (ADR 0080).
-        code_runtime, remote_runtime, hosted = _code_runtime(agent), a2a_runtime(agent), _hosted_call(agent)
+        # A zip version's build is read from its row (S41-08): the version keeps the `pending` it
+        # was published with.
+        builds = await builds_for(session, bundle.project.org_id, [agent.spec]) if agent is not None else {}
+        code_runtime, remote_runtime, hosted = (
+            _code_runtime(agent),
+            a2a_runtime(agent),
+            _hosted_call(agent, builds),
+        )
         # Before any budget is reserved: a remote agent the project cannot reach, or whose
         # credential is gone, never gets a reservation or a pod (ADR 0062).
         await check_remote_agent(
@@ -1114,7 +1123,7 @@ def _prompt_call(agent: Any) -> PromptCall | None:
     )
 
 
-def _hosted_call(agent: Any) -> HostedCall | None:
+def _hosted_call(agent: Any, builds: Mapping[str, Any] | None = None) -> HostedCall | None:
     """The step a hosted agent carries (ADR 0080), from its version's runtime; `None` for any other.
 
     Refused, never retried, when no pod could run it as published: an image without a digest, a zip
@@ -1143,7 +1152,7 @@ def _hosted_call(agent: Any) -> HostedCall | None:
         )
     return HostedCall(
         protocol=protocol,
-        image=_hosted_image(runtime, who),
+        image=_hosted_image(runtime, who, builds),
         port=runtime.port,
         readiness_timeout_s=runtime.readiness_timeout_s,
         termination_grace_s=runtime.termination_grace_s,
@@ -1154,22 +1163,25 @@ def _hosted_call(agent: Any) -> HostedCall | None:
     )
 
 
-def _hosted_image(runtime: Any, who: str) -> str:
-    """`ref@sha256:…`: the digest publication pinned, or the image a zip's build produced."""
+def _hosted_image(runtime: Any, who: str, builds: Mapping[str, Any] | None = None) -> str:
+    """`ref@sha256:…`: the digest publication pinned, or the image a zip's build produced, as its
+    `hosted_builds` row says (the version's own `build` when there is no row)."""
     from temporalio.exceptions import ApplicationError
 
     source = runtime.source
     if source.type == "zip":
         build = runtime.build
-        if build is None or build.status != "ready" or not build.image or "@sha256:" not in build.image:
-            status = build.status if build is not None else "not started"
+        row = (builds or {}).get(build.key) if build is not None else None
+        status = (row or build).status if build is not None else "not started"
+        image = (row or build).image if build is not None else None
+        if status != "ready" or not image or "@sha256:" not in image:
             raise ApplicationError(
                 f"the hosted agent {who} is built from a zip whose build is {status}: a step runs "
                 "only an image a `ready` build produced",
                 type="hosted_build_not_ready",
                 non_retryable=True,
             )
-        return str(build.image)
+        return str(image)
     if not source.digest:
         raise ApplicationError(
             f"the hosted agent {who} names `{source.ref}` without a digest: publication pins every "

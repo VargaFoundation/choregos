@@ -134,3 +134,31 @@ async def test_a_zip_whose_build_is_ready_runs_the_built_image(setup: Fixture) -
     )
     prepared = await stage_activities.prepare_stage(_plan(setup))
     assert prepared["stage_input"]["hosted"]["image"] == built
+
+
+async def test_a_zip_version_published_pending_runs_the_image_its_build_row_records(setup: Fixture) -> None:
+    """Versions are immutable: a zip version keeps `build.status: pending` as published, and the step
+    reads the `hosted_builds` row, which the build workflow wrote since (S41-08)."""
+    from choregos_api.db.models import HostedBuildRecord, Project
+    from choregos_api.db.session import session_scope
+
+    built = f"registry.internal/choregos-builds/triager@{DIGEST}"
+    zipped = {"type": "zip", "sha256": DIGEST, "runtime": "python_3_12", "entry_point": ["app"]}
+    await _agent(setup, {"kind": "hosted", "source": zipped, "build": {"status": "pending", "key": DIGEST}})
+    with pytest.raises(ApplicationError, match="build is pending"):
+        await stage_activities.prepare_stage(_plan(setup))
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        row = HostedBuildRecord(org_id=project.org_id, key=DIGEST, status="building", attempt=1)
+        session.add(row)
+        await session.flush()
+        row_id = row.id
+    with pytest.raises(ApplicationError, match="build is building"):
+        await stage_activities.prepare_stage(_plan(setup))
+    async with session_scope() as session:
+        found = await session.get(HostedBuildRecord, row_id)
+        assert found is not None
+        found.status, found.image = "ready", built
+    prepared = await stage_activities.prepare_stage(_plan(setup))
+    assert prepared["stage_input"]["hosted"]["image"] == built

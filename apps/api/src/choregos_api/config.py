@@ -163,6 +163,15 @@ class Settings(BaseSettings):
     #: The base image of each zip runtime, `ref@sha256:…`, over the shipped ones (ADR 0080 §9):
     #: `{"python_3_13": "registry.internal/python:3.13-slim@sha256:…"}`.
     hosted_base_images: dict[str, str] = Field(default_factory=dict)
+    #: What builds a zip version's image (ADR 0080 §9): a rootless `buildkitd`, or the Docker of a
+    #: laptop (`docker compose`, `make dev-up`).
+    hosted_builder: Literal["buildkit", "local_docker"] = "buildkit"
+    #: The repository built images are pushed to, `registry/path` (`global.images.buildRegistry`).
+    #: Empty: a zip version is published, and its build fails saying no repository is configured.
+    hosted_build_repository: str = ""
+    #: The `buildkitd` builds go through, as `buildctl --addr` takes it; the chart deploys none
+    #: yet (S41-13).
+    buildkit_address: str = "tcp://choregos-buildkitd:1234"
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under

@@ -235,6 +235,12 @@ async def store_source(store: ObjectStore, org_id: str, data: bytes) -> SourceAr
 
 async def load_source(store: ObjectStore, org_id: str, sha256: str) -> SourceArchive:
     """A stored zip, checked again, and refused if its bytes no longer hash to its name."""
+    _, archive = await load_source_bytes(store, org_id, sha256)
+    return archive
+
+
+async def load_source_bytes(store: ObjectStore, org_id: str, sha256: str) -> tuple[bytes, SourceArchive]:
+    """`load_source`, with the zip's bytes: what a build sends as its context (S41-08)."""
     if not _DIGEST.match(sha256):
         raise SourceRefused(f"`{sha256}` is not a sha256 digest")
     try:
@@ -247,7 +253,7 @@ async def load_source(store: ObjectStore, org_id: str, sha256: str) -> SourceArc
     archive = read_source(data)
     if archive.sha256 != sha256:
         raise SourceRefused(f"the stored source `{sha256}` no longer hashes to its name: refused")
-    return archive
+    return data, archive
 
 
 async def pin_zip_runtime(store: ObjectStore, org_id: str, spec: AgentSpec) -> AgentSpec:

@@ -122,6 +122,25 @@ agent cannot be a workflow step).
    twice. The build's provenance (those inputs, the builder and its version, the output digest) is
    stored with the version. A version whose build is not `ready` cannot reach a release channel.
 
+   *How it is built (S41-08).* Versions are immutable, so the build's state lives beside them: one
+   `hosted_builds` row per organisation and build key (`pending`, `building`, `ready`, `failed`,
+   its image, its error, an attempt number), which every version of the same zip shares and which
+   API answers overlay on `runtime.build`. Publication starts the `HostedImageBuild` workflow
+   (claim, build, record); the build activity runs on the orchestrator's `executor` queue, the only
+   worker holding the push credential. It is idempotent twice over: the workflow id carries the key
+   and the attempt, and the builder looks the tag `build-<key>` up in the registry before building.
+   A failed build records its log's tail and is not retried (the same inputs fail the same way); a
+   new publication of the same zip starts the next attempt, and a stale attempt builds nothing.
+   Channels do not move until the build is `ready`; then the moves publication deferred are applied,
+   and a channel already on a newer version stays there. The zip never leaves the platform: the
+   build context is the stored archive, unpacked by the builder. Two builders share one interface:
+   `buildkit` (`buildctl` against a rootless `buildkitd`) and `local_docker` (`docker build` and
+   `push`, a laptop). The plan's BuildKit Job per build becomes a long-lived `buildkitd` the
+   executor worker talks to over TCP: one daemon keeps a cache, and a Job's pod would hold the push
+   credential itself. Its address has no TLS, so only the executor workers may reach it (a
+   NetworkPolicy). The chart does not deploy it yet, because rootless BuildKit needs a seccomp
+   profile the pod security rules refuse today: both come with S41-13. The provenance records the builder's name, not its version.
+
 ### Direct invocation
 
 10. **A session is a new object beside runs**: a run belongs to a work item, a session to a person

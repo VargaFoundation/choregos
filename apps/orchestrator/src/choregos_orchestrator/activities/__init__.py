@@ -14,6 +14,7 @@ from . import (
     execution,
     findings,
     gates,
+    hosted_build,
     knowledge,
     memory,
     provisioning,
@@ -27,6 +28,9 @@ from . import (
 
 ALL_ACTIVITIES = [
     knowledge.sync_knowledge_source,
+    hosted_build.claim_hosted_build,
+    hosted_build.build_hosted_image,
+    hosted_build.record_hosted_build,
     actions.load_action,
     actions.execute_effect,
     actions.compensate_effect,

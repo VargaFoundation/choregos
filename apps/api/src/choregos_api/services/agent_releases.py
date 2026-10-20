@@ -40,6 +40,7 @@ from ..schemas import (
 from .agent_evals import evaluate, suite_for
 from .agent_governance import PERSONAL, is_admin
 from .agent_live_evals import latest_finished
+from .hosted_builds import build_row, ensure_build, names_key, zip_build_key
 
 FINISHED = ("succeeded", "failed", "timed_out", "cancelled")
 PENDING = "pending_approval"
@@ -261,6 +262,19 @@ async def checks_for(
         )
     ).scalar_one_or_none()
     spec = AgentSpec.model_validate(row or {})
+    build_key = zip_build_key(spec)
+    if build_key is not None:
+        build = await build_row(session, agent.org_id, build_key)
+        status = build.status if build is not None else "not started"
+        checks.append(
+            _check(
+                "hosted_build",
+                status == "ready",
+                f"the image built from v{version}'s zip is ready"
+                if status == "ready"
+                else f"v{version} is built from a zip whose build is {status}: a channel takes it once built",
+            )
+        )
     if kind == "rollback":
         checks.append(_check("previously_in_production", True, f"v{version} was in production before"))
     else:
@@ -909,6 +923,9 @@ async def after_publish(
                 done_at=now,
             )
         )
+    if not await _built(session, agent, version):
+        # A zip whose image is not built yet: the move waits for its build (`release_built`).
+        return
     if target == "stable" and version > 1 and policy.stable.approvals > 0:
         # The organisation wants people to approve what reaches production, publication included:
         # the revision is saved, production does not move until enough of them approve.
@@ -969,6 +986,50 @@ async def after_publish(
         kind="publish",
         via="publish",
     )
+
+
+async def _built(session: AsyncSession, agent: Agent, version: int) -> bool:
+    """Starts the build of a zip version (ADR 0080 §9) and says whether its image is ready; any
+    other version is."""
+    spec = (
+        await session.execute(
+            select(AgentVersion.spec).where(
+                AgentVersion.agent_id == agent.id, AgentVersion.version == version
+            )
+        )
+    ).scalar_one_or_none()
+    build = await ensure_build(session, agent.org_id, spec or {})
+    return build is None or build.status == "ready"
+
+
+async def release_built(session: AsyncSession, org_id: str, key: str) -> list[tuple[str, int]]:
+    """The moves publication deferred for a build that is now ready: for each agent, its newest
+    version built from this key goes where `on_publish` sends it, unless production or testing
+    already took a newer one, or a newer one awaits approval. `(slug, version)` of each move."""
+    rows = await session.execute(
+        select(Agent, AgentVersion.version, AgentVersion.spec)
+        .join(Agent, Agent.id == AgentVersion.agent_id)
+        .where(AgentVersion.org_id == org_id, names_key(key))
+        .order_by(AgentVersion.version.desc())
+    )
+    newest: dict[str, tuple[Agent, int]] = {}
+    for agent, version, spec in rows.tuples():
+        if zip_build_key(spec) == key and agent.id not in newest:
+            newest[agent.id] = (agent, version)
+    moved: list[tuple[str, int]] = []
+    for agent, version in newest.values():
+        if agent.lifecycle == "retired" or agent.status == "revoked":
+            continue
+        target = "stable" if version == 1 else policy_of(agent).on_publish
+        pointer = agent.stable_version if target == "stable" else agent.candidate_version
+        waiting = await pending_release(session, agent)
+        if (pointer is not None and pointer >= version) or (
+            waiting is not None and (waiting.version or 0) >= version
+        ):
+            continue
+        await after_publish(session, None, agent, version, "system:hosted-build")
+        moved.append((agent.slug, version))
+    return moved
 
 
 async def production_spec(session: AsyncSession, agent: Agent) -> dict[str, Any] | None:
@@ -1080,6 +1141,7 @@ __all__ = [
     "production_versions",
     "readiness",
     "release",
+    "release_built",
     "release_dto",
     "served",
 ]

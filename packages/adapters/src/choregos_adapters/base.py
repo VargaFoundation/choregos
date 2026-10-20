@@ -39,6 +39,7 @@ from choregos_core.domain import (
     WorkItemData,
 )
 
+from .oci.builder import BuildRequest, BuildResult
 from .oci.signatures import SignatureVerdict
 
 
@@ -159,6 +160,15 @@ class ImageVerifier(Protocol):
     """Whether a pinned image (`ref@sha256:…`) carries a signature the operator trusts (ADR 0080)."""
 
     async def verify(self, pinned: str) -> SignatureVerdict: ...
+
+
+@runtime_checkable
+class ImageBuilder(Protocol):
+    """Builds a hosted agent's zip into an image, once per build key (ADR 0080 §9)."""
+
+    name: str
+
+    async def build(self, request: BuildRequest) -> BuildResult: ...
 
 
 @runtime_checkable
