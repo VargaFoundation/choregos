@@ -153,6 +153,13 @@ class Settings(BaseSettings):
     agent_images: dict[str, str] = Field(default_factory=dict)
     #: A reference without `@sha256:` is refused at start-up (the chart sets it; a local setup may not).
     require_image_digest: bool = False
+    #: Where a hosted agent's image may come from (ADR 0080 §8), as registry or repository prefixes
+    #: matched by path segment (`ghcr.io/acme` covers `ghcr.io/acme/triager`). Empty: no image is
+    #: accepted, only zip sources the platform builds.
+    hosted_registries: list[str] = Field(default_factory=list)
+    #: Whether a hosted image must carry a trusted signature: `off`, `warn` (log and publish) or
+    #: `enforce` (refuse at publication).
+    hosted_cosign: Literal["off", "warn", "enforce"] = "off"
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under

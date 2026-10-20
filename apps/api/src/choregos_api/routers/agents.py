@@ -107,6 +107,7 @@ from ..services.agents import (
     resoudre_l_agent,
 )
 from ..services.egress import egress_gate_for_remote_agent
+from ..services.hosted_images import pin_hosted_runtime
 from ..services.memory_access import check_bindings_at_publish
 from ..services.network import check_agent_network
 from ..services.remote_agents import pin_remote_runtime
@@ -349,6 +350,7 @@ async def create_agent(
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
     await egress_gate_for_remote_agent(session, principal, organisation, body.spec, allow_egress)
     body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
+    body.spec = await pin_hosted_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
     await check_bindings_at_publish(
@@ -478,6 +480,9 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     await check_bindings_at_publish(session, principal, organisation, spec, project_slug=sujet.project_slug)
     await egress_gate_for_remote_agent(session, principal, organisation, spec, allow_egress)
     spec = await pin_remote_runtime(session, organisation.id, spec)
+    if restored_from is None:
+        # A restore keeps the digest its version was published with: the stored bytes, not the tag now.
+        spec = await pin_hosted_runtime(session, organisation.id, spec)
     if agent.status == "revoked":
         raise conflict(f"agent `{agent.slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":
@@ -1387,6 +1392,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     await _model_allowed(session, organisation, body.spec)
     await check_bindings_at_publish(session, principal, organisation, body.spec)
     await check_agent_network(session, organisation.id, body.spec)
+    body.spec = await pin_hosted_runtime(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:

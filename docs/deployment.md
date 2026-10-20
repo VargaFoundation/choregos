@@ -221,6 +221,25 @@ Each image is built **from** the runner image: the runner is the entrypoint, the
 subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
 warm pool built from the runner image: use `k8s_job` for steps that name their own image.
 
+### Registries for hosted agents
+
+A hosted agent ([ADR 0080](adr/0080-hosted-prompt-and-voice-agents.md),
+[hosted agents](hosted-agents.md)) names its own image by reference. The operator says where such a
+reference may come from; the version stores the digest the registry served at publication.
+
+```yaml
+global:
+  images:
+    hostedRegistries: [ghcr.io/acme, registry.internal]   # the default, [], accepts no image source
+    hostedCosign: "off"                                     # off | warn | enforce
+```
+
+The chart renders `CHOREGOS_HOSTED_REGISTRIES` and `CHOREGOS_HOSTED_COSIGN` on the API only. A prefix
+matches by path segment. The API reads the manifest through the organisation's egress allowlist, so the
+organisation must open the registry's host (and its token host, e.g. `ghcr.io` hands tokens from
+`ghcr.io/token`). Pulls are anonymous: a private registry is not supported yet. `enforce` refuses every
+image until a real signature verifier is configured (S41-14).
+
 ### The `agent_sandbox` executor (the default)
 
 [ADR 0016](adr/0016-agent-sandbox-executor.md) adds an executor on

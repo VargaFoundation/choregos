@@ -39,6 +39,8 @@ from choregos_core.domain import (
     WorkItemData,
 )
 
+from .oci.signatures import SignatureVerdict
+
 
 @runtime_checkable
 class TrackerAdapter(Protocol):
@@ -143,6 +145,20 @@ class Executor(Protocol):
     async def status(self, ref: ExecRef) -> ExecStatus: ...
     def logs(self, ref: ExecRef) -> AsyncIterator[str]: ...
     async def cancel(self, ref: ExecRef) -> None: ...
+
+
+@runtime_checkable
+class RegistryClient(Protocol):
+    """An OCI registry, read-only: the digest a reference names now (ADR 0080). Nothing is pulled."""
+
+    async def resolve(self, reference: str) -> str: ...
+
+
+@runtime_checkable
+class ImageVerifier(Protocol):
+    """Whether a pinned image (`ref@sha256:…`) carries a signature the operator trusts (ADR 0080)."""
+
+    async def verify(self, pinned: str) -> SignatureVerdict: ...
 
 
 @runtime_checkable
