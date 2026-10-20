@@ -330,7 +330,9 @@ def _org(org: str | None) -> str:
 
 
 def _client() -> Client:
-    return Client()
+    from .main import TransportSafeClient
+
+    return TransportSafeClient()
 
 
 def _fail(message: str) -> None:

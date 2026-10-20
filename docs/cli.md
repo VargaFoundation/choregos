@@ -273,6 +273,10 @@ Usage: choregos login [OPTIONS]
 
   Save the connection profile (`~/.config/choregos/config.json`).
 
+  The CLI cannot issue the first token (`tokens create` itself needs one): get
+  it from the console, under `/admin` (API tokens), then pass it with
+  `--token`.
+
 Options:
   --api-url <str>  [default: http://localhost:8000]
   --token <str>
