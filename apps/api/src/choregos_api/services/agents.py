@@ -18,7 +18,7 @@ from ..config import get_settings
 from ..db.models import Agent, AgentVersion, Project, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
-from ..schemas import AgentOverrides, AgentSpec, CodeRuntime
+from ..schemas import AgentOverrides, AgentSpec, CodeRuntime, HostedRuntime
 from .agent_governance import usable_in_project
 from .agent_releases import served
 
@@ -69,6 +69,19 @@ def erreurs_d_une_version(spec: AgentSpec) -> None:
                     }
                 ],
             )
+    if isinstance(spec.runtime, HostedRuntime):
+        # ADR 0080 §8-9: an image is accepted under the operator's registry allowlist and pinned to
+        # its digest, a zip once it was uploaded and built. Until both exist, nothing is accepted.
+        raise unprocessable(
+            "the agent's hosted source cannot be accepted",
+            [
+                {
+                    "loc": ["runtime", "source"],
+                    "msg": "no hosted source is accepted yet: the registry allowlist (S41-02) and "
+                    "the source upload (S41-07) are not delivered",
+                }
+            ],
+        )
 
 
 def _outils(spec: AgentSpec) -> set[str]:

@@ -4330,14 +4330,17 @@ components:
         model: { type: [string, "null"] }
         backend: { type: [string, "null"], description: "the ACP coding agent that carries the version; set only with an `acp` runtime (or none)" }
         runtime:
-          description: "How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062)."
+          description: "How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). `prompt`, `voice` and `hosted` are ADR 0080's: instructions and tools with no code, the same spoken, and the agent's own container serving Foundry's hosted contract."
           oneOf:
             - { $ref: "#/components/schemas/AcpRuntime" }
             - { $ref: "#/components/schemas/CodeRuntime" }
             - { $ref: "#/components/schemas/A2aRuntime" }
+            - { $ref: "#/components/schemas/PromptRuntime" }
+            - { $ref: "#/components/schemas/VoiceRuntime" }
+            - { $ref: "#/components/schemas/HostedRuntime" }
           discriminator:
             propertyName: kind
-            mapping: { acp: "#/components/schemas/AcpRuntime", code: "#/components/schemas/CodeRuntime", a2a: "#/components/schemas/A2aRuntime" }
+            mapping: { acp: "#/components/schemas/AcpRuntime", code: "#/components/schemas/CodeRuntime", a2a: "#/components/schemas/A2aRuntime", prompt: "#/components/schemas/PromptRuntime", voice: "#/components/schemas/VoiceRuntime", hosted: "#/components/schemas/HostedRuntime" }
         limits: { $ref: "#/components/schemas/AgentLimits" }
         budget: { $ref: "#/components/schemas/AgentBudget" }
         skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
@@ -4380,6 +4383,78 @@ components:
         declared_cost: { $ref: "#/components/schemas/A2aDeclaredCost" }
         input: { type: string, enum: [text, text+files], default: text }
         pinned_card: { oneOf: [{ $ref: "#/components/schemas/A2aPinnedCard" }, { type: "null" }], description: "filled by the API at publication: the card as it was read; the runner refuses a card that changed" }
+    PromptRuntime:
+      type: object
+      description: "A prompt agent (ADR 0080): the spec's instructions, model, MCP servers and knowledge, run as a tool loop by the platform - no coding agent, no container code. `backend` must be empty."
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [prompt] }
+        max_output_tokens: { type: [integer, "null"], minimum: 1, maximum: 128000 }
+        tool_choice: { type: string, enum: [auto, required, none], default: auto }
+        response_format: { type: string, enum: [text, json_object], default: text, description: "`json_object` asks the model for a JSON object, read as the step's outputs" }
+    VoiceRuntime:
+      type: object
+      description: "A voice-based prompt agent (ADR 0080): a realtime model spoken to over `GET /agents/{slug}/realtime`. `model` must be a catalogue model marked `realtime`; `backend` and `skills` must be empty. It runs only as a session, never as a workflow step."
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [voice] }
+        voice: { type: string, minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9._-]+$", default: alloy }
+        audio: { $ref: "#/components/schemas/VoiceAudio" }
+        greeting: { type: [string, "null"], maxLength: 2000, description: "what the agent says first, before the caller speaks" }
+        turn_detection: { type: string, enum: [server_vad, none], default: server_vad }
+        max_session_minutes: { type: integer, minimum: 1, maximum: 120, default: 30 }
+    VoiceAudio:
+      type: object
+      properties:
+        format: { type: string, enum: [pcm16], default: pcm16 }
+        sample_rate: { type: integer, enum: [16000, 24000], default: 24000 }
+        channels: { type: integer, enum: [1], default: 1 }
+    HostedRuntime:
+      type: object
+      description: "A hosted agent (ADR 0080): the agent's own container, from an image or built from a source zip, serving Foundry's hosted contract (`GET /readiness`, `POST /responses` and/or `POST /invocations`, optionally `GET /invocations_ws`) on `port`, beside the runner in the run's pod. It holds no credential: the model, the MCP servers and the internet are reached through the runner's loopback listeners. `backend` and `skills` must be empty."
+      required: [kind, source]
+      properties:
+        kind: { type: string, enum: [hosted] }
+        source:
+          oneOf:
+            - { $ref: "#/components/schemas/HostedImageSource" }
+            - { $ref: "#/components/schemas/HostedZipSource" }
+          discriminator:
+            propertyName: type
+            mapping: { image: "#/components/schemas/HostedImageSource", zip: "#/components/schemas/HostedZipSource" }
+        protocols: { type: array, minItems: 1, maxItems: 3, uniqueItems: true, items: { type: string, enum: [responses, invocations, invocations_ws] }, default: [responses] }
+        port: { type: integer, minimum: 1024, maximum: 65535, default: 8088, description: "the port the container listens on; 4001-4003 are the runner's loopback listeners and are refused" }
+        readiness_timeout_s: { type: integer, minimum: 1, maximum: 900, default: 120 }
+        termination_grace_s: { type: integer, minimum: 1, maximum: 300, default: 30 }
+        workspace: { type: string, enum: [none, read, write], default: none, description: "`none`: the repository is not mounted; `read`: read-only; `write`: the container changes it and the runner commits and pushes" }
+        env: { type: object, maxProperties: 64, additionalProperties: { type: string, maxLength: 4096 }, description: "non-secret variables; names are upper-case and the `CHOREGOS_`, `FOUNDRY_`, `OPENAI_`, `ANTHROPIC_` prefixes and the proxy variables are refused" }
+        build: { oneOf: [{ $ref: "#/components/schemas/HostedBuild" }, { type: "null" }], description: "filled by the platform for a zip source, never by the caller" }
+    HostedImageSource:
+      type: object
+      required: [type, ref]
+      properties:
+        type: { type: string, enum: [image] }
+        ref: { type: string, minLength: 1, maxLength: 512, description: "an image reference under a prefix of the operator's `CHOREGOS_HOSTED_REGISTRIES`" }
+        digest: { type: [string, "null"], pattern: "^sha256:[0-9a-f]{64}$", description: "filled by the API at publication: what `ref` resolved to; runs pull `ref@digest`" }
+    HostedZipSource:
+      type: object
+      required: [type, sha256, runtime, entry_point]
+      properties:
+        type: { type: string, enum: [zip] }
+        sha256: { type: string, pattern: "^sha256:[0-9a-f]{64}$", description: "the uploaded source (`POST /agents/{slug}/sources`)" }
+        runtime: { type: string, enum: [python_3_12, python_3_13, python_3_14, node_22, dotnet_10] }
+        entry_point: { type: array, minItems: 1, maxItems: 64, items: { type: string, minLength: 1, maxLength: 1024 }, description: "the argv started in the built image, e.g. [python, main.py]" }
+        dependency_resolution: { type: string, enum: [remote_build, bundled], default: remote_build, description: "`remote_build` installs the declared dependencies at build time; `bundled`: the zip carries them" }
+    HostedBuild:
+      type: object
+      description: "The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice."
+      required: [status, key]
+      properties:
+        status: { type: string, enum: [pending, building, ready, failed] }
+        key: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        image: { type: [string, "null"], description: "the built image, `ref@sha256:...`, once ready" }
+        error: { type: [string, "null"] }
+        provenance: { type: object, additionalProperties: { type: string } }
     A2aDeclaredCost:
       type: object
       description: What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`.

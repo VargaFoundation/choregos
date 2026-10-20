@@ -712,6 +712,113 @@
           "description": "the name of the organisation credential the access token comes from (never the token)"
         }
       }
+    },
+    "hosted": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "image",
+        "agent_slug",
+        "agent_version"
+      ],
+      "additionalProperties": false,
+      "description": "Set for a step a hosted agent carries (ADR 0080): `agent.backend` is `hosted`; the agent's own container serves Foundry's contract beside the runner. No credential is here: the container reaches the model, MCP and the internet only through the runner's loopback listeners. At most one of `job`, `remote`, `hosted`, `prompt` is set.",
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "responses",
+            "invocations"
+          ],
+          "default": "responses"
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "@sha256:[0-9a-f]{64}$",
+          "description": "the image started beside the runner, always pinned by digest"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535,
+          "not": { "enum": [4001, 4002, 4003] },
+          "default": 8088
+        },
+        "readiness_timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 900,
+          "default": 120
+        },
+        "termination_grace_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 30
+        },
+        "workspace": {
+          "type": "string",
+          "enum": [
+            "none",
+            "read",
+            "write"
+          ],
+          "default": "none"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "non-secret variables the version declares"
+        },
+        "agent_slug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "prompt": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "description": "Set for a step a prompt agent carries (ADR 0080): `agent.backend` is `prompt`; the runner runs a tool loop on the model with the instructions and the run's MCP tools.",
+      "properties": {
+        "max_output_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 128000
+        },
+        "tool_choice": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "required",
+            "none"
+          ],
+          "default": "auto"
+        },
+        "response_format": {
+          "type": "string",
+          "enum": [
+            "text",
+            "json_object"
+          ],
+          "default": "text"
+        }
+      }
     }
   }
 }

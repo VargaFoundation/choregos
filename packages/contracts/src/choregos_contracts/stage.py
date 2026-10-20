@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from .artifact import ARTIFACT_TYPES
 from .enums import ApiFormat, FindingType, Severity, StageStatus
@@ -299,6 +299,51 @@ class RemoteCall(Strict):
     credential: str | None = None
 
 
+#: The runner's loopback listeners a hosted container is pointed at: model, MCP, egress (ADR 0080).
+LOOPBACK_PORTS = frozenset({4001, 4002, 4003})
+
+
+class HostedCall(Strict):
+    """A step a hosted agent carries (ADR 0080): the agent's own container, beside the runner in the
+    pod, serves Foundry's contract on `port`; the runner sends the step to it and reads the answer.
+
+    `agent.backend` is `hosted`. No credential is here or in the container's environment: the
+    container reaches the model, the MCP servers and the internet only through the runner's
+    loopback listeners."""
+
+    #: The protocol the step is sent with: `responses` (`POST /responses`) or `invocations`.
+    protocol: Literal["responses", "invocations"] = "responses"
+    #: The image the executor starts beside the runner, always `ref@sha256:<hex>`.
+    image: str = Field(min_length=1, pattern=r"@sha256:[0-9a-f]{64}$")
+    port: int = Field(default=8088, ge=1024, le=65535)
+    readiness_timeout_s: int = Field(default=120, ge=1, le=900)
+    termination_grace_s: int = Field(default=30, ge=1, le=300)
+    #: `none`: the repository is not mounted; `read`: mounted read-only; `write`: the container
+    #: changes it and the runner commits and pushes (it never holds a git credential).
+    workspace: Literal["none", "read", "write"] = "none"
+    #: Non-secret variables the version declares; reserved prefixes were refused at publication.
+    env: dict[str, str] = Field(default_factory=dict)
+    agent_slug: str = Field(min_length=1)
+    agent_version: int = Field(ge=1)
+
+    @field_validator("port")
+    @classmethod
+    def _not_a_loopback_listener(cls, port: int) -> int:
+        if port in LOOPBACK_PORTS:
+            raise ValueError(f"port {port} is one of the runner's loopback listeners (4001-4003)")
+        return port
+
+
+class PromptCall(Strict):
+    """A step a prompt agent carries (ADR 0080): the runner runs a tool loop on the model with the
+    instructions and the run's MCP tools; no coding agent, no container code. `agent.backend` is
+    `prompt`."""
+
+    max_output_tokens: int | None = Field(default=None, ge=1, le=128_000)
+    tool_choice: Literal["auto", "required", "none"] = "auto"
+    response_format: Literal["text", "json_object"] = "text"
+
+
 class StageInput(Strict):
     """Ce que l'orchestrateur remet au runner (docs/plan/01 §1.5)."""
 
@@ -338,8 +383,21 @@ class StageInput(Strict):
     job: JobSpec | None = None
     #: Set for a step a remote agent carries over A2A (ADR 0062): `agent.backend` is `a2a`.
     remote: RemoteCall | None = None
+    #: Set for a step a hosted agent carries (ADR 0080): `agent.backend` is `hosted`.
+    hosted: HostedCall | None = None
+    #: Set for a step a prompt agent carries (ADR 0080): `agent.backend` is `prompt`.
+    prompt: PromptCall | None = None
 
     model_config = Strict.model_config | {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def _one_kind_of_step(self) -> StageInput:
+        """A step is carried by one thing: a job, a remote agent, a hosted agent or a prompt agent
+        (or, with none of them, the ACP agent of `agent`)."""
+        carriers = [name for name in ("job", "remote", "hosted", "prompt") if getattr(self, name) is not None]
+        if len(carriers) > 1:
+            raise ValueError(f"a step is carried by one thing, not {' and '.join(carriers)}")
+        return self
 
 
 class Finding(Strict):

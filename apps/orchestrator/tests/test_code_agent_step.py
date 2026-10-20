@@ -149,3 +149,23 @@ async def test_an_acp_runtime_names_the_backend(setup: Fixture, images: None) ->
     await _agent(setup, {"kind": "acp", "backend": "opencode"})
     prepared = await stage_activities.prepare_stage(_plan(setup))
     assert prepared["stage_input"]["agent"]["backend"] == "opencode"
+
+
+@pytest.mark.parametrize(
+    ("runtime", "reason"),
+    [
+        ({"kind": "prompt"}, "not yet"),
+        ({"kind": "voice"}, "only as a session"),
+        ({"kind": "hosted", "source": {"type": "image", "ref": "ghcr.io/acme/triager:1"}}, "not yet"),
+    ],
+)
+async def test_a_runtime_no_step_can_carry_is_refused_before_any_key(
+    setup: Fixture, images: None, runtime: dict[str, Any], reason: str
+) -> None:
+    await _agent(setup, runtime)
+    with pytest.raises(ApplicationError) as raised:
+        await stage_activities.prepare_stage(_plan(setup))
+    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert f"`{runtime['kind']}` cannot run as a workflow step" in str(raised.value)
+    assert reason in str(raised.value)
+    assert setup.adapters.gateway.keys == {}
