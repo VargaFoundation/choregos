@@ -5,7 +5,9 @@ A person names an image by a reference; the operator names the registries such a
 from (`CHOREGOS_HOSTED_REGISTRIES`). Publication resolves the reference to the digest the registry
 serves at that moment and writes it in the version, so every run pulls the same bytes even after the
 tag moves. With `CHOREGOS_HOSTED_COSIGN=enforce` an image without a trusted signature is refused;
-`warn` publishes it and logs `hosted.signature_unverified`; `off` does not ask.
+`warn` publishes it and logs `hosted.signature_unverified`; `off` does not ask. The signature is
+cosign's, by the operator's key or keyless identity (`CHOREGOS_HOSTED_COSIGN_KEY`, `_IDENTITY`,
+`_ISSUER`), on the pinned digest.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from typing import Any
 
 from choregos_adapters.base import ImageVerifier, RegistryClient
 from choregos_adapters.oci import (
+    CosignVerifier,
     ImageRef,
     OciRegistryClient,
     RegistryError,
@@ -67,7 +70,19 @@ def image_verifier() -> ImageVerifier:
         from choregos_adapters.fakes import FakeImageVerifier
 
         return _OVERRIDES.setdefault("verifier", FakeImageVerifier())  # type: ignore[no-any-return]
-    return UnconfiguredVerifier()
+    settings = get_settings()
+    if not (settings.hosted_cosign_key or settings.hosted_cosign_identity or settings.hosted_cosign_issuer):
+        return UnconfiguredVerifier()
+    try:
+        return CosignVerifier(
+            key=settings.hosted_cosign_key,
+            identity=settings.hosted_cosign_identity,
+            issuer=settings.hosted_cosign_issuer,
+            tlog=settings.hosted_cosign_tlog,
+        )
+    except ValueError as exc:
+        # A configuration that names a signer wrongly verifies nothing: it never falls back to trust.
+        return UnconfiguredVerifier(f"the signature verifier is misconfigured: {exc}")
 
 
 def allowlisted_ref(source: HostedImageSource) -> ImageRef:

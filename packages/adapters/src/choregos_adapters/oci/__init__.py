@@ -8,6 +8,7 @@ from .builder import (
     BuildResult,
     LocalDockerBuilder,
 )
+from .cosign import CosignRunner, CosignVerifier, cosign_runner
 from .registry import (
     DOCKER_HUB,
     ImageRef,
@@ -24,12 +25,15 @@ __all__ = [
     "BuildRequest",
     "BuildResult",
     "BuildctlBuilder",
+    "CosignRunner",
+    "CosignVerifier",
     "ImageRef",
     "LocalDockerBuilder",
     "OciRegistryClient",
     "RegistryError",
     "SignatureVerdict",
     "UnconfiguredVerifier",
+    "cosign_runner",
     "parse_ref",
     "under_prefix",
 ]

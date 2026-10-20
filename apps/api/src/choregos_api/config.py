@@ -163,6 +163,16 @@ class Settings(BaseSettings):
     #: Whether a hosted image must carry a trusted signature: `off`, `warn` (log and publish) or
     #: `enforce` (refuse at publication).
     hosted_cosign: Literal["off", "warn", "enforce"] = "off"
+    #: Who may sign a hosted image (S41-14): a public key cosign reads (a path, the chart mounts the
+    #: operator's Secret at `/etc/choregos/cosign/cosign.pub`, or a KMS URI), or keyless, the
+    #: certificate identity and its OIDC issuer as regular expressions matched whole. Neither, or
+    #: both: nothing verifies, and `enforce` refuses every image.
+    hosted_cosign_key: str = ""
+    hosted_cosign_identity: str = ""
+    hosted_cosign_issuer: str = ""
+    #: Whether cosign checks the transparency log (Rekor). `false` only for a key whose signatures
+    #: were never uploaded, an air-gapped registry.
+    hosted_cosign_tlog: bool = True
     #: The base image of each zip runtime, `ref@sha256:…`, over the shipped ones (ADR 0080 §9):
     #: `{"python_3_13": "registry.internal/python:3.13-slim@sha256:…"}`.
     hosted_base_images: dict[str, str] = Field(default_factory=dict)

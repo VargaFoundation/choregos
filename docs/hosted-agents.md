@@ -34,8 +34,8 @@ three runtimes; the stage input carries `hosted` and `prompt` steps. Nothing run
   again, never trusted; a restore keeps the digest it was published with. The manifest is read through
   the organisation's egress allowlist, anonymously;
 - `CHOREGOS_HOSTED_COSIGN`: `enforce` refuses an image without a trusted signature, `warn` publishes it
-  and logs `hosted.signature_unverified`, `off` (the default) does not ask. No real verifier is wired
-  yet (S41-14): under `enforce` every image is refused outside the fakes;
+  and logs `hosted.signature_unverified`, `off` (the default) does not ask. The verifier is cosign
+  (S41-14, below);
 - a hosted **zip** source names a zip uploaded first (S41-07, below); publication builds it (S41-08);
 - a step whose agent is hosted stops before any key is minted, with the reason (`AgentIndisponible`,
   not retried); voice agents are never steps.
@@ -323,6 +323,45 @@ agent's own container, in a pod of its own.
   replayed, it changes nothing.
 - An agent that serves only `invocations_ws` has no session yet (422): the WebSocket relay to a
   hosted container is S41-21.
+
+### Signatures, by cosign (S41-14)
+
+Publication asks the `cosign` binary the API image carries (v2.6.5) about the **pinned** reference,
+`ref@sha256:…`, never a tag: `cosign verify --output json`, by the operator's signer.
+
+- **By key**: `global.images.hostedCosignKeySecret` names a Secret of the release's namespace holding
+  the public key under `cosign.pub`. The chart mounts it on the API
+  (`CHOREGOS_HOSTED_COSIGN_KEY=/etc/choregos/cosign/cosign.pub`; the variable also takes a KMS URI
+  cosign reads).
+- **Keyless**: `hostedCosignIdentity` and `hostedCosignIssuer` (`CHOREGOS_HOSTED_COSIGN_IDENTITY`,
+  `_ISSUER`), the certificate's subject and its OIDC issuer as regular expressions. Cosign searches
+  them; the API then matches cosign's reported subject and issuer **whole** (`re.fullmatch`), so
+  `https://github\.com/acme/.+` does not accept `https://evil.example/?https://github.com/acme/x`.
+  Anchor them anyway (`^…$`): Kyverno searches them too.
+- `hostedCosignTlog: false` (`CHOREGOS_HOSTED_COSIGN_TLOG`) skips the transparency log, for a key
+  whose signatures were never uploaded to Rekor.
+
+A signature counts only when cosign accepts it **and** its payload names the pinned digest: a
+signature copied onto other bytes, or one of another image, does not vouch for this one. A key and
+an identity together, an identity without its issuer, an expression that does not compile: nothing
+verifies, and `enforce` refuses every image with that reason. Every failure is a verdict, shown to
+the publisher: cosign missing, 60 s without an answer, cosign's own `Error:` line.
+
+**At admission.** `hostedCosignPolicy: true` renders the Kyverno ClusterPolicy
+`choregos-hosted-images` (Kyverno required). In the release's namespace, `proj-*` and `choregos-*`,
+an image under `hostedRegistries` in `containers`, `initContainers` (a native sidecar is one) or
+`ephemeralContainers` runs only pinned by `@sha256:`; under `enforce`, Kyverno also verifies it
+against the same key Secret or keyless identity. The chart refuses to render the policy without
+`hostedRegistries`, or under `enforce` without a signer. Kyverno must be allowed to read the key
+Secret.
+
+What is not covered: the cosign subprocess does not go through the platform's egress client; the
+registry was judged by the organisation's egress allowlist when the digest was resolved, and keyless
+verification also reaches Sigstore (`tuf-repo-cdn.sigstore.dev`, Rekor), which the API's network
+must open. A private registry needs credentials cosign does not have yet. A zip version's built
+image is not signed by the platform: the policy requires its digest, and under `enforce` with
+`buildRegistry` under `hostedRegistries` Kyverno would refuse it, so keep the build repository out
+of the hosted prefixes.
 
 ### In the console (S41-12)
 

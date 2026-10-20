@@ -116,6 +116,20 @@ global:
     hostedRegistries: []
     # Signatures of hosted images: off | warn (publish, log `hosted.signature_unverified`) | enforce.
     hostedCosign: "off"
+    # Who may sign a hosted image (S41-14), one of: the name of a Secret of the release's namespace
+    # holding the operator's public key under `cosign.pub` (mounted on the API, named to Kyverno), or
+    # keyless, the certificate identity and its OIDC issuer as regular expressions, matched whole by
+    # the API (`^https://github\.com/acme/.+$`). Under `enforce` with neither, every image is refused.
+    hostedCosignKeySecret: ""
+    hostedCosignIdentity: ""
+    hostedCosignIssuer: ""
+    # false: cosign does not check the transparency log, for a key whose signatures were never
+    # uploaded to Rekor (an air-gapped registry).
+    hostedCosignTlog: true
+    # Renders the `choregos-hosted-images` Kyverno ClusterPolicy: in `proj-*` and `choregos-*`, a
+    # container, init container or native sidecar whose image is under `hostedRegistries` runs only
+    # pinned by `@sha256:` and, under `enforce`, signed by the signer above. Requires Kyverno.
+    hostedCosignPolicy: false
     # Hosted zips (ADR 0080 §9): the repository the platform pushes the images it builds to, as
     # `registry/path` (tagged `build-<key>`, run by digest). Empty: a zip version publishes, and its
     # build fails with the reason. The orchestrator's executor worker pushes there.

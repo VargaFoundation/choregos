@@ -89,6 +89,10 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # --- Cible `api` : le service HTTP.
 FROM commun AS api
+# `cosign`: publication verifies a hosted agent's image signature on its digest (S41-14, ADR 0080
+# §8). The same release as the `hosted-cosign` CI job, pinned by digest.
+COPY --from=ghcr.io/sigstore/cosign/cosign:v2.6.5@sha256:ad281047f85c5e1fc6ffbc30c2b55be3b07b4032bef715a12122ce5829619aca \
+  /ko-app/cosign /usr/local/bin/cosign
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"
