@@ -123,10 +123,11 @@ spec:
             - name: CHOREGOS_NETWORK_INSTANCE_DENY
               value: {{ join "," (($root.Values.global.egress).denyDomains | default list) | quote }}
             {{- end }}
-            # The RuntimeClass of agent pods when the policy imposes none: a
-            # cluster that has gVisor or Kata says so here once. Empty: the cluster's.
+            {{- if not (hasKey ($root.Values.global.runner | default dict) "runtimeClass") }}
+            # `global.runner.runtimeClass` never set: the sub-chart's value alone (commonEnv sets it otherwise).
             - name: CHOREGOS_RUNNER_RUNTIME_CLASS
-              value: {{ $root.Values.runner.runtimeClass | default "" | quote }}
+              value: {{ include "choregos.runtimeClass" $root | quote }}
+            {{- end }}
             {{- with $root.Values.global.images }}
             # The images an operator names for job steps and agents written in code (ADR 0056,
             # ADR 0063): name -> reference. The API validates a version against the names, the

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 
 from .conftest import login
@@ -169,6 +170,31 @@ async def test_a_github_owner_without_an_installation_is_to_do(
         await session.execute(delete(GitHubInstallation))
     body = await _readiness(client, pid)
     assert "github-app-scm" in _by_state(body, "todo")
+
+
+async def test_readiness_says_a_gvisor_policy_the_warm_pool_cannot_run(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S38-13d / #750: before any run, the item names the policy's runtime, the pool's, and the fix."""
+    project = await _project(client)
+    await _activate(project["id"])
+    policy = (await client.get(f"/api/v1/projects/{project['id']}/policy")).json()["yaml"]
+    assert "runtime: default" in policy
+    edited = policy.replace("runtime: default", "runtime: gvisor", 1)
+    put = await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": edited})
+    assert put.status_code == 200, put.text
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "agent_sandbox")
+    monkeypatch.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "")
+    item = next(i for i in (await _readiness(client, project["id"]))["items"] if i["id"] == "runtime-class")
+    assert item["state"] == "todo"
+    assert "gvisor" in item["detail"] and "the cluster default" in item["detail"]
+    assert "runner.runtimeClass" in item["detail"]
+    monkeypatch.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "gvisor")
+    item = next(i for i in (await _readiness(client, project["id"]))["items"] if i["id"] == "runtime-class")
+    assert item["state"] == "done"
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    assert "runtime-class" not in {i["id"] for i in (await _readiness(client, project["id"]))["items"]}
 
 
 async def test_the_probe_of_the_object_store_is_cached_and_reports_its_failure() -> None:

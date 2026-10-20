@@ -138,12 +138,9 @@ class AgentSandboxExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent by `run_id`: a second start finds the claim, or the run still queued."""
-        if spec.runtime_class and spec.runtime_class != self.runtime_class:
-            raise ConfigurationError(
-                f"the run asks for RuntimeClass `{spec.runtime_class}`, the warm pool "
-                f"`{self.warm_pool}` runs `{self.runtime_class or 'the cluster default'}`: a sandbox "
-                "cannot change runtime once made; set `runner.runtimeClass` to match the policy"
-            )
+        refusal = runtime_class_refusal(spec.runtime_class, self.runtime_class, self.warm_pool)
+        if refusal:
+            raise ConfigurationError(refusal)
         if self.pool_image and spec.runner_image and spec.runner_image != self.pool_image:
             raise ConfigurationError(
                 f"the run asks for image `{spec.runner_image}`, the warm pool `{self.warm_pool}` runs "
@@ -575,6 +572,21 @@ class AgentSandboxExecutor:
             "DELETE", f"{self._claims(namespace)}/{ref.name}", json={"propagationPolicy": "Background"}
         )
         await self.client.request("DELETE", f"{self._secrets(namespace)}/{ref.name}")
+
+
+def runtime_class_refusal(asked: str | None, pool_runtime: str | None, warm_pool: str) -> str | None:
+    """Why a warm pool cannot honour a run's RuntimeClass, or None when it can.
+
+    ONE comparison for the executor (at `start`) and for the API (`/readiness`, before any run),
+    so they cannot disagree. `asked` is the run's class (None: the policy asks for none),
+    `pool_runtime` the template's (None or empty: the cluster default)."""
+    if asked and asked != (pool_runtime or None):
+        return (
+            f"the run asks for RuntimeClass `{asked}`, the warm pool "
+            f"`{warm_pool}` runs `{pool_runtime or 'the cluster default'}`: a sandbox "
+            "cannot change runtime once made; set `runner.runtimeClass` to match the policy"
+        )
+    return None
 
 
 def _b64(text: str) -> str:

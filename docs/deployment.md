@@ -250,11 +250,11 @@ versions (Argo CD and `helm install` pass them) and fails, naming the operator a
 global:
   runner:
     executor: agent_sandbox           # the default, written here to make the choice visible
+    runtimeClass: gvisor              # the template's RuntimeClass; "" = the cluster's
 choregos-orchestrator:
   runner:
     # namespacePattern empty = the release namespace: the template lives there
     warmPool: { size: 2 }             # sandboxes made in advance, never used, holding nothing
-    runtimeClass: gvisor              # the template's RuntimeClass; "" = the cluster's
     sandbox: { storage: 10Gi, storageClassName: "", assignmentPort: 8765, ttlSecondsAfterFinished: 300 }
 global:
   rbac: { jobRunner: true }           # or the platform grants the same verbs (see rbac-jobs.yaml)
@@ -628,7 +628,7 @@ catalogue). A ticket still in its initial state after fifteen minutes is not wai
 dead; `temporal workflow describe` says why. `demo/README.md` has the rest, including what
 this bench does **not** prove.
 
-**Hardened runtime for agent pods.** `choregos-orchestrator.runner.runtimeClass` (gVisor, Kata) applies to every agent pod unless the project policy demands gVisor, which always wins. The strict Kyverno rule in `infra/policies/pod-security.yaml` refuses any pod of a platform or project namespace without a non-root, seccomp-profiled security context — the chart's own pods are checked against it by `tests/charts`.
+**Hardened runtime for agent pods.** `global.runner.runtimeClass` (gVisor, Kata; `""` = the cluster's) applies to every agent pod unless the project policy demands gVisor, which always wins. It is the RuntimeClass of the `agent_sandbox` warm pool's template and reaches the API and every worker (`CHOREGOS_RUNNER_RUNTIME_CLASS`); it is deliberately not set by default. An install that sets only `choregos-orchestrator.runner.runtimeClass` renders as before, but the API is then told nothing and cannot judge a gVisor policy (no `runtime-class` item, no false alarm); both set must agree, else the render is refused. With `global.runner.runtimeClass` set, a project whose policy asks for gVisor on a pool that does not run it sees a `runtime-class` item in its readiness (`docs/usage.md`) instead of a run stuck in `queued`. The strict Kyverno rule in `infra/policies/pod-security.yaml` refuses any pod of a platform or project namespace without a non-root, seccomp-profiled security context — the chart's own pods are checked against it by `tests/charts`.
 
 **Context reduction kill switch.** `choregos-orchestrator.runner.contextReduction.enabled: false` (env `CHOREGOS_CONTEXT_REDUCTION=off`) refuses rtk and headroom to every run, whatever a project's policy asks ([ADR 0055](adr/0055-fewer-tokens-per-run.md)). Left at `true`, each policy decides, and a policy without `context` reduces nothing.
 

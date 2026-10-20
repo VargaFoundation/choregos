@@ -147,7 +147,7 @@ def test_a_warm_sandbox_holds_no_credential() -> None:
 @needs_helm
 def test_runtime_class_and_storage_reach_the_template() -> None:
     template = _objects(
-        "choregos-orchestrator.runner.runtimeClass=gvisor",
+        "global.runner.runtimeClass=gvisor",
         "choregos-orchestrator.runner.sandbox.storage=20Gi",
     )["SandboxTemplate/choregos-runner"]
     assert template["spec"]["podTemplate"]["spec"]["runtimeClassName"] == "gvisor"
