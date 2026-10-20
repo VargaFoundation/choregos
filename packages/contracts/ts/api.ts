@@ -2515,6 +2515,9 @@ export type GatewayModel = {
   provider?: string;
   input_cost_per_1k?: number | null;
   output_cost_per_1k?: number | null;
+  input_audio_cost_per_1k?: number | null;
+  output_audio_cost_per_1k?: number | null;
+  cached_input_cost_per_1k?: number | null;
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
@@ -2533,6 +2536,9 @@ export type ModelGatewayFacts = {
   upstream_model?: string;
   input_cost_per_1k?: number | null;
   output_cost_per_1k?: number | null;
+  input_audio_cost_per_1k?: number | null;
+  output_audio_cost_per_1k?: number | null;
+  cached_input_cost_per_1k?: number | null;
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
@@ -2547,6 +2553,7 @@ export type ModelCatalogueEntry = {
   allowed_roles: Array<string>;
   usages: Array<"agent" | "embed" | "distill" | "eval">;
   price_override?: PriceOverride | null;
+  max_usd_per_minute?: number | null;
   gateway?: ModelGatewayFacts | null;
   last_seen_at?: string | null;
   missing_since?: string | null;
@@ -2562,6 +2569,7 @@ export type ModelCatalogueEntryCreate = {
   allowed_roles?: Array<string>;
   usages?: Array<"agent" | "embed" | "distill" | "eval">;
   price_override?: PriceOverride | null;
+  max_usd_per_minute?: number | null;
   notes?: string;
 };
 
@@ -2572,6 +2580,8 @@ export type ModelCataloguePatch = {
   usages?: Array<"agent" | "embed" | "distill" | "eval"> | null;
   price_override?: PriceOverride | null;
   clear_price_override?: boolean;
+  max_usd_per_minute?: number | null;
+  clear_max_usd_per_minute?: boolean;
   notes?: string | null;
 };
 

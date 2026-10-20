@@ -160,8 +160,14 @@ agent cannot be a workflow step).
     the first of the API; everything is decided before it is accepted (a browser's `Origin`, the
     rights, the gateway's `realtime` capability, the key, the upstream socket), and a refusal closes
     it with 1008. The relay screens each caller event against an allowlist; a function call runs
-    through the courtier only if the grant offers the tool. The spend is still the gateway's count on
-    the key, read at close; `model` is not yet checked against a catalogue `realtime` mark (S41-15).
+    through the courtier only if the grant offers the tool.
+    *As delivered for voice spend (S41-15)*: the relay prices each `response.done` itself, from the
+    usage's split in text, audio and cached tokens and the model's prices (the organisation's
+    override, else the gateway's text and audio prices; a model with neither opens no voice session,
+    422). The session closes with 1008 once the sum reaches its cap: its reservation, and the
+    catalogue's `max_usd_per_minute` for each minute begun. The ledger books that sum; the gateway's
+    count is kept beside it in `session.closed`, for comparison. A catalogue `realtime` mark is still
+    not checked: a model with audio prices is taken as realtime.
     *As delivered for hosted agents (S41-11)*: `/responses` reaches the container in a pod of the
     session's own, started once by the workflow `AgentSessionPod` and stopped at the first of a close,
     an idle wait and the expiry. The pod's runner (`serve-session`) takes each turn from the internal

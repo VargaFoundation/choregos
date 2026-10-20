@@ -24,6 +24,21 @@ ORG = "/api/v1/orgs/varga"
 REALTIME = f"{ORG}/agents/concierge/realtime?project=billing-api"
 MODEL = "openai/gpt-realtime"
 GREETING = "Hello, this is the order desk."
+#: A response as gpt-realtime reports it: 1,000 tokens in (300 cached), 400 out, mostly audio.
+USAGE: dict[str, Any] = {
+    "input_tokens": 1000,
+    "output_tokens": 400,
+    "input_token_details": {
+        "text_tokens": 200,
+        "audio_tokens": 800,
+        "cached_tokens": 300,
+        "cached_tokens_details": {"text_tokens": 100, "audio_tokens": 200},
+    },
+    "output_token_details": {"text_tokens": 100, "audio_tokens": 300},
+}
+#: USAGE at the fixture's prices, by hand: 100 x 0.004 + 600 x 0.032 + 300 x 0.0004 (in)
+#: + 100 x 0.016 + 300 x 0.064 (out), per 1,000.
+RESPONSE_USD = 0.04052
 
 
 class Voice:
@@ -58,11 +73,14 @@ def voice() -> Iterator[Voice]:
         model_name=MODEL,
         litellm_model=MODEL,
         provider="openai",
-        input_cost_per_1k=0.04,
-        output_cost_per_1k=0.08,
+        input_cost_per_1k=0.004,
+        output_cost_per_1k=0.016,
+        input_audio_cost_per_1k=0.032,
+        output_audio_cost_per_1k=0.064,
+        cached_input_cost_per_1k=0.0004,
     )
     gateway = FakeGateway(models=[realtime])
-    upstream = FakeRealtimeUpstream()
+    upstream = FakeRealtimeUpstream(usage=USAGE)
     set_session_gateway(gateway)
     set_realtime_connector(upstream)
     yield Voice(gateway, upstream)
@@ -124,7 +142,7 @@ async def greeted(client: AsyncClient, project: dict[str, Any], voice: Voice) ->
 # ───────────────────────── a conversation ─────────────────────────
 
 
-async def test_the_agent_configures_the_session_greets_and_the_spend_is_booked_on_one_revoked_key(
+async def test_the_agent_configures_the_session_greets_and_the_relays_measure_is_booked_on_one_revoked_key(
     client: AsyncClient, project: dict[str, Any], voice: Voice
 ) -> None:
     await _agent(client)
@@ -161,7 +179,8 @@ async def test_the_agent_configures_the_session_greets_and_the_spend_is_booked_o
     (line,) = await _ledger()
     read = await _session(client)
     assert line.session_id == read["id"] and line.run_id is None
-    assert line.cost_usd == pytest.approx(voice.gateway.spends[key_id].cost_usd) and line.cost_usd > 0
+    assert line.cost_usd == pytest.approx(2 * RESPONSE_USD), "the relay's measure, not the gateway's count"
+    assert (line.tokens_in, line.tokens_out, line.tokens_cached) == (2000, 800, 600)
     assert read["status"] == "closed" and read["reason"] == "closed" and read["responses"] == 2
 
     events = await _events(read["id"])
@@ -172,6 +191,10 @@ async def test_the_agent_configures_the_session_greets_and_the_spend_is_booked_o
         ("output.transcript", "It shipped yesterday."),
     ]
     assert AUDIO_B64 not in str(events), "audio is relayed, never kept"
+    (closed,) = [e["payload"] for e in events if e["type"] == "session.closed"]
+    gateway_count = voice.gateway.spends[key_id].cost_usd
+    assert closed["priced_by"] == "relay" and closed["gateway_cost_usd"] == pytest.approx(gateway_count)
+    assert gateway_count != pytest.approx(line.cost_usd), "the test tells the two figures apart"
 
 
 # ───────────────────────── the agent owns the session ─────────────────────────
@@ -386,3 +409,82 @@ async def test_a_voice_agent_is_refused_at_publication_on_a_gateway_without_real
     )
     assert refused.status_code == 422, refused.text
     assert "realtime" in refused.text
+
+
+# ───────────────────────── what it spends (S41-15) ─────────────────────────
+
+
+async def _rate(usd_per_minute: float) -> None:
+    from choregos_api.db.models import ModelCatalogueRow, Organization
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as db:
+        org = (await db.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        db.add(ModelCatalogueRow(org_id=org.id, model_name=MODEL, max_usd_per_minute=usd_per_minute))
+
+
+async def test_the_session_closes_when_the_relays_measure_reaches_its_reservation(
+    client: AsyncClient, project: dict[str, Any], voice: Voice
+) -> None:
+    await _agent(client)
+    voice.model.say(GREETING).hear("Where is order 42?").say("It shipped yesterday.")
+    async with _socket(client, f"{REALTIME}&max_usd=0.05") as socket:
+        await socket.until("response.done")
+        await socket.send_json({"type": "input_audio_buffer.commit"})
+        await socket.until("response.done")
+        closed = await socket.closed()
+    assert closed.code == 1008 and "0.0810 of its 0.0500 USD" in closed.reason
+    read = await _session(client)
+    assert read["status"] == "failed" and read["reason"] == "budget_exceeded"
+    assert voice.gateway.revoked == [voice.key_id] and voice.model.closed
+    (line,) = await _ledger()
+    assert line.cost_usd == pytest.approx(2 * RESPONSE_USD), "booked: what was spent, the crossing included"
+
+
+async def test_the_per_minute_rate_of_the_catalogue_cuts_a_session_spending_faster(
+    client: AsyncClient, project: dict[str, Any], voice: Voice
+) -> None:
+    await _agent(client)
+    await _rate(0.03)
+    voice.model.say(GREETING).say("never said")
+    async with _socket(client) as socket:
+        await socket.until("response.done")
+        closed = await socket.closed()
+    assert closed.code == 1008 and "0.0405 of its 0.0300 USD" in closed.reason
+    read = await _session(client)
+    events = await _events(read["id"])
+    (opened,) = [e["payload"] for e in events if e["type"] == "session.opened"]
+    assert opened["max_usd_per_minute"] == 0.03 and opened["prices"]["audio_out"] == 0.064
+    (done,) = [e["payload"] for e in events if e["type"] == "response.done"]
+    assert done["priced_by"] == "relay" and done["cap_usd"] == 0.03
+    assert done["cost_usd"] == pytest.approx(RESPONSE_USD)
+
+
+async def test_under_its_cap_a_session_goes_on(
+    client: AsyncClient, project: dict[str, Any], voice: Voice
+) -> None:
+    await _agent(client)
+    await _rate(0.05)
+    voice.model.say(GREETING)
+    async with _socket(client) as socket:
+        await socket.until("response.done")
+        item = {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Thanks."}]}
+        await socket.send_json({"type": "conversation.item.create", "item": item})
+        await socket.until("conversation.item.created")
+        await socket.hang_up()
+    read = await _session(client)
+    assert read["status"] == "closed" and read["reason"] == "closed"
+
+
+async def test_a_realtime_model_without_an_audio_price_opens_no_session(
+    client: AsyncClient, project: dict[str, Any], voice: Voice
+) -> None:
+    (model,) = voice.gateway.models
+    voice.gateway.models = [model.model_copy(update={"output_audio_cost_per_1k": None})]
+    await _agent(client)
+    with pytest.raises(Closed) as refused:
+        async with _socket(client):
+            pass
+    assert refused.value.code == 1008 and "no audio price" in refused.value.reason
+    assert voice.minted == {} and voice.model.connections == 0

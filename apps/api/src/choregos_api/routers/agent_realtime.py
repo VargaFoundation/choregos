@@ -35,7 +35,8 @@ from ..services.agent_realtime import (
     relay,
     require_realtime_gateway,
 )
-from ..services.agent_sessions import budget_refusal, open_session, secret_name, session_tools
+from ..services.agent_sessions import budget_refusal, open_session, opened_terms, secret_name, session_tools
+from ..services.realtime_spend import RealtimePrices
 from .agents import _charger, _exiger, _projet
 
 router = APIRouter(tags=["agents"])
@@ -89,6 +90,7 @@ async def agent_realtime(
             spec = (await resoudre_l_agent(db, organisation.id, target.id, served)).spec
             name = secret_name(record.id)
             key = (await get_secret_store().get_many(db, organisation.id, [name])).get(name, "")
+            terms = await opened_terms(db, record)
             voice = VoiceSession(
                 session_id=record.id,
                 org_slug=organisation.slug,
@@ -99,6 +101,10 @@ async def agent_realtime(
                 spec=spec,
                 tools=await session_tools(db, spec, target),
                 max_seconds=getattr(spec.runtime, "max_session_minutes", 1) * SECONDS_PER_MINUTE,
+                prices=RealtimePrices.from_payload(terms["prices"]),
+                reserved_usd=float(terms["reserved_usd"]),
+                usd_per_minute=terms.get("max_usd_per_minute"),
+                minute_s=SECONDS_PER_MINUTE,
             )
     except ApiError as refusal:
         await websocket.close(code=1008, reason=(refusal.detail or refusal.title)[:_REASON])

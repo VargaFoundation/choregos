@@ -668,6 +668,8 @@ class ModelCatalogueRow(Base, PkMixin, TimestampMixin):
     usages: Mapped[list[str]] = mapped_column(Json, default=lambda: ["agent"])
     input_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
     output_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: The most a voice session of the model may spend per minute it lasts (S41-15); null: no rate.
+    max_usd_per_minute: Mapped[float | None] = mapped_column(Float, nullable=True)
     gateway_facts: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

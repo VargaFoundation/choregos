@@ -880,7 +880,7 @@ paths:
     patch:
       tags: [models]
       operationId: updateModelCatalogueEntry
-      description: Enable or disable a model, set its roles, usages, name, notes or price override; `model:catalogue:manage`.
+      description: Enable or disable a model, set its roles, usages, name, notes, price override or the most a voice session of it may spend per minute; `model:catalogue:manage`.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ModelCataloguePatch" } } }
@@ -5998,6 +5998,9 @@ components:
         provider: { type: string }
         input_cost_per_1k: { type: [number, "null"] }
         output_cost_per_1k: { type: [number, "null"] }
+        input_audio_cost_per_1k: { type: [number, "null"] }
+        output_audio_cost_per_1k: { type: [number, "null"] }
+        cached_input_cost_per_1k: { type: [number, "null"] }
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
@@ -6017,6 +6020,9 @@ components:
         upstream_model: { type: string }
         input_cost_per_1k: { type: [number, "null"] }
         output_cost_per_1k: { type: [number, "null"] }
+        input_audio_cost_per_1k: { type: [number, "null"] }
+        output_audio_cost_per_1k: { type: [number, "null"] }
+        cached_input_cost_per_1k: { type: [number, "null"] }
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
@@ -6032,6 +6038,7 @@ components:
         allowed_roles: { type: array, items: { type: string } }
         usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
         last_seen_at: { type: [string, "null"], format: date-time }
         missing_since: { type: [string, "null"], format: date-time }
@@ -6048,6 +6055,7 @@ components:
         allowed_roles: { type: array, items: { type: string } }
         usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
     ModelCataloguePatch:
       type: object
@@ -6058,6 +6066,8 @@ components:
         usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
+        max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
+        clear_max_usd_per_minute: { type: boolean, default: false }
         notes: { type: [string, "null"] }
     ModelTiers:
       type: object

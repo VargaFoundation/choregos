@@ -1216,6 +1216,10 @@ a spend back leaves the line `unmeasured`).
   `allow_unvalidated` never bypasses the catalogue.
 - **Reading**: every member sees the page read-only and the agent builder offers only the usable
   models (`GET /orgs/{org}/models/usable`); changes need the `org_admin` role.
+- **Voice spend rate**: `max_usd_per_minute` (API only, `PATCH /orgs/{org}/models/{id}`;
+  `clear_max_usd_per_minute: true` removes it) caps a voice session of that model at that much per
+  minute begun, on top of its reservation. A voice session needs the model's audio prices, from the
+  gateway or from the override above ([hosted agents](hosted-agents.md), S41-15).
 
 ### Registering a remote agent (A2A)
 

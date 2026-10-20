@@ -370,6 +370,10 @@ class GatewayModel(Model):
     provider: str = ""
     input_cost_per_1k: float | None = None
     output_cost_per_1k: float | None = None
+    #: What a realtime model charges for audio, and any model for a cached input token (S41-15).
+    input_audio_cost_per_1k: float | None = None
+    output_audio_cost_per_1k: float | None = None
+    cached_input_cost_per_1k: float | None = None
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False

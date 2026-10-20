@@ -77,6 +77,7 @@ def _dto(row: ModelCatalogueRow) -> ModelCatalogueEntry:
         allowed_roles=list(row.allowed_roles or []),
         usages=list(row.usages or []),
         price_override=override,
+        max_usd_per_minute=row.max_usd_per_minute,
         gateway=ModelGatewayFacts.model_validate(facts) if facts else None,
         last_seen_at=row.last_seen_at,
         missing_since=row.missing_since,
@@ -205,6 +206,7 @@ async def add_entry(
         usages=list(body.usages),
         input_per_1k_override=body.price_override.input_per_1k if body.price_override else None,
         output_per_1k_override=body.price_override.output_per_1k if body.price_override else None,
+        max_usd_per_minute=body.max_usd_per_minute,
         gateway_facts={},
         notes=body.notes,
         updated_by=principal.email,
@@ -229,7 +231,9 @@ async def update_entry(
     _manage(principal, org)
     organisation = await _organisation(session, org)
     row = await _row(session, organisation, entry_id)
-    changes = body.model_dump(exclude_unset=True, exclude={"clear_price_override"})
+    changes = body.model_dump(
+        exclude_unset=True, exclude={"clear_price_override", "clear_max_usd_per_minute"}
+    )
     if body.display_name is not None:
         row.display_name = body.display_name
     if body.enabled is not None:
@@ -245,6 +249,10 @@ async def update_entry(
     elif body.price_override is not None:
         row.input_per_1k_override = body.price_override.input_per_1k
         row.output_per_1k_override = body.price_override.output_per_1k
+    if body.clear_max_usd_per_minute:
+        row.max_usd_per_minute = None
+    elif body.max_usd_per_minute is not None:
+        row.max_usd_per_minute = body.max_usd_per_minute
     row.updated_by = principal.email
     row.updated_at = utcnow()
     await session.flush()
