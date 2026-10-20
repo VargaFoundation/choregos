@@ -1,0 +1,10 @@
+{
+  "name": "choregos-hosted-reference-node",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The reference hosted agent on Node, no dependency (ADR 0080).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node responses_server.mjs" }
+}

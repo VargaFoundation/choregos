@@ -231,11 +231,43 @@ describe("a hosted agent", () => {
     expect(publish()).toBeDisabled();
   });
 
-  it("offers only the runtimes the platform has a base image for", () => {
+  it("offers every runtime the platform builds", () => {
     wrap(<RuntimeAgentForm org="acme" kind="hosted" onDone={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Source"), { target: { value: "zip" } });
     const options = within(screen.getByLabelText("Runtime")).getAllByRole("option") as HTMLOptionElement[];
-    expect(options.filter((o) => !o.disabled).map((o) => o.value)).toEqual(["python_3_13", "python_3_12"]);
+    expect(options.filter((o) => !o.disabled).map((o) => o.value)).toEqual([
+      "python_3_13",
+      "python_3_12",
+      "python_3_14",
+      "node_22",
+      "dotnet_10",
+    ]);
+    expect(options.map((o) => o.textContent).join(" ")).not.toContain("not yet");
+  });
+
+  it("a Node zip suggests its entry point and carries node_modules, until the entry point is written over", async () => {
+    vi.mocked(api.uploadHostedSource).mockResolvedValue({
+      sha256: SHA,
+      size_bytes: 812,
+      files: ["main.js", "package.json", "package-lock.json"],
+      dependencies: "package-lock.json",
+    });
+    wrap(<RuntimeAgentForm org="acme" kind="hosted" onDone={vi.fn()} />);
+    type("Name", "Triager");
+    fireEvent.change(screen.getByLabelText("Source"), { target: { value: "zip" } });
+    fireEvent.change(screen.getByLabelText("Zip"), { target: { files: [new File(["PK"], "agent.zip")] } });
+    expect(await screen.findByTestId("zip-summary")).toHaveTextContent("dependencies in package-lock.json");
+    fireEvent.change(screen.getByLabelText("Runtime"), { target: { value: "node_22" } });
+    expect(screen.getByLabelText("Entry point")).toHaveValue("node main.js");
+    expect(screen.getByRole("option", { name: "Carried by the zip, in node_modules/" })).toBeInTheDocument();
+    type("Entry point", "node --import tsx main.ts");
+    fireEvent.change(screen.getByLabelText("Runtime"), { target: { value: "dotnet_10" } });
+    expect(screen.getByLabelText("Entry point")).toHaveValue("node --import tsx main.ts");
+    fireEvent.change(screen.getByLabelText("Runtime"), { target: { value: "node_22" } });
+    fireEvent.click(publish());
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
+    const runtime = sent().spec.runtime as HostedRuntime;
+    expect(runtime.source).toMatchObject({ runtime: "node_22", entry_point: ["node", "--import", "tsx", "main.ts"] });
   });
 
   it("says the container holds no credential", () => {

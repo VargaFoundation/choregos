@@ -1071,8 +1071,8 @@ export type HostedSource = {
   sha256: string;
   size_bytes: number;
   files: Array<string>;
-  /** the file at the root that declares the dependencies `remote_build` installs */
-  dependencies?: "requirements.txt" | "pyproject.toml" | null;
+  /** the file at the root that declares the dependencies `remote_build` installs: `requirements.txt` or `pyproject.toml` (Python), `package-lock.json` beside its `package.json` (Node), the one `*.csproj` (.NET); null when there is none */
+  dependencies?: string | null;
 };
 
 /** The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice. */

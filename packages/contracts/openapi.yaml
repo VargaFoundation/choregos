@@ -4606,7 +4606,7 @@ components:
         sha256: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
         size_bytes: { type: integer, minimum: 1 }
         files: { type: array, maxItems: 2000, items: { type: string } }
-        dependencies: { type: [string, "null"], enum: [requirements.txt, pyproject.toml, null], description: "the file at the root that declares the dependencies `remote_build` installs" }
+        dependencies: { type: [string, "null"], pattern: "^(requirements\\.txt|pyproject\\.toml|package-lock\\.json|[^/]+\\.csproj)$", description: "the file at the root that declares the dependencies `remote_build` installs: `requirements.txt` or `pyproject.toml` (Python), `package-lock.json` beside its `package.json` (Node), the one `*.csproj` (.NET); null when there is none" }
     HostedBuild:
       type: object
       description: "The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice."

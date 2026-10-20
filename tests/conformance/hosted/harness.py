@@ -28,6 +28,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -764,4 +765,14 @@ def python_example(directory: str, python: str | None = None) -> HostedAgentSpec
     path = ROOT / "examples" / "hosted" / directory
     return HostedAgentSpec(
         command=[python or sys.executable, str(path / "responses_server.py")], cwd=str(path)
+    )
+
+
+def node_example(directory: str, node: str | None = None) -> HostedAgentSpec:
+    """A Node example of `examples/hosted/` run as a process: `responses_server.mjs` in its directory.
+
+    Without `node` on the machine, the command is the bare name, and the test skips it."""
+    path = ROOT / "examples" / "hosted" / directory
+    return HostedAgentSpec(
+        command=[node or shutil.which("node") or "node", str(path / "responses_server.mjs")], cwd=str(path)
     )

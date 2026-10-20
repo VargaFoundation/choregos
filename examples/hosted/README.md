@@ -1,17 +1,18 @@
-# Hosted agents: one ticket triager on five frameworks
+# Hosted agents: one ticket triager on five frameworks and three languages
 
 Each directory is the same agent, a ticket triager that reads the ticket through an MCP tool and
 answers `{"status": "done", "summary": ...}`, written on one framework and run as a **hosted agent**
 (ADR 0080, `docs/hosted-agents.md`). None of them imports anything from Choregos. Each one:
 
-- serves Foundry's hosted-agent contract with `responses_server.py`: `GET /readiness`,
-  `POST /responses` (with server-sent events when the request asks for `stream: true`) and
-  `POST /invocations`, on `$PORT`, stopping cleanly on SIGTERM. Every example carries an identical
-  copy of this file and imports no shared library (ADR 0063); a test refuses a copy that differs;
+- serves Foundry's hosted-agent contract with `responses_server.py` (`responses_server.mjs` in
+  Node, `Program.cs` in .NET): `GET /readiness`, `POST /responses` (with server-sent events when the
+  request asks for `stream: true`) and `POST /invocations`, on `$PORT`, stopping cleanly on
+  SIGTERM. Every example of a language carries an identical copy of its server and imports no
+  shared library (ADR 0063); a test refuses a copy that differs;
 - reads the model from `OPENAI_BASE_URL` / `OPENAI_API_KEY` (`ANTHROPIC_*` for Claude) and the
   MCP servers from `CHOREGOS_MCP_SERVERS` and `CHOREGOS_MCP_URL<name>`. The platform points these
   variables at the runner's loopback proxies, so the container never holds a secret;
-- writes one function, `answer(text)`, in `agent.py`.
+- writes one function, `answer(text)`, in `agent.py` (`agent.mjs`, or `Agent.Answer` in `Agent.cs`).
 
 | Directory | Framework (pinned in `requirements.txt`) | Wiring |
 | --- | --- | --- |
@@ -21,6 +22,20 @@ answers `{"status": "done", "summary": ...}`, written on one framework and run a
 | `openai-agents` | `openai-agents` 0.24.0 | `OpenAIChatCompletionsModel` on `AsyncOpenAI(base_url=…)`, `MCPServerStreamableHttp`, tracing off |
 | `claude-agent-sdk` | `claude-agent-sdk` 0.2.168 (it bundles its CLI) | `ANTHROPIC_BASE_URL`, HTTP `mcp_servers`, no built-in tools, the CLI's own traffic off |
 | `copilot-sdk` | `github-copilot-sdk` 1.0.24rc0 (a prerelease) | BYOK `provider` (`openai`, chat completions) with no GitHub account, HTTP `mcp_servers`, MCP tools only, runtime fetched at build time |
+| `reference-node` | none, Node 22's standard library only | the same loop as `reference`, over `fetch` |
+| `claude-agent-sdk-node` | `@anthropic-ai/claude-agent-sdk` 0.3.304 (its CLI comes from a platform package) | as `claude-agent-sdk`; `env` replaces the CLI's environment, so it starts from `process.env` |
+| `copilot-sdk-node` | `@github/copilot-sdk` 1.0.23 (its runtime comes from a platform package) | as `copilot-sdk`, nothing fetched at start |
+| `agent-framework-dotnet` | `Microsoft.Agents.AI.OpenAI` 1.25.0 + `ModelContextProtocol.Core` 2.2.0 | `ChatClient.AsAIAgent(…)` on `OpenAIClient(endpoint)`, one `McpClient` per server, on ASP.NET minimal APIs |
+
+The Python examples carry a Dockerfile. The Node and .NET ones are **zips**, as a user would upload
+them (`docs/hosted-agents.md`): no Dockerfile, a `choregos.json` saying what a version would declare
+(`runtime`, `entry_point`, `dependency_resolution`), and the lock file (`package-lock.json`) or the
+project (`Triager.csproj`) the platform builds from. The platform writes their Dockerfile:
+
+```
+uv run python tools/hosted_dockerfile.py examples/hosted/claude-agent-sdk-node   # prints it
+docker build -t claude-node-triager -f <(uv run python tools/hosted_dockerfile.py examples/hosted/claude-agent-sdk-node) examples/hosted/claude-agent-sdk-node
+```
 
 Two settings are not optional, and the conformance suite fails without them:
 
@@ -38,11 +53,15 @@ model and a scripted MCP server (`tests/conformance/hosted/`):
 ```
 # as a process, with an interpreter that has the example's requirements
 make conformance-hosted AGENT=langgraph PYTHON=/path/to/venv/bin/python
+# a Node example runs `node responses_server.mjs` (after `npm ci` in its directory)
+make conformance-hosted AGENT=reference-node [NODE=/path/to/node]
 # as an image
 docker build -t langgraph-triager examples/hosted/langgraph
 make conformance-hosted IMAGE=langgraph-triager
 ```
 
-The blocking CI runs the reference. `.github/workflows/hosted-agent-examples.yml` builds each image
-and runs the suite against it, nightly and on demand, without blocking a merge: the frameworks are
-heavy and stay out of the repository's lock file.
+The blocking CI runs `reference` and `reference-node` (skipped where `node` is not installed).
+`.github/workflows/hosted-agent-examples.yml` builds each image (a zip example from the Dockerfile
+the platform writes) and runs the suite against it, nightly and on demand, without blocking a merge:
+the frameworks are heavy and stay out of the repository's lock file. The .NET example is compiled
+there only: nothing in the blocking CI has the .NET SDK.
