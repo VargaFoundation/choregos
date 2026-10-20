@@ -38,14 +38,28 @@ def _seen(*overrides: str) -> dict[str, set[str]]:
     return found
 
 
-def test_unset_means_the_cluster_default_for_the_api_and_every_worker() -> None:
+def test_never_set_leaves_the_api_without_a_value_so_it_judges_nothing() -> None:
     seen = _seen()
-    assert "choregos-api" in seen, "the API is told, even when the answer is the cluster's default"
-    assert any(name.startswith("choregos-orchestrator") for name in seen)
+    assert "choregos-api" not in seen, "an API told nothing reads the pool's class as unknown"
+    assert set().union(*seen.values()) == {""}, "the workers keep the previous behavior"
+
+
+def test_the_sub_chart_value_alone_still_reaches_the_pool_but_not_the_api() -> None:
+    seen = _seen("choregos-orchestrator.runner.runtimeClass=gvisor")
+    assert "choregos-api" not in seen, "else the API would read a gvisor pool as the cluster default"
+    assert set().union(*seen.values()) == {"gvisor"}
+    rendered = _render("choregos-orchestrator.runner.runtimeClass=gvisor").stdout
+    template = next(d for d in yaml.safe_load_all(rendered) if d and d.get("kind") == "SandboxTemplate")
+    assert template["spec"]["podTemplate"]["spec"]["runtimeClassName"] == "gvisor"
+
+
+def test_an_explicit_empty_global_means_the_cluster_default_for_the_api() -> None:
+    seen = _seen("global.runner.runtimeClass=")
+    assert seen["choregos-api"] == {""}
     assert set().union(*seen.values()) == {""}
 
 
-def test_one_value_reaches_the_api_the_workers_and_the_template() -> None:
+def test_one_global_value_reaches_the_api_the_workers_and_the_template() -> None:
     seen = _seen("global.runner.runtimeClass=gvisor")
     assert seen["choregos-api"] == {"gvisor"}
     assert set().union(*seen.values()) == {"gvisor"}, "no pod has another answer"
@@ -54,8 +68,8 @@ def test_one_value_reaches_the_api_the_workers_and_the_template() -> None:
     assert template["spec"]["podTemplate"]["spec"]["runtimeClassName"] == "gvisor"
 
 
-def test_the_orchestrator_may_repeat_the_value_not_contradict_it() -> None:
+def test_both_may_agree_but_not_contradict() -> None:
     assert _seen("global.runner.runtimeClass=gvisor", "choregos-orchestrator.runner.runtimeClass=gvisor")
-    refused = _render("choregos-orchestrator.runner.runtimeClass=gvisor")
+    refused = _render("global.runner.runtimeClass=kata", "choregos-orchestrator.runner.runtimeClass=gvisor")
     assert refused.returncode != 0
     assert "global.runner.runtimeClass" in refused.stderr

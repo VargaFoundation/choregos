@@ -50,20 +50,26 @@ there would bring back the two answers, so the render refuses it).
 {{- end -}}
 
 {{/*
-The RuntimeClass of the warm pool's template (gVisor, Kata), one answer for every pod: the
-orchestrator renders the template and the executor from it, and the API compares it with what a
-project's policy asks (`/readiness`, S38-13d). `global.runner.runtimeClass` is the setting; the
-orchestrator sub-chart's own `runner.runtimeClass` may only repeat it (a different value would
-hide the pool's real runtime from the API, so the render refuses it). Empty: the cluster's default.
+The RuntimeClass of the warm pool's template (gVisor, Kata). `global.runner.runtimeClass` is the
+setting that the API also reads (S38-13d): when it is SET (even to "", the cluster's default), the API
+and every worker receive it and `/readiness` compares it with what a project's policy asks. When it
+is NEVER set, the orchestrator sub-chart's own `runner.runtimeClass` still applies to the pool as
+before, but the API is told nothing and treats the pool's class as unknown (no judgment, no false
+alarm). Both set and different: refused, that is a contradiction.
 */}}
 {{- define "choregos.runtimeClass" -}}
-{{- $global := (.Values.global.runner | default dict).runtimeClass | default "" -}}
+{{- $runner := .Values.global.runner | default dict -}}
 {{- $local := "" -}}
 {{- with .Values.runner }}{{- $local = .runtimeClass | default "" -}}{{- end -}}
+{{- if hasKey $runner "runtimeClass" -}}
+{{- $global := $runner.runtimeClass | default "" -}}
 {{- if and $local (ne $local $global) -}}
-{{- fail (printf "runner.runtimeClass=%s on the orchestrator differs from global.runner.runtimeClass=%q. Set the RuntimeClass once, in global.runner.runtimeClass: the API and the warm pool must agree on it." $local $global) -}}
+{{- fail (printf "runner.runtimeClass=%s on the orchestrator differs from global.runner.runtimeClass=%q: set the RuntimeClass once, in global.runner.runtimeClass." $local $global) -}}
 {{- end -}}
 {{- $global -}}
+{{- else -}}
+{{- $local -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -119,9 +125,12 @@ proj-{slug}-runners
   value: {{ .Values.global.temporal.namespace | quote }}
 - name: CHOREGOS_EXECUTOR_KIND
   value: {{ include "choregos.executorKind" . | quote }}
-# The warm pool's RuntimeClass, for the API and the workers alike. Empty: the cluster's default.
+{{- if hasKey (.Values.global.runner | default dict) "runtimeClass" }}
+# The warm pool's RuntimeClass, for the API and the workers alike (empty: the cluster's default).
+# Absent when `global.runner.runtimeClass` is never set: the API then knows nothing.
 - name: CHOREGOS_RUNNER_RUNTIME_CLASS
   value: {{ include "choregos.runtimeClass" . | quote }}
+{{- end }}
 - name: CHOREGOS_EXECUTORS_ALLOWED
   value: {{ (.Values.global.runner | default dict).allowedExecutors | default list | join "," | quote }}
 - name: CHOREGOS_GATEWAY_TYPE
