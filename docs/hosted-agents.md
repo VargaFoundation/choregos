@@ -200,7 +200,36 @@ What an image must do, learnt from the five SDKs: switch the SDK's own traffic o
 telemetry, error reports: `no_egress` fails otherwise), give the Claude and Copilot runtimes no
 built-in tool, and fetch what the SDK downloads at first use (the Copilot runtime) when the image is
 built. The blocking CI runs the reference; `.github/workflows/hosted-agent-examples.yml` builds the
-six images and runs the suite against each, nightly, without blocking.
+images and runs the suite against each, nightly, without blocking.
+
+**An agent written for Foundry runs unchanged (S41-19).** `examples/hosted/agent-framework-foundry`
+is the triager as a Foundry deployment holds it: Agent Framework's `FoundryChatClient` with
+azure-identity's `DefaultAzureCredential`, served by Foundry's own hosting adapter
+(`ResponsesHostServer`), no Choregos variable for the model. The container gets:
+
+| Variable | Value |
+| --- | --- |
+| `FOUNDRY_PROJECT_ENDPOINT` | `http://127.0.0.1:4001/api/projects/choregos`, the model listener |
+| `FOUNDRY_MODEL` | the step's model |
+| `FOUNDRY_AGENT_NAME`, `FOUNDRY_AGENT_VERSION` | the agent's slug and version |
+| `FOUNDRY_AGENT_ID` | a GUID derived from the slug, the same for every version |
+| `FOUNDRY_AGENT_SESSION_ID` | the run id, or the session id in a session pod |
+| `IDENTITY_ENDPOINT`, `IDENTITY_HEADER` | `http://127.0.0.1:4001/msi/token` and its header |
+
+On the model listener:
+
+- `…/api/projects/<name>/openai/v1/responses` and `chat/completions` are model calls like `/v1`'s:
+  the run's key, the run's model, a turn each;
+- `…/openai/v1/conversations` (create, read, list items, delete) is forwarded with the run's key. It
+  is not a turn, so a step that has used its turns can still read its conversation;
+- `GET /msi/token` with the header answers a token: the loopback key, valid for an hour. Without the
+  header it answers 401, and to anything but GET 405. It is journaled `hosted.identity_token`;
+- any other path of the project answers 404.
+
+`FOUNDRY_HOSTING_ENVIRONMENT` is not set, so the hosting adapter keeps its responses in the
+container. A version's `env` cannot set any `FOUNDRY_` or `AZURE_` variable, the `IDENTITY_*` pair,
+`IDENTITY_SERVER_THUMBPRINT`, `IMDS_ENDPOINT` or `MSI_*`. The blocking `hosted-foundry` CI job runs
+the example through the eight checks with its pinned requirements.
 
 **A source zip is uploaded, checked and keyed for its build (S41-07).** `POST
 /orgs/{org}/hosted-sources` (`application/zip`, by whoever may create an agent somewhere in the

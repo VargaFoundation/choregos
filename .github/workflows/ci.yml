@@ -34,6 +34,7 @@ jobs:
       hosted-build: ${{ steps.filter.outputs.hosted-build }}
       hosted-cosign: ${{ steps.filter.outputs.hosted-cosign }}
       hosted-gvisor: ${{ steps.filter.outputs.hosted-gvisor }}
+      hosted-foundry: ${{ steps.filter.outputs.hosted-foundry }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -113,6 +114,17 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'pyproject.toml'
               - 'uv.lock'
+            # An agent written for Foundry, run unchanged (S41-19): its example, the suite, the
+            # loopback model that serves the Foundry project and the managed identity, and the
+            # variables that point the SDKs at it.
+            hosted-foundry:
+              - 'examples/hosted/agent-framework-foundry/**'
+              - 'tests/conformance/hosted/**'
+              - 'packages/runner/src/choregos_runner/hosted.py'
+              - 'packages/runner/src/choregos_runner/loopback/**'
+              - 'packages/core/src/choregos_core/hosted.py'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
 
   python:
     needs: changes
@@ -481,6 +493,30 @@ jobs:
           # A skip proves nothing: runsc, node or kyverno went missing, and the job says so.
           ! grep -qi skipped pytest.out
 
+  hosted-foundry:
+    # The Foundry variant of the triager (Agent Framework's `FoundryChatClient`, azure-identity's
+    # `DefaultAzureCredential`, Foundry's `ResponsesHostServer`), unchanged, through the eight checks
+    # (S41-19). Its pinned requirements live in a venv of their own: they stay out of the lock file.
+    needs: changes
+    if: needs.changes.outputs.hosted-foundry == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - name: the example's requirements
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/foundry"
+          uv pip install --python "$RUNNER_TEMP/foundry/bin/python" -r examples/hosted/agent-framework-foundry/requirements.txt
+      - name: conformance of the Foundry agent
+        shell: bash
+        run: |
+          make conformance-hosted AGENT=agent-framework-foundry PYTHON="$RUNNER_TEMP/foundry/bin/python" | tee pytest.out
+          # A skip proves nothing: the suite found no agent to run.
+          ! grep -qi skipped pytest.out
+
   secrets:
     # A committed secret cannot be taken back: it is already in the history. Two files
     # had a `noqa S105` and two SQLite databases were tracked by git — without any scan
@@ -558,7 +594,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-gvisor, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-gvisor, hosted-foundry, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

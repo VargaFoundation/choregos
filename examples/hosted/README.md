@@ -18,6 +18,7 @@ answers `{"status": "done", "summary": ...}`, written on one framework and run a
 | --- | --- | --- |
 | `reference` | none, standard library only | a chat-completions tool loop and a JSON-RPC MCP client |
 | `agent-framework` | `agent-framework-core` 1.22.0 + `agent-framework-openai` 1.17.0 | `OpenAIChatClient(base_url=…)`, `MCPStreamableHTTPTool` |
+| `agent-framework-foundry` | as `agent-framework`, + `agent-framework-foundry` 1.15.0, `agent-framework-foundry-hosting` 1.0.0b261015, `azure-identity` 1.26.0 | written for Foundry: `FoundryChatClient` with `DefaultAzureCredential`, served by Foundry's `ResponsesHostServer` (no `responses_server.py`) |
 | `langgraph` | `langgraph` 1.2.16, `langchain-openai`, `langchain-mcp-adapters` | `ChatOpenAI(base_url=…)`, `MultiServerMCPClient`, `create_react_agent` |
 | `openai-agents` | `openai-agents` 0.24.0 | `OpenAIChatCompletionsModel` on `AsyncOpenAI(base_url=…)`, `MCPServerStreamableHttp`, tracing off |
 | `claude-agent-sdk` | `claude-agent-sdk` 0.2.168 (it bundles its CLI) | `ANTHROPIC_BASE_URL`, HTTP `mcp_servers`, no built-in tools, the CLI's own traffic off |
@@ -36,6 +37,8 @@ project (`Triager.csproj`) the platform builds from. The platform writes their D
 uv run python tools/hosted_dockerfile.py examples/hosted/claude-agent-sdk-node   # prints it
 docker build -t claude-node-triager -f <(uv run python tools/hosted_dockerfile.py examples/hosted/claude-agent-sdk-node) examples/hosted/claude-agent-sdk-node
 ```
+
+`agent-framework-foundry` is the agent as a Foundry deployment holds it, run without a change (S41-19). It reads `FOUNDRY_PROJECT_ENDPOINT` and `FOUNDRY_MODEL`, and asks a managed identity for its token (`IDENTITY_ENDPOINT`, `IDENTITY_HEADER`). The platform points all of them at the runner's loopback model, and the token it gets back is the loopback key. The blocking CI runs it (`hosted-foundry` job).
 
 Two settings are not optional, and the conformance suite fails without them:
 
@@ -60,7 +63,8 @@ docker build -t langgraph-triager examples/hosted/langgraph
 make conformance-hosted IMAGE=langgraph-triager
 ```
 
-The blocking CI runs `reference` and `reference-node` (skipped where `node` is not installed).
+The blocking CI runs `reference` and `reference-node` (skipped where `node` is not installed), and
+`agent-framework-foundry` in a venv of its own.
 `.github/workflows/hosted-agent-examples.yml` builds each image (a zip example from the Dockerfile
 the platform writes) and runs the suite against it, nightly and on demand, without blocking a merge:
 the frameworks are heavy and stay out of the repository's lock file. The .NET example is compiled

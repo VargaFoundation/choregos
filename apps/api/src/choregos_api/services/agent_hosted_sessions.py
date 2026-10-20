@@ -23,6 +23,7 @@ import time
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from choregos_core.hosted import SESSION_RUN_PREFIX
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,7 +67,7 @@ _EVENT_TEXT = 2000
 
 def session_run_id(session_id: str) -> str:
     """The `run_id` a session's pod speaks as: its token's subject, its proxies' journal key."""
-    return f"session-{session_id}"
+    return f"{SESSION_RUN_PREFIX}{session_id}"
 
 
 def hosted_protocol(spec: AgentSpec) -> str | None:

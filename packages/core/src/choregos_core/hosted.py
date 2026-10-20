@@ -11,6 +11,7 @@ the run's gateway key, its run token and the MCP servers' credentials stay in th
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -35,6 +36,17 @@ UNSUPPORTED_CLUSTER = "hosted_unsupported_cluster"
 #: its clone and `.git`, is another volume, never mounted in the container.
 SHARED_WORKSPACE_RUNNER = "/hosted-workspace"
 SHARED_WORKSPACE_AGENT = "/workspace"
+#: The Foundry project the container's `FOUNDRY_PROJECT_ENDPOINT` names, on the model listener
+#: (S41-19): `azure-ai-projects` and Agent Framework's Foundry clients reach the model through it.
+FOUNDRY_PROJECT_PATH = "/api/projects/choregos"
+#: The managed identity a Foundry agent's `DefaultAzureCredential` finds (App Service's protocol:
+#: `IDENTITY_ENDPOINT` and `IDENTITY_HEADER`), on the model listener. The token it gets is the
+#: loopback key: no Azure service accepts it, and the model listener replaces it with the run's key.
+IDENTITY_PATH = "/msi/token"
+#: Not a secret: the header only tells the listener the caller follows the identity protocol.
+IDENTITY_HEADER = "choregos-loopback-identity"
+#: The `run_id` of a session's pod is the session's id behind this prefix (S41-11).
+SESSION_RUN_PREFIX = "session-"
 
 _VERSION = re.compile(r"^v?(\d+)\.(\d+)")
 _NUMBER = re.compile(r"^(\d+)")
@@ -111,6 +123,28 @@ def sidecar_env(
         "no_proxy": f"{LOOPBACK_HOST},localhost",
         # Where the copy of the working tree is, when the version asked for it (S41-18).
         **({"CHOREGOS_WORKSPACE": SHARED_WORKSPACE_AGENT} if hosted.workspace != "none" else {}),
+        **foundry_env(hosted, run_id=run_id, model=model, model_port=model_port),
+    }
+
+
+def foundry_env(hosted: HostedCall, *, run_id: str, model: str, model_port: int) -> dict[str, str]:
+    """What Foundry gives a hosted container (S41-19), so that an agent written for Foundry runs
+    unchanged: its project endpoint and managed identity are the model listener's.
+
+    `FOUNDRY_AGENT_ID` is a GUID in Foundry, stable across versions; here derived from the slug.
+    `FOUNDRY_AGENT_SESSION_ID` is the session's id in a session's pod, the run's otherwise: the
+    container lives for one or the other. `FOUNDRY_HOSTING_ENVIRONMENT` is never set: with it,
+    Foundry's hosting adapter keeps its state in the project's storage APIs, which are not served."""
+    model_url = loopback_url(model_port)
+    return {
+        "FOUNDRY_PROJECT_ENDPOINT": f"{model_url}{FOUNDRY_PROJECT_PATH}",
+        "FOUNDRY_MODEL": model,
+        "FOUNDRY_AGENT_NAME": hosted.agent_slug,
+        "FOUNDRY_AGENT_VERSION": str(hosted.agent_version),
+        "FOUNDRY_AGENT_ID": str(uuid.uuid5(uuid.NAMESPACE_URL, f"choregos:agent:{hosted.agent_slug}")),
+        "FOUNDRY_AGENT_SESSION_ID": run_id.removeprefix(SESSION_RUN_PREFIX),
+        "IDENTITY_ENDPOINT": f"{model_url}{IDENTITY_PATH}",
+        "IDENTITY_HEADER": IDENTITY_HEADER,
     }
 
 

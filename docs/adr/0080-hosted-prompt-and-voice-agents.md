@@ -91,9 +91,23 @@ agent cannot be a workflow step).
    `CHOREGOS_MCP_URL`; `OPENAI_BASE_URL=http://127.0.0.1:4001/v1`, `ANTHROPIC_BASE_URL=http://127.0.0.1:4001`
    and both API keys set to the constant `choregos-loopback` (the loopback ignores them; SDKs refuse
    to start without one); `HTTP_PROXY`, `HTTPS_PROXY` (`http://127.0.0.1:4003`) and `NO_PROXY`
-   (`127.0.0.1,localhost`). The `FOUNDRY_*` variables and a loopback managed-identity endpoint are
-   added so that code written against `azure-ai-projects` runs unchanged (S41-19); the prefix is
-   reserved for that.
+   (`127.0.0.1,localhost`). For code written against Foundry (S41-19), the container also gets
+   Foundry's variables and a managed identity, all on the model listener:
+   - `FOUNDRY_PROJECT_ENDPOINT=http://127.0.0.1:4001/api/projects/choregos` and `FOUNDRY_MODEL`.
+     The listener serves the project's OpenAI root (`…/openai/v1/responses`, chat completions)
+     as it serves `/v1`, and forwards `conversations` with the run's key, without counting a turn;
+     anything else of the project answers 404;
+   - `FOUNDRY_AGENT_NAME` and `FOUNDRY_AGENT_VERSION`, `FOUNDRY_AGENT_ID` (a GUID, as Foundry's,
+     derived from the slug, so every version shares it), and `FOUNDRY_AGENT_SESSION_ID` (the run, or
+     the session for a session pod);
+   - `IDENTITY_ENDPOINT` (`…/msi/token`) and `IDENTITY_HEADER`, App Service's protocol, which
+     `DefaultAzureCredential` finds. The token it returns is the loopback key, so it is accepted by
+     the loopback and by nothing else, and the gateway never sees it.
+
+   `FOUNDRY_HOSTING_ENVIRONMENT` is **not** set: with it, Foundry's hosting adapter keeps responses
+   and conversations in the project's storage APIs, which the platform does not serve. Without it,
+   the adapter keeps them in the container. A version cannot set any of these, nor
+   `IDENTITY_SERVER_THUMBPRINT`, `IMDS_ENDPOINT` or `MSI_*`, which select another identity protocol.
 7. **A hosted step** sends one Responses request: the instructions as `instructions`, the rendered
    task as `input`, the run and transition ids in `metadata`. A final text that parses as a JSON
    object with the transition's outputs fills `outputs`; otherwise it is the `summary`. Files the
@@ -204,6 +218,9 @@ agent cannot be a workflow step).
   RuntimeClass is the pod's, so one sentry holds both, and the agent's syscalls never reach the node's
   kernel. The conformance suite is run with the agent inside gVisor (S41-17), so a framework that
   needs a syscall the sentry lacks is found before a project asks for it.
+- An agent written for Foundry keeps its responses and conversations in its container, not in a
+  project's storage: a session pod's history lasts as long as the pod. `conversations` calls are
+  forwarded to the gateway, and whether a given gateway serves them is not verified by the platform.
 
 ## Alternatives discarded
 

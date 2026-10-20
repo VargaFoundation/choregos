@@ -347,10 +347,15 @@ async def test_no_credential_is_in_the_containers_environment(stage_input: Stage
     )
     tools = ToolsRef(mcp={"crm": McpServerRef(url=CRM, env={"Authorization": f"Bearer {CRM_SECRET}"})})
     stage = _hosted(stage_input, hosted=hosted, tools=tools)
+    # A run token of its own: the conftest's `tok` is a substring of `/msi/token` (S41-19).
+    run_token = "-".join(["run", "token", "9f3a" * 4])
+    stage = stage.model_copy(
+        update={"callbacks": stage.callbacks.model_copy(update={"run_token": run_token})}
+    )
     env = sidecar_env(hosted, run_id=stage.run_id, model="platform/standard", mcp_servers=stage.tools.mcp)
 
     text = json.dumps(env)
-    assert KEY not in text and CRM_SECRET not in text and "tok" not in text
+    assert KEY not in text and CRM_SECRET not in text and stage.callbacks.run_token not in text
     assert env["OPENAI_API_KEY"] == env["ANTHROPIC_API_KEY"] == "choregos-loopback"
     assert env["OPENAI_BASE_URL"] == "http://127.0.0.1:4001/v1"
     assert env["HTTPS_PROXY"] == env["https_proxy"] == "http://127.0.0.1:4003"
