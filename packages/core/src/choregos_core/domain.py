@@ -243,6 +243,20 @@ RUN_GATEWAY_KEY_ENV = "CHOREGOS_RUN_GATEWAY_KEY"
 RUN_REMOTE_TOKEN_ENV = "CHOREGOS_RUN_REMOTE_TOKEN"  # noqa: S105 - a variable name, not a secret
 
 
+class AgentContainer(Model):
+    """A hosted agent's container (ADR 0080), started beside the runner in the run's pod and sharing
+    its network namespace. Its environment is `choregos_core.hosted.sidecar_env`: no secret, only
+    loopback addresses. No Secret, no volume of the runner is ever given to it."""
+
+    image: str = Field(pattern=r"@sha256:[0-9a-f]{64}$")
+    env: dict[str, str] = Field(default_factory=dict)
+    port: int = 8088
+    #: How long the container is given between SIGTERM and SIGKILL.
+    termination_grace_s: int = 30
+    cpu: str = "1"
+    memory: str = "2Gi"
+
+
 class StageJobSpec(Model):
     """Ce qu'un `Executor` doit lancer pour une étape."""
 
@@ -266,6 +280,8 @@ class StageJobSpec(Model):
     env: dict[str, str] = Field(default_factory=dict)
     cpu: str = "1"
     memory: str = "2Gi"
+    #: Set for a step a hosted agent carries (ADR 0080): the agent's container beside the runner.
+    agent_container: AgentContainer | None = None
 
 
 class ExecRef(Model):

@@ -24,7 +24,14 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
+from choregos_core.domain import (
+    RUN_GATEWAY_KEY_ENV,
+    RUN_REMOTE_TOKEN_ENV,
+    AgentContainer,
+    ExecRef,
+    ExecStatus,
+    StageJobSpec,
+)
 from choregos_core.sorties import explication
 
 from .tekton import (
@@ -37,6 +44,8 @@ from .tekton import (
 )
 
 BATCH_API = "/apis/batch/v1"
+#: The name of a hosted agent's container in the run's pod (ADR 0080).
+AGENT_CONTAINER = "agent"
 RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernetes.io/component": "runner"}
 
 
@@ -287,6 +296,8 @@ class KubernetesJobExecutor:
         }
         if spec.runtime_class:
             pod_spec["runtimeClassName"] = spec.runtime_class
+        if spec.agent_container is not None:
+            self._add_agent_container(pod_spec, spec.agent_container)
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -311,6 +322,37 @@ class KubernetesJobExecutor:
                 },
             },
         }
+
+    @staticmethod
+    def _add_agent_container(pod_spec: dict[str, Any], agent: AgentContainer) -> None:
+        """A hosted agent's container (ADR 0080), as a native sidecar (Kubernetes >= 1.29): an init
+        container with `restartPolicy: Always` starts before the runner, shares its loopback, and is
+        stopped when the runner ends, so the Job completes on the runner's exit alone.
+
+        It gets plain values only: no `secretKeyRef`, no `envFrom`, no volume. The runner's token,
+        gateway key and MCP credentials stay in the runner container."""
+        pod_spec["initContainers"] = [
+            {
+                "name": AGENT_CONTAINER,
+                "image": agent.image,
+                "restartPolicy": "Always",
+                "env": [{"name": key, "value": value} for key, value in sorted(agent.env.items())],
+                "ports": [{"name": "agent", "containerPort": agent.port}],
+                "resources": {
+                    "requests": {"cpu": agent.cpu, "memory": agent.memory},
+                    "limits": {"cpu": agent.cpu, "memory": agent.memory},
+                },
+                "securityContext": {
+                    "allowPrivilegeEscalation": False,
+                    "capabilities": {"drop": ["ALL"]},
+                    "runAsNonRoot": True,
+                    "seccompProfile": {"type": "RuntimeDefault"},
+                },
+            }
+        ]
+        # The cluster's services are not announced to the container as variables.
+        pod_spec["enableServiceLinks"] = False
+        pod_spec["terminationGracePeriodSeconds"] = agent.termination_grace_s
 
     async def renew(self, ref: ExecRef, run_token: str) -> None:
         """Remplace le jeton d'un run qui n'a pas encore démarré.

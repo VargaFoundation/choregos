@@ -175,7 +175,6 @@ async def test_an_actor_backend_on_a_prompt_agent_is_refused(setup: Fixture, ima
     ("runtime", "reason"),
     [
         ({"kind": "voice"}, "only as a session"),
-        ({"kind": "hosted", "source": {"type": "image", "ref": "ghcr.io/acme/triager:1"}}, "not yet"),
     ],
 )
 async def test_a_runtime_no_step_can_carry_is_refused_before_any_key(

@@ -98,6 +98,27 @@ answer within `max_minutes`, `timeout`. The result reports `hosted_image`, `host
 (`hosted:<slug>@<version>`) and the response id. Only the project's fact commands run as checks: the
 container does not work in the repository yet (`workspace: write` is S41-18).
 
-The executor does not start the container yet: the sidecar in the run's pod is S41-05, and until then
-the orchestrator still refuses a hosted step. The rest of the stream — the builds, the sessions and
-the console — is planned in [`docs/plan/`](plan/STATUS.md) as S41-05 to S41-21.
+**The executor starts the container beside the runner (S41-05).** The orchestrator accepts a hosted
+step when the version's image is pinned: an `image` source runs `ref@digest` (no digest,
+`hosted_image_unpinned`); a `zip` source runs its build's image once the build is `ready`
+(otherwise `hosted_build_not_ready`). A version that serves only `invocations_ws`
+(`hosted_protocol_unsupported`) or asks for a workspace (`hosted_workspace_unsupported`, until
+S41-18) is refused, so is a stage whose actor names another backend. These refusals are not retried
+and come before any gateway key. A hosted step has no repository and no skills.
+
+The run's pod then holds two containers:
+
+- on Kubernetes (`k8s_job`), the agent is a **native sidecar**: an init container with
+  `restartPolicy: Always` (Kubernetes 1.29 or later), started before the runner and stopped when the
+  runner ends, so the Job completes. It sees the runner on `127.0.0.1` and nothing else of the run:
+  plain variables only (no `envFrom`, no `valueFrom`, no volume), `enableServiceLinks: false`, the
+  runner's restrictions (non-root, no privilege escalation, every capability dropped, seccomp
+  `RuntimeDefault`), its own requests and limits, and the version's `termination_grace_s` as the
+  pod's grace period. An image that runs as root is refused by the kubelet;
+- under `local_docker`, the agent is a second container that joins the runner's network namespace
+  (`--network container:<runner>`), without capabilities, removed with the runner;
+- the routing executor sends a hosted step to Jobs even when it uses the pool's image; the warm pool
+  (`agent_sandbox`), Tekton and Azure Container Apps refuse it before creating anything.
+
+The rest of the stream — the builds, the sessions and the console — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-06 to S41-21.
