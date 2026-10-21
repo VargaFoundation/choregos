@@ -102,6 +102,19 @@ class SandboxPolicy(Strict):
     suspend_max_hours: float = Field(default=24, ge=0)
 
 
+class WebSearchPolicy(Strict):
+    """What a project allows of the built-in `web_search` (ADR 0083). It can only narrow the
+    organisation's ceiling, which opens the tool: without a `web_search` section there, it is not
+    offered whatever this says."""
+
+    #: `deny` takes the tool away from this project's runs.
+    mode: Literal["allow", "deny"] = "allow"
+    #: The longest a backend may keep a query (`None`: the ceiling's bound only).
+    max_query_retention_days: int | None = Field(default=None, ge=0)
+    #: Whether a backend may reuse queries (train, rank, re-index); never wider than the ceiling.
+    allow_query_reuse: bool = False
+
+
 class FindingsPolicy(Strict):
     max_per_run: int = Field(default=5, ge=0)
     dedupe_threshold: float = Field(default=0.86, ge=0, le=1)
@@ -218,3 +231,4 @@ class Policy(Strict):
     context: ContextPolicy = Field(default_factory=ContextPolicy)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
     release_train: dict[str, TrainEnvPolicy] = Field(default_factory=dict)
+    web_search: WebSearchPolicy = Field(default_factory=WebSearchPolicy)

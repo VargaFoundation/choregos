@@ -59,7 +59,7 @@ from ..schemas import (
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..schemas.memory import RunMemoryHit, RunMemorySearch
 from ..schemas.network import NetworkDecisionBatch, RunNetwork
-from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch
+from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch, web_search
 from ..services.agent_hosted_sessions import session_network
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -798,12 +798,14 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     # The governed way to read the web (S40-01f, ADR 0070): offered when the run's network allows a host.
     # Its name cannot be taken by another tool: a masked tool is an agent calling the wrong one.
     web = [web_fetch.announcement()] if await web_fetch.offered(session, run) else []
-    if web and (
-        web_fetch.TOOL_NAME in du_courtier
-        or web_fetch.TOOL_NAME in des_greffons
-        or any(o.name == web_fetch.TOOL_NAME for o in outils)
-    ):
-        raise conflict(f"tool `{web_fetch.TOOL_NAME}` is built in: another tool cannot take its name")
+    # The governed way to search (S40-01g, ADR 0083): offered when a backend the ceiling accepts serves
+    # the project. Its name is reserved the same way.
+    if await web_search.offered(session, project):
+        web.append(web_search.announcement())
+    for builtin in web:
+        taken = str(builtin["name"])
+        if taken in du_courtier or taken in des_greffons or any(o.name == taken for o in outils):
+            raise conflict(f"tool `{taken}` is built in: another tool cannot take its name")
     return {
         "tools": [
             *({"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils),
@@ -827,9 +829,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
     du_courtier = await outils_du_courtier(session, run, project)
     is_web = name == web_fetch.TOOL_NAME and await web_fetch.offered(session, run)
-    if is_web and (outil is not None or name in des_greffons or name in du_courtier):
+    is_search = name == web_search.TOOL_NAME and await web_search.offered(session, project)
+    if (is_web or is_search) and (outil is not None or name in des_greffons or name in du_courtier):
         raise conflict(f"tool `{name}` is built in: another tool cannot take its name")
-    if outil is None and name not in des_greffons and name not in du_courtier and not is_web:
+    if outil is None and name not in des_greffons and name not in du_courtier and not (is_web or is_search):
         # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
         # le catalogue du déploiement en essayant des noms.
         raise not_found("Tool", name)
@@ -852,7 +855,15 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
 
     suspicions: list[dict[str, str]] = []
     prix_usd = 0.0
-    if is_web:
+    #: What the event says of a search query: its fingerprint and its length, never its text (ADR 0015).
+    about_query: dict[str, Any] = {}
+    if is_search:
+        code, corps, fournisseur, prix_usd, about_query = await _web_search(session, run, project, body or {})
+        prix = 0.0
+        code, corps, suspicions = await _garde_contre_l_injection(
+            session, run, project, SimpleNamespace(nom=name), code, corps
+        )
+    elif is_web:
         code, corps, fournisseur = await _web_fetch(session, run, project, body or {})
         prix = 0.0
         code, corps, suspicions = await _garde_contre_l_injection(
@@ -898,7 +909,12 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         fournisseur, prix = f"greffon:{greffon}", 0.0
     # A call the organisation's network policy stopped never reached the server: it is not counted
     # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
-    refused_by_network = isinstance(corps, dict) and corps.get("type") in {"network_policy", "rate_limited"}
+    # A search query refused for what it holds was not sent either (ADR 0083 §5).
+    refused_by_network = isinstance(corps, dict) and corps.get("type") in {
+        "network_policy",
+        "rate_limited",
+        "query_redacted",
+    }
     if not refused_by_network:
         session.add(
             CostLedger(
@@ -932,6 +948,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         # keeps no payload, but a result that is later disputed can be matched to the bytes served.
         request_sha256=json_sha256(body or {}),
         response_sha256=json_sha256(corps),
+        **about_query,
     )
     return {
         "status_code": code,
@@ -958,6 +975,32 @@ async def _web_fetch(
             f"argument refused by the schema of web_fetch at {where}: {exc.message}",
         ) from exc
     return await web_fetch.fetch(session, run, project, arguments, fakes=get_settings().fakes)
+
+
+async def _web_search(
+    session: Any, run: Run, project: Project, arguments: dict[str, Any]
+) -> tuple[int, Any, str, float, dict[str, Any]]:
+    """`web_search` (S40-01g): arguments checked against the announced schema BEFORE anything leaves
+    (400), then the governed search (`services/web_search.py`). A query that was not sent costs
+    nothing."""
+    import jsonschema
+
+    try:
+        jsonschema.validate(arguments, web_search.INPUT_SCHEMA)
+    except jsonschema.ValidationError as exc:
+        where = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            "Arguments refused",
+            f"argument refused by the schema of web_search at {where}: {exc.message}",
+        ) from exc
+    query = str(arguments["query"])
+    about = {"query_sha256": web_search.fingerprint(query), "query_length": len(query)}
+    code, corps, backend = await web_search.search(session, run, project, arguments)
+    if backend is None:
+        raise not_found("Tool", web_search.TOOL_NAME)
+    price = web_search.price_usd(backend) if code == 200 else 0.0
+    return code, corps, backend.provider, price, about
 
 
 async def _par_le_courtier(

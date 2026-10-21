@@ -6126,6 +6126,16 @@ components:
           additionalProperties: false
           properties:
             max_per_run: { type: [integer, "null"], minimum: 0 }
+        web_search:
+          type: [object, "null"]
+          additionalProperties: false
+          description: "The built-in web_search tool (ADR 0083). Absent or `mode: deny`: not offered. An unknown data-handling value fails every bound that reads it."
+          properties:
+            mode: { type: string, enum: [allow, deny], default: deny }
+            backends: { type: [array, "null"], items: { type: string } }
+            max_query_retention_days: { type: [integer, "null"], minimum: 0 }
+            allow_query_reuse: { type: boolean, default: false }
+            regions: { type: [array, "null"], items: { type: string } }
     PolicyCeilingState:
       type: object
       properties:

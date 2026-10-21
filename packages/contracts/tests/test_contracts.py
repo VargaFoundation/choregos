@@ -456,3 +456,17 @@ def test_an_asset_property_names_where_its_file_goes() -> None:
     assert list(validator.iter_errors(with_badge({**asset, "type": "object"})))
     # A plain string property is untouched.
     assert not list(validator.iter_errors(with_badge({"type": "string"})))
+
+
+def test_the_web_search_schema_and_model_declare_the_same_fields() -> None:
+    """ADR 0083: the project's narrowing of web_search, in the schema as in the model."""
+    from choregos_contracts.policy import WebSearchPolicy
+
+    gaps: list[str] = []
+    node = contracts.load_schema("policy.schema.json")["properties"]["web_search"]
+    _comparer("policy.web_search", node, WebSearchPolicy, gaps)
+    assert not gaps, "\n".join(gaps)
+    raw = _load("policy.solo.json") | {"web_search": {"allow_query_reuse": "maybe"}}
+    assert list(_validator("policy.schema.json").iter_errors(raw))
+    with pytest.raises(ValueError, match="allow_query_reuse"):
+        Policy.model_validate(raw)
