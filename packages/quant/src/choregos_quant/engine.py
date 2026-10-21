@@ -149,6 +149,14 @@ def run_backtest(
         },
         "products": products,
         "relevant": sorted(relevant),
+        # The bar each product was judged against, as the engine applied it: a product's memo
+        # quotes it from here, not from the campaign's fields, which a person may edit after the
+        # backtest (#824: a memo said "passing" for a DSR of 0.03 without saying the bar was 0).
+        "thresholds": {
+            "min_dsr": campaign.min_dsr,
+            "max_drawdown": campaign.max_drawdown,
+            "min_trades": campaign.min_trades,
+        },
     }
     rounded: dict[str, Any] = _round(doc)
     return rounded
