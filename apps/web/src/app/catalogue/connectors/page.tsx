@@ -40,9 +40,9 @@ export default function ConnectorCataloguePage() {
   const shown = filterConnectorEntries(entries, filters);
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-semibold">Connectors</h1>
+      <h1 className="text-xl font-semibold">Connector types</h1>
       <p className="max-w-3xl text-sm text-ink-muted">
-        The systems Choregos can reach, by family. An organisation connector is declared once by the administrator and
+        The systems Choregos can reach, by family. Installing one happens in Administration → Installed connectors. An organisation connector is declared once by the administrator and
         turned on for the projects that need it; a project connector is configured in the project&apos;s settings.
         MCP servers have{" "}
         <Link href="/catalogue/mcp-servers" className="underline">

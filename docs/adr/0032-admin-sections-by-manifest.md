@@ -63,3 +63,39 @@ Three ways to give them screens:
   versioned like the others (ADR 0001).
 - Navigation by product manifests (R-SOC-UI-01) is not decided here; the same format is meant to
   grow into it, project tabs included.
+
+## Addendum (2026-10-21): a block may carry its own permission (S42-02)
+
+A section has one permission and one scope, so a screen mixing an organisation-level form and an
+instance-level one (platform administrators only) had to be two sections with the same title. Decision:
+every block kind gains an optional `permission`, same vocabulary as the section's
+(`ui-manifest.schema.json`, `$defs/block_permission`).
+
+- The section's permission and scope still apply first. `GET /api/v1/ui/admin-sections` then drops the
+  blocks the caller lacks (`platform:admin` is checked on the instance, any other permission in the
+  organisations in scope) and lists the section only if at least one block remains.
+- Start-up refuses an unknown block permission, like a section's.
+- Nested `row_actions` are not filtered: they belong to their table.
+- `choregos_api.greffons.SECTION_FEATURES` (`frozenset({"block_permission", "asset_upload"})`) lets a plugin detect
+  the feature without parsing versions. Hiding is a courtesy: the routes a block calls still enforce
+  their own permission.
+- Not decided here: resetting a form to inherited values; plugins use `action` (DELETE) and `table`
+  blocks.
+
+## Addendum (S42-13): a form property may be an uploaded file
+
+An organisation could not change its logo because the console asked for a reference string and no
+organisation route accepted a file. A string property of a form's schema may now carry
+`format: "asset"` with `x-upload` (a POST path, `{org}` filled in; required with the format),
+`x-accept` (media types) and `x-max-bytes` (`ui-manifest.schema.json`).
+
+- The console shows the current file (a thumbnail when the value is a same-origin `/api/v1/…` path,
+  text otherwise, never loaded), a file input, and "Remove". It checks type and size as a courtesy,
+  then POSTs the RAW file to `x-upload` with the file's own `Content-Type`. The route answers
+  `{"ref": "<string>"}`; the ref becomes the field's value and the form's own write saves it.
+  "Remove" writes `null`.
+- `chemins_d_une_section` includes each `x-upload` as a `POST` path, so start-up stops when no route
+  serves it. The route stays the judge of type, size, content and quota; the console's checks are a
+  courtesy. `SECTION_FEATURES` gains `"asset_upload"`: a plugin offers `format: "asset"` only when it
+  is present, and keeps a plain string otherwise.
+- Not decided here: where an edition stores the files and how it vets them (SVG in particular).

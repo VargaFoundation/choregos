@@ -428,6 +428,38 @@ async def test_a_confluence_page_tree_syncs_and_follows_the_source(
     }  # fmt: skip
 
 
+async def test_chosen_pages_without_their_sub_pages_sync_and_one_leaving_is_deleted(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S42-09d: `page_ids` + `descendants: false` mirror exactly those pages."""
+    from choregos_adapters.fakes.confluence import FakeConfluence
+    from choregos_adapters.http import rest
+
+    monkeypatch.setattr(rest, "_backoff", lambda response, attempt: 0.0)
+    site = FakeConfluence()
+    site.add_space("ENG")
+    site.put_page("ENG", "100", "Handbook", "<p>how we work</p>")
+    site.put_page("ENG", "101", "Deploy guide", "<p>use argo rollouts</p>", parent="100")
+    site.put_page("ENG", "103", "Pager", "<p>call the oncall</p>")
+    source = await _confluence(
+        client, monkeypatch, site, space_key="ENG", page_ids=["100", "103", "103"], descendants=False
+    )
+    assert source["config"] == {
+        "space_key": "ENG", "page_ids": ["100", "103"], "descendants": False,
+        "include_root": True, "include_attachments": False,
+    }  # fmt: skip
+    first = await _sync(source["id"])
+    assert first["added"] == 2, first
+    names = {d["filename"] for d in (await client.get(f"{BASE}/framework")).json()["documents"]}
+    assert names == {"handbook-100.html", "pager-103.html"}, "the sub-page 101 was not asked for"
+    site.restrict("103")
+    with pytest.raises(
+        Exception, match="103"
+    ):  # a chosen page the account cannot read is refused, not skipped
+        await _sync(source["id"])
+    assert len((await client.get(f"{BASE}/framework")).json()["documents"]) == 2
+
+
 async def test_a_listing_that_fails_deletes_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -454,6 +486,11 @@ async def test_a_listing_that_fails_deletes_nothing(
         ({"space_key": "ENG", "page_id": "abc"}, "page_id"),
         ({"space_key": "ENG", "include_attachments": "yes"}, "include_attachments"),
         ({"space_key": "ENG", "labels": ["x"] * 21}, "labels"),
+        ({"space_key": "ENG", "page_ids": ["1"] * 51}, "page_ids"),
+        ({"space_key": "ENG", "page_ids": ["12", "ab"]}, "page_ids"),
+        ({"space_key": "ENG", "page_ids": ["12"], "page_id": "13"}, "not both"),
+        ({"space_key": "ENG", "page_id": "12", "descendants": "no"}, "descendants"),
+        ({"space_key": "ENG", "page_id": "12", "descendants": False, "include_root": False}, "no page"),
     ],
 )
 async def test_a_confluence_source_is_refused_before_its_first_sync(
@@ -638,3 +675,56 @@ async def test_a_git_source_refuses_another_kind_of_connector_and_still_works_wi
         json={"kind": "git", "name": "pub", "config": {"url": "https://github.com/a/public.git"}},
     )
     assert public.status_code == 201 and public.json()["connector"] is None
+
+
+async def test_a_web_source_with_linked_documents_stores_the_pdf_converted(
+    client: AsyncClient, admin: str
+) -> None:
+    """S42-09b: a PDF the crawl lists goes through the same pipeline as an upload (fakes: no network)."""
+    from choregos_adapters.fakes.documents import fake_source
+    from choregos_api.db.models import KnowledgeDocument
+    from choregos_api.db.session import session_scope
+
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "web",
+            "name": "Offer",
+            "config": {"url": "https://docs.example.com/offer", "max_depth": 1, "include_documents": True},
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["config"]["include_documents"] is True
+    fake_source(created.json()["id"]).put("deck", "deck.pdf", fx.pdf(["Group revenue grew twelve percent"]))
+    assert (await _sync(created.json()["id"]))["added"] == 1
+    document = (await client.get(f"{BASE}/framework")).json()["documents"][0]
+    assert document["filename"] == "deck.pdf" and document["status"] == "ready"
+    async with session_scope() as session:
+        row = await session.get(KnowledgeDocument, document["id"])
+        assert row is not None and row.mime == "application/pdf"
+
+
+async def test_a_web_source_config_accepts_one_page_and_refuses_a_bad_flag(
+    client: AsyncClient, admin: str
+) -> None:
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    one = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "web",
+            "name": "One",
+            "config": {"url": "https://docs.example.com/a", "max_depth": 0, "max_pages": 1},
+        },
+    )
+    assert one.status_code == 201, one.text
+    assert one.json()["config"] == {"url": "https://docs.example.com/a", "max_depth": 0, "max_pages": 1}
+    bad = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "web",
+            "name": "x",
+            "config": {"url": "https://docs.example.com/", "include_documents": "yes"},
+        },
+    )
+    assert bad.status_code == 422 and "include_documents" in bad.json()["detail"]

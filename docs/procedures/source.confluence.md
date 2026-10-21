@@ -24,7 +24,7 @@ the chosen tree or restricted against the account leaves the base at the next sy
 ## In Choregos
 
 1. **Knowledge**, the base, **Add source**, kind **Confluence**.
-2. Pick the **connector**, then `space_key`; optionally `page_id` (and `include_root`), `labels` (one request
+2. Pick the **connector**, then `space_key`; optionally `page_id`, or several `page_ids` (paste page addresses in the console), with `descendants: false` to read only those pages (and `include_root`), `labels` (one request
    per page) and `include_attachments`.
 3. Choose the refresh: an interval, a cron expression, or manual.
 
@@ -45,10 +45,12 @@ Press **Sync now**. Each sync lists the space once and downloads only pages whos
 | Field | What to put in it |
 | :-- | :-- |
 | `connector` | the organisation's documents/confluence connector, picked from a list |
+| `descendants` | false to read only the chosen pages, not the pages under them (default true) |
 | `include_attachments` | true to index pdf, docx, pptx, xlsx, md, txt and html attachments |
 | `include_root` | false to leave the page itself out |
 | `labels` | keep only pages carrying one of these labels |
 | `page_id` | a page's number, to read that page and everything under it |
+| `page_ids` | up to 50 page numbers, to read exactly those pages (not together with page_id) |
 | `space_key` | the space's key, for example ENG |
 
 ## Network egress

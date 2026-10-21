@@ -291,6 +291,23 @@ holds the permission for; a section asking for `platform:admin` goes to platform
 only, whatever its scope — an `org_admin` holds every permission in their own organisation.
 `apps/api/tests/test_sections_d_administration.py` proves it.
 
+One screen can mix levels (S42-02): every block may carry its own `permission`, in the section's
+vocabulary (`"permission": "platform:admin"` on an instance-wide form next to organisation blocks). The
+section's permission still applies first; `GET /api/v1/ui/admin-sections` then leaves out the blocks the
+caller lacks, and lists the section only if at least one block remains. Start-up stops on an unknown
+block permission, as on a section's. Nested `row_actions` have no permission of their own. A plugin
+detects the feature without parsing versions: `choregos_api.greffons.SECTION_FEATURES` is a frozenset,
+currently `{"block_permission", "asset_upload"}` (S42-13: a form property of `format: "asset"` uploads its file to its `x-upload` path, see ADR 0032). Give a block a `description` ("this organisation", "the whole
+instance") to say which level it edits; every block kind renders it.
+
+```python
+{"id": "appearance", "title": "Appearance", "scope": "organisation", "permission": "member:manage",
+ "blocks": [
+     {"kind": "form", "title": "This organisation", "description": "Applies to Acme only.", ...},
+     {"kind": "form", "title": "The whole instance", "permission": "platform:admin", ...},
+ ]}
+```
+
 A `form` block reads its `read` path and writes back, to `write`, **only the fields of its schema**:
 give it exactly the fields of the model its route writes, or a forgotten one goes back to its default
 on every save. The console draws a field from its JSON Schema: `string` (with `format: date`,

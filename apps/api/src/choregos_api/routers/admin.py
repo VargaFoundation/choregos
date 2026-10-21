@@ -141,23 +141,15 @@ async def list_agent_images(principal: Me, settings: Config) -> list[AgentImageI
 
 
 @router.get("/platform/executors", response_model=list[ExecutorInfo], operation_id="listExecutors")
-async def list_executors(session: Db, principal: Me) -> list[ExecutorInfo]:
-    rows = (await session.execute(select(ExecutorRow))).scalars().all()
-    if rows:
-        return [
-            ExecutorInfo(
-                kind=row.kind,
-                enabled=row.enabled,
-                cluster=row.cluster,
-                namespace_pattern=row.namespace_pattern,
-                runner_image=row.runner_image,
-                default_timeout_minutes=row.default_timeout_minutes,
-            )
-            for row in rows
-        ]
-    # No row: the deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`),
-    # not a list written by hand. This used to claim Tekton was on everywhere, and a project
-    # that picked it on a cluster without Tekton died at its first run (ADR 0072).
+async def list_executors(principal: Me) -> list[ExecutorInfo]:
+    """The executors this deployment runs agent stages on, read from its own configuration.
+
+    Always the deployment's answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`, the
+    chart's `global.runner.allowedExecutors`), never a stored row: nothing reads `ExecutorRow` at
+    runtime (ADR 0072), so listing it would show the console a list that nothing applies, and it
+    would hide the real one (S42-07). Not a hand-written list either: it used to claim Tekton was
+    on everywhere, and a project that picked it on a cluster without Tekton died at its first run.
+    """
     allowed = allowed_executor_kinds()
     pattern = os.environ.get("CHOREGOS_RUNNER_NAMESPACE_PATTERN", "") or None
     return [
@@ -172,6 +164,9 @@ async def list_executors(session: Db, principal: Me) -> list[ExecutorInfo]:
 
 @router.put("/platform/executors", response_model=ExecutorInfo, operation_id="putExecutor")
 async def put_executor(body: ExecutorInfo, session: Db, principal: Me) -> ExecutorInfo:
+    """Store an executor row. It has NO runtime effect: nothing reads it (ADR 0072) and
+    `GET /platform/executors` no longer reports it. Kept, with its audit entry, because removing
+    it would be a contract change; what a deployment runs is set in its chart and environment."""
     await exiger_admin_de_plateforme(session, principal)
     row = (
         await session.execute(select(ExecutorRow).where(ExecutorRow.kind == body.kind))

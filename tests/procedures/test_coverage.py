@@ -27,8 +27,17 @@ DOOR_ALIASES = {"copilot-vscode": "vscode"}
 #: The configuration keys of a knowledge source (`KnowledgeSourceCreate.config`, per kind).
 SOURCE_FIELDS = {
     "sharepoint": {"connector", "site_id", "drive_id", "folder"},
-    "confluence": {"connector", "space_key", "page_id", "include_root", "include_attachments", "labels"},
-    "web": {"url", "max_depth", "max_pages"},
+    "confluence": {
+        "connector",
+        "space_key",
+        "page_id",
+        "page_ids",
+        "descendants",
+        "include_root",
+        "include_attachments",
+        "labels",
+    },
+    "web": {"url", "max_depth", "max_pages", "exclude", "include_documents"},
     "git": {"connector", "url", "ref", "paths"},
 }
 
