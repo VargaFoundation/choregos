@@ -288,9 +288,35 @@ def test_the_edition_schema_accepts_the_community_and_the_enterprise_shapes() ->
     validator.validate(base)  # an older core, without the two new fields, stays valid
     validator.validate({**base, "publisher": None, "edition_version": None})
     validator.validate({**base, "edition": "enterprise", "publisher": "Acme", "edition_version": "0.2.0"})
+    # the about panel's fields: all optional, so an older core stays valid
+    validator.validate(
+        {**base, "licence": "Apache-2.0", "edition_licence": None, "build": {"revision": None}}
+    )
+    validator.validate(
+        {
+            **base,
+            "edition": "enterprise",
+            "licence": "Apache-2.0",
+            "edition_licence": "Acme Corp EULA",
+            "build": {"revision": "0123abc"},
+        }
+    )
 
 
-@pytest.mark.parametrize("extra", [{"publisher": 3}, {"edition_version": 3}, {"publisher": "x" * 81}])
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"publisher": 3},
+        {"edition_version": 3},
+        {"publisher": "x" * 81},
+        {"edition_licence": 3},
+        {"edition_licence": "x" * 81},
+        {"licence": 3},
+        {"build": {}},
+        {"build": {"revision": "NOT-A-SHA"}},
+        {"build": {"revision": "abc"}},
+    ],
+)
 def test_the_edition_schema_refuses_a_malformed_publisher_or_version(extra: dict[str, Any]) -> None:
     from jsonschema import ValidationError
 
@@ -387,3 +413,42 @@ def test_the_network_denied_event_is_declared_and_the_openapi_names_the_four_ope
     } <= operations
     agent = spec["components"]["schemas"]["AgentSpec"]["properties"]["network"]
     assert agent == {"$ref": "#/components/schemas/AgentNetwork"}
+
+
+def test_admin_section_block_permission_is_optional_and_a_string() -> None:
+    """S42-02: every block kind may carry its own permission; a non-string is refused."""
+    validator = _validator("ui-manifest.schema.json")
+    section = _load("ui-manifest.example.json")
+    assert any("permission" in block for block in section["blocks"])
+    assert not list(validator.iter_errors(section))
+    for block in section["blocks"]:
+        broken = {**section, "blocks": [{**block, "permission": 7}]}
+        assert list(validator.iter_errors(broken)), block["kind"]
+    bare = {
+        **section,
+        "blocks": [{k: v for k, v in b.items() if k != "permission"} for b in section["blocks"]],
+    }
+    assert not list(validator.iter_errors(bare))
+
+
+def test_an_asset_property_names_where_its_file_goes() -> None:
+    """S42-13: `format: asset` needs an `x-upload` path; accept and size limits are typed."""
+    validator = _validator("ui-manifest.schema.json")
+    section = _load("ui-manifest.example.json")
+    form = section["blocks"][0]
+    asset = form["schema"]["properties"]["badge"]
+    assert asset["format"] == "asset"
+    assert not list(validator.iter_errors(section))
+
+    def with_badge(badge: dict) -> dict:
+        schema = {**form["schema"], "properties": {"badge": badge}}
+        return {**section, "blocks": [{**form, "schema": schema}]}
+
+    without_upload = {k: v for k, v in asset.items() if k != "x-upload"}
+    assert list(validator.iter_errors(with_badge(without_upload)))
+    assert list(validator.iter_errors(with_badge({**asset, "x-upload": "https://elsewhere/up"})))
+    assert list(validator.iter_errors(with_badge({**asset, "x-max-bytes": 0})))
+    assert list(validator.iter_errors(with_badge({**asset, "x-accept": ["png"]})))
+    assert list(validator.iter_errors(with_badge({**asset, "type": "object"})))
+    # A plain string property is untouched.
+    assert not list(validator.iter_errors(with_badge({"type": "string"})))

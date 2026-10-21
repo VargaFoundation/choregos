@@ -703,15 +703,21 @@ export type Template = {
   scaffold?: string;
 };
 
+/** optional: a core permission (same vocabulary as the section's) the caller must hold to see this block; the section's own permission still applies. A section with no visible block is not listed. */
+export type UiManifestBlockPermission = string;
+
 export type UiManifestPath = string;
 
 export type UiManifestForm = {
   kind: "form";
+  permission?: UiManifestBlockPermission;
   title: string;
   description?: string;
-  /** the JSON Schema of the values; the console derives the form from it */
+  /** the JSON Schema of the values; the console derives the form from it. A string property may carry `format: "asset"` (S42-13): the console then shows the current file, a file input and a Remove button, and uploads the chosen file to `x-upload` (a POST path, `{org}` filled in) as the RAW request body with the file's own Content-Type. The response is JSON with a `ref` string, which becomes the field's value; the form's own write then saves that reference. `x-accept` lists the accepted media types and `x-max-bytes` the largest size, both checked in the browser as a courtesy: the upload route stays the judge. */
   schema: {
-    [key: string]: unknown;
+    properties?: {
+      [key: string]: unknown;
+    };
   };
   read: UiManifestPath;
   write: UiManifestPath;
@@ -726,6 +732,7 @@ export type UiManifestColumn = {
 
 export type UiManifestTable = {
   kind: "table";
+  permission?: UiManifestBlockPermission;
   title: string;
   description?: string;
   list: UiManifestPath;
@@ -736,6 +743,7 @@ export type UiManifestTable = {
 
 export type UiManifestAction = {
   kind: "action";
+  permission?: UiManifestBlockPermission;
   label: string;
   description?: string;
   path: UiManifestPath;
@@ -753,6 +761,7 @@ export type UiManifestAction = {
 
 export type UiManifestSecretOnce = {
   kind: "secret_once";
+  permission?: UiManifestBlockPermission;
   label: string;
   description?: string;
   path: UiManifestPath;

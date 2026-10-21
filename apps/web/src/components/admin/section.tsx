@@ -31,6 +31,7 @@ export function SectionRendue({ section, org }: { section: AdminSection; org: st
         if (bloc.kind === "secret_once") return <BlocSecret key={index} bloc={bloc} org={org} />;
         return (
           <Card key={index} title={bloc.label}>
+            {bloc.description && <p className="mb-3 text-sm text-ink-muted">{bloc.description}</p>}
             <BoutonDAction action={bloc} org={org} />
           </Card>
         );
