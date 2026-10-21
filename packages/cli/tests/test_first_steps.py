@@ -119,3 +119,29 @@ def test_an_api_error_reads_clearly(profile: Path) -> None:
     result = _run("orgs", "create", "pirate")
     assert result.exit_code != 0
     assert "org_admin" in result.output
+
+
+def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A profile without an organisation and no CHOREGOS_ORG: a clear error, not `varga`."""
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"api_url": API, "token": "chg_x"}))
+    monkeypatch.setattr("choregos_cli.client.CONFIG_PATH", path)
+    monkeypatch.delenv("CHOREGOS_ORG", raising=False)
+    with respx.mock:
+        result = _run("projects", "list")
+    assert result.exit_code != 0
+    assert "--org" in result.output and "CHOREGOS_ORG" in result.output
+    assert "varga" not in result.output
+    assert not respx.calls
+
+
+@respx.mock
+def test_the_environment_names_the_organisation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("choregos_cli.client.CONFIG_PATH", tmp_path / "absent.json")
+    monkeypatch.setenv("CHOREGOS_API_URL", API)
+    monkeypatch.setenv("CHOREGOS_ORG", "diametral")
+    route = respx.get(f"{API}/api/v1/orgs/diametral/projects").mock(
+        return_value=Response(200, json={"items": []})
+    )
+    assert _run("projects", "list").exit_code == 0
+    assert route.called

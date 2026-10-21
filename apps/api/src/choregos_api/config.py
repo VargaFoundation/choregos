@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     # Combien de temps le courtier attend l'issue d'une écriture appelée par un run, jouée en action
     # gouvernée (#241), avant de rendre 202 et l'identifiant de l'action.
     courtier_attente_ecriture_s: float = 30.0
+    #: The most a broker tool result may weigh, as JSON bytes, when it reaches the agent (#755): a
+    #: larger one is cut to its text with a marker that says so. A third-party server does not decide
+    #: how much of the agent's context, and of its token budget, it fills.
+    broker_result_max_bytes: int = Field(default=65536, ge=1024)
     allowed_agent_backends: list[str] = Field(default_factory=list)
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
@@ -179,6 +183,8 @@ class Settings(BaseSettings):
     knowledge_max_documents: int = 500
     #: The largest markdown a conversion may produce; past it the document fails, it is not cut.
     knowledge_max_markdown_mib: int = 8
+    #: The most rows a workbook's sheet gives once converted; the rest is counted, not shown (S42-09c).
+    knowledge_xlsx_rows_per_sheet: int = 2000
     #: A conversion runs in a child process, killed past this delay.
     knowledge_conversion_timeout_s: float = 120.0
     #: How long a connector's connection test may take, when it runs on save (S40-05).

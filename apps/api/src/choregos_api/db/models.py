@@ -818,6 +818,9 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     schema_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
     #: Ce que le courtier annonce à l'agent, et vérifie avant de joindre le serveur.
     input_schema: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The `outputSchema` the server declares: a successful result that does not match it is refused
+    #: before the agent reads it (#755).
+    output_schema: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: The identity-provider group whose members approve the actions it proposes (ADR 0052).
     approver_group: Mapped[str | None] = mapped_column(String(200), nullable=True)

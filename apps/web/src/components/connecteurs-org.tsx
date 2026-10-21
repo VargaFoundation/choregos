@@ -62,7 +62,7 @@ export function OutilsDeLivraison({ org }: { org: string }) {
   });
   const lignes = lignesDeLivraison(liste, lectures);
   return (
-    <Card title="Project delivery tools">
+    <Card title="Project delivery tools — configured in each project">
       <div className="space-y-3 text-sm" id="delivery">
         <p className="max-w-3xl text-ink-muted">
           Each project&apos;s tracker, repository, CI and deployment — set in the project&apos;s settings, never here. A

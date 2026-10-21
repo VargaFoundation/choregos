@@ -12,6 +12,16 @@ make ci        # lint, strict typing, the test suite, contracts, charts
 
 `make demo` uses the `fake` connectors. It proves the machinery, not the integrations.
 
+### Which version is deployed?
+
+**About**, at the bottom of the sidebar (an icon when the sidebar is folded; in the **Menu** under
+1280 px), opens a panel with what the deployment runs: the product name, the core's version and
+licence, the edition (community or enterprise) and, for an edition that announces them, its
+version, publisher and licence, then the build revision and links to the source and the
+documentation. *Copy for support* puts the product, versions, edition and revision on the clipboard
+as plain text, ready for a support request. The revision reads *not recorded* on an image built
+without one.
+
 ## 2. Create a project
 
 Three ways, same result: the web wizard (`/projects/new`), the CLI, or the API.
@@ -140,8 +150,8 @@ the usual failures mean, with this platform's webhook and callback addresses fil
 [`docs/procedures/`](procedures/README.md), generated from the same files
 ([ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)); `GET /procedures` serves it.
 
-**The organisation's connectors.** A directory, a device manager, an MCP server is declared once
-by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
+**Installed connectors (the organisation's).** A directory, a device manager, an MCP server is declared once
+by the organisation's administrator (*Administration → Installed connectors*, `POST /orgs/{org}/connectors`),
 named, and shared by its projects. It is born with the operations its type declares — a read
 `allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-governed-actions-in-the-core.md)) —
 and each operation carries its **policy** (`allowed`, `approval`, `forbidden`), the **project
@@ -178,8 +188,8 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
-**The catalogue, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
-catalogues list what exists: `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
+**The catalogues, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
+catalogues list what the platform offers (*Catalogue → MCP servers* and *Catalogue → Connector types* in the console; installing from either lands in *Administration → Installed connectors*): `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
 (the registry's connector types by family, organisation or project scope, where each is installed or
 configured; platform plumbing and fakes are left out). **Every member of the organisation reads them**,
 whether the role is an organisation role or only a project role. Each entry carries `can`
@@ -750,6 +760,22 @@ server answered (the call waits up to `courtier_attente_ecriture_s`, 30 s, then 
 the action's id), and calling it again with the same arguments returns the same action instead of
 writing twice. A write set to `approval` waits for a person instead ([ADR 0034](adr/0034-connectors-by-capability.md) §7).
 
+**What a server answers is bounded before the agent reads it** (#755). A third-party server writes
+what lands in the agent's context, so the broker holds every result, read or write, to three rules:
+
+| Rule | What the agent gets |
+| :-- | :-- |
+| The server declares an `outputSchema` for the operation (captured at discovery) and its `structuredContent` does not match it, or is missing | `422`, `type: output_schema`, naming where and which rule failed — never the payload. A governed write is never refused this way: its effect already happened |
+| The result holds a secret (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) | the value masked as `[REDACTED]`, in text blocks, embedded text resources and the strings of `structuredContent` |
+| The result weighs more than `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB by default) as JSON | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; `structuredContent` is dropped |
+
+The cap is the deployment's, for every operation; a per-operation cap does not exist yet.
+
+A YAML catalogue tool and a plugin's tool answer through the same cap and the same masking (#759):
+an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, over the cap,
+becomes `{text: <its JSON, cut, with the marker>, truncated}`. Neither declares an output schema,
+and the injection guard does not read their answers yet.
+
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
 
@@ -1143,6 +1169,25 @@ is the library: import a zip or a repository (preview, pick, import at the resol
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).
 
+### Platform
+
+`/admin/platform` (**Administration → Platform**) shows what the deployment can run, in two cards.
+
+- **Coding agents (backends).** A backend is the coding agent CLI that the runner image ships and
+  that executes an agent stage ([Actor](concepts.md#actor)). Per backend the page shows its
+  capabilities, version, conformance (passed over total, last run, report, failures) and, when it is
+  off, the reason. A platform administrator can **Disable** a backend (a reason is required and
+  audited as `backend.update`) or **Enable** it; anyone else is told "Only a platform administrator
+  can change this." **Enabled here only means counted as usable by the readiness check.** The
+  orchestrator does not read the switch: which backends a project may use is set by the deployment
+  (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and `allowedBackends`) and
+  by the project's policy. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
+- **Executors (where agent stages run).** Read-only: `agent_sandbox`, `k8s_job`, `tekton`, `aca`,
+  `local_docker`, each with a one-line explanation and its set-up procedure. The list is the
+  deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
+  chart (`global.runner.allowedExecutors`). `PUT /platform/executors` still exists but has no
+  runtime effect and `GET` ignores what it stores.
+
 ### Models
 
 `/admin/models` (the **Models** page of the administration) is the organisation's model catalogue
@@ -1153,6 +1198,11 @@ the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price pe
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 
+- **Which version?** Each row says `runs <upstream model> via <provider>`, with the context window and
+  the Tools / Vision badges, and the Tiers card says what `platform/<tier>` resolves to. That is the
+  upstream model **as the gateway is configured** (LiteLLM `/model/info`) at the last sync, dated on the
+  Gateway card; it carries a dated version only if the gateway declares dated names. It is not proof of
+  the version the provider actually served for a run.
 - **Modes**: `open` (the default; everything the gateway lists is usable, the catalogue only
   restricts what it has an entry for) and `curated` (only enabled entries are usable; a model
   discovered later arrives disabled). Switching to `curated` shows first the agents and project
@@ -1414,7 +1464,13 @@ An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text; 20 MiB by default
 `CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB`) is answered `202 pending` and converted to markdown **in the
 background**, in a child process that sees none of the API's secrets and is stopped after
 `CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S` (120 s). Headings, slide titles and tables are kept; a PDF
-gives its text without headings, and a scanned PDF fails (no OCR). Each document then reads
+gives its text without headings, and a scanned PDF fails (no OCR). A workbook gives one `## <sheet>`
+table per sheet (hidden sheets marked), with empty cells empty, numbers as the sheet shows them
+(percentages, thousands, dates), the cached value of each formula, and at most
+`CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
+shown`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
+before this reading keep their old text until converted again: `POST …/documents/{id}/convert`
+(which also shrinks the corpus). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
 `groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage` (an organisation administrator), or, for a base created from a project
@@ -1475,6 +1531,10 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   on. The source names a `space_key` (`ENG`; a personal space starts with `~`) and optionally a
   `page_id`: that page **and everything under it** (`include_root: false` leaves the page itself
   out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
+  To read **chosen pages** instead, give `page_ids` (up to 50 numbers; not together with `page_id`; the
+  console accepts pasted page addresses) and, to leave the pages under them out, `descendants: false`
+  (`page_id` with `descendants: false` is one page). A chosen page that is missing or unreadable
+  refuses the sync by name; a page that leaves the chosen set (or its tree) is deleted at the next sync.
   Options: `include_attachments` (pdf, docx, pptx, xlsx, md, txt, html), `labels` (keep only pages
   carrying one of them; one request per page). Each sync lists the space once; only pages whose
   version number changed are downloaded again. A page that is deleted, archived, **moved out of the
@@ -1491,7 +1551,11 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   redirects off it (`www.example.com` to `example.com`) is refused when the source is created, with
   the target to use instead. Pages are named by their whole path (`/en/about` is `en-about.html`).
   A crawl that lists no page at all (a moved site, a wall) is reported as unreadable and **deletes
-  nothing**.
+  nothing**. `max_depth: 0` with `max_pages: 1` reads that page only (the console's **This page only**).
+  With `include_documents: true` the crawl also lists the PDF, Word, PowerPoint and Excel files the
+  pages link to, on the same host and under the same rules (at most 5 MiB each, recognised by their
+  content type or their extension, kept under their real extension); links are never read out of a
+  document, and a document on another host is not followed.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
   (`*.md` by default). A document is named by its whole path (`docs-adr-0001.md`), so two
   `README.md` do not collide; a repository where no file matches `paths` is reported unreadable and
@@ -1510,6 +1574,34 @@ between two fires) or `manual` (only when someone syncs). The page shows `next s
 source (an estimate: a worker that is down at the cron minute syncs at its next pass), and **edit
 refresh** changes the mode, with **apply to all sources** to set the same schedule everywhere; the
 change takes effect at once, not at the end of the current wait. A manual sync always runs.
+
+#### A knowledge base from decks, spreadsheets, Confluence pages and links
+
+For a group-wide base (decks, a workbook of figures, wiki pages, some web pages): create the base, then
+feed it from several places at once, each one a source or an upload.
+
+1. **Create the base** (`POST /orgs/acme/knowledge`) with the `scope` of the people who may read it.
+2. **Decks and workbooks**: upload the `.pptx` and `.xlsx` files (or list them in a manifest, see *A
+   knowledge base as code*). Re-upload a file with the same name to replace it.
+3. **Confluence pages**: add a Confluence source on the space, or on a page and everything under it.
+4. **Web pages and linked files**: add a web source; tick **This page only** for a single address, and
+   **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files it links to.
+5. **Size it.** Add up the converted text: the base's page shows each document's size. Up to about 200k
+   tokens, **files** is enough and exact; above that, switch the base to **index** (the *Serving mode*
+   row on its page, or `PATCH … {"serving_mode": "index"}`; the chunks are built at once), so agents
+   search and cite instead of loading everything.
+6. **Check it**: write a few questions and the documents expected to answer them (the eval set) and run
+   it; read the converted documents of the decks and workbooks before trusting them.
+
+What conversion keeps and loses: slide titles, text, speaker notes and tables are kept; **images and charts
+are not described** (a chart's numbers are lost unless they also sit in a table), and there is **no OCR**,
+so a scanned PDF fails. A workbook gives its sheets as tables, with each formula's **cached value** (the
+number last saved by Excel, not the formula); a workbook never opened in Excel after being generated by a
+script may hold no cached value.
+
+**Confluence and permissions.** A Confluence source reads with a service account, so everything that
+account can read in the chosen space or tree becomes readable by the base's readers, whatever the page
+restrictions say for other people. Give the account read access to the spaces to index and nothing else.
 
 #### A knowledge base as code
 
@@ -1577,6 +1669,20 @@ Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting p
 
 **An organisation sets a ceiling that every project policy may only tighten**
 (`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):
+
+On the admin page, **Policy ceiling** is a form, grouped as the ceiling is: **Budgets** (a dollar cap per
+ticket size S/M/L/XL; under *Per-stage budgets*, one per role and size; max turns and max minutes per
+role, with a `default` row for every role not named; tool calls per run; daily spend per project;
+monthly spend of the organisation), **Attempts** (default attempts, accepted but not enforced;
+definition-of-done iterations; attempts per role), **Scope** (files granted without asking, files and
+lines in a diff) and **Findings** (per run). An empty field is no cap and is left out of what is
+saved; the grey figure in a field is what the platform applies when nobody sets one. A value below a
+field's minimum is flagged on the field and blocks the save; a refusal from the API (`422`) is shown on
+the field it names. Saving reads the ceiling again and changes only these fields, so the **Network
+access** card and any other key survive. **Advanced: raw JSON** keeps the whole ceiling editable as
+text (it is the way to reach a key the form has no row for).
+
+The same ceiling as JSON:
 
 ```json
 {"budgets": {"ticket_usd": {"M": 20}, "stage_usd": {"default": {"M": 6}}, "max_turns": {"default": 60},
@@ -1654,7 +1760,7 @@ wall: see [security](security.md).
   the allowed hosts (**No cap**, **Any public host**, or **Only these hosts**, one per line), the denied
   hosts, the requests per minute per host and per run, the built-in web tools (inherit, allow, deny) and
   the contact written into the User-Agent. It is the `network` section of the policy ceiling: saving
-  reads the whole ceiling again and replaces only that section, so the JSON **Policy ceiling** card below
+  reads the whole ceiling again and replaces only that section, so the **Policy ceiling** card below
   it and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
   flagged before anything is sent.
 - *The agent's* — the **Network access** section of the agent builder (new agent, new version): **Same as
@@ -2064,7 +2170,8 @@ same as a table with an organisation column.
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id
 `<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
-organisation by its id. What does not follow: addresses already copied elsewhere (an MCP client's
+organisation by its id. A platform administrator granted by an edition plugin can rename an
+organisation they do not belong to (the response then carries no `role`). What does not follow: addresses already copied elsewhere (an MCP client's
 configuration), IdP groups that still name the old slug, and `oidc.defaultOrg` if it names it.
 
 ```bash

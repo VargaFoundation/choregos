@@ -72,13 +72,17 @@ def child_environment() -> dict[str, str]:
     return {key: os.environ[key] for key in _ENV_KEPT if key in os.environ}
 
 
-async def run_converter(data: bytes, extension: str, *, timeout_s: float, max_bytes: int) -> dict[str, Any]:
+async def run_converter(
+    data: bytes, extension: str, *, timeout_s: float, max_bytes: int, rows_per_sheet: int | None = None
+) -> dict[str, Any]:
     """Runs `knowledge.convert` in a child process; raises `ConversionError` on any failure."""
     process = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
         "choregos_api.knowledge.convert",
         extension,
+        # The cap travels by argv: the child's environment is bare by design (`child_environment`).
+        *([str(rows_per_sheet)] if rows_per_sheet else []),
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -144,6 +148,7 @@ async def convert_document(org: str, document_id: str) -> str:
             extension,
             timeout_s=settings.knowledge_conversion_timeout_s,
             max_bytes=settings.knowledge_max_markdown_mib * 1024 * 1024,
+            rows_per_sheet=settings.knowledge_xlsx_rows_per_sheet,
         )
         status, values = (
             READY,

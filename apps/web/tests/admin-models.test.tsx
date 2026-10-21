@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ModelsPage from "@/app/admin/models/page";
+import { contextWindow } from "@/components/model-catalogue";
 import { api } from "@/lib/api";
 import type { ModelCatalogue } from "@/lib/types";
 
@@ -41,7 +42,15 @@ function catalogue(over: Partial<ModelCatalogue> = {}): ModelCatalogue {
         allowed_roles: [],
         usages: ["agent"],
         price_override: null,
-        gateway: { provider: "anthropic", input_cost_per_1k: 0.003, output_cost_per_1k: 0.015 },
+        gateway: {
+          provider: "anthropic",
+          upstream_model: "anthropic/claude-sonnet-5-20261001",
+          input_cost_per_1k: 0.003,
+          output_cost_per_1k: 0.015,
+          max_input_tokens: 200000,
+          supports_tool_calling: true,
+          supports_vision: true,
+        },
         last_seen_at: "2026-10-15T10:00:00Z",
         missing_since: null,
         notes: "",
@@ -90,6 +99,38 @@ describe("the Models page", () => {
     expect(screen.getByTestId("model-platform/old")).toHaveTextContent("0.1 / 0.2");
     expect(screen.getByTestId("gateway")).toHaveTextContent("litellm");
     expect(screen.getByTestId("gateway")).toHaveTextContent("hard_budget");
+  });
+
+  it("shows which upstream model a row runs, its context window and capabilities", async () => {
+    show();
+    const row = await screen.findByTestId("model-platform/standard");
+    expect(within(row).getByTestId("upstream-platform/standard")).toHaveTextContent(
+      "runs anthropic/claude-sonnet-5-20261001 via anthropic",
+    );
+    expect(row).toHaveTextContent("200k tokens");
+    expect(row).toHaveTextContent("Tools");
+    expect(row).toHaveTextContent("Vision");
+    expect(screen.getByTestId("model-platform/old")).not.toHaveTextContent("runs"); // no facts: nothing invented
+  });
+
+  it("says what the platform alias of a tier resolves to, and when it is not synced", async () => {
+    show();
+    expect(await screen.findByTestId("tier-alias-standard")).toHaveTextContent(
+      "platform/standard runs anthropic/claude-sonnet-5-20261001",
+    );
+    expect(screen.getByTestId("tier-alias-strong")).toHaveTextContent("platform/strong runs not synced yet");
+  });
+
+  it("dates the facts by the last sync", async () => {
+    show();
+    expect(await screen.findByTestId("facts-as-of")).toHaveTextContent(/as of the last sync \(.+\)\. Sync from the gateway to refresh/);
+  });
+
+  it("formats a context window", () => {
+    expect(contextWindow(200000)).toBe("200k tokens");
+    expect(contextWindow(1000000)).toBe("1M tokens");
+    expect(contextWindow(8192)).toBe("8.2k tokens");
+    expect(contextWindow(512)).toBe("512 tokens");
   });
 
   it("toggling a model calls the API with the change", async () => {

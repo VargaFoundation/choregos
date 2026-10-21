@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .client import ApiError, Client, Profile
+from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
 
 app = typer.Typer(
@@ -89,6 +89,14 @@ def fail(message: str) -> None:
     raise typer.Exit(1)
 
 
+def _organisation(profile: Profile, org: str | None) -> str:
+    try:
+        return profile.organisation(org)
+    except NoOrganisationError as exc:
+        fail(str(exc))
+        raise
+
+
 # ───────────────────────────── session ─────────────────────────────
 
 
@@ -96,7 +104,9 @@ def fail(message: str) -> None:
 def login(
     api_url: Annotated[str, typer.Option(prompt=True)] = "http://localhost:8000",
     token: Annotated[str, typer.Option(prompt=True, hide_input=True)] = "",
-    org: Annotated[str, typer.Option()] = "varga",
+    org: Annotated[
+        str, typer.Option(help="Default organisation slug (else --org per command or CHOREGOS_ORG)")
+    ] = "",
 ) -> None:
     """Save the connection profile (`~/.config/choregos/config.json`).
 
@@ -204,7 +214,7 @@ def tokens_revoke(token_id: str) -> None:
 @projects_app.command("list")
 def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
     api = client()
-    organization = org or api.profile.org
+    organization = _organisation(api.profile, org)
     page = api.get(f"/orgs/{organization}/projects")
     table = Table("slug", "name", "status", "active work items", "cost this month (€)", "trains")
     for project in page["items"]:
@@ -245,7 +255,7 @@ def projects_create(
     directory, and requests are filed with `choregos items create`.
     """
     api = client()
-    organization = org or api.profile.org
+    organization = _organisation(api.profile, org)
     config: dict[str, Any] = {"slug": slug, "org": organization}
     if repo:
         config["repo"] = {"url": repo, "default_branch": "main", "language": language}

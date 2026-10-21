@@ -12,7 +12,13 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...real,
-    api: { ...real.api, knowledgeBase: vi.fn(), distillKnowledgeBase: vi.fn(), estimateKnowledgeDistillation: vi.fn() },
+    api: {
+      ...real.api,
+      knowledgeBase: vi.fn(),
+      distillKnowledgeBase: vi.fn(),
+      estimateKnowledgeDistillation: vi.fn(),
+      updateKnowledgeBase: vi.fn(),
+    },
   };
 });
 
@@ -131,5 +137,23 @@ describe("distillation (S33-05)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Distill" }));
     expect(await screen.findByTestId("estimate-refused")).toHaveTextContent("exclude `*.xlsx`");
     expect(screen.getByRole("button", { name: "Start distillation" })).toBeDisabled();
+  });
+
+  it("switches the serving mode files to index through the existing PATCH (S42-09b)", async () => {
+    vi.mocked(api.knowledgeBase).mockResolvedValue(base);
+    vi.mocked(api.updateKnowledgeBase).mockResolvedValue({ ...base, serving_mode: "index" });
+    await act(async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Suspense fallback="…">
+            <KnowledgeBasePage params={Promise.resolve({ slug: "architecture" })} />
+          </Suspense>
+        </QueryClientProvider>,
+      );
+    });
+    const row = await screen.findByTestId("knowledge-serving");
+    expect(row).toHaveTextContent("recommended above ~200k tokens");
+    fireEvent.change(screen.getByLabelText("serving mode"), { target: { value: "index" } });
+    await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", { serving_mode: "index" }));
   });
 });

@@ -226,3 +226,17 @@ API's event loop. Since S39-26:
     document run in a thread. Only I/O awaits on the loop.
 25. **One conversion at a time per replica by default** (`knowledge_conversion_concurrency: 1`): the
     API pod has one CPU, a second converter would only share it.
+
+## Update 2026-10-21 — a workbook is read as figures (S42-09c)
+
+26. **A `.xlsx` is read directly, not through MarkItDown.** MarkItDown goes through pandas, so empty
+    cells became `NaN`, empty headers `Unnamed: 3`, a percentage `0.1234`, and a 100 000-row sheet was
+    converted whole. The converter now reads the workbook with openpyxl (read-only, cached values):
+    one `## <sheet>` per sheet (hidden ones marked), empty cells empty, numbers as their cell format
+    shows them (percent, thousands, decimals, dates), at most `knowledge_xlsx_rows_per_sheet` rows
+    (2000) per sheet and then `… N more rows not shown`. The cap reaches the child by argv (its
+    environment stays bare); a workbook openpyxl cannot read falls back to MarkItDown. Documents
+    converted before keep their old text until converted again (`POST …/documents/{id}/convert`), which
+    also shrinks the corpus. Speaker notes and table or chart text of a deck survive MarkItDown 0.1.8
+    (regression test), so decks are unchanged.
+
