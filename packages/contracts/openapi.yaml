@@ -2682,9 +2682,32 @@ paths:
         The `knowledge-distiller` agent compiles the base into a principles skill (`<slug>-principles`), each principle
         citing its source documents, in the background. The version is published `pending_review` whatever its risk:
         a person approves it before any agent carries it (S32-06). The outcome lands in `distillation`. `agent:manage`, or `project:write` on the owning project (`owner_project`).
+        A base too large for one model call is read in passes (S42-10): `exclude` leaves documents out, `max_usd` caps the spend.
+        The body is optional; without it nothing is excluded and the platform's budget applies. A second start while one runs answers 409; so does
+        a distillation whose estimate exceeds `max_usd` (`distill_over_budget`).
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDistillRequest" } } }
       responses:
         "202": { description: Distilling, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/distill/estimate:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: exclude, in: query, required: false, description: "filename globs left out of the estimate, repeated (at most 20)", schema: { type: array, items: { type: string }, maxItems: 20 }, style: form, explode: true }
+    get:
+      tags: [knowledge]
+      operationId: estimateKnowledgeDistillation
+      description: >-
+        What distilling the base would read and cost, without calling a model (S42-10): characters, an approximate token
+        count (characters / 4), the parts the corpus is cut into, the model calls, and the price when the model is priced
+        (`priced_by`: `gateway`, `override` or `none`). `refused_reason` says why a distillation would not start
+        (`too_large`, `no_document`); `biggest` names the documents that weigh most, the ones to `exclude`. Same rights as `distill`.
+      responses:
+        "200": { description: The estimate, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDistillEstimate" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/knowledge/{slug}/eval:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -5276,6 +5299,37 @@ components:
         markdown: { type: [string, "null"], description: returned by the reading of one document }
         source_id: { type: [string, "null"], description: the source it was synced from; none for an upload }
         source_url: { type: [string, "null"], description: where to open the original }
+    KnowledgeDistillRequest:
+      type: object
+      description: Optional body of `distillKnowledgeBase` (S42-10).
+      properties:
+        exclude: { type: array, maxItems: 20, items: { type: string, maxLength: 200 }, default: [], description: "filename globs of documents left out (`*.xlsx`, `archive/*`)" }
+        max_usd: { type: [number, "null"], minimum: 0, description: "stop and publish nothing when the spend would pass this; null keeps the platform's budget" }
+    KnowledgeDistillEstimate:
+      type: object
+      required: [characters, tokens_estimate, documents, parts, calls, model, priced_by, within_budget, biggest]
+      properties:
+        characters: { type: integer }
+        tokens_estimate: { type: integer, description: "approximate: characters / 4" }
+        documents: { type: integer }
+        parts: { type: integer, description: "the pieces the corpus is cut into; a base that fits one pass is one part" }
+        calls: { type: integer, description: "model calls: one per part, plus the merge(s) when there are several parts" }
+        model: { type: string }
+        input_cost_usd: { type: [number, "null"], description: "null when the model is not priced" }
+        output_cost_usd: { type: [number, "null"] }
+        priced_by: { type: string, enum: [gateway, override, none] }
+        budget_usd: { type: [number, "null"], description: "the platform's ceiling for one distillation" }
+        within_budget: { type: boolean }
+        refused_reason: { type: [string, "null"], description: "why a distillation would not start; null when it would" }
+        biggest:
+          type: array
+          description: the documents that weigh most, biggest first
+          items:
+            type: object
+            required: [filename, characters]
+            properties:
+              filename: { type: string }
+              characters: { type: integer }
     KnowledgeBase:
       type: object
       required: [slug, name, scope, serving_mode, status]
@@ -5306,7 +5360,7 @@ components:
         owner_project: { type: [string, "null"], description: "the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base" }
         distillation:
           type: [object, "null"]
-          description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`"
+          description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one)"
         eval_result:
           type: [object, "null"]
           description: the last run of the eval set

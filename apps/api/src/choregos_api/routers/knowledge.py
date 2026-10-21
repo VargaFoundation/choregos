@@ -20,7 +20,7 @@ from typing import Annotated
 
 import httpx
 from choregos_adapters.registry import fakes_enabled
-from fastapi import APIRouter, Path, Request, Response, status
+from fastapi import APIRouter, Path, Query, Request, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
@@ -50,6 +50,8 @@ from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
     KnowledgeBasePatch,
+    KnowledgeDistillEstimate,
+    KnowledgeDistillRequest,
     KnowledgeDocumentDto,
     KnowledgeEvalSet,
     KnowledgeSearchRequest,
@@ -1152,19 +1154,50 @@ async def sync_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) 
     return dto
 
 
+def _in_passes_not_yet() -> ApiError:
+    return ApiError(
+        status.HTTP_501_NOT_IMPLEMENTED,
+        "Not implemented",
+        "distillation in passes (exclude, max_usd, estimate) lands with S42-10c; the contract is fixed here",
+        extra={"code": "distill_in_passes_not_implemented"},
+    )
+
+
+@router.get(
+    "/orgs/{org}/knowledge/{slug}/distill/estimate",
+    response_model=KnowledgeDistillEstimate,
+    operation_id="estimateKnowledgeDistillation",
+)
+async def estimate_knowledge_distillation(
+    org: str,
+    slug: Slug,
+    session: Db,
+    principal: Me,
+    exclude: Annotated[list[str] | None, Query(max_length=20)] = None,
+) -> KnowledgeDistillEstimate:
+    """What distilling the base would read and cost, with no model call. Same rights as `distill`."""
+    base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
+    raise _in_passes_not_yet()
+
+
 @router.post(
     "/orgs/{org}/knowledge/{slug}/distill",
     response_model=KnowledgeBaseDto,
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="distillKnowledgeBase",
 )
-async def distill_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+async def distill_knowledge_base(
+    org: str, slug: Slug, session: Db, principal: Me, body: KnowledgeDistillRequest | None = None
+) -> KnowledgeBaseDto:
     """The `knowledge-distiller` compiles the base into a principles skill, in the background; the
     version waits for a person's approval (`pending_review`). `agent:manage`."""
     from ..knowledge.distill import distill
 
     base = await _base(session, principal, org, slug)
     _curate(principal, org, base)
+    if body is not None and (body.exclude or body.max_usd is not None):
+        raise _in_passes_not_yet()
     if (base.distillation or {}).get("status") == "running":
         raise conflict(f"knowledge base `{slug}` is already being distilled")
     base.distillation = {"status": "running", "requested_by": principal.email}
