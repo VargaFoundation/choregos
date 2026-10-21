@@ -760,6 +760,22 @@ server answered (the call waits up to `courtier_attente_ecriture_s`, 30 s, then 
 the action's id), and calling it again with the same arguments returns the same action instead of
 writing twice. A write set to `approval` waits for a person instead ([ADR 0034](adr/0034-connectors-by-capability.md) §7).
 
+**What a server answers is bounded before the agent reads it** (#755). A third-party server writes
+what lands in the agent's context, so the broker holds every result, read or write, to three rules:
+
+| Rule | What the agent gets |
+| :-- | :-- |
+| The server declares an `outputSchema` for the operation (captured at discovery) and its `structuredContent` does not match it, or is missing | `422`, `type: output_schema`, naming where and which rule failed — never the payload. A governed write is never refused this way: its effect already happened |
+| The result holds a secret (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) | the value masked as `[REDACTED]`, in text blocks, embedded text resources and the strings of `structuredContent` |
+| The result weighs more than `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB by default) as JSON | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; `structuredContent` is dropped |
+
+The cap is the deployment's, for every operation; a per-operation cap does not exist yet.
+
+A YAML catalogue tool and a plugin's tool answer through the same cap and the same masking (#759):
+an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, over the cap,
+becomes `{text: <its JSON, cut, with the marker>, truncated}`. Neither declares an output schema,
+and the injection guard does not read their answers yet.
+
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
 
