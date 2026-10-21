@@ -95,3 +95,65 @@ async def test_un_proprietaire_de_projet_ne_renomme_pas_l_organisation(
 
 async def test_un_slug_mal_forme_est_refuse(client: AsyncClient, admin: str) -> None:
     assert (await client.patch(f"{ORG}/varga", json={"slug": "Pas Bon"})).status_code == 422
+
+
+# ── S42-01 : an instance administrator granted by an edition plugin, member of nothing ──
+
+
+async def _retirer_les_appartenances(email: str) -> None:
+    """The dev login enrols a newcomer in the default organisation: undo it, he is a real outsider."""
+    from choregos_api.db.models import Membership, User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import delete, select
+
+    async with session_scope(orgs="*") as session:
+        moi = (await session.execute(select(User).where(User.email == email))).scalar_one()
+        await session.execute(delete(Membership).where(Membership.user_id == moi.id))
+
+
+async def _declarer_administrateur(emails: set[str]) -> None:
+    from choregos_api.edition import declarer_un_administrateur_de_plateforme, reinitialiser
+
+    reinitialiser()
+    declarer_un_administrateur_de_plateforme(lambda session, principal: principal.email in emails)
+
+
+async def test_un_administrateur_de_plateforme_non_membre_renomme_nom_et_slug(
+    client: AsyncClient, admin: str
+) -> None:
+    from choregos_api.edition import reinitialiser
+
+    await _declarer_administrateur({"plateforme@exemple.dev"})
+    try:
+        await login(client, "plateforme@exemple.dev")
+        await _retirer_les_appartenances("plateforme@exemple.dev")
+        assert (await client.get(ORG)).json() == [], "he belongs to no organisation"
+        renomme = await client.patch(f"{ORG}/varga", json={"name": "Diametral", "slug": "diametral"})
+        assert renomme.status_code == 200, renomme.text
+        assert renomme.json() == {"slug": "diametral", "name": "Diametral", "role": None, "currency": "EUR"}
+        await login(client, "admin@varga.dev")
+        assert {(o["slug"], o["name"]) for o in (await client.get(ORG)).json()} == {
+            ("diametral", "Diametral")
+        }
+        (ligne,) = [
+            a for a in (await client.get("/api/v1/audit")).json()["items"] if a["action"] == "org.update"
+        ]
+        assert ligne["payload"]["avant"]["slug"] == "varga"
+        assert ligne["payload"]["apres"] == {"slug": "diametral", "name": "Diametral", "currency": "EUR"}
+    finally:
+        reinitialiser()
+
+
+async def test_un_non_membre_sans_droit_de_plateforme_est_refuse(client: AsyncClient, admin: str) -> None:
+    from choregos_api.edition import reinitialiser
+
+    await _declarer_administrateur({"plateforme@exemple.dev"})
+    try:
+        await login(client, "curieux@exemple.dev")
+        await _retirer_les_appartenances("curieux@exemple.dev")
+        refus = await client.patch(f"{ORG}/varga", json={"name": "My place"})
+        assert refus.status_code == 403, refus.text
+        await login(client, "admin@varga.dev")
+        assert {o["name"] for o in (await client.get(ORG)).json()} == {"Varga Foundation"}
+    finally:
+        reinitialiser()

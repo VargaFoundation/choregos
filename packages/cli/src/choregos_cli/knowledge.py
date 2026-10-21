@@ -324,9 +324,14 @@ def print_plan(plan: Plan) -> None:
 
 
 def _org(org: str | None) -> str:
-    from .client import Profile
+    from .client import NoOrganisationError, Profile
+    from .main import fail
 
-    return org or Profile.load().org
+    try:
+        return Profile.load().organisation(org)
+    except NoOrganisationError as exc:
+        fail(str(exc))
+        raise
 
 
 def _client() -> Client:

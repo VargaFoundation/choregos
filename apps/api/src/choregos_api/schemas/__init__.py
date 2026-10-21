@@ -200,6 +200,8 @@ from .plateforme import (
     ConformanceReport,
     ExecutorInfo,
     GatewayKeyInfo,
+    PlatformIdentity,
+    PlatformIdentityRow,
     WebhookAck,
 )
 from .procedures import ProcedureDto, ProcedureSection, ProcedureSummary, VendorDocDto
@@ -437,6 +439,8 @@ __all__ = [
     "OrgDto",
     "OrgUpdate",
     "PageMeta",
+    "PlatformIdentity",
+    "PlatformIdentityRow",
     "PolicyCeilingDto",
     "PolicyCeilingPut",
     "PolicyDto",

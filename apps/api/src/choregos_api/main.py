@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -48,6 +50,7 @@ from .routers import (
     model_catalogue,
     models,
     org_connectors,
+    platform_identity,
     procedures,
     projects,
     readiness,
@@ -222,6 +225,10 @@ def _verifier_les_sections(servies: set[tuple[str, str]]) -> None:
             raise RuntimeError(f"section d'administration `{nom}` invalide : {detail}")
         if section["permission"] not in {p.value for p in Permission}:
             raise RuntimeError(f"section `{nom}` : permission inconnue `{section['permission']}`")
+        connues_p = {p.value for p in Permission}
+        for bloc in section["blocks"]:
+            if "permission" in bloc and bloc["permission"] not in connues_p:
+                raise RuntimeError(f"section `{nom}` : unknown block permission `{bloc['permission']}`")
         for methode, chemin in chemins_d_une_section(section):
             if (methode, forme(API_PREFIX + chemin)) not in connues:
                 raise RuntimeError(f"section `{nom}` : `{methode} {chemin}` n'est servi par aucune route")
@@ -290,6 +297,7 @@ def create_app() -> FastAPI:
         theme.router,
         integrations.router,
         procedures.router,
+        platform_identity.router,
         projects.router,
         readiness.router,
         connectors.router,
@@ -340,13 +348,22 @@ def create_app() -> FastAPI:
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
+    def _revision_de_construction() -> str | None:
+        """The source revision the image was built from (`CHOREGOS_BUILD_REVISION`, set by the build).
+
+        Public like the rest of `/edition`. Anything that is not a hex commit id is dropped, so a
+        misconfigured variable cannot put free text in a public response.
+        """
+        valeur = os.environ.get("CHOREGOS_BUILD_REVISION", "").strip()
+        return valeur if re.fullmatch(r"[0-9a-f]{7,40}", valeur) else None
+
     async def edition_courante() -> dict[str, Any]:
         """Quelle édition tourne, et ce qu'elle s'autorise (ADR 0024).
 
         Sans route, la seule façon de savoir sur quoi on est branché serait de tenter une action
         et de lire le refus. Un exploitant doit pouvoir le demander.
         """
-        from .edition import courante, edition_version, fonctions, publisher
+        from .edition import CORE_LICENCE, courante, edition_licence, edition_version, fonctions, publisher
 
         return {
             "edition": courante(),
@@ -354,6 +371,9 @@ def create_app() -> FastAPI:
             "version": __version__,
             "publisher": publisher(),
             "edition_version": edition_version(),
+            "licence": CORE_LICENCE,
+            "edition_licence": edition_licence(),
+            "build": {"revision": _revision_de_construction()},
         }
 
     # Le contrat la place sous `/api/v1` (`servers: /api/v1`) : c'est là que la console la
