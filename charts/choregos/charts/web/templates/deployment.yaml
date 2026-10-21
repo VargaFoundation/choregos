@@ -32,8 +32,6 @@ spec:
               value: https://api.{{ .Values.global.domain }}
             - name: NEXT_PUBLIC_API_MODE
               value: {{ ternary "mock" "live" .Values.global.fakes | quote }}
-            - name: NEXT_PUBLIC_DEFAULT_ORG
-              value: {{ .Values.global.defaultOrg | default "varga" | quote }}
             - name: NODE_ENV
               value: production
           readinessProbe:

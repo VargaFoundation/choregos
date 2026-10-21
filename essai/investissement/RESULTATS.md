@@ -154,3 +154,28 @@ says so. **What it finds relevant is not a research result**: a DSR of 0.03 pass
 
 Waiting: each child's attested decision (`t-decide`, group `owner`), then the campaign's. They are a
 person's statement ("I read the memo…") and are left to Vincent.
+
+## 2026-10-21, evening — `RESEARCH-5`, `preset:regulated` with gVisor
+
+The dev cluster got gVisor: `runsc` 20261005.0 (sha512-pinned, the release of
+`dev/scripts/gvisor.sh`) in K3s's containerd on the three nodes, one at a time, canary first
+(DiametralGroup/infra#1224); the `gvisor` RuntimeClass by Argo CD; the runner pool's template
+set to `runtimeClass: gvisor` (choregos-deploy#83). The project's policy went back to
+`preset:regulated` unchanged (version 3, `sandbox.runtime: gvisor`), and `RESEARCH-5` was opened
+with RESEARCH-3's fields (thresholds as shipped).
+
+| # | Step | Result |
+|---|---|---|
+| 1 | the nodes | a busybox pod `runtimeClassName: gvisor` on each node prints "Starting gVisor..." and reaches DNS and the apiserver's ClusterIP (Cilium); the three nodes Ready, etcd healthy, no pod newly failing |
+| 2 | the pool | the warm sandbox `choregos-runner-*` runs under gVisor (`dmesg` inside it: "Starting gVisor...") |
+| 3 | snapshot, profile (jobs) | 20 symbols, 39,180 rows, `missing=0`, `bars_sha256=a2f53b77…` (a fifth version of the same request); 20 products, 3 clusters |
+| 4 | strategize, real model | $0.175 |
+| 5 | backtest (job) | 80 trials, best out-of-sample DSR 0.546, `relevant_count=0` |
+| 6 | verdict | `backtested → not_relevant`, 4 min 33 s after opening |
+
+The four steps ran in four sandbox pods, each `runtimeClassName: gvisor` (`kubectl get pods`
+right after): pandas and numpy run under gVisor, and so does the network (the snapshot fetched its 20 symbols, `reused=0`).
+
+Not proven by this run: that the runner could not have run under `runc` — the readiness item
+`runtime-class` (S38-13d) and the executor's refusal (S38-13b, S38-13e) are what keeps a policy
+asking for gVisor off a pool that lacks it.

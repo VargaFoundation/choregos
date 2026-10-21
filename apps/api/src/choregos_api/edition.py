@@ -32,7 +32,11 @@ _etat: dict[str, object] = {
     "fonctions": frozenset[str](),
     "publisher": None,
     "edition_version": None,
+    "edition_licence": None,
 }
+
+#: The licence the core is distributed under (an SPDX identifier): the LICENSE file at the root.
+CORE_LICENCE: Final = "Apache-2.0"
 
 _MAX_PUBLISHER = 80
 _MAX_VERSION = 40
@@ -45,12 +49,15 @@ def declarer(
     fonctions: frozenset[str] | None = None,
     publisher: str | None = None,
     version: str | None = None,
+    licence: str | None = None,
 ) -> None:
     """Called by the enterprise edition when it loads. The core never calls it.
 
     `publisher` (who publishes the running edition) and `version` (the edition plugin's own version)
     are announced by the plugin and only rendered by the core: the core never names an edition's
     publisher itself. Both are optional, and refused for the community edition, which has neither.
+    `licence` is the licence the edition plugin is distributed under, announced the same way (a
+    free label such as an SPDX identifier, 1 to 80 characters), shown in the console's About panel.
     """
     if nom not in (COMMUNAUTAIRE, ENTREPRISE):
         raise ValueError(f"édition inconnue : {nom!r}")
@@ -60,16 +67,21 @@ def declarer(
             raise ValueError(
                 f"publisher must be 1 to {_MAX_PUBLISHER} characters, without control characters"
             )
+    if licence is not None:
+        licence = licence.strip()
+        if not 1 <= len(licence) <= _MAX_PUBLISHER or any(ord(c) < 32 or ord(c) == 127 for c in licence):
+            raise ValueError(f"licence must be 1 to {_MAX_PUBLISHER} characters, without control characters")
     if version is not None and (len(version) > _MAX_VERSION or not _VERSION_FORMAT.match(version)):
         raise ValueError(
             f"edition version must match {_VERSION_FORMAT.pattern} (at most {_MAX_VERSION} characters)"
         )
-    if nom == COMMUNAUTAIRE and (publisher is not None or version is not None):
-        raise ValueError("the community edition has no publisher and no edition version")
+    if nom == COMMUNAUTAIRE and (publisher is not None or version is not None or licence is not None):
+        raise ValueError("the community edition has no publisher, no edition version and no licence")
     _etat["edition"] = nom
     _etat["fonctions"] = fonctions or frozenset[str]()
     _etat["publisher"] = publisher
     _etat["edition_version"] = version
+    _etat["edition_licence"] = licence
 
 
 #: Ce que le CŒUR sait faire d'une liste de groupes d'IdP : `choregos:<org>:<role>`, et un groupe
@@ -131,6 +143,12 @@ def publisher() -> str | None:
 def edition_version() -> str | None:
     """The edition plugin's own version, as announced by it; `None` in the community edition."""
     valeur = _etat["edition_version"]
+    return valeur if isinstance(valeur, str) else None
+
+
+def edition_licence() -> str | None:
+    """The licence of the edition plugin, as announced by it; `None` in the community edition."""
+    valeur = _etat["edition_licence"]
     return valeur if isinstance(valeur, str) else None
 
 

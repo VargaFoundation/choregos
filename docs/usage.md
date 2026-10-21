@@ -12,6 +12,16 @@ make ci        # lint, strict typing, the test suite, contracts, charts
 
 `make demo` uses the `fake` connectors. It proves the machinery, not the integrations.
 
+### Which version is deployed?
+
+**About**, at the bottom of the sidebar (an icon when the sidebar is folded; in the **Menu** under
+1280 px), opens a panel with what the deployment runs: the product name, the core's version and
+licence, the edition (community or enterprise) and, for an edition that announces them, its
+version, publisher and licence, then the build revision and links to the source and the
+documentation. *Copy for support* puts the product, versions, edition and revision on the clipboard
+as plain text, ready for a support request. The revision reads *not recorded* on an image built
+without one.
+
 ## 2. Create a project
 
 Three ways, same result: the web wizard (`/projects/new`), the CLI, or the API.
@@ -140,8 +150,8 @@ the usual failures mean, with this platform's webhook and callback addresses fil
 [`docs/procedures/`](procedures/README.md), generated from the same files
 ([ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)); `GET /procedures` serves it.
 
-**The organisation's connectors.** A directory, a device manager, an MCP server is declared once
-by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
+**Installed connectors (the organisation's).** A directory, a device manager, an MCP server is declared once
+by the organisation's administrator (*Administration → Installed connectors*, `POST /orgs/{org}/connectors`),
 named, and shared by its projects. It is born with the operations its type declares — a read
 `allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-governed-actions-in-the-core.md)) —
 and each operation carries its **policy** (`allowed`, `approval`, `forbidden`), the **project
@@ -178,8 +188,8 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
-**The catalogue, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
-catalogues list what exists: `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
+**The catalogues, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
+catalogues list what the platform offers (*Catalogue → MCP servers* and *Catalogue → Connector types* in the console; installing from either lands in *Administration → Installed connectors*): `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
 (the registry's connector types by family, organisation or project scope, where each is installed or
 configured; platform plumbing and fakes are left out). **Every member of the organisation reads them**,
 whether the role is an organisation role or only a project role. Each entry carries `can`
@@ -1153,6 +1163,11 @@ the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price pe
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 
+- **Which version?** Each row says `runs <upstream model> via <provider>`, with the context window and
+  the Tools / Vision badges, and the Tiers card says what `platform/<tier>` resolves to. That is the
+  upstream model **as the gateway is configured** (LiteLLM `/model/info`) at the last sync, dated on the
+  Gateway card; it carries a dated version only if the gateway declares dated names. It is not proof of
+  the version the provider actually served for a run.
 - **Modes**: `open` (the default; everything the gateway lists is usable, the catalogue only
   restricts what it has an entry for) and `curated` (only enabled entries are usable; a model
   discovered later arrives disabled). Switching to `curated` shows first the agents and project
@@ -2064,7 +2079,8 @@ same as a table with an organisation column.
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id
 `<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
-organisation by its id. What does not follow: addresses already copied elsewhere (an MCP client's
+organisation by its id. A platform administrator granted by an edition plugin can rename an
+organisation they do not belong to (the response then carries no `role`). What does not follow: addresses already copied elsewhere (an MCP client's
 configuration), IdP groups that still name the old slug, and `oidc.defaultOrg` if it names it.
 
 ```bash

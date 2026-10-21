@@ -11,6 +11,8 @@ test("a model disabled in /admin/models is not offered when creating an agent", 
   await expect(page.getByRole("heading", { name: "Models", exact: true })).toBeVisible();
   const row = page.getByTestId("model-platform/cheap");
   await expect(row).toBeVisible();
+  await expect(row.getByTestId("upstream-platform/cheap")).toContainText("runs anthropic/claude-haiku-4-5");
+  await expect(row).toContainText("200k tokens");
   await row.getByLabel("Enable platform/cheap").click();
   await expect(page.getByText("platform/cheap disabled")).toBeVisible();
 

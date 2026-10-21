@@ -74,3 +74,16 @@ class WebhookAck(Dto):
     accepted: bool
     duplicate: bool = False
     events: int = 0
+
+
+class PlatformIdentityRow(Dto):
+    key: str
+    label: str
+    #: Display value; a secret shows only `set` or `missing`.
+    value: str
+    #: `settings`: set by the deployment; `derived`: computed from other settings; `default`: built in.
+    source: Literal["settings", "derived", "default"]
+
+
+class PlatformIdentity(Dto):
+    items: list[PlatformIdentityRow]

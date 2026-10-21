@@ -18,6 +18,8 @@ export type {
   AuditPage,
   ConnectorType,
   ExecutorInfo,
+  PlatformIdentity,
+  PlatformIdentityRow,
   Membership,
   MembershipUpsert,
   Org,

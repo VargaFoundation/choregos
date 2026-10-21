@@ -2,6 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { InstanceIdentityCard } from "@/components/admin/instance-identity";
 import { Card, Empty, EtatDeLecture, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 
@@ -11,6 +12,7 @@ export default function PlatformPage() {
   const executors = useQuery({ queryKey: ["executors"], queryFn: () => api.executors() });
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <InstanceIdentityCard />
       <Card title="Agent backends">
         <ul className="space-y-1 text-xs">
           {(backends.data ?? []).map((backend) => (
