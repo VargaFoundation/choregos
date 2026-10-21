@@ -28,7 +28,7 @@ def _pattern(file: str, rule: str) -> dict[str, Any]:
 
 
 def _latest_rule() -> dict[str, Any]:
-    policy = yaml.safe_load((POLICIES / "images.yaml").read_text())
+    policy = yaml.safe_load((POLICIES / "image-tags.yaml").read_text())
     rule: dict[str, Any] = next(r for r in policy["spec"]["rules"] if r["name"] == "interdire-latest")
     return rule
 
@@ -88,7 +88,7 @@ def test_a_tagged_or_digest_pinned_image_passes(image: str) -> None:
 
 
 def test_the_latest_tag_rule_names_ephemeral_containers_as_out_of_scope() -> None:
-    text = (POLICIES / "images.yaml").read_text()
+    text = (POLICIES / "image-tags.yaml").read_text()
     assert "Ephemeral containers" in text and "OUT of this rule on purpose" in text
     for rule in yaml.safe_load(text)["spec"]["rules"]:
         assert "ephemeralContainers" not in str(rule)

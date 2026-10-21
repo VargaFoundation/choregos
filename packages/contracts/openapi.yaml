@@ -3340,6 +3340,23 @@ paths:
                   edition_version:
                     type: [string, "null"]
                     description: the version of the edition plugin; null in the community edition
+                  licence:
+                    type: string
+                    maxLength: 80
+                    description: the licence the core is distributed under (an SPDX identifier)
+                  edition_licence:
+                    type: [string, "null"]
+                    maxLength: 80
+                    description: the licence of the edition plugin, as announced by it; null in the community edition or when the plugin announces none
+                  build:
+                    type: object
+                    required: [revision]
+                    description: what built the running image. Public, like the rest of this response.
+                    properties:
+                      revision:
+                        type: [string, "null"]
+                        pattern: "^[0-9a-f]{7,40}$"
+                        description: the source revision the image was built from; null when the build did not record it
   /theme:
     get:
       tags: [session]
@@ -5509,7 +5526,7 @@ components:
             stage_usd: { type: object, additionalProperties: { type: object, additionalProperties: { type: number } } }
             max_turns: { type: object, additionalProperties: { type: integer } }
             max_minutes: { type: object, additionalProperties: { type: integer } }
-            tool_calls_per_run: { type: [integer, "null"], minimum: 1 }
+            tool_calls_per_run: { type: [integer, "null"], minimum: 0 }
             daily_project_usd: { type: [number, "null"], exclusiveMinimum: 0 }
         attempts:
           type: object

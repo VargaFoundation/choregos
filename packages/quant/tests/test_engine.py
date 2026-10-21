@@ -73,6 +73,25 @@ def test_metrics_shape(workdir: Path) -> None:
     assert re.search(r"\.\d{7,}", raw) is None  # at most 6 decimals
 
 
+def test_metrics_carry_the_thresholds_the_engine_applied() -> None:
+    """A product's memo quotes its bar from `metrics.thresholds` (#824): it is the campaign's, as applied."""
+    bars = {"AAA": _series(synth_rows("AAA", 5))}
+    meta = {"bars_sha256": "x", "strategies_sha256": "y"}
+    campaign = parse_campaign(
+        {**CAMPAIGN, "symbols": ["AAA"], "min_dsr": 0.5, "max_drawdown": 0.2, "min_trades": 3}
+    )
+    doc = engine.run_backtest(campaign, bars, validate_strategies(STRATEGIES), meta)
+    assert doc["thresholds"] == {"min_dsr": 0.5, "max_drawdown": 0.2, "min_trades": 3}
+    defaults = engine.run_backtest(
+        parse_campaign({**CAMPAIGN, "symbols": ["AAA"]}), bars, validate_strategies(STRATEGIES), meta
+    )
+    assert defaults["thresholds"] == {
+        "min_dsr": parse_campaign(CAMPAIGN).min_dsr,
+        "max_drawdown": parse_campaign(CAMPAIGN).max_drawdown,
+        "min_trades": parse_campaign(CAMPAIGN).min_trades,
+    }
+
+
 def test_report_is_static_with_disclaimer(workdir: Path) -> None:
     run(workdir, "o")
     html = (workdir / "o" / "report.html").read_text()
