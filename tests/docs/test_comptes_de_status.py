@@ -26,3 +26,14 @@ def test_le_total_est_celui_du_tableau() -> None:
     assert tuple(int(n) for n in annonce.groups()) == compte, (
         f"STATUS annonce {annonce.groups()} et son tableau dit {compte}"
     )
+
+
+STORY_ROW = re.compile(r"^\| ([A-Z][A-Za-z0-9-]+) \| ", re.M)
+
+
+def test_each_story_has_one_row() -> None:
+    """A rebase that keeps both sides leaves a story twice, and the total counts it twice (#794)."""
+    ids = STORY_ROW.findall(STATUS.read_text(encoding="utf-8"))
+    assert len(ids) > 100, "the table no longer parses: its row shape changed without this test"
+    twice = sorted({story for story in ids if ids.count(story) > 1} - {"Story"})
+    assert not twice, f"STATUS has these stories on more than one row: {twice}"
