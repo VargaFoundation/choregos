@@ -91,6 +91,13 @@ Rovo). A version's **runtime** says how it runs: `acp` (a coding agent the runne
 agent written in code, ADR 0063) or `a2a` (a remote agent: the runner pod calls it, a declared cost
 is booked, the same gates read its outputs).
 
+## Knowledge bases
+
+A knowledge base is a corpus a human curates and agents read. Its **reach** (`scope`) says which runs are
+served it; its **grants** give people a role on it (`viewer`, `editor`, `owner`); `restricted` hides it
+from people who hold no grant. One server function decides every gesture
+([ADR 0081](adr/0081-knowledge-base-rights.md)).
+
 ## Memory
 
 What agents learn from work is kept in **memories** ([ADR 0075](adr/0075-an-agent-reads-several-memories.md)),

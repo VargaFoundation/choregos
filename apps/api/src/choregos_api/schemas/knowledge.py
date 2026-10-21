@@ -31,6 +31,8 @@ class KnowledgeBaseCreate(Dto):
     projects: list[str] = Field(default_factory=list, max_length=200)
     groups: list[str] = Field(default_factory=list, max_length=200)
     serving_mode: ServingMode = "files"
+    #: people read it only through a grant; runs it is attached to are still served (S42-11)
+    restricted: bool = False
 
     @model_validator(mode="after")
     def _scope(self) -> KnowledgeBaseCreate:
@@ -55,6 +57,44 @@ class KnowledgeBasePatch(Dto):
     groups: list[str] | None = Field(default=None, max_length=200)
     serving_mode: ServingMode | None = None
     status: Literal["active", "archived"] | None = None
+    #: `agent:manage` only, like the rest of the reach (S42-11)
+    restricted: bool | None = None
+
+
+GrantSubject = Literal["user", "group", "project"]
+GrantRole = Literal["viewer", "editor", "owner"]
+
+
+class KnowledgeGrantDto(Dto):
+    """A role on one base given to a person, a group or a project (S42-11, ADR 0081)."""
+
+    subject_type: GrantSubject
+    #: a member id or an e-mail (`user`), an IdP group name (`group`), a project slug (`project`)
+    subject: str = Field(min_length=1, max_length=320)
+    display: str | None = None
+    role: GrantRole
+    #: read-only: an e-mail with no member yet, kept until that person signs in
+    pending: bool = False
+    created_by: str | None = None
+    created_at: datetime | None = None
+
+
+class KnowledgeGrants(Dto):
+    grants: list[KnowledgeGrantDto] = Field(default_factory=list, max_length=200)
+
+
+class KnowledgeGrantsPut(Dto):
+    grants: list[KnowledgeGrantDto] = Field(default_factory=list, max_length=200)
+
+
+class KnowledgePermissions(Dto):
+    """What the caller may do with a base, decided by the server (ADR 0081)."""
+
+    edit: bool
+    distill: bool
+    share: bool
+    archive: bool
+    widen: bool
 
 
 class KnowledgeDocumentDto(Dto):
@@ -105,6 +145,15 @@ class KnowledgeBaseDto(Dto):
     distillation: dict[str, Any] | None = None
     #: the project this base was created from (S39-14): its owners curate it, never widen it
     owner_project: str | None = None
+    #: people read it only through a grant; runs it is attached to are still served (S42-11)
+    restricted: bool = False
+    #: what the caller may do, and the server's sentence when it may not edit (S42-11)
+    can: KnowledgePermissions | None = None
+    cannot_reason: str | None = None
+    #: the caller's role through grants or ownership; None for a plain reader through the reach
+    my_role: GrantRole | None = None
+    #: a reading of ONE base carries them, to a caller who may share it
+    grants: list[KnowledgeGrantDto] | None = None
 
 
 class KnowledgeEvalCase(Dto):

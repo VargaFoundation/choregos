@@ -29,11 +29,14 @@ from ..config import Settings, get_settings
 from ..db.models import (
     ConnectorOperation,
     KnowledgeBase,
+    KnowledgeGrant,
     Organization,
     OrgConnector,
     Skill,
 )
+from ..knowledge.access import visible_to
 from ..limiteur import Limiteur
+from ..rbac import Principal
 from ..schemas import AgentDraft, AgentDraftRequest, AgentSampleInput, AgentSpec
 from ..schemas.agents import RESERVED_SLUGS, AgentSkillRef
 from .agent_releases import production_spec_of
@@ -218,7 +221,7 @@ def slug_from_name(name: str) -> str:
     return "new-agent" if len(slug) < 2 or slug in RESERVED_SLUGS else slug
 
 
-async def context_of(session: AsyncSession, organisation: Organization) -> DraftContext:
+async def context_of(session: AsyncSession, organisation: Organization, principal: Principal) -> DraftContext:
     """Usable skills, active knowledge bases and MCP connectors, each list capped."""
     context = DraftContext()
     skills = (
@@ -239,10 +242,19 @@ async def context_of(session: AsyncSession, organisation: Organization) -> Draft
             select(KnowledgeBase)
             .where(KnowledgeBase.org_id == organisation.id, KnowledgeBase.status == "active")
             .order_by(KnowledgeBase.slug)
-            .limit(MAX_LISTED)
         )
     ).scalars()
+    grants: dict[str, list[KnowledgeGrant]] = {}
+    for grant in (
+        await session.execute(select(KnowledgeGrant).where(KnowledgeGrant.org_id == organisation.id))
+    ).scalars():
+        grants.setdefault(grant.knowledge_base_id, []).append(grant)
     for base in bases:
+        if len(context.knowledge) >= MAX_LISTED:
+            break
+        # A base the caller may not read is not suggested: its name alone would tell (ADR 0081).
+        if not visible_to(principal, organisation.slug, base, grants.get(base.id, [])):
+            continue
         reach = {"org": "every project", "projects": "some projects", "groups": "some groups"}.get(
             base.scope, base.scope
         )
@@ -385,11 +397,13 @@ def checked(
     )
 
 
-async def draft(session: AsyncSession, organisation: Organization, request: AgentDraftRequest) -> AgentDraft:
+async def draft(
+    session: AsyncSession, organisation: Organization, request: AgentDraftRequest, principal: Principal
+) -> AgentDraft:
     """The proposal for this request. Nothing is saved."""
     drafter = get_drafter()
     instructions = await instructions_for_drafter(session, organisation.id)
-    context = await context_of(session, organisation)
+    context = await context_of(session, organisation, principal)
     answer = await drafter.draft(instructions, request, context)
     return checked(answer, request, context, drafter.model)
 

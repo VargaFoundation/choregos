@@ -23,6 +23,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -1234,6 +1235,32 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     distillation: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     #: the project this base was created from (S39-14): its owners curate it, never widen it
     owner_project: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: people read it only through a grant (or as an administrator or owning-project owner); runs
+    #: that the base is attached to are still served (S42-11, ADR 0081)
+    restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+
+
+class KnowledgeGrant(Base, PkMixin, TimestampMixin):
+    """A role on one knowledge base given to a person, a group or a project (S42-11, ADR 0081).
+
+    `subject_type`: `user` (`subject` is a user id, or an e-mail kept as typed for a person with no
+    account yet), `group` (an IdP group name) or `project` (a project slug). `role`: viewer, editor
+    or owner. A grant gives people a role; it never serves a run.
+    """
+
+    __tablename__ = "knowledge_grants"
+    __table_args__ = (
+        UniqueConstraint("knowledge_base_id", "subject_type", "subject", name="uq_knowledge_grants_subject"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    subject_type: Mapped[str] = mapped_column(String(16))
+    subject: Mapped[str] = mapped_column(String(320))
+    role: Mapped[str] = mapped_column(String(16))
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class KnowledgeDocument(Base, PkMixin, TimestampMixin):

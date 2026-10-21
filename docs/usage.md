@@ -1510,6 +1510,29 @@ source (an estimate: a worker that is down at the cron minute syncs at its next 
 refresh** changes the mode, with **apply to all sources** to set the same schedule everywhere; the
 change takes effect at once, not at the end of the current wait. A manual sync always runs.
 
+#### Who may do what on a base
+
+Reach (`scope`) decides which runs are served a base; **grants** decide which people may change it
+([ADR 0081](adr/0081-knowledge-base-rights.md)). The server answers per caller in `can`
+(`edit`, `distill`, `share`, `archive`, `widen`), with `cannot_reason` and `my_role`.
+
+| Gesture | Org admin / owning project's owner | `owner` | `editor` | `viewer` |
+|---|---|---|---|---|
+| read | yes | yes | yes | yes |
+| upload, add a source, sync, distil, rename | yes | yes | yes | no |
+| share (edit grants), archive | yes | yes | no | no |
+| widen scope, projects, groups, `restricted` | admin only | no | no | no |
+
+```bash
+curl -X PUT $API/orgs/acme/knowledge/architecture/grants -H 'Content-Type: application/json' \
+  -d '{"grants": [{"subject_type": "group", "subject": "architects", "role": "editor"},
+                  {"subject_type": "user", "subject": "ana@acme.dev", "role": "viewer"}]}'
+```
+
+`subject_type` is `user` (a member id, or an e-mail: waiting, `pending`, until that person is a member),
+`group` or `project` (its explicit members). The list is replaced as a whole (at most 200). A
+`restricted` base is read by people only through a grant; its runs are still served.
+
 #### A knowledge base as code
 
 `choregos knowledge apply -f kb.yaml [--org <slug>] [--dry-run] [--prune]` makes a base match a
