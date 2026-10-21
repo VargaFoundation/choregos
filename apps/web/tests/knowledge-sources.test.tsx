@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { api } from "@/lib/api";
-import { nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
+import { nextSyncLabel, pageIdsOf, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
 import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -173,7 +173,7 @@ describe("the sources of a base (S33-04)", () => {
     expect(screen.queryByLabelText("site or drive id")).toBeNull();
     fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
     fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
-    fireEvent.change(screen.getByLabelText("page id"), { target: { value: " 12345 " } });
+    fireEvent.change(screen.getByLabelText("page ids"), { target: { value: " 12345 " } });
     fireEvent.click(screen.getByRole("button", { name: "add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
@@ -186,6 +186,38 @@ describe("the sources of a base (S33-04)", () => {
       }),
     );
     expect(screen.getByText(/everything the connector/)).toBeInTheDocument();
+  });
+
+  it("extracts page ids from numbers and pasted Confluence URLs (S42-09d)", () => {
+    const url = "https://acme.atlassian.net/wiki/spaces/ENG/pages/555/Deploy+guide";
+    expect(pageIdsOf(`12, ${url}  12\n https://acme.atlassian.net/wiki/pages/viewpage.action?pageId=77 junk`)).toEqual(["12", "555", "77"]);
+    expect(pageIdsOf("")).toEqual([]);
+    const base = { site: "", folder: "", url: "", ref: "", paths: "", space: "ENG" };
+    expect(sourceConfig("confluence", { ...base, pageId: `${url}, 7`, descendants: false })).toEqual({
+      space_key: "ENG", page_ids: ["555", "7"], descendants: false, include_attachments: false,
+    });
+    expect(sourceConfig("confluence", { ...base, pageId: url })).toEqual({ space_key: "ENG", page_id: "555", include_attachments: false });
+    expect(sourceConfig("confluence", { ...base, pageId: "", descendants: false })).toEqual({ space_key: "ENG", include_attachments: false });
+  });
+
+  it("sends the chosen pages without their sub-pages when the box is cleared", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
+    await screen.findByRole("option", { name: "wiki" });
+    fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
+    fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
+    fireEvent.change(screen.getByLabelText("page ids"), { target: { value: "1, 2" } });
+    fireEvent.click(screen.getByLabelText("and its sub-pages"));
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ config: { space_key: "ENG", page_ids: ["1", "2"], descendants: false, include_attachments: false } }),
+      ),
+    );
   });
 
   it("sends no page id for a whole space, and asks for attachments when ticked", () => {
