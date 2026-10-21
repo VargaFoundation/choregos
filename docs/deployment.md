@@ -830,6 +830,23 @@ on the enterprise edition they say who publishes it and which version of the plu
 (`"publisher":"GraalSystems","edition_version":"0.2.0"`), and the admin page and the footer show
 them. They are `null` on the community edition, and absent from an older core.
 
+Three more fields feed the console's **About** entry (sidebar, bottom left; the mobile menu has
+it too):
+
+| Field | Meaning |
+|---|---|
+| `licence` | the licence of the core (`Apache-2.0`) |
+| `edition_licence` | the licence the edition's plugin announces through `declarer(..., licence=...)`; `null` on the community edition |
+| `build.revision` | the source commit the running image was built from, or `null` |
+
+`build.revision` comes from the `CHOREGOS_BUILD_REVISION` environment variable, which the API and
+worker images set from their `REVISION` build argument (`--build-arg REVISION=$(git rev-parse HEAD)`;
+the CI and release workflows pass the commit). An image built by hand without it reports `null`,
+and so does a value that is not a 7 to 40 character lowercase hexadecimal commit id. **`/edition` is
+public** (the sign-in page reads it), so the revision is public too: a commit id of an open source
+repository, but a deployment that does not want to say which commit it runs sets the variable to
+an empty string.
+
 This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
 second one is refused with a 409 that names the decision behind it
 ([ADR 0024](adr/0024-two-editions.md)). That is not an arbitrary cap — multi-tenancy is not
