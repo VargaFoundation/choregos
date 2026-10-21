@@ -143,6 +143,18 @@ charts-test:  ## helm unittest
 	fi
 	helm unittest charts/choregos
 
+.PHONY: policies-test
+policies-test:  ## The Kyverno engine judges infra/policies against infra/policies/tests
+	@# Pinned and checked, like helm-unittest above: Kyverno CLI 1.13.4 counts "want fail, got
+	@# pass" as a pass, so a policy weakened to admit `nginx` stayed green there.
+	@v=$$(kyverno version 2>/dev/null | awk '/^Version:/{print $$2}'); \
+	if [ "$$v" != "1.19.1" ]; then \
+	  echo "kyverno CLI is $${v:-absent}, pinned to 1.19.1:"; \
+	  echo "  https://github.com/kyverno/kyverno/releases/tag/v1.19.1 (kyverno-cli_v1.19.1_*)"; \
+	  exit 1; \
+	fi
+	kyverno test infra/policies/tests
+
 # ───────────────────────── images ─────────────────────────
 # `--target` n'est pas optionnel sur `api.Dockerfile` : sans lui, Docker construit la dernière
 # étape du fichier, qui est `worker`.
