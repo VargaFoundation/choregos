@@ -26,6 +26,7 @@
     }
   },
   "$defs": {
+    "block_permission": { "type": "string", "description": "optional: a core permission (same vocabulary as the section's) the caller must hold to see this block; the section's own permission still applies. A section with no visible block is not listed." },
     "path": { "type": "string", "pattern": "^/[A-Za-z0-9_{}/.:-]*$" },
     "form": {
       "type": "object",
@@ -33,6 +34,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "form" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "schema": { "type": "object", "description": "the JSON Schema of the values; the console derives the form from it" },
@@ -57,6 +59,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "table" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "list": { "$ref": "#/$defs/path" },
@@ -71,6 +74,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "action" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "label": { "type": "string" },
         "description": { "type": "string" },
         "path": { "$ref": "#/$defs/path" },
@@ -87,6 +91,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "secret_once" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "label": { "type": "string" },
         "description": { "type": "string" },
         "path": { "$ref": "#/$defs/path" },

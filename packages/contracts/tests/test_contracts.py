@@ -387,3 +387,19 @@ def test_the_network_denied_event_is_declared_and_the_openapi_names_the_four_ope
     } <= operations
     agent = spec["components"]["schemas"]["AgentSpec"]["properties"]["network"]
     assert agent == {"$ref": "#/components/schemas/AgentNetwork"}
+
+
+def test_admin_section_block_permission_is_optional_and_a_string() -> None:
+    """S42-02: every block kind may carry its own permission; a non-string is refused."""
+    validator = _validator("ui-manifest.schema.json")
+    section = _load("ui-manifest.example.json")
+    assert any("permission" in block for block in section["blocks"])
+    assert not list(validator.iter_errors(section))
+    for block in section["blocks"]:
+        broken = {**section, "blocks": [{**block, "permission": 7}]}
+        assert list(validator.iter_errors(broken)), block["kind"]
+    bare = {
+        **section,
+        "blocks": [{k: v for k, v in b.items() if k != "permission"} for b in section["blocks"]],
+    }
+    assert not list(validator.iter_errors(bare))
