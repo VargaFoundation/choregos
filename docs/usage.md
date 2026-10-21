@@ -12,6 +12,16 @@ make ci        # lint, strict typing, the test suite, contracts, charts
 
 `make demo` uses the `fake` connectors. It proves the machinery, not the integrations.
 
+### Which version is deployed?
+
+**About**, at the bottom of the sidebar (an icon when the sidebar is folded; in the **Menu** under
+1280 px), opens a panel with what the deployment runs: the product name, the core's version and
+licence, the edition (community or enterprise) and, for an edition that announces them, its
+version, publisher and licence, then the build revision and links to the source and the
+documentation. *Copy for support* puts the product, versions, edition and revision on the clipboard
+as plain text, ready for a support request. The revision reads *not recorded* on an image built
+without one.
+
 ## 2. Create a project
 
 Three ways, same result: the web wizard (`/projects/new`), the CLI, or the API.
@@ -2055,7 +2065,8 @@ same as a table with an organisation column.
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id
 `<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
-organisation by its id. What does not follow: addresses already copied elsewhere (an MCP client's
+organisation by its id. A platform administrator granted by an edition plugin can rename an
+organisation they do not belong to (the response then carries no `role`). What does not follow: addresses already copied elsewhere (an MCP client's
 configuration), IdP groups that still name the old slug, and `oidc.defaultOrg` if it names it.
 
 ```bash

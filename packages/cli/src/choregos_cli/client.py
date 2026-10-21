@@ -14,13 +14,19 @@ import httpx
 CONFIG_PATH = Path(os.environ.get("CHOREGOS_CONFIG", Path.home() / ".config" / "choregos" / "config.json"))
 
 
+class NoOrganisationError(RuntimeError):
+    """Neither `--org`, the profile nor `CHOREGOS_ORG` names an organisation."""
+
+
 @dataclass
 class Profile:
     """The connection profile, stored in `~/.config/choregos/config.json`."""
 
     api_url: str = "http://localhost:8000"
     token: str = ""
-    org: str = "varga"
+    #: No default organisation: a fresh installation names its own (`global.bootstrap.org`), and a
+    #: hard-coded one pointed every newcomer at an organisation that does not exist.
+    org: str = ""
 
     @classmethod
     def load(cls) -> Profile:
@@ -30,8 +36,18 @@ class Profile:
         return cls(
             api_url=os.environ.get("CHOREGOS_API_URL", "http://localhost:8000"),
             token=os.environ.get("CHOREGOS_TOKEN", ""),
-            org=os.environ.get("CHOREGOS_ORG", "varga"),
+            org=os.environ.get("CHOREGOS_ORG", ""),
         )
+
+    def organisation(self, override: str | None = None) -> str:
+        """`--org`, else the profile's organisation; otherwise a usage error naming both ways."""
+        chosen = override or self.org or os.environ.get("CHOREGOS_ORG", "")
+        if not chosen:
+            raise NoOrganisationError(
+                "no organisation: pass --org <slug>, set CHOREGOS_ORG, or save one in the profile "
+                "with `choregos login --org <slug>` (`choregos orgs list` shows yours)"
+            )
+        return chosen
 
     def save(self) -> Path:
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
