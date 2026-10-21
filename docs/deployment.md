@@ -722,6 +722,16 @@ it nothing breaks: the index serves full-text only and the knowledge page says s
 database: `CREATE EXTENSION vector;` as a superuser, then `ALTER TABLE knowledge_chunks ADD COLUMN
 embedding_vec vector;` as the owner of the schema, then **reindex** each index base.
 
+**Checking the sign-in configuration from the console.** *Admin → Platform* shows a read-only card,
+"How people sign in to this instance", for the platform administrator: the OIDC issuer, client id and
+discovery URL, whether the client secret is set (never its value), the redirect URI to register at the
+identity provider (`<apiUrl>/api/v1/auth/callback`), the MCP door's OAuth issuer, audience and registered
+clients, the session lifetime, the development login switch, and the bootstrap organisation and the
+number of bootstrap administrators (never their e-mails). It is the answer of
+`GET /api/v1/platform/identity`. Nothing is editable there: the values come from the chart
+(`global.oidc`, `global.mcp.oauth`), and a row marked `default` was not set by the deployment. When
+`oidc.issuer` reads "not configured", the instance still runs on the built-in development issuer.
+
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
 (`global.devLogin.enabled`, `global.devLogin.adminEmails`).
