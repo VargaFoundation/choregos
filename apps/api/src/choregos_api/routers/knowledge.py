@@ -715,9 +715,22 @@ def _confluence_config(config: dict[str, object]) -> dict[str, object]:
     page = config.get("page_id")
     if page not in (None, "") and not re.fullmatch(r"\d{1,20}", str(page)):
         raise unprocessable("`page_id` is the number in the page's URL (/pages/<id>/…)")
-    for flag in ("include_root", "include_attachments"):
+    ids = config.get("page_ids")
+    if ids not in (None, []):
+        if page not in (None, ""):
+            raise unprocessable("name `page_id` or `page_ids`, not both")
+        if (
+            not isinstance(ids, list)
+            or not len(ids) > 0
+            or len(ids) > 50
+            or not all(isinstance(x, str | int) and re.fullmatch(r"\d{1,20}", str(x)) for x in ids)
+        ):
+            raise unprocessable("`page_ids` is a list of at most 50 page numbers (/pages/<id>/…)")
+    for flag in ("include_root", "include_attachments", "descendants"):
         if flag in config and not isinstance(config[flag], bool):
             raise unprocessable(f"`{flag}` is true or false")
+    if config.get("descendants") is False and config.get("include_root") is False:
+        raise unprocessable("`descendants` false with `include_root` false leaves no page")
     labels = config.get("labels") or []
     if (
         not isinstance(labels, list)
@@ -728,6 +741,10 @@ def _confluence_config(config: dict[str, object]) -> dict[str, object]:
     out: dict[str, object] = {"space_key": space}
     if page not in (None, ""):
         out["page_id"] = str(page)
+    if isinstance(ids, list) and ids:
+        out["page_ids"] = list(dict.fromkeys(str(x) for x in ids))
+    if config.get("descendants") is False:
+        out["descendants"] = False  # absent means true: a stored config reads as before
     out["include_root"] = bool(config.get("include_root", True))
     out["include_attachments"] = bool(config.get("include_attachments", False))
     if labels:

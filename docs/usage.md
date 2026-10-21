@@ -12,6 +12,16 @@ make ci        # lint, strict typing, the test suite, contracts, charts
 
 `make demo` uses the `fake` connectors. It proves the machinery, not the integrations.
 
+### Which version is deployed?
+
+**About**, at the bottom of the sidebar (an icon when the sidebar is folded; in the **Menu** under
+1280 px), opens a panel with what the deployment runs: the product name, the core's version and
+licence, the edition (community or enterprise) and, for an edition that announces them, its
+version, publisher and licence, then the build revision and links to the source and the
+documentation. *Copy for support* puts the product, versions, edition and revision on the clipboard
+as plain text, ready for a support request. The revision reads *not recorded* on an image built
+without one.
+
 ## 2. Create a project
 
 Three ways, same result: the web wizard (`/projects/new`), the CLI, or the API.
@@ -140,8 +150,8 @@ the usual failures mean, with this platform's webhook and callback addresses fil
 [`docs/procedures/`](procedures/README.md), generated from the same files
 ([ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)); `GET /procedures` serves it.
 
-**The organisation's connectors.** A directory, a device manager, an MCP server is declared once
-by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
+**Installed connectors (the organisation's).** A directory, a device manager, an MCP server is declared once
+by the organisation's administrator (*Administration → Installed connectors*, `POST /orgs/{org}/connectors`),
 named, and shared by its projects. It is born with the operations its type declares — a read
 `allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-governed-actions-in-the-core.md)) —
 and each operation carries its **policy** (`allowed`, `approval`, `forbidden`), the **project
@@ -178,8 +188,8 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
-**The catalogue, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
-catalogues list what exists: `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
+**The catalogues, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
+catalogues list what the platform offers (*Catalogue → MCP servers* and *Catalogue → Connector types* in the console; installing from either lands in *Administration → Installed connectors*): `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
 (the registry's connector types by family, organisation or project scope, where each is installed or
 configured; platform plumbing and fakes are left out). **Every member of the organisation reads them**,
 whether the role is an organisation role or only a project role. Each entry carries `can`
@@ -1153,6 +1163,11 @@ the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price pe
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 
+- **Which version?** Each row says `runs <upstream model> via <provider>`, with the context window and
+  the Tools / Vision badges, and the Tiers card says what `platform/<tier>` resolves to. That is the
+  upstream model **as the gateway is configured** (LiteLLM `/model/info`) at the last sync, dated on the
+  Gateway card; it carries a dated version only if the gateway declares dated names. It is not proof of
+  the version the provider actually served for a run.
 - **Modes**: `open` (the default; everything the gateway lists is usable, the catalogue only
   restricts what it has an entry for) and `curated` (only enabled entries are usable; a model
   discovered later arrives disabled). Switching to `curated` shows first the agents and project
@@ -1475,6 +1490,10 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   on. The source names a `space_key` (`ENG`; a personal space starts with `~`) and optionally a
   `page_id`: that page **and everything under it** (`include_root: false` leaves the page itself
   out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
+  To read **chosen pages** instead, give `page_ids` (up to 50 numbers; not together with `page_id`; the
+  console accepts pasted page addresses) and, to leave the pages under them out, `descendants: false`
+  (`page_id` with `descendants: false` is one page). A chosen page that is missing or unreadable
+  refuses the sync by name; a page that leaves the chosen set (or its tree) is deleted at the next sync.
   Options: `include_attachments` (pdf, docx, pptx, xlsx, md, txt, html), `labels` (keep only pages
   carrying one of them; one request per page). Each sync lists the space once; only pages whose
   version number changed are downloaded again. A page that is deleted, archived, **moved out of the
@@ -1596,6 +1615,20 @@ Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting p
 **An organisation sets a ceiling that every project policy may only tighten**
 (`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):
 
+On the admin page, **Policy ceiling** is a form, grouped as the ceiling is: **Budgets** (a dollar cap per
+ticket size S/M/L/XL; under *Per-stage budgets*, one per role and size; max turns and max minutes per
+role, with a `default` row for every role not named; tool calls per run; daily spend per project;
+monthly spend of the organisation), **Attempts** (default attempts, accepted but not enforced;
+definition-of-done iterations; attempts per role), **Scope** (files granted without asking, files and
+lines in a diff) and **Findings** (per run). An empty field is no cap and is left out of what is
+saved; the grey figure in a field is what the platform applies when nobody sets one. A value below a
+field's minimum is flagged on the field and blocks the save; a refusal from the API (`422`) is shown on
+the field it names. Saving reads the ceiling again and changes only these fields, so the **Network
+access** card and any other key survive. **Advanced: raw JSON** keeps the whole ceiling editable as
+text (it is the way to reach a key the form has no row for).
+
+The same ceiling as JSON:
+
 ```json
 {"budgets": {"ticket_usd": {"M": 20}, "stage_usd": {"default": {"M": 6}}, "max_turns": {"default": 60},
              "max_minutes": {"implement": 45}, "tool_calls_per_run": 50, "daily_project_usd": 100,
@@ -1672,7 +1705,7 @@ wall: see [security](security.md).
   the allowed hosts (**No cap**, **Any public host**, or **Only these hosts**, one per line), the denied
   hosts, the requests per minute per host and per run, the built-in web tools (inherit, allow, deny) and
   the contact written into the User-Agent. It is the `network` section of the policy ceiling: saving
-  reads the whole ceiling again and replaces only that section, so the JSON **Policy ceiling** card below
+  reads the whole ceiling again and replaces only that section, so the **Policy ceiling** card below
   it and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
   flagged before anything is sent.
 - *The agent's* — the **Network access** section of the agent builder (new agent, new version): **Same as
@@ -2082,7 +2115,8 @@ same as a table with an organisation column.
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id
 `<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
-organisation by its id. What does not follow: addresses already copied elsewhere (an MCP client's
+organisation by its id. A platform administrator granted by an edition plugin can rename an
+organisation they do not belong to (the response then carries no `role`). What does not follow: addresses already copied elsewhere (an MCP client's
 configuration), IdP groups that still name the old slug, and `oidc.defaultOrg` if it names it.
 
 ```bash

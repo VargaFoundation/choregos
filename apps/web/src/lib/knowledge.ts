@@ -86,14 +86,30 @@ export function syncSummary(summary: Record<string, unknown> | null | undefined)
   return parts.length ? parts.join(" · ") : "no change";
 }
 
+/**
+ * The page ids in a field: numbers, or Confluence page addresses (`…/pages/<id>/Title`, `…pageId=<id>`),
+ * separated by commas, spaces or lines. Order kept, repeats dropped.
+ */
+export function pageIdsOf(text: string): string[] {
+  const found: string[] = [];
+  for (const token of text.split(/[\s,;]+/).filter(Boolean)) {
+    const id = /^\d+$/.test(token) ? token : (token.match(/\/pages\/(\d+)/) ?? token.match(/[?&]pageId=(\d+)/))?.[1];
+    if (id && !found.includes(id)) found.push(id);
+  }
+  return found;
+}
+
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
   kind: "sharepoint" | "confluence" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean },
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean },
 ): Record<string, unknown> {
   if (kind === "confluence") {
-    const page = (fields.pageId ?? "").trim();
-    return { space_key: (fields.space ?? "").trim(), ...(page ? { page_id: page } : {}), include_attachments: Boolean(fields.attachments) };
+    const ids = pageIdsOf(fields.pageId ?? "");
+    const pages = ids.length === 1 ? { page_id: ids[0] } : ids.length > 1 ? { page_ids: ids } : {};
+    // Sub-pages are the default; only "no" is sent, and only when a page was chosen.
+    const alone = ids.length > 0 && fields.descendants === false ? { descendants: false } : {};
+    return { space_key: (fields.space ?? "").trim(), ...pages, ...alone, include_attachments: Boolean(fields.attachments) };
   }
   if (kind === "sharepoint") {
     const site = fields.site.trim();

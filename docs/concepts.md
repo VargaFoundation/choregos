@@ -15,7 +15,7 @@ control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, th
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 A **catalogue** is what the platform *offers*; a **connector** is what an organisation has
-*installed*, and each project uses only what is enabled for it (ADR 0074). The image ships a catalogue of well-known MCP servers (and one of skills): listing an
+*installed* (the console shows them under *Installed connectors*); a **connector type** is one entry of the connector catalogue, the kind of system a connector can be an instance of (a directory, a tracker, a CI). Each project uses only what is enabled for it (ADR 0074). The image ships a catalogue of well-known MCP servers (and one of skills): listing an
 entry enables nothing, and installing one goes through the same governance as declaring it by hand
 ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)).
 
@@ -287,7 +287,9 @@ the **project's** profiles, the **organisation's tier** (`/admin/models`), the *
 (`platform/<tier>`); then it checks the result against the gateway's list, the backend, the eval
 matrix and, last, the **organisation's model catalogue** for the stage's role (a disabled model, or a
 model without an entry in `curated` mode, is refused, and `allow_unvalidated` does not bypass it). See
-[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md).
+[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md). `/admin/models` shows the upstream model
+each name resolves to, as the gateway declares it at the last sync (a dated id only if the gateway
+declares dated names); it does not show what the provider actually served.
 
 ## Where the money goes
 

@@ -46,6 +46,7 @@ export function KnowledgeSources({
   const [attachments, setAttachments] = useState(false);
   const [pageOnly, setPageOnly] = useState(false);
   const [documents, setDocuments] = useState(false);
+  const [subPages, setSubPages] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const guard = useEgressGuard();
   // A connected source picks one of the organisation's `documents/<kind>` connectors: never typed.
@@ -149,7 +150,7 @@ export function KnowledgeSources({
                     kind,
                     name: fields.name || KIND[kind],
                     connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
-                    config: sourceConfig(kind, { ...fields, attachments, pageOnly, documents }),
+                    config: sourceConfig(kind, { ...fields, attachments, pageOnly, documents, descendants: subPages }),
                     ...refreshBody(refresh),
                     ...egressFlag(allow),
                   }),
@@ -216,7 +217,11 @@ export function KnowledgeSources({
           ) : kind === "confluence" ? (
             <>
               <Input aria-label="space key" placeholder="space key (ENG)" value={fields.space} onChange={set("space")} />
-              <Input aria-label="page id" placeholder="page id (optional: that page and everything under it)" value={fields.pageId} onChange={set("pageId")} />
+              <Input aria-label="page ids" placeholder="page ids or page URLs, comma separated (optional, up to 50)" value={fields.pageId} onChange={set("pageId")} />
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={subPages} onChange={(e) => setSubPages(e.target.checked)} />
+                and its sub-pages
+              </label>
               <label className="flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={attachments} onChange={(e) => setAttachments(e.target.checked)} />
                 include attachments (pdf, docx, pptx, xlsx, md, txt)

@@ -428,6 +428,38 @@ async def test_a_confluence_page_tree_syncs_and_follows_the_source(
     }  # fmt: skip
 
 
+async def test_chosen_pages_without_their_sub_pages_sync_and_one_leaving_is_deleted(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S42-09d: `page_ids` + `descendants: false` mirror exactly those pages."""
+    from choregos_adapters.fakes.confluence import FakeConfluence
+    from choregos_adapters.http import rest
+
+    monkeypatch.setattr(rest, "_backoff", lambda response, attempt: 0.0)
+    site = FakeConfluence()
+    site.add_space("ENG")
+    site.put_page("ENG", "100", "Handbook", "<p>how we work</p>")
+    site.put_page("ENG", "101", "Deploy guide", "<p>use argo rollouts</p>", parent="100")
+    site.put_page("ENG", "103", "Pager", "<p>call the oncall</p>")
+    source = await _confluence(
+        client, monkeypatch, site, space_key="ENG", page_ids=["100", "103", "103"], descendants=False
+    )
+    assert source["config"] == {
+        "space_key": "ENG", "page_ids": ["100", "103"], "descendants": False,
+        "include_root": True, "include_attachments": False,
+    }  # fmt: skip
+    first = await _sync(source["id"])
+    assert first["added"] == 2, first
+    names = {d["filename"] for d in (await client.get(f"{BASE}/framework")).json()["documents"]}
+    assert names == {"handbook-100.html", "pager-103.html"}, "the sub-page 101 was not asked for"
+    site.restrict("103")
+    with pytest.raises(
+        Exception, match="103"
+    ):  # a chosen page the account cannot read is refused, not skipped
+        await _sync(source["id"])
+    assert len((await client.get(f"{BASE}/framework")).json()["documents"]) == 2
+
+
 async def test_a_listing_that_fails_deletes_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -454,6 +486,11 @@ async def test_a_listing_that_fails_deletes_nothing(
         ({"space_key": "ENG", "page_id": "abc"}, "page_id"),
         ({"space_key": "ENG", "include_attachments": "yes"}, "include_attachments"),
         ({"space_key": "ENG", "labels": ["x"] * 21}, "labels"),
+        ({"space_key": "ENG", "page_ids": ["1"] * 51}, "page_ids"),
+        ({"space_key": "ENG", "page_ids": ["12", "ab"]}, "page_ids"),
+        ({"space_key": "ENG", "page_ids": ["12"], "page_id": "13"}, "not both"),
+        ({"space_key": "ENG", "page_id": "12", "descendants": "no"}, "descendants"),
+        ({"space_key": "ENG", "page_id": "12", "descendants": False, "include_root": False}, "no page"),
     ],
 )
 async def test_a_confluence_source_is_refused_before_its_first_sync(
