@@ -1143,9 +1143,15 @@ async def distill_knowledge_base(org: str, slug: Slug, session: Db, principal: M
 
     base = await _base(session, principal, org, slug)
     _curate(principal, org, base)
-    if (base.distillation or {}).get("status") == "running":
+    from ..knowledge.distill import is_running
+
+    if is_running(base.distillation):
         raise conflict(f"knowledge base `{slug}` is already being distilled")
-    base.distillation = {"status": "running", "requested_by": principal.email}
+    base.distillation = {
+        "status": "running",
+        "requested_by": principal.email,
+        "started_at": refresh.utcnow().isoformat(),
+    }
     await session.flush()
     await record(
         session,
