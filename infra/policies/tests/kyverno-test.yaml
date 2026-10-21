@@ -1,0 +1,194 @@
+# The Kyverno engine itself (RE2 regular expressions, anchors) judges these pods: a Python
+# reading of the policies cannot tell what Kyverno would admit. `choregos-verify-images`
+# (signatures) needs the registry and Sigstore, so it is not judged here.
+# One entry per pod, so a wrong verdict names its pod.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: choregos-policies
+policies:
+- ../image-tags.yaml
+- ../pod-security.yaml
+resources:
+- resources.yaml
+results:
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - explicit-latest
+  kind: Pod
+  result: fail
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - no-tag
+  kind: Pod
+  result: fail
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - bare-name
+  kind: Pod
+  result: fail
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - port-no-tag
+  kind: Pod
+  result: fail
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - sidecar-latest
+  kind: Pod
+  result: fail
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - sidecar-no-tag
+  kind: Pod
+  result: fail
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - tagged
+  kind: Pod
+  result: pass
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - digest
+  kind: Pod
+  result: pass
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - tag-and-digest
+  kind: Pod
+  result: pass
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - port-and-tag
+  kind: Pod
+  result: pass
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - sidecar-tagged
+  kind: Pod
+  result: pass
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - sidecar-privileged
+  kind: Pod
+  result: pass
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - no-pod-context
+  kind: Pod
+  result: pass
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - host-path
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - sidecar-privileged
+  kind: Pod
+  result: fail
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - no-pod-context
+  kind: Pod
+  result: fail
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - tagged
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - digest
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - tag-and-digest
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - port-and-tag
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - explicit-latest
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - no-tag
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - bare-name
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - port-no-tag
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - sidecar-tagged
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - sidecar-latest
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - sidecar-no-tag
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - host-path
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: pas-de-hostpath
+  resources:
+  - host-path
+  kind: Pod
+  result: fail
+- policy: choregos-pod-security
+  rule: pas-de-hostpath
+  resources:
+  - tagged
+  kind: Pod
+  result: pass
