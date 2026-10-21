@@ -37,3 +37,11 @@ def test_each_story_has_one_row() -> None:
     assert len(ids) > 100, "the table no longer parses: its row shape changed without this test"
     twice = sorted({story for story in ids if ids.count(story) > 1} - {"Story"})
     assert not twice, f"STATUS has these stories on more than one row: {twice}"
+
+
+def test_no_story_row_after_the_total() -> None:
+    """A conflict resolution that appends the other side after the Total leaves rows outside the table."""
+    lines = STATUS.read_text(encoding="utf-8").splitlines()
+    total = next(i for i, line in enumerate(lines) if line.startswith("**Total**"))
+    after = [line.split(" | ")[0] for line in lines[total + 1 :] if STORY_ROW.match(line + "\n")]
+    assert not after, f"these STATUS rows sit below the Total, outside the table: {after}"

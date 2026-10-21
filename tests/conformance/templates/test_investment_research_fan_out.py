@@ -2,8 +2,9 @@
 
 Read from the workflow files, not copied: the spawn of `campaign.yaml` names a workflow the
 template delivers, a list the backtest writes, and gives the child every field its schema requires;
-`product-memo.yaml` keeps the guarantees of the memo (numbers measured) and of the decision
-(attested human task). Remove the `spawn:` and the first test goes red.
+`product-memo.yaml` keeps the guarantees of the memo (numbers measured, and the bar the backtest
+applied written in it, #824) and of the decision (attested human task). Remove the `spawn:` and the
+first test goes red.
 """
 
 from __future__ import annotations
@@ -61,12 +62,16 @@ def test_the_memo_and_the_decision_keep_their_guarantees_in_the_child() -> None:
             "numbers_measured",
             {
                 "sources": ["parent.metrics.products.$symbol", "parent.metrics.facts"],
+                "must_quote": ["parent.metrics.thresholds"],
                 "outputs": ["memo_markdown"],
             },
         )
     ]
     # Never the child's own fields: a person can edit them (S38-17).
     assert "fields" not in memo.gates[0].params["sources"]
+    # The bar is copied for the analyst to read, from what the engine applied (#824).
+    spawn = _transition(campaign, "t-fan-out").spawn
+    assert spawn is not None and spawn.fields["thresholds"] == "{{ outputs.metrics.thresholds }}"
     decide = _transition(child, "t-decide")
     assert decide.task is not None and decide.task.attest and decide.on_reject == "rejected"
     assert child.states["adopted"].terminal and child.states["rejected"].terminal
