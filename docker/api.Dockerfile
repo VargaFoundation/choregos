@@ -80,6 +80,10 @@ RUN cd /tmp && echo "$(cut -d' ' -f1 hubble.sha256sum)  hubble.tar.gz" | sha256s
  && hubble version
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
+# The source revision, read by `GET /edition` for the console's About panel (S42-12). Last, so a
+# new commit invalidates no layer above. Empty when the image is built by hand; the API then says so.
+ARG REVISION=""
+ENV CHOREGOS_BUILD_REVISION=$REVISION
 USER 1000
 ENTRYPOINT ["/usr/bin/tini", "--"]
 

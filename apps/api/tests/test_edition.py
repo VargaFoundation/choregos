@@ -192,3 +192,82 @@ async def test_the_edition_route_serves_the_publisher(client: AsyncClient) -> No
             "application/json"
         ]["schema"]
         Draft202012Validator(schema).validate(body)
+
+
+def test_the_edition_names_its_licence() -> None:
+    from choregos_api import edition
+
+    assert edition.edition_licence() is None
+    edition.declarer(edition.ENTREPRISE, licence="  Acme Corp EULA ")
+    assert edition.edition_licence() == "Acme Corp EULA"
+    edition.reinitialiser()
+    assert edition.edition_licence() is None
+
+
+@pytest.mark.parametrize("licence", ["", "   ", "x" * 81, "bad\nlicence", "tab\there", "del\x7f"])
+def test_a_malformed_licence_is_refused(licence: str) -> None:
+    from choregos_api import edition
+
+    with pytest.raises(ValueError, match="licence"):
+        edition.declarer(edition.ENTREPRISE, licence=licence)
+    assert edition.edition_licence() is None
+
+
+def test_the_community_edition_has_no_licence() -> None:
+    from choregos_api import edition
+
+    with pytest.raises(ValueError, match="community"):
+        edition.declarer(edition.COMMUNAUTAIRE, licence="Acme Corp EULA")
+
+
+def _validate_edition_body(body: dict[str, object]) -> None:
+    import choregos_contracts as contracts
+    from jsonschema import Draft202012Validator
+
+    schema = contracts.load_openapi()["paths"]["/edition"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    Draft202012Validator(schema).validate(body)
+
+
+async def test_the_edition_route_serves_the_licences_and_no_revision_by_default(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api import edition
+
+    monkeypatch.delenv("CHOREGOS_BUILD_REVISION", raising=False)
+    community = (await client.get("/api/v1/edition")).json()
+    assert community["licence"] == "Apache-2.0"
+    assert community["edition_licence"] is None
+    assert community["build"] == {"revision": None}
+    _validate_edition_body(community)
+
+    edition.declarer(edition.ENTREPRISE, publisher="Acme Corp", version="0.2.0", licence="Acme Corp EULA")
+    for path in ("/edition", "/api/v1/edition"):
+        body = (await client.get(path)).json()
+        assert body["licence"] == "Apache-2.0", "the core's licence stays the core's"
+        assert body["edition_licence"] == "Acme Corp EULA"
+        _validate_edition_body(body)
+
+
+@pytest.mark.parametrize(
+    ("raw", "served"),
+    [
+        ("0123abc", "0123abc"),
+        ("  " + "a" * 40 + "\n", "a" * 40),
+        ("", None),
+        ("abc", None),
+        ("a" * 41, None),
+        ("ABCDEF0", None),
+        ("not a revision", None),
+        ("<script>alert(1)</script>", None),
+    ],
+)
+async def test_the_edition_route_serves_the_build_revision_only_when_it_is_a_commit_id(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, raw: str, served: str | None
+) -> None:
+    monkeypatch.setenv("CHOREGOS_BUILD_REVISION", raw)
+    for path in ("/edition", "/api/v1/edition"):
+        body = (await client.get(path)).json()
+        assert body["build"] == {"revision": served}
+        _validate_edition_body(body)
