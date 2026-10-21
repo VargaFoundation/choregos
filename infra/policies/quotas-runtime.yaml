@@ -20,19 +20,6 @@ spec:
               - key: "{{ request.object.metadata.labels.\"choregos/project\" || '' }}"
                 operator: Equals
                 value: ""
-    - name: runtimeclass-gvisor
-      match:
-        any:
-          - resources:
-              kinds: [Pod]
-              namespaces: ["proj-*-runners"]
-      preconditions:
-        all:
-          - key: "{{ request.object.metadata.labels.\"choregos/sandbox\" || 'default' }}"
-            operator: Equals
-            value: gvisor
-      validate:
-        message: "ce projet exige gVisor : `runtimeClassName: gvisor` est obligatoire"
-        pattern:
-          spec:
-            runtimeClassName: gvisor
+    # gVisor is enforced per project by the `require-gvisor` Policy that provisioning writes
+    # (gitops.render_project_manifests). A cluster-wide rule here keyed on a pod label that
+    # nothing sets never applied to anything (finding #790).
