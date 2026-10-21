@@ -30,9 +30,11 @@ export function PolicyCeilingCard({ org, canEdit }: { org: string; canEdit: bool
   const ceiling = useQuery({ queryKey: ["policy-ceiling", org], queryFn: () => api.policyCeiling(org) });
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const shown = text ?? (ceiling.data?.ceiling ? JSON.stringify(ceiling.data.ceiling, null, 2) : "");
   const refresh = () => client.invalidateQueries({ queryKey: ["policy-ceiling", org] });
   async function saveRaw() {
+    setSaved(false);
     setError(null);
     const parsed = parseCeiling(shown);
     if ("error" in parsed) return setError(parsed.error);
@@ -53,7 +55,12 @@ export function PolicyCeilingCard({ org, canEdit }: { org: string; canEdit: bool
           org={org}
           stored={ceiling.data?.ceiling}
           canEdit={canEdit}
-          onSaved={refresh}
+          saved={saved}
+          onSaved={async () => {
+            setSaved(true);
+            await refresh();
+          }}
+          onEdited={() => setSaved(false)}
         />
         {ceiling.data?.updated_by && (
           <p className="text-xs text-ink-muted">

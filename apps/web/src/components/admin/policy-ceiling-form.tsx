@@ -78,18 +78,22 @@ export function PolicyCeilingForm({
   org,
   stored,
   canEdit,
+  saved,
   onSaved,
+  onEdited,
 }: {
   org: string;
   stored: Record<string, unknown> | null | undefined;
   canEdit: boolean;
+  /** Whether the last save went through; held by the parent, because a save re-keys (remounts) this form. */
+  saved: boolean;
   onSaved: () => Promise<void>;
+  onEdited: () => void;
 }) {
   const [edits, setEdits] = useState<Values>({});
   const [serverFields, setServerFields] = useState<Values>({});
   const [general, setGeneral] = useState<string[]>([]);
   const [tried, setTried] = useState(false);
-  const [saved, setSaved] = useState(false);
   const values: Values = { ...toFormValues(stored), ...edits };
   const local = validate(values);
   const errors: Values = { ...(tried ? local : {}), ...serverFields };
@@ -98,7 +102,7 @@ export function PolicyCeilingForm({
   function change(name: string, text: string) {
     setEdits((current) => ({ ...current, [name]: text }));
     setServerFields(({ [name]: _gone, ...rest }) => rest);
-    setSaved(false);
+    onEdited();
   }
 
   const cell = (path: string[], label: string, unit?: string, placeholder?: string) => {
@@ -109,7 +113,7 @@ export function PolicyCeilingForm({
 
   async function save() {
     setTried(true);
-    setSaved(false);
+    onEdited();
     setGeneral([]);
     setServerFields({});
     if (Object.keys(local).length) return;
@@ -120,7 +124,6 @@ export function PolicyCeilingForm({
       await api.putPolicyCeiling(org, Object.keys(merged).length ? merged : null);
       setEdits({});
       setTried(false);
-      setSaved(true);
       await onSaved();
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 422) {
