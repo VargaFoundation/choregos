@@ -1707,6 +1707,15 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/ExecutorInfo" } } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutorInfo" } } } }
+  /platform/identity:
+    get:
+      tags: [admin]
+      operationId: getPlatformIdentity
+      summary: How people sign in to this instance (read-only)
+      description: The instance-level sign-in configuration, as the deployment set it (OIDC issuer and client, redirect URI, MCP door OAuth, session lifetime, bootstrap). Secrets are never returned, only whether they are set. The platform administrator only.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformIdentity" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /platform/gateway/keys:
     get:
       tags: [admin]
@@ -5517,7 +5526,7 @@ components:
             stage_usd: { type: object, additionalProperties: { type: object, additionalProperties: { type: number } } }
             max_turns: { type: object, additionalProperties: { type: integer } }
             max_minutes: { type: object, additionalProperties: { type: integer } }
-            tool_calls_per_run: { type: [integer, "null"], minimum: 1 }
+            tool_calls_per_run: { type: [integer, "null"], minimum: 0 }
             daily_project_usd: { type: [number, "null"], exclusiveMinimum: 0 }
         attempts:
           type: object
@@ -6547,6 +6556,22 @@ components:
         name: { type: string }
         enabled: { type: boolean }
         disabled_reason: { type: [string, "null"] }
+    PlatformIdentityRow:
+      type: object
+      required: [key, label, value, source]
+      properties:
+        key: { type: string, description: "Stable identifier, e.g. oidc.issuer." }
+        label: { type: string }
+        value: { type: string, description: "Display value; a secret shows only set or missing." }
+        source:
+          type: string
+          enum: [settings, derived, default]
+          description: "settings: set by the deployment; derived: computed from other settings; default: the built-in default."
+    PlatformIdentity:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PlatformIdentityRow" } }
     ExecutorInfo:
       type: object
       required: [kind, enabled]

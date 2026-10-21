@@ -1379,6 +1379,33 @@ export const sectionScim = {
     },
   ],
 };
+/** One screen, two levels (S42-02): an organisation form, and a block only a platform administrator sees. */
+export const sectionAcmeLayered = {
+  id: "acme-layered",
+  title: "Acme layered",
+  description: "One screen for what this organisation sets and what the whole instance sets.",
+  scope: "organisation",
+  permission: "member:manage",
+  blocks: [
+    {
+      kind: "form",
+      title: "This organisation",
+      description: "Applies to Acme only.",
+      schema: { type: "object", properties: { accent: { type: "string", title: "accent colour" } } },
+      read: "/orgs/{org}/scim/settings",
+      write: "/orgs/{org}/scim/settings",
+    },
+    {
+      kind: "form",
+      title: "The whole instance",
+      description: "Applies to every organisation of this instance; needs platform administration.",
+      permission: "platform:admin",
+      schema: { type: "object", properties: { product_name: { type: "string", title: "product name" } } },
+      read: "/orgs/{org}/scim/settings",
+      write: "/orgs/{org}/scim/settings",
+    },
+  ],
+};
 const ETAT_EN_LIGNE = /^( {2}([\w-]+): \{ display: )([^,}]+?)(\s*[,}])/gm;
 
 /**
@@ -3160,7 +3187,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
     [/^\/orgs\/[^/]+\/skills\/[^/]+$/, skills[0]],
-    [/^\/ui\/admin-sections$/, [sectionScim]],
+    [/^\/ui\/admin-sections$/, [sectionScim, sectionAcmeLayered]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
     [/^\/orgs$/, [{ slug: "acme", name: "Varga Foundation", role: "org_admin", currency: "EUR" }]],

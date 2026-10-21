@@ -63,3 +63,21 @@ Three ways to give them screens:
   versioned like the others (ADR 0001).
 - Navigation by product manifests (R-SOC-UI-01) is not decided here; the same format is meant to
   grow into it, project tabs included.
+
+## Addendum (2026-10-21): a block may carry its own permission (S42-02)
+
+A section has one permission and one scope, so a screen mixing an organisation-level form and an
+instance-level one (platform administrators only) had to be two sections with the same title. Decision:
+every block kind gains an optional `permission`, same vocabulary as the section's
+(`ui-manifest.schema.json`, `$defs/block_permission`).
+
+- The section's permission and scope still apply first. `GET /api/v1/ui/admin-sections` then drops the
+  blocks the caller lacks (`platform:admin` is checked on the instance, any other permission in the
+  organisations in scope) and lists the section only if at least one block remains.
+- Start-up refuses an unknown block permission, like a section's.
+- Nested `row_actions` are not filtered: they belong to their table.
+- `choregos_api.greffons.SECTION_FEATURES` (`frozenset({"block_permission"})`) lets a plugin detect
+  the feature without parsing versions. Hiding is a courtesy: the routes a block calls still enforce
+  their own permission.
+- Not decided here: resetting a form to inherited values; plugins use `action` (DELETE) and `table`
+  blocks.

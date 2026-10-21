@@ -224,6 +224,10 @@ def _verifier_les_sections(servies: set[tuple[str, str]]) -> None:
             raise RuntimeError(f"section d'administration `{nom}` invalide : {detail}")
         if section["permission"] not in {p.value for p in Permission}:
             raise RuntimeError(f"section `{nom}` : permission inconnue `{section['permission']}`")
+        connues_p = {p.value for p in Permission}
+        for bloc in section["blocks"]:
+            if "permission" in bloc and bloc["permission"] not in connues_p:
+                raise RuntimeError(f"section `{nom}` : unknown block permission `{bloc['permission']}`")
         for methode, chemin in chemins_d_une_section(section):
             if (methode, forme(API_PREFIX + chemin)) not in connues:
                 raise RuntimeError(f"section `{nom}` : `{methode} {chemin}` n'est servi par aucune route")

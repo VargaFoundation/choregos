@@ -329,6 +329,7 @@ vendor). `ready` is true when no item is `todo`.
 | :-- | :-- | :-- |
 | `provisioned` | the project is not active (the failing provisioning step is named) | |
 | `workflow` | no active workflow | none is the default |
+| `workflow-template` | never: a project keeps running its version | an active workflow still marked `source: template` differs from the one the project's template ships on this image (compared on the parsed definition: a comment or a reformatting is not a difference). The detail names the workflow, its version, both checksums and the template file; the fix is to publish that file as the next version (`choregos workflow push`, or `PUT /projects/{id}/workflows/{name}` with `source: template`). A work item in progress stays on its version. Not listed without a template, for a workflow published by hand (`platform`, `repo`), or when the template no longer ships it or comes from the database |
 | `connector-<capability>` | a workflow needs it, none is configured and the deployment does not provide it, or its last test failed | a `demo`/`fake` stand-in, or never tested |
 | `connector-<kind>-secrets` | a secret field of the type is not set (webhook secrets excepted) | |
 | `connector-<kind>-stale` | | the last passing test is older than 7 days |

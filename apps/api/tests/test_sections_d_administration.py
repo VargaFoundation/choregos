@@ -36,6 +36,10 @@ def _routeur_scim() -> APIRouter:
     async def ecrire(org: str) -> dict[str, Any]:
         return {"enabled": True}
 
+    @routeur.post("/orgs/{org}/scim/badge")
+    async def televerser(org: str) -> dict[str, Any]:
+        return {"ref": "sha256-0"}
+
     @routeur.get("/orgs/{org}/scim/tokens")
     async def lister(org: str) -> dict[str, Any]:
         return {"items": []}
@@ -97,6 +101,11 @@ async def test_l_administrateur_voit_les_sections_le_developpeur_non(
         pytest.param(lambda m: m.pop("blocks"), "invalide", id="manifeste-invalide"),
         pytest.param(
             lambda m: m.update(permission="org:everything"), "permission inconnue", id="permission-inconnue"
+        ),
+        pytest.param(
+            lambda m: m["blocks"][0].update(permission="org:everything"),
+            "unknown block permission",
+            id="block-permission-unknown",
         ),
         pytest.param(
             lambda m: m["blocks"][1].update(list="/orgs/{org}/scim/jetons"),
@@ -172,3 +181,59 @@ async def test_une_section_d_organisation_qui_demande_la_plateforme_ne_se_montre
         session.add(Organization(slug="autre", name="Autre"))
     ids = [s["id"] for s in (await client.get("/api/v1/ui/admin-sections")).json()]
     assert ids == ["scim"], "member:manage dans son organisation, rien de la plateforme"
+
+
+async def test_a_block_the_caller_lacks_is_filtered_and_the_section_stays(
+    greffon: Any, client: AsyncClient, admin: str
+) -> None:
+    """S42-02: the example's last block needs `platform:admin`. With two organisations the
+    organisation administrator keeps the section and its other blocks, not that block."""
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+
+    first = (await client.get("/api/v1/ui/admin-sections")).json()[0]
+    assert [b["kind"] for b in first["blocks"]] == ["form", "table", "secret_once"]
+
+    async with session_scope() as session:
+        session.add(Organization(slug="autre", name="Autre"))
+    [scim] = (await client.get("/api/v1/ui/admin-sections")).json()
+    assert scim["id"] == "scim"
+    assert [b["kind"] for b in scim["blocks"]] == ["form", "table"]
+    assert scim["blocks"][1]["row_actions"][0]["method"] == "DELETE", "nested row_actions untouched"
+
+
+async def test_a_section_with_no_visible_block_is_not_listed(
+    greffon: Any, client: AsyncClient, admin: str
+) -> None:
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+
+    greffon.declarer_une_section_d_administration(
+        {
+            "id": "acme-instance",
+            "title": "Appearance",
+            "scope": "organisation",
+            "permission": "member:manage",
+            "blocks": [
+                {
+                    "kind": "table",
+                    "title": "instance",
+                    "permission": "platform:admin",
+                    "list": "/orgs",
+                    "columns": [{"key": "slug", "label": "s"}],
+                }
+            ],
+        }
+    )
+    ids = [s["id"] for s in (await client.get("/api/v1/ui/admin-sections")).json()]
+    assert "acme-instance" in ids
+    async with session_scope() as session:
+        session.add(Organization(slug="autre", name="Autre"))
+    ids = [s["id"] for s in (await client.get("/api/v1/ui/admin-sections")).json()]
+    assert "acme-instance" not in ids
+
+
+def test_the_core_announces_block_permission() -> None:
+    from choregos_api.greffons import SECTION_FEATURES
+
+    assert "block_permission" in SECTION_FEATURES

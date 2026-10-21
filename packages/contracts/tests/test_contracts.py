@@ -155,6 +155,7 @@ def _comparer(chemin: str, noeud: dict[str, Any], model: type, ecarts: list[str]
         ("stage-input.schema.json", StageInput),
         ("finding.schema.json", Finding),
         ("human-decision.schema.json", HumanDecision),
+        ("policy.schema.json", Policy),
     ],
 )
 def test_le_schema_et_le_modele_declarent_les_memes_champs(schema_name: str, model: type) -> None:
@@ -261,8 +262,7 @@ def test_a_role_override_changes_that_role_only() -> None:
 
 
 def test_the_context_schema_and_model_declare_the_same_fields() -> None:
-    """The whole policy is not compared yet (`budgets.tool_calls_per_run` is missing from its
-    schema, a finding); its `context` block is, overrides included."""
+    """The `context` block, overrides included; the whole policy is compared above."""
     gaps: list[str] = []
     node = contracts.load_schema("policy.schema.json")["properties"]["context"]
     _comparer("policy.context", node, ContextPolicy, gaps)
@@ -413,3 +413,42 @@ def test_the_network_denied_event_is_declared_and_the_openapi_names_the_four_ope
     } <= operations
     agent = spec["components"]["schemas"]["AgentSpec"]["properties"]["network"]
     assert agent == {"$ref": "#/components/schemas/AgentNetwork"}
+
+
+def test_admin_section_block_permission_is_optional_and_a_string() -> None:
+    """S42-02: every block kind may carry its own permission; a non-string is refused."""
+    validator = _validator("ui-manifest.schema.json")
+    section = _load("ui-manifest.example.json")
+    assert any("permission" in block for block in section["blocks"])
+    assert not list(validator.iter_errors(section))
+    for block in section["blocks"]:
+        broken = {**section, "blocks": [{**block, "permission": 7}]}
+        assert list(validator.iter_errors(broken)), block["kind"]
+    bare = {
+        **section,
+        "blocks": [{k: v for k, v in b.items() if k != "permission"} for b in section["blocks"]],
+    }
+    assert not list(validator.iter_errors(bare))
+
+
+def test_an_asset_property_names_where_its_file_goes() -> None:
+    """S42-13: `format: asset` needs an `x-upload` path; accept and size limits are typed."""
+    validator = _validator("ui-manifest.schema.json")
+    section = _load("ui-manifest.example.json")
+    form = section["blocks"][0]
+    asset = form["schema"]["properties"]["badge"]
+    assert asset["format"] == "asset"
+    assert not list(validator.iter_errors(section))
+
+    def with_badge(badge: dict) -> dict:
+        schema = {**form["schema"], "properties": {"badge": badge}}
+        return {**section, "blocks": [{**form, "schema": schema}]}
+
+    without_upload = {k: v for k, v in asset.items() if k != "x-upload"}
+    assert list(validator.iter_errors(with_badge(without_upload)))
+    assert list(validator.iter_errors(with_badge({**asset, "x-upload": "https://elsewhere/up"})))
+    assert list(validator.iter_errors(with_badge({**asset, "x-max-bytes": 0})))
+    assert list(validator.iter_errors(with_badge({**asset, "x-accept": ["png"]})))
+    assert list(validator.iter_errors(with_badge({**asset, "type": "object"})))
+    # A plain string property is untouched.
+    assert not list(validator.iter_errors(with_badge({"type": "string"})))
