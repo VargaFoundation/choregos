@@ -1563,6 +1563,20 @@ Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting p
 **An organisation sets a ceiling that every project policy may only tighten**
 (`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):
 
+On the admin page, **Policy ceiling** is a form, grouped as the ceiling is: **Budgets** (a dollar cap per
+ticket size S/M/L/XL; under *Per-stage budgets*, one per role and size; max turns and max minutes per
+role, with a `default` row for every role not named; tool calls per run; daily spend per project;
+monthly spend of the organisation), **Attempts** (default attempts, accepted but not enforced;
+definition-of-done iterations; attempts per role), **Scope** (files granted without asking, files and
+lines in a diff) and **Findings** (per run). An empty field is no cap and is left out of what is
+saved; the grey figure in a field is what the platform applies when nobody sets one. A value below a
+field's minimum is flagged on the field and blocks the save; a refusal from the API (`422`) is shown on
+the field it names. Saving reads the ceiling again and changes only these fields, so the **Network
+access** card and any other key survive. **Advanced: raw JSON** keeps the whole ceiling editable as
+text (it is the way to reach a key the form has no row for).
+
+The same ceiling as JSON:
+
 ```json
 {"budgets": {"ticket_usd": {"M": 20}, "stage_usd": {"default": {"M": 6}}, "max_turns": {"default": 60},
              "max_minutes": {"implement": 45}, "tool_calls_per_run": 50, "daily_project_usd": 100,
@@ -1639,7 +1653,7 @@ wall: see [security](security.md).
   the allowed hosts (**No cap**, **Any public host**, or **Only these hosts**, one per line), the denied
   hosts, the requests per minute per host and per run, the built-in web tools (inherit, allow, deny) and
   the contact written into the User-Agent. It is the `network` section of the policy ceiling: saving
-  reads the whole ceiling again and replaces only that section, so the JSON **Policy ceiling** card below
+  reads the whole ceiling again and replaces only that section, so the **Policy ceiling** card below
   it and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
   flagged before anything is sent.
 - *The agent's* — the **Network access** section of the agent builder (new agent, new version): **Same as
