@@ -251,3 +251,104 @@ async def test_readiness_of_a_project_that_writes_files_lists_the_object_store(
     finally:
         use_object_store(None)
         readiness.forget_object_store_probe()
+
+
+async def _store_an_older_copy(project_id: str, name: str, drop: str) -> None:
+    """The copy a project made of its template before the template was fixed (#817): the line is gone."""
+    from choregos_api.db.models import WorkflowDef
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        row = (
+            await session.execute(
+                select(WorkflowDef).where(
+                    WorkflowDef.project_id == project_id, WorkflowDef.name == name, WorkflowDef.is_active
+                )
+            )
+        ).scalar_one()
+        assert drop in row.yaml
+        row.yaml = row.yaml.replace(drop, "")
+
+
+def _template_item(body: dict[str, Any]) -> dict[str, Any] | None:
+    return next((i for i in body["items"] if i["id"] == "workflow-template"), None)
+
+
+async def test_a_workflow_copied_before_its_template_was_fixed_is_flagged_until_republished(
+    client: AsyncClient, admin: str
+) -> None:
+    from pathlib import Path
+
+    created = await client.post(
+        "/api/v1/orgs/varga/projects",
+        json={
+            "slug": "research",
+            "name": "Research",
+            "template_ref": "investment-research@0.1.0",
+            "config": {"slug": "research", "org": "varga"},
+        },
+    )
+    assert created.status_code == 201, created.text
+    pid = created.json()["id"]
+    await _activate(pid)
+    fresh = _template_item(await _readiness(client, pid))
+    assert fresh is not None and fresh["state"] == "done", fresh
+    await _store_an_older_copy(
+        pid,
+        "campaign",
+        "    # stored as that document, not as markdown the job cannot find (S38-13, RESEARCH-2 on dev).\n",
+    )
+    commented = _template_item(await _readiness(client, pid))
+    assert commented is not None and commented["state"] == "done", "a comment is not the definition"
+
+    await _store_an_older_copy(pid, "campaign", "    output_types: { strategies: json }\n")
+    item = _template_item(await _readiness(client, pid))
+    assert item is not None and item["state"] == "check", item
+    assert "`campaign` v1" in item["detail"] and "`./workflows/campaign.yaml`" in item["detail"]
+    assert "`product-memo`" not in item["detail"], "the workflow that did not change is not named"
+
+    shipped = Path(__file__).resolve().parents[3] / "templates" / "investment-research" / "workflows"
+    put = await client.put(
+        f"/api/v1/projects/{pid}/workflows/campaign",
+        json={"yaml": (shipped / "campaign.yaml").read_text(), "source": "template", "activate": True},
+    )
+    assert put.status_code == 200, put.text
+    republished = _template_item(await _readiness(client, pid))
+    assert republished is not None and republished["state"] == "done", republished
+
+
+async def test_a_workflow_published_by_hand_or_a_project_with_no_template_is_not_judged(
+    client: AsyncClient, admin: str
+) -> None:
+    from pathlib import Path
+
+    created = await client.post(
+        "/api/v1/orgs/varga/projects",
+        json={
+            "slug": "research",
+            "name": "Research",
+            "template_ref": "investment-research@0.1.0",
+            "config": {"slug": "research", "org": "varga"},
+        },
+    )
+    assert created.status_code == 201, created.text
+    pid = created.json()["id"]
+    await _activate(pid)
+    shipped = Path(__file__).resolve().parents[3] / "templates" / "investment-research" / "workflows"
+    mine = (shipped / "campaign.yaml").read_text().replace("    output_types: { strategies: json }\n", "")
+    put = await client.put(
+        f"/api/v1/projects/{pid}/workflows/campaign",
+        json={"yaml": mine, "source": "platform", "activate": True},
+    )
+    assert put.status_code == 200, put.text
+    item = _template_item(await _readiness(client, pid))
+    assert item is not None and item["state"] == "done" and "`campaign`" not in item["detail"], item
+
+    bare = await client.post(
+        "/api/v1/orgs/varga/projects",
+        json={"slug": "bare", "name": "Bare", "config": {"slug": "bare", "org": "varga"}},
+    )
+    assert bare.status_code == 201, bare.text
+    await _activate(bare.json()["id"])
+    assert _template_item(await _readiness(client, bare.json()["id"])) is None
