@@ -164,7 +164,12 @@ percentage for a fraction and a dropped sign are tolerated; years, integers belo
 (default 10) and an explicit `allow:` list are skipped. The source `fields` is the work item's own
 fields, which a person can edit; a child opened by a fan-out reads `parent.<doc>[.<key>...]` instead,
 the parent's measured document (a key `$name` is the child's own field `name`); a work item with no
-parent has no such source and is refused.
+parent has no such source and is refused. `must_quote:` names sources whose every number must also
+be written in the outputs (and are sources themselves): a product memo must state the thresholds the
+backtest applied (`parent.metrics.thresholds`), so a product that passed a lowered bar does not read
+as one that passed the usual one (#824). A number of such a source counts as quoted when it is written
+exactly (`0.95`, `35%`), wherever in the text: a `10` elsewhere quotes `min_trades: 10` — the gate
+checks the numbers are there, not that the text names them as the bar.
 
 `adr_number_free` guards numbered records: when the branch adds `docs/adr/NNNN-*.md` (the path
 pattern is the `pattern` parameter), it lists the records already on the default branch and refuses
