@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { InstanceIdentityCard } from "@/components/admin/instance-identity";
 import { Alert, Button, Card, Code, Empty, EtatDeLecture, Field, Input, StateBadge } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { AgentBackendInfo, ExecutorInfo } from "@/lib/types";
@@ -24,6 +25,7 @@ export default function PlatformPage() {
   const executors = useQuery({ queryKey: ["executors"], queryFn: () => api.executors() });
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <InstanceIdentityCard />
       <Card title="Coding agents (backends)">
         <p className="mb-3 text-xs text-ink-muted">
           A backend is the coding agent CLI that the runner image ships and that executes an agent stage (see{" "}

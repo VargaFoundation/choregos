@@ -27,20 +27,32 @@ async def admin_sections(
     """Les sections que l'appelant peut voir ; `org` restreint celles d'organisation à celle-là."""
     visibles: list[dict[str, Any]] = []
     plateforme: bool | None = None
+
+    async def peut(permission: str) -> bool:
+        """Whether the caller holds `permission`: on the instance for `platform:admin`, in any
+        organisation in scope otherwise."""
+        nonlocal plateforme
+        if permission == Permission.PLATFORM_ADMIN.value:
+            if plateforme is None:
+                plateforme = await _admin_de_plateforme(session, principal)
+            return plateforme
+        organisations = [org] if org else list(principal.org_roles)
+        return any(principal.can(Permission(permission), organisation) for organisation in organisations)
+
     for section in sections_declarees():
         # `platform:admin` est un droit sur l'INSTANCE, quelle que soit la portée de la section : un
         # `org_admin` a toutes les permissions dans SON organisation, celle-là comprise, et ce n'est
         # pas administrer la plateforme dès qu'il y a deux organisations.
-        if section["scope"] == "platform" or section["permission"] == Permission.PLATFORM_ADMIN.value:
-            if plateforme is None:
-                plateforme = await _admin_de_plateforme(session, principal)
-            if plateforme:
-                visibles.append(section)
+        if section["scope"] == "platform":
+            if not await peut(Permission.PLATFORM_ADMIN.value):
+                continue
+        elif not await peut(section["permission"]):
             continue
-        permission = Permission(section["permission"])
-        organisations = [org] if org else list(principal.org_roles)
-        if any(principal.can(permission, organisation) for organisation in organisations):
-            visibles.append(section)
+        # A block may carry its own permission (S42-02): the section's permission still applies, then
+        # each block the caller lacks is left out, and a section with no block left is not listed.
+        blocs = [b for b in section["blocks"] if "permission" not in b or await peut(b["permission"])]
+        if blocs:
+            visibles.append({**section, "blocks": blocs})
     return visibles
 
 

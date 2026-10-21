@@ -50,7 +50,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/knowledge", label: "Knowledge", icone: Library },
   { href: "/memories", label: "Memories", icone: Brain },
   { href: "/catalogue/mcp-servers", label: "MCP servers", icone: ServerCog },
-  { href: "/catalogue/connectors", label: "Connectors", icone: Cable },
+  { href: "/catalogue/connectors", label: "Connector types", icone: Cable },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "Integrations", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
@@ -183,7 +183,7 @@ export function adminGroups(pluginSections: { id: string; title: string }[] = []
       entries: [
         page("/admin", "Overview", LayoutDashboard),
         page("/admin/members", "Members", Users),
-        page("/admin/connectors", "Connectors", Plug),
+        page("/admin/connectors", "Installed connectors", Plug),
         page("/admin/models", "Models", Cpu),
         page("/admin/remote-agents", "Remote agents", Bot),
         page("/admin/egress", "Network access", Globe),

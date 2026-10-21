@@ -75,6 +75,25 @@ async def test_sync_enables_new_models_in_open_mode_and_disables_them_in_curated
     assert entries["platform/standard"]["enabled"] is True, "what was decided is kept"
 
 
+async def test_the_catalogue_exposes_the_upstream_model_and_context_window_of_each_entry(
+    client: AsyncClient, admin: str, gateway: Scripted
+) -> None:
+    gateway.models[:] = [
+        GatewayModel(
+            model_name="platform/standard",
+            litellm_model="anthropic/claude-sonnet-5-20261001",
+            provider="anthropic",
+            max_input_tokens=200000,
+            supports_vision=True,
+        )
+    ]
+    await client.post(f"{BASE}/sync")
+    facts = (await _entries(client))["platform/standard"]["gateway"]
+    assert facts["upstream_model"] == "anthropic/claude-sonnet-5-20261001"
+    assert facts["max_input_tokens"] == 200000
+    assert (facts["provider"], facts["supports_vision"]) == ("anthropic", True)
+
+
 async def test_a_model_gone_from_the_gateway_is_marked_and_keeps_its_settings(
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:

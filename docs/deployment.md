@@ -359,6 +359,22 @@ the page, so the first paint is already themed; the person's organisation theme 
 after hydration. A person's own light/dark choice always wins over the theme's default mode. See
 [ADR 0064](adr/0064-a-theme-is-data-the-console-applies.md).
 
+An organisation's own look (S42-13) follows the person, not only the instance:
+- When the person picks or is given an organisation, the console remembers its slug in
+  `localStorage` (`choregos.org`) and in the non-HttpOnly cookie `choregos_org`. The root layout
+  reads the cookie and asks `GET /api/v1/theme?org=<slug>`, so the first paint, sign-in page
+  included, already wears that organisation's name, logo, favicon, colours and footer. The cookie
+  only SELECTS a public look: it grants nothing, a value that is not a slug (`[a-z0-9-]`, 63
+  characters at most) is ignored, and the theme is memoised per organisation for 60 s in a
+  bounded cache (32 entries).
+- The footer sentence, the attribution line and the favicon follow the theme the client holds, so
+  they change with the organisation once it is swapped in. The attribution to the foundation stays.
+- A long product name is cut in the header and shows whole in a tooltip.
+- A logo is a file the organisation uploads, never a URL (the console's CSP serves images from
+  `'self'`, `data:` and `blob:` only). A theme editor in an edition offers it as a form field of
+  `format: "asset"` (ADR 0032 addendum); the community core serves no organisation theme, so
+  it has no such upload route.
+
 ## Playbooks and the tool catalogue
 
 Both are brought by the deployment, as ConfigMaps, and both are optional.
@@ -525,7 +541,7 @@ nothing. Without the egress rule, installing a bundled skill still works and a g
 ### The MCP server catalogue: egress and your own entries
 
 The image ships a catalogue of well-known MCP servers ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md));
-an administrator installs an entry from *Catalogue → MCP servers*. Two chart values
+an administrator installs an entry from *Catalogue → MCP servers* (it then appears under *Administration → Installed connectors*). Two chart values
 belong to the deployment:
 
 - `choregos-api.egressHosts` (a list, `*.` wildcards allowed) declares the hosts the API pod may
@@ -652,6 +668,19 @@ At every start the API creates the organisation if it is missing and gives those
 `org_admin` on it; it never touches what already exists. They can then create other
 organisations (`POST /orgs`, `choregos orgs create`) and invite members.
 
+`global.bootstrap.org` is the **slug** of the first organisation and `orgName` its display name:
+name them for the installation (there is no default organisation, neither in the chart nor in the
+CLI). The console shows the organisation a person last picked, else the first one `GET /orgs`
+returns; `NEXT_PUBLIC_DEFAULT_ORG` is a build-time variable of the image and the chart does not set it.
+
+The bootstrap **never renames** an organisation that exists: changing `bootstrap.org` on a running
+instance creates a second organisation (refused on the community edition, which holds one). To
+rename, call `PATCH /api/v1/orgs/<slug>` with `{"name": "…"}` (an organisation administrator), or
+`{"slug": "…"}` (a platform administrator, who need not be a member). A new slug is a decision for
+the operator: the memory tenant (`org:<slug>`), the IdP groups (`choregos:<slug>:<group>`), every
+MCP address (`/mcp/projects/<slug>:<project>`) and every copied console URL name the old one, and
+nothing rewrites them for you.
+
 The CLI and CI authenticate with API tokens, which a person issues for themselves once
 logged in (`POST /me/tokens`, `choregos tokens create`). Before anyone has logged in, the
 first token comes from the server side:
@@ -725,6 +754,16 @@ database); the embedded chart's image (`pgvector/pgvector:0.8.1-pg16`) does it a
 it nothing breaks: the index serves full-text only and the knowledge page says so. For an existing
 database: `CREATE EXTENSION vector;` as a superuser, then `ALTER TABLE knowledge_chunks ADD COLUMN
 embedding_vec vector;` as the owner of the schema, then **reindex** each index base.
+
+**Checking the sign-in configuration from the console.** *Admin → Platform* shows a read-only card,
+"How people sign in to this instance", for the platform administrator: the OIDC issuer, client id and
+discovery URL, whether the client secret is set (never its value), the redirect URI to register at the
+identity provider (`<apiUrl>/api/v1/auth/callback`), the MCP door's OAuth issuer, audience and registered
+clients, the session lifetime, the development login switch, and the bootstrap organisation and the
+number of bootstrap administrators (never their e-mails). It is the answer of
+`GET /api/v1/platform/identity`. Nothing is editable there: the values come from the chart
+(`global.oidc`, `global.mcp.oauth`), and a row marked `default` was not set by the deployment. When
+`oidc.issuer` reads "not configured", the instance still runs on the built-in development issuer.
 
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
@@ -833,6 +872,23 @@ curl -s https://<api-host>/edition
 on the enterprise edition they say who publishes it and which version of the plugin runs
 (`"publisher":"GraalSystems","edition_version":"0.2.0"`), and the admin page and the footer show
 them. They are `null` on the community edition, and absent from an older core.
+
+Three more fields feed the console's **About** entry (sidebar, bottom left; the mobile menu has
+it too):
+
+| Field | Meaning |
+|---|---|
+| `licence` | the licence of the core (`Apache-2.0`) |
+| `edition_licence` | the licence the edition's plugin announces through `declarer(..., licence=...)`; `null` on the community edition |
+| `build.revision` | the source commit the running image was built from, or `null` |
+
+`build.revision` comes from the `CHOREGOS_BUILD_REVISION` environment variable, which the API and
+worker images set from their `REVISION` build argument (`--build-arg REVISION=$(git rev-parse HEAD)`;
+the CI and release workflows pass the commit). An image built by hand without it reports `null`,
+and so does a value that is not a 7 to 40 character lowercase hexadecimal commit id. **`/edition` is
+public** (the sign-in page reads it), so the revision is public too: a commit id of an open source
+repository, but a deployment that does not want to say which commit it runs sets the variable to
+an empty string.
 
 This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
 second one is refused with a 409 that names the decision behind it

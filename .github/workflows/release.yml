@@ -53,6 +53,9 @@ jobs:
           file: ${{ matrix.file }}
           target: ${{ matrix.target }}
           platforms: linux/${{ matrix.platform }}
+          # The About panel shows which commit the image was built from (S42-12, `GET /edition`).
+          build-args: REVISION=${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           sbom: true
           provenance: mode=max

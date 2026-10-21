@@ -85,7 +85,7 @@ describe("les connecteurs, rangés par ce qu'ils sont (S21-04)", () => {
     );
     const metier = screen.getByTestId("section-metier");
     const mcp = screen.getByTestId("section-mcp");
-    expect(within(metier).getByRole("heading", { name: "Business systems (API)" })).toBeInTheDocument();
+    expect(within(metier).getByRole("heading", { name: /^Business systems \(API\) \(\d+\)$/ })).toBeInTheDocument();
     expect(await within(metier).findByText(/entra-acme/)).toBeInTheDocument();
     expect(within(metier).getByText(/parc/)).toBeInTheDocument();
     expect(within(metier).queryByText(/supplier-agent/)).toBeNull();
@@ -115,5 +115,22 @@ describe("les connecteurs, rangés par ce qu'ils sont (S21-04)", () => {
     } finally {
       params.delete("type");
     }
+  });
+
+  it("names the page Installed connectors and points to the catalogues instead of a Catalogue line (S42-06)", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OrgConnectorsPage />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("heading", { level: 1, name: "Installed connectors" })).toBeInTheDocument();
+    expect(screen.queryByText(/Catalogue:/)).toBeNull();
+    const callout = screen.getByTestId("add-from-catalogues");
+    expect(callout).toHaveTextContent("Add from the catalogues");
+    expect(within(callout).getByRole("link", { name: "Browse MCP servers" })).toHaveAttribute("href", "/catalogue/mcp-servers");
+    expect(within(callout).getByRole("link", { name: "Browse connector types" })).toHaveAttribute("href", "/catalogue/connectors");
+    expect(screen.getByText(/Connectors this organisation has installed/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Project delivery tools — configured in each project" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Declare a connector" })).toBeInTheDocument();
   });
 });

@@ -51,7 +51,7 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
         .getAllByRole("link")
         .map((lien) => lien.textContent);
     expect(noms("Work")).toEqual(["Projects", "Inbox"]);
-    expect(noms("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers", "Connectors"]);
+    expect(noms("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers", "Connector types"]);
     expect(noms("Organisation")).toEqual(["Integrations", "Spend", "Admin"]);
   });
 
@@ -62,7 +62,7 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
     ["/p/billing-api", "Overview"],
     ["/skills/onboarding-procedure", "Skills"],
     ["/integrations/cursor", "Integrations"],
-    ["/admin/connectors", "Connectors"],
+    ["/admin/connectors", "Installed connectors"],
     ["/admin", "Overview"],
   ])("sur %s, une seule entrée est active : %s", (pathname, attendue) => {
     const barre = rendre(pathname);
@@ -91,6 +91,15 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
     expect(window.localStorage.getItem(CLE_DE_LA_BARRE)).toBe("full");
     expect(document.documentElement.dataset.sidebar).toBeUndefined();
     expect(skills).not.toHaveAttribute("title");
+  });
+
+  it("About comes before the collapse button and stays a named button once folded (S42-12)", () => {
+    const barre = rendre("/");
+    const [premier, second] = within(barre).getAllByRole("button");
+    expect(premier).toHaveAccessibleName("About");
+    expect(second).toHaveAccessibleName(/Collapse sidebar/);
+    fireEvent.click(within(barre).getByRole("button", { name: /Collapse sidebar/ }));
+    expect(within(barre).getByRole("button", { name: "About" })).toHaveAttribute("title", "About");
   });
 
   it("un repli fait dans un autre onglet vaut ici aussi", () => {
