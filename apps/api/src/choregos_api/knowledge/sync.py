@@ -114,6 +114,7 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             max_depth=int(config.get("max_depth", 2)),
             max_pages=int(config.get("max_pages", 50)),
             exclude=config.get("exclude"),
+            include_documents=config.get("include_documents") is True,
             user_agent=agent,
             per_host_per_minute=per_host,
         )
