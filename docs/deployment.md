@@ -333,6 +333,10 @@ global:
     modelProfiles: { standard: platform/standard }   # profile → gateway model
 ```
 
+These values, and `global.runner.allowedExecutors` / `CHOREGOS_EXECUTOR_KIND` for the executors,
+are where backends and executors are configured; *Administration → Platform* only displays them
+(its backend switch feeds readiness, nothing else, and `PUT /platform/executors` has no effect).
+
 A project that names its own `agent` or `models` keeps them. When a runner pod dies before it can
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong

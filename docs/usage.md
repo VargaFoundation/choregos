@@ -1169,6 +1169,25 @@ is the library: import a zip or a repository (preview, pick, import at the resol
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).
 
+### Platform
+
+`/admin/platform` (**Administration → Platform**) shows what the deployment can run, in two cards.
+
+- **Coding agents (backends).** A backend is the coding agent CLI that the runner image ships and
+  that executes an agent stage ([Actor](concepts.md#actor)). Per backend the page shows its
+  capabilities, version, conformance (passed over total, last run, report, failures) and, when it is
+  off, the reason. A platform administrator can **Disable** a backend (a reason is required and
+  audited as `backend.update`) or **Enable** it; anyone else is told "Only a platform administrator
+  can change this." **Enabled here only means counted as usable by the readiness check.** The
+  orchestrator does not read the switch: which backends a project may use is set by the deployment
+  (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and `allowedBackends`) and
+  by the project's policy. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
+- **Executors (where agent stages run).** Read-only: `agent_sandbox`, `k8s_job`, `tekton`, `aca`,
+  `local_docker`, each with a one-line explanation and its set-up procedure. The list is the
+  deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
+  chart (`global.runner.allowedExecutors`). `PUT /platform/executors` still exists but has no
+  runtime effect and `GET` ignores what it stores.
+
 ### Models
 
 `/admin/models` (the **Models** page of the administration) is the organisation's model catalogue
