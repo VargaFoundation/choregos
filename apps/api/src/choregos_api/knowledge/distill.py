@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 import httpx
@@ -37,7 +38,23 @@ AGENT = "knowledge-distiller"
 #: About 100k tokens: the corpus goes whole into one prompt.
 MAX_CORPUS_CHARS = 400_000
 MAX_PRINCIPLES = 60
+#: A distillation `running` for longer than this is dead (its replica restarted): it no longer blocks.
+STALE_AFTER = timedelta(minutes=30)
 _SENTENCE = re.compile(r"(.+?[.!?])(\s|$)", re.DOTALL)
+
+
+def is_running(distillation: dict[str, Any] | None, *, now: datetime | None = None) -> bool:
+    """`running` and recent: a record without `started_at` (written before it existed) or older than
+    `STALE_AFTER` is a dead one, so a restart never blocks the base's distillations for good."""
+    if not distillation or distillation.get("status") != "running":
+        return False
+    try:
+        started = datetime.fromisoformat(str(distillation["started_at"]))
+    except (KeyError, ValueError):
+        return False
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=utcnow().tzinfo)
+    return (now or utcnow()) - started < STALE_AFTER
 
 
 class DistillationError(RuntimeError):
@@ -219,6 +236,25 @@ def render(slug: str, base: KnowledgeBase, description: str, principles: list[di
     }
 
 
+def _compact(count: int) -> str:
+    return f"{count / 1_000_000:.2f} M" if count >= 1_000_000 else f"{round(count / 1000)} k"
+
+
+def biggest_documents(corpus: list[Source], count: int = 3) -> list[Source]:
+    return sorted(corpus, key=lambda s: len(s.markdown), reverse=True)[:count]
+
+
+def too_large_message(corpus: list[Source]) -> str:
+    """Says what to do, not only what is wrong: which documents weigh the corpus down."""
+    size = sum(len(s.markdown) for s in corpus)
+    biggest = ", ".join(f"{s.filename} ({_compact(len(s.markdown))})" for s in biggest_documents(corpus))
+    return (
+        f"this base holds {_compact(size)} characters (\u2248 {_compact(size // 4)} tokens); one pass reads "
+        f"at most {_compact(MAX_CORPUS_CHARS)}: leave large spreadsheets out, or use distillation in passes. "
+        f"The biggest documents: {biggest}"
+    )
+
+
 async def load_corpus(session: Any, base: KnowledgeBase) -> list[Source]:
     documents = (
         await session.execute(
@@ -233,10 +269,7 @@ async def load_corpus(session: Any, base: KnowledgeBase) -> list[Source]:
         raise DistillationError("the knowledge base has no converted document")
     size = sum(len(s.markdown) for s in corpus)
     if size > MAX_CORPUS_CHARS:
-        raise DistillationError(
-            f"the corpus holds {size} characters, more than {MAX_CORPUS_CHARS}: "
-            "too large to distil in one pass"
-        )
+        raise DistillationError(too_large_message(corpus))
     return corpus
 
 
