@@ -5554,7 +5554,7 @@ components:
             stage_usd: { type: object, additionalProperties: { type: object, additionalProperties: { type: number } } }
             max_turns: { type: object, additionalProperties: { type: integer } }
             max_minutes: { type: object, additionalProperties: { type: integer } }
-            tool_calls_per_run: { type: [integer, "null"], minimum: 1 }
+            tool_calls_per_run: { type: [integer, "null"], minimum: 0 }
             daily_project_usd: { type: [number, "null"], exclusiveMinimum: 0 }
         attempts:
           type: object
