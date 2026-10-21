@@ -263,7 +263,9 @@ the **project's** profiles, the **organisation's tier** (`/admin/models`), the *
 (`platform/<tier>`); then it checks the result against the gateway's list, the backend, the eval
 matrix and, last, the **organisation's model catalogue** for the stage's role (a disabled model, or a
 model without an entry in `curated` mode, is refused, and `allow_unvalidated` does not bypass it). See
-[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md).
+[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md). `/admin/models` shows the upstream model
+each name resolves to, as the gateway declares it at the last sync (a dated id only if the gateway
+declares dated names); it does not show what the provider actually served.
 
 ## Where the money goes
 
