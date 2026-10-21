@@ -1391,7 +1391,21 @@ export const sectionAcmeLayered = {
       kind: "form",
       title: "This organisation",
       description: "Applies to Acme only.",
-      schema: { type: "object", properties: { accent: { type: "string", title: "accent colour" } } },
+      schema: {
+        type: "object",
+        properties: {
+          accent: { type: "string", title: "accent colour" },
+          logo: {
+            type: "string",
+            format: "asset",
+            title: "logo",
+            description: "PNG or SVG, 256 KiB at most.",
+            "x-upload": "/orgs/{org}/acme/branding/files",
+            "x-accept": ["image/png", "image/svg+xml"],
+            "x-max-bytes": 262144,
+          },
+        },
+      },
       read: "/orgs/{org}/scim/settings",
       write: "/orgs/{org}/scim/settings",
     },
@@ -2559,6 +2573,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       projects: [slug],
       owner_project: slug,
     } as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/acme\/branding\/files$/.test(path)) {
+    // An upload (S42-13): the answer carries the `ref` the field then holds. A served sample file, so the thumbnail draws.
+    return { ref: "/api/v1/mock-theme-assets/logo.svg" } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.

@@ -355,6 +355,22 @@ the page, so the first paint is already themed; the person's organisation theme 
 after hydration. A person's own light/dark choice always wins over the theme's default mode. See
 [ADR 0064](adr/0064-a-theme-is-data-the-console-applies.md).
 
+An organisation's own look (S42-13) follows the person, not only the instance:
+- When the person picks or is given an organisation, the console remembers its slug in
+  `localStorage` (`choregos.org`) and in the non-HttpOnly cookie `choregos_org`. The root layout
+  reads the cookie and asks `GET /api/v1/theme?org=<slug>`, so the first paint, sign-in page
+  included, already wears that organisation's name, logo, favicon, colours and footer. The cookie
+  only SELECTS a public look: it grants nothing, a value that is not a slug (`[a-z0-9-]`, 63
+  characters at most) is ignored, and the theme is memoised per organisation for 60 s in a
+  bounded cache (32 entries).
+- The footer sentence, the attribution line and the favicon follow the theme the client holds, so
+  they change with the organisation once it is swapped in. The attribution to the foundation stays.
+- A long product name is cut in the header and shows whole in a tooltip.
+- A logo is a file the organisation uploads, never a URL (the console's CSP serves images from
+  `'self'`, `data:` and `blob:` only). A theme editor in an edition offers it as a form field of
+  `format: "asset"` (ADR 0032 addendum); the community core serves no organisation theme, so
+  it has no such upload route.
+
 ## Playbooks and the tool catalogue
 
 Both are brought by the deployment, as ConfigMaps, and both are optional.

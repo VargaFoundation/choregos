@@ -277,7 +277,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     credentials: "include",
     // A file upload (`FormData`) sets its own type, with its multipart boundary.
-    headers: init.body instanceof FormData ? { ...(init.headers ?? {}) } : { "Content-Type": "application/json", ...(init.headers ?? {}) },
+    // A raw file (`Blob`) carries the content type its caller gives it (`sectionUpload`).
+    headers:
+      init.body instanceof FormData || init.body instanceof Blob
+        ? { ...(init.headers ?? {}) }
+        : { "Content-Type": "application/json", ...(init.headers ?? {}) },
     cache: "no-store",
   });
   if (!response.ok) {
@@ -357,6 +361,16 @@ export const api = {
    */
   sectionCall: <T>(method: string, path: string, body?: unknown) =>
     request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
+  /**
+   * Upload a file to a path a section declares in a form field of `format: "asset"` (`x-upload`, S42-13):
+   * the RAW body with the file's own content type, answered by `{ ref }`, the value the field then holds.
+   */
+  sectionUpload: (path: string, file: File) =>
+    request<{ ref: string }>(path, {
+      method: "POST",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    }),
   addMember: (org: string, body: MembershipUpsert) =>
     request<Membership>(`/orgs/${org}/members`, { method: "POST", body: JSON.stringify(body) }),
   /** Le registre d'agents de l'organisation (ADR 0033) : une version ne se modifie jamais. */
