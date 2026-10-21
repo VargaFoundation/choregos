@@ -18,9 +18,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import yaml
 from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import ARTIFACT_TYPES, ProjectConfig
-from choregos_core import ModelResolutionError
+from choregos_core import ModelResolutionError, checksum, parse_workflow
+from choregos_core import ValidationError as WorkflowInvalid
 from choregos_core.models import ModelResolver
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,10 +37,12 @@ from ..db.models import (
     WorkflowDef,
     WorkItem,
 )
+from ..errors import ApiError
 from ..object_store import object_store
 from ..schemas.readiness import ProjectReadiness, ReadinessFix, ReadinessItem, ReadinessSummary
 from . import github_app
 from .definitions import active_policy, policy_model, workflow_model
+from .gabarits import manifeste_du_gabarit, shipped_workflows
 from .human_groups import groups_known_in, unknown_group_warnings
 from .projets import declares_a_release_train
 
@@ -97,6 +101,22 @@ class RuntimeFact:
 
 
 @dataclass(frozen=True)
+class TemplateWorkflowFact:
+    """An active workflow the project received from its template, against what the template ships now.
+
+    Both checksums are computed now, by the same parser, from the stored YAML and from the template's
+    file: a parser that learnt a new default does not make every stored copy look different."""
+
+    name: str
+    #: the project's active version of it
+    version: int
+    stored: str
+    shipped: str
+    #: where the template takes it from (`workflows/campaign.yaml`, `template:default-simple@1`)
+    ref: str
+
+
+@dataclass(frozen=True)
 class Facts:
     slug: str
     status: str
@@ -136,6 +156,10 @@ class Facts:
     #: the policy's RuntimeClass against the warm pool's; None when nothing is asked, the pool is not
     #: the executor in use, or the deployment did not say which RuntimeClass it runs
     runtime: RuntimeFact | None = None
+    #: the template the project was made from, and its workflows still marked `source: template`;
+    #: empty when there is no template or it cannot be read any more (nothing is judged then)
+    template: str | None = None
+    template_workflows: tuple[TemplateWorkflowFact, ...] = ()
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -582,6 +606,43 @@ def item_runtime_class(f: Facts) -> list[ReadinessItem]:
     ]
 
 
+def item_workflow_template(f: Facts) -> list[ReadinessItem]:
+    """A project keeps the copy of its template's workflows made the day it was created (#817)."""
+    if f.template is None or not f.template_workflows:
+        return []
+    title = "Workflows as the template ships them"
+    fix = ReadinessFix(href=f"/p/{f.slug}/workflows", by="project_owner")
+    behind = [w for w in f.template_workflows if w.stored != w.shipped]
+    if not behind:
+        shown = ", ".join(f"`{w.name}`" for w in f.template_workflows)
+        return [
+            _item(
+                "workflow-template",
+                "general",
+                title,
+                "done",
+                f"{shown} as `{f.template}` ships them on this platform.",
+                fix,
+            )
+        ]
+    differs = "; ".join(
+        f"`{w.name}` v{w.version} ({w.stored[7:19]}) is not `{w.ref}` ({w.shipped[7:19]})" for w in behind
+    )
+    return [
+        _item(
+            "workflow-template",
+            "general",
+            title,
+            "check",
+            f"`{f.template}` ships a different version of what this project received: {differs}. "
+            "A fix to the template does not reach a project on its own: publish the template's file "
+            "as the next version (`choregos workflow push`, or `PUT /projects/{id}/workflows/{name}` "
+            "with `source: template`); a work item in progress stays on its version.",
+            fix,
+        )
+    ]
+
+
 ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_provisioned,
     item_workflow,
@@ -597,6 +658,7 @@ ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_notifications,
     item_object_store,
     item_runtime_class,
+    item_workflow_template,
     item_tools,
     item_first_work_item,
 )
@@ -766,6 +828,34 @@ def runtime_fact(connectors: dict[str, ConnectorFact], policy: Any) -> RuntimeFa
     return RuntimeFact("gvisor", runtime_class_refusal("gvisor", str(pool), str(warm_pool)))
 
 
+async def template_workflow_facts(
+    session: AsyncSession, template_ref: str | None, rows: list[Any]
+) -> tuple[TemplateWorkflowFact, ...]:
+    """The project's active `source: template` workflows that its template still ships, both sides
+    checksummed now. Nothing (an empty tuple) when there is no template, when it cannot be read any
+    more, or when a document no longer parses: the item then says nothing rather than guess."""
+    if not template_ref:
+        return ()
+    try:
+        shipped: dict[str, tuple[str, str]] = {}
+        for ref, source in shipped_workflows(*await manifeste_du_gabarit(session, template_ref)):
+            parsed, _ = parse_workflow(source, strict=False)
+            shipped[parsed.metadata.name] = (ref, checksum(parsed))
+    except (ApiError, WorkflowInvalid, OSError, yaml.YAMLError):
+        return ()
+    facts: list[TemplateWorkflowFact] = []
+    for row in rows:
+        if row.source != "template" or row.name not in shipped or not row.yaml:
+            continue
+        try:
+            stored = checksum(parse_workflow(row.yaml, strict=False)[0])
+        except (WorkflowInvalid, yaml.YAMLError):
+            continue
+        ref, shipped_checksum = shipped[row.name]
+        facts.append(TemplateWorkflowFact(row.name, row.version, stored, shipped_checksum, ref))
+    return tuple(sorted(facts, key=lambda f: f.name))
+
+
 def _file_outputs(workflows: list[Any]) -> tuple[str, ...]:
     names: set[str] = set()
     for workflow in workflows:
@@ -831,6 +921,8 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         file_outputs=file_outputs,
         object_store=await probe_object_store() if file_outputs else None,
         runtime=runtime_fact(connectors, policy),
+        template=project.template_ref or None,
+        template_workflows=await template_workflow_facts(session, project.template_ref, list(workflow_rows)),
         slug=project.slug,
         status=project.status,
         provision_failure=(f"{failed.get('name')}: {failed.get('message')}" if failed else None),
