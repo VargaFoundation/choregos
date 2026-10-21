@@ -288,9 +288,35 @@ def test_the_edition_schema_accepts_the_community_and_the_enterprise_shapes() ->
     validator.validate(base)  # an older core, without the two new fields, stays valid
     validator.validate({**base, "publisher": None, "edition_version": None})
     validator.validate({**base, "edition": "enterprise", "publisher": "Acme", "edition_version": "0.2.0"})
+    # the about panel's fields: all optional, so an older core stays valid
+    validator.validate(
+        {**base, "licence": "Apache-2.0", "edition_licence": None, "build": {"revision": None}}
+    )
+    validator.validate(
+        {
+            **base,
+            "edition": "enterprise",
+            "licence": "Apache-2.0",
+            "edition_licence": "Acme Corp EULA",
+            "build": {"revision": "0123abc"},
+        }
+    )
 
 
-@pytest.mark.parametrize("extra", [{"publisher": 3}, {"edition_version": 3}, {"publisher": "x" * 81}])
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"publisher": 3},
+        {"edition_version": 3},
+        {"publisher": "x" * 81},
+        {"edition_licence": 3},
+        {"edition_licence": "x" * 81},
+        {"licence": 3},
+        {"build": {}},
+        {"build": {"revision": "NOT-A-SHA"}},
+        {"build": {"revision": "abc"}},
+    ],
+)
 def test_the_edition_schema_refuses_a_malformed_publisher_or_version(extra: dict[str, Any]) -> None:
     from jsonschema import ValidationError
 
