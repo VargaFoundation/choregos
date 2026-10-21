@@ -51,16 +51,26 @@ export default function OrgConnectorsPage() {
   ) : null;
   return (
     <div className="space-y-6">
-      <p className="text-sm text-ink-muted">
-        Catalogue:{" "}
-        <Link href="/catalogue/mcp-servers" className="underline">
-          MCP servers
-        </Link>{" "}
-        ·{" "}
-        <Link href="/catalogue/connectors" className="underline">
-          Connectors
-        </Link>
+      <h1 className="text-xl font-semibold">Installed connectors</h1>
+      <p className="max-w-3xl text-sm text-ink-muted">
+        Connectors this organisation has installed. Projects enable them; project delivery tools (tracker, scm, ci, cd,
+        notify) are configured in each project.
       </p>
+      <aside
+        className="max-w-3xl rounded border border-line bg-surface px-3 py-2 text-sm"
+        aria-label="Add from the catalogues"
+        data-testid="add-from-catalogues"
+      >
+        <strong>Add from the catalogues</strong>
+        <span className="text-ink-muted"> — </span>
+        <Link href="/catalogue/mcp-servers" className="underline">
+          Browse MCP servers
+        </Link>
+        <span className="text-ink-muted"> · </span>
+        <Link href="/catalogue/connectors" className="underline">
+          Browse connector types
+        </Link>
+      </aside>
       {arrivee && (
         <p className="max-w-3xl text-sm" role="status" data-testid="installed-from-catalogue">
           Installed <strong data-donnee>{arrivee.name}</strong> from the catalogue.
@@ -69,15 +79,15 @@ export default function OrgConnectorsPage() {
       )}
       <div className="space-y-3">
         <p className="max-w-3xl text-sm text-ink-muted">
-          A connector is a system Choregos reaches out to. Those of the organisation are declared once and shared by its
-          projects: each operation is allowed, needs an approval (a governed action), or is forbidden — and opens to the
-          project groups you name (none: every project). A project can tighten an operation, never widen it.
+          Each operation of an installed connector is allowed, needs an approval (a governed action), or is forbidden
+          — and opens to the project groups you name (none: every project). A project can tighten an operation, never
+          widen it.
         </p>
         <Glossaire ici="connectors" ouvert />
       </div>
       <section className="space-y-3" aria-labelledby="business" data-testid="section-metier">
         <h2 id="business" className="text-lg font-semibold">
-          Business systems (API)
+          Business systems (API) ({metier.length})
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
           Systems your agents act on through the operations their type declares — a directory, a device fleet, a
@@ -92,7 +102,7 @@ export default function OrgConnectorsPage() {
       </section>
       <section className="space-y-3" aria-labelledby="mcp" data-testid="section-mcp">
         <h2 id="mcp" className="text-lg font-semibold">
-          MCP servers
+          MCP servers ({mcp.length})
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
           Tool servers Choregos calls over MCP: discover lists their tools, and each new tool is born closed. A

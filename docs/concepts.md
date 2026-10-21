@@ -15,7 +15,7 @@ control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, th
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 A **catalogue** is what the platform *offers*; a **connector** is what an organisation has
-*installed*, and each project uses only what is enabled for it (ADR 0074). The image ships a catalogue of well-known MCP servers (and one of skills): listing an
+*installed* (the console shows them under *Installed connectors*); a **connector type** is one entry of the connector catalogue, the kind of system a connector can be an instance of (a directory, a tracker, a CI). Each project uses only what is enabled for it (ADR 0074). The image ships a catalogue of well-known MCP servers (and one of skills): listing an
 entry enables nothing, and installing one goes through the same governance as declaring it by hand
 ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)).
 
