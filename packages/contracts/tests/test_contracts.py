@@ -155,6 +155,7 @@ def _comparer(chemin: str, noeud: dict[str, Any], model: type, ecarts: list[str]
         ("stage-input.schema.json", StageInput),
         ("finding.schema.json", Finding),
         ("human-decision.schema.json", HumanDecision),
+        ("policy.schema.json", Policy),
     ],
 )
 def test_le_schema_et_le_modele_declarent_les_memes_champs(schema_name: str, model: type) -> None:
@@ -261,8 +262,7 @@ def test_a_role_override_changes_that_role_only() -> None:
 
 
 def test_the_context_schema_and_model_declare_the_same_fields() -> None:
-    """The whole policy is not compared yet (`budgets.tool_calls_per_run` is missing from its
-    schema, a finding); its `context` block is, overrides included."""
+    """The `context` block, overrides included; the whole policy is compared above."""
     gaps: list[str] = []
     node = contracts.load_schema("policy.schema.json")["properties"]["context"]
     _comparer("policy.context", node, ContextPolicy, gaps)
@@ -288,9 +288,35 @@ def test_the_edition_schema_accepts_the_community_and_the_enterprise_shapes() ->
     validator.validate(base)  # an older core, without the two new fields, stays valid
     validator.validate({**base, "publisher": None, "edition_version": None})
     validator.validate({**base, "edition": "enterprise", "publisher": "Acme", "edition_version": "0.2.0"})
+    # the about panel's fields: all optional, so an older core stays valid
+    validator.validate(
+        {**base, "licence": "Apache-2.0", "edition_licence": None, "build": {"revision": None}}
+    )
+    validator.validate(
+        {
+            **base,
+            "edition": "enterprise",
+            "licence": "Apache-2.0",
+            "edition_licence": "Acme Corp EULA",
+            "build": {"revision": "0123abc"},
+        }
+    )
 
 
-@pytest.mark.parametrize("extra", [{"publisher": 3}, {"edition_version": 3}, {"publisher": "x" * 81}])
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"publisher": 3},
+        {"edition_version": 3},
+        {"publisher": "x" * 81},
+        {"edition_licence": 3},
+        {"edition_licence": "x" * 81},
+        {"licence": 3},
+        {"build": {}},
+        {"build": {"revision": "NOT-A-SHA"}},
+        {"build": {"revision": "abc"}},
+    ],
+)
 def test_the_edition_schema_refuses_a_malformed_publisher_or_version(extra: dict[str, Any]) -> None:
     from jsonschema import ValidationError
 

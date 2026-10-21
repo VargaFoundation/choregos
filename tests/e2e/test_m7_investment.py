@@ -219,8 +219,24 @@ async def honest_analyst(stage_input: StageInput) -> StageResult:
     memo = (
         f"# Memo {fields['symbol']}\n\n"
         f"- {fields['symbol']}: out-of-sample CAGR {oos['cagr']:.1%}, deflated Sharpe {oos['dsr']:.2f}, "
-        f"max drawdown {abs(oos['max_drawdown']):.1%}."
+        f"max drawdown {abs(oos['max_drawdown']):.1%}.\n{_bar(fields)}"
     )
+    return StageResult(status=StageStatus.DONE, summary="memo", outputs={"memo_markdown": memo})
+
+
+def _bar(fields: dict[str, Any]) -> str:
+    """The bar the product was judged against, as the analyst is told to state it (#824)."""
+    bar = fields["thresholds"]
+    return (
+        f"- Judged against a deflated Sharpe of at least {bar['min_dsr']}, a drawdown of at most "
+        f"{bar['max_drawdown']} and at least {bar['min_trades']} trades."
+    )
+
+
+async def barless_analyst(stage_input: StageInput) -> StageResult:
+    """Every number measured, but not the bar the product passed: the memo of #824."""
+    memo = (await honest_analyst(stage_input)).outputs.model_dump()["memo_markdown"]
+    memo = memo.split("\n- Judged against", 1)[0]
     return StageResult(status=StageStatus.DONE, summary="memo", outputs={"memo_markdown": memo})
 
 
@@ -229,7 +245,8 @@ def _memo_of(fields: dict[str, Any]) -> StageResult:
     oos = product["strategies"][product["best_in_sample"]]["oos"]
     memo = (
         f"# Memo {fields['symbol']}\n\n"
-        f"- out-of-sample CAGR {oos['cagr']:.1%}, max drawdown {abs(oos['max_drawdown']):.1%}."
+        f"- out-of-sample CAGR {oos['cagr']:.1%}, max drawdown {abs(oos['max_drawdown']):.1%}.\n"
+        f"{_bar(fields)}"
     )
     return StageResult(status=StageStatus.DONE, summary="memo", outputs={"memo_markdown": memo})
 
@@ -442,11 +459,14 @@ async def test_a_trending_product_opens_a_child_the_owner_adopts_then_the_campai
         assert (child["workflow"], child["fields"]["symbol"]) == ("product-memo", "TRND.US")
         assert child["fields"]["product"]["relevant"] is True
         assert "AAA.US" not in json.dumps(child["fields"]), "another product's numbers are not copied"
+        # The bar the engine applied — the campaign's, defaults included — for the memo to state (#824).
+        assert child["fields"]["thresholds"] == {"min_dsr": 0.9, "max_drawdown": 0.35, "min_trades": 3}
         await _state(client, child["id"], "memo_written", "the child reaches its memo")
         assert (await _artifact(client, child["id"], "memo_markdown"))["type"] == "markdown"
         (memo,) = [r.outputs.model_dump().get("memo_markdown") for r in bench.results.values()
                    if r.outputs.model_dump().get("memo_markdown")]  # fmt: skip
         assert "TRND.US" in memo and "AAA.US" not in memo, memo
+        assert "at least 0.9," in memo, memo
 
         await _decide(client, child["id"], "complete", "follow TRND.US on paper", CHILD_ATTESTATION)
         await _state(client, item["id"], "products_settled", "the campaign resumes once its child is settled")
@@ -563,6 +583,28 @@ async def test_a_memo_that_quotes_an_unmeasured_number_never_reaches_the_owner(
     assert len(memos) == 2, "the analyst had its two attempts"
 
 
+async def test_a_memo_that_leaves_out_the_bar_never_reaches_the_owner(
+    platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
+) -> None:
+    """#824: every number measured, but read alone the memo would pass a lowered bar for the usual one."""
+    client = platform.client
+    await login(client)
+    project = await _organisation(client)
+    bench = Bench(api_url, tmp_path / "runs", {"strategize": strategist, "memo": barless_analyst})
+    platform.adapters.executor = bench
+    fields = {"symbols": ["TRND.US", "AAA.US"], **PERIOD, "min_dsr": 0.9, "min_trades": 3}
+
+    async with worker():
+        item, interpreter = await _campaign(platform, project, fields)
+        child = await _child(client, item["key"], 1)
+        await _state(client, child["id"], "to_review", "a memo without its bar sends the product to review")
+        await interpreter.cancel()
+    memos = [s for s in bench.started if s.stage_input and s.stage_input.transition.role == "memo"]
+    assert len(memos) == 2, "the analyst had its two attempts"
+    timeline = (await client.get(f"/api/v1/work-items/{child['id']}/timeline")).text
+    assert "to quote written nowhere" in timeline and "thresholds: 0.9" in timeline, timeline[-2000:]
+
+
 async def test_a_child_whose_fields_were_edited_is_checked_against_the_parents_measures(
     platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
 ) -> None:
@@ -605,7 +647,8 @@ async def test_a_product_memo_created_by_hand_has_no_measured_numbers_to_quote(
     created = await client.post(
         f"/api/v1/projects/{project['id']}/work-items",
         json={"title": "By hand", "workflow": "product-memo", "start": False, "fields": {
-            "symbol": "TRND.US", "product": product, "facts": {}, **PERIOD}},
+            "symbol": "TRND.US", "product": product, "facts": {},
+            "thresholds": {"min_dsr": 0.9, "max_drawdown": 0.35, "min_trades": 3}, **PERIOD}},
     )  # fmt: skip
     assert created.status_code == 201 and created.json()["workflow_name"] == "product-memo", created.text
     key, item_id = created.json()["tracker_key"], created.json()["id"]

@@ -43,6 +43,7 @@ with workflow.unsafe.imports_passed_through():
     from ..activities import stage as stage_activities
     from ..activities import suspension as suspension_activities
     from ..activities import tracker as tracker_activities
+    from ..activities.execution import START_REFUSED
     from ..activities.interpretation import (
         activite_de,
         escalation_context,
@@ -159,6 +160,12 @@ ANSWER_GRANTS_ONE_ATTEMPT = "answer-grants-one-attempt"
 #: so nothing was pushed — escalates the work item with that reason (S22-46, #539). Before this
 #: marker GitHub answered 422 `head invalid` and the interpreter failed.
 OPEN_PR_WITHOUT_BRANCH_ESCALATES = "open-pr-without-branch-escalates"
+#: The executor refusing a run on the deployment's configuration at `start_run` — a policy asking for
+#: a RuntimeClass the warm pool does not run (#750, S38-13e) — escalates the work item at once, like
+#: `prepare_stage`'s refusals: the run is already closed `failed` with the reason, and replaying it
+#: would be refused the same way until an operator fixes the configuration. Before this marker the
+#: refusal failed the interpreter, and the work item had no workflow.
+START_REFUSAL_ESCALATES = "start-refusal-escalates"
 #: An agent step that measured no change takes its state's "already fixed" exit (S22-47, #539): the
 #: work item ends there when the exit's guarantees prove the fix is already on the default branch, and
 #: escalates at once otherwise. Before this marker it went on to test, review, and the pull request.
@@ -536,16 +543,23 @@ class WorkflowInterpreter:
             self.current_run = run_id
             budget = prepared["stage_input"]["budget"]
 
-            started = await executer_activite(
-                stage_activities.start_run,
-                {
-                    "project_id": params.project_id,
-                    "work_item_id": params.work_item_id,
-                    "stage_input": prepared["stage_input"],
-                },
-                start_to_close_timeout=timedelta(minutes=5),
-                retry_policy=DEFAULT_RETRY,
-            )
+            try:
+                started = await executer_activite(
+                    stage_activities.start_run,
+                    {
+                        "project_id": params.project_id,
+                        "work_item_id": params.work_item_id,
+                        "stage_input": prepared["stage_input"],
+                    },
+                    start_to_close_timeout=timedelta(minutes=5),
+                    retry_policy=DEFAULT_RETRY,
+                )
+            except ActivityError as error:
+                escalated = await self._start_refused(params, engine, transition, error)
+                if escalated is None:
+                    raise
+                self.current_run = None  # closed `failed` by `start_run`; nothing runs
+                return escalated
             capabilities = list((started or {}).get("capabilities") or [])
         awaited = await executer_activite(
             stage_activities.await_run,
@@ -797,6 +811,29 @@ class WorkflowInterpreter:
                 reason=f"configuration refused: {detail}",
                 question=f"The stage `{transition.key}` cannot start: {detail}. "
                 "Fix the configuration, then replay the stage.",
+                kind="configuration",
+            ),
+        )
+
+    async def _start_refused(
+        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, error: ActivityError
+    ) -> Any:
+        """The executor refused the run on the deployment's configuration (#750, S38-13e): the run is
+        closed `failed` with the reason, and the work item escalates at once with it — another attempt
+        would be refused the same way. Any other error of `start_run` is `None`, and fails the
+        interpreter as before."""
+        detail = message_de(error)
+        return await self._refusal_escalates(
+            params,
+            engine,
+            transition,
+            error,
+            Refusal(
+                types=frozenset({START_REFUSED}),
+                marker=START_REFUSAL_ESCALATES,
+                reason=f"the executor refused the run: {detail}",
+                question=f"The stage `{transition.key}` could not start: {detail}. "
+                "Fix the deployment or the policy, then replay the stage.",
                 kind="configuration",
             ),
         )
