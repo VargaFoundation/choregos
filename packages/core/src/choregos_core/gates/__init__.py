@@ -678,6 +678,13 @@ def _supported(written: str, value: float, measured: list[float], tolerance: flo
     return any(abs(c - t) <= step + 1e-9 or abs(c - t) <= tolerance * abs(t) for c, t in pairs)
 
 
+def _quotes(written: str, value: float, number: float) -> bool:
+    """A written number quotes `number` when it is that number, as a fraction or in percent; signs aside."""
+    # `_cited` reads "35%" as 0.35; a metric may also be stored in percent (35.0).
+    candidates = (abs(value), abs(value) * 100) if written.endswith("%") else (abs(value),)
+    return any(abs(c - abs(number)) <= 1e-9 for c in candidates)
+
+
 def _parent_source(ctx: GateContext, source: str) -> tuple[Any, str | None]:
     """`parent.<doc>[.<key>...]`: a document of the parent work item, walked down by keys.
 
@@ -714,8 +721,17 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     — a job's measured `metrics` — and `fields`, the work item's own fields: the check reads what
     was computed or asked, never what was said. `fields` is editable by a person; a child opened by
     a fan-out checks `parent.<doc>[.<key>...]` instead (S38-17), the parent's measured document.
+
+    `must_quote: [parent.metrics.thresholds]` (#824): every number of these sources must also be
+    written somewhere in the outputs. A memo that calls a product "relevant" without the bar it
+    passed reads, to whoever decides on it alone, as a pass against the campaign's usual bar —
+    RESEARCH-4 on dev called a DSR of 0.03 "passing" when the bar had been lowered to 0. Each
+    `must_quote` source is also a source of the check above. A number is quoted when it is written
+    exactly (`0.95`, or `95%`), not merely rounded to: a "1" must not quote a bar of 0.95.
     """
+    must_quote = [str(s) for s in (params.get("must_quote") or [])]
     sources = [str(s) for s in (params.get("sources") or [])]
+    sources += [s for s in must_quote if s not in sources]
     if not sources:
         return GateOutcome("numbers_measured", False, detail="no source: `sources:` missing on the guarantee")
     if ctx.result is None:
@@ -754,9 +770,11 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     ignore_below = float(params.get("ignore_below", 10))
     unsupported: list[str] = []
     count = 0
+    cited_everywhere: list[tuple[str, float]] = []
     for name in checked:
         raw = produced[name]
         text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)
+        cited_everywhere += _cited(text)
         for written, value in _cited(text):
             is_integer = not written.endswith("%") and _decimals(written) == 0
             if is_integer and (abs(value) < ignore_below or 1900 <= value <= 2100):
@@ -764,15 +782,24 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
             count += 1
             if not _supported(written, value, measured, tolerance):
                 unsupported.append(f"{name}: {written}")
+    unquoted = [
+        f"{source}: {number:g}"
+        for source in must_quote
+        for number in _numbers_in(_output_value(documents[source]))
+        if not any(_quotes(written, value, number) for written, value in cited_everywhere)
+    ]
+    problems = []
+    if unsupported:
+        problems.append(
+            f"{len(unsupported)} of {count} cited number(s) measured nowhere: " + ", ".join(unsupported[:20])
+        )
+    if unquoted:
+        problems.append(f"{len(unquoted)} number(s) to quote written nowhere: " + ", ".join(unquoted))
     return GateOutcome(
         "numbers_measured",
-        not unsupported,
-        detail=(
-            f"{len(unsupported)} of {count} cited number(s) measured nowhere: " + ", ".join(unsupported[:20])
-            if unsupported
-            else f"{count} cited number(s), all measured in {', '.join(sources)}"
-        ),
-        annotations=unsupported,
+        not problems,
+        detail="; ".join(problems) or f"{count} cited number(s), all measured in {', '.join(sources)}",
+        annotations=unsupported + unquoted,
     )
 
 
