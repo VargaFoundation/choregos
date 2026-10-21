@@ -1174,11 +1174,17 @@ async def distill_knowledge_base(
 
     base = await _base(session, principal, org, slug)
     _curate(principal, org, base)
+    from ..knowledge.distill import is_running
+
     if body is not None and (body.exclude or body.max_usd is not None):
         raise _in_passes_not_yet()
-    if (base.distillation or {}).get("status") == "running":
+    if is_running(base.distillation):
         raise conflict(f"knowledge base `{slug}` is already being distilled")
-    base.distillation = {"status": "running", "requested_by": principal.email}
+    base.distillation = {
+        "status": "running",
+        "requested_by": principal.email,
+        "started_at": refresh.utcnow().isoformat(),
+    }
     await session.flush()
     await record(
         session,
