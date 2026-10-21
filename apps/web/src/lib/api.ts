@@ -69,6 +69,8 @@ import type {
   KnowledgeBasePatch,
   KnowledgeDocument,
   KnowledgeEvalCase,
+  KnowledgeGrant,
+  KnowledgeGrants,
   KnowledgeSearchResult,
   KnowledgeSource,
   KnowledgeSourceCreate,
@@ -509,6 +511,10 @@ export const api = {
     request<KnowledgeBase>(`/projects/${encodeURIComponent(project)}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
   updateKnowledgeBase: (org: string, slug: string, body: KnowledgeBasePatch) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /** Who holds a role on a base (S42-11): readable and replaceable by callers who can share it. */
+  knowledgeGrants: (org: string, slug: string) => request<KnowledgeGrants>(`/orgs/${org}/knowledge/${slug}/grants`),
+  putKnowledgeGrants: (org: string, slug: string, grants: KnowledgeGrant[]) =>
+    request<KnowledgeGrants>(`/orgs/${org}/knowledge/${slug}/grants`, { method: "PUT", body: JSON.stringify({ grants }) }),
   uploadKnowledgeDocument: (org: string, slug: string, file: File) => {
     const form = new FormData();
     form.append("file", file);

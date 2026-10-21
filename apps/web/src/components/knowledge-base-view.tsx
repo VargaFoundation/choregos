@@ -5,11 +5,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { KnowledgeAccess } from "@/components/knowledge-access";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { Badge, Card, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
-import { distillationLabel, scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
+import { distillationLabel, permissionsOf, scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
 import { useSession } from "@/lib/session";
 
 // Only an `index` base shows the search and eval panel: loaded when needed, outside the page's chunk.
@@ -80,6 +81,9 @@ export function KnowledgeBaseView({
   if (base.error) return <ErrorNote>{String(base.error)}</ErrorNote>;
   if (!base.data) return <Empty>Reading the knowledge base…</Empty>;
   const documents = base.data.documents ?? [];
+  const can = permissionsOf(base.data);
+  // The server's sentence for what this person may not do: shown where the gesture would be.
+  const why = base.data.cannot_reason ?? undefined;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-3">
@@ -106,9 +110,15 @@ export function KnowledgeBaseView({
             Review
           </Link>
         ) : null}
-        <button type="button" className="ml-2 underline" onClick={() => void act(() => api.distillKnowledgeBase(org, slug))}>
-          Distill
-        </button>
+        {can.distill ? (
+          <button type="button" className="ml-2 underline" onClick={() => void act(() => api.distillKnowledgeBase(org, slug))}>
+            Distill
+          </button>
+        ) : (
+          <button type="button" className="ml-2 text-ink-subtle underline" disabled title={why}>
+            Distill
+          </button>
+        )}
       </p>
       <Card title="Documents">
         {documents.length === 0 ? (
@@ -149,14 +159,20 @@ export function KnowledgeBaseView({
                     </td>
                     <td className="text-xs text-ink-muted">{doc.created_at ? relative(doc.created_at) : "—"}</td>
                     <td className="space-x-2 text-right text-xs">
-                      {doc.status === "failed" && (
+                      {doc.status === "failed" && can.edit && (
                         <button type="button" className="underline" onClick={() => void act(() => api.convertKnowledgeDocument(org, slug, doc.id))}>
                           Convert again
                         </button>
                       )}
-                      <button type="button" className="underline" onClick={() => void act(() => api.deleteKnowledgeDocument(org, slug, doc.id))}>
-                        Delete
-                      </button>
+                      {can.edit ? (
+                        <button type="button" className="underline" onClick={() => void act(() => api.deleteKnowledgeDocument(org, slug, doc.id))}>
+                          Delete
+                        </button>
+                      ) : (
+                        <button type="button" className="text-ink-subtle underline" disabled title={why}>
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -165,8 +181,10 @@ export function KnowledgeBaseView({
           </div>
         )}
       </Card>
-      {base.data.serving_mode === "index" && <KnowledgeIndex org={org} base={base.data} onChange={() => void refresh()} />}
-      <KnowledgeSources org={org} slug={slug} sources={base.data.sources ?? []} onChange={() => void refresh()} />
+      {base.data.serving_mode === "index" && <KnowledgeIndex org={org} base={base.data} onChange={() => void refresh()} canEdit={can.edit} />}
+      <KnowledgeSources org={org} slug={slug} sources={base.data.sources ?? []} onChange={() => void refresh()} canEdit={can.edit} />
+      <KnowledgeAccess org={org} base={base.data} onChange={() => void refresh()} />
+      {can.edit ? (
       <Card title="Upload documents">
         <div className="space-y-2 text-sm">
           <p className="text-ink-muted">
@@ -187,6 +205,11 @@ export function KnowledgeBaseView({
           {error && <ErrorNote>{error}</ErrorNote>}
         </div>
       </Card>
+      ) : (
+        <p className="text-sm text-ink-muted" data-testid="knowledge-read-only">
+          {why ?? "You can read this knowledge base but not change it."}
+        </p>
+      )}
       {shown && (
         <Card
           title={document.data?.title ?? "Document"}

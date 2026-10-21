@@ -11,7 +11,18 @@ import type { KnowledgeBase, KnowledgeSearchResult } from "@/lib/types";
  * An `index` knowledge base (ADR 0051): how it ranks here, a search that cites, and its eval set —
  * questions and the documents expected to answer them — with the recall@5 it last measured.
  */
-export function KnowledgeIndex({ org, base, onChange }: { org: string; base: KnowledgeBase; onChange: () => void }) {
+export function KnowledgeIndex({
+  org,
+  base,
+  onChange,
+  canEdit = true,
+}: {
+  org: string;
+  base: KnowledgeBase;
+  onChange: () => void;
+  /** `can.edit` of the base (S42-11): search stays open to readers, reindexing and the eval set do not. */
+  canEdit?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<KnowledgeSearchResult | null>(null);
   const [evalText, setEvalText] = useState(() => formatEvalSet(base.eval_set));
@@ -36,9 +47,11 @@ export function KnowledgeIndex({ org, base, onChange }: { org: string; base: Kno
       <Card
         title="Index"
         action={
-          <button type="button" className={buttonClasses("ghost", "sm")} disabled={busy} onClick={() => void act(() => api.reindexKnowledgeBase(org, base.slug))}>
-            Reindex
-          </button>
+          canEdit ? (
+            <button type="button" className={buttonClasses("ghost", "sm")} disabled={busy} onClick={() => void act(() => api.reindexKnowledgeBase(org, base.slug))}>
+              Reindex
+            </button>
+          ) : undefined
         }
       >
         <div className="space-y-3 text-sm">
@@ -99,9 +112,9 @@ export function KnowledgeIndex({ org, base, onChange }: { org: string; base: Kno
           )}
           <label className="block space-y-1">
             <span className="text-xs text-ink-muted">One question per line: question | expected document, another</span>
-            <Textarea aria-label="Eval set" rows={5} value={evalText} onChange={(e) => setEvalText(e.target.value)} />
+            <Textarea aria-label="Eval set" rows={5} value={evalText} readOnly={!canEdit} onChange={(e) => setEvalText(e.target.value)} />
           </label>
-          <div className="flex gap-2">
+          {canEdit && <div className="flex gap-2">
             <button
               type="button"
               className={buttonClasses("secondary", "sm")}
@@ -113,7 +126,7 @@ export function KnowledgeIndex({ org, base, onChange }: { org: string; base: Kno
             <button type="button" className={buttonClasses("primary", "sm")} disabled={busy} onClick={() => void act(() => api.runKnowledgeEval(org, base.slug))}>
               Measure recall
             </button>
-          </div>
+          </div>}
           {error && <ErrorNote>{error}</ErrorNote>}
         </div>
       </Card>

@@ -1933,6 +1933,10 @@ export const knowledgeBase: KnowledgeBase = {
   documents_by_status: { ready: 1 },
   created_by: "lea@varga.dev",
   created_at: iso(60 * 24 * 5),
+  restricted: false,
+  can: { edit: true, distill: true, share: true, archive: true, widen: true },
+  my_role: "owner",
+  grants: [],
   documents: [
     {
       id: "kd-1",
@@ -1964,8 +1968,33 @@ export const projectKnowledgeBase: KnowledgeBase = {
   documents_by_status: {},
   created_by: "lea@varga.dev",
   created_at: iso(60 * 24 * 2),
+  restricted: false,
+  can: { edit: true, distill: true, share: true, archive: true, widen: false },
+  my_role: "owner",
+  grants: [],
   documents: [],
 };
+
+/** A base the signed-in person only reads (S42-11): every gesture is disabled, with the server's reason. */
+export const readOnlyKnowledgeBase: KnowledgeBase = {
+  ...knowledgeBase,
+  slug: "security-policy",
+  name: "Security policy",
+  restricted: true,
+  can: { edit: false, distill: false, share: false, archive: false, widen: false },
+  cannot_reason: "You read this knowledge base through a viewer grant: editors and owners change it.",
+  my_role: "viewer",
+  grants: null,
+};
+
+/** The grants written during the page's life, by base: the next read gives them back (S42-11). */
+const writtenGrants = new Map<string, Array<Record<string, unknown>>>();
+
+/** A base with the grants the page wrote since it loaded. */
+function withWrittenGrants(base: KnowledgeBase): KnowledgeBase {
+  const written = writtenGrants.get(base.slug);
+  return written ? ({ ...base, grants: written } as KnowledgeBase) : base;
+}
 
 /** What `GET /orgs/{org}/knowledge` returns: the organisation's base, then the project's. */
 export const knowledgeBases: KnowledgeBase[] = [knowledgeBase, projectKnowledgeBase];
@@ -2514,6 +2543,24 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       return { valid: false, errors: [{ code: "workflow.states", message: "a workflow declares its states", line: 1, column: 1 }], warnings: [] } as T;
     }
     return workflowValidation as T;
+  }
+  const grantsRoute = /^\/orgs\/[^/]+\/knowledge\/([^/]+)\/grants$/.exec(path);
+  if (grantsRoute && method === "PUT") {
+    const written = ((body as { grants?: Array<Record<string, unknown>> }).grants ?? []).map((g) => ({
+      ...g,
+      display: String(g.subject),
+      pending: String(g.subject).includes("@"),
+      created_by: "lea@varga.dev",
+    }));
+    writtenGrants.set(decodeURIComponent(grantsRoute[1] ?? ""), written);
+    return { grants: written } as T;
+  }
+  if (grantsRoute && method === "GET") return { grants: writtenGrants.get(decodeURIComponent(grantsRoute[1] ?? "")) ?? [] } as T;
+  const baseRoute = /^\/orgs\/[^/]+\/knowledge\/([^/]+)$/.exec(path);
+  if (baseRoute && method === "PATCH") {
+    const slug = decodeURIComponent(baseRoute[1] ?? "");
+    const known = [...knowledgeBases, readOnlyKnowledgeBase].find((b) => b.slug === slug) ?? knowledgeBase;
+    return { ...known, ...(body as object) } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/knowledge$/.test(path)) {
     // The base created, as the body says it (its slug, scope and projects): the page opens it next.
@@ -3146,8 +3193,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/skill-catalogue$/, skillCatalogue()],
     [/^\/orgs\/[^/]+\/knowledge$/, knowledgeBases.map((b) => ({ ...b, documents: null }))],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
-    [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, projectKnowledgeBase],
-    [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...knowledgeBase, documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
+    [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, withWrittenGrants(projectKnowledgeBase)],
+    [/^\/orgs\/[^/]+\/knowledge\/security-policy$/, readOnlyKnowledgeBase],
+    [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...withWrittenGrants(knowledgeBase), documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
     [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
     [/^\/orgs\/[^/]+\/skills\/[^/]+$/, skills[0]],

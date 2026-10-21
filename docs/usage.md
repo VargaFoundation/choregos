@@ -1427,7 +1427,7 @@ served to this project's runs only (there is no scope to choose), owned by the p
 where you upload documents or add a source. **From the organisation**: **Knowledge** (`/knowledge`) is
 the registry of every base, filterable by scope (organisation-wide, project, group), with who uses
 each one; its creation form is where a base is shared with several projects (picked from a list) or
-with groups. A base's page uploads documents and follows each conversion.
+with groups. A base's page uploads documents and follows each conversion. Its **Access** card shows who is served the base and who reads it, and, to those who may share it, the grants table (a role per member, e-mail, group or project; **Save access** replaces the list); an administrator also restricts the base there. Buttons the caller may not use are disabled and carry the server's reason.
 
 An agent version reads a base by naming it: `"knowledge": [{"slug": "architecture"}]` in its spec.
 When a run is prepared, each named base must exist and be served to the run's project — otherwise

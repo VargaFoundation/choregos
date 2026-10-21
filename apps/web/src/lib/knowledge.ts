@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /** What the knowledge pages say about a base and its documents (ADR 0051). */
 import { relative } from "./format";
-import type { KnowledgeBase, KnowledgeEvalCase, KnowledgeSource } from "./types";
+import type { KnowledgeBase, KnowledgeEvalCase, KnowledgeGrant, KnowledgePermissions, KnowledgeSource } from "./types";
 
 /** Where a base is served, said in words: who reads it, which runs get it. */
 export function scopeLabel(base: Pick<KnowledgeBase, "scope" | "projects" | "groups">): string {
@@ -172,4 +172,45 @@ export function refreshBody(draft: RefreshDraft): RefreshBody {
   if (draft.mode === "cron") return { refresh_mode: "cron", refresh_cron: draft.cron.trim(), refresh_timezone: draft.timezone };
   if (draft.mode === "manual") return { refresh_mode: "manual" };
   return { refresh_mode: "interval", interval_minutes: Number(draft.interval) || 60 };
+}
+
+const EVERYTHING: KnowledgePermissions = { edit: true, distill: true, share: true, archive: true, widen: true };
+
+/**
+ * What the caller may do with a base, as the server said (`can`, S42-11). A response without it
+ * (an older API) allows everything: the console never hides a gesture on a guess, and the server
+ * refuses what the caller may not do anyway.
+ */
+export function permissionsOf(base: Pick<KnowledgeBase, "can">): KnowledgePermissions {
+  return base.can ?? EVERYTHING;
+}
+
+/** Who may read the base, in words: the reach, and whether people need a grant. */
+export function accessLabel(base: Pick<KnowledgeBase, "restricted" | "scope" | "projects" | "groups">): string {
+  return base.restricted
+    ? "restricted: people read it through a grant; its runs are still served"
+    : `readable by ${scopeLabel(base)}`;
+}
+
+export const GRANT_ROLES: KnowledgeGrant["role"][] = ["viewer", "editor", "owner"];
+
+/** What a role lets one do, for the role select's hint. */
+export function roleHint(role: KnowledgeGrant["role"] | string | null | undefined): string {
+  if (role === "owner") return "feeds, distils, shares and archives";
+  if (role === "editor") return "feeds, syncs and distils";
+  if (role === "viewer") return "reads";
+  return "reads through the base's reach";
+}
+
+/** A grant's name on screen: the server's display, else its subject. */
+export function grantName(grant: Pick<KnowledgeGrant, "subject" | "display" | "subject_type">): string {
+  return grant.display || grant.subject;
+}
+
+/** The key of a grant in a list: one per (type, subject). */
+export const grantKey = (g: Pick<KnowledgeGrant, "subject_type" | "subject">): string => `${g.subject_type}:${g.subject}`;
+
+/** The grants as the PUT sends them: only what the server reads. */
+export function grantsBody(grants: KnowledgeGrant[]): KnowledgeGrant[] {
+  return grants.map((g) => ({ subject_type: g.subject_type, subject: g.subject, role: g.role }));
 }
