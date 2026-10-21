@@ -1152,6 +1152,11 @@ the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price pe
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 
+- **Which version?** Each row says `runs <upstream model> via <provider>`, with the context window and
+  the Tools / Vision badges, and the Tiers card says what `platform/<tier>` resolves to. That is the
+  upstream model **as the gateway is configured** (LiteLLM `/model/info`) at the last sync, dated on the
+  Gateway card; it carries a dated version only if the gateway declares dated names. It is not proof of
+  the version the provider actually served for a run.
 - **Modes**: `open` (the default; everything the gateway lists is usable, the catalogue only
   restricts what it has an entry for) and `curated` (only enabled entries are usable; a model
   discovered later arrives disabled). Switching to `curated` shows first the agents and project

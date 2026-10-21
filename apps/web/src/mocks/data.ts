@@ -1793,6 +1793,7 @@ export const modelCatalogue: ModelCatalogue = {
       upstream_model: m.litellm_model,
       input_cost_per_1k: m.input_cost_per_1k,
       output_cost_per_1k: m.output_cost_per_1k,
+      max_input_tokens: 200000,
       supports_tool_calling: true,
       supports_vision: false,
     },
