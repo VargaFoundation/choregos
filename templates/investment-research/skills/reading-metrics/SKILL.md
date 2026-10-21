@@ -24,10 +24,13 @@ and the sha256 of the bars and of the strategies the numbers come from.
 
 ## A product is relevant when, out of sample
 
-`dsr ≥ min_dsr`, `max_drawdown ≤ max_drawdown`, `trades ≥ min_trades` (the work item's fields) and
-its CAGR beats buy-and-hold. The engine decides; the memo reports.
+`dsr ≥ min_dsr`, `max_drawdown ≤ max_drawdown`, `trades ≥ min_trades` and its CAGR beats
+buy-and-hold. The engine writes the bar it applied in `metrics.thresholds` (in a product's memo, the
+field `thresholds`); a campaign may lower it, so the memo states it. The engine decides; the memo
+reports.
 
 ## Quoting
 
 Copy, round, write a fraction as a percentage: allowed. Compute anything new: refused by the
-platform — the step fails on a number it cannot find in `metrics` or in the work item's fields.
+platform — the step fails on a number it cannot find in `metrics`, and on a memo that does not
+write each of the three thresholds.

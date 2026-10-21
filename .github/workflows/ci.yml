@@ -191,6 +191,13 @@ jobs:
           # "unknown command "unittest"" two lines further down.
           helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2
           helm unittest charts/choregos
+      - name: kyverno test (the engine judges infra/policies against infra/policies/tests)
+        run: |
+          # Pinned and checksummed: 1.13.4 counted "want fail, got pass" as a pass.
+          curl -sSfLo kyverno.tar.gz https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz
+          echo "b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  kyverno.tar.gz" | sha256sum -c -
+          tar xzf kyverno.tar.gz kyverno
+          ./kyverno test infra/policies/tests
 
   conformance-backends:
     needs: changes
@@ -252,6 +259,8 @@ jobs:
           platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
+          build-args: REVISION=${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
           # SBOM and SLSA provenance attached to the image (BuildKit attestations). SECURITY.md
           # promised them from the start; none existed (status review of 2026-09-24).
           sbom: ${{ github.ref == 'refs/heads/main' }}

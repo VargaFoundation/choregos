@@ -2,8 +2,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Card } from "@/components/ui";
+import { Info } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { useServedTheme } from "@/components/served-theme";
+import { buttonClasses, Card, Drawer, EtatDeLecture } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Edition } from "@/lib/types";
 
@@ -129,4 +131,132 @@ export const DEFAULT_FOOTER_TEXT = "A ticket goes in, a controlled production re
 
 export function FooterText() {
   return <span data-testid="footer-text">{useServedTheme().footer?.text ?? DEFAULT_FOOTER_TEXT}</span>;
+}
+
+/** Where the core's source and documentation live: the foundation's repository (ADR 0048). */
+export const SOURCE_REPOSITORY = "https://github.com/VargaFoundation/choregos";
+export const DOCUMENTATION = `${SOURCE_REPOSITORY}/tree/main/docs`;
+
+/** The plain text "Copy for support" puts on the clipboard: what a support request needs, nothing more. */
+export function aboutSupportText(productName: string, edition: Edition): string {
+  const enterprise = edition.edition === "enterprise";
+  return [
+    `Product: ${productName}`,
+    `Core version: ${edition.version}`,
+    `Edition: ${enterprise ? "enterprise" : "community"}`,
+    ...(enterprise && edition.edition_version ? [`Edition version: ${edition.edition_version}`] : []),
+    `Revision: ${edition.build?.revision ?? "unknown"}`,
+  ].join("\n");
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[9rem_1fr] gap-3 py-2 text-sm">
+      <dt className="text-ink-muted">{label}</dt>
+      <dd className="min-w-0 break-words">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * The About panel: what is deployed (product, core version and licence, edition, who publishes it,
+ * the build revision) and where to read more. Everything comes from `GET /edition` and the served
+ * theme; nothing here names an edition or a publisher itself, the plugin announces them.
+ */
+export function AboutPanel() {
+  const productName = useServedTheme().product_name;
+  const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
+  const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+  const data = edition.data;
+  if (!data) return <EtatDeLecture lecture={edition} quoi="the version information" />;
+  const enterprise = data.edition === "enterprise";
+
+  async function copy(texte: string) {
+    try {
+      await navigator.clipboard.writeText(texte);
+      setCopied("yes");
+    } catch {
+      setCopied("no");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <dl className="divide-y divide-line" aria-label="Deployed version">
+        <Row label="Product">{productName}</Row>
+        <Row label="Core">
+          Choregos <span className="font-mono">{data.version}</span>
+          {" · "}
+          <span data-testid="about-core-licence">{data.licence ?? "Apache-2.0"}</span> licence
+        </Row>
+        <Row label="Edition">{enterprise ? "Enterprise edition" : "Community edition"}</Row>
+        {enterprise && data.edition_version ? (
+          <Row label="Edition version">
+            <span className="font-mono">{data.edition_version}</span>
+          </Row>
+        ) : null}
+        {enterprise && data.publisher ? <Row label="Publisher">{data.publisher}</Row> : null}
+        {enterprise && data.edition_licence ? <Row label="Edition licence">{data.edition_licence}</Row> : null}
+        <Row label="Build revision">
+          {data.build?.revision ? (
+            <span className="font-mono">{data.build.revision}</span>
+          ) : (
+            <span className="text-ink-muted">not recorded</span>
+          )}
+        </Row>
+      </dl>
+      <ul className="space-y-1 text-sm" aria-label="Links">
+        <li>
+          <a href={SOURCE_REPOSITORY} target="_blank" rel="noreferrer" className="underline">
+            Source repository
+          </a>
+        </li>
+        <li>
+          <a href={DOCUMENTATION} target="_blank" rel="noreferrer" className="underline">
+            Documentation
+          </a>
+        </li>
+      </ul>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => void copy(aboutSupportText(productName, data))}
+          className={buttonClasses("secondary", "sm")}
+        >
+          Copy for support
+        </button>
+        <span role="status" className="text-xs text-ink-muted">
+          {copied === "yes" ? "Copied." : copied === "no" ? "Could not copy: select the values above instead." : ""}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The "About" entry of the sidebar and of the mobile menu: a button that opens the panel in a drawer.
+ * `rail` folds the sidebar variant to its icon (the label stays for a screen reader and a tooltip).
+ */
+export function AboutEntry({ className = "", rail = false }: { className?: string; rail?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="About"
+        aria-haspopup="dialog"
+        title="About"
+        onClick={() => {
+          setOpen(true);
+        }}
+        className={className}
+      >
+        <Info aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
+        <span className={rail ? "rail:hidden" : undefined}>About</span>
+      </button>
+      <Drawer open={open} onClose={() => setOpen(false)} title="About">
+        <AboutPanel />
+      </Drawer>
+    </>
+  );
 }

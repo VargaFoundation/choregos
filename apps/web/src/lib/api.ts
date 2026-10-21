@@ -84,6 +84,7 @@ import type {
   AuditPage,
   ConnectorType,
   ExecutorInfo,
+  PlatformIdentity,
   GatewayModel,
   ModelCatalogue,
   ModelCatalogueEntry,
@@ -597,6 +598,8 @@ export const api = {
   /** The images an operator named for agents written in code: names only (ADR 0063). */
   agentImages: () => request<AgentImageInfo[]>("/platform/agent-images"),
   executors: () => request<ExecutorInfo[]>("/platform/executors"),
+  /** How people sign in to this instance: the deployment's sign-in configuration, secret-free (S42-03). */
+  platformIdentity: () => request<PlatformIdentity>("/platform/identity"),
   models: (id: string) => request<ProjectModels>(`/projects/${qualify(id)}/models`),
   putModels: (id: string, body: ProjectModels) =>
     request<ProjectModels>(`/projects/${qualify(id)}/models`, { method: "PUT", body: JSON.stringify(body) }),

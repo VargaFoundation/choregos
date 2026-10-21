@@ -738,6 +738,16 @@ it nothing breaks: the index serves full-text only and the knowledge page says s
 database: `CREATE EXTENSION vector;` as a superuser, then `ALTER TABLE knowledge_chunks ADD COLUMN
 embedding_vec vector;` as the owner of the schema, then **reindex** each index base.
 
+**Checking the sign-in configuration from the console.** *Admin → Platform* shows a read-only card,
+"How people sign in to this instance", for the platform administrator: the OIDC issuer, client id and
+discovery URL, whether the client secret is set (never its value), the redirect URI to register at the
+identity provider (`<apiUrl>/api/v1/auth/callback`), the MCP door's OAuth issuer, audience and registered
+clients, the session lifetime, the development login switch, and the bootstrap organisation and the
+number of bootstrap administrators (never their e-mails). It is the answer of
+`GET /api/v1/platform/identity`. Nothing is editable there: the values come from the chart
+(`global.oidc`, `global.mcp.oauth`), and a row marked `default` was not set by the deployment. When
+`oidc.issuer` reads "not configured", the instance still runs on the built-in development issuer.
+
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
 (`global.devLogin.enabled`, `global.devLogin.adminEmails`).
@@ -845,6 +855,23 @@ curl -s https://<api-host>/edition
 on the enterprise edition they say who publishes it and which version of the plugin runs
 (`"publisher":"GraalSystems","edition_version":"0.2.0"`), and the admin page and the footer show
 them. They are `null` on the community edition, and absent from an older core.
+
+Three more fields feed the console's **About** entry (sidebar, bottom left; the mobile menu has
+it too):
+
+| Field | Meaning |
+|---|---|
+| `licence` | the licence of the core (`Apache-2.0`) |
+| `edition_licence` | the licence the edition's plugin announces through `declarer(..., licence=...)`; `null` on the community edition |
+| `build.revision` | the source commit the running image was built from, or `null` |
+
+`build.revision` comes from the `CHOREGOS_BUILD_REVISION` environment variable, which the API and
+worker images set from their `REVISION` build argument (`--build-arg REVISION=$(git rev-parse HEAD)`;
+the CI and release workflows pass the commit). An image built by hand without it reports `null`,
+and so does a value that is not a 7 to 40 character lowercase hexadecimal commit id. **`/edition` is
+public** (the sign-in page reads it), so the revision is public too: a commit id of an open source
+repository, but a deployment that does not want to say which commit it runs sets the variable to
+an empty string.
 
 This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
 second one is refused with a 409 that names the decision behind it
