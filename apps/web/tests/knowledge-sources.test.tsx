@@ -44,6 +44,12 @@ describe("what a source says", () => {
       url: "https://git.test/r.git", max_depth: 2, max_pages: 50, exclude: ["/es/*", "/pt/*"],
     });
     expect(sourceConfig("web", fields)).toEqual({ url: "https://git.test/r.git", max_depth: 2, max_pages: 50 });
+    expect(sourceConfig("web", { ...fields, pageOnly: true, depth: "4", maxPages: "300" })).toEqual({
+      url: "https://git.test/r.git", max_depth: 0, max_pages: 1,
+    });
+    expect(sourceConfig("web", { ...fields, depth: "9", maxPages: "120", documents: true })).toEqual({
+      url: "https://git.test/r.git", max_depth: 5, max_pages: 120, include_documents: true,
+    });
     expect(sourceConfig("git", fields)).toEqual({ url: "https://git.test/r.git", ref: "main", paths: ["docs/*.md", "*.md"] });
   });
 });
@@ -65,6 +71,34 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "sync now" }));
     await waitFor(() => expect(api.syncKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1"));
     expect(onChange).toHaveBeenCalled();
+  });
+
+  it("adds a single page, or a crawl with linked documents (S42-09b)", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://example.com/offer" } });
+    fireEvent.click(screen.getByLabelText("This page only (no links followed)"));
+    expect(screen.queryByLabelText("crawl depth")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ kind: "web", config: { url: "https://example.com/offer", max_depth: 0, max_pages: 1 } }),
+      ),
+    );
+    fireEvent.click(screen.getByLabelText("This page only (no links followed)"));
+    fireEvent.change(screen.getByLabelText("crawl depth"), { target: { value: "1" } });
+    fireEvent.click(screen.getByLabelText("Include linked documents (PDF, Word, PowerPoint, Excel)"));
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenLastCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ config: { url: "https://example.com/offer", max_depth: 1, max_pages: 50, include_documents: true } }),
+      ),
+    );
   });
 
   it("adds a SharePoint source through its connector", async () => {

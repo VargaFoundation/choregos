@@ -23,7 +23,7 @@ The crawl is anonymous: it reads only what any visitor reads.
 ## In Choregos
 
 1. **Knowledge**, the base, **Add source**, kind **Web**.
-2. `url`, `max_depth` and `max_pages`.
+2. `url`, `max_depth` and `max_pages`. For a single page tick **This page only** (depth 0, one page). Tick **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files linked from the pages, on the same host (at most 5 MiB each).
 3. Choose the refresh. Web content changes: an interval of a day or a cron expression is usual.
 4. The API must be allowed to reach the site: the network egress allowlist must open its host.
 
@@ -42,6 +42,8 @@ Press **Sync now** and open the documents that were added.
 
 | Field | What to put in it |
 | :-- | :-- |
+| `exclude` | path globs, each starting with /, that are neither fetched nor followed |
+| `include_documents` | also read the PDF, Word, PowerPoint and Excel files the pages link to (same host) |
 | `max_depth` | how many links deep to follow, at most 5 |
 | `max_pages` | how many pages to read, at most 500 |
 | `url` | the https address the crawl starts from |

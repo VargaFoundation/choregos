@@ -102,7 +102,7 @@ export function pageIdsOf(text: string): string[] {
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
   kind: "sharepoint" | "confluence" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean },
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean },
 ): Record<string, unknown> {
   if (kind === "confluence") {
     const ids = pageIdsOf(fields.pageId ?? "");
@@ -118,7 +118,19 @@ export function sourceConfig(
   }
   if (kind === "web") {
     const exclude = (fields.exclude ?? "").split(",").map((p) => p.trim()).filter(Boolean);
-    return { url: fields.url.trim(), max_depth: 2, max_pages: 50, ...(exclude.length ? { exclude } : {}) };
+    // "This page only" is a crawl of depth 0 and one page; otherwise the depth and cap the form shows.
+    const bounded = (raw: string | undefined, fallback: number, low: number, high: number) => {
+      const n = Number.parseInt((raw ?? "").trim(), 10);
+      return Number.isFinite(n) ? Math.max(low, Math.min(high, n)) : fallback;
+    };
+    const pageOnly = Boolean(fields.pageOnly);
+    return {
+      url: fields.url.trim(),
+      max_depth: pageOnly ? 0 : bounded(fields.depth, 2, 0, 5),
+      max_pages: pageOnly ? 1 : bounded(fields.maxPages, 50, 1, 500),
+      ...(exclude.length ? { exclude } : {}),
+      ...(fields.documents ? { include_documents: true } : {}),
+    };
   }
   return {
     url: fields.url.trim(),

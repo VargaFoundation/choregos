@@ -675,3 +675,56 @@ async def test_a_git_source_refuses_another_kind_of_connector_and_still_works_wi
         json={"kind": "git", "name": "pub", "config": {"url": "https://github.com/a/public.git"}},
     )
     assert public.status_code == 201 and public.json()["connector"] is None
+
+
+async def test_a_web_source_with_linked_documents_stores_the_pdf_converted(
+    client: AsyncClient, admin: str
+) -> None:
+    """S42-09b: a PDF the crawl lists goes through the same pipeline as an upload (fakes: no network)."""
+    from choregos_adapters.fakes.documents import fake_source
+    from choregos_api.db.models import KnowledgeDocument
+    from choregos_api.db.session import session_scope
+
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "web",
+            "name": "Offer",
+            "config": {"url": "https://docs.example.com/offer", "max_depth": 1, "include_documents": True},
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["config"]["include_documents"] is True
+    fake_source(created.json()["id"]).put("deck", "deck.pdf", fx.pdf(["Group revenue grew twelve percent"]))
+    assert (await _sync(created.json()["id"]))["added"] == 1
+    document = (await client.get(f"{BASE}/framework")).json()["documents"][0]
+    assert document["filename"] == "deck.pdf" and document["status"] == "ready"
+    async with session_scope() as session:
+        row = await session.get(KnowledgeDocument, document["id"])
+        assert row is not None and row.mime == "application/pdf"
+
+
+async def test_a_web_source_config_accepts_one_page_and_refuses_a_bad_flag(
+    client: AsyncClient, admin: str
+) -> None:
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    one = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "web",
+            "name": "One",
+            "config": {"url": "https://docs.example.com/a", "max_depth": 0, "max_pages": 1},
+        },
+    )
+    assert one.status_code == 201, one.text
+    assert one.json()["config"] == {"url": "https://docs.example.com/a", "max_depth": 0, "max_pages": 1}
+    bad = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "web",
+            "name": "x",
+            "config": {"url": "https://docs.example.com/", "include_documents": "yes"},
+        },
+    )
+    assert bad.status_code == 422 and "include_documents" in bad.json()["detail"]

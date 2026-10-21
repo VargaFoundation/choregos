@@ -417,3 +417,92 @@ async def test_a_github_app_mints_a_read_only_token_for_the_repository(
     assert fetch_env["GIT_CONFIG_VALUE_0"].endswith(
         base64.b64encode(f"x-access-token:{minted}".encode()).decode()
     )
+
+
+_PDF = "application/pdf"
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _typed(routes: dict[str, tuple[str, bytes]]) -> httpx.MockTransport:
+    """url -> (content type, body); anything else is a 404."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="")
+        if url not in routes:
+            return httpx.Response(404)
+        kind, body = routes[url]
+        return httpx.Response(200, content=body, headers={"content-type": kind})
+
+    return httpx.MockTransport(handler)
+
+
+_HOME = (
+    "text/html",
+    b'<a href="/deck.pdf">d</a><a href="/export?id=7">x</a><a href="https://elsewhere.test/o.pdf">o</a>'
+    b'<a href="/page">p</a>',
+)
+
+
+def _linked_site() -> dict[str, tuple[str, bytes]]:
+    root = "https://example.test/"
+    return {
+        root: _HOME,
+        f"{root}deck.pdf": (_PDF, b"%PDF-1.4 deck"),
+        f"{root}export?id=7": (_XLSX, b"PK-figures"),
+        f"{root}page": ("text/html", b"<p>page</p>"),
+        "https://elsewhere.test/o.pdf": (_PDF, b"%PDF-1.4 other"),
+    }
+
+
+async def test_a_depth_zero_crawl_lists_exactly_one_item() -> None:
+    root = "https://example.test/"
+    crawl = WebCrawlSource(
+        url=root,
+        max_depth=0,
+        max_pages=1,
+        include_documents=True,
+        transport=_typed(_linked_site()),
+        resolver=_public,
+    )
+    changes = await crawl.changes(None)
+    assert [i.ref for i in changes.items] == [root]
+
+
+async def test_linked_documents_on_the_same_host_are_listed_with_their_bytes_and_extension() -> None:
+    root = "https://example.test/"
+    crawl = WebCrawlSource(
+        url=root, include_documents=True, transport=_typed(_linked_site()), resolver=_public
+    )
+    changes = await crawl.changes(None)
+    names = {i.ref: i.name for i in changes.items}
+    # A PDF on another host is never followed; a document served without an extension takes its type's.
+    assert names == {
+        root: "index.html",
+        f"{root}deck.pdf": "deck.pdf",
+        f"{root}export?id=7": "export.xlsx",
+        f"{root}page": "page.html",
+    }
+    deck = next(i for i in changes.items if i.name == "deck.pdf")
+    assert await crawl.fetch(deck) == b"%PDF-1.4 deck"
+
+
+async def test_without_include_documents_a_linked_pdf_is_skipped() -> None:
+    root = "https://example.test/"
+    crawl = WebCrawlSource(url=root, transport=_typed(_linked_site()), resolver=_public)
+    changes = await crawl.changes(None)
+    assert [i.name for i in changes.items] == ["index.html", "page.html"]
+    assert not changes.unreadable
+
+
+async def test_links_are_never_parsed_out_of_a_document() -> None:
+    root = "https://example.test/"
+    site = {
+        root: ("text/html", b'<a href="/deck.pdf">d</a>'),
+        f"{root}deck.pdf": (_PDF, b'<a href="/secret">looks like a link</a>'),
+        f"{root}secret": ("text/html", b"never reached"),
+    }
+    crawl = WebCrawlSource(url=root, include_documents=True, transport=_typed(site), resolver=_public)
+    changes = await crawl.changes(None)
+    assert [i.name for i in changes.items] == ["index.html", "deck.pdf"]
