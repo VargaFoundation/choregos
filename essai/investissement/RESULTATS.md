@@ -136,3 +136,21 @@ Not reached on dev: the fan-out, a memo written by a real model, the owner's att
 no product passed, which is the honest outcome of 80 trials on 20 liquid products. Still not proven:
 a cross-check (the free Alpha Vantage key has no multi-year history), `preset:regulated` with gVisor
 (the project runs `regulated-without-gvisor`).
+
+## 2026-10-21, later — `RESEARCH-4`, the fan-out and three memos by a real model
+
+`RESEARCH-3` exercised no child. To run the rest of the workflow on dev, `RESEARCH-4` was opened
+with the same products and dates and **thresholds lowered on purpose** (`min_dsr: 0`,
+`min_trades: 1`; `max_drawdown` 0.35 and "beats buy-and-hold out of sample" unchanged). Its title
+says so. **What it finds relevant is not a research result**: a DSR of 0.03 passes.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | snapshot, profile, strategize (real model), backtest | 20 symbols, `bars_sha256=2ed0f39d…` (a fourth version of the same request); a new strategy set, $0.238; 80 trials, best out-of-sample DSR 0.580, `relevant_count=3` (IEF, TLT, XLU) |
+| 2 | `t-verdict` then `t-fan-out` | `backtested → relevant`; three children `RESEARCH-4.1` (IEF), `.2` (TLT), `.3` (XLU) in `product-memo` v1, 7 s after the verdict |
+| 3 | `t-memo`, real model (`quant-analyst`, `platform/standard`), one per child | the three memos passed `numbers_measured` on the first attempt (against the parent's measured `metrics`), 1 to 3 min each, $0.168 / $0.191 / $0.167 (26,353 to 31,646 tokens in) |
+| 4 | the memos, read | each quotes only this product's measured figures (e.g. XLU: Sharpe 1.47, DSR 0.31, CAGR 12.4 % against 5.4 % for buy-and-hold, drawdown 5.8 %, 13 trades — `metrics.products.XLU`), lists what would make it wrong and carries the notice; artifacts match their digests. None says the campaign's thresholds were lowered: a reader of one memo alone sees "relevant" |
+| 5 | ledger | 2026-10-21 day total $1.245 = the runs of RESEARCH-2, -3, -4 and its three children, to the cent. The campaign's own `totals` ($0.238) leave out its children, as ADR 0057 decides (each child has its own budget) |
+
+Waiting: each child's attested decision (`t-decide`, group `owner`), then the campaign's. They are a
+person's statement ("I read the memo…") and are left to Vincent.
