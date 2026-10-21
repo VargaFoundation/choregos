@@ -6,16 +6,26 @@ import io
 import zipfile
 
 
-def pptx(slides: list[tuple[str, str]], table: list[list[str]] | None = None) -> bytes:
-    """A deck: one slide per `(title, body)`, and a last slide holding `table` if given."""
+def pptx(
+    slides: list[tuple[str, str]],
+    table: list[list[str]] | None = None,
+    notes: dict[int, str] | None = None,
+    chart: tuple[list[str], dict[str, list[float]]] | None = None,
+) -> bytes:
+    """A deck: one slide per `(title, body)` (with the speaker `notes` of slide n, 0-based), a slide holding
+    `table` if given, and a last one holding a column `chart` (categories, series) if given."""
     from pptx import Presentation
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
     from pptx.util import Inches
 
     deck = Presentation()
-    for title, body in slides:
+    for index, (title, body) in enumerate(slides):
         slide = deck.slides.add_slide(deck.slide_layouts[1])
         slide.shapes.title.text = title
         slide.placeholders[1].text = body
+        if notes and index in notes:
+            slide.notes_slide.notes_text_frame.text = notes[index]
     if table:
         slide = deck.slides.add_slide(deck.slide_layouts[5])
         slide.shapes.title.text = "Table"
@@ -25,6 +35,16 @@ def pptx(slides: list[tuple[str, str]], table: list[list[str]] | None = None) ->
         for i, row in enumerate(table):
             for j, cell in enumerate(row):
                 grid.cell(i, j).text = cell
+    if chart:
+        slide = deck.slides.add_slide(deck.slide_layouts[5])
+        slide.shapes.title.text = "Chart"
+        data = CategoryChartData()
+        data.categories = chart[0]
+        for name, values in chart[1].items():
+            data.add_series(name, values)
+        slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(1), Inches(2), Inches(6), Inches(4), data
+        )
     out = io.BytesIO()
     deck.save(out)
     return out.getvalue()

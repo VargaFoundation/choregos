@@ -15,7 +15,7 @@ control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, th
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 A **catalogue** is what the platform *offers*; a **connector** is what an organisation has
-*installed*, and each project uses only what is enabled for it (ADR 0074). The image ships a catalogue of well-known MCP servers (and one of skills): listing an
+*installed* (the console shows them under *Installed connectors*); a **connector type** is one entry of the connector catalogue, the kind of system a connector can be an instance of (a directory, a tracker, a CI). Each project uses only what is enabled for it (ADR 0074). The image ships a catalogue of well-known MCP servers (and one of skills): listing an
 entry enables nothing, and installing one goes through the same governance as declaring it by hand
 ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)).
 
@@ -64,6 +64,12 @@ Three kinds:
 - **`human`** — a group, an SLA in hours, a reminder and an escalation.
 - **`system`** — a transition the platform performs itself, with no agent and no cost.
 
+A **backend** is the coding agent CLI (`claude-code`, `gemini-cli`, `opencode`, …) that the runner
+image ships and that executes an agent stage. An **executor** is where that stage runs
+(`agent_sandbox`, `k8s_job`, `tekton`, `aca`, `local_docker`). Both are chosen by the deployment;
+*Administration → Platform* shows them (backends can be flagged enabled or disabled there, which
+readiness counts but the orchestrator does not enforce).
+
 ## Agent scope
 
 An agent is a registered, versioned object ([ADR 0033](adr/0033-agent-registry-and-skill-library.md))
@@ -111,6 +117,25 @@ memory in turn. At most one binding **writes**: the run's lessons and the agent'
 a **global** memory they are only ever **proposals**, accepted by an administrator. A version that
 says nothing keeps its legacy `memory` field (`project`, `agent`, `none`), which means the same
 bindings as before; nothing already published changes.
+
+## Knowledge bases
+
+A **knowledge base** is a corpus a human curates and agents only read ([ADR 0051](adr/0051-knowledge-bases.md)):
+decks, spreadsheets, policies, pages of a wiki, a few web pages. Documents are converted to markdown,
+whatever they came from (uploaded, or synced from a SharePoint folder, a Confluence space or page tree,
+a web site or a git repository), and a document deleted at the source leaves the base at the next sync.
+
+- **Reach** says who may use it: the whole organisation, a list of projects, or people of some IdP groups
+  (never a run). An agent version names the bases it reads; a run whose project is not served a named
+  base does not start.
+- **Files or index.** Served as **files**, the ready documents are laid read-only in the run's workspace
+  and the agent reads them like any file: simple, exact, and bounded by the model's context. Served as an
+  **index**, they are cut into chunks and the agent searches them and cites the passage: it scales past
+  what fits in a context (use it above roughly 200k tokens of text) and costs a retrieval step.
+- **Distillation** turns a base into a reviewed skill of principles, each citing the document it came from.
+- **Not the memory.** Memory holds what agents learn from work, proposed and accepted. For a handful of
+  facts that only one run needs, give the run the document as an input, or let it fetch the page at run
+  time (a tool), rather than keeping a base that must be synced and kept current.
 
 ## Agent revisions and channels
 
@@ -164,7 +189,12 @@ percentage for a fraction and a dropped sign are tolerated; years, integers belo
 (default 10) and an explicit `allow:` list are skipped. The source `fields` is the work item's own
 fields, which a person can edit; a child opened by a fan-out reads `parent.<doc>[.<key>...]` instead,
 the parent's measured document (a key `$name` is the child's own field `name`); a work item with no
-parent has no such source and is refused.
+parent has no such source and is refused. `must_quote:` names sources whose every number must also
+be written in the outputs (and are sources themselves): a product memo must state the thresholds the
+backtest applied (`parent.metrics.thresholds`), so a product that passed a lowered bar does not read
+as one that passed the usual one (#824). A number of such a source counts as quoted when it is written
+exactly (`0.95`, `35%`), wherever in the text: a `10` elsewhere quotes `min_trades: 10` — the gate
+checks the numbers are there, not that the text names them as the bar.
 
 `adr_number_free` guards numbered records: when the branch adds `docs/adr/NNNN-*.md` (the path
 pattern is the `pattern` parameter), it lists the records already on the default branch and refuses
@@ -263,7 +293,9 @@ the **project's** profiles, the **organisation's tier** (`/admin/models`), the *
 (`platform/<tier>`); then it checks the result against the gateway's list, the backend, the eval
 matrix and, last, the **organisation's model catalogue** for the stage's role (a disabled model, or a
 model without an entry in `curated` mode, is refused, and `allow_unvalidated` does not bypass it). See
-[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md).
+[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md). `/admin/models` shows the upstream model
+each name resolves to, as the gateway declares it at the last sync (a dated id only if the gateway
+declares dated names); it does not show what the provider actually served.
 
 ## Where the money goes
 

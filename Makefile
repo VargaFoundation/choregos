@@ -75,9 +75,13 @@ docs-cli:  ## Régénère docs/cli.md depuis la CLI (à committer)
 	$(UV) run python tools/gen_cli_reference.py
 
 .PHONY: headroom-lock
+# certifi is exempt from the 14 days: 2026.10.19 removes root CAs with compromised keys
+# (GHSA-6q48-6c7w-9gw2, CRITICAL, #856), and Trivy refuses the image without it. The exemption
+# carries no date: a dated one would hold certifi at that day and block the next CA revocation.
 headroom-lock:  ## Recompile docker/headroom/requirements.txt (hashes, releases at least 14 days old)
 	$(UV) pip compile docker/headroom/requirements.in --universal --python-version 3.12 \
-	  --generate-hashes --exclude-newer P14D -o docker/headroom/requirements.txt
+	  --generate-hashes --exclude-newer P14D --exclude-newer-package certifi=false \
+	  -o docker/headroom/requirements.txt
 
 .PHONY: procedures
 procedures:  ## Regenerates docs/procedures/ from the setup procedures (to commit)

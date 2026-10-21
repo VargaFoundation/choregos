@@ -1,6 +1,6 @@
 [project]
 name = "choregos-ontology"
-version = "0.19.1"
+version = "0.19.2"
 description = "Platform trial (TRV-001 to 003): an ontology in YAML, compiled, its MCP tools generated, served as a core plugin"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }

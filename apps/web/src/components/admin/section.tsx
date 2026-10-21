@@ -31,6 +31,7 @@ export function SectionRendue({ section, org }: { section: AdminSection; org: st
         if (bloc.kind === "secret_once") return <BlocSecret key={index} bloc={bloc} org={org} />;
         return (
           <Card key={index} title={bloc.label}>
+            {bloc.description && <p className="mb-3 text-sm text-ink-muted">{bloc.description}</p>}
             <BoutonDAction action={bloc} org={org} />
           </Card>
         );
@@ -79,7 +80,7 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
       {lu.error ? (
         <ErrorNote>{String(lu.error)}</ErrorNote>
       ) : (
-        <SchemaForm schema={schema} value={valeurs} onChange={setSaisie} disabled={lu.isLoading} />
+        <SchemaForm schema={schema} value={valeurs} onChange={setSaisie} disabled={lu.isLoading} org={org} />
       )}
       {message && (
         <p className="mt-2 text-sm" role="status">
@@ -214,7 +215,7 @@ function BoutonDAction({
     <div className="space-y-2 rounded border border-line p-2" role="group" aria-label={`Confirm ${action.label}`}>
       {action.confirm && <p className="text-sm">{action.confirm}</p>}
       {action.reauth && <p className="text-xs text-ink-muted">You may be asked to sign in again.</p>}
-      {params && <SchemaForm schema={params} value={valeurs} onChange={setValeurs} />}
+      {params && <SchemaForm schema={params} value={valeurs} onChange={setValeurs} org={org} />}
       <span className="inline-flex gap-2">
         <Button
           size="sm"
@@ -274,7 +275,7 @@ function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {params && <SchemaForm schema={params} value={valeurs} onChange={setValeurs} />}
+          {params && <SchemaForm schema={params} value={valeurs} onChange={setValeurs} org={org} />}
           {bloc.confirm && <p className="text-sm text-ink-muted">{bloc.confirm}</p>}
           <Button tone="accent" onClick={() => void obtenir()} disabled={params ? champsManquants(params, valeurs).length > 0 : false}>
             {bloc.label}

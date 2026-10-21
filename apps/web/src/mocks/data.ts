@@ -1379,6 +1379,47 @@ export const sectionScim = {
     },
   ],
 };
+/** One screen, two levels (S42-02): an organisation form, and a block only a platform administrator sees. */
+export const sectionAcmeLayered = {
+  id: "acme-layered",
+  title: "Acme layered",
+  description: "One screen for what this organisation sets and what the whole instance sets.",
+  scope: "organisation",
+  permission: "member:manage",
+  blocks: [
+    {
+      kind: "form",
+      title: "This organisation",
+      description: "Applies to Acme only.",
+      schema: {
+        type: "object",
+        properties: {
+          accent: { type: "string", title: "accent colour" },
+          logo: {
+            type: "string",
+            format: "asset",
+            title: "logo",
+            description: "PNG or SVG, 256 KiB at most.",
+            "x-upload": "/orgs/{org}/acme/branding/files",
+            "x-accept": ["image/png", "image/svg+xml"],
+            "x-max-bytes": 262144,
+          },
+        },
+      },
+      read: "/orgs/{org}/scim/settings",
+      write: "/orgs/{org}/scim/settings",
+    },
+    {
+      kind: "form",
+      title: "The whole instance",
+      description: "Applies to every organisation of this instance; needs platform administration.",
+      permission: "platform:admin",
+      schema: { type: "object", properties: { product_name: { type: "string", title: "product name" } } },
+      read: "/orgs/{org}/scim/settings",
+      write: "/orgs/{org}/scim/settings",
+    },
+  ],
+};
 const ETAT_EN_LIGNE = /^( {2}([\w-]+): \{ display: )([^,}]+?)(\s*[,}])/gm;
 
 /**
@@ -1793,6 +1834,7 @@ export const modelCatalogue: ModelCatalogue = {
       upstream_model: m.litellm_model,
       input_cost_per_1k: m.input_cost_per_1k,
       output_cost_per_1k: m.output_cost_per_1k,
+      max_input_tokens: 200000,
       supports_tool_calling: true,
       supports_vision: false,
     },
@@ -1822,8 +1864,20 @@ export function usableModelsOf(path: string): UsableModel[] {
 }
 
 export const platformBackends: AgentBackendInfo[] = [
-  { name: "claude-code", enabled: true, version: "2.1.0", capabilities: ["mcp", "skills"] },
-  { name: "codex", enabled: false, capabilities: ["mcp"], disabled_reason: "conformance below threshold" },
+  {
+    name: "claude-code",
+    enabled: true,
+    version: "2.1.0",
+    capabilities: ["mcp", "skills"],
+    conformance: { passed: 24, total: 24, last_run_at: "2026-10-15T10:00:00Z", failures: [] },
+  },
+  {
+    name: "codex",
+    enabled: false,
+    capabilities: ["mcp"],
+    disabled_reason: "conformance below threshold",
+    conformance: { passed: 18, total: 24, failures: ["structured_output"] },
+  },
 ];
 
 /** The images an operator named for agents written in code: names only, never references (ADR 0063). */
@@ -2477,6 +2531,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
   const bare = path.split("?")[0] ?? path;
+  // The platform administrator's switch on a coding-agent backend (S42-07): the list answers with it.
+  if (method === "PUT" && bare === "/platform/backends") {
+    const update = body as { name: string; enabled: boolean; disabled_reason?: string | null };
+    const target = platformBackends.find((b) => b.name === update.name);
+    if (target) {
+      target.enabled = update.enabled;
+      target.disabled_reason = update.enabled ? null : (update.disabled_reason ?? null);
+      return structuredClone(target) as T;
+    }
+  }
   if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
     if (method === "PUT") {
       mockCeiling = { ceiling: (body as { ceiling: Record<string, unknown> | null }).ceiling, updated_by: me.email, updated_at: new Date().toISOString() };
@@ -2532,6 +2596,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       projects: [slug],
       owner_project: slug,
     } as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/acme\/branding\/files$/.test(path)) {
+    // An upload (S42-13): the answer carries the `ref` the field then holds. A served sample file, so the thumbnail draws.
+    return { ref: "/api/v1/mock-theme-assets/logo.svg" } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
@@ -3151,7 +3219,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
     [/^\/orgs\/[^/]+\/skills\/[^/]+$/, skills[0]],
-    [/^\/ui\/admin-sections$/, [sectionScim]],
+    [/^\/ui\/admin-sections$/, [sectionScim, sectionAcmeLayered]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
     [/^\/orgs$/, [{ slug: "acme", name: "Varga Foundation", role: "org_admin", currency: "EUR" }]],

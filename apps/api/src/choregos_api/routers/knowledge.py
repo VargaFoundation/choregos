@@ -20,7 +20,7 @@ from typing import Annotated
 
 import httpx
 from choregos_adapters.registry import fakes_enabled
-from fastapi import APIRouter, Path, Request, Response, status
+from fastapi import APIRouter, Path, Query, Request, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
@@ -50,6 +50,8 @@ from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
     KnowledgeBasePatch,
+    KnowledgeDistillEstimate,
+    KnowledgeDistillRequest,
     KnowledgeDocumentDto,
     KnowledgeEvalSet,
     KnowledgeSearchRequest,
@@ -715,9 +717,22 @@ def _confluence_config(config: dict[str, object]) -> dict[str, object]:
     page = config.get("page_id")
     if page not in (None, "") and not re.fullmatch(r"\d{1,20}", str(page)):
         raise unprocessable("`page_id` is the number in the page's URL (/pages/<id>/…)")
-    for flag in ("include_root", "include_attachments"):
+    ids = config.get("page_ids")
+    if ids not in (None, []):
+        if page not in (None, ""):
+            raise unprocessable("name `page_id` or `page_ids`, not both")
+        if (
+            not isinstance(ids, list)
+            or not len(ids) > 0
+            or len(ids) > 50
+            or not all(isinstance(x, str | int) and re.fullmatch(r"\d{1,20}", str(x)) for x in ids)
+        ):
+            raise unprocessable("`page_ids` is a list of at most 50 page numbers (/pages/<id>/…)")
+    for flag in ("include_root", "include_attachments", "descendants"):
         if flag in config and not isinstance(config[flag], bool):
             raise unprocessable(f"`{flag}` is true or false")
+    if config.get("descendants") is False and config.get("include_root") is False:
+        raise unprocessable("`descendants` false with `include_root` false leaves no page")
     labels = config.get("labels") or []
     if (
         not isinstance(labels, list)
@@ -728,6 +743,10 @@ def _confluence_config(config: dict[str, object]) -> dict[str, object]:
     out: dict[str, object] = {"space_key": space}
     if page not in (None, ""):
         out["page_id"] = str(page)
+    if isinstance(ids, list) and ids:
+        out["page_ids"] = list(dict.fromkeys(str(x) for x in ids))
+    if config.get("descendants") is False:
+        out["descendants"] = False  # absent means true: a stored config reads as before
     out["include_root"] = bool(config.get("include_root", True))
     out["include_attachments"] = bool(config.get("include_attachments", False))
     if labels:
@@ -751,6 +770,11 @@ def _web_config(config: dict[str, object]) -> dict[str, object]:
     }
     if exclude:
         checked["exclude"] = exclude
+    if "include_documents" in config:
+        if not isinstance(config["include_documents"], bool):
+            raise unprocessable("`include_documents` is true or false")
+        if config["include_documents"]:
+            checked["include_documents"] = True
     return checked
 
 
@@ -1130,22 +1154,59 @@ async def sync_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) 
     return dto
 
 
+def _in_passes_not_yet() -> ApiError:
+    return ApiError(
+        status.HTTP_501_NOT_IMPLEMENTED,
+        "Not implemented",
+        "distillation in passes (exclude, max_usd, estimate) lands with S42-10c; the contract is fixed here",
+        extra={"code": "distill_in_passes_not_implemented"},
+    )
+
+
+@router.get(
+    "/orgs/{org}/knowledge/{slug}/distill/estimate",
+    response_model=KnowledgeDistillEstimate,
+    operation_id="estimateKnowledgeDistillation",
+)
+async def estimate_knowledge_distillation(
+    org: str,
+    slug: Slug,
+    session: Db,
+    principal: Me,
+    exclude: Annotated[list[str] | None, Query(max_length=20)] = None,
+) -> KnowledgeDistillEstimate:
+    """What distilling the base would read and cost, with no model call. Same rights as `distill`."""
+    base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
+    raise _in_passes_not_yet()
+
+
 @router.post(
     "/orgs/{org}/knowledge/{slug}/distill",
     response_model=KnowledgeBaseDto,
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="distillKnowledgeBase",
 )
-async def distill_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+async def distill_knowledge_base(
+    org: str, slug: Slug, session: Db, principal: Me, body: KnowledgeDistillRequest | None = None
+) -> KnowledgeBaseDto:
     """The `knowledge-distiller` compiles the base into a principles skill, in the background; the
     version waits for a person's approval (`pending_review`). `agent:manage`."""
     from ..knowledge.distill import distill
 
     base = await _base(session, principal, org, slug)
     _curate(principal, org, base)
-    if (base.distillation or {}).get("status") == "running":
+    from ..knowledge.distill import is_running
+
+    if body is not None and (body.exclude or body.max_usd is not None):
+        raise _in_passes_not_yet()
+    if is_running(base.distillation):
         raise conflict(f"knowledge base `{slug}` is already being distilled")
-    base.distillation = {"status": "running", "requested_by": principal.email}
+    base.distillation = {
+        "status": "running",
+        "requested_by": principal.email,
+        "started_at": refresh.utcnow().isoformat(),
+    }
     await session.flush()
     await record(
         session,

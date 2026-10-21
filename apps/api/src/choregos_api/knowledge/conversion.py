@@ -31,7 +31,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import undefer
 
 from ..config import get_settings
-from ..db.models import KnowledgeDocument, Organization
+from ..db.models import KnowledgeBase, KnowledgeDocument, Organization
 from ..db.session import TOUT, session_scope
 from ..logging import get_logger
 
@@ -72,13 +72,17 @@ def child_environment() -> dict[str, str]:
     return {key: os.environ[key] for key in _ENV_KEPT if key in os.environ}
 
 
-async def run_converter(data: bytes, extension: str, *, timeout_s: float, max_bytes: int) -> dict[str, Any]:
+async def run_converter(
+    data: bytes, extension: str, *, timeout_s: float, max_bytes: int, rows_per_sheet: int | None = None
+) -> dict[str, Any]:
     """Runs `knowledge.convert` in a child process; raises `ConversionError` on any failure."""
     process = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
         "choregos_api.knowledge.convert",
         extension,
+        # The cap travels by argv: the child's environment is bare by design (`child_environment`).
+        *([str(rows_per_sheet)] if rows_per_sheet else []),
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -144,6 +148,7 @@ async def convert_document(org: str, document_id: str) -> str:
             extension,
             timeout_s=settings.knowledge_conversion_timeout_s,
             max_bytes=settings.knowledge_max_markdown_mib * 1024 * 1024,
+            rows_per_sheet=settings.knowledge_xlsx_rows_per_sheet,
         )
         status, values = (
             READY,
@@ -248,7 +253,26 @@ class Conversions:
             pending = list(rows)
         for org, document_id in pending:
             self.schedule(org, document_id)
+        await self._interrupt_distillations()
         return len(pending)
+
+    async def _interrupt_distillations(self) -> int:
+        """A distillation `running` is a task of a replica that stopped: say so, so the base can be
+        distilled again (the route also ignores one older than 30 minutes, for the replica that died
+        without a start-up)."""
+        async with session_scope(orgs=TOUT) as session:
+            bases = (
+                await session.execute(select(KnowledgeBase).where(KnowledgeBase.distillation.is_not(None)))
+            ).scalars()
+            interrupted = [b for b in bases if (b.distillation or {}).get("status") == "running"]
+            for base in interrupted:
+                base.distillation = {
+                    **(base.distillation or {}),
+                    "status": "failed",
+                    "error": "interrupted by a restart: distil again",
+                    "at": utcnow().isoformat(),
+                }
+        return len(interrupted)
 
 
 conversions = Conversions()

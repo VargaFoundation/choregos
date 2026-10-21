@@ -82,6 +82,11 @@ def reinitialiser() -> None:
 
 _SECTIONS: list[dict[str, Any]] = []
 
+# What the core's section manifests support, so a plugin detects a feature without parsing versions
+# (S42-02). `block_permission`: a block may carry its own `permission`. `asset_upload` (S42-13): a form
+# property of `format: "asset"` uploads its file to its `x-upload` path.
+SECTION_FEATURES: frozenset[str] = frozenset({"block_permission", "asset_upload"})
+
 
 def declarer_une_section_d_administration(manifeste: dict[str, Any]) -> None:
     """Appelée par un greffon à son chargement ; la validation se fait au démarrage de l'API."""
@@ -105,6 +110,20 @@ def sections_declarees() -> tuple[dict[str, Any], ...]:
     return tuple(_SECTIONS)
 
 
+def _televersements(schema: Any) -> list[tuple[str, str]]:
+    """The POST paths of a form schema's `format: "asset"` properties (`x-upload`, S42-13)."""
+    if not isinstance(schema, dict):
+        return []
+    proprietes = schema.get("properties")
+    if not isinstance(proprietes, dict):
+        return []
+    return [
+        ("POST", str(propriete["x-upload"]))
+        for propriete in proprietes.values()
+        if isinstance(propriete, dict) and propriete.get("format") == "asset" and "x-upload" in propriete
+    ]
+
+
 def chemins_d_une_section(manifeste: dict[str, Any]) -> list[tuple[str, str]]:
     """{(méthode, chemin)} qu'une section appelle : la console n'en appellera pas d'autre."""
     chemins: list[tuple[str, str]] = []
@@ -117,6 +136,7 @@ def chemins_d_une_section(manifeste: dict[str, Any]) -> list[tuple[str, str]]:
         if sorte == "form":
             chemins.append(("GET", str(bloc["read"])))
             chemins.append((str(bloc.get("write_method") or "PUT"), str(bloc["write"])))
+            chemins.extend(_televersements(bloc.get("schema")))
         elif sorte == "table":
             chemins.append(("GET", str(bloc["list"])))
             for ligne in bloc.get("row_actions", []):
