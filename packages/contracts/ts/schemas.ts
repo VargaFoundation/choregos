@@ -703,10 +703,14 @@ export type Template = {
   scaffold?: string;
 };
 
+/** optional: a core permission (same vocabulary as the section's) the caller must hold to see this block; the section's own permission still applies. A section with no visible block is not listed. */
+export type UiManifestBlockPermission = string;
+
 export type UiManifestPath = string;
 
 export type UiManifestForm = {
   kind: "form";
+  permission?: UiManifestBlockPermission;
   title: string;
   description?: string;
   /** the JSON Schema of the values; the console derives the form from it */
@@ -726,6 +730,7 @@ export type UiManifestColumn = {
 
 export type UiManifestTable = {
   kind: "table";
+  permission?: UiManifestBlockPermission;
   title: string;
   description?: string;
   list: UiManifestPath;
@@ -736,6 +741,7 @@ export type UiManifestTable = {
 
 export type UiManifestAction = {
   kind: "action";
+  permission?: UiManifestBlockPermission;
   label: string;
   description?: string;
   path: UiManifestPath;
@@ -753,6 +759,7 @@ export type UiManifestAction = {
 
 export type UiManifestSecretOnce = {
   kind: "secret_once";
+  permission?: UiManifestBlockPermission;
   label: string;
   description?: string;
   path: UiManifestPath;
