@@ -122,3 +122,53 @@ def test_parent_source_ignores_what_the_childs_fields_say() -> None:
 def test_parent_source_refuses_a_work_item_with_no_parent() -> None:
     passed, detail = _child_memo("Sharpe 1.23.", None, {"symbol": "A.US"})
     assert not passed and "no parent" in detail
+
+
+THRESHOLDS = {"metrics": {"thresholds": {"min_dsr": 0.0, "max_drawdown": 0.35, "min_trades": 1}}}
+
+
+def test_must_quote_refuses_a_memo_that_leaves_out_the_bar() -> None:
+    """#824: a memo of a product judged against a lowered bar has to say so."""
+    params = {"must_quote": ["thresholds"]}
+    docs = {"metrics": METRICS, "thresholds": THRESHOLDS["metrics"]["thresholds"]}
+    passed, detail = memo("P01 passed: Sharpe 1.23 out of sample.", docs, **params)
+    assert not passed
+    assert "to quote written nowhere" in detail and "thresholds: 0.35" in detail and "thresholds: 1" in detail
+    stated = (
+        "P01 passed against a minimum DSR of 0, a maximum drawdown of 35% and at least 1 trade: Sharpe 1.23."
+    )
+    assert memo(stated, docs, **params)[0]
+
+
+def test_must_quote_is_a_source_too_and_checks_the_bar_as_applied() -> None:
+    docs = {"metrics": METRICS, "thresholds": THRESHOLDS["metrics"]["thresholds"]}
+    # The bar is quoted, so it is no invented number; a bar the engine did not apply is.
+    assert memo("Bar: DSR 0, drawdown 35%, 1 trade.", docs, must_quote=["thresholds"])[0]
+    passed, detail = memo("Bar: DSR 0.95, drawdown 35%, 1 trade.", docs, must_quote=["thresholds"])
+    assert not passed and "memo_markdown: 0.95" in detail and "thresholds: 0" in detail
+
+
+def test_must_quote_reads_the_parents_thresholds_not_the_childs_fields() -> None:
+    ctx = GateContext(
+        result=StageResult(
+            status=StageStatus.DONE,
+            summary="ok",
+            outputs=StageOutputs(memo_markdown="Judged against DSR 0.95, drawdown 35%, 10 trades."),  # type: ignore[call-arg]
+        ),
+        fields={"symbol": "A.US", "thresholds": {"min_dsr": 0.95, "max_drawdown": 0.35, "min_trades": 10}},
+        parent_documents=THRESHOLDS,
+    )
+    out = evaluate(
+        "numbers_measured", ctx, {"must_quote": ["parent.metrics.thresholds"], "outputs": ["memo_markdown"]}
+    )
+    assert not out.passed, "the child's fields say 0.95; the engine applied 0"
+
+
+def test_must_quote_wants_the_bar_written_not_rounded_to() -> None:
+    """A "1" rounds to 0.95: as a quote, it would let a memo leave out a DSR bar of 0.95."""
+    docs = {"metrics": METRICS, "thresholds": {"min_dsr": 0.95, "max_drawdown": 0.35, "min_trades": 10}}
+    passed, detail = memo(
+        "Sharpe 1.23 over 10 trades, a drawdown under 35%; rank 1.", docs, must_quote=["thresholds"]
+    )
+    assert not passed and "thresholds: 0.95" in detail
+    assert memo("Bar: DSR 0.95, drawdown 35%, 10 trades; Sharpe 1.23.", docs, must_quote=["thresholds"])[0]

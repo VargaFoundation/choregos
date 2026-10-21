@@ -75,9 +75,12 @@ docs-cli:  ## Régénère docs/cli.md depuis la CLI (à committer)
 	$(UV) run python tools/gen_cli_reference.py
 
 .PHONY: headroom-lock
+# certifi is exempt from the 14 days: 2026.10.19 removes root CAs with compromised keys
+# (GHSA-6q48-6c7w-9gw2, CRITICAL, #856), and Trivy refuses the image without it.
 headroom-lock:  ## Recompile docker/headroom/requirements.txt (hashes, releases at least 14 days old)
 	$(UV) pip compile docker/headroom/requirements.in --universal --python-version 3.12 \
-	  --generate-hashes --exclude-newer P14D -o docker/headroom/requirements.txt
+	  --generate-hashes --exclude-newer P14D --exclude-newer-package certifi=2026-10-21 \
+	  -o docker/headroom/requirements.txt
 
 .PHONY: procedures
 procedures:  ## Regenerates docs/procedures/ from the setup procedures (to commit)
@@ -142,6 +145,18 @@ charts-test:  ## helm unittest
 	  exit 1; \
 	fi
 	helm unittest charts/choregos
+
+.PHONY: policies-test
+policies-test:  ## The Kyverno engine judges infra/policies against infra/policies/tests
+	@# Pinned and checked, like helm-unittest above: Kyverno CLI 1.13.4 counts "want fail, got
+	@# pass" as a pass, so a policy weakened to admit `nginx` stayed green there.
+	@v=$$(kyverno version 2>/dev/null | awk '/^Version:/{print $$2}'); \
+	if [ "$$v" != "1.19.1" ]; then \
+	  echo "kyverno CLI is $${v:-absent}, pinned to 1.19.1:"; \
+	  echo "  https://github.com/kyverno/kyverno/releases/tag/v1.19.1 (kyverno-cli_v1.19.1_*)"; \
+	  exit 1; \
+	fi
+	kyverno test infra/policies/tests
 
 # ───────────────────────── images ─────────────────────────
 # `--target` n'est pas optionnel sur `api.Dockerfile` : sans lui, Docker construit la dernière

@@ -70,12 +70,7 @@ ENGLISH = (
 )
 
 #: (file, start of the line) — French that stays, each with its reason.
-STILL_FRENCH = {
-    # The banner `gen_contracts` writes into `packages/contracts/ts/`: changing it rewrites the
-    # generated contracts, which is a `contract-change` pull request (ADR 0001).
-    ("tools/gen_contracts.py", " * Généré par tools/gen_contracts.py"),  # lang: fr-ok
-    ("tools/gen_contracts.py", " * Régénérer : make contracts"),  # lang: fr-ok
-}
+STILL_FRENCH: set[tuple[str, str]] = set()
 
 _SKIPPED_PARTS = {".venv", "node_modules", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache"}
 
