@@ -4,7 +4,10 @@
 # with those of `workflows/product-memo.yaml` — not a copy of them — and, for the strategist, with the
 # one check no gate makes: a strategy that names a product of the campaign. The analyst writes the
 # memo of ONE product (S38-15): it is scored on what the PARENT campaign measured (S38-17) — its
-# entry of `metrics.products` and `metrics.facts` — never on the child's editable fields.
+# entry of `metrics.products` and `metrics.facts` — never on the child's editable fields. Its memo
+# must also write the bar the engine applied, `metrics.thresholds` (#824). The gate enforces that each
+# threshold's number is written, exactly; that the text names it as the bar is only instructed (see
+# `a-bar-written-by-accident`).
 #
 # A case that should be refused and is accepted means a guarantee was loosened: the suite turns red.
 # Recorded outputs, no model: what a live model writes is scored the same way in S38-13.
@@ -19,6 +22,7 @@ fields: &fields
 metrics: &metrics
   trials: 9
   facts: { trials: 9, relevant_count: 1 }
+  thresholds: { min_dsr: 0.95, max_drawdown: 0.35, min_trades: 10 }
   products:
     P01:
       relevant: true
@@ -98,6 +102,30 @@ analyst:
       # Campaign memo
       P01 passed: out of sample (from 2022-01-01) a CAGR of 12.3%, a Sharpe ratio of 1.07, a
       deflated Sharpe of 0.97 after 9 trials, a 15.6% drawdown over 14 trades.
+      The bar: a deflated Sharpe of at least 0.95, a drawdown of at most 35%, at least 10 trades.
+
+  - id: a-verdict-without-its-bar
+    expect: refuse
+    why: >-
+      #824 — read alone, a memo that says "passed" without the bar reads as a pass against the usual
+      one, even when the campaign lowered it
+    memo: |
+      P01 passed: out of sample a CAGR of 12.3%, a deflated Sharpe of 0.97, a 15.6% drawdown.
+
+  - id: a-bar-the-backtest-did-not-apply
+    expect: refuse
+    why: the memo states the bar the engine applied (`metrics.thresholds`), not one it remembers
+    memo: |
+      P01 passed: a deflated Sharpe of 0.97, a 15.6% drawdown over 14 trades.
+      The bar: a deflated Sharpe of at least 0.5, a drawdown of at most 35%, at least 10 trades.
+
+  - id: a-bar-written-by-accident
+    expect: accept
+    why: >-
+      a known gap, kept visible: the gate checks each threshold's number is written, not that the
+      text calls it the bar; the instructions ask for it, a reviewer reads it
+    memo: |
+      P01 passed: a deflated Sharpe of 0.97 in 10 of 14 trades, 0.95 of the time under a 35% loss.
 
   - id: an-invented-forecast
     expect: refuse
