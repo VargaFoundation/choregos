@@ -48,6 +48,9 @@ class OutilMcp:
     #: `annotations.readOnlyHint` : un outil qui se déclare en lecture seule. Sans déclaration,
     #: il est tenu pour une écriture — le défaut prudent (ADR 0034).
     read_only: bool = False
+    #: `outputSchema`: what the tool promises its `structuredContent` looks like; the broker holds
+    #: the server to it (#755). Not part of the schema digest: it does not change what the tool does.
+    output_schema: dict[str, Any] | None = None
 
 
 def empreinte_du_schema(schema: dict[str, Any]) -> str:
@@ -189,12 +192,14 @@ class ClientMcp:
                 resultat = await self._envoyer(http, "tools/list", {"cursor": curseur} if curseur else {})
                 for brut in (resultat or {}).get("tools", []):
                     annotations = brut.get("annotations") or {}
+                    output = brut.get("outputSchema")
                     outils.append(
                         OutilMcp(
                             name=str(brut["name"]),
                             description=str(brut.get("description") or ""),
                             input_schema=dict(brut.get("inputSchema") or {}),
                             read_only=annotations.get("readOnlyHint") is True,
+                            output_schema=dict(output) if isinstance(output, dict) else None,
                         )
                     )
                 curseur = (resultat or {}).get("nextCursor")
