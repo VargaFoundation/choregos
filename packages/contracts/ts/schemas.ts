@@ -216,6 +216,8 @@ export type Policy = {
     max_minutes?: {
       [key: string]: number;
     };
+    /** Catalogue tool calls allowed per run; null means no ceiling. */
+    tool_calls_per_run?: number | null;
     daily_project_usd?: number;
     alert_at_ratio?: number;
   };
