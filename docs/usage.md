@@ -1413,7 +1413,13 @@ An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text; 20 MiB by default
 `CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB`) is answered `202 pending` and converted to markdown **in the
 background**, in a child process that sees none of the API's secrets and is stopped after
 `CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S` (120 s). Headings, slide titles and tables are kept; a PDF
-gives its text without headings, and a scanned PDF fails (no OCR). Each document then reads
+gives its text without headings, and a scanned PDF fails (no OCR). A workbook gives one `## <sheet>`
+table per sheet (hidden sheets marked), with empty cells empty, numbers as the sheet shows them
+(percentages, thousands, dates), the cached value of each formula, and at most
+`CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
+shown`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
+before this reading keep their old text until converted again: `POST …/documents/{id}/convert`
+(which also shrinks the corpus). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
 `groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage` (an organisation administrator), or, for a base created from a project

@@ -179,6 +179,8 @@ class Settings(BaseSettings):
     knowledge_max_documents: int = 500
     #: The largest markdown a conversion may produce; past it the document fails, it is not cut.
     knowledge_max_markdown_mib: int = 8
+    #: The most rows a workbook's sheet gives once converted; the rest is counted, not shown (S42-09c).
+    knowledge_xlsx_rows_per_sheet: int = 2000
     #: A conversion runs in a child process, killed past this delay.
     knowledge_conversion_timeout_s: float = 120.0
     #: How long a connector's connection test may take, when it runs on save (S40-05).
