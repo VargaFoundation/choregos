@@ -32,6 +32,8 @@
     },
     {
       "kind": "secret_once",
+      "permission": "platform:admin",
+      "description": "Visible to platform administrators only.",
       "label": "create a token",
       "path": "/orgs/{org}/scim/tokens",
       "secret_field": "token",
