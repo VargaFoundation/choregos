@@ -70,6 +70,22 @@ def test_the_lock_is_compiled_by_the_command_renovate_reruns() -> None:
     assert next(rule for rule in rules if rule["matchManagers"] == ["pip_requirements"])["enabled"] is False
 
 
+def test_the_lock_carries_a_ca_bundle_no_older_than_the_workspace_one() -> None:
+    """The 14-day wait kept a revoked root CA in the runner image after uv.lock had dropped it
+    (GHSA-6q48-6c7w-9gw2): certifi is exempt from the wait, and never lags the workspace lock."""
+    header = LOCK.read_text(encoding="utf-8").splitlines()[1]
+    assert "--exclude-newer-package certifi=false" in header
+    workspace = re.search(r'^name = "certifi"\nversion = "([\d.]+)"', (ROOT / "uv.lock").read_text(), re.M)
+    pinned = next(line for line in _requirements() if line.startswith("certifi=="))
+    assert workspace is not None
+    headroom_version = pinned.split("==")[1].split()[0]
+
+    def as_tuple(version: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in version.split("."))
+
+    assert as_tuple(headroom_version) >= as_tuple(workspace.group(1)), (headroom_version, workspace.group(1))
+
+
 def test_the_stage_installs_by_hash_and_loads_its_model_offline() -> None:
     stage = _stages()["headroom"]
     install = re.search(r"uv pip install (.+?)\n(?!\s+-)", stage.replace("\\\n", " "), re.S)

@@ -829,7 +829,11 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             session, run, project, SimpleNamespace(nom=name), code, corps
         )
     elif outil is not None:
+        from ..services.courtier import bounded_payload
+
         code, corps = await appeler_outil(outil, body or {})
+        # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
+        corps = bounded_payload(corps)
         fournisseur, prix = outil.provider, outil.price_eur
     elif name in du_courtier and du_courtier[name].sous_validation:
         # Sous validation (ADR 0035) : l'appel PROPOSE l'action ; rien ne part vers le serveur. La
@@ -856,9 +860,11 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         prix_usd = du_courtier[name].operation.price_usd or 0.0
     else:
         from ..greffons import fournisseurs_d_outils
+        from ..services.courtier import bounded_payload
 
         greffon = des_greffons[name][0]
         code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
+        corps = bounded_payload(corps)
         fournisseur, prix = f"greffon:{greffon}", 0.0
     # A call the organisation's network policy stopped never reached the server: it is not counted
     # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).

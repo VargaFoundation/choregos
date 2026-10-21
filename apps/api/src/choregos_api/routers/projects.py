@@ -110,9 +110,14 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     par son identifiant, pas par son slug. Ce qui ne suit pas : les adresses déjà copiées ailleurs, et
     les groupes de l'IdP qui nomment l'ancien slug.
     """
+    est_admin = principal.org_roles.get(org) == Role.ORG_ADMIN
+    if not est_admin:
+        # A platform administrator (granted by an edition plugin) renames an organisation they are
+        # not a member of. The instance right is checked BEFORE the lookup: under PostgreSQL RLS, a
+        # lookup bounded to the caller's organisations would not see the row (404).
+        await exiger_admin_de_plateforme(session, principal)
+        await limiter_aux_organisations(session, TOUT)
     organisation = await _org(session, org)
-    if principal.org_roles.get(org) != Role.ORG_ADMIN:
-        raise forbidden(f"renaming `{org}` needs the org_admin role")
     avant = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
     if body.slug is not None and body.slug != organisation.slug:
         await exiger_admin_de_plateforme(session, principal)
@@ -133,7 +138,10 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     await record(session, principal, "org.update", org_id=organisation.id, target_type="org",
                  target_id=organisation.id, avant=avant, apres=apres)  # fmt: skip
     return OrgDto(
-        slug=organisation.slug, name=organisation.name, role=Role.ORG_ADMIN, currency=moneta(organisation)
+        slug=organisation.slug,
+        name=organisation.name,
+        role=Role.ORG_ADMIN if est_admin else None,  # a non-member platform admin has no role here
+        currency=moneta(organisation),
     )
 
 

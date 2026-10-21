@@ -2821,7 +2821,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Confluence**.\n2. Pick the **connector**, then `space_key`; optionally `page_id` (and `include_root`), `labels` (one request\n   per page) and `include_attachments`.\n3. Choose the refresh: an interval, a cron expression, or manual."
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Confluence**.\n2. Pick the **connector**, then `space_key`; optionally `page_id`, or several `page_ids` (paste page addresses in the console), with `descendants: false` to read only those pages (and `include_root`), `labels` (one request\n   per page) and `include_attachments`.\n3. Choose the refresh: an interval, a cron expression, or manual."
       },
       {
         "key": "test",
@@ -2843,6 +2843,8 @@
       "connector": "the organisation's documents/confluence connector, picked from a list",
       "space_key": "the space's key, for example ENG",
       "page_id": "a page's number, to read that page and everything under it",
+      "page_ids": "up to 50 page numbers, to read exactly those pages (not together with page_id)",
+      "descendants": "false to read only the chosen pages, not the pages under them (default true)",
       "include_root": "false to leave the page itself out",
       "include_attachments": "true to index pdf, docx, pptx, xlsx, md, txt and html attachments",
       "labels": "keep only pages carrying one of these labels"
@@ -3000,7 +3002,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Web**.\n2. `url`, `max_depth` and `max_pages`.\n3. Choose the refresh. Web content changes: an interval of a day or a cron expression is usual.\n4. The API must be allowed to reach the site: the network egress allowlist must open its host."
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Web**.\n2. `url`, `max_depth` and `max_pages`. For a single page tick **This page only** (depth 0, one page). Tick **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files linked from the pages, on the same host (at most 5 MiB each).\n3. Choose the refresh. Web content changes: an interval of a day or a cron expression is usual.\n4. The API must be allowed to reach the site: the network egress allowlist must open its host."
       },
       {
         "key": "test",
@@ -3020,7 +3022,9 @@
     "fields": {
       "url": "the https address the crawl starts from",
       "max_depth": "how many links deep to follow, at most 5",
-      "max_pages": "how many pages to read, at most 500"
+      "max_pages": "how many pages to read, at most 500",
+      "exclude": "path globs, each starting with /, that are neither fetched nor followed",
+      "include_documents": "also read the PDF, Word, PowerPoint and Excel files the pages link to (same host)"
     },
     "vendor_docs": [],
     "origin": "shipped"
