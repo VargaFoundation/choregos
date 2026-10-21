@@ -95,6 +95,16 @@ def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
     )
 
 
+def shipped_workflows(manifeste: dict[str, Any], dossier: Path | None) -> list[tuple[str, str]]:
+    """`(ref, YAML source)` of each workflow the manifest ships today, in its order (S38-20).
+
+    The same sources `livraison` gives a new project, with the reference each comes from, so that a
+    project born of this template can be told which file to publish again."""
+    defauts = manifeste.get("defaults") or {}
+    refs = list(defauts.get("workflows") or ([defauts["workflow"]] if defauts.get("workflow") else []))
+    return [(str(ref), _source_du_workflow(str(ref), dossier)) for ref in refs or [WORKFLOW_SANS_GABARIT]]
+
+
 def _chemin_du_gabarit(ref: str, dossier: Path | None) -> Path:
     """Un chemin que nomme le manifeste : dans le dossier du gabarit, jamais au-dehors."""
     if dossier is None:
@@ -200,4 +210,4 @@ def _source_de_la_politique(ref: str, dossier: Path | None) -> str:
         ) from erreur
 
 
-__all__ = ["Livraison", "livraison", "manifeste_du_gabarit", "repertoire_des_gabarits"]
+__all__ = ["Livraison", "livraison", "manifeste_du_gabarit", "repertoire_des_gabarits", "shipped_workflows"]
