@@ -751,6 +751,11 @@ def _web_config(config: dict[str, object]) -> dict[str, object]:
     }
     if exclude:
         checked["exclude"] = exclude
+    if "include_documents" in config:
+        if not isinstance(config["include_documents"], bool):
+            raise unprocessable("`include_documents` is true or false")
+        if config["include_documents"]:
+            checked["include_documents"] = True
     return checked
 
 
