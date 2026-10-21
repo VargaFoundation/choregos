@@ -5,6 +5,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useSyncExternalStore } from "react";
+import { AboutEntry } from "@/components/edition";
 import { Wordmark } from "@/components/ui";
 import { useInboxCount } from "@/lib/a-decider";
 import { appliquerLaBarre, choisirLaBarre, CLE_DE_LA_BARRE, lireLaBarre, type Barre } from "@/lib/preferences";
@@ -72,7 +73,9 @@ export function BarreLaterale() {
       <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-2 py-3">
         <ListeDeNavigation pathname={pathname} aDecider={aDecider} variante="barre" rail={barre === "rail"} />
       </nav>
-      <div className="shrink-0 border-t border-line p-2">
+      <div className="shrink-0 space-y-0.5 border-t border-line p-2">
+        {/* Version, licence, edition, publisher: what is deployed (S42-12). The rail keeps the icon. */}
+        <AboutEntry rail className="flex h-7 w-full items-center gap-2.5 rounded px-2 text-[13px] text-ink-muted hover:bg-surface-muted hover:text-ink pointer-coarse:min-h-11 rail:justify-center rail:px-0" />
         {/* Les deux états sont rendus, le CSS montre le bon : juste dès la première peinture. */}
         <button
           type="button"

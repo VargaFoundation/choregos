@@ -12,6 +12,16 @@ make ci        # lint, strict typing, the test suite, contracts, charts
 
 `make demo` uses the `fake` connectors. It proves the machinery, not the integrations.
 
+### Which version is deployed?
+
+**About**, at the bottom of the sidebar (an icon when the sidebar is folded; in the **Menu** under
+1280 px), opens a panel with what the deployment runs: the product name, the core's version and
+licence, the edition (community or enterprise) and, for an edition that announces them, its
+version, publisher and licence, then the build revision and links to the source and the
+documentation. *Copy for support* puts the product, versions, edition and revision on the clipboard
+as plain text, ready for a support request. The revision reads *not recorded* on an image built
+without one.
+
 ## 2. Create a project
 
 Three ways, same result: the web wizard (`/projects/new`), the CLI, or the API.
