@@ -15,6 +15,7 @@ from .evals import EvalMatrix
 from .findings import FindingsTriage
 from .interpreter import WorkflowInterpreter
 from .knowledge import KnowledgeSync
+from .knowledge_distill import KnowledgeDistill
 from .memory import MemoryIngestion
 from .provisioning import ProjectProvisioning
 from .reconciliation import TrackerReconciliation
@@ -32,6 +33,7 @@ ALL_WORKFLOWS = [
     TrackerReconciliation,
     AgentTrial,
     KnowledgeSync,
+    KnowledgeDistill,
 ]
 
 WORKFLOW_ACTIVITIES = [
@@ -49,6 +51,7 @@ __all__ = [
     "AgentTrial",
     "EvalMatrix",
     "FindingsTriage",
+    "KnowledgeDistill",
     "KnowledgeSync",
     "MemoryIngestion",
     "ProjectProvisioning",

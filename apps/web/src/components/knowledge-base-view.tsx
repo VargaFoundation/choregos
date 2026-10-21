@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { KnowledgeDistill } from "@/components/knowledge-distill";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { Badge, Card, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -99,17 +100,15 @@ export function KnowledgeBaseView({
         {base.data.status !== "active" && ` · ${base.data.status}`}
       </p>
       {base.data.description && <p className="max-w-3xl text-sm">{base.data.description}</p>}
-      <p className="text-sm" data-testid="knowledge-distillation">
+      <div className="text-sm" data-testid="knowledge-distillation">
         Principles skill: {distillationLabel(base.data.distillation)}
         {base.data.distillation?.skill ? (
           <Link href={`/skills/${String(base.data.distillation.skill)}`} className="ml-2 underline">
             Review
           </Link>
         ) : null}
-        <button type="button" className="ml-2 underline" onClick={() => void act(() => api.distillKnowledgeBase(org, slug))}>
-          Distill
-        </button>
-      </p>
+        <KnowledgeDistill org={org} slug={slug} onStarted={refresh} />
+      </div>
       <Card title="Documents">
         {documents.length === 0 ? (
           <Empty title="No document yet">Upload the corpus below.</Empty>

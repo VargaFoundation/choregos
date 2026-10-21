@@ -63,7 +63,7 @@ from ..schemas.knowledge import (
 )
 from ..services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
 from ..services.platform_network import check_platform_host
-from ..temporal import get_temporal, knowledge_sync_id
+from ..temporal import get_temporal, knowledge_distill_id, knowledge_sync_id
 
 router = APIRouter(tags=["knowledge"])
 
@@ -1132,15 +1132,6 @@ async def sync_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) 
     return dto
 
 
-def _in_passes_not_yet() -> ApiError:
-    return ApiError(
-        status.HTTP_501_NOT_IMPLEMENTED,
-        "Not implemented",
-        "distillation in passes (exclude, max_usd, estimate) lands with S42-10c; the contract is fixed here",
-        extra={"code": "distill_in_passes_not_implemented"},
-    )
-
-
 @router.get(
     "/orgs/{org}/knowledge/{slug}/distill/estimate",
     response_model=KnowledgeDistillEstimate,
@@ -1156,7 +1147,10 @@ async def estimate_knowledge_distillation(
     """What distilling the base would read and cost, with no model call. Same rights as `distill`."""
     base = await _base(session, principal, org, slug)
     _curate(principal, org, base)
-    raise _in_passes_not_yet()
+    from ..knowledge.distill import estimate_for
+
+    estimate = await estimate_for(session, base, exclude or [])
+    return KnowledgeDistillEstimate(**estimate.values)
 
 
 @router.post(
@@ -1170,20 +1164,32 @@ async def distill_knowledge_base(
 ) -> KnowledgeBaseDto:
     """The `knowledge-distiller` compiles the base into a principles skill, in the background; the
     version waits for a person's approval (`pending_review`). `agent:manage`."""
-    from ..knowledge.distill import distill
+    from ..knowledge.distill import estimate_for, estimated_total, is_running
 
     base = await _base(session, principal, org, slug)
     _curate(principal, org, base)
-    from ..knowledge.distill import is_running
-
-    if body is not None and (body.exclude or body.max_usd is not None):
-        raise _in_passes_not_yet()
+    exclude = list(body.exclude) if body else []
+    max_usd = body.max_usd if body else None
     if is_running(base.distillation):
         raise conflict(f"knowledge base `{slug}` is already being distilled")
+    if max_usd is not None:
+        total = estimated_total(await estimate_for(session, base, exclude))
+        if total is not None and total > max_usd:
+            raise ApiError(
+                status.HTTP_409_CONFLICT,
+                "Conflict",
+                f"the estimated cost (${total:.2f}) is above the ${max_usd:.2f} asked",
+                extra={"code": "distill_over_budget"},
+            )
+    started_at = refresh.utcnow().isoformat()
     base.distillation = {
         "status": "running",
         "requested_by": principal.email,
-        "started_at": refresh.utcnow().isoformat(),
+        "started_at": started_at,
+        "phase": "plan",
+        "parts_done": 0,
+        "parts_total": 0,
+        "spent_usd": 0.0,
     }
     await session.flush()
     await record(
@@ -1196,5 +1202,14 @@ async def distill_knowledge_base(
     )
     dto = await _dto(session, base)
     await session.commit()
-    conversions.spawn("distill", partial(distill, org, base.id, principal.email))
+    await get_temporal().start_knowledge_distill(
+        knowledge_distill_id(base.id, started_at),
+        {
+            "org": org,
+            "base_id": base.id,
+            "requested_by": principal.email,
+            "exclude": exclude,
+            "max_usd": max_usd,
+        },
+    )
     return dto
