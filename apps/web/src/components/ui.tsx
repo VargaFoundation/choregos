@@ -669,7 +669,7 @@ export function Wordmark({ className, compact = false }: { className?: string; c
   const light = theme.logo ?? theme.logo_dark;
   const dark = theme.logo_dark ?? theme.logo;
   return (
-    <span className={cn("inline-flex items-center gap-2 text-ink", className)}>
+    <span className={cn("inline-flex min-w-0 items-center gap-2 text-ink", className)}>
       {light && dark ? (
         <>
           {/* A served file: `next/image` would add an optimiser in front of a same-origin asset. */}
@@ -695,7 +695,11 @@ export function Wordmark({ className, compact = false }: { className?: string; c
           <path d="M10.5 10h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       )}
-      <span className={cn("text-[15px] font-semibold tracking-tight", compact && "sr-only")}>
+      {/* An organisation chooses its own name (up to 40 characters): a long one is cut, and the title says it whole. */}
+      <span
+        className={cn("max-w-[14rem] truncate text-[15px] font-semibold tracking-tight", compact && "sr-only")}
+        title={theme.product_name}
+      >
         {theme.product_name}
       </span>
     </span>

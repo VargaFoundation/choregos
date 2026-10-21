@@ -93,6 +93,15 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
     expect(skills).not.toHaveAttribute("title");
   });
 
+  it("About comes before the collapse button and stays a named button once folded (S42-12)", () => {
+    const barre = rendre("/");
+    const [premier, second] = within(barre).getAllByRole("button");
+    expect(premier).toHaveAccessibleName("About");
+    expect(second).toHaveAccessibleName(/Collapse sidebar/);
+    fireEvent.click(within(barre).getByRole("button", { name: /Collapse sidebar/ }));
+    expect(within(barre).getByRole("button", { name: "About" })).toHaveAttribute("title", "About");
+  });
+
   it("un repli fait dans un autre onglet vaut ici aussi", () => {
     const barre = rendre("/");
     act(() => {
