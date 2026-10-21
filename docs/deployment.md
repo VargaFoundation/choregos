@@ -648,6 +648,19 @@ At every start the API creates the organisation if it is missing and gives those
 `org_admin` on it; it never touches what already exists. They can then create other
 organisations (`POST /orgs`, `choregos orgs create`) and invite members.
 
+`global.bootstrap.org` is the **slug** of the first organisation and `orgName` its display name:
+name them for the installation (there is no default organisation, neither in the chart nor in the
+CLI). The console shows the organisation a person last picked, else the first one `GET /orgs`
+returns; `NEXT_PUBLIC_DEFAULT_ORG` is a build-time variable of the image and the chart does not set it.
+
+The bootstrap **never renames** an organisation that exists: changing `bootstrap.org` on a running
+instance creates a second organisation (refused on the community edition, which holds one). To
+rename, call `PATCH /api/v1/orgs/<slug>` with `{"name": "…"}` (an organisation administrator), or
+`{"slug": "…"}` (a platform administrator, who need not be a member). A new slug is a decision for
+the operator: the memory tenant (`org:<slug>`), the IdP groups (`choregos:<slug>:<group>`), every
+MCP address (`/mcp/projects/<slug>:<project>`) and every copied console URL name the old one, and
+nothing rewrites them for you.
+
 The CLI and CI authenticate with API tokens, which a person issues for themselves once
 logged in (`POST /me/tokens`, `choregos tokens create`). Before anyone has logged in, the
 first token comes from the server side:
