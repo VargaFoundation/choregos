@@ -3189,6 +3189,20 @@ export type AgentBackendUpdate = {
   disabled_reason?: string | null;
 };
 
+export type PlatformIdentityRow = {
+  /** Stable identifier, e.g. oidc.issuer. */
+  key: string;
+  label: string;
+  /** Display value; a secret shows only set or missing. */
+  value: string;
+  /** settings: set by the deployment; derived: computed from other settings; default: the built-in default. */
+  source: "settings" | "derived" | "default";
+};
+
+export type PlatformIdentity = {
+  items: Array<PlatformIdentityRow>;
+};
+
 export type ExecutorInfo = {
   kind: "tekton" | "k8s_job" | "local_docker" | "aca" | "agent_sandbox";
   enabled: boolean;
@@ -3389,6 +3403,7 @@ export interface Operations {
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
+  getPlatformIdentity: { method: "GET"; path: "/platform/identity"; body: never; response: PlatformIdentity };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
   getProcedure: { method: "GET"; path: "/procedures/{procedure_id}"; body: never; response: Procedure };
