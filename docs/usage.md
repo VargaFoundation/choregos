@@ -2049,7 +2049,8 @@ same as a table with an organisation column.
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id
 `<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
-organisation by its id. What does not follow: addresses already copied elsewhere (an MCP client's
+organisation by its id. A platform administrator granted by an edition plugin can rename an
+organisation they do not belong to (the response then carries no `role`). What does not follow: addresses already copied elsewhere (an MCP client's
 configuration), IdP groups that still name the old slug, and `oidc.defaultOrg` if it names it.
 
 ```bash

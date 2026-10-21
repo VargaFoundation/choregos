@@ -280,7 +280,8 @@ Usage: choregos login [OPTIONS]
 Options:
   --api-url <str>  [default: http://localhost:8000]
   --token <str>
-  --org <str>      [default: varga]
+  --org <str>      Default organisation slug (else --org per command or
+                   CHOREGOS_ORG)
   --help           Show this message and exit.
 ```
 
