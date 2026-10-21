@@ -88,6 +88,7 @@ def test_the_analyst_cases(case: dict[str, Any]) -> None:
         "symbol": symbol,
         "product": CASES["metrics"]["products"][symbol],
         "facts": CASES["metrics"]["facts"],
+        "thresholds": CASES["metrics"]["thresholds"],
         **{k: CASES["fields"][k] for k in ("start", "oos_start", "end")},
     }
     refused = _score(
@@ -117,4 +118,5 @@ def test_the_instructions_say_what_the_evals_check() -> None:
     analyst = (TEMPLATE / "agents" / "quant-analyst.yaml").read_text(encoding="utf-8")
     assert "Never name a real product" in strategist
     assert "never quote a number" in strategist
-    assert "A number found in neither fails the step" in analyst
+    assert "A number found in none of them" in analyst
+    assert "A memo that leaves one out fails" in analyst  # the bar it was judged against (#824)

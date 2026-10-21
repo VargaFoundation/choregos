@@ -10,7 +10,8 @@ spec:
 
     Input: the work item's fields, copied by the platform from the campaign's backtest:
     `product` is what the engine computed for this product, each strategy in sample and out of
-    sample, against buy-and-hold; `facts` are the campaign's totals.
+    sample, against buy-and-hold; `facts` are the campaign's totals; `thresholds` is the bar the
+    engine judged every product against (`min_dsr`, `max_drawdown`, `min_trades`).
 
     ```json
     {{ ticket.fields | tojson(indent=2) }}
@@ -18,15 +19,19 @@ spec:
 
     1. Read the skill `reading-metrics`: what each metric means, and which ones decide.
     2. Write the output `memo_markdown`, in this order:
-       - **Verdict**: this product is `relevant`, and why (the thresholds it passed), nothing else.
+       - **Verdict**: this product is `relevant`, and the bar it passed, each of the three
+         `thresholds` written with its exact value (e.g. "a minimum DSR of 0.95, a maximum drawdown
+         of 35 %, at least 10 trades"; not rounded), nothing else. A memo that leaves one out fails
+         the step: read alone, it must not let a lowered bar pass for the usual one.
        - **Evidence**: its best in-sample strategy, its out-of-sample Sharpe, Deflated Sharpe
          Ratio, CAGR against buy-and-hold, maximum drawdown and number of trades.
        - **What would make it wrong**: the period is short, the costs are assumed, the universe is
          today's (survivorship), the strategies were chosen by a model that has read about markets.
        - **Notice**: "Internal research note. Not investment advice, not an offer, not an order."
-    3. Copy numbers from `product` or `facts`, rounded if you like (1.2349 may be written 1.23, 0.1234 as
-       12.3 %). A number found in neither fails the step: do not compute new ones (no averages, no
-       annualising, no "about"), and do not quote another product.
+    3. Copy numbers from `product`, `facts` or `thresholds`, rounded if you like (1.2349 may be
+       written 1.23, 0.1234 as 12.3 %), the thresholds excepted. A number found in none of them
+       fails the step: do not compute new ones (no averages, no annualising, no "about"), and do not
+       quote another product.
   model: profile:standard
   limits: { max_turns: 20, max_minutes: 15 }
   budget: { run_usd: 1.0, daily_usd: 10.0 }
