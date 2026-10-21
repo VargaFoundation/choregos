@@ -1198,6 +1198,43 @@ export type AgentSessionTurnResult = {
   events?: Array<AgentSessionPodEvent>;
 };
 
+/** What a hosted session's caller did on its socket (S41-21): `open`, a text frame `in`, `close`. */
+export type AgentSessionSocketFrame = {
+  seq: number;
+  kind: "open" | "in" | "close";
+  text?: string;
+  code?: number | null;
+};
+
+export type AgentSessionSocketNext = {
+  frames?: Array<AgentSessionSocketFrame>;
+  /** The journal's `seq` the pod reads after next time. */
+  cursor: number;
+  /** The last of the container's frames journaled. */
+  out_n: number;
+};
+
+export type AgentSessionSocketOutFrame = {
+  n: number;
+  text: string;
+};
+
+export type AgentSessionSocketClosed = {
+  code: number;
+  reason?: string;
+};
+
+/** What the container sent on its `/invocations_ws`, and whether it closed it. */
+export type AgentSessionSocketOut = {
+  frames?: Array<AgentSessionSocketOutFrame>;
+  closed?: AgentSessionSocketClosed | null;
+  events?: Array<AgentSessionPodEvent>;
+};
+
+export type AgentSessionSocketRecorded = {
+  out_n: number;
+};
+
 export type AgentSessionTools = {
   tools?: Array<{
     [key: string]: unknown;
@@ -3861,8 +3898,10 @@ export interface Operations {
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
+  nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
+  postAgentSessionSocketFrames: { method: "POST"; path: "/internal/agent-sessions/{id}/socket/out"; body: AgentSessionSocketOut; response: AgentSessionSocketRecorded };
   postAgentSessionTurnResult: { method: "POST"; path: "/internal/agent-sessions/{id}/turns/{turn_id}"; body: AgentSessionTurnResult; response: {
   status: "recorded" | "already_recorded";
   turn_id: string;

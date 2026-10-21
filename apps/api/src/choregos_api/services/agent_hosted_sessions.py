@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -72,7 +73,7 @@ def session_run_id(session_id: str) -> str:
 
 def hosted_protocol(spec: AgentSpec) -> str | None:
     """How a turn reaches the container: `responses` when it serves it, else `invocations`; `None`
-    for a container that only speaks `invocations_ws` (relayed in S41-21)."""
+    for a container that only speaks `invocations_ws` (relayed on `/realtime`: `agent_session_sockets`)."""
     protocols = list(getattr(spec.runtime, "protocols", []) or [])
     for protocol in ("responses", "invocations"):
         if protocol in protocols:
@@ -114,22 +115,7 @@ async def respond_hosted(
     result: AgentSessionTurnResult | None = None
     runtime = spec.runtime
     readiness = float(getattr(runtime, "readiness_timeout_s", 120))
-    try:
-        if first:
-            await get_temporal().start_session_pod(
-                session_pod_id(record.id),
-                {
-                    "session_id": record.id,
-                    "org": org_slug,
-                    "idle_s": get_settings().hosted_session_idle_s,
-                    "expires_at": record.expires_at.isoformat(),
-                },
-            )
-        else:
-            with contextlib.suppress(Exception):  # a missed touch only shortens the pod's idle wait
-                await get_temporal().signal(session_pod_id(record.id), "touch", {})
-    except Exception as refused:
-        log.warning("agent_session.pod_not_started", session_id=record.id, error=str(refused)[:300])
+    if not await ask_for_pod(record.id, record.expires_at, org_slug, first=first):
         error = AgentResponseError(code="hosted_unavailable", message="the session's pod could not start")
     if error is None:
         result = await _await_answer(record.id, org_slug, response_id, readiness + TURN_TIMEOUT_S)
@@ -173,6 +159,31 @@ async def respond_hosted(
         ),
         error=error,
     )
+
+
+async def ask_for_pod(session_id: str, expires_at: datetime | None, org_slug: str, *, first: bool) -> bool:
+    """Starts the session's pod (`first`, which needs the session's `expires_at`) or tells it the
+    session is alive; `False` when it could not start. The caller has committed
+    `record.pod = {"state": "requested"}` before a first ask."""
+    try:
+        if first:
+            assert expires_at is not None, "a pod is started for a session's lifetime"
+            await get_temporal().start_session_pod(
+                session_pod_id(session_id),
+                {
+                    "session_id": session_id,
+                    "org": org_slug,
+                    "idle_s": get_settings().hosted_session_idle_s,
+                    "expires_at": expires_at.isoformat(),
+                },
+            )
+        else:
+            with contextlib.suppress(Exception):  # a missed touch only shortens the pod's idle wait
+                await get_temporal().signal(session_pod_id(session_id), "touch", {})
+    except Exception as refused:
+        log.warning("agent_session.pod_not_started", session_id=session_id, error=str(refused)[:300])
+        return False
+    return True
 
 
 async def _await_answer(
@@ -296,6 +307,7 @@ __all__ = [
     "POLL_S",
     "TURN_TIMEOUT_S",
     "answer_turn",
+    "ask_for_pod",
     "fail_open_turns",
     "hosted_protocol",
     "next_turn",

@@ -29,6 +29,8 @@ dependencies = [
     # `choregos-tools-mcp` pulls them in already; declared, they do not depend on it.
     "starlette>=0.40",
     "uvicorn>=0.32",
+    # A hosted session's pod relays the caller's frames to the container's `/invocations_ws` (S41-21).
+    "websockets>=13",
 ]
 
 [project.scripts]

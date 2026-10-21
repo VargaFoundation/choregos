@@ -3299,6 +3299,47 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/agent-sessions/{id}/socket/next:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: nextAgentSessionSocketFrames
+      description: >-
+        What the caller did on a hosted session's socket (S41-21) after the journal's `after`: open the container's
+        `/invocations_ws`, a text frame for it, close it. With `wait`, up to that many seconds for one; `out_n` is the
+        last of the container's frames journaled, which the pod numbers the next one after. A session that ended is
+        410 and the runner stops.
+      parameters:
+        - { name: after, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: wait, in: query, required: false, schema: { type: number, minimum: 0, maximum: 30, default: 0 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionSocketNext" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/agent-sessions/{id}/socket/out:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postAgentSessionSocketFrames
+      description: >-
+        What the container sent on its `/invocations_ws`, numbered by the pod from 1, and whether it closed it. Each
+        number is journaled once: a batch posted again changes nothing; a number that leaves a hole is 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionSocketOut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionSocketRecorded" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: A frame out of order, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /internal/agent-sessions/{id}/tools:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -4738,6 +4779,46 @@ components:
         turns: { type: integer, minimum: 0, default: 0 }
         tool_calls: { type: integer, minimum: 0, default: 0 }
         events: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/AgentSessionPodEvent" } }
+    AgentSessionSocketFrame:
+      type: object
+      description: "What a hosted session's caller did on its socket (S41-21): `open`, a text frame `in`, `close`."
+      required: [seq, kind]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [open, in, close] }
+        text: { type: string, maxLength: 1048576, default: "" }
+        code: { type: [integer, "null"] }
+    AgentSessionSocketNext:
+      type: object
+      required: [cursor, out_n]
+      properties:
+        frames: { type: array, items: { $ref: "#/components/schemas/AgentSessionSocketFrame" } }
+        cursor: { type: integer, minimum: 0, description: "The journal's `seq` the pod reads after next time." }
+        out_n: { type: integer, minimum: 0, description: "The last of the container's frames journaled." }
+    AgentSessionSocketOutFrame:
+      type: object
+      required: [n, text]
+      properties:
+        n: { type: integer, minimum: 1 }
+        text: { type: string, maxLength: 1048576 }
+    AgentSessionSocketClosed:
+      type: object
+      required: [code]
+      properties:
+        code: { type: integer, minimum: 1000, maximum: 4999 }
+        reason: { type: string, maxLength: 123, default: "" }
+    AgentSessionSocketOut:
+      type: object
+      description: "What the container sent on its `/invocations_ws`, and whether it closed it."
+      properties:
+        frames: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/AgentSessionSocketOutFrame" } }
+        closed: { oneOf: [{ $ref: "#/components/schemas/AgentSessionSocketClosed" }, { type: "null" }] }
+        events: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/AgentSessionPodEvent" } }
+    AgentSessionSocketRecorded:
+      type: object
+      required: [out_n]
+      properties:
+        out_n: { type: integer, minimum: 0 }
     AgentSessionTools:
       type: object
       properties:

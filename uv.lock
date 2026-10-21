@@ -549,6 +549,7 @@ dependencies = [
     { name = "structlog" },
     { name = "typer" },
     { name = "uvicorn" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -564,6 +565,7 @@ requires-dist = [
     { name = "structlog", specifier = ">=24.4" },
     { name = "typer", specifier = ">=0.15" },
     { name = "uvicorn", specifier = ">=0.32" },
+    { name = "websockets", specifier = ">=13" },
 ]
 
 [[package]]

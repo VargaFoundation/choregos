@@ -325,6 +325,9 @@ class HostedCall(Strict):
     env: dict[str, str] = Field(default_factory=dict)
     agent_slug: str = Field(min_length=1)
     agent_version: int = Field(ge=1)
+    #: The container serves `/invocations_ws`: a session's pod relays the caller's socket to it
+    #: (S41-21). A workflow step never opens it.
+    socket: bool = False
 
     @field_validator("port")
     @classmethod

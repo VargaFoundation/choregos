@@ -34,7 +34,8 @@ async def _start(setup: Fixture, prepared: dict[str, Any]) -> Any:
 
 
 async def test_a_hosted_agent_is_sent_the_step_in_its_pinned_image(setup: Fixture) -> None:
-    await _agent(setup, _hosted(protocols=["invocations", "responses"], env={"LOG_LEVEL": "debug"}))
+    protocols = ["invocations", "responses", "invocations_ws"]
+    await _agent(setup, _hosted(protocols=protocols, env={"LOG_LEVEL": "debug"}))
     prepared = await stage_activities.prepare_stage(_plan(setup))
     stage_input = prepared["stage_input"]
     assert stage_input["agent"]["backend"] == "hosted" and stage_input["agent"]["image"] is None
@@ -43,6 +44,7 @@ async def test_a_hosted_agent_is_sent_the_step_in_its_pinned_image(setup: Fixtur
     assert hosted["protocol"] == "invocations", "the first HTTP protocol the version lists"
     assert hosted["agent_slug"] == "triager" and hosted["agent_version"] == 1
     assert hosted["env"] == {"LOG_LEVEL": "debug"}
+    assert hosted["socket"] is False, "a step has no caller's socket to relay (S41-21)"
     assert stage_input["repo"] is None, "the container never sees a workspace (`workspace: none`)"
     assert stage_input["skills"] == []
     assert stage_input["budget"]["max_turns"] == 9

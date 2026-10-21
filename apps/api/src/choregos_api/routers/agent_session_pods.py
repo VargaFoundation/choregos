@@ -8,6 +8,9 @@ container's tool calls, which go through the courtier as a prompt session's do.
 
 The long poll of `turns/next` holds no transaction while it waits: each look is a short one of its
 own, so a response committing its turn is never blocked by the pod waiting for it.
+
+A container that serves `invocations_ws` (S41-21) is reached through the same journal: the pod reads
+the caller's frames from `socket/next`, the same way, and posts the container's to `socket/out`.
 """
 
 from __future__ import annotations
@@ -25,6 +28,9 @@ from ..db.session import TOUT, limiter_aux_organisations, session_scope
 from ..deps import Db
 from ..errors import ApiError, forbidden, not_found, unauthorized
 from ..schemas.agent_sessions import (
+    AgentSessionSocketNext,
+    AgentSessionSocketOut,
+    AgentSessionSocketRecorded,
     AgentSessionToolAnswer,
     AgentSessionToolCall,
     AgentSessionTools,
@@ -33,6 +39,7 @@ from ..schemas.agent_sessions import (
 )
 from ..security import verify_run_token
 from ..services.agent_hosted_sessions import POLL_S, answer_turn, next_turn, session_run_id
+from ..services.agent_session_sockets import record_out, socket_frames, write
 from ..services.agent_sessions import call_session_tool, session_tools
 
 router = APIRouter(tags=["internal"], prefix="/internal")
@@ -135,6 +142,57 @@ async def post_turn_result(
         raise _gone(record)
     recorded = await answer_turn(session, record, turn_id, body)
     return {"status": "recorded" if recorded else "already_recorded", "turn_id": turn_id}
+
+
+@router.get(
+    "/agent-sessions/{id}/socket/next",
+    response_model=AgentSessionSocketNext,
+    operation_id="nextAgentSessionSocketFrames",
+    responses={410: {"description": "the session ended"}},
+)
+async def get_socket_frames(
+    id: str,
+    session: Db,
+    record: SessionPod,
+    after: Annotated[int, Query(ge=0)] = 0,
+    wait: Annotated[float, Query(ge=0, le=MAX_WAIT_S)] = 0.0,
+) -> AgentSessionSocketNext:
+    """The caller's frames after the journal's `after`; with `wait`, up to that many seconds for one."""
+    if record.status != "open":
+        raise _gone(record)
+    await session.commit()  # as `turns/next`: nothing is held while it waits
+    deadline = time.monotonic() + wait
+    while True:
+        async with session_scope(orgs=TOUT) as db:
+            current = await db.get(AgentSessionRecord, id)
+            if current is None:
+                raise not_found("Agent session", id)
+            if current.status != "open":
+                raise _gone(current)
+            found = await socket_frames(db, current, after)
+        if found.frames or time.monotonic() >= deadline:
+            return found
+        await asyncio.sleep(POLL_S)
+
+
+@router.post(
+    "/agent-sessions/{id}/socket/out",
+    response_model=AgentSessionSocketRecorded,
+    operation_id="postAgentSessionSocketFrames",
+    responses={409: {"description": "a frame out of order"}, 410: {"description": "the session ended"}},
+)
+async def post_socket_frames(
+    id: str, body: AgentSessionSocketOut, session: Db, record: SessionPod
+) -> AgentSessionSocketRecorded:
+    """The container's frames, numbered by the pod: each number is journaled once."""
+    if record.status != "open":
+        raise _gone(record)
+    await session.commit()  # the caller's handler journals too: a short transaction, tried again
+
+    async def act(db: AsyncSession, current: AgentSessionRecord) -> int:
+        return await record_out(db, current, body)
+
+    return AgentSessionSocketRecorded(out_n=int(await write(id, act, orgs=TOUT) or 0))
 
 
 @router.get(

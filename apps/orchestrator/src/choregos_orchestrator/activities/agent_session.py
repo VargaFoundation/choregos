@@ -88,7 +88,7 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
             raise _refused(str(exc)) from exc
         builds = await builds_for(session, record.org_id, [agent.spec])
         # Refused here, as for a step, when no pod could run the version as published.
-        hosted = _hosted_call(agent, builds)
+        hosted = _hosted_call(agent, builds, session=True)
         if hosted is None:
             raise _refused(f"the agent {served} is not a hosted agent")
         # A session works on no repository: whatever the version asks, its container gets no tree.

@@ -9,6 +9,10 @@ ready after `ready_after` readiness probes; `None` never.
 
 With `workspace` (S41-18), the shared copy of the working tree the container sees at `/workspace`:
 the actions `read`, `write`, `delete` and `symlink` work in it as a container's code would.
+
+It serves `/invocations_ws` too (S41-21): `connect` is a `RealtimeConnector`. Each text frame plays
+the script, then is answered `{"type": "echo", "text": …}`; `socket_greeting` is sent when the
+socket opens, and `socket_close` closes it after `socket_close_after` frames.
 """
 
 from __future__ import annotations
@@ -23,6 +27,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
+
+from ..base import RealtimeClosed
 
 
 @dataclass
@@ -44,6 +50,15 @@ class FakeHostedAgent:
     requests: list[dict[str, Any]] = field(default_factory=list)
     #: What each scripted action got back, in order.
     seen: list[Any] = field(default_factory=list)
+    #: `/invocations_ws`: the frames sent when it opens, and the close it answers with — (code,
+    #: reason) after `socket_close_after` frames; `socket_refused` refuses the connection.
+    socket_greeting: list[str] = field(default_factory=list)
+    socket_close: tuple[int, str] | None = None
+    socket_close_after: int = 0
+    socket_refused: bool = False
+    socket_urls: list[str] = field(default_factory=list)
+    socket_heard: list[str] = field(default_factory=list)
+    sockets: list[FakeHostedSocket] = field(default_factory=list)
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.handle)
@@ -79,6 +94,19 @@ class FakeHostedAgent:
         ]
         body = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events)
         return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body.encode())
+
+    async def connect(self, url: str, headers: dict[str, str]) -> FakeHostedSocket:
+        """`/invocations_ws`, as `RealtimeConnector.connect`."""
+        self.socket_urls.append(url)
+        if self.socket_refused:
+            raise ConnectionRefusedError("the agent refused the socket")
+        link = FakeHostedSocket(self)
+        self.sockets.append(link)
+        for text in self.socket_greeting:
+            link.out.put_nowait(text)
+        if self.socket_close is not None and self.socket_close_after == 0:
+            link.out.put_nowait(self.socket_close)
+        return link
 
     async def _play(self, action: tuple[Any, ...]) -> Any:
         if action[0] in ("read", "write", "delete", "symlink", "fifo"):
@@ -143,6 +171,38 @@ class FakeHostedAgent:
         line = (await reader.readline()).decode("latin-1").strip()
         writer.close()
         return line
+
+
+class FakeHostedSocket:
+    """One open `/invocations_ws` of a `FakeHostedAgent`."""
+
+    def __init__(self, agent: FakeHostedAgent) -> None:
+        self.agent = agent
+        self.out: asyncio.Queue[str | tuple[int, str]] = asyncio.Queue()
+        self.closed = False
+
+    async def send(self, message: str) -> None:
+        if self.closed:
+            raise RealtimeClosed(1000)
+        self.agent.socket_heard.append(message)
+        for action in self.agent.script:
+            self.agent.seen.append(await self.agent._play(action))
+        self.out.put_nowait(json.dumps({"type": "echo", "text": message}))
+        close = self.agent.socket_close
+        if close is not None and len(self.agent.socket_heard) == self.agent.socket_close_after:
+            self.out.put_nowait(close)
+
+    async def recv(self) -> str:
+        message = await self.out.get()
+        if isinstance(message, tuple):
+            self.closed = True
+            raise RealtimeClosed(*message)
+        return message
+
+    async def close(self) -> None:
+        if not self.closed:
+            self.closed = True
+            self.out.put_nowait((1000, ""))
 
 
 def _rpc(id_: int, method: str, params: dict[str, Any]) -> dict[str, Any]:

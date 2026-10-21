@@ -133,6 +133,53 @@ class AgentSessionTurnResult(Dto):
     events: list[AgentSessionPodEvent] = Field(default_factory=list, max_length=200)
 
 
+#: The largest text frame a hosted session's socket relays, either way (as a voice session's).
+SOCKET_FRAME_BYTES = 1024 * 1024
+
+
+class AgentSessionSocketFrame(Dto):
+    """What the caller did on a hosted session's socket (S41-21), in the order the journal has it:
+    `open` (connect the container's `/invocations_ws`), `in` (a text frame for it), `close`."""
+
+    seq: int = Field(ge=1)
+    kind: Literal["open", "in", "close"]
+    text: str = Field(default="", max_length=SOCKET_FRAME_BYTES)
+    code: int | None = None
+
+
+class AgentSessionSocketNext(Dto):
+    """The caller's frames after the pod's cursor, and how many of the container's it has recorded."""
+
+    frames: list[AgentSessionSocketFrame] = Field(default_factory=list)
+    #: The journal's `seq` the pod reads after next time.
+    cursor: int = Field(ge=0)
+    #: The last `n` of the container's frames the journal holds: the pod numbers the next one after it.
+    out_n: int = Field(ge=0)
+
+
+class AgentSessionSocketOutFrame(Dto):
+    #: The frame's number in the session, from 1: a frame posted twice is recorded once.
+    n: int = Field(ge=1)
+    text: str = Field(max_length=SOCKET_FRAME_BYTES)
+
+
+class AgentSessionSocketClosed(Dto):
+    code: int = Field(ge=1000, le=4999)
+    reason: str = Field(default="", max_length=123)
+
+
+class AgentSessionSocketOut(Dto):
+    """What the container sent on its socket, and whether it closed it."""
+
+    frames: list[AgentSessionSocketOutFrame] = Field(default_factory=list, max_length=100)
+    closed: AgentSessionSocketClosed | None = None
+    events: list[AgentSessionPodEvent] = Field(default_factory=list, max_length=200)
+
+
+class AgentSessionSocketRecorded(Dto):
+    out_n: int = Field(ge=0)
+
+
 class AgentSessionToolCall(Dto):
     arguments: dict[str, Any] = Field(default_factory=dict)
 

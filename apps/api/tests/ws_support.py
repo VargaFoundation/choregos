@@ -117,6 +117,14 @@ class AsgiWebSocket:
         await self._to_app.put({"type": "websocket.disconnect", "code": 1000})
         await self._finish()
 
+    async def drop(self, *, wait: bool = True) -> None:
+        """The socket goes away without a close frame (1006), as a lost network leaves it; without
+        `wait`, the server's handler is left to finish on its own (a hosted one waits for a resume)."""
+        self.close_code = 1006
+        await self._to_app.put({"type": "websocket.disconnect", "code": 1006})
+        if wait:
+            await self._finish()
+
 
 def cookie_header(client: AsyncClient) -> dict[str, str]:
     """The signed-in session of an httpx test client, as a browser's socket would carry it."""

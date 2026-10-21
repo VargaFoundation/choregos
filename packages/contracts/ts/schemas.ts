@@ -571,6 +571,8 @@ export type StageInput = {
     };
     agent_slug: string;
     agent_version: number;
+    /** The container serves `/invocations_ws`: a session's pod relays the caller's socket to it (S41-21). A workflow step never opens it. */
+    socket?: boolean;
   } | null;
   /** Set for a step a prompt agent carries (ADR 0080): `agent.backend` is `prompt`; the runner runs a tool loop on the model with the instructions and the run's MCP tools. */
   prompt?: {
