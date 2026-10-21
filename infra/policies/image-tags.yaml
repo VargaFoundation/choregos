@@ -1,0 +1,45 @@
+# Refuses image references that move: `:latest`, or no tag and no digest at all.
+# Its own ClusterPolicy, apart from `choregos-verify-images`: the Kyverno CLI skips any policy that
+# holds a `verifyImages` rule (it needs the registry and Sigstore), so this rule could not be
+# tested by the engine while it lived there (`infra/policies/tests`, `make policies-test`).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-image-tags
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    # Refuses an image that resolves to `latest`: an explicit `:latest` AND an image with no tag
+    # and no digest at all (`nginx`, `ghcr.io/org/img`, `registry:5000/img`), which the runtime
+    # pulls as `latest`. A digest (`img@sha256:...`, even `img:latest@sha256:...`) or a tag
+    # (`img:1.2`) passes. A simple `*:*` wildcard cannot tell the port of `registry:5000/img` from
+    # a tag, so this is a `deny` on a regular expression over the last path segment.
+    # Init containers (native sidecars included) pull images too: second `foreach`, and
+    # an empty-list default so a pod without any still passes.
+    # Ephemeral containers (`kubectl debug`) are OUT of this rule on purpose: an operator
+    # debugging a pod picks a throwaway tool image (`busybox`) and must not be blocked from it
+    # during an incident; the pod's own images, the ones that run the workload, are judged here.
+    - name: interdire-latest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: ["choregos-*", "proj-*"]
+      validate:
+        message: "images must be referenced by digest or by version: never `latest`, never without a tag"
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^(([^@]*/)?[^/@:]+|[^@]*:latest)$', '{{ element.image }}') }}"
+                    operator: Equals
+                    value: true
+          - list: "request.object.spec.initContainers || `[]`"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^(([^@]*/)?[^/@:]+|[^@]*:latest)$', '{{ element.image }}') }}"
+                    operator: Equals
+                    value: true

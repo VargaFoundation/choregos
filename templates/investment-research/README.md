@@ -19,7 +19,7 @@ Each child (`workflow product-memo`, keyed `<campaign>.<rank>`) is followed on i
 
 | # | Step | Actor | Produces | Gate |
 |:--|:--|:--|:--|:--|
-| 1 | `memo` | agent `quant-analyst` | `memo_markdown` for **one** product | `numbers_measured`: every number quoted is one the backtest measured for that product |
+| 1 | `memo` | agent `quant-analyst` | `memo_markdown` for **one** product | `numbers_measured`: every number quoted is one the backtest measured for that product, and the memo writes the bar it was judged against |
 | 2 | `decide` | a person (`owner`) | adopted / rejected | attested task |
 
 The platform copies into the child's fields what the backtest measured for its product (`product`,
@@ -29,6 +29,13 @@ a person can edit them. `numbers_measured` reads the **parent's** `metrics` docu
 `symbol`), which only the backtest job wrote. So the memo of one product cannot quote another's,
 a number edited into the child's fields is refused, and a product-memo created by hand (no parent)
 has nothing to quote: its memo goes to review. The campaign writes no memo of its own.
+
+The memo also writes the bar the product passed: the engine records the thresholds it applied in
+`metrics.thresholds` (`min_dsr`, `max_drawdown`, `min_trades`, copied into the child's field
+`thresholds`), and `must_quote: [parent.metrics.thresholds]` refuses a memo that leaves one of them
+out, or states one the engine did not apply (#824) — read alone, a product that passed a lowered bar
+must not read as one that passed the usual one. The gate checks each number is written, exactly; that
+the text names it as the bar is instructed, and read by the owner (eval `a-bar-written-by-accident`).
 
 A campaign waits for its slowest child: the owner's SLA (72 h) is on the child's decision, and the
 campaign's status says how many are still open. A campaign whose products are all rejected ends in
