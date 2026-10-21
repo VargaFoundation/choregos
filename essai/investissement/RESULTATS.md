@@ -105,3 +105,34 @@ Not reached: backtest, verdict, memo. They need #766 deployed on dev (a release 
 
 With the free Alpha Vantage key, cross-checking spends 20 of the day's 25 requests for nothing over a
 multi-year range: the connector can be set `cross_check: false`, or keep Alpha Vantage as a fallback.
+
+## 2026-10-21 — `RESEARCH-3`, a campaign to its verdict
+
+0.19.1 (#766) was deployed to dev on 2026-10-20 (choregos-deploy#80), yet `RESEARCH-2` relaunched
+failed the same way: the project's `campaign` workflow is the copy the 0.19.0 template made when the
+project was created (2026-10-19, `t-strategize.output_types: {}`), and a work item stays on the
+version it started with. The only difference with the template on `main` was the `output_types`
+line. It was published as version 2 (`PUT /projects/{id}/workflows/campaign`, `source: template`,
+`base_version: 1`); `RESEARCH-2` was rejected and `RESEARCH-3` opened with the same fields on v2.
+Nothing told that the project ran an older template: finding #817.
+
+| # | Step | Result | Consequence |
+|---|---|---|---|
+| 1 | `t-snapshot` (job) | 20 symbols, 39,180 rows, `missing=0`, `cross_checked=0`, provider `yahoo`, `bars_sha256=8c6e5240…`, 20 s | a third version of the same request (`2a4737a3…`, `e35b79cb…`, `8c6e5240…`): Yahoo's adjusted history moves; each campaign freezes its own |
+| 2 | `t-profile` (job) | 20 products, 3 clusters, 1,631 in-sample days | — |
+| 3 | `t-strategize`, real model (`platform/standard`) | 4 strategies in the grammar (`rsi_reversion`, `momentum`, `ema_trend`, `donchian_breakout`), no ticker named; **32,683 tokens in, 1,821 out, $0.220 (€0.203)**, 42 s; `strategies` stored as **`json`** (1,805 bytes) | #766 works on a real model once the project's workflow carries it |
+| 4 | `t-backtest` (job) | 80 trials (4 × 20), best out-of-sample DSR **0.595** (JNJ, `c1-rsi-pullback`, 12 trades), `relevant_count=0`; 3 of 20 selected strategies beat buy-and-hold out of sample (GLD +0.1 %, IEF +0.7 %, XLU +7.0 % CAGR), 14 of 20 trade fewer than 10 times | — |
+| 5 | `t-verdict` | `evidence_facts` refuses (`relevant_count` 0 < 1): **`backtested → not_relevant`**, 4 min 36 s after opening | the campaign reached its verdict on dev, on measured facts only |
+
+Checked afterwards, from a workstation:
+
+| # | Check | Result |
+|---|---|---|
+| 1 | the 8 artifacts downloaded (`/work-items/{id}/artifacts/{name}/content`) | each `sha256` equals its stored digest, each size its stored size |
+| 2 | `choregos-quant backtest` replayed locally on the downloaded `bars` and `strategies` (same code as 0.19.1) | `results.csv` and `report.html` identical byte for byte; `metrics.json` identical as a document and in its canonical bytes, but the stored artifact lacks the engine's trailing newline (an inline JSON output is re-serialised by the platform), so `sha256sum metrics.json` ≠ stored digest |
+| 3 | ledger (`/projects/{id}/costs`) | 2026-10-21: $0.482145 = RESEARCH-2's second strategist ($0.26167) + RESEARCH-3's ($0.220475); project total $0.747 against a $600 budget |
+
+Not reached on dev: the fan-out, a memo written by a real model, the owner's attested decision —
+no product passed, which is the honest outcome of 80 trials on 20 liquid products. Still not proven:
+a cross-check (the free Alpha Vantage key has no multi-year history), `preset:regulated` with gVisor
+(the project runs `regulated-without-gvisor`).
