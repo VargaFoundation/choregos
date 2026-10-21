@@ -12,6 +12,7 @@ from choregos_api.services.readiness import (
     Facts,
     ObjectStoreFact,
     RuntimeFact,
+    TemplateWorkflowFact,
     evaluate,
     item_backend,
     item_budgets,
@@ -29,6 +30,7 @@ from choregos_api.services.readiness import (
     item_stale_tests,
     item_tools,
     item_workflow,
+    item_workflow_template,
     runtime_fact,
 )
 from choregos_contracts import Policy, ProjectConfig
@@ -394,3 +396,31 @@ def test_a_sandbox_connector_with_its_own_runtime_class_is_judged_on_it(
     pool = connector("runtime", "agent_sandbox", config={"runtime_class": "gvisor", "warm_pool": "mine"})
     fact = runtime_fact({"runtime": pool}, _policy("gvisor"))
     assert fact == RuntimeFact("gvisor", None)
+
+
+def _campaign(stored: str, shipped: str) -> TemplateWorkflowFact:
+    return TemplateWorkflowFact("campaign", 1, stored, shipped, "./workflows/campaign.yaml")
+
+
+def test_a_workflow_that_differs_from_what_its_template_ships_now_is_to_check_naming_both() -> None:
+    old, new = "sha256:" + "a" * 64, "sha256:" + "b" * 64
+    f = facts(template="investment-research@0.1.0", template_workflows=(_campaign(old, new),))
+    (item,) = item_workflow_template(f)
+    assert item.id == "workflow-template" and item.state == "check" and item.fix.by == "project_owner"
+    assert "`campaign` v1" in item.detail and "`./workflows/campaign.yaml`" in item.detail
+    assert "a" * 12 in item.detail and "b" * 12 in item.detail
+    assert "choregos workflow push" in item.detail and "source: template" in item.detail
+    assert item.fix.href == "/p/dev/workflows"
+
+
+def test_a_workflow_equal_to_what_its_template_ships_is_done() -> None:
+    same = "sha256:" + "c" * 64
+    (item,) = item_workflow_template(
+        facts(template="investment-research", template_workflows=(_campaign(same, same),))
+    )
+    assert item.state == "done" and "`campaign`" in item.detail
+
+
+def test_no_template_or_no_workflow_it_still_ships_asks_nothing() -> None:
+    assert item_workflow_template(facts()) == []
+    assert item_workflow_template(facts(template="investment-research")) == []
