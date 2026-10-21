@@ -1629,7 +1629,9 @@ the base (the others are listed as dropped), writes `SKILL.md` with each princip
 `references/sources.md` with every document's sha256, and publishes the skill
 `<base>-principles` as a new version **`pending_review`**, whatever its risk tier: no agent carries
 it until an administrator approves it on the skill's page. One model call with the whole corpus in
-the prompt: a base over 400 000 characters is refused.
+the prompt: a base over 400 000 characters is refused, with its size, the limit and its three biggest
+documents (leave large spreadsheets out). A distillation that shows `running` for more than 30 minutes
+(its replica restarted) no longer blocks a new one; a restart marks it failed.
 
 ## 4. Write the policy
 

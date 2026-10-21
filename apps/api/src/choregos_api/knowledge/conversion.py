@@ -31,7 +31,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import undefer
 
 from ..config import get_settings
-from ..db.models import KnowledgeDocument, Organization
+from ..db.models import KnowledgeBase, KnowledgeDocument, Organization
 from ..db.session import TOUT, session_scope
 from ..logging import get_logger
 
@@ -253,7 +253,26 @@ class Conversions:
             pending = list(rows)
         for org, document_id in pending:
             self.schedule(org, document_id)
+        await self._interrupt_distillations()
         return len(pending)
+
+    async def _interrupt_distillations(self) -> int:
+        """A distillation `running` is a task of a replica that stopped: say so, so the base can be
+        distilled again (the route also ignores one older than 30 minutes, for the replica that died
+        without a start-up)."""
+        async with session_scope(orgs=TOUT) as session:
+            bases = (
+                await session.execute(select(KnowledgeBase).where(KnowledgeBase.distillation.is_not(None)))
+            ).scalars()
+            interrupted = [b for b in bases if (b.distillation or {}).get("status") == "running"]
+            for base in interrupted:
+                base.distillation = {
+                    **(base.distillation or {}),
+                    "status": "failed",
+                    "error": "interrupted by a restart: distil again",
+                    "at": utcnow().isoformat(),
+                }
+        return len(interrupted)
 
 
 conversions = Conversions()
