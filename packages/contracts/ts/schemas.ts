@@ -713,9 +713,11 @@ export type UiManifestForm = {
   permission?: UiManifestBlockPermission;
   title: string;
   description?: string;
-  /** the JSON Schema of the values; the console derives the form from it */
+  /** the JSON Schema of the values; the console derives the form from it. A string property may carry `format: "asset"` (S42-13): the console then shows the current file, a file input and a Remove button, and uploads the chosen file to `x-upload` (a POST path, `{org}` filled in) as the RAW request body with the file's own Content-Type. The response is JSON with a `ref` string, which becomes the field's value; the form's own write then saves that reference. `x-accept` lists the accepted media types and `x-max-bytes` the largest size, both checked in the browser as a courtesy: the upload route stays the judge. */
   schema: {
-    [key: string]: unknown;
+    properties?: {
+      [key: string]: unknown;
+    };
   };
   read: UiManifestPath;
   write: UiManifestPath;

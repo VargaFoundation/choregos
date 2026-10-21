@@ -429,3 +429,26 @@ def test_admin_section_block_permission_is_optional_and_a_string() -> None:
         "blocks": [{k: v for k, v in b.items() if k != "permission"} for b in section["blocks"]],
     }
     assert not list(validator.iter_errors(bare))
+
+
+def test_an_asset_property_names_where_its_file_goes() -> None:
+    """S42-13: `format: asset` needs an `x-upload` path; accept and size limits are typed."""
+    validator = _validator("ui-manifest.schema.json")
+    section = _load("ui-manifest.example.json")
+    form = section["blocks"][0]
+    asset = form["schema"]["properties"]["badge"]
+    assert asset["format"] == "asset"
+    assert not list(validator.iter_errors(section))
+
+    def with_badge(badge: dict) -> dict:
+        schema = {**form["schema"], "properties": {"badge": badge}}
+        return {**section, "blocks": [{**form, "schema": schema}]}
+
+    without_upload = {k: v for k, v in asset.items() if k != "x-upload"}
+    assert list(validator.iter_errors(with_badge(without_upload)))
+    assert list(validator.iter_errors(with_badge({**asset, "x-upload": "https://elsewhere/up"})))
+    assert list(validator.iter_errors(with_badge({**asset, "x-max-bytes": 0})))
+    assert list(validator.iter_errors(with_badge({**asset, "x-accept": ["png"]})))
+    assert list(validator.iter_errors(with_badge({**asset, "type": "object"})))
+    # A plain string property is untouched.
+    assert not list(validator.iter_errors(with_badge({"type": "string"})))
