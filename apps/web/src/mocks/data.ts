@@ -1822,8 +1822,20 @@ export function usableModelsOf(path: string): UsableModel[] {
 }
 
 export const platformBackends: AgentBackendInfo[] = [
-  { name: "claude-code", enabled: true, version: "2.1.0", capabilities: ["mcp", "skills"] },
-  { name: "codex", enabled: false, capabilities: ["mcp"], disabled_reason: "conformance below threshold" },
+  {
+    name: "claude-code",
+    enabled: true,
+    version: "2.1.0",
+    capabilities: ["mcp", "skills"],
+    conformance: { passed: 24, total: 24, last_run_at: "2026-10-15T10:00:00Z", failures: [] },
+  },
+  {
+    name: "codex",
+    enabled: false,
+    capabilities: ["mcp"],
+    disabled_reason: "conformance below threshold",
+    conformance: { passed: 18, total: 24, failures: ["structured_output"] },
+  },
 ];
 
 /** The images an operator named for agents written in code: names only, never references (ADR 0063). */
@@ -2477,6 +2489,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
   const bare = path.split("?")[0] ?? path;
+  // The platform administrator's switch on a coding-agent backend (S42-07): the list answers with it.
+  if (method === "PUT" && bare === "/platform/backends") {
+    const update = body as { name: string; enabled: boolean; disabled_reason?: string | null };
+    const target = platformBackends.find((b) => b.name === update.name);
+    if (target) {
+      target.enabled = update.enabled;
+      target.disabled_reason = update.enabled ? null : (update.disabled_reason ?? null);
+      return structuredClone(target) as T;
+    }
+  }
   if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
     if (method === "PUT") {
       mockCeiling = { ceiling: (body as { ceiling: Record<string, unknown> | null }).ceiling, updated_by: me.email, updated_at: new Date().toISOString() };

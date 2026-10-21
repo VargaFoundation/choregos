@@ -74,6 +74,7 @@ import type {
   KnowledgeSourceCreate,
   KnowledgeSourcePatch,
   AgentBackendInfo,
+  AgentBackendUpdate,
   AgentImageInfo,
   ApiToken,
   ApiTokenCreate,
@@ -580,6 +581,9 @@ export const api = {
     request<void>(`/orgs/${org}/models/${id}`, { method: "DELETE" }),
   previewModelCuration: (org: string) => request<ModelCuratePreview>(`/orgs/${org}/models/curate-preview`),
   backends: () => request<AgentBackendInfo[]>("/platform/backends"),
+  /** Enable or disable a coding-agent backend in the platform catalogue (platform administrators only). */
+  putPlatformBackend: (body: AgentBackendUpdate) =>
+    request<AgentBackendInfo>("/platform/backends", { method: "PUT", body: JSON.stringify(body) }),
   /** The images an operator named for agents written in code: names only (ADR 0063). */
   agentImages: () => request<AgentImageInfo[]>("/platform/agent-images"),
   executors: () => request<ExecutorInfo[]>("/platform/executors"),

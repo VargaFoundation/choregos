@@ -64,6 +64,12 @@ Three kinds:
 - **`human`** — a group, an SLA in hours, a reminder and an escalation.
 - **`system`** — a transition the platform performs itself, with no agent and no cost.
 
+A **backend** is the coding agent CLI (`claude-code`, `gemini-cli`, `opencode`, …) that the runner
+image ships and that executes an agent stage. An **executor** is where that stage runs
+(`agent_sandbox`, `k8s_job`, `tekton`, `aca`, `local_docker`). Both are chosen by the deployment;
+*Administration → Platform* shows them (backends can be flagged enabled or disabled there, which
+readiness counts but the orchestrator does not enforce).
+
 ## Agent scope
 
 An agent is a registered, versioned object ([ADR 0033](adr/0033-agent-registry-and-skill-library.md))

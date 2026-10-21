@@ -5,6 +5,7 @@
  */
 export type {
   AgentBackendInfo,
+  AgentBackendUpdate,
   AgentImageInfo,
   CodeRuntime,
   AgentNetwork,
