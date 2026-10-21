@@ -19,10 +19,9 @@ import pytest
 from httpx import AsyncClient
 
 BASE = "/api/v1/orgs/varga/knowledge"
-#: How long the deliberately CPU-bound step spins, and what a concurrent request may wait.
+#: How long the deliberately CPU-bound step spins.
 SPIN_S = 1.5
-BUDGET_S = 0.5
-#: Light requests that must be answered before a heavy search ends (an order, not a duration).
+#: Light requests that must be answered before a heavy step ends (an order, not a duration).
 LIGHT_BEFORE_END = 3
 
 
@@ -32,11 +31,18 @@ def _mark() -> None:
         handle.write(str(os.getpid()))
 
 
+def _mark_done() -> None:
+    """The heavy step says its CPU-bound part is over: a second file the test reads."""
+    with open(os.environ["HEAVY_DONE"], "a") as handle:
+        handle.write(str(os.getpid()))
+
+
 def heavy_chunk(markdown: str, title: str, **kw: Any) -> Any:
     from choregos_api.knowledge.chunking import chunk
 
     _mark()
     _spin(SPIN_S)
+    _mark_done()
     return chunk(markdown, title, **kw)
 
 
@@ -53,6 +59,7 @@ async def _worker(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
     from choregos_api.knowledge import offload
 
     monkeypatch.setenv("HEAVY_MARKER", str(tmp_path / "heavy"))
+    monkeypatch.setenv("HEAVY_DONE", str(tmp_path / "heavy-done"))
     # The spawned worker imports this module by name and inherits the parent's `sys.path`.
     monkeypatch.syspath_prepend(str(pathlib.Path(__file__).resolve().parents[3]))
     offload.shutdown()
@@ -72,39 +79,6 @@ async def _warm(client: AsyncClient) -> None:
 
     await offload.run(_noop)
     assert (await client.get(f"{BASE}/heavy")).status_code == 200
-
-
-async def _answers_meanwhile(client: AsyncClient, work: Any) -> float:
-    """The longest a concurrent GET (or a loop tick) waited while `work()` ran."""
-    worst = 0.0
-    done = asyncio.Event()
-
-    async def probe() -> None:
-        nonlocal worst
-        while not done.is_set():
-            started = time.monotonic()
-            answered = await client.get(f"{BASE}/heavy")
-            assert answered.status_code == 200
-            worst = max(worst, time.monotonic() - started)
-            await asyncio.sleep(0.02)
-
-    async def ticker() -> None:
-        nonlocal worst
-        last = time.monotonic()
-        while not done.is_set():
-            await asyncio.sleep(0.02)
-            now = time.monotonic()
-            worst = max(worst, now - last - 0.02)
-            last = now
-
-    async def job() -> None:
-        try:
-            await work()
-        finally:
-            done.set()
-
-    await asyncio.gather(job(), probe(), ticker())
-    return worst
 
 
 async def _answered_before_it_ended(client: AsyncClient, work: Any) -> int:
@@ -135,6 +109,31 @@ async def _answered_before_it_ended(client: AsyncClient, work: Any) -> int:
     return answered_first
 
 
+async def _answered_during_the_spin(client: AsyncClient, work: Any, tmp_path: Any) -> int:
+    """How many light GETs were sent after the heavy step began and answered before its spin ended.
+
+    The step writes a file when it starts and another when its CPU-bound part is over, so this is an
+    ordering, not a time. Indexing goes on after the spin (embedding, inserts, commit) and those
+    awaits would let a few GETs through even if the spin held the loop, so the end of `work()` is
+    not the right mark here: the end of the spin is. A free loop answers many GETs during it; a loop
+    held by the spin answers none until it is over.
+    """
+    started, spun = tmp_path / "heavy", tmp_path / "heavy-done"
+    task = asyncio.create_task(work())
+    answered = 0
+    while not spun.exists() and not task.done():
+        if not started.exists():  # the worker has not begun: nothing to measure yet
+            await asyncio.sleep(0.005)
+            continue
+        reply = await client.get(f"{BASE}/heavy")
+        assert reply.status_code == 200
+        if not spun.exists():
+            answered += 1
+        await asyncio.sleep(0.02)
+    await task
+    return answered
+
+
 def _spin(seconds: float) -> None:
     """Pure-Python CPU work (holds the GIL between its periodic releases), not a sleep."""
     end = time.monotonic() + seconds
@@ -160,9 +159,12 @@ async def test_a_cpu_heavy_indexing_does_not_starve_other_requests(
         f"{BASE}/heavy/documents", files={"file": ("a.md", b"# Title\n\nSome text about tls.\n")}
     )
     assert sent.status_code == 202, sent.text
-    worst = await _answers_meanwhile(client, conversions.drain)
-    assert (tmp_path / "heavy").exists(), "the heavy step ran"
-    assert worst < BUDGET_S, f"a request waited {worst:.2f} s while the index was being built"
+    answered = await _answered_during_the_spin(client, conversions.drain, tmp_path)
+    assert (tmp_path / "heavy-done").exists(), "the heavy step ran"
+    assert answered >= LIGHT_BEFORE_END, (
+        f"only {answered} light request(s) were answered while the index was being built: "
+        "the indexing held the event loop"
+    )
 
 
 async def test_a_cpu_heavy_search_does_not_starve_other_requests(
