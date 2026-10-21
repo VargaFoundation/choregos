@@ -19,21 +19,23 @@ export function InstanceIdentityCard() {
   if (identity.error instanceof ApiError && identity.error.status === 403) return null;
   return (
     <Card title="How people sign in to this instance" className="lg:col-span-2">
-      <table className="w-full text-xs">
-        <tbody>
-          {(identity.data?.items ?? []).map((row) => (
-            <tr key={row.key} className="border-b border-line last:border-0">
-              <th scope="row" className="py-1 pr-3 text-left font-normal text-ink-muted">
-                {row.label}
-              </th>
-              <td className="py-1 font-mono" data-donnee>
-                {row.value === "missing" ? <Badge tone="danger">missing</Badge> : row.value}
-              </td>
-              <td className="py-1 pl-3 text-right text-ink-muted">{row.source}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <tbody>
+            {(identity.data?.items ?? []).map((row) => (
+              <tr key={row.key} className="border-b border-line last:border-0">
+                <th scope="row" className="py-1 pr-3 text-left font-normal text-ink-muted">
+                  {row.label}
+                </th>
+                <td className="py-1 font-mono [overflow-wrap:anywhere]" data-donnee>
+                  {row.value === "missing" ? <Badge tone="danger">missing</Badge> : row.value}
+                </td>
+                <td className="py-1 pl-3 text-right text-ink-muted [overflow-wrap:anywhere]">{row.source}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <EtatDeLecture lecture={identity} quoi="the sign-in configuration" />
       <p className="mt-2 text-xs text-ink-muted">
         Set in the deployment (chart global.oidc / global.mcp.oauth); read-only here.
