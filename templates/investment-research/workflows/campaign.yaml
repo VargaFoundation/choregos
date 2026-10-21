@@ -219,6 +219,9 @@ transitions:
         symbol: "{{ item }}"
         product: "{{ outputs.metrics.products[item] }}"
         facts: "{{ outputs.metrics.facts }}"
+        # The bar the engine applied (#824), for the analyst to state; the memo is checked against
+        # the parent's `metrics.thresholds`, not this copy.
+        thresholds: "{{ outputs.metrics.thresholds }}"
         start: "{{ fields.start }}"
         oos_start: "{{ fields.oos_start }}"
         end: "{{ fields.end }}"
