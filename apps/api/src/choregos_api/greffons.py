@@ -82,6 +82,10 @@ def reinitialiser() -> None:
 
 _SECTIONS: list[dict[str, Any]] = []
 
+# What the core's section manifests support, so a plugin detects a feature without parsing versions
+# (S42-02). `block_permission`: a block may carry its own `permission`.
+SECTION_FEATURES: frozenset[str] = frozenset({"block_permission"})
+
 
 def declarer_une_section_d_administration(manifeste: dict[str, Any]) -> None:
     """Appelée par un greffon à son chargement ; la validation se fait au démarrage de l'API."""
