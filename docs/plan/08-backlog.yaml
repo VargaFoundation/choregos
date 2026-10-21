@@ -1979,6 +1979,16 @@ stories:
     acceptance:
       - "A todowrite call is a plan revision; a cancelled todo is removed, never counted as done"
 
+  - id: S25-06
+    title: "The S25 views read a real agent's journal from the dev tenant"
+    stream: S25
+    sprint: 15
+    priority: 6
+    size: S
+    depends_on: [S25-05]
+    acceptance:
+      - "A real opencode journal from the dev tenant yields the agent's plan and its tool calls, each call once"
+
   - id: S26-01
     title: "Train status answers from the database when the train workflow does not exist or does not answer in 3 s"
     stream: S26
