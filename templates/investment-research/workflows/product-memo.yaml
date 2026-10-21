@@ -7,7 +7,9 @@
 # `numbers_measured` reads them in the PARENT's `metrics` document (this product's entry and the
 # campaign's facts), never in this work item's fields — a person can edit those, and a work item
 # created by hand has no parent, so its memo is refused. A memo of one product cannot quote
-# another's. The fields `product` and `facts` are a copy for the analyst to read, not a source.
+# another's. The fields `product`, `facts` and `thresholds` are a copy for the analyst to read, not a
+# source. The memo must state the thresholds the backtest applied (`must_quote`, #824): read alone, a
+# memo of a product that passed a lowered bar must not look like one that passed the usual one.
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -16,11 +18,12 @@ metadata:
   description: The memo and the decision for one product a research campaign found relevant.
   inputs:
     type: object
-    required: [symbol, product, facts, start, oos_start, end]
+    required: [symbol, product, facts, thresholds, start, oos_start, end]
     properties:
       symbol: { type: string, title: Product (e.g. SPY.US) }
       product: { type: object, title: What the backtest measured for this product (copied by the platform) }
       facts: { type: object, title: What the backtest measured for the whole campaign (copied by the platform) }
+      thresholds: { type: object, title: The bar the backtest applied to every product (copied by the platform) }
       start: { type: string, format: date, title: First day of data }
       oos_start: { type: string, format: date, title: First out-of-sample day }
       end: { type: string, format: date, title: Last day of data }
@@ -43,7 +46,10 @@ transitions:
     outputs: [memo_markdown]
     gates:
       - name: numbers_measured
-        params: { sources: [parent.metrics.products.$symbol, parent.metrics.facts], outputs: [memo_markdown] }
+        params:
+          sources: [parent.metrics.products.$symbol, parent.metrics.facts]
+          must_quote: [parent.metrics.thresholds]
+          outputs: [memo_markdown]
     on_fail: { to: product, max_attempts: 2, escalate_to: to_review }
 
   - id: t-decide

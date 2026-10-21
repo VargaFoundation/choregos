@@ -155,6 +155,7 @@ def _comparer(chemin: str, noeud: dict[str, Any], model: type, ecarts: list[str]
         ("stage-input.schema.json", StageInput),
         ("finding.schema.json", Finding),
         ("human-decision.schema.json", HumanDecision),
+        ("policy.schema.json", Policy),
     ],
 )
 def test_le_schema_et_le_modele_declarent_les_memes_champs(schema_name: str, model: type) -> None:
@@ -261,8 +262,7 @@ def test_a_role_override_changes_that_role_only() -> None:
 
 
 def test_the_context_schema_and_model_declare_the_same_fields() -> None:
-    """The whole policy is not compared yet (`budgets.tool_calls_per_run` is missing from its
-    schema, a finding); its `context` block is, overrides included."""
+    """The `context` block, overrides included; the whole policy is compared above."""
     gaps: list[str] = []
     node = contracts.load_schema("policy.schema.json")["properties"]["context"]
     _comparer("policy.context", node, ContextPolicy, gaps)
