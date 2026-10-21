@@ -21,6 +21,7 @@ import asyncio
 import json
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from typing import Any
@@ -465,13 +466,41 @@ def bounded_result(resultat: dict[str, Any]) -> dict[str, Any]:
     if total <= limit:
         return masked
     kept = {k: v for k, v in masked.items() if k not in ("content", "structuredContent")}
-    whole = texte_du_resultat(masked).encode("utf-8")
+    return _cut(
+        texte_du_resultat(masked),
+        lambda note: {**kept, "content": [{"type": "text", "text": note}]},
+        total,
+        limit,
+    )
+
+
+def bounded_payload(payload: Any) -> Any:
+    """Any tool answer as the agent may read it (#759): a catalogue tool's JSON, a plugin's body. An
+    MCP result goes through `bounded_result`; anything else has its strings masked and, when larger
+    than `broker_result_max_bytes`, becomes `{"text": <its JSON, cut, with TRUNCATED>, "truncated"}`."""
+    from ..config import get_settings
+
+    if isinstance(payload, dict) and isinstance(payload.get("content"), list):
+        return bounded_result(payload)
+    masked = _masked_strings(payload)
+    limit = get_settings().broker_result_max_bytes
+    total = len(_json(masked).encode("utf-8"))
+    if total <= limit:
+        return masked
+    return _cut(_json(masked), lambda note: {"text": note}, total, limit)
+
+
+def _cut(text: str, shape: Callable[[str], dict[str, Any]], total: int, limit: int) -> dict[str, Any]:
+    """`shape(text cut + TRUNCATED)` with `truncated` beside it, no larger than `limit` as JSON."""
+    whole = text.encode("utf-8")
     room = limit
     while True:
-        text = whole[:room].decode("utf-8", errors="ignore")
-        returned = len(text.encode("utf-8"))
-        note = {"type": "text", "text": f"{text}\n{TRUNCATED.format(returned=returned, total=total)}"}
-        cut = {**kept, "content": [note], "truncated": {"returned_bytes": returned, "total_bytes": total}}
+        kept = whole[:room].decode("utf-8", errors="ignore")
+        returned = len(kept.encode("utf-8"))
+        cut = {
+            **shape(f"{kept}\n{TRUNCATED.format(returned=returned, total=total)}"),
+            "truncated": {"returned_bytes": returned, "total_bytes": total},
+        }
         # JSON escapes what it quotes: shrink by what is still over, until it fits.
         over = len(_json(cut).encode("utf-8")) - limit
         if over <= 0 or room == 0:
@@ -479,19 +508,23 @@ def bounded_result(resultat: dict[str, Any]) -> dict[str, Any]:
         room = max(0, room - over)
 
 
+def _masked_strings(value: Any) -> Any:
+    """`redact` on every string of a JSON value, keys left as they are."""
+    from choregos_core.redaction import redact
+
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, list):
+        return [_masked_strings(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _masked_strings(v) for k, v in value.items()}
+    return value
+
+
 def _masked(resultat: dict[str, Any]) -> dict[str, Any]:
     """`redact` on every text the agent reads: text blocks, embedded text resources, and the strings
     of `structuredContent`. Binary blocks (images, audio) are left as they are: base64 is not prose."""
     from choregos_core.redaction import redact
-
-    def strings(valeur: Any) -> Any:
-        if isinstance(valeur, str):
-            return redact(valeur)
-        if isinstance(valeur, list):
-            return [strings(v) for v in valeur]
-        if isinstance(valeur, dict):
-            return {k: strings(v) for k, v in valeur.items()}
-        return valeur
 
     def block(bloc: Any) -> Any:
         if not isinstance(bloc, dict):
@@ -511,7 +544,7 @@ def _masked(resultat: dict[str, Any]) -> dict[str, Any]:
     if isinstance(masked.get("content"), list):
         masked["content"] = [block(b) for b in masked["content"]]
     if "structuredContent" in masked:
-        masked["structuredContent"] = strings(masked["structuredContent"])
+        masked["structuredContent"] = _masked_strings(masked["structuredContent"])
     return masked
 
 
