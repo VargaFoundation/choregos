@@ -1490,6 +1490,10 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   on. The source names a `space_key` (`ENG`; a personal space starts with `~`) and optionally a
   `page_id`: that page **and everything under it** (`include_root: false` leaves the page itself
   out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
+  To read **chosen pages** instead, give `page_ids` (up to 50 numbers; not together with `page_id`; the
+  console accepts pasted page addresses) and, to leave the pages under them out, `descendants: false`
+  (`page_id` with `descendants: false` is one page). A chosen page that is missing or unreadable
+  refuses the sync by name; a page that leaves the chosen set (or its tree) is deleted at the next sync.
   Options: `include_attachments` (pdf, docx, pptx, xlsx, md, txt, html), `labels` (keep only pages
   carrying one of them; one request per page). Each sync lists the space once; only pages whose
   version number changed are downloaded again. A page that is deleted, archived, **moved out of the
