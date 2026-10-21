@@ -102,6 +102,8 @@ class ConfluenceSource:
         api_token: str,
         space_key: str,
         page_id: str | None = None,
+        page_ids: list[str] | None = None,
+        descendants: bool = True,
         include_root: bool = True,
         include_attachments: bool = False,
         labels: list[str] | None = None,
@@ -119,6 +121,9 @@ class ConfluenceSource:
             )
         self.site = base_url.rstrip("/")
         self.space_key, self.page_id = space_key, page_id
+        #: The pages chosen one by one (S42-09d); `page_id` is the one-page spelling of the same thing.
+        self.roots = [str(p) for p in (page_ids or ([page_id] if page_id else []))]
+        self.descendants = descendants
         self.include_root, self.include_attachments = include_root, include_attachments
         self.labels = {label.lower() for label in labels or []}
         # The gateway root for a scoped token, the site itself otherwise: `/wiki/api/v2` hangs off it.
@@ -178,25 +183,31 @@ class ConfluenceSource:
         by_id = {str(p["id"]): p for p in pages}
         self._titles = {pid: str(p.get("title", pid)) for pid, p in by_id.items()}
         chosen: list[str]
-        if self.page_id is None:
+        if not self.roots:
             chosen = list(by_id)
         else:
-            if self.page_id not in by_id:
-                raise SourceRefusedError(
-                    f"page {self.page_id} is not in space `{self.space_key}`, or its account cannot read it"
-                )
+            for root in self.roots:
+                if root not in by_id:
+                    raise SourceRefusedError(
+                        f"page {root} is not in space `{self.space_key}`, or its account cannot read it"
+                    )
             children: dict[str, list[str]] = {}
             for pid, page in by_id.items():
                 if page.get("parentId"):
                     children.setdefault(str(page["parentId"]), []).append(pid)
             chosen = []
-            queue = deque([self.page_id])
+            seen: set[str] = set()
+            queue = deque(self.roots)
             while queue:
                 current = queue.popleft()
+                if current in seen:
+                    continue  # a chosen page under another chosen page is listed once
+                seen.add(current)
                 chosen.append(current)
-                queue.extend(children.get(current, []))
+                if self.descendants:
+                    queue.extend(children.get(current, []))
             if not self.include_root:
-                chosen.remove(self.page_id)
+                chosen = [pid for pid in chosen if pid not in self.roots]
         if len(chosen) > MAX_PAGES:
             raise SourceRefusedError(f"{len(chosen)} pages, more than {MAX_PAGES}: name a page_id")
         for pid in chosen:
@@ -318,6 +329,8 @@ class ConfluenceDocumentsConnector:
             cloud_id=self.config.get("cloud_id"),
             space_key=str(config["space_key"]),
             page_id=str(config["page_id"]) if config.get("page_id") else None,
+            page_ids=[str(p) for p in config.get("page_ids") or []],
+            descendants=bool(config.get("descendants", True)),
             include_root=bool(config.get("include_root", True)),
             include_attachments=bool(config.get("include_attachments", False)),
             labels=list(config.get("labels") or []),

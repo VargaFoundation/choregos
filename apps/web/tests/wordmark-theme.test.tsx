@@ -42,4 +42,16 @@ describe("the wordmark follows the served theme (S39-03b)", () => {
     );
     expect(screen.getByText("Acme").className).toContain("sr-only");
   });
+
+  it("cuts a long name and says it whole in a tooltip (S42-13)", () => {
+    const long = "A very long organisation product name!!!";
+    render(
+      <ServedThemeProvider initial={{ ...DEFAULT_SERVED_THEME, product_name: long }}>
+        <Wordmark />
+      </ServedThemeProvider>,
+    );
+    const name = screen.getByText(long);
+    expect(name.className).toContain("truncate");
+    expect(name).toHaveAttribute("title", long);
+  });
 });

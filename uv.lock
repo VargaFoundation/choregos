@@ -306,7 +306,7 @@ wheels = [
 
 [[package]]
 name = "choregos-adapters"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/adapters" }
 dependencies = [
     { name = "choregos-core" },
@@ -331,7 +331,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-agent-sdk"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/agent-sdk" }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -350,7 +350,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-api"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "aiosqlite" },
@@ -399,7 +399,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-cli"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "choregos-core" },
@@ -420,7 +420,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-contracts"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -435,7 +435,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-core"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -458,7 +458,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-ontology"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/ontology" }
 dependencies = [
     { name = "cel-python" },
@@ -486,7 +486,7 @@ provides-extras = ["service"]
 
 [[package]]
 name = "choregos-orchestrator"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "apps/orchestrator" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -511,7 +511,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-playbooks"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/playbooks" }
 dependencies = [
     { name = "jinja2" },
@@ -528,12 +528,12 @@ requires-dist = [
 
 [[package]]
 name = "choregos-quant"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/quant" }
 
 [[package]]
 name = "choregos-runner"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/runner" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -562,7 +562,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-tools-mcp"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "packages/tools-mcp" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -589,7 +589,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-workspace"
-version = "0.19.1"
+version = "0.19.2"
 source = { editable = "." }
 dependencies = [
     { name = "choregos-adapters" },

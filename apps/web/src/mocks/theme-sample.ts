@@ -32,3 +32,19 @@ export const SAMPLE_THEME: ServedTheme = {
   favicon: "/api/v1/mock-theme-assets/favicon.svg",
   footer: { text: "Operated by Sample" },
 };
+
+/**
+ * Organisation themes of the demo build, keyed by slug: the cookie `choregos_org` picks one at the
+ * first paint (S42-13). Deliberately not any real brand.
+ */
+export const SAMPLE_ORG_THEMES: Record<string, ServedTheme> = {
+  "acme-labs": {
+    id: "acme-labs",
+    product_name: "Acme Labs",
+    default_mode: "light",
+    tokens: { light: { accent: "#7a3b00", "accent-strong": "#7a3b00", focus: "#7a3b00" }, dark: {} },
+    logo: "/api/v1/mock-theme-assets/logo.svg",
+    favicon: "/api/v1/mock-theme-assets/favicon.svg",
+    footer: { text: "Operated by Acme Labs" },
+  },
+};

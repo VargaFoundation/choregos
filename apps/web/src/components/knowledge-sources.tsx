@@ -38,12 +38,15 @@ export function KnowledgeSources({
   const [kind, setKind] = useState<Kind>("sharepoint");
   // The procedure opens by itself once the person has chosen a kind, not when the page loads.
   const [chosen, setChosen] = useState(false);
-  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", exclude: "", ref: "main", paths: "*.md" });
+  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", exclude: "", depth: "2", maxPages: "50", ref: "main", paths: "*.md" });
   const [refresh, setRefresh] = useState<RefreshDraft>(draftOf());
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<RefreshDraft>(draftOf());
   const [applyAll, setApplyAll] = useState(false);
   const [attachments, setAttachments] = useState(false);
+  const [pageOnly, setPageOnly] = useState(false);
+  const [documents, setDocuments] = useState(false);
+  const [subPages, setSubPages] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const guard = useEgressGuard();
   // A connected source picks one of the organisation's `documents/<kind>` connectors: never typed.
@@ -147,7 +150,7 @@ export function KnowledgeSources({
                     kind,
                     name: fields.name || KIND[kind],
                     connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
-                    config: sourceConfig(kind, { ...fields, attachments }),
+                    config: sourceConfig(kind, { ...fields, attachments, pageOnly, documents, descendants: subPages }),
                     ...refreshBody(refresh),
                     ...egressFlag(allow),
                   }),
@@ -214,7 +217,11 @@ export function KnowledgeSources({
           ) : kind === "confluence" ? (
             <>
               <Input aria-label="space key" placeholder="space key (ENG)" value={fields.space} onChange={set("space")} />
-              <Input aria-label="page id" placeholder="page id (optional: that page and everything under it)" value={fields.pageId} onChange={set("pageId")} />
+              <Input aria-label="page ids" placeholder="page ids or page URLs, comma separated (optional, up to 50)" value={fields.pageId} onChange={set("pageId")} />
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={subPages} onChange={(e) => setSubPages(e.target.checked)} />
+                and its sub-pages
+              </label>
               <label className="flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={attachments} onChange={(e) => setAttachments(e.target.checked)} />
                 include attachments (pdf, docx, pptx, xlsx, md, txt)
@@ -224,7 +231,23 @@ export function KnowledgeSources({
             <Input aria-label="url" placeholder="https://…" value={fields.url} onChange={set("url")} className="sm:col-span-2" />
           )}
           {kind === "web" && (
-            <Input aria-label="excluded paths" placeholder="excluded paths, e.g. /es/*, /pt/*" value={fields.exclude} onChange={set("exclude")} className="sm:col-span-2" />
+            <>
+              <label className="flex items-center gap-2 text-xs sm:col-span-3">
+                <input type="checkbox" checked={pageOnly} onChange={(e) => setPageOnly(e.target.checked)} />
+                This page only (no links followed)
+              </label>
+              {!pageOnly && (
+                <>
+                  <Input aria-label="crawl depth" type="number" min={0} max={5} placeholder="link depth (0-5)" value={fields.depth} onChange={set("depth")} />
+                  <Input aria-label="max pages" type="number" min={1} max={500} placeholder="max pages (1-500)" value={fields.maxPages} onChange={set("maxPages")} />
+                </>
+              )}
+              <label className="flex items-center gap-2 text-xs sm:col-span-3">
+                <input type="checkbox" checked={documents} onChange={(e) => setDocuments(e.target.checked)} />
+                Include linked documents (PDF, Word, PowerPoint, Excel)
+              </label>
+              <Input aria-label="excluded paths" placeholder="excluded paths, e.g. /es/*, /pt/*" value={fields.exclude} onChange={set("exclude")} className="sm:col-span-2" />
+            </>
           )}
           {kind === "git" && (
             <>

@@ -25,6 +25,13 @@ const price = (entry: ModelCatalogueEntry) =>
       ? `${entry.gateway?.input_cost_per_1k ?? "?"} / ${entry.gateway?.output_cost_per_1k ?? "?"}`
       : "no price";
 
+/** A context window as people say it: 200000 is "200k tokens", 1000000 is "1M tokens". */
+export function contextWindow(tokens: number): string {
+  if (tokens >= 1_000_000) return `${+(tokens / 1_000_000).toFixed(2)}M tokens`;
+  if (tokens >= 1_000) return `${+(tokens / 1_000).toFixed(1)}k tokens`;
+  return `${tokens} tokens`;
+}
+
 export function ModelCataloguePanel() {
   const { org, orgs } = useSession();
   const client = useQueryClient();
@@ -52,6 +59,13 @@ export function ModelCataloguePanel() {
   }
   const data = catalogue.data;
   const enabled = data.entries.filter((e) => e.enabled);
+  const lastSync = data.entries
+    .map((e) => e.last_seen_at)
+    .filter((t): t is string => !!t)
+    .sort()
+    .at(-1);
+  /** What `platform/<tier>` runs, read from the catalogue entry of that alias. */
+  const aliasTarget = (tier: string) => data.entries.find((e) => e.model_name === `platform/${tier}`)?.gateway?.upstream_model;
   const hardBudget = (data.gateway.capabilities ?? []).includes("hard_budget");
 
   async function setMode(mode: "open" | "curated") {
@@ -77,6 +91,11 @@ export function ModelCataloguePanel() {
             )}
           </p>
           {!hardBudget && <Alert tone="warn">{NO_HARD_BUDGET}</Alert>}
+          <p className="text-xs text-ink-muted" data-testid="facts-as-of">
+            {lastSync
+              ? `Facts (upstream model, context window, price) as of the last sync (${when(lastSync)}). Sync from the gateway to refresh.`
+              : "Facts (upstream model, context window, price) arrive with a sync. Sync from the gateway to read them."}
+          </p>
         </div>
       </Card>
 
@@ -133,6 +152,7 @@ export function ModelCataloguePanel() {
             {TIERS.map((tier) => (
               <label key={tier} className="flex items-center justify-between gap-3">
                 <span className="font-mono text-xs">{tier}</span>
+                <span className="flex min-w-0 flex-col items-end gap-1">
                 <Select
                   aria-label={`Model of the ${tier} tier`}
                   value={data.tiers[tier] ?? ""}
@@ -152,6 +172,13 @@ export function ModelCataloguePanel() {
                     </option>
                   ))}
                 </Select>
+                {!data.tiers[tier] && (
+                  <span className="max-w-64 break-words text-right text-xs text-ink-muted" data-testid={`tier-alias-${tier}`}>
+                    {`platform/${tier} runs `}
+                    {aliasTarget(tier) ? <span className="font-mono">{aliasTarget(tier)}</span> : "not synced yet"}
+                  </span>
+                )}
+                </span>
               </label>
             ))}
           </div>
@@ -246,8 +273,22 @@ function EntryRow({
         <span className="font-medium">{entry.display_name || entry.model_name}</span>
         <span className="block font-mono text-xs text-ink-muted">
           {entry.model_name}
-          {entry.gateway?.provider ? ` · ${entry.gateway.provider}` : ""}
         </span>
+        {entry.gateway?.upstream_model ? (
+          <span className="block break-words text-xs" data-testid={`upstream-${entry.model_name}`}>
+            runs <span className="font-mono">{entry.gateway.upstream_model}</span>
+            {entry.gateway.provider ? ` via ${entry.gateway.provider}` : ""}
+          </span>
+        ) : (
+          entry.gateway?.provider && <span className="block text-xs text-ink-muted">via {entry.gateway.provider}</span>
+        )}
+        {entry.gateway && (
+          <span className="mt-1 flex flex-wrap gap-1">
+            {entry.gateway.max_input_tokens != null && <Badge tone="neutral">{contextWindow(entry.gateway.max_input_tokens)}</Badge>}
+            {entry.gateway.supports_tool_calling && <Badge tone="neutral">Tools</Badge>}
+            {entry.gateway.supports_vision && <Badge tone="neutral">Vision</Badge>}
+          </span>
+        )}
         {entry.source === "manual" && <Badge tone="neutral">added by hand</Badge>}
       </TD>
       <TD>

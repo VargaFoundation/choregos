@@ -19,10 +19,9 @@ import pytest
 from httpx import AsyncClient
 
 BASE = "/api/v1/orgs/varga/knowledge"
-#: How long the deliberately CPU-bound step spins, and what a concurrent request may wait.
+#: How long the deliberately CPU-bound step spins.
 SPIN_S = 1.5
-BUDGET_S = 0.5
-#: Light requests that must be answered before a heavy search ends (an order, not a duration).
+#: Light requests that must be answered before a heavy step ends (an order, not a duration).
 LIGHT_BEFORE_END = 3
 
 
@@ -37,6 +36,8 @@ def heavy_chunk(markdown: str, title: str, **kw: Any) -> Any:
 
     _mark()
     _spin(SPIN_S)
+    with open(os.environ["HEAVY_MARKER"] + ".end", "a") as handle:
+        handle.write(str(os.getpid()))
     return chunk(markdown, title, **kw)
 
 
@@ -74,39 +75,6 @@ async def _warm(client: AsyncClient) -> None:
     assert (await client.get(f"{BASE}/heavy")).status_code == 200
 
 
-async def _answers_meanwhile(client: AsyncClient, work: Any) -> float:
-    """The longest a concurrent GET (or a loop tick) waited while `work()` ran."""
-    worst = 0.0
-    done = asyncio.Event()
-
-    async def probe() -> None:
-        nonlocal worst
-        while not done.is_set():
-            started = time.monotonic()
-            answered = await client.get(f"{BASE}/heavy")
-            assert answered.status_code == 200
-            worst = max(worst, time.monotonic() - started)
-            await asyncio.sleep(0.02)
-
-    async def ticker() -> None:
-        nonlocal worst
-        last = time.monotonic()
-        while not done.is_set():
-            await asyncio.sleep(0.02)
-            now = time.monotonic()
-            worst = max(worst, now - last - 0.02)
-            last = now
-
-    async def job() -> None:
-        try:
-            await work()
-        finally:
-            done.set()
-
-    await asyncio.gather(job(), probe(), ticker())
-    return worst
-
-
 async def _answered_before_it_ended(client: AsyncClient, work: Any) -> int:
     """How many light GETs were answered while `work()` was still running (an ordering, not a time).
 
@@ -135,6 +103,34 @@ async def _answered_before_it_ended(client: AsyncClient, work: Any) -> int:
     return answered_first
 
 
+async def _answered_during_the_heavy_step(client: AsyncClient, work: Any, marker: pathlib.Path) -> int:
+    """How many light GETs were answered between the heavy step's start and end markers.
+
+    Counting up to the end of `work()` is not enough when `work()` awaits other things first (the
+    conversion does): answers given before the heavy step began would hide a step that blocks the
+    loop. A blocked loop handles no reply until the step has written its end marker.
+    """
+    ended = asyncio.Event()
+    end = marker.with_name(marker.name + ".end")
+
+    async def job() -> None:
+        try:
+            await work()
+        finally:
+            ended.set()
+
+    task = asyncio.create_task(job())
+    answered_during = 0
+    while not ended.is_set():
+        reply = await client.get(f"{BASE}/heavy")
+        assert reply.status_code == 200
+        if marker.exists() and not end.exists():
+            answered_during += 1
+        await asyncio.sleep(0.02)
+    await task
+    return answered_during
+
+
 def _spin(seconds: float) -> None:
     """Pure-Python CPU work (holds the GIL between its periodic releases), not a sleep."""
     end = time.monotonic() + seconds
@@ -160,9 +156,13 @@ async def test_a_cpu_heavy_indexing_does_not_starve_other_requests(
         f"{BASE}/heavy/documents", files={"file": ("a.md", b"# Title\n\nSome text about tls.\n")}
     )
     assert sent.status_code == 202, sent.text
-    worst = await _answers_meanwhile(client, conversions.drain)
+    # An order, not a duration (finding #821): a shared CI runner made a 0.5 s budget flaky.
+    answered_during = await _answered_during_the_heavy_step(client, conversions.drain, tmp_path / "heavy")
     assert (tmp_path / "heavy").exists(), "the heavy step ran"
-    assert worst < BUDGET_S, f"a request waited {worst:.2f} s while the index was being built"
+    assert answered_during >= LIGHT_BEFORE_END, (
+        f"only {answered_during} light request(s) were answered while the index was being built: "
+        "the indexing held the event loop"
+    )
 
 
 async def test_a_cpu_heavy_search_does_not_starve_other_requests(
