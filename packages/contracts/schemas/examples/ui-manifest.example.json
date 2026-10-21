@@ -12,7 +12,15 @@
         "type": "object",
         "properties": {
           "enabled": { "type": "boolean", "title": "accept SCIM requests" },
-          "default_role": { "type": "string", "enum": ["viewer", "developer"], "title": "role of a provisioned member" }
+          "default_role": { "type": "string", "enum": ["viewer", "developer"], "title": "role of a provisioned member" },
+          "badge": {
+            "type": "string",
+            "format": "asset",
+            "title": "badge shown next to the token list",
+            "x-upload": "/orgs/{org}/scim/badge",
+            "x-accept": ["image/png", "image/svg+xml"],
+            "x-max-bytes": 262144
+          }
         }
       },
       "read": "/orgs/{org}/scim/settings",

@@ -36,6 +36,10 @@ def _routeur_scim() -> APIRouter:
     async def ecrire(org: str) -> dict[str, Any]:
         return {"enabled": True}
 
+    @routeur.post("/orgs/{org}/scim/badge")
+    async def televerser(org: str) -> dict[str, Any]:
+        return {"ref": "sha256-0"}
+
     @routeur.get("/orgs/{org}/scim/tokens")
     async def lister(org: str) -> dict[str, Any]:
         return {"items": []}
