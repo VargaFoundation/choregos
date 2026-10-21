@@ -108,7 +108,10 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
  * changes; an enterprise edition that announces a publisher is named next to it, and the line says
  * it is built on the community core.
  */
-export function EditionFooterLine({ productName = "Choregos" }: { productName?: string }) {
+export function EditionFooterLine({ productName }: { productName?: string }) {
+  // The name follows the theme the client holds, the organisation's once it is swapped in (S42-13).
+  const served = useServedTheme().product_name;
+  productName = productName ?? served;
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   const publisher = edition.data?.edition === "enterprise" ? edition.data.publisher : null;
   // The foundation is named here, and only here (ADR 0048). A theme cannot remove this line; a renamed
@@ -121,6 +124,13 @@ export function EditionFooterLine({ productName = "Choregos" }: { productName?: 
         : `${productName === "Choregos" ? "Choregos" : `${productName}, built on Choregos`} by Varga Foundation · Apache 2.0`}
     </span>
   );
+}
+
+/** The footer's own sentence: the theme's, which follows the organisation once it is swapped in (S42-13). */
+export const DEFAULT_FOOTER_TEXT = "A ticket goes in, a controlled production release comes out.";
+
+export function FooterText() {
+  return <span data-testid="footer-text">{useServedTheme().footer?.text ?? DEFAULT_FOOTER_TEXT}</span>;
 }
 
 /** Where the core's source and documentation live: the foundation's repository (ADR 0048). */

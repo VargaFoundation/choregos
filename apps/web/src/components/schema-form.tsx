@@ -3,7 +3,9 @@
 
 import { useId, useState } from "react";
 import { GitHubRepoField } from "@/components/github-repo-field";
-import { Input, Select, Textarea } from "@/components/ui";
+import { Button, Input, Select, Textarea } from "@/components/ui";
+import { api } from "@/lib/api";
+import { safeAsset } from "@/lib/served-theme";
 
 /**
  * Un formulaire tiré d'un JSON Schema — celui d'une section d'administration déclarée par un
@@ -25,6 +27,10 @@ export type JsonSchema = {
   properties?: Record<string, JsonSchema>;
   required?: string[];
   default?: unknown;
+  /** `format: "asset"` (S42-13): where the chosen file is POSTed, what it may be, and how large. */
+  "x-upload"?: string;
+  "x-accept"?: string[];
+  "x-max-bytes"?: number;
 };
 
 type Valeurs = Record<string, unknown>;
@@ -53,11 +59,14 @@ export function SchemaForm({
   value,
   onChange,
   disabled,
+  org,
 }: {
   schema: JsonSchema;
   value: Valeurs;
   onChange: (value: Valeurs) => void;
   disabled?: boolean;
+  /** Fills `{org}` in an asset field's `x-upload`; without it such a field cannot upload. */
+  org?: string;
 }) {
   const base = useId();
   const requis = new Set(schema.required ?? []);
@@ -74,6 +83,7 @@ export function SchemaForm({
           requis={requis.has(nom)}
           valeur={value[nom]}
           disabled={disabled}
+          org={org}
           onChange={(valeur) => {
             const suivantes = { ...value };
             if (valeur === undefined) delete suivantes[nom];
@@ -93,6 +103,7 @@ function Champ({
   requis,
   valeur,
   disabled,
+  org,
   onChange,
 }: {
   id: string;
@@ -101,6 +112,7 @@ function Champ({
   requis: boolean;
   valeur: unknown;
   disabled?: boolean;
+  org?: string;
   onChange: (valeur: unknown) => void;
 }) {
   const libelle = propriete.title ?? nom.replaceAll("_", " ");
@@ -160,6 +172,18 @@ function Champ({
         value={typeof valeur === "string" ? valeur : ""}
         disabled={disabled}
         describedBy={aide}
+        onChange={onChange}
+      />
+    );
+  } else if (propriete.format === "asset") {
+    controle = (
+      <AssetField
+        id={id}
+        propriete={propriete}
+        valeur={valeur}
+        disabled={disabled}
+        describedBy={aide}
+        org={org}
         onChange={onChange}
       />
     );
@@ -297,5 +321,115 @@ function Correspondance({
         </p>
       )}
     </>
+  );
+}
+
+/** The path an asset field uploads to, `{org}` filled in; null when it cannot be (no org, or another placeholder). */
+export function cheminDeTeleversement(modele: string | undefined, org: string | undefined): string | null {
+  if (!modele) return null;
+  if (modele.includes("{org}")) {
+    if (!org) return null;
+    modele = modele.replaceAll("{org}", encodeURIComponent(org));
+  }
+  return /[{}]/.test(modele) ? null : modele;
+}
+
+/** Why a file cannot be offered, from the schema's limits, or null. A courtesy: the upload route is the judge. */
+export function refusDuFichier(fichier: { type: string; size: number }, propriete: JsonSchema): string | null {
+  const accepte = propriete["x-accept"];
+  if (accepte && accepte.length > 0 && !accepte.includes(fichier.type)) {
+    return `This file type is not accepted (${accepte.join(", ")})`;
+  }
+  const max = propriete["x-max-bytes"];
+  if (max !== undefined && fichier.size > max) {
+    return `This file is larger than ${max >= 1024 ? `${Math.round(max / 1024)} KiB` : `${max} bytes`}`;
+  }
+  return null;
+}
+
+/**
+ * A file the person uploads (`format: "asset"`, S42-13): the current one as a thumbnail, a file
+ * input, and "Remove". The file goes to the field's `x-upload` as the raw body; the `ref` the
+ * answer carries becomes the field's value, and the form's own Save writes it. Removing writes
+ * `null`: an explicit "no file", not a field left out.
+ */
+function AssetField({
+  id,
+  propriete,
+  valeur,
+  disabled,
+  describedBy,
+  org,
+  onChange,
+}: {
+  id: string;
+  propriete: JsonSchema;
+  valeur: unknown;
+  disabled?: boolean;
+  describedBy?: string;
+  org?: string;
+  onChange: (valeur: unknown) => void;
+}) {
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const chemin = cheminDeTeleversement(propriete["x-upload"], org);
+  const actuel = typeof valeur === "string" && valeur !== "" ? valeur : null;
+  // Only a same-origin served file is drawn; any other reference is shown as text, never loaded.
+  const image = actuel ? safeAsset(actuel) : undefined;
+
+  async function choisir(fichier: File | undefined) {
+    setErreur(null);
+    if (!fichier || !chemin) return;
+    const refus = refusDuFichier(fichier, propriete);
+    if (refus) return setErreur(refus);
+    setEnvoi(true);
+    try {
+      const { ref } = await api.sectionUpload(chemin, fichier);
+      onChange(ref);
+    } catch (cause) {
+      setErreur(cause instanceof Error ? cause.message : "upload refused");
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2" data-testid={`asset-${id}`}>
+      {actuel &&
+        (image ? (
+          // A served file: `next/image` would add an optimiser in front of a same-origin asset.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image} alt="Current file" className="h-10 w-auto max-w-40 rounded-control border border-line bg-surface-muted p-1" />
+        ) : (
+          <p className="break-all font-mono text-xs text-ink-muted">{actuel}</p>
+        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          id={id}
+          type="file"
+          accept={propriete["x-accept"]?.join(",")}
+          disabled={disabled || envoi || !chemin}
+          aria-describedby={describedBy}
+          className="text-xs"
+          // The same file chosen twice must fire again.
+          onChange={(event) => {
+            const fichier = event.target.files?.[0];
+            event.target.value = "";
+            void choisir(fichier);
+          }}
+        />
+        {actuel && (
+          <Button size="sm" tone="default" type="button" disabled={disabled || envoi} onClick={() => onChange(null)}>
+            Remove
+          </Button>
+        )}
+        {envoi && <span className="text-xs text-ink-muted">Uploading…</span>}
+      </div>
+      {erreur && (
+        <p className="text-xs text-danger" role="alert">
+          {erreur}
+        </p>
+      )}
+    </div>
   );
 }

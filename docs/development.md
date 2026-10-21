@@ -297,7 +297,7 @@ section's permission still applies first; `GET /api/v1/ui/admin-sections` then l
 caller lacks, and lists the section only if at least one block remains. Start-up stops on an unknown
 block permission, as on a section's. Nested `row_actions` have no permission of their own. A plugin
 detects the feature without parsing versions: `choregos_api.greffons.SECTION_FEATURES` is a frozenset,
-currently `{"block_permission"}`. Give a block a `description` ("this organisation", "the whole
+currently `{"block_permission", "asset_upload"}` (S42-13: a form property of `format: "asset"` uploads its file to its `x-upload` path, see ADR 0032). Give a block a `description` ("this organisation", "the whole
 instance") to say which level it edits; every block kind renders it.
 
 ```python

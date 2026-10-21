@@ -113,6 +113,18 @@ async def test_l_administrateur_voit_les_sections_le_developpeur_non(
             id="chemin-non-servi",
         ),
         pytest.param(
+            lambda m: m["blocks"][0]["schema"]["properties"]["badge"].update(
+                **{"x-upload": "/orgs/{org}/scim/nope"}
+            ),
+            "aucune route",  # lang: fr-ok: the start-up message is French
+            id="asset-upload-path-not-served",
+        ),
+        pytest.param(
+            lambda m: m["blocks"][0]["schema"]["properties"]["badge"].pop("x-upload"),
+            "invalide",
+            id="asset-without-upload-path",
+        ),
+        pytest.param(
             lambda m: m["blocks"][1]["row_actions"][0].update(method="POST"),
             "aucune route",
             id="methode-non-servie",
@@ -237,3 +249,16 @@ def test_the_core_announces_block_permission() -> None:
     from choregos_api.greffons import SECTION_FEATURES
 
     assert "block_permission" in SECTION_FEATURES
+
+
+def test_the_core_announces_asset_upload_and_a_section_lists_its_upload_paths() -> None:
+    """S42-13: the paths a section calls include the POST path of each `format: asset` property."""
+    from choregos_api.greffons import SECTION_FEATURES, chemins_d_une_section
+
+    assert "asset_upload" in SECTION_FEATURES
+    chemins = chemins_d_une_section(SCIM)
+    assert ("POST", "/orgs/{org}/scim/badge") in chemins
+    # Only `format: asset` properties count: a plain string with an `x-upload` key does not.
+    plain = copy.deepcopy(SCIM)
+    plain["blocks"][0]["schema"]["properties"]["badge"].pop("format")
+    assert ("POST", "/orgs/{org}/scim/badge") not in chemins_d_une_section(plain)

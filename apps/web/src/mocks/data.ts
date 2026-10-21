@@ -1391,7 +1391,21 @@ export const sectionAcmeLayered = {
       kind: "form",
       title: "This organisation",
       description: "Applies to Acme only.",
-      schema: { type: "object", properties: { accent: { type: "string", title: "accent colour" } } },
+      schema: {
+        type: "object",
+        properties: {
+          accent: { type: "string", title: "accent colour" },
+          logo: {
+            type: "string",
+            format: "asset",
+            title: "logo",
+            description: "PNG or SVG, 256 KiB at most.",
+            "x-upload": "/orgs/{org}/acme/branding/files",
+            "x-accept": ["image/png", "image/svg+xml"],
+            "x-max-bytes": 262144,
+          },
+        },
+      },
       read: "/orgs/{org}/scim/settings",
       write: "/orgs/{org}/scim/settings",
     },
@@ -2560,6 +2574,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       owner_project: slug,
     } as T;
   }
+  if (method === "POST" && /^\/orgs\/[^/]+\/acme\/branding\/files$/.test(path)) {
+    // An upload (S42-13): the answer carries the `ref` the field then holds. A served sample file, so the thumbnail draws.
+    return { ref: "/api/v1/mock-theme-assets/logo.svg" } as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
     return { id: "t2", name: "okta", token: "scim_demo_shown_once" } as T;
@@ -3159,16 +3177,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
-    [/^\/edition$/, {
-        edition: "community",
-        features: [],
-        version: "0.13.1",
-        publisher: null,
-        edition_version: null,
-        licence: "Apache-2.0",
-        edition_licence: null,
-        build: { revision: "0123abc4567def890123abc4567def890123abc4" },
-      }],
+    [/^\/edition$/, { edition: "community", features: [], version: "0.13.1", publisher: null, edition_version: null }],
     [
       /^\/integrations$/,
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
@@ -3204,19 +3213,6 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/agent-images$/, platformAgentImages],
-    [
-      /^\/platform\/identity$/,
-      {
-        items: [
-          { key: "oidc.issuer", label: "OIDC issuer", value: "https://sso.example.test/realms/choregos", source: "settings" },
-          { key: "oidc.client_id", label: "OIDC client id", value: "choregos", source: "settings" },
-          { key: "oidc.client_secret", label: "OIDC client secret", value: "set", source: "settings" },
-          { key: "oidc.redirect_uri", label: "Redirect URI to register at the identity provider", value: "https://api.example.test/api/v1/auth/callback", source: "derived" },
-          { key: "mcp.oauth.enabled", label: "MCP door accepts OAuth tokens", value: "enabled", source: "settings" },
-          { key: "session.max_age", label: "Session lifetime", value: "8 h", source: "default" },
-        ],
-      },
-    ],
     // What a deployment on agent-sandbox answers (ADR 0072): the others are not run there.
     [
       /^\/platform\/executors$/,
