@@ -64,6 +64,8 @@ import type {
   SkillUpdate,
   SkillVersion,
   KnowledgeBase,
+  KnowledgeDistillEstimate,
+  KnowledgeDistillRequest,
   KnowledgeBaseCreate,
   ProjectKnowledgeBaseCreate,
   KnowledgeBasePatch,
@@ -539,8 +541,15 @@ export const api = {
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/reindex`, { method: "POST" }),
   putKnowledgeEvalSet: (org: string, slug: string, cases: KnowledgeEvalCase[]) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval`, { method: "PUT", body: JSON.stringify({ cases }) }),
-  distillKnowledgeBase: (org: string, slug: string) =>
-    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/distill`, { method: "POST" }),
+  distillKnowledgeBase: (org: string, slug: string, body?: KnowledgeDistillRequest) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/distill`, {
+      method: "POST",
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }),
+  estimateKnowledgeDistillation: (org: string, slug: string, exclude: string[] = []) =>
+    request<KnowledgeDistillEstimate>(
+      `/orgs/${org}/knowledge/${slug}/distill/estimate${exclude.length ? `?${exclude.map((e) => `exclude=${encodeURIComponent(e)}`).join("&")}` : ""}`,
+    ),
   runKnowledgeEval: (org: string, slug: string) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval/run`, { method: "POST" }),
   createKnowledgeSource: (org: string, slug: string, body: KnowledgeSourceCreate) =>

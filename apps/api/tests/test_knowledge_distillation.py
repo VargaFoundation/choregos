@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-import pytest
 from httpx import AsyncClient
 
 from . import knowledge_fixtures as fx
@@ -130,30 +129,25 @@ def test_the_distiller_is_in_the_catalogue_in_english() -> None:
     assert "cites at least one source" in distiller.document["spec"]["instructions"]
 
 
-async def test_a_corpus_too_large_names_its_biggest_documents() -> None:
-    """The refusal says what to do: how big the base is, the limit, and which documents weigh most."""
-    from types import SimpleNamespace
-
-    from choregos_api.knowledge.distill import MAX_CORPUS_CHARS, DistillationError, load_corpus
+def test_a_base_too_large_for_the_cap_names_its_biggest_documents() -> None:
+    """The refusal says what to do: the size, the number of parts, and which documents weigh most."""
+    from choregos_api.config import Settings
+    from choregos_api.knowledge.distill import Source, build_estimate
+    from choregos_api.services.model_catalogue import Price
 
     sizes = {"budget.xlsx": 1_500_000, "notes.md": 1_000, "prices.xlsx": 700_000, "plan.md": 60_000}
-
-    class Session:
-        async def execute(self, _query: Any) -> Any:
-            documents = [
-                SimpleNamespace(filename=name, title=name, digest="sha256:x", markdown="x" * size, id=name)
-                for name, size in sizes.items()
-            ]
-            return SimpleNamespace(scalars=lambda: documents)
-
-    assert sum(sizes.values()) > MAX_CORPUS_CHARS
-    with pytest.raises(DistillationError) as refusal:
-        await load_corpus(Session(), SimpleNamespace(id="b"))
-    message = str(refusal.value)
+    corpus = [Source(name, name, "sha256:x", "x" * size) for name, size in sizes.items()]
+    settings = Settings(knowledge_distill_part_chars=100_000, knowledge_distill_max_parts=16)
+    estimate = build_estimate(corpus, "instructions", "m", Price(None, None, "none"), [], settings)
+    assert estimate.refusal is not None and estimate.refusal[0] == "too_large"
+    message = estimate.refusal[1]
     assert "2.26 M characters" in message and "565 k tokens" in message
-    assert "at most 400 k" in message and "leave large spreadsheets out" in message
+    assert "at most 16" in message and "leave large spreadsheets out" in message
     assert "budget.xlsx (1.50 M), prices.xlsx (700 k), plan.md (60 k)" in message
     assert "notes.md" not in message
+    # Leaving the spreadsheets out makes it fit.
+    fitting = build_estimate(corpus, "instructions", "m", Price(None, None, "none"), ["*.xlsx"], settings)
+    assert fitting.refusal is None and fitting.values["parts"] == 1
 
 
 async def test_a_stale_running_distillation_does_not_block(client: AsyncClient, admin: str) -> None:

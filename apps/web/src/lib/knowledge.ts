@@ -111,11 +111,38 @@ export function sourceConfig(
   };
 }
 
+const FAILURES: Record<string, string> = {
+  too_large: "the base is too large to read in one distillation: leave the biggest documents out",
+  over_budget: "stopped before the budget was spent",
+  no_document: "no converted document to distil",
+  model_refused: "the model is not allowed to distil (see /admin/models)",
+  nothing_cited: "no principle cited a document of the base, so nothing was published",
+  gateway: "the model gateway failed",
+  cancelled: "cancelled",
+};
+
+/** "map 3/8 - $0.92 spent": where a running distillation is. */
+export function distillationProgress(d: Record<string, unknown>): string {
+  const total = Number(d.parts_total ?? 0);
+  const phase = String(d.phase ?? "plan");
+  const where = phase === "map" && total ? `map ${Number(d.parts_done ?? 0)}/${total}` : phase;
+  const spent = Number(d.spent_usd ?? 0);
+  return spent > 0 ? `${where} \u00b7 $${spent.toFixed(2)} spent` : where;
+}
+
 /** The last distillation, in words, and the skill version it waits on. */
 export function distillationLabel(d: Record<string, unknown> | null | undefined): string {
   if (!d) return "not distilled";
-  if (d.status === "running") return "distilling…";
-  if (d.status === "failed") return `failed: ${String(d.error ?? "")}`;
+  if (d.status === "running") {
+    const progress = d.phase && d.phase !== "plan" ? ` ${distillationProgress(d)}` : "";
+    return `distilling\u2026${progress}`;
+  }
+  if (d.status === "failed") {
+    const why = FAILURES[String(d.code ?? "")];
+    const detail = String(d.error ?? "");
+    const spent = Number(d.spent_usd ?? 0);
+    return `failed: ${why ? `${why} (${detail})` : detail}${spent > 0 ? ` \u00b7 $${spent.toFixed(2)} spent` : ""}`;
+  }
   const dropped = Array.isArray(d.dropped) ? d.dropped.length : 0;
   return `${String(d.skill)} v${String(d.version)}: ${String(d.principles)} principles, waiting for review${dropped ? ` (${dropped} dropped: no source)` : ""}`;
 }

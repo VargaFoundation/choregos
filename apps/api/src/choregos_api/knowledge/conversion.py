@@ -254,7 +254,10 @@ class Conversions:
     async def _interrupt_distillations(self) -> int:
         """A distillation `running` is a task of a replica that stopped: say so, so the base can be
         distilled again (the route also ignores one older than 30 minutes, for the replica that died
-        without a start-up)."""
+        without a start-up). With Temporal the workflow is durable and outlives the replica (S42-10c):
+        only the in-process distillation of the fakes is interrupted."""
+        if not get_settings().fakes:
+            return 0
         async with session_scope(orgs=TOUT) as session:
             bases = (
                 await session.execute(select(KnowledgeBase).where(KnowledgeBase.distillation.is_not(None)))

@@ -186,6 +186,15 @@ class Settings(BaseSettings):
     #: How many conversions run at once in one API replica. One by default: the API pod has one CPU
     #: (S39-26), a second converter would only share it.
     knowledge_conversion_concurrency: int = 1
+    #: Distillation in passes (S42-10c, ADR 0082): the corpus is read in parts of at most this many
+    #: characters (about 75 k tokens), one model call each.
+    knowledge_distill_part_chars: int = 300_000
+    #: The most parts one distillation reads; a bigger base is refused, naming its biggest documents.
+    knowledge_distill_max_parts: int = 16
+    #: The most one distillation may spend, in US dollars, when the model is priced.
+    knowledge_distill_budget_usd: float = 10.0
+    #: The output a call is assumed to produce, to estimate a cost before spending it.
+    knowledge_distill_output_tokens_per_call: int = 6_000
     #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.
     knowledge_embedding_model: str = "platform/embed"
     #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the
