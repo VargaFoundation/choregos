@@ -7,7 +7,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { OrganisationTheme, ServedThemeProvider, THEME_STYLE_ID } from "@/components/served-theme";
 import { Container, Wordmark } from "@/components/ui";
-import { EditionFooterLine } from "@/components/edition";
+import { EditionFooterLine, FooterText } from "@/components/edition";
 import { BarreLaterale } from "@/components/coquille/barre-laterale";
 import { SCRIPT_DES_PREFERENCES } from "@/lib/preferences";
 import { themeCss } from "@/lib/served-theme";
@@ -87,12 +87,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     size="wide"
                     className="flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
                   >
-                    <span data-testid="footer-text">
-                      {theme.footer?.text ?? "A ticket goes in, a controlled production release comes out."}
-                    </span>
+                    <FooterText />
                     {/* The foundation is named here, and only here (ADR 0048). A theme cannot remove this
                         line; a renamed instance says what it is built on (ADR 0064). */}
-                    <EditionFooterLine productName={theme.product_name} />
+                    <EditionFooterLine />
                   </Container>
                 </footer>
               </div>

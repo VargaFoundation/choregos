@@ -259,6 +259,8 @@ jobs:
           platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
+          build-args: REVISION=${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
           # SBOM and SLSA provenance attached to the image (BuildKit attestations). SECURITY.md
           # promised them from the start; none existed (status review of 2026-09-24).
           sbom: ${{ github.ref == 'refs/heads/main' }}

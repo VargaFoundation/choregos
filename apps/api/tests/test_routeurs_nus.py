@@ -591,9 +591,14 @@ async def test_backends_et_executeurs_se_listent_et_se_reglent(client: AsyncClie
         },
     )
     assert regle.status_code == 200
-    assert [e["kind"] for e in (await client.get("/api/v1/platform/executors")).json()] == ["k8s_job"], (
-        "dès qu'une ligne existe, c'est elle qui fait foi"
-    )
+    # S42-07: a stored row no longer replaces the deployment's list (nothing reads it, ADR 0072)
+    assert {e["kind"] for e in (await client.get("/api/v1/platform/executors")).json()} == {
+        "tekton",
+        "k8s_job",
+        "local_docker",
+        "aca",
+        "agent_sandbox",
+    }
     assert (await client.get("/api/v1/platform/gateway/keys")).json() == []
 
 

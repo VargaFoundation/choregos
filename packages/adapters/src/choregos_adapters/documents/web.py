@@ -52,9 +52,34 @@ def _private(address: str) -> bool:
     return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
 
 
-def page_name(url: str) -> str:
-    """A page is named by its whole path, so `/en/about` and `/fr/about` do not collide."""
+#: The documents a crawl may list besides HTML pages (`include_documents`): content type to extension.
+DOCUMENT_TYPES = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+}
+DOCUMENT_EXTENSIONS = tuple(DOCUMENT_TYPES.values())
+
+
+def _document_extension(url: str, content_type: str) -> str | None:
+    """The extension of a linked document, from its content type or, failing that, its URL path."""
+    kind = content_type.split(";", 1)[0].strip().lower()
+    if kind in DOCUMENT_TYPES:
+        return DOCUMENT_TYPES[kind]
+    path = urlsplit(url).path.lower()
+    return next((ext for ext in DOCUMENT_EXTENSIONS if path.endswith(ext)), None)
+
+
+def page_name(url: str, extension: str | None = None) -> str:
+    """A page is named by its whole path, so `/en/about` and `/fr/about` do not collide.
+
+    A linked document keeps its real extension (`extension`, from its content type when the URL has none)."""
     name = "-".join(part for part in urlsplit(url).path.split("/") if part) or "index"
+    if name.lower().endswith(DOCUMENT_EXTENSIONS):
+        return name
+    if extension:
+        return f"{name}{extension}"
     return name if name.endswith((".html", ".htm")) else f"{name}.html"
 
 
@@ -85,6 +110,7 @@ class WebCrawlSource:
         resolver: Resolver = resolve,
         allow_http: bool = False,
         exclude: list[str] | None = None,
+        include_documents: bool = False,
         user_agent: str = USER_AGENT,
         per_host_per_minute: int | None = None,
         sleep: Sleep = asyncio.sleep,
@@ -99,6 +125,7 @@ class WebCrawlSource:
         self.prefix = parts.path.rsplit("/", 1)[0] + "/" if parts.path else "/"
         self.host = parts.hostname
         self.exclude = list(exclude or [])
+        self.include_documents = include_documents
         self.max_depth = max(0, min(max_depth, MAX_DEPTH))
         self.max_pages = max(1, min(max_pages, MAX_PAGES))
         self._resolver = resolver
@@ -203,19 +230,25 @@ class WebCrawlSource:
                 unreadable.append(url)
                 continue
             kind = response.headers.get("content-type", "")
-            if response.status_code != 200 or "html" not in kind or len(response.content) > MAX_PAGE_BYTES:
+            if response.status_code != 200 or len(response.content) > MAX_PAGE_BYTES:
+                continue
+            is_html = "html" in kind
+            extension = (
+                None if is_html else _document_extension(final, kind) if self.include_documents else None
+            )
+            if not is_html and extension is None:
                 continue
             if final != url:
                 if final in seen:
                     continue
                 seen.add(final)
                 url = final
-            name = page_name(url)
+            name = page_name(url, extension)
             self._pages[url] = response.content
             items.append(
                 SourceItem(ref=url, name=name, version=hashlib.sha256(response.content).hexdigest(), url=url)
             )
-            if depth < self.max_depth:
+            if is_html and depth < self.max_depth:
                 parser = _Links()
                 parser.feed(response.text)
                 for link in parser.links:

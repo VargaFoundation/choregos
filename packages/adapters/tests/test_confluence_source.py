@@ -60,6 +60,48 @@ async def test_a_page_tree_is_the_page_and_its_descendants() -> None:
         await _source(site, page_id="999").changes(None)
 
 
+async def test_without_descendants_a_page_is_just_that_page() -> None:
+    site = _site()
+    one = await _source(site, page_id="100", descendants=False).changes(None)
+    assert {i.ref for i in one.items} == {"page:100"}
+    assert {
+        i.ref for i in (await _source(site, page_ids=["101"], descendants=False).changes(None)).items
+    } == {"page:101"}
+
+
+async def test_chosen_pages_are_the_pages_listed_and_nothing_else() -> None:
+    site = _site()
+    chosen = await _source(site, page_ids=["100", "103"], descendants=False).changes(None)
+    assert {i.ref for i in chosen.items} == {"page:100", "page:103"}
+    # With descendants, overlapping choices list a page once.
+    tree = await _source(site, page_ids=["100", "101"]).changes(None)
+    assert sorted(i.ref for i in tree.items) == ["page:100", "page:101", "page:102"]
+
+
+async def test_a_listed_id_that_is_missing_is_refused_by_name() -> None:
+    site = _site()
+    with pytest.raises(SourceRefusedError, match="page 999"):
+        await _source(site, page_ids=["100", "999"]).changes(None)
+
+
+async def test_a_page_that_leaves_the_chosen_set_is_no_longer_listed() -> None:
+    """`changes` is a full listing: the sync engine deletes what it no longer names."""
+    site = _site()
+    first = await _source(site, page_ids=["101"]).changes(None)
+    assert {i.ref for i in first.items} == {"page:101", "page:102"}
+    site.put_page("ENG", "102", "Runbook", "<p>restart the pod</p>", parent=None)  # moved out of the tree
+    again = await _source(site, page_ids=["101"]).changes(None)
+    assert again.full is True and {i.ref for i in again.items} == {"page:101"}
+
+
+def test_the_connector_opens_a_source_with_the_chosen_pages() -> None:
+    connector = ConfluenceDocumentsConnector({"base_url": SITE, "email": "a@b.c", "api_token": "t"})
+    source = connector.source({"space_key": "ENG", "page_ids": ["100", 101], "descendants": False}, key="k")
+    assert (source.roots, source.descendants) == (["100", "101"], False)
+    whole = connector.source({"space_key": "ENG", "page_id": "100"}, key="k")
+    assert (whole.roots, whole.descendants) == (["100"], True)
+
+
 async def test_pagination_follows_the_next_links() -> None:
     site = FakeConfluence()
     site.add_space("ENG")

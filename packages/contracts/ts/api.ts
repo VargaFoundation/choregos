@@ -1992,6 +1992,40 @@ export type KnowledgeDocument = {
   source_url?: string | null;
 };
 
+/** Optional body of `distillKnowledgeBase` (S42-10). */
+export type KnowledgeDistillRequest = {
+  /** filename globs of documents left out (`*.xlsx`, `archive/*`) */
+  exclude?: Array<string>;
+  /** stop and publish nothing when the spend would pass this; null keeps the platform's budget */
+  max_usd?: number | null;
+};
+
+export type KnowledgeDistillEstimate = {
+  characters: number;
+  /** approximate: characters / 4 */
+  tokens_estimate: number;
+  documents: number;
+  /** the pieces the corpus is cut into; a base that fits one pass is one part */
+  parts: number;
+  /** model calls: one per part, plus the merge(s) when there are several parts */
+  calls: number;
+  model: string;
+  /** null when the model is not priced */
+  input_cost_usd?: number | null;
+  output_cost_usd?: number | null;
+  priced_by: "gateway" | "override" | "none";
+  /** the platform's ceiling for one distillation */
+  budget_usd?: number | null;
+  within_budget: boolean;
+  /** why a distillation would not start; null when it would */
+  refused_reason?: string | null;
+  /** the documents that weigh most, biggest first */
+  biggest: Array<{
+    filename: string;
+    characters: number;
+  }>;
+};
+
 export type KnowledgeBase = {
   slug: string;
   name: string;
@@ -2020,7 +2054,7 @@ export type KnowledgeBase = {
   sources?: Array<KnowledgeSource> | null;
   /** the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base */
   owner_project?: string | null;
-  /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at` */
+  /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one) */
   distillation?: {
     [key: string]: unknown;
   } | null;
@@ -3189,6 +3223,20 @@ export type AgentBackendUpdate = {
   disabled_reason?: string | null;
 };
 
+export type PlatformIdentityRow = {
+  /** Stable identifier, e.g. oidc.issuer. */
+  key: string;
+  label: string;
+  /** Display value; a secret shows only set or missing. */
+  value: string;
+  /** settings: set by the deployment; derived: computed from other settings; default: the built-in default. */
+  source: "settings" | "derived" | "default";
+};
+
+export type PlatformIdentity = {
+  items: Array<PlatformIdentityRow>;
+};
+
 export type ExecutorInfo = {
   kind: "tekton" | "k8s_job" | "local_docker" | "aca" | "agent_sandbox";
   enabled: boolean;
@@ -3349,7 +3397,7 @@ export interface Operations {
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
-  distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
+  distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: KnowledgeDistillRequest; response: KnowledgeBase };
   draftAgent: { method: "POST"; path: "/orgs/{org}/agent-drafts"; body: AgentDraftRequest; response: AgentDraft };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
@@ -3361,8 +3409,18 @@ export interface Operations {
   publisher?: string | null;
   /** the version of the edition plugin; null in the community edition */
   edition_version?: string | null;
+  /** the licence the core is distributed under (an SPDX identifier) */
+  licence?: string;
+  /** the licence of the edition plugin, as announced by it; null in the community edition or when the plugin announces none */
+  edition_licence?: string | null;
+  /** what built the running image. Public, like the rest of this response. */
+  build?: {
+    /** the source revision the image was built from; null when the build did not record it */
+    revision: string | null;
+  };
 } };
   enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
+  estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
@@ -3389,6 +3447,7 @@ export interface Operations {
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
+  getPlatformIdentity: { method: "GET"; path: "/platform/identity"; body: never; response: PlatformIdentity };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
   getProcedure: { method: "GET"; path: "/procedures/{procedure_id}"; body: never; response: Procedure };

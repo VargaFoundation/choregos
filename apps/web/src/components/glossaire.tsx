@@ -26,9 +26,9 @@ export const NOTIONS: { cle: NotionDuGlossaire; terme: string; href: string; def
   {
     cle: "connectors",
     terme: "Connector",
-    href: "/catalogue/connectors",
+    href: "/admin/connectors",
     definition:
-      "a system Choregos reaches OUT to: a directory, a device fleet, an MCP server. Each operation is allowed, needs an approval, or is forbidden. A project's delivery tools — tracker, repository, CI, deployment — are set in the project's settings.",
+      "an installed instance of a system Choregos reaches OUT to: a directory, a device fleet, an MCP server. Each operation is allowed, needs an approval, or is forbidden. A catalogue lists what the platform offers (MCP servers, connector types); installing one from it makes a connector. A project's delivery tools — tracker, repository, CI, deployment — are set in the project's settings.",
   },
   {
     cle: "clients",

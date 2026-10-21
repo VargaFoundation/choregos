@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, model_validator
 
@@ -193,3 +193,33 @@ class KnowledgeSourceDto(Dto):
     last_error: str | None = None
     last_summary: dict[str, Any] | None = None
     document_count: int = 0
+
+
+class KnowledgeDistillRequest(Dto):
+    """Optional body of `POST …/distill` (S42-10): documents left out and a spending cap."""
+
+    exclude: list[Annotated[str, Field(max_length=200)]] = Field(default_factory=list, max_length=20)
+    max_usd: float | None = Field(default=None, ge=0)
+
+
+class DistillBiggest(Dto):
+    filename: str
+    characters: int
+
+
+class KnowledgeDistillEstimate(Dto):
+    """What distilling a base would read and cost, before any model call."""
+
+    characters: int
+    tokens_estimate: int
+    documents: int
+    parts: int
+    calls: int
+    model: str
+    input_cost_usd: float | None = None
+    output_cost_usd: float | None = None
+    priced_by: Literal["gateway", "override", "none"]
+    budget_usd: float | None = None
+    within_budget: bool
+    refused_reason: str | None = None
+    biggest: list[DistillBiggest]

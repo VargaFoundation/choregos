@@ -6,12 +6,14 @@ process past its timeout, and the process inherits none of the API's secrets (`c
 gives it a bare environment): a hostile document reaches a parser, never a database URL or a key.
 
 MarkItDown (MIT) keeps what matters to an agent reading the corpus: headings of a Word document,
-one `#` title per slide, one table per sheet. A PDF yields its text; its headings are not
+one `#` title per slide. A workbook is read directly (`xlsx.py`, S42-09c): one table per sheet, cached
+values, a row cap. A PDF yields its text; its headings are not
 recovered (ADR 0051).
 """
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import re
@@ -20,8 +22,14 @@ import sys
 _BLANKS = re.compile(r"\n{3,}")
 
 
-def to_markdown(data: bytes, extension: str) -> tuple[str, str | None]:
+def to_markdown(data: bytes, extension: str, rows_per_sheet: int | None = None) -> tuple[str, str | None]:
     """The markdown of a document and the title its format declares, if any."""
+    if extension == ".xlsx":
+        from .xlsx import DEFAULT_ROWS_PER_SHEET, xlsx_to_markdown
+
+        # A workbook openpyxl cannot read falls back to MarkItDown.
+        with contextlib.suppress(Exception):
+            return xlsx_to_markdown(data, rows_per_sheet or DEFAULT_ROWS_PER_SHEET), None
     from markitdown import MarkItDown, StreamInfo
 
     converter = MarkItDown(enable_plugins=False)
@@ -31,12 +39,12 @@ def to_markdown(data: bytes, extension: str) -> tuple[str, str | None]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        sys.stderr.write("usage: python -m choregos_api.knowledge.convert .ext < document\n")
+    if len(argv) not in {2, 3} or (len(argv) == 3 and not argv[2].isdigit()):
+        sys.stderr.write("usage: python -m choregos_api.knowledge.convert .ext [rows_per_sheet] < document\n")
         return 2
     data = sys.stdin.buffer.read()
     try:
-        markdown, title = to_markdown(data, argv[1])
+        markdown, title = to_markdown(data, argv[1], int(argv[2]) if len(argv) == 3 else None)
     except Exception as exc:  # the converter's own failure, said to the parent
         sys.stderr.write(f"{type(exc).__name__}: {exc}"[:2000])
         return 1

@@ -109,3 +109,122 @@ async def test_an_agent_names_its_knowledge_bases_without_changing_older_digests
         },
     )
     assert created.status_code == 201, created.text
+
+
+# -- Spreadsheets that read as figures, decks that keep their notes (S42-09c) ------------------------
+
+
+def _with_cached_formula(data: bytes, cell: str, cached: str) -> bytes:
+    """Writes the value Excel would have saved beside a formula (openpyxl writes formulas without one)."""
+    import io
+    import re
+    import zipfile
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(out, "w") as target:
+        for item in source.infolist():
+            body = source.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                pattern = re.compile(
+                    rb'(<c r="'
+                    + cell.encode()
+                    + rb'"[^>]*>\s*<f>[^<]*</f>)\s*<v\s*/>|(<c r="'
+                    + cell.encode()
+                    + rb'"[^>]*>\s*<f>[^<]*</f>)\s*<v></v>'
+                )
+                body, count = pattern.subn(
+                    lambda m: (m.group(1) or m.group(2)) + b"<v>" + cached.encode() + b"</v>", body
+                )
+                assert count == 1, body[:2000]
+            target.writestr(item, body)
+    return out.getvalue()
+
+
+def _workbook() -> bytes:
+    import datetime
+    import io
+
+    from openpyxl import Workbook
+
+    book = Workbook()
+    sheet = book.active
+    assert sheet is not None
+    sheet.title = "Revenue"
+    sheet.append(["Entity", "Revenue", "Margin", "Closed", None, "Note"])
+    sheet.append(["Diametral Group", 1234567.891, 0.1234, datetime.date(2025, 3, 1), None, "a | b"])
+    sheet.append(["Doubled", "=B2*2", None, None, None, None])
+    sheet["B2"].number_format = "#,##0.00"
+    sheet["C2"].number_format = "0.0%"
+    sheet["D2"].number_format = "dd/mm/yyyy"
+    sheet["B3"].number_format = "#,##0"
+    book.create_sheet("Costs").append(["Item", "Amount"])
+    book["Costs"].append(["Rent", 1200])
+    secret = book.create_sheet("Scratch")
+    secret.append(["draft"])
+    secret.sheet_state = "hidden"
+    out = io.BytesIO()
+    book.save(out)
+    return _with_cached_formula(out.getvalue(), "B3", "2469135.782")
+
+
+def test_a_workbook_reads_as_figures_not_as_a_dataframe() -> None:
+    from choregos_api.knowledge.convert import to_markdown
+
+    markdown, _ = to_markdown(_workbook(), ".xlsx")
+    assert "NaN" not in markdown and "Unnamed" not in markdown
+    assert [line for line in markdown.splitlines() if line.startswith("## ")] == [
+        "## Revenue",
+        "## Costs",
+        "## Scratch (hidden)",
+    ]
+    # Numbers as the sheet shows them; the formula gives the value Excel saved; a pipe is escaped.
+    assert "| Diametral Group | 1,234,567.89 | 12.3% | 2025-03-01 |  | a \\| b |" in markdown
+    assert "| Doubled | 2,469,136 |" in markdown
+    assert "| Rent | 1200 |" in markdown
+
+
+def test_a_long_sheet_is_capped_and_says_so() -> None:
+    from choregos_api.knowledge.convert import to_markdown
+
+    rows: list[list[object]] = [["id", "value"]] + [[i, i * 2] for i in range(10_000)]
+    markdown, _ = to_markdown(fx.xlsx({"Big": rows}), ".xlsx", 2000)
+    assert markdown.count("\n| ") == 2000 + 1  # the header, its separator and 1999 rows
+    assert "… 8001 more rows not shown" in markdown
+    assert "| 9999 |" not in markdown
+
+
+def test_a_workbook_openpyxl_cannot_read_falls_back_to_markitdown(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from choregos_api.knowledge import convert, xlsx
+
+    def refuse(*_args: object, **_kwargs: object) -> str:
+        raise ValueError("unreadable")
+
+    monkeypatch.setattr(xlsx, "xlsx_to_markdown", refuse)
+    markdown, _ = convert.to_markdown(fx.xlsx({"Sheet1": [["a", "b"], [1, 2]]}), ".xlsx")
+    assert "## Sheet1" in markdown and "| a | b |" in markdown.replace("  ", " ")
+
+
+def test_a_deck_keeps_its_speaker_notes_tables_and_chart_text() -> None:
+    from choregos_api.knowledge.convert import to_markdown
+
+    deck = fx.pptx(
+        [("Group strategy", "Three pillars")],
+        table=[["Region", "Share"], ["Nordics", "41%"]],
+        notes={0: "Say that the Nordics carry the plan"},
+        chart=(["2024", "2025"], {"Revenue": [10.0, 12.5]}),
+    )
+    markdown, _ = to_markdown(deck, ".pptx")
+    assert "Say that the Nordics carry the plan" in markdown
+    assert "Nordics" in markdown and "41%" in markdown
+    assert "2025" in markdown and "12.5" in markdown
+
+
+async def test_the_row_cap_reaches_the_child_process_by_argv() -> None:
+    """The child's environment is bare by design: the cap is an argument, not a variable."""
+    from choregos_api.knowledge.conversion import run_converter
+
+    rows: list[list[object]] = [["id"]] + [[i] for i in range(50)]
+    answer = await run_converter(
+        fx.xlsx({"Many": rows}), ".xlsx", timeout_s=60, max_bytes=1024 * 1024, rows_per_sheet=10
+    )
+    assert "… 41 more rows not shown" in answer["markdown"]

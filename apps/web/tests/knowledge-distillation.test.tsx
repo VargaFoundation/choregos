@@ -10,7 +10,7 @@ import type { KnowledgeBase } from "@/lib/types";
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
-  return { ...real, api: { ...real.api, knowledgeBase: vi.fn(), distillKnowledgeBase: vi.fn() } };
+  return { ...real, api: { ...real.api, knowledgeBase: vi.fn(), distillKnowledgeBase: vi.fn(), updateKnowledgeBase: vi.fn() } };
 });
 
 const base: KnowledgeBase = {
@@ -48,5 +48,23 @@ describe("distillation (S33-05)", () => {
     expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute("href", "/skills/architecture-principles");
     fireEvent.click(screen.getByRole("button", { name: "Distill" }));
     await waitFor(() => expect(api.distillKnowledgeBase).toHaveBeenCalledWith("varga", "architecture"));
+  });
+
+  it("switches the serving mode files to index through the existing PATCH (S42-09b)", async () => {
+    vi.mocked(api.knowledgeBase).mockResolvedValue(base);
+    vi.mocked(api.updateKnowledgeBase).mockResolvedValue({ ...base, serving_mode: "index" });
+    await act(async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Suspense fallback="…">
+            <KnowledgeBasePage params={Promise.resolve({ slug: "architecture" })} />
+          </Suspense>
+        </QueryClientProvider>,
+      );
+    });
+    const row = await screen.findByTestId("knowledge-serving");
+    expect(row).toHaveTextContent("recommended above ~200k tokens");
+    fireEvent.change(screen.getByLabelText("serving mode"), { target: { value: "index" } });
+    await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", { serving_mode: "index" }));
   });
 });
