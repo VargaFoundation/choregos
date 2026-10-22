@@ -3810,6 +3810,20 @@ export interface Operations {
   tool_cost_eur?: number;
   /** @deprecated Former name of `tool_cost_eur`, still emitted for one release (ADR 0046) */
   cout_outils_eur?: number;
+  /** Who started the work item and which earlier runs produced what this run read (ADR 0077 §2). Recorded at stage start by the orchestrator, never sent by the agent. Absent for a run started before it was recorded. */
+  chain?: {
+    /** `<kind>:<subject>` — `person:<email>`, `mcp:<email>`, `a2a:<client>`, `schedule:<name>`, `work_item:<key>`, `tracker:<kind>`, `finding:<id>`, `eval`, `demo`, `trial:<email>`; null when the work item predates the record */
+    initiated_by: string | null;
+    /** The runs of the chain, earliest first; the last one is this run */
+    runs: Array<{
+      run_id: string;
+      stage: string | null;
+      agent_slug?: string | null;
+      agent_version?: number | null;
+      /** The run ids whose outputs this run read as declared inputs */
+      inputs_from: Array<string>;
+    }>;
+  };
   acces: Array<{
     nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
     /** The file, command, address or tool asked for */
