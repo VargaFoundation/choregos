@@ -1,0 +1,16 @@
+# Without its PolicyException the builder is refused: the exception is what admits it, nothing else.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: choregos-builder-without-exception
+policies:
+- ../../pod-security.yaml
+resources:
+- resources.yaml
+results:
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - choregos-buildkitd-7d9f
+  kind: Pod
+  result: fail

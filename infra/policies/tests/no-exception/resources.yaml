@@ -1,0 +1,28 @@
+# The builder's pod as the chart renders it, judged WITHOUT its PolicyException.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: choregos-buildkitd-7d9f
+  namespace: choregos-platform
+spec:
+  containers:
+  - name: buildkitd
+    image: ghcr.io/example/buildkit:1
+    securityContext:
+      seccompProfile:
+        type: Unconfined
+      appArmorProfile:
+        type: Unconfined
+      allowPrivilegeEscalation: true
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+        add:
+        - SETUID
+        - SETGID
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault

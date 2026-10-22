@@ -49,6 +49,11 @@ def _modeles_de_pod(documents: list[dict[str, Any]]) -> list[tuple[str, dict[str
     return sortie
 
 
+def _confined(profil: dict[str, Any] | None) -> bool:
+    """An absent profile passes (`=()` anchor); a present one must be RuntimeDefault or Localhost."""
+    return profil is None or profil.get("type") in {"RuntimeDefault", "Localhost"}
+
+
 def manquements(spec: dict[str, Any]) -> list[str]:
     """What the `non-root` rule would fault this pod for; empty if it passes."""
     fautes: list[str] = []
@@ -57,8 +62,20 @@ def manquements(spec: dict[str, Any]) -> list[str]:
         fautes.append("pod.runAsNonRoot")
     if (pod.get("seccompProfile") or {}).get("type") not in {"RuntimeDefault", "Localhost"}:
         fautes.append("pod.seccompProfile")
+    if not _confined(pod.get("appArmorProfile")):
+        fautes.append("pod.appArmorProfile")
+    # Ephemeral containers: only their profiles are judged (as in the policy).
+    for conteneur in spec.get("ephemeralContainers", []):
+        contexte = conteneur.get("securityContext") or {}
+        for profil in ("seccompProfile", "appArmorProfile"):
+            if not _confined(contexte.get(profil)):
+                fautes.append(f"{conteneur['name']}.{profil}")
     for conteneur in spec.get("containers", []) + spec.get("initContainers", []):
         contexte = conteneur.get("securityContext") or {}
+        # A container's own profile overrides the pod's (finding #784).
+        for profil in ("seccompProfile", "appArmorProfile"):
+            if not _confined(contexte.get(profil)):
+                fautes.append(f"{conteneur['name']}.{profil}")
         if contexte.get("allowPrivilegeEscalation") is not False:
             fautes.append(f"{conteneur['name']}.allowPrivilegeEscalation")
         if "ALL" not in ((contexte.get("capabilities") or {}).get("drop") or []):
@@ -82,3 +99,51 @@ def test_la_regle_kyverno_est_bien_stricte() -> None:
     assert motif["securityContext"]["runAsNonRoot"] is True, "`=(securityContext)` laissait passer un pod nu"
     assert "seccompProfile" in motif["securityContext"]
     assert motif["containers"][0]["securityContext"]["allowPrivilegeEscalation"] is False
+
+
+def _pod(**surcharges: Any) -> dict[str, Any]:
+    conteneur = {
+        "name": "main",
+        "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
+    }
+    spec: dict[str, Any] = {
+        "securityContext": {"runAsNonRoot": True, "seccompProfile": {"type": "RuntimeDefault"}},
+        "containers": [conteneur],
+    }
+    spec.update(surcharges)
+    return spec
+
+
+def test_a_profile_set_on_a_container_or_an_init_container_is_judged() -> None:
+    """Finding #784: the pod's RuntimeDefault used to hide a container's own `Unconfined`."""
+    assert manquements(_pod()) == []
+    unconfined = {"type": "Unconfined"}
+    for profil in ("seccompProfile", "appArmorProfile"):
+        spec = _pod()
+        spec["containers"][0]["securityContext"][profil] = unconfined
+        assert manquements(spec) == [f"main.{profil}"]
+        init = {**_pod()["containers"][0], "name": "side"}
+        init["securityContext"] = {**init["securityContext"], profil: unconfined}
+        assert manquements(_pod(initContainers=[init])) == [f"side.{profil}"]
+        assert manquements(
+            _pod(ephemeralContainers=[{"name": "dbg", "securityContext": {profil: unconfined}}])
+        ) == [f"dbg.{profil}"]
+    spec = _pod()
+    spec["securityContext"]["appArmorProfile"] = unconfined
+    assert manquements(spec) == ["pod.appArmorProfile"]
+    spec = _pod()
+    spec["containers"][0]["securityContext"]["seccompProfile"] = {
+        "type": "Localhost",
+        "localhostProfile": "x",
+    }
+    assert manquements(spec) == []
+
+
+def test_the_policy_file_judges_container_profiles() -> None:
+    politique = yaml.safe_load((RACINE / "infra" / "policies" / "pod-security.yaml").read_text())
+    regle = next(r for r in politique["spec"]["rules"] if r["name"] == "non-root")
+    motif = regle["validate"]["pattern"]["spec"]
+    assert "=(appArmorProfile)" in motif["securityContext"]
+    for cle in ("containers", "=(initContainers)"):
+        contexte = motif[cle][0]["securityContext"]
+        assert "=(seccompProfile)" in contexte and "=(appArmorProfile)" in contexte, cle
