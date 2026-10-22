@@ -364,3 +364,26 @@ imagePullSecrets:
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Whether the chart deploys its own `buildkitd` (S41-13): BuildKit is the builder, there is a
+repository to push to, and no other daemon is named. Reads `global` only, so the orchestrator's
+subchart asks the same question and gets the same answer.
+*/}}
+{{- define "choregos.buildkitdDeployed" -}}
+{{- $images := .Values.global.images | default dict -}}
+{{- $b := .Values.global.buildkitd | default dict -}}
+{{- if and (ne $b.enabled false) (eq ($images.hostedBuilder | default "buildkit") "buildkit") $images.buildRegistry (not $images.buildkitAddress) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/* The address `buildctl` dials: the operator's daemon, else the chart's, else none. */}}
+{{- define "choregos.buildkitAddress" -}}
+{{- $images := .Values.global.images | default dict -}}
+{{- if $images.buildkitAddress -}}
+{{- $images.buildkitAddress -}}
+{{- else if include "choregos.buildkitdDeployed" . -}}
+{{- printf "tcp://choregos-buildkitd:%d" (int ((.Values.global.buildkitd | default dict).port | default 1234)) -}}
+{{- end -}}
+{{- end -}}

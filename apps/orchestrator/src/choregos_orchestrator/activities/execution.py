@@ -22,6 +22,7 @@ from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import ExecRef, ExecStatus, StageJobSpec, utcnow
+from choregos_core.hosted import agent_container
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
 from temporalio import activity
@@ -261,12 +262,16 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
                 "choregos/run-id": stage_input.run_id,
                 "choregos/work-item": stage_input.work_item.key.replace("/", "_").replace("#", "-"),
             },
+            # A hosted agent's container beside the runner (ADR 0080): loopback addresses only.
+            agent_container=agent_container(stage_input),
         )
         try:
             ref = await bundle.adapters.executor.start(spec)
         except ConfigurationError as refusal:
             await _fail_run_on_configuration(session, bundle, run, payload, stage_input.run_id, refusal)
-            raise ApplicationError(str(refusal), type=START_REFUSED, non_retryable=True) from refusal
+            # A refusal that names itself (`hosted_unsupported_cluster`, S41-16) keeps its name.
+            kind = getattr(refusal, "code", START_REFUSED)
+            raise ApplicationError(str(refusal), type=kind, non_retryable=True) from refusal
         capabilities = _capabilities_for(bundle.adapters.executor, ref, capabilities)
         # Un exécuteur qui sait mettre en file (`queue`) a pu créer le run SANS pod, parce
         # que le plafond de simultanéité était atteint. Le marquer « running » ferait
@@ -314,7 +319,8 @@ async def _fail_run_on_configuration(
     if run is not None:
         run.status = "failed"
         run.ended_at = run.ended_at or utcnow()
-        run.result = StageResult.failure(message[:4000], START_REFUSED).model_dump(mode="json", by_alias=True)
+        reason = getattr(refusal, "code", START_REFUSED)
+        run.result = StageResult.failure(message[:4000], reason).model_dump(mode="json", by_alias=True)
     await persist_event(
         session,
         EventType.RUN_FINISHED,

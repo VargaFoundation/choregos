@@ -16,12 +16,14 @@ metadata:
   name: choregos-allow-platform
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
-  # Not the runner pods and not the egress proxy: a runner is untrusted code and must not reach
-  # PostgreSQL or Temporal (ADR 0070); each has its own policy below. They share this namespace
-  # when the executor is `agent_sandbox`.
+  # Not the runner pods, not the egress proxy, not the builder: a runner is untrusted code and must
+  # not reach PostgreSQL or Temporal (ADR 0070), and the builder runs an author's `pip install`; each
+  # has its own policy. They share this namespace when the executor is `agent_sandbox`.
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [choregos-runner, choregos-egress] }
+      - key: app.kubernetes.io/name
+        operator: NotIn
+        values: [choregos-runner, choregos-egress, choregos-buildkitd]
   policyTypes: ["Egress"]
   egress:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
@@ -36,6 +38,11 @@ spec:
       ports: [{ protocol: TCP, port: 8432 }]
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
       ports: [{ protocol: TCP, port: 4318 }]
+    {{- if include "choregos.buildkitdDeployed" . }}
+    # The builder, for the orchestrator's build activity (S41-13); its own policy admits nobody else.
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-buildkitd } } }]
+      ports: [{ protocol: TCP, port: {{ int ((.Values.global.buildkitd | default dict).port | default 1234) }} }]
+    {{- end }}
     {{- if .Values.demoFakes.enabled }}
     # The fakes served for a demonstration (S20-07): the API and the orchestrator reach them.
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-demo-fakes } } }]

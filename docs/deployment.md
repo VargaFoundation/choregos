@@ -9,6 +9,7 @@ and an optional MCP tools sidecar — plus four dependencies it can either **emb
 | | Minimum | Notes |
 | :-- | :-- | :-- |
 | Kubernetes | 1.24 | `spec.suspend` on Jobs (GA in 1.24) is used to queue runs |
+| Kubernetes, for hosted agents | 1.29 | A hosted agent runs as a native sidecar; below 1.29 its versions are refused (`hosted_unsupported_cluster`, [hosted agents](hosted-agents.md)) |
 | Helm | 3.12 | The chart is also published as an OCI artifact |
 | PostgreSQL | 15 | Embedded single instance for a bench, an operator in production |
 | Temporal | 1.22 | Embedded dev server for a bench, a cluster in production |
@@ -220,6 +221,38 @@ the names at `GET /platform/agent-images`, never the references) and on every or
 Each image is built **from** the runner image: the runner is the entrypoint, the agent is a
 subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
 warm pool built from the runner image: use `k8s_job` for steps that name their own image.
+
+### Registries for hosted agents
+
+A hosted agent ([ADR 0080](adr/0080-hosted-prompt-and-voice-agents.md),
+[hosted agents](hosted-agents.md)) names its own image by reference. The operator says where such a
+reference may come from; the version stores the digest the registry served at publication.
+
+```yaml
+global:
+  images:
+    hostedRegistries: [ghcr.io/acme, registry.internal]   # the default, [], accepts no image source
+    hostedCosign: "off"                                     # off | warn | enforce
+    hostedCosignKeySecret: ""      # a Secret holding `cosign.pub`, or keyless:
+    hostedCosignIdentity: ""       #   the certificate identity, a regular expression
+    hostedCosignIssuer: ""         #   its OIDC issuer, a regular expression
+    hostedCosignTlog: true         # false: skip Rekor, for a key whose signatures were never uploaded
+    hostedCosignPolicy: false      # render the Kyverno ClusterPolicy `choregos-hosted-images`
+```
+
+Hosted agents need Kubernetes 1.29 or later. The chart renders the cluster's version as
+`CHOREGOS_CLUSTER_VERSION` on the API, from `global.kubernetesVersion` or, empty, from the version Helm
+renders for: the cluster's own on `helm install` and under Argo CD, Helm's built-in default under an
+offline `helm template` (pass `--kube-version` or set `global.kubernetesVersion` there). The executor
+also reads the API server's `/version` before it starts a hosted step.
+
+The chart renders `CHOREGOS_HOSTED_REGISTRIES` and `CHOREGOS_HOSTED_COSIGN` on the API only. A prefix
+matches by path segment. The API reads the manifest through the organisation's egress allowlist, so the
+organisation must open the registry's host (and its token host, e.g. `ghcr.io` hands tokens from
+`ghcr.io/token`). Pulls are anonymous: a private registry is not supported yet. The signature is cosign's,
+by the key or the keyless identity above; `enforce` with neither refuses every image. The signer's
+variables (`CHOREGOS_HOSTED_COSIGN_KEY`, `_IDENTITY`, `_ISSUER`, `_TLOG`) and the key's mount are on the
+API only; [`hosted-agents.md`](hosted-agents.md#signatures-by-cosign-s41-14) says what is verified.
 
 ### The `agent_sandbox` executor (the default)
 

@@ -140,6 +140,15 @@ function NewAgent() {
               <Link href="/agents/new/remote" className={buttonClasses("ghost")}>
                 Or register a remote agent (A2A)
               </Link>
+              <Link href="/agents/new/runtime?kind=prompt" className={buttonClasses("ghost")}>
+                Or a prompt agent
+              </Link>
+              <Link href="/agents/new/runtime?kind=voice" className={buttonClasses("ghost")}>
+                Or a voice agent
+              </Link>
+              <Link href="/agents/new/runtime?kind=hosted" className={buttonClasses("ghost")}>
+                Or a hosted agent (image or zip)
+              </Link>
             </div>
             {drafting && (
               <p role="status" className="text-sm text-ink-muted">

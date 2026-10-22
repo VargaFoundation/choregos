@@ -35,7 +35,7 @@ fields:
 3. Set the permissions and events below, then create the App and generate a **private key**.
 4. **Install** the App on the repositories Choregos works in, from the console: the repository field's
    **Install on GitHub** button opens GitHub's install page and brings you back. The installation is
-   discovered by the platform (ADR 0073): there is no number to copy. The App's **Setup URL** is the
+   discovered by the platform: there is no number to copy. The App's **Setup URL** is the
    platform's `/api/v1/github/setup`.
 
 ## Permissions

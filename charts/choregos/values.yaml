@@ -24,6 +24,11 @@ global:
   # healthy and refusing the second organization weeks later.
   edition: community
   fakes: false
+  # The cluster's Kubernetes version, as the API reads it to refuse a hosted agent's version below
+  # 1.29, which cannot run its native sidecar (S41-16). Empty: the version Helm or Argo CD renders
+  # for (`.Capabilities.KubeVersion`, the cluster's own on `helm install`). Set it when rendering
+  # offline for an older cluster. The executor checks the API server itself at every start anyway.
+  kubernetesVersion: ""
   # What runs agent stages (ADR 0072): one setting for the API and for the workers.
   # `agent_sandbox` (kubernetes-sigs/agent-sandbox) is the default of a real deployment; the
   # chart refuses to render without its operator. Every other executor is chosen here, by name:
@@ -110,6 +115,64 @@ global:
     jobs: {}
     agents: {}
     requireDigest: true
+    # Hosted agents (ADR 0080): the registry prefixes an agent version's image may come from, matched
+    # by path segment (`ghcr.io/acme` covers `ghcr.io/acme/triager`, not `ghcr.io/acme-evil`). Empty:
+    # no image source is accepted. Publication pins the tag to the digest the registry serves.
+    hostedRegistries: []
+    # Signatures of hosted images: off | warn (publish, log `hosted.signature_unverified`) | enforce.
+    hostedCosign: "off"
+    # Who may sign a hosted image (S41-14), one of: the name of a Secret of the release's namespace
+    # holding the operator's public key under `cosign.pub` (mounted on the API, named to Kyverno), or
+    # keyless, the certificate identity and its OIDC issuer as regular expressions, matched whole by
+    # the API (`^https://github\.com/acme/.+$`). Under `enforce` with neither, every image is refused.
+    hostedCosignKeySecret: ""
+    hostedCosignIdentity: ""
+    hostedCosignIssuer: ""
+    # false: cosign does not check the transparency log, for a key whose signatures were never
+    # uploaded to Rekor (an air-gapped registry).
+    hostedCosignTlog: true
+    # Renders the `choregos-hosted-images` Kyverno ClusterPolicy: in `proj-*` and `choregos-*`, a
+    # container, init container or native sidecar whose image is under `hostedRegistries` runs only
+    # pinned by `@sha256:` and, under `enforce`, signed by the signer above. Requires Kyverno.
+    hostedCosignPolicy: false
+    # Hosted zips (ADR 0080 §9): the repository the platform pushes the images it builds to, as
+    # `registry/path` (tagged `build-<key>`, run by digest). Empty: a zip version publishes, and its
+    # build fails with the reason. The orchestrator's executor worker pushes there.
+    buildRegistry: ""
+    # buildkit (`buildctl` against a `buildkitd`) | local_docker (`docker build` + `push`, a laptop).
+    # With `buildkit` and a `buildRegistry`, the chart deploys its own rootless `buildkitd`
+    # (`global.buildkitd`, S41-13); `buildkitAddress` names another one instead, and the chart then
+    # deploys none.
+    hostedBuilder: buildkit
+    buildkitAddress: ""
+  # The `buildkitd` that builds hosted zips (S41-13, ADR 0080 §9), rendered only when
+  # `images.hostedBuilder` is `buildkit`, `images.buildRegistry` is set and `images.buildkitAddress`
+  # is empty. Rootless: uid 1000, no service account token, every capability dropped but SETUID and
+  # SETGID; its user namespaces need seccomp and AppArmor `Unconfined` and privilege escalation (the
+  # setuid `newuidmap`), which is why it runs in a pod of its own that takes traffic from the
+  # orchestrator only and reaches the Internet, never the platform (docs/security.md).
+  buildkitd:
+    enabled: true
+    # The image's `buildctl` is the one the worker image copies (docker/api.Dockerfile): bump both.
+    image: moby/buildkit:v0.33.1-rootless@sha256:f8a833b2de9d68e27f0815e4a737abdfaf8a2e4c615650557df11025101557b4
+    port: 1234
+    # A `kubernetes.io/dockerconfigjson` Secret: the push credential of `buildRegistry`, the only
+    # credential the builder holds. Empty: the registry takes anonymous pushes (a bench).
+    pushSecret: ""
+    # Mutual TLS between the worker and the daemon, from two `kubernetes.io/tls` Secrets that carry
+    # `ca.crt` too (cert-manager writes them so): the daemon's, and the worker's client one. Without
+    # them the gRPC is plain, and the NetworkPolicy alone keeps other pods off it.
+    tls:
+      serverSecret: ""
+      clientSecret: ""
+    # The Internet ports the builder may reach (`pip install`, base images), outside private ranges.
+    egressPorts: [443, 80]
+    # Private ranges the build registry lives in, when it is inside the cluster or the network.
+    registryCidrs: []
+    registryPorts: [443, 5000]
+    resources:
+      requests: { cpu: 500m, memory: 1Gi }
+      limits: { cpu: "2", memory: 4Gi, ephemeral-storage: 20Gi }
   # Network egress, one model (ADR 0066 and ADR 0070, amended): the organisation decides in the
   # console which hosts it OPENS (its egress allowlist) and the BOUNDS nothing may cross (its policy
   # ceiling's network section); this block is what only the operator sets. It lives under `global`

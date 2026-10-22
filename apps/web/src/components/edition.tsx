@@ -51,7 +51,7 @@ export function EditionBadge({
       title={
         edition === "enterprise" && publisher
           ? `Enterprise edition, published by ${publisher}`
-          : "ADR 0024 — two editions"
+          : "Community edition: the open-source platform"
       }
       data-testid="edition-badge"
     >

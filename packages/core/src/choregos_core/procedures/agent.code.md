@@ -17,7 +17,7 @@ fields: {}
   that instructions can carry is a prompt agent.
 - Two people are involved: the author, who builds the image, and the **operator**, who names it. A workflow
   or an agent never writes an image.
-- Read `docs/code-agents.md` and ADR 0063: this page is its checklist.
+- Read `docs/code-agents.md`: this page is its checklist.
 
 ## At the registry
 

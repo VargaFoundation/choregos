@@ -23,6 +23,8 @@ out/
 *.log
 dist/
 build/
+# The real BuildKit's tests (S41-13): `build/` above hid them, and CI ran a directory git never had.
+!tests/build/
 .DS_Store
 .tilt/
 tmp/

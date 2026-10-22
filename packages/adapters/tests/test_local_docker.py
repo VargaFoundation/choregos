@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from choregos_adapters.errors import UpstreamError
 from choregos_adapters.executor.local_docker import LocalDockerExecutor
-from choregos_core.domain import ExecRef, StageJobSpec
+from choregos_core.domain import AgentContainer, ExecRef, StageJobSpec
 
 
 class _Docker:
@@ -188,4 +188,103 @@ async def test_les_journaux_et_l_annulation() -> None:
     ex = executeur(docker)
     assert [ligne async for ligne in ex.logs(ExecRef(kind="local_docker", name="c"))] == ["a", "b", "c"]
     await ex.cancel(ExecRef(kind="local_docker", name="c"))
-    assert docker.appels[-1] == ["rm", "-f", "c"]
+    assert docker.appels[-1] == ["rm", "-f", "c", "c-agent"], "a hosted agent beside it goes too"
+
+
+DIGEST = "sha256:" + "a" * 64
+
+
+def hosted_spec() -> StageJobSpec:
+    agent = AgentContainer(
+        image=f"ghcr.io/acme/triager@{DIGEST}",
+        env={"PORT": "8088", "OPENAI_API_KEY": "choregos-loopback"},
+        termination_grace_s=12,
+    )
+    return spec().model_copy(update={"gateway_key": "gw-secret", "agent_container": agent})
+
+
+async def test_a_hosted_agent_shares_the_runners_network_and_none_of_its_secrets() -> None:
+    """ADR 0080: the sidecar reaches the runner's loopback listeners, and nothing else of it."""
+    docker = _Docker(inspect=(1, "", "no such container"))
+    await executeur(docker).start(hosted_spec())
+    runs = [(i, a) for i, a in enumerate(docker.appels) if a[0] == "run"]
+    assert [a[-1] for _, a in runs] == ["run", f"ghcr.io/acme/triager@{DIGEST}"], "the runner first"
+    index, agent = runs[1]
+    assert agent[agent.index("--name") + 1] == "choregos-run-r-1-agent"
+    assert agent[agent.index("--network") + 1] == "container:choregos-run-r-1"
+    assert agent[agent.index("--cap-drop") + 1] == "ALL"
+    assert agent[agent.index("--stop-timeout") + 1] == "12"
+    envs = [agent[i + 1] for i, a in enumerate(agent) if a == "--env"]
+    assert sorted(envs) == ["OPENAI_API_KEY=choregos-loopback", "PORT=8088"]
+    assert not any(
+        e.startswith(("CHOREGOS_RUN_TOKEN", "CHOREGOS_RUN_GATEWAY_KEY", "HTTPS_PROXY")) for e in envs
+    )
+    assert docker.envs[index] is None, "no secret travels in docker's environment for the agent"
+
+
+async def test_an_agent_that_cannot_start_takes_the_runner_down_with_it() -> None:
+    class _Failing(_Docker):
+        async def __call__(
+            self, *args: str, timeout: float = 120.0, env: dict[str, str] | None = None
+        ) -> tuple[int, str, str]:
+            await super().__call__(*args, timeout=timeout, env=env)
+            if args[0] == "inspect":
+                return 1, "", "no such container"
+            if args[0] == "run" and args[-1].startswith("ghcr.io/"):
+                return 125, "", "manifest unknown"
+            return 0, "", ""
+
+    docker = _Failing()
+    with pytest.raises(UpstreamError, match="manifest unknown"):
+        await executeur(docker).start(hosted_spec())
+    assert docker.appels[-1] == ["rm", "--force", "choregos-run-r-1"]
+
+
+async def test_a_finished_runner_stops_the_agent_beside_it() -> None:
+    done = json.dumps([{"State": {"Running": False, "ExitCode": 0}}])
+    docker = _Docker(inspect=(0, done, ""))
+    statut = await executeur(docker).status(ExecRef(kind="local_docker", name="c"))
+    assert statut.state == "succeeded"
+    assert ["rm", "--force", "c-agent"] in docker.appels
+    running = _Docker(inspect=(0, json.dumps([{"State": {"Running": True}}]), ""))
+    await executeur(running).status(ExecRef(kind="local_docker", name="c"))
+    assert not [a for a in running.appels if a[0] == "rm"], "a running sidecar is left alone"
+
+
+def _working(workspace: str) -> StageJobSpec:
+    hosted = hosted_spec()
+    assert hosted.agent_container is not None
+    agent = hosted.agent_container.model_copy(update={"workspace": workspace})
+    return hosted.model_copy(update={"agent_container": agent})
+
+
+def _volumes(args: list[str]) -> list[str]:
+    return [args[i + 1] for i, a in enumerate(args) if a == "--volume"]
+
+
+@pytest.mark.parametrize(("workspace", "mount"), [("read", "/workspace:ro"), ("write", "/workspace")])
+async def test_a_hosted_agent_that_asks_for_the_workspace_gets_the_runners_copy(
+    workspace: str, mount: str
+) -> None:
+    """S41-18: one volume per run, at `/hosted-workspace` in the runner and `/workspace` in the
+    agent, which joins the runner's group to change the files the runner copied."""
+    docker = _Docker(inspect=(1, "", "no such container"))
+    await executeur(docker).start(_working(workspace))
+    runner, agent = [a for a in docker.appels if a[0] == "run"]
+    assert _volumes(runner) == ["choregos-run-r-1-workspace:/hosted-workspace"]
+    assert _volumes(agent) == [f"choregos-run-r-1-workspace:{mount}"]
+    assert agent[agent.index("--group-add") + 1] == "1000"
+
+
+async def test_a_hosted_agent_without_the_workspace_gets_no_volume() -> None:
+    docker = _Docker(inspect=(1, "", "no such container"))
+    await executeur(docker).start(_working("none"))
+    runner, agent = [a for a in docker.appels if a[0] == "run"]
+    assert _volumes(runner) == [] and _volumes(agent) == [] and "--group-add" not in agent
+
+
+async def test_pruning_a_finished_run_removes_its_workspace_volume_too() -> None:
+    names = "\n".join(f"choregos-run-{i}" for i in range(11))
+    docker = _Docker(inspect=(1, "", "no such container"), ps=(0, names, ""))
+    await executeur(docker).start(spec())
+    assert ["volume", "rm", "--force", "choregos-run-10-workspace"] in docker.appels

@@ -462,6 +462,8 @@ def render_project_manifests(
                     *(["egress.yaml"] if allowed_domains else []),
                     "tekton.yaml",
                     "argocd.yaml",
+                    # Argo CD applies what this lists, nothing else of the directory (S41-17).
+                    *(["runtimeclass.yaml"] if gvisor else []),
                 ],
             }
         ]

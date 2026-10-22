@@ -149,3 +149,41 @@ async def test_an_acp_runtime_names_the_backend(setup: Fixture, images: None) ->
     await _agent(setup, {"kind": "acp", "backend": "opencode"})
     prepared = await stage_activities.prepare_stage(_plan(setup))
     assert prepared["stage_input"]["agent"]["backend"] == "opencode"
+
+
+async def test_a_prompt_agent_is_carried_by_the_runners_own_loop(setup: Fixture, images: None) -> None:
+    await _agent(setup, {"kind": "prompt", "tool_choice": "required", "response_format": "json_object"})
+    prepared = await stage_activities.prepare_stage(_plan(setup))
+    stage_input = prepared["stage_input"]
+    assert stage_input["agent"]["backend"] == "prompt" and stage_input["agent"]["image"] is None
+    assert stage_input["prompt"]["tool_choice"] == "required"
+    assert stage_input["prompt"]["response_format"] == "json_object"
+    assert stage_input["budget"]["max_turns"] == 9
+    assert stage_input["model"]["api_format"] == "openai", "the loop speaks chat completions"
+
+
+async def test_an_actor_backend_on_a_prompt_agent_is_refused(setup: Fixture, images: None) -> None:
+    await _agent(setup, {"kind": "prompt"})
+    with pytest.raises(ApplicationError) as raised:
+        await stage_activities.prepare_stage(_plan(setup, backend="claude"))
+    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert "prompt agent" in str(raised.value)
+    assert setup.adapters.gateway.keys == {}
+
+
+@pytest.mark.parametrize(
+    ("runtime", "reason"),
+    [
+        ({"kind": "voice"}, "only as a session"),
+    ],
+)
+async def test_a_runtime_no_step_can_carry_is_refused_before_any_key(
+    setup: Fixture, images: None, runtime: dict[str, Any], reason: str
+) -> None:
+    await _agent(setup, runtime)
+    with pytest.raises(ApplicationError) as raised:
+        await stage_activities.prepare_stage(_plan(setup))
+    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert f"`{runtime['kind']}` cannot run as a workflow step" in str(raised.value)
+    assert reason in str(raised.value)
+    assert setup.adapters.gateway.keys == {}

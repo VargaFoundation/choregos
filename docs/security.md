@@ -133,6 +133,25 @@ the user's code, makes the call. It is a convention the SDK keeps, not a wall: P
 can open a socket or run a command like any program, and is bounded by the sandbox, not by the SDK.
 Cosign verification of agent images is not built yet.
 
+## The builder of hosted zips
+
+The rootless `buildkitd` the chart deploys for hosted zips (S41-13, ADR 0080 §9) is the one pod of the
+platform with a weaker profile than the strict rule: it runs the `RUN` steps of a Dockerfile the
+platform writes over files a user uploaded, and rootless BuildKit makes a user namespace (through
+the setuid `newuidmap`, so privilege escalation stays allowed and SETUID/SETGID stay in the bounding
+set) and mounts inside it, which the RuntimeDefault seccomp profile and AppArmor refuse. The
+container is therefore `Unconfined` for both, and a Kyverno `PolicyException` (`choregos-buildkitd`)
+lifts the `non-root` rule of `choregos-pod-security` for that Deployment's pods only.
+
+What contains it instead: uid 1000, every other capability dropped, no service account token, a
+read-only root filesystem, no platform credential (the push credential of the build repository
+only), and a NetworkPolicy that admits the orchestrator alone and lets it out to the Internet,
+never to a private range. A build is a user's code running in that pod: the pod, not a per-step
+sandbox, is the boundary (`--oci-worker-no-process-sandbox`). A cluster that cannot grant this
+profile names a builder of its own (`global.images.buildkitAddress`). A node that restricts
+unprivileged user namespaces (Ubuntu 24.04's `kernel.apparmor_restrict_unprivileged_userns=1`)
+refuses the builder until that setting is lifted.
+
 ## What a run remembers
 
 A run reads only the memories its agent version binds **and** that reach its project
@@ -253,7 +272,10 @@ project's memory is not sent to a remote agent.
 
 Images signed with cosign (keyless, GitHub OIDC), **SBOM and SLSA provenance attached**
 (BuildKit attestations) on `main` and on releases, Trivy on the published image before it is
-signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRun`s.
+signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRun`s. A hosted agent's
+image is verified by cosign at publication, on its pinned digest, by the operator's key or keyless
+identity, and, with `global.images.hostedCosignPolicy`, again by Kyverno at admission, init containers
+included ([`hosted-agents.md`](hosted-agents.md#signatures-by-cosign-s41-14)).
 Renovate proposes bumps; every agent bump goes through conformance. A nightly CRITICAL in
 the dependency scan fails the night and opens an issue.
 

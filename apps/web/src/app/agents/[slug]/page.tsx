@@ -20,6 +20,7 @@ import {
 import { DefinitionView } from "@/components/agents/definition-view";
 import { AgentDetailsCard } from "@/components/agents/details";
 import { History } from "@/components/agents/history";
+import { BUILD_POLL_MS, buildInProgress, latestRuntime } from "@/components/agents/runtime-row";
 import { TagList } from "@/components/agents/tags";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
@@ -78,7 +79,12 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   const search = useSearchParams();
   const demande = search.get("tab") === "versions" ? "history" : search.get("tab"); // the former name still opens History
   const onglet: AgentTab = AGENT_TABS.some((o) => o.id === demande) ? (demande as AgentTab) : "overview";
-  const agent = useQuery({ queryKey: ["agent", org, slug], queryFn: () => api.agent(org, slug) });
+  const agent = useQuery({
+    queryKey: ["agent", org, slug],
+    queryFn: () => api.agent(org, slug),
+    // A hosted zip version builds at publication: the page asks again until its build has ended (S41-12).
+    refetchInterval: (query) => (buildInProgress(latestRuntime(query.state.data)) ? BUILD_POLL_MS : false),
+  });
   const [forking, setForking] = useState(false);
   if (agent.error) return <ErrorNote>{String(agent.error)}</ErrorNote>;
   if (!agent.data) return <Empty>Reading the agent…</Empty>;

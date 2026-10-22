@@ -148,6 +148,9 @@ class GatewayModelDto(Dto):
     provider: str = ""
     input_cost_per_1k: float | None = None
     output_cost_per_1k: float | None = None
+    input_audio_cost_per_1k: float | None = None
+    output_audio_cost_per_1k: float | None = None
+    cached_input_cost_per_1k: float | None = None
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
@@ -210,6 +213,9 @@ class ModelGatewayFacts(Dto):
     upstream_model: str = ""
     input_cost_per_1k: float | None = None
     output_cost_per_1k: float | None = None
+    input_audio_cost_per_1k: float | None = None
+    output_audio_cost_per_1k: float | None = None
+    cached_input_cost_per_1k: float | None = None
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
@@ -224,6 +230,8 @@ class ModelCatalogueEntry(Dto):
     allowed_roles: list[str] = Field(default_factory=list)
     usages: list[Usage] = Field(default_factory=list)
     price_override: PriceOverride | None = None
+    #: The most a voice session of this model may spend per minute it lasts (S41-15).
+    max_usd_per_minute: float | None = None
     gateway: ModelGatewayFacts | None = None
     last_seen_at: datetime | None = None
     missing_since: datetime | None = None
@@ -239,6 +247,7 @@ class ModelCatalogueEntryCreate(Dto):
     allowed_roles: list[str] = Field(default_factory=list)
     usages: list[Usage] = Field(default_factory=_agent_usage)
     price_override: PriceOverride | None = None
+    max_usd_per_minute: float | None = Field(default=None, gt=0)
     notes: str = ""
 
 
@@ -250,6 +259,9 @@ class ModelCataloguePatch(Dto):
     #: `null` is "no change"; to remove an override send `clear_price_override: true`.
     price_override: PriceOverride | None = None
     clear_price_override: bool = False
+    #: The same: `null` is "no change", `clear_max_usd_per_minute: true` removes it.
+    max_usd_per_minute: float | None = Field(default=None, gt=0)
+    clear_max_usd_per_minute: bool = False
     notes: str | None = None
 
 
