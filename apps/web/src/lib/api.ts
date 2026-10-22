@@ -48,6 +48,7 @@ import type {
   AgentTrialCreate,
   AgentMetricsSummary,
   AgentResolution,
+  HostedSource,
   ImplicitAgent,
   AgentPatch,
   AgentSpec,
@@ -509,6 +510,13 @@ export const api = {
     request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, {
       method: "POST",
       ...(allowEgress && { body: JSON.stringify({ allow_egress: true }) }),
+    }),
+  /** A hosted agent's source zip (ADR 0080, S41-07), checked and stored under its sha256; a zip version names it. */
+  uploadHostedSource: (org: string, archive: Blob) =>
+    request<HostedSource>(`/orgs/${org}/hosted-sources`, {
+      method: "POST",
+      body: archive,
+      headers: { "Content-Type": "application/zip" },
     }),
   skill: (org: string, slug: string) => request<Skill>(`/orgs/${org}/skills/${slug}`),
   skillVersion: (org: string, slug: string, version: number) =>

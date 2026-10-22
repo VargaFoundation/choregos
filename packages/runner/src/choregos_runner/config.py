@@ -26,6 +26,9 @@ class RunnerSettings(BaseSettings):
     #: How often a remote task that does not stream is asked for its state.
     remote_poll_seconds: float = Field(default=5.0, gt=0, validation_alias="CHOREGOS_REMOTE_POLL_SECONDS")
     workspace: Path = Path("/workspace")
+    #: The copy of the working tree a hosted container works in (S41-18): a volume the two
+    #: containers share, never the runner's checkout.
+    hosted_workspace: Path = Path("/hosted-workspace")
     tools_url: str = "http://localhost:7777/mcp"
     git_user_name: str = "choregos-bot"
     git_user_email: str = "choregos-bot@varga.foundation"

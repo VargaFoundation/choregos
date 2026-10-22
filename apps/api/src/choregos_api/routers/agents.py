@@ -8,10 +8,12 @@ peut que la resserrer : un budget plus bas, moins d'outils. Une surcharge qui é
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Literal
 
+from choregos_adapters.storage import ObjectStoreError
 from choregos_core import utcnow
-from fastapi import APIRouter, Path, Query, Response, status
+from fastapi import APIRouter, Path, Query, Request, Response, status
 from pydantic import StringConstraints
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +24,7 @@ from ..db.models import (
     AgentCredential,
     AgentVersion,
     ApiToken,
+    HostedBuildRecord,
     Membership,
     Organization,
     Project,
@@ -31,6 +34,7 @@ from ..db.models import (
 )
 from ..deps import Config, Db, Me, ProjectCtx
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable, upstream
+from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import (
     AgentCatalogueConnect,
@@ -63,6 +67,7 @@ from ..schemas import (
     AgentVersionPublish,
     AgentVersionRestore,
     ApiTokenCreated,
+    HostedSourceDto,
     ImplicitAgent,
     ProjectAgentDto,
     ProjectAgentPut,
@@ -77,6 +82,7 @@ from ..services.agent_governance import (
     decide,
     is_admin,
     is_member,
+    may_create_somewhere,
     permissions_of,
     subject_of,
     visible_clause,
@@ -107,6 +113,16 @@ from ..services.agents import (
     resoudre_l_agent,
 )
 from ..services.egress import egress_gate_for_remote_agent
+from ..services.hosted_builds import builds_for, with_current_build
+from ..services.hosted_images import pin_hosted_runtime
+from ..services.hosted_sources import (
+    MAX_BYTES,
+    SourceArchive,
+    SourceRefused,
+    dependency_file,
+    load_source,
+    store_source,
+)
 from ..services.memory_access import check_bindings_at_publish
 from ..services.network import check_agent_network
 from ..services.remote_agents import pin_remote_runtime
@@ -145,7 +161,10 @@ async def _versions(session: AsyncSession, agent: Agent) -> list[AgentVersion]:
 
 
 def _version_dto(
-    ligne: AgentVersion, agent: Agent | None = None, pins: dict[int, list[str]] | None = None
+    ligne: AgentVersion,
+    agent: Agent | None = None,
+    pins: dict[int, list[str]] | None = None,
+    builds: Mapping[str, HostedBuildRecord] | None = None,
 ) -> AgentVersionDto:
     channels: list[Literal["stable", "candidate"]] = []
     if agent is not None:
@@ -155,7 +174,7 @@ def _version_dto(
             channels.append("candidate")
     return AgentVersionDto(
         version=ligne.version,
-        spec=AgentSpec.model_validate(ligne.spec),
+        spec=with_current_build(AgentSpec.model_validate(ligne.spec), builds or {}),
         checksum=ligne.checksum,
         created_by=ligne.created_by,
         created_at=ligne.created_at,
@@ -212,6 +231,7 @@ async def _dto(
     dernier = await last_run_at(session, agent.org_id, agent.slug)
     sujet = await subject_of(session, agent)
     pins = await _pins(session, principal, org, agent) if avec_versions else None
+    builds = await builds_for(session, agent.org_id, [v.spec for v in versions]) if avec_versions else {}
     droits, raison = permissions_of(principal, org, sujet)
     return AgentDto(
         scope=agent.scope,
@@ -230,7 +250,7 @@ async def _dto(
         revoked_at=agent.revoked_at,
         latest_version=versions[0].version if versions else 0,
         created_at=agent.created_at,
-        versions=[_version_dto(v, agent, pins) for v in versions] if pins is not None else None,
+        versions=[_version_dto(v, agent, pins, builds) for v in versions] if pins is not None else None,
         lifecycle=agent.lifecycle or "active",
         retired_at=agent.retired_at,
         last_run_at=dernier,
@@ -349,6 +369,7 @@ async def create_agent(
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
     await egress_gate_for_remote_agent(session, principal, organisation, body.spec, allow_egress)
     body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
+    body.spec = await pin_hosted_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
     await check_bindings_at_publish(
@@ -441,6 +462,69 @@ async def draft_agent(org: str, body: AgentDraftRequest, session: Db, principal:
     return proposal
 
 
+def _source_dto(archive: SourceArchive) -> HostedSourceDto:
+    return HostedSourceDto(
+        sha256=archive.sha256,
+        size_bytes=archive.size_bytes,
+        files=list(archive.files),
+        dependencies=dependency_file(archive),
+    )
+
+
+@router.post(
+    "/orgs/{org}/hosted-sources",
+    response_model=HostedSourceDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="uploadHostedSource",
+)
+async def upload_hosted_source(org: str, request: Request, session: Db, principal: Me) -> HostedSourceDto:
+    """A hosted agent's source zip (ADR 0080 §9), checked and stored under its sha256, which a zip
+    version's `source.sha256` then names. The same bytes uploaded twice are one source."""
+    if not may_create_somewhere(principal, org):
+        raise forbidden("uploading a hosted source asks the right to create an agent in the organisation")
+    organisation = await _organisation(session, org)
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > MAX_BYTES:
+            raise unprocessable(f"the archive is larger than {MAX_BYTES // (1024 * 1024)} MiB")
+    try:
+        archive = await store_source(object_store(), organisation.id, bytes(data))
+    except SourceRefused as exc:
+        raise unprocessable(str(exc)) from exc
+    except ObjectStoreError as exc:
+        raise upstream("object-store", str(exc)) from exc
+    await record(
+        session,
+        principal,
+        "agent.hosted_source_upload",
+        org_id=organisation.id,
+        target_type="hosted_source",
+        # `target_id` is 64 characters: the hex digest fits it, its `sha256:` prefix does not.
+        target_id=archive.sha256.removeprefix("sha256:"),
+        size_bytes=archive.size_bytes,
+        files=len(archive.files),
+    )
+    return _source_dto(archive)
+
+
+@router.get(
+    "/orgs/{org}/hosted-sources/{sha256}",
+    response_model=HostedSourceDto,
+    operation_id="getHostedSource",
+)
+async def get_hosted_source(org: str, sha256: str, session: Db, principal: Me) -> HostedSourceDto:
+    if not is_member(principal, org):
+        raise forbidden("not a member of the organisation")
+    organisation = await _organisation(session, org)
+    try:
+        return _source_dto(await load_source(object_store(), organisation.id, sha256))
+    except SourceRefused as exc:
+        raise not_found("Hosted source", sha256) from exc
+    except ObjectStoreError as exc:
+        raise upstream("object-store", str(exc)) from exc
+
+
 @router.get("/orgs/{org}/agents/{slug}", response_model=AgentDto, operation_id="getAgent")
 async def get_agent(org: str, slug: Slug, session: Db, principal: Me) -> AgentDto:
     _, agent, _ = await _charger(session, principal, org, slug)
@@ -478,6 +562,9 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     await check_bindings_at_publish(session, principal, organisation, spec, project_slug=sujet.project_slug)
     await egress_gate_for_remote_agent(session, principal, organisation, spec, allow_egress)
     spec = await pin_remote_runtime(session, organisation.id, spec)
+    if restored_from is None:
+        # A restore keeps the digest its version was published with: the stored bytes, not the tag now.
+        spec = await pin_hosted_runtime(session, organisation.id, spec)
     if agent.status == "revoked":
         raise conflict(f"agent `{agent.slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":
@@ -547,7 +634,7 @@ async def publish_version(
     ligne = await _append_version(
         session, principal, org, organisation, agent, sujet, body, message=None, allow_egress=allow_egress
     )
-    return _version_dto(ligne, agent)
+    return _version_dto(ligne, agent, builds=await builds_for(session, agent.org_id, [ligne.spec]))
 
 
 @router.post(
@@ -574,7 +661,7 @@ async def publish_version_with_message(
         base_version=body.base_version,
         allow_egress=allow_egress,
     )
-    return _version_dto(ligne, agent)
+    return _version_dto(ligne, agent, builds=await builds_for(session, agent.org_id, [ligne.spec]))
 
 
 @router.post(
@@ -608,7 +695,7 @@ async def restore_version(
         restored_from=source,
         base_version=body.base_version,
     )
-    return _version_dto(ligne, agent)
+    return _version_dto(ligne, agent, builds=await builds_for(session, agent.org_id, [ligne.spec]))
 
 
 @router.get(
@@ -625,7 +712,12 @@ async def get_version(org: str, slug: Slug, version: int, session: Db, principal
     ).scalar_one_or_none()
     if ligne is None:
         raise not_found("Agent version", f"{slug}@{version}")
-    return _version_dto(ligne, agent, await _pins(session, principal, org, agent))
+    return _version_dto(
+        ligne,
+        agent,
+        await _pins(session, principal, org, agent),
+        await builds_for(session, agent.org_id, [ligne.spec]),
+    )
 
 
 FINIS = {"succeeded", "failed", "timed_out", "cancelled"}
@@ -1387,6 +1479,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     await _model_allowed(session, organisation, body.spec)
     await check_bindings_at_publish(session, principal, organisation, body.spec)
     await check_agent_network(session, organisation.id, body.spec)
+    body.spec = await pin_hosted_runtime(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:

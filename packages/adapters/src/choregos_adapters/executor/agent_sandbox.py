@@ -138,6 +138,12 @@ class AgentSandboxExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent by `run_id`: a second start finds the claim, or the run still queued."""
+        if spec.agent_container is not None:
+            raise ConfigurationError(
+                "a hosted agent's container runs beside the runner in one pod (ADR 0080), which a "
+                "warm-pool sandbox, made before the run, cannot have; use `runner.executor: k8s_job` "
+                "for hosted agents"
+            )
         refusal = runtime_class_refusal(spec.runtime_class, self.runtime_class, self.warm_pool)
         if refusal:
             raise ConfigurationError(refusal)

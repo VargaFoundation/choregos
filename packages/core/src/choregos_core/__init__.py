@@ -10,6 +10,7 @@ from __future__ import annotations
 from .acces import Acces, RapportAcces, rapport_d_acces
 from .catalogue import Catalogue, OutilCatalogue, charger_catalogue, construire_requete
 from .domain import (
+    AgentContainer,
     Change,
     CiStatus,
     Comment,
@@ -114,6 +115,7 @@ __all__ = [
     "PRESET_NAMES",
     "TEMPLATE_NAMES",
     "Acces",
+    "AgentContainer",
     "Catalogue",
     "CatalogueEntry",
     "Change",

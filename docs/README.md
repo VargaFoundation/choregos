@@ -14,6 +14,7 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [Concepts](concepts.md) | The model: projects, workflows, stages, gates, runs, evidence, tools |
 | [Deployment](deployment.md) | Helm chart, dependencies, secrets, identity, the first organisation, a single-node bench |
 | [Agents written in code](code-agents.md) | The Python SDK, the image, the registry entry, conformance, two examples |
+| [Prompt, voice and hosted agents](hosted-agents.md) | Foundry's three agent kinds: what a version may say, what runs today (the contract only) |
 | [Usage](usage.md) | Onboarding a project, writing a workflow, tools, policy, reading a run, day-2 knobs |
 | [Development](development.md) | The three levels of a dev environment, the tests that touch the real world, pitfalls |
 | [Security](security.md) | What stops an agent from doing damage, and what is *not* a wall |

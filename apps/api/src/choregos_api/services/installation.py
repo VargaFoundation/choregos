@@ -25,6 +25,7 @@ from ..schemas.agents import AgentCreate
 from .agent_releases import after_publish
 from .agents import empreinte as empreinte_de_l_agent
 from .agents import erreurs_d_une_version
+from .hosted_images import pin_hosted_runtime
 from .network import check_agent_network
 from .skill_gate import platform_columns
 from .skills import SkillRefusee, empreinte, valider
@@ -116,6 +117,7 @@ async def installer_skills_et_agents(
             await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == corps.slug))
         ).first():
             continue
+        corps.spec = await pin_hosted_runtime(session, org_id, corps.spec)
         provenance = (du_catalogue or {}).get(corps.slug, auteur)
         agent = Agent(
             org_id=org_id,

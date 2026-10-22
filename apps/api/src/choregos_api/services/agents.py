@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 
 from choregos_core import utcnow
+from choregos_core.hosted import native_sidecars_refusal
 from choregos_core.instructions import erreurs_des_instructions
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,7 @@ from ..config import get_settings
 from ..db.models import Agent, AgentVersion, Project, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
-from ..schemas import AgentOverrides, AgentSpec, CodeRuntime
+from ..schemas import AgentOverrides, AgentSpec, CodeRuntime, HostedImageSource, HostedRuntime
 from .agent_governance import usable_in_project
 from .agent_releases import served
 
@@ -69,6 +70,33 @@ def erreurs_d_une_version(spec: AgentSpec) -> None:
                     }
                 ],
             )
+    if isinstance(spec.runtime, HostedRuntime):
+        cluster = get_settings().cluster_version
+        refusal = native_sidecars_refusal(cluster) if cluster else None
+        if refusal is not None:
+            # The executor refuses the start too, from the API server itself; this tells the author
+            # now rather than at the first run.
+            raise unprocessable(
+                "this cluster cannot run a hosted agent",
+                [{"loc": ["runtime"], "msg": f"{refusal} (upgrade the cluster to publish this version)"}],
+            )
+        if isinstance(spec.runtime.source, HostedImageSource):
+            # ADR 0080 §8: under the operator's allowlist; the digest is resolved where the version
+            # is written (`pin_hosted_runtime`), never taken from the caller.
+            from .hosted_images import allowlisted_ref
+
+            allowlisted_ref(spec.runtime.source)
+        else:
+            # ADR 0080 §9: the zip itself is read where the version is written (`pin_hosted_runtime`).
+            from .hosted_sources import SourceRefused, base_image
+
+            try:
+                base_image(spec.runtime.source.runtime)
+            except SourceRefused as exc:
+                raise unprocessable(
+                    "the agent's hosted source cannot be built",
+                    [{"loc": ["runtime", "source", "runtime"], "msg": str(exc)}],
+                ) from exc
 
 
 def _outils(spec: AgentSpec) -> set[str]:

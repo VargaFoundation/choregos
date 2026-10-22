@@ -155,6 +155,34 @@ async def test_litellm_le_catalogue_porte_les_prix_par_millier() -> None:
 
 
 @respx.mock
+async def test_litellm_a_realtime_model_carries_its_audio_and_cached_prices() -> None:
+    """What a voice session is measured at (S41-15): LiteLLM's audio and cache-read prices."""
+    respx.get(f"{LITELLM}/model/info").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "model_name": "openai/gpt-realtime",
+                        "litellm_params": {"model": "openai/gpt-realtime"},
+                        "model_info": {
+                            "input_cost_per_token": 0.000004,
+                            "output_cost_per_token": 0.000016,
+                            "input_cost_per_audio_token": 0.000032,
+                            "output_cost_per_audio_token": 0.000064,
+                            "cache_read_input_token_cost": 0.0000004,
+                        },
+                    }
+                ]
+            },
+        )
+    )
+    [model] = await LiteLlmGateway(LITELLM, "sk").list_models()
+    assert (model.input_audio_cost_per_1k, model.output_audio_cost_per_1k) == (0.032, 0.064)
+    assert model.cached_input_cost_per_1k == 0.0004
+
+
+@respx.mock
 async def test_litellm_an_unknown_tool_calling_capability_is_not_a_denial() -> None:
     """What the dev tenant's LiteLLM answers for its `openai/choregos-*` aliases (S22-42)."""
     respx.get(f"{LITELLM}/model/info").mock(

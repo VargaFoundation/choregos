@@ -142,6 +142,22 @@ spec:
             {{- end }}
             - name: CHOREGOS_REQUIRE_IMAGE_DIGEST
               value: {{ .requireDigest | default false | quote }}
+            # Where a hosted zip's image is built and pushed (ADR 0080 §9).
+            {{- with .buildRegistry }}
+            - name: CHOREGOS_HOSTED_BUILD_REPOSITORY
+              value: {{ . | quote }}
+            {{- end }}
+            - name: CHOREGOS_HOSTED_BUILDER
+              value: {{ .hostedBuilder | default "buildkit" | quote }}
+            {{- end }}
+            {{- with include "choregos.buildkitAddress" $root }}
+            # The `buildkitd` the build activity dials: the operator's, else the chart's (S41-13).
+            - name: CHOREGOS_BUILDKIT_ADDRESS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if (($root.Values.global.buildkitd | default dict).tls | default dict).clientSecret }}
+            - name: CHOREGOS_BUILDKIT_TLS_DIR
+              value: /etc/choregos/buildkit
             {{- end }}
             {{- if eq (include "choregos.executorKind" $root) "agent_sandbox" }}
             # The warm pool the `agent_sandbox` executor claims from, and the port its warm
@@ -168,6 +184,9 @@ spec:
           resources: {{- toYaml .resources | nindent 12 }}
           volumeMounts:
             - { name: tmp, mountPath: /tmp }
+            {{- if (($root.Values.global.buildkitd | default dict).tls | default dict).clientSecret }}
+            - { name: buildkit-client, mountPath: /etc/choregos/buildkit, readOnly: true }
+            {{- end }}
             {{- with $root.Values.global.playbooks.configMap }}
             - { name: playbooks, mountPath: {{ $root.Values.global.playbooks.mountPath }}, readOnly: true }
             {{- end }}
@@ -176,6 +195,10 @@ spec:
             {{- end }}
       volumes:
         - { name: tmp, emptyDir: {} }
+        {{- with (($root.Values.global.buildkitd | default dict).tls | default dict).clientSecret }}
+        - name: buildkit-client
+          secret: { secretName: {{ . }} }
+        {{- end }}
         {{- with $root.Values.global.playbooks.configMap }}
         - name: playbooks
           configMap: { name: {{ . }} }

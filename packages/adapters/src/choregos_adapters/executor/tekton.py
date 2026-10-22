@@ -19,7 +19,7 @@ import httpx
 from choregos_contracts import ExecutorKind, StageResult
 from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 
-from ..errors import UpstreamError
+from ..errors import ConfigurationError, UpstreamError
 
 TEKTON_API = "/apis/tekton.dev/v1"
 CORE_API = "/api/v1"
@@ -101,6 +101,12 @@ class TektonExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent : si le PipelineRun existe déjà, on le réutilise."""
+        if spec.agent_container is not None:
+            raise ConfigurationError(
+                "a hosted agent's container runs beside the runner in one pod (ADR 0080), which "
+                "a PipelineRun's task steps cannot carry; use `runner.executor: k8s_job` for hosted "
+                "agents"
+            )
         name = self._name(spec.run_id)
         existing = await self.client.request(
             "GET", f"{TEKTON_API}/namespaces/{spec.namespace}/pipelineruns/{name}"

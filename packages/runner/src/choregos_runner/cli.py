@@ -117,6 +117,25 @@ async def _serve_then_run(port: int, workspace: Path | None) -> tuple[RunOutcome
         await server.close()
 
 
+@app.command("serve-session")
+def serve_session(
+    run_id: Annotated[str, typer.Option("--run-id", envvar="CHOREGOS_RUN_ID")] = "",
+    api_url: Annotated[str, typer.Option("--api-url", envvar="CHOREGOS_API_URL")] = "",
+) -> None:
+    """A hosted session's pod (S41-11): serve the session's turns until it ends."""
+    from .serve_session import serve_session as serve
+
+    reset_settings_cache()
+    settings = get_settings()
+    if run_id:
+        settings.run_id = run_id
+    if api_url:
+        settings.api_url = api_url
+    code = asyncio.run(serve(settings))
+    typer.echo(json.dumps({"run_id": settings.run_id, "exit": int(code), "explanation": code.explanation}))
+    raise typer.Exit(int(code))
+
+
 @app.command()
 def backends() -> None:
     """Liste les backends ACP connus et les versions épinglées dans l'image."""

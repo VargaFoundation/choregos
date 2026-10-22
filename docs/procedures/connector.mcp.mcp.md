@@ -22,7 +22,7 @@ whose rights are exactly what the agents should have, and the narrowest scopes t
 ## Permissions
 
 - The connector's tools act with **that account's permissions**, nothing in Choregos can widen them.
-- Tools are **born closed** (ADR 0034): after discovery each tool is `forbidden` until an administrator
+- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator
   opens it. A read can be `allowed`; a write is a governed action that waits for approval.
 - A project sees only the tools its groups are opened to, and can only tighten them.
 

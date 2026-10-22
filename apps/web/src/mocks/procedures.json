@@ -13,7 +13,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A **code agent** is a Python program that runs under the same guarantees as any agent: the runner starts\n  it, decides its permissions, counts its turns, journals its tool calls and reads its result. Use it for a\n  program of your own that must run governed. A fixed computation with no model is a `job`; a judgement\n  that instructions can carry is a prompt agent.\n- Two people are involved: the author, who builds the image, and the **operator**, who names it. A workflow\n  or an agent never writes an image.\n- Read `docs/code-agents.md` and ADR 0063: this page is its checklist."
+        "markdown": "- A **code agent** is a Python program that runs under the same guarantees as any agent: the runner starts\n  it, decides its permissions, counts its turns, journals its tool calls and reads its result. Use it for a\n  program of your own that must run governed. A fixed computation with no model is a `job`; a judgement\n  that instructions can carry is a prompt agent.\n- Two people are involved: the author, who builds the image, and the **operator**, who names it. A workflow\n  or an agent never writes an image.\n- Read `docs/code-agents.md`: this page is its checklist."
       },
       {
         "key": "at",
@@ -1635,7 +1635,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The connector's tools act with **that account's permissions**, nothing in Choregos can widen them.\n- Tools are **born closed** (ADR 0034): after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+        "markdown": "- The connector's tools act with **that account's permissions**, nothing in Choregos can widen them.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
       },
       {
         "key": "in_choregos",
@@ -2161,7 +2161,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- The agent-sandbox **operator**, whose CRDs are cluster-scoped: a platform team installs it, a tenant of\n  a shared cluster cannot. `tekton` and `k8s_job` stay the defaults.\n- Read the deployment guide, section \"The `agent_sandbox` executor\", and ADR 0053: it is the reference;\n  this page is its checklist."
+        "markdown": "- The agent-sandbox **operator**, whose CRDs are cluster-scoped: a platform team installs it, a tenant of\n  a shared cluster cannot. `tekton` and `k8s_job` stay the defaults.\n- Read the deployment guide, section \"The `agent_sandbox` executor\": it is the reference;\n  this page is its checklist."
       },
       {
         "key": "at",
@@ -2378,7 +2378,7 @@
       {
         "key": "at",
         "title": "At GitHub",
-        "markdown": "1. Create the App with the **Webhook URL** `https://choregos.example.com/api/v1/webhooks/github`, or reuse the platform's.\n2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's\n   install page and brings you back. The installation is discovered by the platform (ADR 0073): there\n   is no number to copy.\n3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).\n   Without one, set `merge_queue` to false."
+        "markdown": "1. Create the App with the **Webhook URL** `https://choregos.example.com/api/v1/webhooks/github`, or reuse the platform's.\n2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's\n   install page and brings you back. The installation is discovered by the platform: there\n   is no number to copy.\n3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).\n   Without one, set `merge_queue` to false."
       },
       {
         "key": "permissions",
@@ -2498,7 +2498,7 @@
       {
         "key": "at",
         "title": "At GitHub",
-        "markdown": "1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in, from the console: the repository field's\n   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is\n   discovered by the platform (ADR 0073): there is no number to copy. The App's **Setup URL** is the\n   platform's `/api/v1/github/setup`."
+        "markdown": "1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in, from the console: the repository field's\n   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is\n   discovered by the platform: there is no number to copy. The App's **Setup URL** is the\n   platform's `/api/v1/github/setup`."
       },
       {
         "key": "permissions",
