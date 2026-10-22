@@ -179,3 +179,25 @@ right after): pandas and numpy run under gVisor, and so does the network (the sn
 Not proven by this run: that the runner could not have run under `runc` — the readiness item
 `runtime-class` (S38-13d) and the executor's refusal (S38-13b, S38-13e) are what keeps a policy
 asking for gVisor off a pool that lacks it.
+
+## 2026-10-22, morning — `RESEARCH-6`, 0.19.2: the bar in the memo
+
+The dev tenant moved to 0.19.2 (choregos-ee#33, choregos-deploy#84; gVisor now set in
+`global.runner.runtimeClass`, so the API knows the pool's class). The template of v0.19.2 was
+republished on `varga:research`: skill `reading-metrics` v2, agent `quant-analyst` v2 (the memo
+states the thresholds), workflows `product-memo` v2 and `campaign` v3. `RESEARCH-6` was opened with
+`RESEARCH-4`'s fields (lowered bar: `min_dsr` 0, `min_trades` 1), under `preset:regulated`.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | readiness | `workflow-template` done (`campaign`, `product-memo` as `investment-research` ships them); `runtime-class` done ("the pool runs `gvisor`") |
+| 2 | snapshot, profile (jobs) | 20 symbols, 39,180 rows, `missing=0`, `bars_sha256=b4f3e4d0…`; 20 products, 3 clusters |
+| 3 | strategize, real model | four strategies, $0.131 |
+| 4 | backtest (job) | best out-of-sample DSR 0.597, `relevant_count=2` |
+| 5 | fan-out | two `product-memo` children (IEF, XOM), each with the field `thresholds` = `{min_dsr: 0.0, max_drawdown: 0.35, min_trades: 1}` |
+| 6 | memos, real model | both pass `numbers_measured` with `must_quote` at the first attempt ($0.171, $0.180); each verdict reads "a minimum DSR of 0.0, a maximum drawdown of 0.35, at least 1 trades" |
+| 7 | decision | waiting for the owner (not signed by the agent) |
+
+Cost of the run: $0.482. The memos say plainly that the bar was lowered: read alone, neither passes
+for a product that met the usual one (DSR 0.95, ten trades).
+
