@@ -2878,8 +2878,8 @@ export type Procedure = ProcedureSummary & {
   origin: string;
 };
 
-/** `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP door only (ADR 0030) — such a token is refused by the REST API, and the door refuses `*`. */
-export type TokenScope = "*" | "mcp:read" | "mcp:write";
+/** `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP door only (ADR 0030) — such a token is refused by the REST API, and the door refuses `*`. `a2a`: the A2A door only (ADR 0078), which also refuses `*`. */
+export type TokenScope = "*" | "mcp:read" | "mcp:write" | "a2a";
 
 export type ApiTokenCreate = {
   name: string;

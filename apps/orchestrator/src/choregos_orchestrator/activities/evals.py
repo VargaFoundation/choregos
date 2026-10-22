@@ -36,6 +36,7 @@ from typing import Any
 
 from choregos_api.db.models import ModelProfileRow, Run, RunEvent, WorkItem
 from choregos_api.services import Naissance, le_tracker_est_interne, nouveau_ticket
+from choregos_api.services.initiator import initiator
 from choregos_core import elapsed_seconds, utcnow
 from sqlalchemy import select
 from temporalio import activity
@@ -435,6 +436,7 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
                     title=f"[eval] {spec.get('title', fixture)}",
                     body=str(spec.get("prompt", "")),
                     created_by="eval",
+                    initiated_by=initiator("eval"),
                     labels=("eval", f"eval:{fixture}"),
                     allowed_paths=tuple(spec.get("allowed_paths") or ()),
                 ),

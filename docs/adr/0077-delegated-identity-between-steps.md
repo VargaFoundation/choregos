@@ -1,6 +1,7 @@
 # 0077 — Delegated identity between the steps of a work item
 
-- **Status**: proposed, 2026-10-20 — not implemented (#756)
+- **Status**: accepted, 2026-10-22 — points 2 and 4 implemented by S40-22; point 3 (on-behalf-of token
+  exchange) not implemented (#756)
 - **Concerns**: the run token (`security.py`, `mint_run_token`), the `runs` table, the run's access
   record (`GET /runs/{id}/access`), the tool broker (`services/courtier.py`), the connector types of
   the registry (`choregos_adapters`); builds on [ADR 0021](0021-spiffe-behind-the-run-token.md) (the
@@ -36,7 +37,7 @@ So the reviewed architecture's token exchange answers a problem Choregos does no
 choosing to call another), and does not answer one it does have: a system downstream of a connector
 cannot tell *which person* an agent acted for, and the record cannot show the chain.
 
-## Decision (proposed)
+## Decision
 
 1. **Delegation stays orchestrated.** An agent never mints, holds or passes a credential for another
    agent. Handing work from A to B is a workflow transition; B's run gets its own run token, minted
@@ -60,6 +61,23 @@ cannot tell *which person* an agent acted for, and the record cannot show the ch
    inputs; A's own memory (`own`, ADR 0075) stays A's. This is today's behaviour for memories; the
    story that implements point 2 checks it for artefacts and adds the test that fails if a step can
    read an artefact it did not declare.
+
+## Implementation (S40-22)
+
+- **Point 2.** The initiator is written once **on the work item**, at birth, by the door it came
+  through (`work_items.initiated_by`, `services/initiator.py`): `person:<email>` (console, REST, API
+  token), `mcp:<email>`, `schedule:<name>`, `work_item:<parent key>` (fan-out), `tracker:<source>`
+  (webhook) or `tracker:sync`, `finding:<id>`, `eval`, `demo`, `trial:<email>`, `system`; the kind
+  `a2a` is reserved for the inbound A2A door (S40-23). At stage start the orchestrator copies it onto
+  the run and sets `runs.inputs_from` to the producers of the latest revision of each declared input
+  and of each document the prompt embeds; a document a person edited after its run is not credited
+  to that run. `GET /runs/{id}/access` gains `chain` (contract change), walked through
+  `inputs_from` within the work item. A work item or a run from before the migration stays `NULL`:
+  the record shows no chain rather than one guessed from `created_by`.
+- **Point 4.** `GET /internal/runs/{id}/inputs/{name}` serves only a name the run's transition
+  declares; `test_a_step_cannot_read_an_artefact_it_did_not_declare_as_an_input` fails without that
+  guard. Not closed: `GET /internal/runs/{id}/ticket` still returns `spec_markdown` and
+  `plan_markdown` to every step, declared or not (finding #890).
 
 ## Alternatives rejected
 

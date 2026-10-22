@@ -70,7 +70,7 @@ tests:
           value: choregos-api.internal.dev.diametral.com
       - lengthEqual:
           path: spec.rules[0].http.paths
-          count: 5
+          count: 6
       # The MCP gateway (ADR 0030) exits through the API: without this path, an MCP client lands on the console.
       - equal:
           path: spec.rules[0].http.paths[1].path
@@ -79,6 +79,10 @@ tests:
       - equal:
           path: spec.rules[0].http.paths[4].path
           value: /.well-known/oauth-protected-resource
+      # The A2A door (ADR 0078) too: an outside agent's card and task calls go to the API.
+      - equal:
+          path: spec.rules[0].http.paths[5].path
+          value: /a2a
 
   - it: without Gateway API, the front end exits through an Ingress
     template: charts/choregos-web/templates/deployment.yaml

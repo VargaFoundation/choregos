@@ -105,6 +105,7 @@ async def spawn_children(payload: dict[str, Any]) -> dict[str, Any]:
     refused the same way, so it goes to the transition's `on_fail`, not to a retry."""
     from choregos_api.rbac import SYSTEM
     from choregos_api.schemas.tickets import WorkItemCreate
+    from choregos_api.services.initiator import initiator
     from choregos_api.services.tickets import creer_un_ticket
     from choregos_api.temporal import interpreter_id
     from temporalio.exceptions import WorkflowAlreadyStartedError
@@ -156,6 +157,7 @@ async def spawn_children(payload: dict[str, Any]) -> dict[str, Any]:
                         ),
                         canal="fan-out",
                         cle=key,
+                        initiated_by=initiator("work_item", parent.tracker_key),
                     )
                 except (SpawnRefusedError, ApiError) as refused:
                     detail = refused.detail if isinstance(refused, ApiError) else str(refused)

@@ -9,6 +9,7 @@ from typing import Any
 from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.services import Naissance, nouveau_ticket, persist_event
+from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
 from choregos_core.gates import ALREADY_FIXED_GATE
@@ -569,6 +570,7 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                         risk=str(data.risk) if data.risk else None,
                         labels=tuple(data.labels),
                         item_type=data.item_type,
+                        initiated_by=initiator("tracker", "sync"),
                     ),
                 )
                 created.append(key)

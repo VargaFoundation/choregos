@@ -36,6 +36,7 @@ organisations must assume **a member of one will try to read another**.
 | a plugin running code in the console | a plugin's screens are **data** — forms, tables, actions, secrets shown once — rendered by the console's own blocks; the CSP stays `script-src 'self'`; a section naming a path no route serves stops start-up | `greffons.py`, `routers/ui.py`, `main.py`, ADR 0032 |
 | an organisation left without an administrator | the last `org_admin` of an organisation cannot be removed (409) | `routers/admin.py` |
 | logging in without an identity | OIDC with discovery, PKCE and a signed single-use `state`; development login off by default and refused in staging/prod | `routers/auth.py`, `config.py` |
+| an outside agent driving a workflow, or deciding in a person's place | the A2A door (ADR 0078) serves only the workflows that opted in (`a2a:`), to a token with the `a2a` scope (a `*` token is refused, and an `a2a` token is refused by the REST API); the caller acts with its person's rights, a resent message is the same work item (id derived from organisation, client and `messageId`), a waiting decision is answered `input-required` with the console's `decision_url` and a reply to a task is refused; every call is audited (`a2a.call`), rate-limited per token, counted in the daily write budget shared with the MCP door, and a message is capped (20 parts, 100,000 characters, no file part) | `a2a/door.py`, `mcp/appelant.py`, `tests/test_a2a_inbound.py` |
 
 ## What is *not* a wall, and is said so
 
@@ -174,8 +175,8 @@ Facts carry their organisation and sit under forced row-level security.
 
 Some gestures are too consequential to be made from a browser left open: the session must have been
 authenticated recently (`step_up_minutes`; the API answers `401 step_up_required` and the console
-signs the person in again). They are made by a person in a session, never by an API token or an MCP
-client, which propose and do not decide:
+signs the person in again). They are made by a person in a session, never by an API token, an MCP
+client or an A2A caller, which propose and do not decide:
 
 - deciding a governed action (approving one; [ADR 0035](adr/0035-governed-actions-in-the-core.md));
 - **releasing an agent revision to production, or to a canary share, and loosening the release
@@ -208,6 +209,24 @@ a short-lived access token, in its Secret (`CHOREGOS_RUN_REMOTE_TOKEN`), never i
 The agent card is pinned at publication and read again by the pod: a card that changed stops the step
 before anything is sent. The runner pod may reach only the hosts the project's policy allows. The
 project's memory is not sent to a remote agent.
+
+## Who started a run, and what it read
+
+A work item records who started it, `<kind>:<subject>`, written once by the door it came through and
+never by an agent ([ADR 0077](adr/0077-delegated-identity-between-steps.md) §2): `person:<email>`
+(console, REST, API token), `mcp:<email>`, `a2a:<client>`, `schedule:<name>`, `work_item:<key>` (a
+fan-out child), `tracker:<kind>`, `finding:<id>`, `eval`, `demo`, `trial:<email>`, or `system`. At stage
+start the orchestrator copies it onto the run and records `inputs_from`: the runs that produced the
+latest revision of each artefact the step reads (declared inputs, and the spec or plan its prompt
+embeds); a document a person edited since is not credited to the run that wrote it. `GET
+/runs/{id}/access` shows the result as `chain`: the initiator, then each run with its agent and
+version, earliest first, walked within the work item. A run recorded before S40-22 has no `chain`.
+
+A step reads an earlier step's artefact only through its declared inputs: `GET
+/internal/runs/{id}/inputs/{name}` answers 404 for any other name, and leaves no read receipt. Not yet
+partitioned: `GET /internal/runs/{id}/ticket` still gives every step the spec and the plan (#890). A
+step still runs with the platform's identity; acting on behalf of the initiator (token exchange,
+ADR 0077 §3) is not implemented (#756).
 
 ## Secrets
 

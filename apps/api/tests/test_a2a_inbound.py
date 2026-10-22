@@ -1,0 +1,335 @@
+"""The A2A door (ADR 0078): governed workflows served as A2A skills to outside agents.
+
+The caller simulated here is another agent holding a person's `a2a` token. Each guard of the
+door has its test: the scope, the refusal of `*`, the opt-in, the derived task id, the decision
+that stays in the console, the rate and the parts cap.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from httpx import ASGITransport, AsyncClient, Response
+
+CARD = "/a2a/orgs/varga/.well-known/agent-card.json"
+ENDPOINT = "/a2a/orgs/varga"
+OPT_IN = """
+a2a:
+  skill: ship-a-change
+  description: Ship a change through review and release.
+"""
+
+
+async def _token(client: AsyncClient, *scopes: str, project: str | None = None) -> str:
+    body: dict[str, Any] = {"name": "partner-agent", "scopes": list(scopes)}
+    if project:
+        body["project"] = project
+    created = await client.post("/api/v1/me/tokens", json=body)
+    assert created.status_code == 201, created.text
+    return str(created.json()["token"])
+
+
+async def _publish(client: AsyncClient, project: dict[str, Any], *, opt_in: bool = True) -> None:
+    from choregos_core.dsl import template_yaml
+
+    tracker = await client.put(
+        f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
+    )
+    assert tracker.status_code == 200, tracker.text
+    text = template_yaml("default-simple").rstrip("\n") + "\n" + (OPT_IN if opt_in else "")
+    published = await client.put(f"/api/v1/projects/{project['id']}/workflow", json={"yaml": text})
+    assert published.status_code == 200, published.text
+
+
+async def _rpc(client: AsyncClient, token: str, method: str, params: dict[str, Any]) -> Response:
+    return await client.post(
+        ENDPOINT,
+        json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
+def _message(text: str, message_id: str = "m-1", **extra: Any) -> dict[str, Any]:
+    return {
+        "message": {
+            "kind": "message",
+            "role": "user",
+            "messageId": message_id,
+            "parts": [{"kind": "text", "text": text}],
+            **extra,
+        }
+    }
+
+
+async def _send(client: AsyncClient, token: str, text: str = "Add credit notes", **kw: Any) -> dict[str, Any]:
+    answer = await _rpc(client, token, "message/send", _message(text, **kw))
+    assert answer.status_code == 200, answer.text
+    assert "result" in answer.json(), answer.text
+    return dict(answer.json()["result"])
+
+
+async def _ready(client: AsyncClient, project: dict[str, Any], *, opt_in: bool = True) -> str:
+    await _publish(client, project, opt_in=opt_in)
+    token = await _token(client, "a2a")
+    client.cookies.clear()
+    return token
+
+
+# ───────────────────────────── who may knock ─────────────────────────────
+
+
+async def test_without_a_token_a_401_says_how_to_authenticate(client: AsyncClient, admin: str) -> None:
+    answer = await client.get(CARD)
+    assert answer.status_code == 401, answer.text
+    assert answer.headers["www-authenticate"].startswith("Bearer")
+    assert "a2a" in answer.json()["error"]
+
+
+async def test_the_door_needs_the_a2a_scope(client: AsyncClient, admin: str) -> None:
+    """An MCP token opens the MCP door, not this one."""
+    token = await _token(client, "mcp:write")
+    client.cookies.clear()
+    for answer in (await client.get(CARD, headers={"Authorization": f"Bearer {token}"}),
+                   await _rpc(client, token, "tasks/get", {"id": "x"})):  # fmt: skip
+        assert answer.status_code == 403, answer.text
+        assert 'error="insufficient_scope"' in answer.headers["www-authenticate"]
+
+
+async def test_a_full_api_token_is_refused(client: AsyncClient, admin: str) -> None:
+    """A `*` token opens the REST API: it does not belong in another agent's configuration."""
+    token = await _token(client, "*")
+    client.cookies.clear()
+    answer = await client.get(CARD, headers={"Authorization": f"Bearer {token}"})
+    assert answer.status_code == 403, answer.text
+    assert 'error="insufficient_scope"' in answer.headers["www-authenticate"]
+
+
+async def test_an_a2a_token_does_not_open_the_rest_api(client: AsyncClient, admin: str) -> None:
+    token = await _token(client, "a2a")
+    client.cookies.clear()
+    answer = await client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
+    assert answer.status_code == 403, answer.text
+
+
+async def test_an_unknown_organisation_is_not_found(client: AsyncClient, admin: str) -> None:
+    token = await _token(client, "a2a")
+    client.cookies.clear()
+    answer = await client.get(
+        "/a2a/orgs/elsewhere/.well-known/agent-card.json", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert answer.status_code == 404, answer.text
+
+
+# ───────────────────────────── the card ─────────────────────────────
+
+
+async def test_a_workflow_that_did_not_opt_in_is_not_a_skill(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    token = await _ready(client, project, opt_in=False)
+    card = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
+    assert card["skills"] == []
+    refused = (await _rpc(client, token, "message/send", _message("hello"))).json()
+    assert refused["error"]["code"] == -32602, refused
+
+
+async def test_the_card_lists_the_opted_in_workflow_and_parses_as_a2a(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_adapters.a2a import AUTH_BEARER, parse_card
+
+    token = await _ready(client, project)
+    raw = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
+    card = parse_card(raw)
+    assert card.protocol_version == "0.3.0"
+    assert card.url.endswith("/a2a/orgs/varga")
+    assert [s.id for s in card.skills] == ["billing-api/ship-a-change"]
+    assert AUTH_BEARER in card.auth_types
+    assert raw["capabilities"]["streaming"] is False
+    assert raw["capabilities"]["pushNotifications"] is False
+
+
+# ───────────────────────────── message/send ─────────────────────────────
+
+
+async def test_a_resent_message_is_the_same_task(client: AsyncClient, project: dict[str, Any]) -> None:
+    from choregos_api.db.models import AuditLog, WorkItem
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    token = await _ready(client, project)
+    first = await _send(client, token, message_id="m-42")
+    again = await _send(client, token, message_id="m-42")
+    other = await _send(client, token, message_id="m-43")
+    assert first["id"] == again["id"] != other["id"]
+    assert first["status"]["state"] == "working"
+    assert first["metadata"]["choregos"]["project"] == "varga:billing-api"
+    async with session_scope() as session:
+        items = list((await session.execute(select(WorkItem))).scalars())
+        calls = list((await session.execute(select(AuditLog).where(AuditLog.action == "a2a.call"))).scalars())
+        created = list(
+            (await session.execute(select(AuditLog).where(AuditLog.action == "workitem.create"))).scalars()
+        )
+    assert sorted(i.id for i in items) == sorted([first["id"], other["id"]])
+    assert [i.title for i in items] == ["Add credit notes"] * 2
+    assert all(c.payload["canal"] == "a2a" for c in created)
+    assert all((i.initiated_by or "").startswith("a2a:") and len(i.initiated_by or "") > 4 for i in items), [
+        i.initiated_by for i in items
+    ]
+    assert len(calls) == 3
+    assert [c.payload["ecriture"] for c in calls].count(True) == 2, "a resent message writes nothing"
+
+
+async def test_tasks_get_reads_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:
+    token = await _ready(client, project)
+    task = await _send(client, token)
+    read = (await _rpc(client, token, "tasks/get", {"id": task["id"]})).json()["result"]
+    assert read["id"] == task["id"]
+    assert read["status"]["state"] == "working"
+    unknown = (await _rpc(client, token, "tasks/get", {"id": "nope"})).json()
+    assert unknown["error"]["code"] == -32001
+
+
+async def test_the_parts_are_capped(client: AsyncClient, project: dict[str, Any]) -> None:
+    token = await _ready(client, project)
+    many = _message("x")
+    many["message"]["parts"] = [{"kind": "text", "text": "x"}] * 21
+    assert (await _rpc(client, token, "message/send", many)).json()["error"]["code"] == -32602
+    long = (await _rpc(client, token, "message/send", _message("y" * 100_001))).json()
+    assert long["error"]["code"] == -32602
+    with_file = _message("x")
+    with_file["message"]["parts"].append({"kind": "file", "file": {"name": "a", "bytes": "eA=="}})
+    assert (await _rpc(client, token, "message/send", with_file)).json()["error"]["code"] == -32005
+    data = _message("x")
+    data["message"]["parts"].append({"kind": "data", "data": {"k": 1}})
+    refused = (await _rpc(client, token, "message/send", data)).json()
+    assert refused["error"]["code"] == -32005, "the skill takes text/plain only"
+
+
+# ───────────────────────────── no decision over A2A ─────────────────────────────
+
+
+async def test_a_pending_decision_is_input_required_and_stays_in_the_console(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import HumanRequest
+    from choregos_api.db.session import session_scope
+    from choregos_api.temporal import get_temporal
+    from choregos_core import utcnow
+
+    token = await _ready(client, project)
+    task = await _send(client, token)
+    async with session_scope() as session:
+        session.add(
+            HumanRequest(
+                work_item_id=task["id"],
+                project_id=project["id"],
+                kind="approval",
+                payload={"question": "Merge?"},
+                requested_at=utcnow(),
+            )
+        )
+    read = (await _rpc(client, token, "tasks/get", {"id": task["id"]})).json()["result"]
+    assert read["status"]["state"] == "input-required"
+    data = next(p["data"] for p in read["status"]["message"]["parts"] if p["kind"] == "data")
+    assert data["decision_url"].endswith(f"/p/billing-api/items/{task['id']}")
+    assert data["kind"] == "approval"
+
+    reply = _message("approve", message_id="m-2", taskId=task["id"])
+    refused = (await _rpc(client, token, "message/send", reply)).json()
+    assert refused["error"]["code"] == -32004, refused
+    assert refused["error"]["data"]["decision_url"] == data["decision_url"]
+    async with session_scope() as session:
+        from sqlalchemy import select
+
+        pending = (await session.execute(select(HumanRequest))).scalar_one()
+    assert pending.decided_at is None
+    assert not [s for s in get_temporal().signals if s[1] == "human_decision"]  # type: ignore[attr-defined]
+
+
+async def test_states_map_one_way(client: AsyncClient, project: dict[str, Any]) -> None:
+    from choregos_api.db.models import ArtifactRecord, Project, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+
+    token = await _ready(client, project)
+    ids = [(await _send(client, token, message_id=f"m-{n}"))["id"] for n in range(3)]
+    async with session_scope() as session:
+        done, failed, closed = [await session.get(WorkItem, i) for i in ids]
+        assert done and failed and closed
+        done.state = "deployed_prod"
+        failed.failure = {"reason": "boom"}
+        closed.closed_at = utcnow()
+        owner = await session.get(Project, project["id"])
+        assert owner is not None
+        session.add(
+            ArtifactRecord(
+                org_id=owner.org_id,
+                work_item_id=done.id,
+                name="release-notes",
+                version=1,
+                type="markdown",
+                kind="inline",
+                media_type="text/markdown",
+                digest="sha256:" + "0" * 64,
+                size=3,
+                content="ok",
+                run_id="run-1",
+            )
+        )
+    states = [(await _rpc(client, token, "tasks/get", {"id": i})).json()["result"] for i in ids]
+    assert [s["status"]["state"] for s in states] == ["completed", "failed", "canceled"]
+    assert [a["name"] for a in states[0]["artifacts"]] == ["release-notes"]
+
+
+async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:
+    from choregos_api.temporal import get_temporal
+
+    token = await _ready(client, project)
+    task = await _send(client, token)
+    answer = (await _rpc(client, token, "tasks/cancel", {"id": task["id"]})).json()
+    assert "result" in answer, answer
+    controls = [s[2] for s in get_temporal().signals if s[1] == "control"]  # type: ignore[attr-defined]
+    assert [c["action"] for c in controls] == ["stop"]
+
+
+# ───────────────────────────── guards ─────────────────────────────
+
+
+async def test_streaming_and_push_are_not_served(client: AsyncClient, project: dict[str, Any]) -> None:
+    token = await _ready(client, project)
+    stream = (await _rpc(client, token, "message/stream", _message("x"))).json()
+    assert stream["error"]["code"] == -32004
+    push = (await _rpc(client, token, "tasks/pushNotificationConfig/set", {})).json()
+    assert push["error"]["code"] == -32003
+    unknown = (await _rpc(client, token, "agent/dance", {})).json()
+    assert unknown["error"]["code"] == -32601
+
+
+async def test_the_door_is_rate_limited(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.a2a import door
+    from choregos_api.limiteur import Limiteur
+
+    token = await _ready(client, project)
+    monkeypatch.setattr(door, "LIMITEUR", Limiteur(1))
+    assert (await _rpc(client, token, "tasks/get", {"id": "x"})).status_code == 200
+    limited = await _rpc(client, token, "tasks/get", {"id": "x"})
+    assert limited.status_code == 429, limited.text
+    assert limited.headers["retry-after"]
+
+
+async def test_a_reference_a2a_client_drives_the_door(
+    app: Any, client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """The platform's own outbound client (ADR 0062) speaks to the door as to any A2A agent."""
+    from choregos_adapters.a2a import A2aClient, text_part
+
+    token = await _ready(client, project)
+    async with A2aClient(f"http://test{ENDPOINT}", token, transport=ASGITransport(app=app)) as remote:
+        sent = await remote.send(remote.message([text_part("Add credit notes")]))
+        read = await remote.get_task(sent.id)
+    assert sent.state == read.state == "working"
+    assert read.id == sent.id

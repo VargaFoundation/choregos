@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import Project, WorkflowDef, WorkItem
 from ..errors import unprocessable
 from .definitions import default_workflow, policy_engine, workflow_actif, workflow_model
+from .initiator import initiator
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +34,8 @@ class Naissance:
     size: str | None = None
     risk: str | None = None
     created_by: str | None = None
+    #: Who started it, `<kind>:<subject>` (`services/initiator.py`, ADR 0077 §2).
+    initiated_by: str | None = None
     #: Le workflow demandé explicitement ; sinon le routage, sinon le défaut.
     workflow: str | None = None
     labels: tuple[str, ...] = ()
@@ -43,6 +46,8 @@ class Naissance:
     fields: dict[str, Any] = field(default_factory=dict)
     #: The budget given at launch (S27-06): only tightens the workflow's and the policy's.
     budget_usd: float | None = None
+    #: An id derived by the caller (ADR 0008): an A2A message sent twice finds its work item (ADR 0078).
+    item_id: str | None = None
 
 
 def _correspond(condition: dict[str, Any], etiquettes: set[str], type_: str | None) -> bool:
@@ -150,10 +155,13 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         state=WorkflowEngine(workflow).initial_state,
         workflow_def_id=ligne.id if ligne is not None else None,
         created_by=naissance.created_by,
+        initiated_by=naissance.initiated_by,
         allowed_paths=list(naissance.allowed_paths),
         fields=dict(naissance.fields),
         budget_usd=await _budget_at_launch(session, project, workflow, naissance),
     )
+    if naissance.item_id is not None:
+        item.id = naissance.item_id
     if naissance.labels:
         noter_les_etiquettes(item, naissance.labels)
     session.add(item)
@@ -177,6 +185,7 @@ async def nouveau_ticket_d_essai(
         body_snapshot=body,
         state="trial",
         created_by=created_by,
+        initiated_by=initiator("trial", created_by),
     )
     session.add(item)
     await session.flush()

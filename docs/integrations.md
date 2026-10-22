@@ -202,6 +202,41 @@ with the agent's**: a `choregos` entry in the version's `mcp_servers` names the 
 call (patterns allowed); a person without a right gives an agent without it. The agent's state is
 read on **every call**: revoked, suspended or expired, the next call answers `401`.
 
+## Another agent, over A2A
+
+A workflow can be served to an outside agent as an **A2A skill** (A2A 0.3.0,
+[ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md)). Nothing is served by default: the
+workflow opts in.
+
+```yaml
+a2a:
+  skill: ship-a-change            # the skill id is `<project>/ship-a-change`
+  description: Ship a change through review and release.
+  input_modes: [text/plain]       # add application/json to take one data part as the fields
+```
+
+The organisation's card is at `/a2a/orgs/<org>/.well-known/agent-card.json`, its JSON-RPC endpoint at
+`/a2a/orgs/<org>`. Both take a token with the `a2a` scope, minted like an MCP one (a `*` token is
+refused, and an `a2a` token does not open the REST API):
+
+```bash
+choregos tokens create --name partner-agent --scope a2a --project acme:billing-api --expires-in-days 30
+```
+
+The card lists the opted-in workflows of the projects the token's person may read. What the door does:
+
+- `message/send` opens a work item through the same path as the console, under an id derived from the
+  organisation, the client and the `messageId`: a message sent twice is one work item. Text parts make
+  its body, one data part its fields; name the skill in `message.metadata.skill` when there are several.
+- `tasks/get` reads the work item: `working`, `input-required` while a person must decide (with the
+  console's `decision_url` — a decision is never taken over A2A, and a reply to a task is refused),
+  `completed` with the latest revision of each artefact described, `failed`, `canceled`.
+- `tasks/cancel` stops the work item, for a person who may control it.
+
+Not served yet: `message/stream`, `tasks/resubscribe`, push notifications, file parts. The card needs
+the token too, since its skills depend on who asks. Calls are audited (`a2a.call`), rate-limited per
+token, and count in the person's daily write budget with the MCP door's.
+
 ## Atlassian's Rovo MCP Server, as a connector
 
 The step-by-step setup (what to enable in Atlassian Administration, which credential goes with which

@@ -30,6 +30,7 @@ async def seed() -> tuple[str, str, Any]:
     from choregos_api.db.models import Organization, Project
     from choregos_api.db.session import create_all, session_scope
     from choregos_api.services import Naissance, ensure_defaults, nouveau_ticket
+    from choregos_api.services.initiator import initiator
     from choregos_contracts import Evidence, StageResult, StageStatus
     from choregos_core.domain import WorkItemData
 
@@ -81,6 +82,7 @@ async def seed() -> tuple[str, str, Any]:
                 size="M",
                 risk="low",
                 allowed_paths=("src/orders/**", "tests/orders/**"),
+                initiated_by=initiator("demo"),
             ),
         )
         project_id, work_item_id, key = project.id, item.id, item.tracker_key

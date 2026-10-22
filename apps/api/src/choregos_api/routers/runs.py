@@ -129,10 +129,53 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
     ]
     rapport = rapport_d_acces(evenements)
     tool_cost_eur = round(sum(a.cost_eur for a in appels), 4)
-    return {
+    record: dict[str, Any] = {
         **rapport.to_dict(),
         "tool_cost_eur": tool_cost_eur,
         "cout_outils_eur": tool_cost_eur,  # lang: fr-ok -- former name, emitted for one release (ADR 0046)
+    }
+    if run.inputs_from is not None or run.initiated_by is not None:
+        record["chain"] = await _chain(session, run)
+    return record
+
+
+#: How far back a chain is walked: a work item's steps, not an unbounded graph.
+CHAIN_MAX_RUNS = 64
+
+
+async def _chain(session: Any, run: Run) -> dict[str, Any]:
+    """`initiator → run A → run B` (ADR 0077 §2): the runs this one read from, and theirs, earliest first.
+
+    Only what the orchestrator recorded at each stage start (`runs.initiated_by`, `runs.inputs_from`),
+    nothing the agent said. The walk stays within the run's work item, where its inputs live.
+    """
+    found: dict[str, Run] = {run.id: run}
+    pending = list(run.inputs_from or [])
+    while pending and len(found) < CHAIN_MAX_RUNS:
+        wanted = [run_id for run_id in dict.fromkeys(pending) if run_id not in found]
+        pending = []
+        if not wanted:
+            break
+        query = select(Run).where(Run.id.in_(wanted), Run.work_item_id == run.work_item_id)
+        for row in (await session.execute(query)).scalars().all():
+            found[row.id] = row
+            pending += list(row.inputs_from or [])
+    earlier = sorted(
+        (r for r in found.values() if r.id != run.id),
+        key=lambda r: (r.started_at or r.created_at, r.id),
+    )
+    return {
+        "initiated_by": run.initiated_by,
+        "runs": [
+            {
+                "run_id": r.id,
+                "stage": r.stage_role,
+                "agent_slug": r.agent_slug,
+                "agent_version": r.agent_version,
+                "inputs_from": list(r.inputs_from or []),
+            }
+            for r in [*earlier, run]
+        ],
     }
 
 

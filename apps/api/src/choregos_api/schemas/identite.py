@@ -31,7 +31,8 @@ class MeDto(Dto):
 
 #: Les portées d'un jeton (ADR 0030). `*` ouvre l'API REST et la CLI ; `mcp:read` et `mcp:write`
 #: n'ouvrent que la porte MCP — et un jeton qui les porte est refusé par l'API REST.
-PorteeDeJeton = Literal["*", "mcp:read", "mcp:write"]
+#: `a2a` opens only the A2A door (ADR 0078).
+PorteeDeJeton = Literal["*", "mcp:read", "mcp:write", "a2a"]
 
 
 def _toute_l_api() -> list[PorteeDeJeton]:

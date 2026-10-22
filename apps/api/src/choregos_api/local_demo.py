@@ -260,6 +260,7 @@ async def seed_local_demo(
     from .rbac import SYSTEM
     from .schemas.tickets import WorkItemCreate
     from .services import creer_un_ticket, ensure_defaults, publier_workflow
+    from .services.initiator import initiator
 
     settings = settings or get_settings()
     org_slug = settings.bootstrap_org or "demo"
@@ -354,6 +355,7 @@ async def seed_local_demo(
                 project,
                 WorkItemCreate(title=DEMO_TICKET_TITLE, body=DEMO_TICKET_BODY, start=provider is None),
                 canal="local-install",
+                initiated_by=initiator("demo"),
             )
             report["work_items"].append(item.tracker_key)
     logger.info(

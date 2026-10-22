@@ -208,6 +208,12 @@ async def test_create_work_item_ouvre_un_ticket_au_nom_de_la_personne(
     await login(client, ADMIN)
     tickets = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()["items"]
     assert [t["tracker_key"] for t in tickets] == [cle]
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        born = await session.get(WorkItem, resultat["structuredContent"]["work_item"])
+        assert born is not None and born.initiated_by == f"mcp:{ADMIN}", "the door names its caller (S40-22)"
     audit = (await client.get("/api/v1/audit")).json()["items"]
     actions = {(a["action"], a.get("target_id")) for a in audit}
     assert ("mcp.call", "create_work_item") in actions
