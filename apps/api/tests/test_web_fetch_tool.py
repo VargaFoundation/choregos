@@ -233,6 +233,70 @@ async def test_a_page_that_tries_to_instruct_the_agent_is_flagged(
     assert answer["suspicions"], "third-party text goes through the injection guard"
 
 
+# ───────────────────────────── what the address holds ─────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "https://docs.example.com/?q={}",
+        "https://docs.example.com/leak/{}/page",
+        "https://docs.example.com/?q={encoded}",
+        "https://docs.example.com/?note=a&b={}",
+    ],
+)
+async def test_an_address_that_holds_a_secret_is_refused_before_anything_is_sent(
+    client: AsyncClient, project: dict[str, Any], web: Any, template: str
+) -> None:
+    from urllib.parse import quote
+
+    from choregos_core.redaction import forget_secrets, remember_secret
+
+    secret = "tenant-db-passphrase/77"
+    base, headers = await _ready(client, project)
+    remember_secret(secret)
+    try:
+        encoded = quote(secret, safe="")
+        url = template.format(secret.replace("/", "%2F") if "{}" in template else "", encoded=encoded)
+        answer = await _fetch(client, base, headers, url=url)
+    finally:
+        forget_secrets()
+    assert answer["status_code"] == 422 and answer["result"]["type"] == "url_redacted"
+    assert web.requests == [], "no robots.txt request, no page request: nothing left the platform"
+    assert await _ledger() == [], "an address that was not requested costs nothing"
+    assert await _decisions() == {("docs.example.com", "denied", "redacted"): 1}
+    assert secret not in str(answer) and "passphrase" not in str(answer)
+
+
+async def test_a_token_shaped_value_in_the_query_is_refused_without_being_remembered(
+    client: AsyncClient, project: dict[str, Any], web: Any
+) -> None:
+    base, headers = await _ready(client, project)
+    answer = await _fetch(client, base, headers, url=PAGE + "?api_key=" + "x1y2z3w4v5u6t7s8")
+    assert answer["status_code"] == 422 and answer["result"]["type"] == "url_redacted"
+    assert web.requests == []
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/guide?q=hello%20world&page=2",
+        "/docs/caf%C3%A9/menu.html",
+        "/items/9f1c2a7e-4b1d-4c55-8a30-2f6d1e0b7c11",
+        "/search?utm_source=news&lang=en#section-2",
+    ],
+)
+async def test_ordinary_addresses_are_still_read(
+    client: AsyncClient, project: dict[str, Any], web: Any, path: str
+) -> None:
+    url = "https://docs.example.com" + path
+    web.add(url.split("#")[0], "<p>ok</p>")
+    base, headers = await _ready(client, project)
+    answer = await _fetch(client, base, headers, url=url)
+    assert answer["status_code"] == 200, answer
+    assert answer["result"]["content"][0]["text"] == "ok"
+
+
 # ───────────────────────────── which hosts ─────────────────────────────
 
 

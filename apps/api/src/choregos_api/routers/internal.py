@@ -963,11 +963,12 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         fournisseur, prix = f"greffon:{greffon}", 0.0
     # A call the organisation's network policy stopped never reached the server: it is not counted
     # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
-    # A search query refused for what it holds was not sent either (ADR 0083 §5).
+    # A search query or a fetch address refused for what it holds was not sent either (ADR 0083 §5).
     refused_by_network = isinstance(corps, dict) and corps.get("type") in {
         "network_policy",
         "rate_limited",
         "query_redacted",
+        "url_redacted",
     }
     if not refused_by_network:
         session.add(
