@@ -61,6 +61,7 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
     """Open the work item of each schedule whose window is open and not yet served."""
     from choregos_api.rbac import SYSTEM
     from choregos_api.schemas.tickets import WorkItemCreate
+    from choregos_api.services.initiator import initiator
     from choregos_api.services.tickets import cle_de_ticket_interne, creer_un_ticket, le_tracker_est_interne
 
     now = datetime.fromisoformat(payload["now"]) if payload.get("now") else datetime.now(UTC)
@@ -104,6 +105,7 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
                     ),
                     canal="schedule",
                     cle=key,
+                    initiated_by=initiator("schedule", schedule.name),
                 )
             except ApiError as erreur:
                 # Fields the workflow refuses, a workflow that does not exist: the schedule is wrong,

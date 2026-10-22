@@ -31,6 +31,7 @@ from ..services import (
     workflow_du_ticket,
     workflow_model,
 )
+from ..services.initiator import initiator
 from ..temporal import deliver_inbound, get_temporal, interpreter_id, train_id
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
@@ -134,6 +135,7 @@ async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
                     url=event.payload.get("url"),
                     labels=tuple(event.payload.get("labels") or []),
                     item_type=event.payload.get("item_type"),
+                    initiated_by=initiator("tracker", event.source),
                 ),
             )
         if item is None:

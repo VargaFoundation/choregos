@@ -200,6 +200,9 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     )
     temporal_wf_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Who started the work item, as `<kind>:<subject>` (`services/initiator.py`, ADR 0077 §2):
+    #: written once at birth by the door it came through; `None` for a work item born before S40-22.
+    initiated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     paused: Mapped[bool] = mapped_column(Boolean, default=False)
     #: Pourquoi l'interpréteur du ticket est mort (`{message, activity, at}`), ou rien.
     #: Posé par le workflow lui-même en mourant, effacé quand il redémarre.
@@ -266,6 +269,11 @@ class Run(Base, PkMixin, TimestampMixin):
     context_pack: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     playbook_checksum: Mapped[str | None] = mapped_column(String(80), nullable=True)
     allowed_paths: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: The run's chain (ADR 0077 §2), written at stage start by the orchestrator, never by the agent:
+    #: its work item's initiator, and the runs whose outputs the step reads as declared inputs (the
+    #: latest `produced` receipt of each). `None` on both for a run started before S40-22.
+    initiated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    inputs_from: Mapped[list[str] | None] = mapped_column(Json, nullable=True)
 
     work_item: Mapped[WorkItem] = relationship(back_populates="runs")
     events: Mapped[list[RunEvent]] = relationship(back_populates="run", cascade="all, delete-orphan")

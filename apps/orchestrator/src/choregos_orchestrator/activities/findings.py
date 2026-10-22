@@ -9,6 +9,7 @@ from typing import Any
 
 from choregos_api.db.models import Finding, WorkItem
 from choregos_api.services import Naissance, nouveau_ticket, persist_event
+from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType
 from choregos_core import Message, NewItem, utcnow
 from sqlalchemy import select
@@ -123,6 +124,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 size=row.estimate,
                 risk="high" if row.severity == "critical" else "low",
                 labels=tuple(labels),
+                initiated_by=initiator("finding", row.id),
             ),
         )
         row.created_work_item_id = created.id

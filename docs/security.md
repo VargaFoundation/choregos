@@ -209,6 +209,24 @@ The agent card is pinned at publication and read again by the pod: a card that c
 before anything is sent. The runner pod may reach only the hosts the project's policy allows. The
 project's memory is not sent to a remote agent.
 
+## Who started a run, and what it read
+
+A work item records who started it, `<kind>:<subject>`, written once by the door it came through and
+never by an agent ([ADR 0077](adr/0077-delegated-identity-between-steps.md) §2): `person:<email>`
+(console, REST, API token), `mcp:<email>`, `a2a:<client>`, `schedule:<name>`, `work_item:<key>` (a
+fan-out child), `tracker:<kind>`, `finding:<id>`, `eval`, `demo`, `trial:<email>`, or `system`. At stage
+start the orchestrator copies it onto the run and records `inputs_from`: the runs that produced the
+latest revision of each artefact the step reads (declared inputs, and the spec or plan its prompt
+embeds); a document a person edited since is not credited to the run that wrote it. `GET
+/runs/{id}/access` shows the result as `chain`: the initiator, then each run with its agent and
+version, earliest first, walked within the work item. A run recorded before S40-22 has no `chain`.
+
+A step reads an earlier step's artefact only through its declared inputs: `GET
+/internal/runs/{id}/inputs/{name}` answers 404 for any other name, and leaves no read receipt. Not yet
+partitioned: `GET /internal/runs/{id}/ticket` still gives every step the spec and the plan (#890). A
+step still runs with the platform's identity; acting on behalf of the initiator (token exchange,
+ADR 0077 §3) is not implemented (#756).
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
