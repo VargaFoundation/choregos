@@ -29,6 +29,10 @@ from .base import db
 
 logger = get_logger("choregos.actions")
 
+#: What an `ActionWorkflow` may run: an approval that was committed, or a run of it already begun
+#: (`load_action` retried after it moved the row).
+EXECUTABLE = frozenset({ActionStatus.APPROVED.value, ActionStatus.RUNNING.value})
+
 
 async def _charger(session: Any, action_id: str) -> tuple[Action, Project]:
     action = await session.get(Action, action_id)
@@ -58,10 +62,19 @@ async def _faits(session: Any, action_id: str, avant: int) -> list[dict[str, Any
 async def load_action(action_id: str) -> dict[str, Any]:
     async with db() as session:
         if await session.get(Action, action_id) is None:
-            # Démarrée par la requête qui l'a décidée, AVANT que celle-ci ne valide sa transaction :
-            # la ligne peut ne pas être encore visible. Une erreur passagère, que Temporal retente.
+            # Started after the commit since ADR 0085; a replica of an older version still starts
+            # it before. A passing error, which Temporal retries.
             raise ApplicationError(f"action {action_id} not visible yet", type="ActionPasEncoreVisible")
         action, _projet = await _charger(session, action_id)
+        if action.status not in EXECUTABLE:
+            # Fail closed (ADR 0085): a workflow started by anything but a committed approval — a
+            # decision whose transaction failed, a hand-made start, a finished action started again —
+            # runs nothing, and leaves the row as it found it. Final: retrying would not approve it.
+            raise ApplicationError(
+                f"action {action_id} is {action.status}, not approved: nothing is done",
+                type="ActionNotApproved",
+                non_retryable=True,
+            )
         if action.status == ActionStatus.APPROVED.value:
             action.status = ActionStatus.RUNNING.value
         return {"effets": len(action.effects or []), "statut": action.status}

@@ -9,6 +9,7 @@ import contextlib
 from typing import Any
 
 from choregos_api.logging import configure_logging, get_logger
+from choregos_core import telemetry
 
 from .activities import ALL_ACTIVITIES
 from .config import ALL_QUEUES, get_settings
@@ -146,8 +147,12 @@ def main() -> None:
     args = parser.parse_args()
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
+    telemetry.configure_tracing("choregos-orchestrator")
     queues = [queue.strip() for queue in args.queues.split(",") if queue.strip()]
-    asyncio.run(run_worker(queues))
+    try:
+        asyncio.run(run_worker(queues))
+    finally:
+        telemetry.shutdown_tracing()
 
 
 if __name__ == "__main__":

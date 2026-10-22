@@ -1,6 +1,7 @@
 # 0018 — OpenTelemetry GenAI conventions from the runner and the gateway
 
-- **Status**: proposed, 2026-09-25 — not implemented
+- **Status**: proposed, 2026-09-25 — partially implemented on 2026-10-22 (S40-20: points 1 and 4;
+  points 2 and 3 not yet, see *Implementation*)
 - **Concerns**: the runner, LiteLLM, the API and orchestrator logging, `infra/bootstrap/otel-collector.yaml`
 
 ## Context
@@ -55,3 +56,24 @@ client spans natively through its OTel callback.
   stays; duplicating it as a proprietary trace gives nothing a collector does not.
 - **Instrumenting the agent itself** (Claude Code, Codex, Gemini CLI): the agents are
   black boxes by design (ADR 0002, BYO agent); we measure their edges, not their insides.
+
+## Implementation (S40-20, 2026-10-22)
+
+- `choregos_core.telemetry` holds the names (semantic conventions 0.66b0, schema 1.44.0; a test
+  compares each name with the package) and the helpers; the SDK and the OTLP/HTTP exporter are
+  pinned exactly in `choregos-core`. Tracing is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` (or its
+  `_TRACES_` form) is set; the global tracer provider is left to the libraries that have one.
+- **The context does not travel in a `TRACEPARENT` variable** but in `StageInput.trace_parent`,
+  which the contract already had: the warm-sandbox and Tekton paths do not build a pod environment
+  per run, the `StageInput` reaches every path. The trace id and the stage span id are **derived
+  from the run id** (SHA-256), so the API's tool route attaches its spans to the run's trace from
+  the run id in its path, with no lookup and no state.
+- `invoke_workflow <stage>` is opened by the `await_run` activity and lasts as long as the wait;
+  `invoke_agent <backend>` wraps the runner's `execute`; `execute_tool <tool>` wraps the API's tool
+  route (catalogue, plugin, broker, `web_fetch`, `web_search`), so tools are traced where the platform
+  serves them rather than in the runner's tool server. `is_error` is the span's error status with
+  `error.type` (the HTTP status of the call), the conventions' form of it.
+- Not done yet: LiteLLM's callback (point 2), the nightly drift job (point 3), the collector's
+  pipeline and dashboards. A Temporal retry of `await_run` emits a second root span with the same
+  id; the tools the runner's own tool server answers without the API (`report_finding`, `ask_human`)
+  have no span.

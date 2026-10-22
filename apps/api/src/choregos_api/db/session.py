@@ -3,18 +3,59 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
+from ..logging import get_logger
 from .base import Base
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+logger = get_logger("choregos.db")
+
+#: What waits for the transaction to commit, then what the commit released (ADR 0085).
+_PENDING = "choregos.after_commit.pending"
+_READY = "choregos.after_commit.ready"
+
+
+def after_commit(session: AsyncSession, callback: Callable[[], Awaitable[Any]]) -> None:
+    """Run `callback` once this session's transaction has COMMITTED, never if it rolls back (ADR 0085).
+
+    What leaves the database for another system (a Temporal workflow) must not leave before the row
+    that justifies it is written: a commit that fails would leave the workflow running on nothing.
+    The callback is best effort — a crash between the commit and it loses it —, so what it starts
+    must also be found again from the database (`services/action_relay.py`). Register it once the
+    transaction has begun (after a write): a rollback of no transaction drops nothing."""
+    session.info.setdefault(_PENDING, []).append(callback)
+
+
+async def run_after_commit(session: AsyncSession) -> None:
+    """The callbacks the last commits released, once each. A failure is logged, not raised: the
+    transaction is already committed, and the relay starts what the callback could not."""
+    ready: list[Callable[[], Awaitable[Any]]] = session.info.pop(_READY, [])
+    for callback in ready:
+        try:
+            await callback()
+        except Exception as error:
+            logger.warning("after_commit.failed", error=f"{type(error).__name__}: {error}"[:300])
+
+
+@event.listens_for(Session, "after_commit")
+def _released(session: Session) -> None:
+    pending = session.info.pop(_PENDING, None)
+    if pending:
+        session.info.setdefault(_READY, []).extend(pending)
+
+
+@event.listens_for(Session, "after_rollback")
+def _dropped(session: Session) -> None:
+    session.info.pop(_PENDING, None)
 
 
 def _create_engine(settings: Settings) -> AsyncEngine:
@@ -132,6 +173,7 @@ async def session_scope(
         except Exception:
             await session.rollback()
             raise
+        await run_after_commit(session)
 
 
 async def create_all() -> None:

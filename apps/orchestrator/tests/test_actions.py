@@ -78,7 +78,7 @@ SANS_COMPENSATION = {"effect": "test.ajouter", "with": {"compte": "{{ effects[0]
 REFUSER = {"effect": "test.refuser", "with": {}}  # fmt: skip
 
 
-async def _action(setup: Fixture, effets: list[dict[str, Any]]) -> str:
+async def _action(setup: Fixture, effets: list[dict[str, Any]], status: str = "approved") -> str:
     from choregos_api.db.models import Action, Project
     from choregos_api.db.session import session_scope
 
@@ -96,7 +96,7 @@ async def _action(setup: Fixture, effets: list[dict[str, Any]]) -> str:
             proposed_by={"kind": "system", "id": "system"},
             approval={},
             decisions=[],
-            status="approved",
+            status=status,
         )
         session.add(action)
         await session.flush()
@@ -153,6 +153,23 @@ async def test_une_panne_passagere_ne_refait_pas_l_effet_deja_fait(
     if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
         cible = HISTORIQUES / "action-S20-01.json"
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("status", ["pending_approval", "rejected", "succeeded", "failed"])
+async def test_a_workflow_started_without_a_committed_approval_runs_nothing(
+    setup: Fixture, temporal_env: Any, worker_factory: Any, journal: Journal, status: str
+) -> None:
+    """Fail closed (ADR 0085): a decision whose transaction failed, a hand-made start, a finished
+    action started again — `load_action` refuses before the first effect, whatever the effect is,
+    and leaves the row as it found it."""
+    from temporalio.client import WorkflowFailureError
+
+    action_id = await _action(setup, [CREER, AJOUTER], status=status)
+    with pytest.raises(WorkflowFailureError) as failure:
+        await _executer(temporal_env, worker_factory, action_id)
+    assert "not approved" in str(failure.value.cause.cause)
+    assert journal.faits == [], "no effect, no compensation"
+    assert await _etat(action_id) == (status, []), "the row is not closed, no effect is logged"
 
 
 async def test_un_refus_compense_ce_qui_etait_fait_a_rebours(

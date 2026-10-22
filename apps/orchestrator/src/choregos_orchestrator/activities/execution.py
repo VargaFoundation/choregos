@@ -21,7 +21,7 @@ from choregos_api.db.session import limiter_aux_organisations
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
-from choregos_core import ExecRef, ExecStatus, StageJobSpec, utcnow
+from choregos_core import ExecRef, ExecStatus, StageJobSpec, telemetry, utcnow
 from choregos_core.hosted import agent_container
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
@@ -359,6 +359,29 @@ async def _gateway_key(session: Any, bundle: Any, run: Run | None, stage_input: 
 
 @activity.defn(name="await_run")
 async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
+    """Waits for the run inside its stage span, the root of the run's trace (ADR 0018)."""
+    run_id = payload["run_id"]
+    async with db() as session:
+        run = await session.get(Run, run_id)
+        stage_input = (run.stage_input if run else None) or {}
+    with telemetry.stage_span(
+        run_id,
+        stage=run.stage_role if run else None,
+        project=(stage_input.get("project") or {}).get("slug"),
+        work_item=(stage_input.get("work_item") or {}).get("key"),
+    ) as span:
+        outcome = await _await_run(payload)
+        result = outcome.get("result") or {}
+        finished = outcome.get("status") == "finished"
+        telemetry.record_outcome(
+            span,
+            str(result.get("status") if finished else outcome.get("status")),
+            failed=not finished or result.get("status") == StageStatus.FAILED.value,
+        )
+        return outcome
+
+
+async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
     """Attend la fin du run, avec heartbeat et annulation propre (S1-03)."""
     settings = get_settings()
     run_id = payload["run_id"]

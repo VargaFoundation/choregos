@@ -218,16 +218,23 @@ async def open_session(
 
     from .definitions import effective_policy
 
-    if (daily := PolicyEngine(await effective_policy(session, project.id)).daily_budget()) is not None:
+    policy = await effective_policy(session, project.id)
+    if (daily := PolicyEngine(policy).daily_budget()) is not None:
         team_id = await gateway.ensure_team(f"choregos-{project.id}", daily)
+    key_metadata: dict[str, Any] = {
+        "project": project.slug,
+        "agent": record.agent_slug,
+        "agent_version": record.agent_version,
+        "session_id": record.id,
+        "user": principal.user_id,
+    }
+    if policy.sandbox.llm_security_analyzer:
+        # The gateway's guard masks secrets for this key, as for a run's (ADR 0084).
+        from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
+
+        key_metadata[GUARD_METADATA_KEY] = GUARD_REDACT
     key = await gateway.mint_key(
-        {
-            "project": project.slug,
-            "agent": record.agent_slug,
-            "agent_version": record.agent_version,
-            "session_id": record.id,
-            "user": principal.user_id,
-        },
+        key_metadata,
         budget_usd=reservation.usd,
         ttl_s=ttl_s,
         models=[model.litellm_model],

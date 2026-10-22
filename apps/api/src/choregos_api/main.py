@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from choregos_adapters import charger_les_greffons
+from choregos_core import telemetry
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -69,6 +70,7 @@ from .routers import (
     workflows,
     workitems,
 )
+from .services.action_relay import relay_loop
 
 API_PREFIX = "/api/v1"
 logger = get_logger("choregos.api")
@@ -78,6 +80,7 @@ logger = get_logger("choregos.api")
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
+    telemetry.configure_tracing("choregos-api")
     logger.info("démarrage de l'API", env=settings.env, fakes=settings.fakes)
     if not settings.is_sqlite:
         await _refuser_le_superutilisateur()
@@ -98,15 +101,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await amorcer(settings)
     # Conversions a stopped replica left behind (ADR 0051): pending ones, and stale `converting`.
     await conversions.recover()
+    # Approved actions whose start after the commit was lost (ADR 0085), once the schema exists.
+    action_relay = asyncio.create_task(relay_loop())
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relais is not None:
         await relais.arreter()
-    rafraichissement.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await rafraichissement
+    for task in (rafraichissement, action_relay):
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
     await dispose_engine()
+    telemetry.shutdown_tracing()
     logger.info("arrêt de l'API")
 
 

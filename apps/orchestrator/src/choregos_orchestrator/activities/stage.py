@@ -45,7 +45,7 @@ from choregos_contracts import (
     WorkItemLinks,
     WorkItemRef,
 )
-from choregos_core import KNOWN_BACKEND_NAMES, ModelResolutionError, ModelResolver, utcnow
+from choregos_core import KNOWN_BACKEND_NAMES, ModelResolutionError, ModelResolver, telemetry, utcnow
 from choregos_core.memory_bindings import Binding, legacy_scope, merge_context_packs
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
@@ -262,6 +262,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         depot = bundle.config.repo
         stage_input = StageInput(
             run_id=run_id,
+            # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
+            trace_parent=telemetry.traceparent(run_id),
             attempt=plan.attempt,
             project=ProjectRef(
                 slug=bundle.slug,
