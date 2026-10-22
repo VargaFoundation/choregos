@@ -174,3 +174,48 @@ async def test_a_governed_write_result_is_masked_too(
     assert again.json()["status_code"] == 200, again.text
     assert "ghost-token-123456" not in again.text
     assert again.json()["result"]["action"] == action_id
+
+
+async def test_a_job_reads_an_oversized_answer_whole_and_masked(
+    client: AsyncClient, project: dict[str, Any], server: Any
+) -> None:
+    """The cap protects a model's context (#755); a job (ADR 0056) has none. A snapshot job reads
+    seven years of daily bars through the broker: cut, they were no bars at all, and every
+    investment campaign stopped at its snapshot (S40-13b). Masking still holds."""
+    from choregos_api.config import get_settings
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import mint_run_token
+
+    bars = [{"date": f"day-{i}", "close": 100.0 + i} for i in range(5_000)]
+    server.gestes["stock"] = lambda _arguments: {"quantity": 3, "bars": bars, "note": "password=hunter2-job"}
+    await _preparer(client, project, ["*"])
+    async with session_scope() as session:
+        model = await session.get(Run, "run-courtier-1")
+        assert model is not None
+        session.add(
+            Run(
+                id="run-job-bars",
+                work_item_id=model.work_item_id,
+                project_id=project["id"],
+                stage_role="snapshot",
+                transition_id="t-snapshot",
+                status="running",
+                backend="job",
+                stage_input={"job": {"command": ["x"], "tools": {"fournisseur": ["stock"]}}},
+            )
+        )
+    token = mint_run_token(
+        "run-job-bars", project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30
+    )
+    answer = await client.post(
+        "/api/v1/internal/runs/run-job-bars/tools/fournisseur__stock",
+        headers={"Authorization": f"Bearer {token}"},
+        json={},
+    )
+    assert answer.status_code == 200, answer.text
+    result = answer.json()["result"]
+    assert len(json.dumps(result).encode("utf-8")) > get_settings().broker_result_max_bytes
+    assert "truncated" not in result, "a job is not a model: its input is not cut"
+    assert result["structuredContent"]["bars"] == bars
+    assert "hunter2-job" not in answer.text, "masked all the same"
