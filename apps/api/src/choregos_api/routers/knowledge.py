@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
 from typing import Annotated
+from weakref import WeakKeyDictionary
 
 import httpx
 from choregos_adapters.registry import fakes_enabled
@@ -32,15 +33,25 @@ from ..db.models import (
     KnowledgeBase,
     KnowledgeChunk,
     KnowledgeDocument,
+    KnowledgeGrant,
     KnowledgeSource,
+    Membership,
     Organization,
     OrgConnector,
     Project,
+    User,
 )
 from ..deps import Db, Me, ProjectCtx
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..knowledge import refresh
-from ..knowledge.access import can_curate, can_manage, visible_to
+from ..knowledge.access import (
+    ROLES,
+    KnowledgeAction,
+    can_manage,
+    decide,
+    role_of,
+    visible_to,
+)
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
@@ -54,6 +65,10 @@ from ..schemas.knowledge import (
     KnowledgeDistillRequest,
     KnowledgeDocumentDto,
     KnowledgeEvalSet,
+    KnowledgeGrantDto,
+    KnowledgeGrants,
+    KnowledgeGrantsPut,
+    KnowledgePermissions,
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
     KnowledgeSourceCreate,
@@ -93,23 +108,55 @@ def _manage(principal: Me, org: str) -> None:
         raise forbidden("curating a knowledge base needs the org_admin role")
 
 
-def _curate(principal: Me, org: str, base: KnowledgeBase) -> None:
-    """Feeding a base: an organisation administrator, or the owner of the project that owns it."""
-    if not can_curate(principal, org, base):
-        raise forbidden(
-            "curating this knowledge base needs the org_admin role, or project_owner of its project"
+#: The grants of the bases loaded in this request, so `_require` never queries twice for one base.
+_GRANTS: WeakKeyDictionary[KnowledgeBase, list[KnowledgeGrant]] = WeakKeyDictionary()
+
+
+def _require(principal: Me, org: str, base: KnowledgeBase, action: KnowledgeAction) -> None:
+    """The one gate (ADR 0081): the server's own sentence when the caller may not."""
+    decision = decide(principal, org, base, action, _GRANTS.get(base, []))
+    if not decision.allowed:
+        raise forbidden(decision.reason or "not allowed on this knowledge base")
+
+
+async def _grants_of(session: AsyncSession, base_ids: list[str]) -> dict[str, list[KnowledgeGrant]]:
+    """The grants of these bases, in one query."""
+    found: dict[str, list[KnowledgeGrant]] = {base_id: [] for base_id in base_ids}
+    if not base_ids:
+        return found
+    rows = (
+        await session.execute(
+            select(KnowledgeGrant)
+            .where(KnowledgeGrant.knowledge_base_id.in_(base_ids))
+            .order_by(KnowledgeGrant.subject_type, KnowledgeGrant.subject)
         )
+    ).scalars()
+    for grant in rows:
+        found[grant.knowledge_base_id].append(grant)
+    return found
+
+
+async def _load_grants(session: AsyncSession, base: KnowledgeBase) -> list[KnowledgeGrant]:
+    if base not in _GRANTS:
+        _GRANTS[base] = (await _grants_of(session, [base.id]))[base.id]
+    return _GRANTS[base]
 
 
 async def _base(session: AsyncSession, principal: Me, org: str, slug: str) -> KnowledgeBase:
-    """The base, if the caller may read it; one it may not read does not exist for it (404)."""
+    """The base, if the caller may read it; one it may not read does not exist for it (404).
+
+    Reading is the reach, or any role granted on the base (ADR 0081), so the grants are loaded here.
+    """
     organisation = await _organisation(session, org)
     base = (
         await session.execute(
             select(KnowledgeBase).where(KnowledgeBase.org_id == organisation.id, KnowledgeBase.slug == slug)
         )
     ).scalar_one_or_none()
-    if base is None or not visible_to(principal, org, base):
+    if base is None:
+        raise not_found("Knowledge base", f"{org}/{slug}")
+    grants = await _load_grants(session, base)
+    if not decide(principal, org, base, KnowledgeAction.READ, grants).allowed:
         raise not_found("Knowledge base", f"{org}/{slug}")
     return base
 
@@ -149,8 +196,24 @@ def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -
 
 
 async def _dto(
-    session: AsyncSession, base: KnowledgeBase, *, with_documents: bool = False
+    session: AsyncSession,
+    principal: Me,
+    org: str,
+    base: KnowledgeBase,
+    *,
+    with_documents: bool = False,
+    grants: list[KnowledgeGrant] | None = None,
 ) -> KnowledgeBaseDto:
+    held = grants if grants is not None else await _load_grants(session, base)
+    allowed = {action: decide(principal, org, base, action, held) for action in KnowledgeAction}
+    can = KnowledgePermissions(
+        edit=allowed[KnowledgeAction.EDIT].allowed,
+        distill=allowed[KnowledgeAction.DISTILL].allowed,
+        share=allowed[KnowledgeAction.SHARE].allowed,
+        archive=allowed[KnowledgeAction.ARCHIVE].allowed,
+        widen=allowed[KnowledgeAction.WIDEN].allowed,
+    )
+    shown = await _grant_dtos(session, base, held) if with_documents and can.share else None
     counts = {
         str(state): int(count)
         for state, count in (
@@ -196,6 +259,11 @@ async def _dto(
         else None,
         distillation=base.distillation,
         owner_project=base.owner_project,
+        restricted=base.restricted,
+        can=can,
+        cannot_reason=allowed[KnowledgeAction.EDIT].reason,
+        my_role=role_of(principal, org, base, held),
+        grants=shown,
     )
 
 
@@ -250,12 +318,22 @@ async def _index_state(session: AsyncSession, base: KnowledgeBase) -> dict[str, 
 async def list_knowledge_bases(org: str, session: Db, principal: Me) -> list[KnowledgeBaseDto]:
     _member(principal, org)
     organisation = await _organisation(session, org)
-    bases = (
-        await session.execute(
-            select(KnowledgeBase).where(KnowledgeBase.org_id == organisation.id).order_by(KnowledgeBase.slug)
-        )
-    ).scalars()
-    return [await _dto(session, base) for base in bases if visible_to(principal, org, base)]
+    bases = list(
+        (
+            await session.execute(
+                select(KnowledgeBase)
+                .where(KnowledgeBase.org_id == organisation.id)
+                .order_by(KnowledgeBase.slug)
+            )
+        ).scalars()
+    )
+    # One query for the grants of every base: no per-base lookup (ADR 0081).
+    grants = await _grants_of(session, [base.id for base in bases])
+    return [
+        await _dto(session, principal, org, base, grants=grants[base.id])
+        for base in bases
+        if visible_to(principal, org, base, grants[base.id])
+    ]
 
 
 @router.post(
@@ -287,6 +365,7 @@ async def create_knowledge_base(
         projects=sorted(set(body.projects)) if body.scope == "projects" else [],
         groups=sorted(set(body.groups)) if body.scope == "groups" else [],
         serving_mode=body.serving_mode,
+        restricted=body.restricted,
         status="active",
         created_by=principal.email,
     )
@@ -301,7 +380,7 @@ async def create_knowledge_base(
         target_id=base.id,
         scope=base.scope,
     )
-    return await _dto(session, base, with_documents=True)
+    return await _dto(session, principal, org, base, with_documents=True)
 
 
 @router.post(
@@ -350,13 +429,15 @@ async def create_project_knowledge_base(
         scope=base.scope,
         owner_project=ctx.project.slug,
     )
-    return await _dto(session, base, with_documents=True)
+    return await _dto(session, ctx.principal, ctx.org_slug, base, with_documents=True)
 
 
 @router.get("/orgs/{org}/knowledge/{slug}", response_model=KnowledgeBaseDto, operation_id="getKnowledgeBase")
 async def get_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     _member(principal, org)
-    return await _dto(session, await _base(session, principal, org, slug), with_documents=True)
+    return await _dto(
+        session, principal, org, await _base(session, principal, org, slug), with_documents=True
+    )
 
 
 @router.patch(
@@ -368,11 +449,17 @@ async def update_knowledge_base(
     base = await _base(session, principal, org, slug)
     changes = body.model_dump(exclude_unset=True)
     widens = any(field in changes for field in ("scope", "projects", "groups"))
-    if widens:
-        # Who reads and who is served a base is the organisation's call, not its owning project's.
-        _manage(principal, org)
-    else:
-        _curate(principal, org, base)
+    # Who reads and who is served a base is the organisation's call, not its owning project's or its
+    # owners' (D11-2): `restricted` is part of the reach.
+    if widens or changes.get("restricted") is not None:
+        _require(principal, org, base, KnowledgeAction.WIDEN)
+    archives = changes.get("status") is not None
+    if archives:
+        _require(principal, org, base, KnowledgeAction.ARCHIVE)
+    if not (widens or archives) or any(
+        changes.get(field) is not None for field in ("name", "description", "serving_mode")
+    ):
+        _require(principal, org, base, KnowledgeAction.EDIT)
     scope = changes.get("scope", base.scope)
     projects = changes.get("projects", base.projects) or []
     groups = changes.get("groups", base.groups) or []
@@ -382,7 +469,7 @@ async def update_knowledge_base(
         raise unprocessable("scope `groups` names at least one group")
     await _known_projects(session, await _organisation(session, org), projects if scope == "projects" else [])
     reindex = changes.get("serving_mode") == "index" and base.serving_mode != "index"
-    for field in ("name", "description", "serving_mode", "status"):
+    for field in ("name", "description", "serving_mode", "status", "restricted"):
         if field in changes and changes[field] is not None:
             setattr(base, field, changes[field])
     base.scope = scope
@@ -401,12 +488,172 @@ async def update_knowledge_base(
         target_id=base.id,
         changes=sorted(changes),
     )
-    dto = await _dto(session, base, with_documents=True)
+    dto = await _dto(session, principal, org, base, with_documents=True)
     if reindex:
         # Switched to `index`: its ready documents are cut and embedded in the background.
         await session.commit()
         conversions.spawn("reindex", partial(reindex_base, org, base.id))
     return dto
+
+
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+async def _members_of(session: AsyncSession, organisation: Organization) -> list[User]:
+    """The people who belong to the organisation, at any level."""
+    return list(
+        (
+            await session.execute(
+                select(User)
+                .join(Membership, Membership.user_id == User.id)
+                .where(Membership.org_id == organisation.id)
+                .distinct()
+            )
+        ).scalars()
+    )
+
+
+async def _grant_dtos(
+    session: AsyncSession, base: KnowledgeBase, grants: list[KnowledgeGrant]
+) -> list[KnowledgeGrantDto]:
+    """The grants as shown: a name for each user, and which e-mails still wait for a person."""
+    organisation = await session.get(Organization, base.org_id)
+    members = await _members_of(session, organisation) if organisation is not None else []
+    by_id = {member.id: member for member in members}
+    by_email = {member.email.lower(): member for member in members}
+    shown: list[KnowledgeGrantDto] = []
+    for grant in grants:
+        display: str | None = grant.subject
+        pending = False
+        if grant.subject_type == "user":
+            member = by_id.get(grant.subject) or by_email.get(grant.subject.lower())
+            pending = member is None
+            display = (member.display_name or member.email) if member is not None else grant.subject
+        shown.append(
+            KnowledgeGrantDto(
+                subject_type=grant.subject_type,
+                subject=grant.subject,
+                display=display,
+                role=grant.role,
+                pending=pending,
+                created_by=grant.created_by,
+                created_at=grant.created_at,
+            )
+        )
+    return shown
+
+
+async def _checked_grants(
+    session: AsyncSession, organisation: Organization, wanted: list[KnowledgeGrantDto]
+) -> dict[tuple[str, str], str]:
+    """The (type, subject) -> role map to store, or a 422 saying what is wrong.
+
+    A user is a member id, or an e-mail: the id of the member that owns it when there is one, else the
+    e-mail as typed in lower case, which matches that person the day they sign in (D11-4). A project
+    must exist; a group is a free IdP name.
+    """
+    members = await _members_of(session, organisation)
+    by_id = {member.id: member for member in members}
+    by_email = {member.email.lower(): member for member in members}
+    known = set(
+        (await session.execute(select(Project.slug).where(Project.org_id == organisation.id))).scalars()
+    )
+    stored: dict[tuple[str, str], str] = {}
+    for item in wanted:
+        subject = item.subject.strip()
+        if item.subject_type == "user":
+            if "@" in subject:
+                if not _EMAIL.match(subject):
+                    raise unprocessable(f"`{subject}` is not an e-mail address")
+                member = by_email.get(subject.lower())
+                subject = member.id if member is not None else subject.lower()
+            elif subject not in by_id:
+                raise unprocessable(f"unknown member in {organisation.slug}: {subject}")
+        elif item.subject_type == "project":
+            if subject not in known:
+                raise unprocessable(f"unknown project(s) in {organisation.slug}: {subject}")
+        elif not subject:
+            raise unprocessable("a group grant names an IdP group")
+        if item.role not in ROLES:
+            raise unprocessable(f"unknown role `{item.role}`")
+        if (item.subject_type, subject) in stored:
+            raise unprocessable(f"{item.subject_type} `{subject}` is listed twice")
+        stored[(item.subject_type, subject)] = item.role
+    return stored
+
+
+@router.get(
+    "/orgs/{org}/knowledge/{slug}/grants",
+    response_model=KnowledgeGrants,
+    operation_id="listKnowledgeGrants",
+)
+async def list_knowledge_grants(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeGrants:
+    """Who holds a role on the base. Shown to whoever may change it only."""
+    _member(principal, org)
+    base = await _base(session, principal, org, slug)
+    _require(principal, org, base, KnowledgeAction.SHARE)
+    return KnowledgeGrants(grants=await _grant_dtos(session, base, await _load_grants(session, base)))
+
+
+@router.put(
+    "/orgs/{org}/knowledge/{slug}/grants",
+    response_model=KnowledgeGrants,
+    operation_id="putKnowledgeGrants",
+)
+async def put_knowledge_grants(
+    org: str, slug: Slug, body: KnowledgeGrantsPut, session: Db, principal: Me
+) -> KnowledgeGrants:
+    """Replaces the list of grants: the same call twice changes nothing. A grant gives people a role;
+    it never serves a run."""
+    _member(principal, org)
+    base = await _base(session, principal, org, slug)
+    _require(principal, org, base, KnowledgeAction.SHARE)
+    organisation = await _organisation(session, org)
+    wanted = await _checked_grants(session, organisation, body.grants)
+    current = {(grant.subject_type, grant.subject): grant for grant in await _load_grants(session, base)}
+    added = sorted(
+        f"{kind}:{subject}={role}"
+        for (kind, subject), role in wanted.items()
+        if (kind, subject) not in current
+    )
+    removed = sorted(f"{kind}:{subject}" for (kind, subject) in current if (kind, subject) not in wanted)
+    changed = sorted(
+        f"{kind}:{subject}={role}"
+        for (kind, subject), role in wanted.items()
+        if (kind, subject) in current and current[(kind, subject)].role != role
+    )
+    for key, grant in current.items():
+        if key not in wanted:
+            await session.delete(grant)
+        elif grant.role != wanted[key]:
+            grant.role = wanted[key]
+    for (kind, subject), role in wanted.items():
+        if (kind, subject) not in current:
+            session.add(
+                KnowledgeGrant(
+                    org_id=base.org_id,
+                    knowledge_base_id=base.id,
+                    subject_type=kind,
+                    subject=subject,
+                    role=role,
+                    created_by=principal.email,
+                )
+            )
+    await session.flush()
+    if added or removed or changed:
+        await record(
+            session,
+            principal,
+            "knowledge.grant.set",
+            org_id=base.org_id,
+            target_type="knowledge_base",
+            target_id=base.id,
+            added=added,
+            removed=removed,
+            changed=changed,
+        )
+    _GRANTS.pop(base, None)
+    return KnowledgeGrants(grants=await _grant_dtos(session, base, await _load_grants(session, base)))
 
 
 @router.post(
@@ -423,7 +670,7 @@ async def upload_knowledge_document(
     The same bytes twice are one document: the second upload answers the first (200).
     """
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     settings = get_settings()
     cap = settings.knowledge_max_upload_mib * 1024 * 1024
     declared = request.headers.get("content-length")
@@ -534,7 +781,7 @@ async def delete_knowledge_document(
     org: str, slug: Slug, document_id: str, session: Db, principal: Me
 ) -> None:
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     document = await _document(session, base, document_id)
     await session.delete(document)
     await record(
@@ -559,7 +806,7 @@ async def convert_knowledge_document(
 ) -> KnowledgeDocumentDto:
     """Converts a document again — after a failure, or a converter upgrade."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     document = await _document(session, base, document_id)
     if document.status in {PENDING, "converting"}:
         raise conflict(f"document `{document_id}` is already being converted")
@@ -600,10 +847,10 @@ async def reindex_knowledge_base(org: str, slug: Slug, session: Db, principal: M
     """Cuts and embeds every ready document again, in the background (after pgvector was installed,
     or the embedding model changed)."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     if base.serving_mode != "index":
         raise conflict(f"knowledge base `{slug}` is served as files: switch it to `index` first")
-    dto = await _dto(session, base, with_documents=True)
+    dto = await _dto(session, principal, org, base, with_documents=True)
     await session.commit()
     conversions.spawn("reindex", partial(reindex_base, org, base.id))
     return dto
@@ -619,11 +866,11 @@ async def put_knowledge_eval_set(
 ) -> KnowledgeBaseDto:
     """The base's eval set: questions, and the documents expected to answer each."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     base.eval_set = [case.model_dump() for case in body.cases]
     base.eval_result = None
     await session.flush()
-    return await _dto(session, base)
+    return await _dto(session, principal, org, base)
 
 
 @router.post(
@@ -634,7 +881,7 @@ async def put_knowledge_eval_set(
 async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     """Runs the eval set against the index: recall@5, per question. Shown on the base's page."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     if base.serving_mode != "index":
         raise conflict(f"knowledge base `{slug}` is served as files: it has no index to evaluate")
     if not base.eval_set:
@@ -650,7 +897,7 @@ async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -
         target_id=base.id,
         recall=base.eval_result["recall"],
     )
-    return await _dto(session, base)
+    return await _dto(session, principal, org, base)
 
 
 # ───────────────────────────── sources (S33-04) ─────────────────────────────
@@ -958,7 +1205,7 @@ async def create_knowledge_source(
     """SharePoint/OneDrive (through a `documents` connector), an allow-listed web site, or a git
     repository; synced at once, then every `interval_minutes`. `agent:manage`."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     organisation = await _organisation(session, org)
     config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
     await _egress_gate(
@@ -1009,7 +1256,7 @@ async def update_knowledge_source(
     org: str, slug: Slug, source_id: str, body: KnowledgeSourcePatch, session: Db, principal: Me
 ) -> KnowledgeSourceDto:
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     source = await _source(session, base, source_id)
     if body.name is not None:
         source.name = body.name
@@ -1080,7 +1327,7 @@ async def update_knowledge_source(
 async def delete_knowledge_source(org: str, slug: Slug, source_id: str, session: Db, principal: Me) -> None:
     """The source and the documents it brought (and their chunks) leave the base."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     source = await _source(session, base, source_id)
     await session.execute(delete(KnowledgeDocument).where(KnowledgeDocument.source_id == source.id))
     await session.delete(source)
@@ -1109,7 +1356,7 @@ async def sync_knowledge_source(
 ) -> KnowledgeSourceDto:
     """Syncs now rather than at the end of the interval. `agent:manage`."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     source = await _source(session, base, source_id)
     source.sync_requested_at = refresh.utcnow()
     dto = await _source_dto(session, source)
@@ -1126,9 +1373,10 @@ async def sync_knowledge_source(
     operation_id="syncKnowledgeBase",
 )
 async def sync_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
-    """Syncs every source of the base now: one gesture for the whole base. `agent:manage`."""
-    _manage(principal, org)
+    """Syncs every source of the base now: one gesture for the whole base. Whoever edits the base
+    (ADR 0051 §12, ADR 0081): it was `agent:manage` only, which the per-source routes never were."""
     base = await _base(session, principal, org, slug)
+    _require(principal, org, base, KnowledgeAction.EDIT)
     sources = (
         (await session.execute(select(KnowledgeSource).where(KnowledgeSource.knowledge_base_id == base.id)))
         .scalars()
@@ -1146,7 +1394,7 @@ async def sync_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) 
         target_id=base.id,
         sources=len(sources),
     )
-    dto = await _dto(session, base)
+    dto = await _dto(session, principal, org, base)
     await session.commit()
     for source in sources:
         await _start_sync_loop(org, source)
@@ -1168,7 +1416,7 @@ async def estimate_knowledge_distillation(
 ) -> KnowledgeDistillEstimate:
     """What distilling the base would read and cost, with no model call. Same rights as `distill`."""
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.DISTILL)
     from ..knowledge.distill import estimate_for
 
     estimate = await estimate_for(session, base, exclude or [])
@@ -1189,7 +1437,7 @@ async def distill_knowledge_base(
     from ..knowledge.distill import estimate_for, estimated_total, is_running
 
     base = await _base(session, principal, org, slug)
-    _curate(principal, org, base)
+    _require(principal, org, base, KnowledgeAction.DISTILL)
     exclude = list(body.exclude) if body else []
     max_usd = body.max_usd if body else None
     if is_running(base.distillation):
@@ -1222,7 +1470,7 @@ async def distill_knowledge_base(
         target_type="knowledge_base",
         target_id=base.id,
     )
-    dto = await _dto(session, base)
+    dto = await _dto(session, principal, org, base)
     await session.commit()
     await get_temporal().start_knowledge_distill(
         knowledge_distill_id(base.id, started_at),

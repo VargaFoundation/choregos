@@ -447,7 +447,7 @@ async def draft_agent(org: str, body: AgentDraftRequest, session: Db, principal:
         )
     organisation = await _organisation(session, org)
     try:
-        proposal = await agent_drafts.draft(session, organisation, body)
+        proposal = await agent_drafts.draft(session, organisation, body, principal)
     except agent_drafts.DraftingError as exc:
         raise upstream("gateway", str(exc)) from exc
     await record(

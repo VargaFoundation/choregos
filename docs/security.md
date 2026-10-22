@@ -115,6 +115,13 @@ archive it, but cannot widen it to the organisation, to other projects or to gro
 never decides what *other* projects' runs read. An administrator who widens it makes it the
 organisation's: the owner stops curating. Another project's owners, and developers, read at most.
 
+Since S42-11 ([ADR 0081](adr/0081-knowledge-base-rights.md)) people can also hold a **role on one base**
+(`viewer`, `editor`, `owner`) by a grant to a user, a group or a project, and a base can be `restricted`:
+people then read it only through a grant, while its runs are still served. Only an administrator widens
+or restricts a base. A grant never crosses organisations. A source read with a service account (Confluence)
+mirrors everything that account sees, so restricting the base and granting roles is the confidentiality
+boundary, not the source's own permissions.
+
 ## Agents written in code
 
 A code agent ([ADR 0063](adr/0063-agents-written-in-code.md)) runs in the run's pod, in the sandbox,
