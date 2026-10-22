@@ -121,6 +121,23 @@ async def test_a_second_start_starts_nothing(setup: Fixture) -> None:
     assert setup.adapters.executor.start_calls_by_run == {f"session-{session_id}": 1}
 
 
+@pytest.mark.parametrize(
+    ("protocols", "socket", "protocol"),
+    [(["invocations_ws"], True, "responses"), (["invocations", "invocations_ws"], True, "invocations"),
+     (["responses"], False, "responses")],
+)  # fmt: skip
+async def test_a_version_that_serves_a_socket_gets_its_socket_relayed(
+    setup: Fixture, protocols: list[str], socket: bool, protocol: str
+) -> None:
+    """S41-21: a session's pod relays the caller's socket to `/invocations_ws`, which a workflow
+    step refuses (`test_hosted_agent_step`)."""
+    await _agent(setup, _hosted(protocols=protocols))
+    session_id = await _session(setup)
+    await pod_activities.start_session_pod({"session_id": session_id})
+    hosted = (await _record(session_id)).stage_input["hosted"]
+    assert hosted["socket"] is socket and hosted["protocol"] == protocol
+
+
 async def test_a_version_no_pod_could_run_is_refused_without_a_retry(setup: Fixture) -> None:
     await _agent(setup, {"kind": "hosted", "source": {"type": "image", "ref": "ghcr.io/acme/triager:1"}})
     session_id = await _session(setup)

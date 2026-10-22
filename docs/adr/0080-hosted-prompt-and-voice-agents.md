@@ -192,8 +192,17 @@ agent cannot be a workflow step).
     an idle wait and the expiry. The pod's runner (`serve-session`) takes each turn from the internal
     API with a token scoped to the session and keeps a step's walls; `max_turns` counts per turn. The
     session's tools are served by the runner on the loopback MCP listener and go through the internal
-    API, so the pod holds no tracker credential. `invocations_ws` is not relayed yet (S41-21), and the
-    network decisions of a session's pod are acknowledged but not stored.
+    API, so the pod holds no tracker credential. The network decisions of a session's pod are
+    acknowledged but not stored.
+    *As delivered for sockets (S41-21)*: `invocations_ws` is relayed through the journal, never by a
+    connection from the API to the pod: the caller's frames are journaled and read by the pod's
+    runner, the container's are posted back numbered, each number journaled once. A session outlives
+    its caller's socket: the first event names the session, a voice event carries `seq`, and a socket
+    dropped without a close frame leaves the session open for 30 s, for the same person to resume it
+    with `session` and `after`; past it, `caller_gone`. A voice session is held by the API process
+    that opened it (another answers 1013), a hosted one by the journal (any replica). The container's
+    frames are journaled as text; an attached caller polls the journal every 0.2 s; a restarted pod
+    replays the caller's frames to a new container.
 
 ## Consequences
 

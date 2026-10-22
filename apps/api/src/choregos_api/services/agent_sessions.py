@@ -75,12 +75,13 @@ DEFAULT_MAX_TURNS = 20
 #: The `gateway_keys.run_id` of a session's key.
 KEY_PREFIX = "session:"
 
-SessionRuntime = Literal["prompt", "voice"]
-_DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime"}
-#: The runtimes each door serves: a hosted agent answers on `/responses` too, from its pod (S41-11).
-_SERVED: dict[str, set[str]] = {"prompt": {"prompt", "hosted"}, "voice": {"voice"}}
+SessionRuntime = Literal["prompt", "voice", "socket"]
+_DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime", "socket": "/realtime"}
+#: The runtimes each door serves: a hosted agent answers on `/responses` too, from its pod (S41-11),
+#: and on `/realtime` when its container serves `invocations_ws` (S41-21).
+_SERVED: dict[str, set[str]] = {"prompt": {"prompt", "hosted"}, "voice": {"voice"}, "socket": {"hosted"}}
 #: The reasons a session ends that are not failures.
-_CLEAN_ENDS = {"closed", "expired", "max_minutes", "idle"}
+_CLEAN_ENDS = {"closed", "expired", "max_minutes", "idle", "caller_gone", "agent_closed"}
 
 #: The gateway's own words for a spent key, as `choregos_runner.budget` reads them.
 _BUDGET_SIGNATURES = ("budget_exceeded", "budgetexceedederror", "exceededbudget", "budget has been exceeded")
@@ -146,7 +147,8 @@ async def open_session(
 ) -> AgentSessionRecord:
     """A new session of the agent in the project: its version, its model, its reservation, its key.
 
-    `runtime` is the door it opens at: `prompt` on `/responses`, `voice` on `/realtime` (S41-10)."""
+    `runtime` is the door it opens at: `prompt` on `/responses`, `voice` on `/realtime` (S41-10),
+    `socket` on `/realtime` for a hosted agent's own socket (S41-21)."""
     from .agents import AgentIndisponible, resoudre_l_agent
 
     await sweep_expired(session, project.id)
@@ -165,12 +167,16 @@ async def open_session(
     if kind == "hosted":
         from .agent_hosted_sessions import hosted_protocol
 
-        if hosted_protocol(spec) is None:
-            # Relaying a container's own socket is S41-21's.
+        protocols = list(getattr(spec.runtime, "protocols", []) or [])
+        if runtime == "socket" and "invocations_ws" not in protocols:
             raise unprocessable(
-                f"`{agent_slug}` serves only `invocations_ws`: a session reaches a hosted agent by "
-                "`responses` or `invocations`",
-                [{"loc": ["agent", "runtime", "protocols"], "msg": "no protocol a session speaks"}],
+                f"`{agent_slug}` does not serve `invocations_ws`: a session reaches it on `/responses`",
+                [{"loc": ["agent", "runtime", "protocols"], "msg": "no socket to relay"}],
+            )
+        if runtime == "prompt" and hosted_protocol(spec) is None:
+            raise unprocessable(
+                f"`{agent_slug}` serves only `invocations_ws`: a session reaches it on `/realtime`",
+                [{"loc": ["agent", "runtime", "protocols"], "msg": "no protocol `/responses` speaks"}],
             )
     # A voice session lives as long as its agent lets it speak, its key with it.
     ttl_s = max(SESSION_TTL_S, getattr(spec.runtime, "max_session_minutes", 0) * 60 + 60)

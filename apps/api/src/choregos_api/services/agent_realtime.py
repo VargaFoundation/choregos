@@ -23,6 +23,10 @@ with 1009; `max_session_minutes` closes it with 1000; either way the session clo
 The spend is the relay's own (S41-15, `realtime_spend`): each `response.done` is priced from its
 usage at the prices the session opened with, and the session closes with 1008 `budget_exceeded` the
 moment the sum reaches its cap, the reservation or the per-minute rate of the catalogue.
+
+A dropped socket is not a hang-up (S41-21, `VoiceRelay`): each event the caller gets is numbered,
+the model's socket waits `RESUME_GRACE_S` for the caller to come back, and the events it missed are
+sent again; past the grace the session closes, `caller_gone`. A close the caller sends hangs up.
 """
 
 from __future__ import annotations
@@ -31,12 +35,14 @@ import asyncio
 import contextlib
 import json
 import time
+from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 from urllib.parse import quote, urlsplit, urlunsplit
 
 from choregos_adapters.base import RealtimeClosed, RealtimeConnector, RealtimeLink
+from choregos_adapters.realtime_ws import WebsocketsConnector
 from choregos_adapters.registry import fakes_enabled
 
 from ..config import get_settings
@@ -107,43 +113,7 @@ def realtime_connector() -> RealtimeConnector:
         from choregos_adapters.fakes import FakeRealtimeUpstream
 
         return _OVERRIDES.setdefault("connector", FakeRealtimeUpstream())  # type: ignore[no-any-return]
-    return WebsocketsConnector()
-
-
-class WebsocketsConnector:
-    """The gateway's realtime socket, through `websockets` (LiteLLM relays `/realtime`)."""
-
-    async def connect(self, url: str, headers: dict[str, str]) -> RealtimeLink:
-        from websockets.asyncio.client import connect
-
-        socket = await connect(url, additional_headers=headers, max_size=8 * MAX_FRAME_BYTES)
-        return _WebsocketsLink(socket)
-
-
-class _WebsocketsLink:
-    def __init__(self, socket: Any) -> None:
-        self._socket = socket
-
-    async def send(self, message: str) -> None:
-        from websockets.exceptions import ConnectionClosed
-
-        try:
-            await self._socket.send(message)
-        except ConnectionClosed as closed:
-            raise RealtimeClosed(closed.rcvd.code if closed.rcvd else 1006) from closed
-
-    async def recv(self) -> str:
-        from websockets.exceptions import ConnectionClosed
-
-        try:
-            message = await self._socket.recv()
-        except ConnectionClosed as closed:
-            code, reason = (closed.rcvd.code, closed.rcvd.reason) if closed.rcvd else (1006, "")
-            raise RealtimeClosed(code, reason) from closed
-        return message if isinstance(message, str) else message.decode("utf-8", "replace")
-
-    async def close(self) -> None:
-        await self._socket.close()
+    return WebsocketsConnector(max_size=8 * MAX_FRAME_BYTES)
 
 
 def realtime_url(gateway_url: str, model: str) -> str:
@@ -216,7 +186,7 @@ def screen_client_event(event: dict[str, Any]) -> dict[str, Any] | Refusal:
     return Refusal("event_refused", f"`{type_}` is not an event a caller sends in a voice session")
 
 
-def error_event(refusal: Refusal, event_id: Any = None) -> str:
+def error_payload(refusal: Refusal, event_id: Any = None) -> dict[str, Any]:
     error: dict[str, Any] = {
         "type": "invalid_request_error",
         "code": refusal.code,
@@ -224,7 +194,7 @@ def error_event(refusal: Refusal, event_id: Any = None) -> str:
     }
     if event_id is not None:
         error["event_id"] = event_id
-    return json.dumps({"type": "error", "error": error})
+    return {"type": "error", "error": error}
 
 
 # ───────────────────────────── the relay ─────────────────────────────
@@ -285,6 +255,10 @@ class VoiceSession:
     started: float = field(default_factory=time.monotonic)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
+    def deadline(self) -> float:
+        """When `max_session_minutes` ends the session, however many sockets it took."""
+        return self.started + self.max_seconds
+
     def cap(self) -> float:
         return session_cap(
             self.reserved_usd, self.usd_per_minute, time.monotonic() - self.started, self.minute_s
@@ -321,103 +295,266 @@ class Ending:
     message: str = ""
 
 
-async def relay(caller: CallerSocket, upstream: RealtimeLink, voice: VoiceSession) -> Ending:
-    """Both directions until one ends: the caller hangs up, the model's socket closes, a frame is
-    too large, the minutes run out, or the gateway refuses the key for budget."""
-    transcription = get_settings().realtime_transcription_model
-    configuration = session_configuration(voice.spec, voice.model, voice.tools, transcription)
-    await upstream.send(json.dumps(configuration))
-    greeting = getattr(voice.spec.runtime, "greeting", None)
-    if greeting:
-        await upstream.send(
-            json.dumps(
-                {
-                    "type": "response.create",
-                    "response": {"instructions": f"Greet the caller with exactly these words: {greeting}"},
-                }
+#: The close code of a socket that dropped without a close frame: the one cut a caller comes back
+#: from. Any close the caller sends is a hang-up.
+DROPPED = 1006
+#: The platform's own event, the first on a session's socket: `{"type": …, "session_id": …}`.
+SESSION_EVENT = "choregos.session"
+
+
+class VoiceRelay:
+    """One voice session's relay, which outlives its caller's socket (S41-21).
+
+    Every event sent to the caller carries `seq`, its number in the session (1, 2, …), and the last
+    `RESUME_BUFFER_BYTES` of them are held. When the caller's socket drops (`DROPPED`), the model's
+    socket stays open for `grace_s`: its events are still priced, its function calls still answered,
+    its events held. A caller that comes back in time with the session's id and the last `seq` it
+    read gets the events after it, then the live ones; otherwise the session closes, `caller_gone`.
+    Nothing is counted twice: a response is priced when the model sends it, never when it is resent.
+    """
+
+    def __init__(self, upstream: RealtimeLink, voice: VoiceSession, grace_s: float | None = None) -> None:
+        self.upstream = upstream
+        self.voice = voice
+        self.grace_s = RESUME_GRACE_S if grace_s is None else grace_s
+        self.seq = 0
+        self.caller: CallerSocket | None = None
+        self.detached_at = 0.0
+        self._held: deque[tuple[int, str]] = deque()
+        self._held_bytes = 0
+        self._changed = asyncio.Event()
+        self._final: Ending | None = None
+        self._ended = asyncio.Event()
+        self._owner: asyncio.Task[None] | None = None
+        self._kick: asyncio.Event | None = None
+
+    # ───────────────────────── its life ─────────────────────────
+
+    async def start(self) -> None:
+        """Configures the model's session, greets, and runs the relay until it ends."""
+        transcription = get_settings().realtime_transcription_model
+        configuration = session_configuration(
+            self.voice.spec, self.voice.model, self.voice.tools, transcription
+        )
+        await self.upstream.send(json.dumps(configuration))
+        greeting = getattr(self.voice.spec.runtime, "greeting", None)
+        if greeting:
+            instructions = f"Greet the caller with exactly these words: {greeting}"
+            await self.upstream.send(
+                json.dumps({"type": "response.create", "response": {"instructions": instructions}})
             )
-        )
+        _RELAYS[self.voice.session_id] = self
+        # The caller's first event: the session's id, to come back with if its socket drops.
+        await self.send({"type": SESSION_EVENT, "session_id": self.voice.session_id})
+        self._owner = asyncio.create_task(self._own())
 
-    from_caller = asyncio.create_task(_from_caller(caller, upstream, voice))
-    from_model = asyncio.create_task(_from_model(caller, upstream, voice))
-    try:
-        done, _ = await asyncio.wait(
-            {from_caller, from_model}, timeout=voice.max_seconds, return_when=asyncio.FIRST_COMPLETED
-        )
-    finally:
-        for task in (from_caller, from_model):
-            if not task.done():
-                task.cancel()
+    async def done(self) -> Ending:
+        """The relay's ending, once the session is closed and its upstream with it."""
+        if self._owner is not None:
+            await asyncio.shield(self._owner)
+        return self._final or Ending("relay_error", 1011, "the relay failed")
+
+    def _finish(self, ending: Ending) -> None:
+        if self._final is None:
+            self._final = ending
+            self._ended.set()
+            self._changed.set()
+
+    async def _own(self) -> None:
+        try:
+            await self._serve()
+        except Exception as failure:  # the session still closes, its spend booked
+            log.warning(
+                "agent_realtime.relay_failed", session_id=self.voice.session_id, error=str(failure)[:300]
+            )
+            self._finish(Ending("relay_error", 1011, "the relay failed"))
+        finally:
+            _RELAYS.pop(self.voice.session_id, None)
+            with contextlib.suppress(Exception):
+                await self.upstream.close()
+            ending = self._final or Ending("relay_error", 1011, "the relay failed")
+            await end_voice_session(self.voice, ending.reason)
+
+    async def _serve(self) -> None:
+        """Until the model ends, the minutes run out, or the caller stays away past the grace."""
+        model = asyncio.create_task(self._from_model())
+        try:
+            while self._final is None:
+                now = time.monotonic()
+                left = self.voice.deadline() - now
+                if left <= 0:
+                    self._finish(Ending("max_minutes", 1000, "the agent's max_session_minutes is reached"))
+                    break
+                wait = left
+                if self.caller is None and self.detached_at:
+                    grace_left = self.detached_at + self.grace_s - now
+                    if grace_left <= 0:
+                        self._finish(Ending("caller_gone", 1001, "the caller did not come back in time"))
+                        break
+                    wait = min(wait, grace_left)
+                changed = asyncio.ensure_future(self._changed.wait())
+                done, _ = await asyncio.wait(
+                    {model, changed}, timeout=wait, return_when=asyncio.FIRST_COMPLETED
+                )
+                changed.cancel()
+                self._changed.clear()
+                if model in done:
+                    self._finish(model.result())
+        finally:
+            if not model.done():
+                model.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await task
-    if not done:
-        return Ending("max_minutes", 1000, "the agent's max_session_minutes is reached")
-    return next(iter(done)).result()
+                    await model
 
+    # ───────────────────────── its caller ─────────────────────────
 
-async def _from_caller(caller: CallerSocket, upstream: RealtimeLink, voice: VoiceSession) -> Ending:
-    while True:
-        message = await caller.receive()
-        if message["type"] == "websocket.disconnect":
-            return Ending("closed", 1000)
-        text = message.get("text")
-        if text is None:
-            if len(message.get("bytes") or b"") > MAX_FRAME_BYTES:
+    def refusal(self, after: int) -> Ending | None:
+        """Why a caller cannot resume after `after`: an event it never had, or one no longer held."""
+        if after > self.seq or (after < self.seq and (not self._held or self._held[0][0] > after + 1)):
+            return Ending("resume_refused", 1008, f"the events after {after} are not held anymore")
+        return None
+
+    async def attach(self, caller: CallerSocket, after: int = 0) -> Ending | None:
+        """Serves `caller` from the event after `after` until its socket ends: the ending to close
+        it with, or `None` when it dropped and the relay waits for it to come back."""
+        if self._final is not None:
+            return await self.done()
+        refused = self.refusal(after)
+        if refused is not None:
+            return refused
+        if self._kick is not None:
+            self._kick.set()  # a socket the server has not seen drop yet: the new one takes its place
+            await self.voice.note("caller.replaced", {"seq": self.seq})
+        kick = self._kick = asyncio.Event()
+        resumed = self.caller is not None or self.detached_at > 0
+        self.caller, self.detached_at = caller, 0.0
+        self._changed.set()
+        if resumed:
+            await self.voice.note("caller.resumed", {"after": after, "seq": self.seq})
+        for seq, text in list(self._held):
+            if seq > after:
+                await caller.send_text(text)
+        reader = asyncio.create_task(self._from_caller(caller))
+        waits = {reader, asyncio.ensure_future(self._ended.wait()), asyncio.ensure_future(kick.wait())}
+        try:
+            done, _ = await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in waits:
+                if not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await task
+        if kick.is_set():
+            return Ending("replaced", 1000, "the session was resumed on another socket")
+        if reader in done:
+            ending = reader.result()
+            if ending.reason == "dropped":
+                self.caller, self.detached_at, self._kick = None, time.monotonic(), None
+                self._changed.set()
+                await self.voice.note("caller.dropped", {"seq": self.seq})
+                return None
+            self._finish(ending)
+        return await self.done()
+
+    async def send(self, event: dict[str, Any]) -> None:
+        """An event to the caller, numbered and held; to nobody while the caller is away."""
+        self.seq += 1
+        numbered = json.dumps({**event, "seq": self.seq})
+        self._held.append((self.seq, numbered))
+        self._held_bytes += len(numbered)
+        while self._held_bytes > RESUME_BUFFER_BYTES and len(self._held) > 1:
+            self._held_bytes -= len(self._held.popleft()[1])
+        caller = self.caller
+        if caller is not None:
+            with contextlib.suppress(Exception):  # a socket going away: its reader sees it
+                await caller.send_text(numbered)
+
+    async def _from_caller(self, caller: CallerSocket) -> Ending:
+        upstream, voice = self.upstream, self.voice
+        while True:
+            message = await caller.receive()
+            if message["type"] == "websocket.disconnect":
+                if message.get("code") == DROPPED:
+                    return Ending("dropped", DROPPED)
+                return Ending("closed", 1000)
+            text = message.get("text")
+            if text is None:
+                if len(message.get("bytes") or b"") > MAX_FRAME_BYTES:
+                    return Ending("frame_too_large", 1009, f"a frame is limited to {MAX_FRAME_BYTES} bytes")
+                await self.send(error_payload(Refusal("event_refused", "realtime events are JSON text")))
+                continue
+            if len(text.encode("utf-8")) > MAX_FRAME_BYTES:
+                await voice.note("client.refused", {"code": "frame_too_large", "bytes": len(text)})
                 return Ending("frame_too_large", 1009, f"a frame is limited to {MAX_FRAME_BYTES} bytes")
-            await caller.send_text(error_event(Refusal("event_refused", "realtime events are JSON text")))
-            continue
-        if len(text.encode("utf-8")) > MAX_FRAME_BYTES:
-            await voice.note("client.refused", {"code": "frame_too_large", "bytes": len(text)})
-            return Ending("frame_too_large", 1009, f"a frame is limited to {MAX_FRAME_BYTES} bytes")
-        try:
-            event = json.loads(text)
-        except ValueError:
-            event = None
-        if not isinstance(event, dict):
-            await caller.send_text(error_event(Refusal("event_refused", "an event is a JSON object")))
-            continue
-        screened = screen_client_event(event)
-        if isinstance(screened, Refusal):
-            await voice.note("client.refused", {"code": screened.code, "type": str(event.get("type"))[:64]})
-            await caller.send_text(error_event(screened, event.get("event_id")))
-            continue
-        if screened["type"] == "conversation.item.create":
-            said = [p.get("text", "") for p in screened["item"]["content"] if p.get("type") == "input_text"]
-            if said:
-                await voice.note("input.text", {"text": " ".join(said)[:2000]})
-        try:
-            await upstream.send(json.dumps(screened))
-        except RealtimeClosed as closed:
-            return Ending("upstream_closed", 1011, closed.reason or "the model's socket closed")
+            try:
+                event = json.loads(text)
+            except ValueError:
+                event = None
+            if not isinstance(event, dict):
+                await self.send(error_payload(Refusal("event_refused", "an event is a JSON object")))
+                continue
+            screened = screen_client_event(event)
+            if isinstance(screened, Refusal):
+                await voice.note(
+                    "client.refused", {"code": screened.code, "type": str(event.get("type"))[:64]}
+                )
+                await self.send(error_payload(screened, event.get("event_id")))
+                continue
+            if screened["type"] == "conversation.item.create":
+                said = [
+                    p.get("text", "") for p in screened["item"]["content"] if p.get("type") == "input_text"
+                ]
+                if said:
+                    await voice.note("input.text", {"text": " ".join(said)[:2000]})
+            try:
+                await upstream.send(json.dumps(screened))
+            except RealtimeClosed as closed:
+                return Ending("upstream_closed", 1011, closed.reason or "the model's socket closed")
+
+    # ───────────────────────── its model ─────────────────────────
+
+    async def _from_model(self) -> Ending:
+        upstream, voice = self.upstream, self.voice
+        while True:
+            try:
+                raw = await upstream.recv()
+            except RealtimeClosed as closed:
+                return Ending("upstream_closed", 1011, closed.reason or "the model's socket closed")
+            try:
+                event = json.loads(raw)
+            except ValueError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            type_ = str(event.get("type"))
+            spent: Ending | None = None
+            if type_ in _SPOKEN:
+                kind, key = _SPOKEN[type_]
+                await voice.note(kind, {"text": str(event.get(key) or "")[:2000]})
+            elif type_ == "response.done":
+                spent = await _count_the_response(voice, event.get("response") or {})
+            elif type_ == "error" and budget_refusal(raw):
+                await self.send(event)
+                return Ending("budget_exceeded", 1008, "the session's budget is spent")
+            await self.send(event)
+            if spent is not None:
+                return spent
+            if type_ == "response.function_call_arguments.done":
+                await _answer_the_call(upstream, voice, event)
 
 
-async def _from_model(caller: CallerSocket, upstream: RealtimeLink, voice: VoiceSession) -> Ending:
-    while True:
-        try:
-            raw = await upstream.recv()
-        except RealtimeClosed as closed:
-            return Ending("upstream_closed", 1011, closed.reason or "the model's socket closed")
-        try:
-            event = json.loads(raw)
-        except ValueError:
-            continue
-        if not isinstance(event, dict):
-            continue
-        type_ = str(event.get("type"))
-        spent: Ending | None = None
-        if type_ in _SPOKEN:
-            kind, key = _SPOKEN[type_]
-            await voice.note(kind, {"text": str(event.get(key) or "")[:2000]})
-        elif type_ == "response.done":
-            spent = await _count_the_response(voice, event.get("response") or {})
-        elif type_ == "error" and budget_refusal(raw):
-            await caller.send_text(raw)
-            return Ending("budget_exceeded", 1008, "the session's budget is spent")
-        await caller.send_text(raw)
-        if spent is not None:
-            return spent
-        if type_ == "response.function_call_arguments.done":
-            await _answer_the_call(upstream, voice, event)
+#: The relays this API process holds, by session: where a caller's reconnection finds its session.
+_RELAYS: dict[str, VoiceRelay] = {}
+#: How long the model's socket waits for a caller whose socket dropped (a test shortens it).
+RESUME_GRACE_S = 30.0
+#: What a relay holds of the events it sent, for a caller coming back: about a minute of the
+#: model's audio, base64-encoded.
+RESUME_BUFFER_BYTES = 8 * 1024 * 1024
+
+
+def held_relay(session_id: str) -> VoiceRelay | None:
+    """The relay of that session, if this process holds it."""
+    return _RELAYS.get(session_id)
 
 
 async def _count_the_response(voice: VoiceSession, response: dict[str, Any]) -> Ending | None:
@@ -494,14 +631,19 @@ async def end_voice_session(voice: VoiceSession, reason: str) -> None:
 
 __all__ = [
     "MAX_FRAME_BYTES",
+    "RESUME_BUFFER_BYTES",
+    "RESUME_GRACE_S",
+    "SESSION_EVENT",
     "CallerSocket",
     "Ending",
     "Refusal",
+    "VoiceRelay",
     "VoiceSession",
     "end_voice_session",
+    "error_payload",
+    "held_relay",
     "realtime_connector",
     "realtime_url",
-    "relay",
     "require_realtime_gateway",
     "screen_client_event",
     "session_configuration",

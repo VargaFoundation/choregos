@@ -1123,18 +1123,24 @@ def _prompt_call(agent: Any) -> PromptCall | None:
     )
 
 
-def _hosted_call(agent: Any, builds: Mapping[str, Any] | None = None) -> HostedCall | None:
+def _hosted_call(
+    agent: Any, builds: Mapping[str, Any] | None = None, *, session: bool = False
+) -> HostedCall | None:
     """The step a hosted agent carries (ADR 0080), from its version's runtime; `None` for any other.
 
     Refused, never retried, when no pod could run it as published: an image without a digest, a zip
-    whose build is not `ready`, or a version that serves only `invocations_ws`."""
+    whose build is not `ready`, or, for a workflow step, a version that serves only `invocations_ws`
+    (a `session`'s pod relays that socket, S41-21)."""
     from temporalio.exceptions import ApplicationError
 
     runtime = getattr(getattr(agent, "spec", None), "runtime", None)
     if runtime is None or runtime.kind != "hosted":
         return None
     who = f"`{agent.agent.slug}` v{agent.version}"
+    socket = "invocations_ws" in runtime.protocols
     protocol = next((p for p in runtime.protocols if p in ("responses", "invocations")), None)
+    if protocol is None and session and socket:
+        protocol = "responses"  # never sent: a session reaches it only on `/realtime`
     if protocol is None:
         raise ApplicationError(
             f"the hosted agent {who} serves only `invocations_ws`; a workflow step is sent over "
@@ -1152,6 +1158,7 @@ def _hosted_call(agent: Any, builds: Mapping[str, Any] | None = None) -> HostedC
         env=dict(runtime.env),
         agent_slug=agent.agent.slug,
         agent_version=agent.version,
+        socket=socket and session,
     )
 
 

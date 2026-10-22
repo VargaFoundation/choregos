@@ -455,8 +455,45 @@ agent's own container, in a pod of its own.
   without a response (600 s by default; each response restarts the wait), the session's expiry.
   Stopping fails the turns still waiting, cancels the pod and closes the session with that reason;
   replayed, it changes nothing.
-- An agent that serves only `invocations_ws` has no session yet (422): the WebSocket relay to a
-  hosted container is S41-21.
+- An agent that serves only `invocations_ws` is answered 422 here: its session is on `/realtime`
+  (below).
+
+**A person on a hosted agent's own socket (S41-21).** A hosted agent that declares `invocations_ws`
+answers on the same `/orgs/{org}/agents/{slug}/realtime?project=…` as a voice agent, with the same
+door (`Origin`, rights, the session opened before the socket is accepted). The API never connects
+to the pod: each text frame the caller sends is journaled (`socket.in`); the pod's runner reads
+them (`GET /internal/agent-sessions/{id}/socket/next`, a long poll), connects the container's
+`ws://127.0.0.1:$PORT/invocations_ws` at the first one, writes each frame to it, and posts what the
+container sends back numbered from 1 (`POST …/socket/out`). Each number is journaled once, so a post
+sent again changes nothing, and one that would leave a hole is refused (409). The caller's handler
+reads the journal and sends each frame once, in order, unmodified.
+
+- **Frames**: text only, 1 MiB at most; a binary frame closes with 1003, a larger one with 1009.
+  Each frame the caller sends is a turn for `max_turns`, as a prompt turn is.
+- **How it ends**: the caller's close closes the session and its pod; the container's close
+  closes the caller's socket with its code (one a server may not send becomes 1011) and the
+  session, `agent_closed`; a spent key closes with 1008 `budget_exceeded`; a container never ready,
+  or whose socket refuses the connection, closes with 1011.
+
+**A socket that drops (S41-21).** A socket's first event is the platform's,
+`{"type": "choregos.session", "session_id": …}`. Every voice event after it carries `seq`, its
+number in the session. A socket that goes away without a close frame (1006) does not end the session:
+for 30 s the model's socket (voice) or the pod (hosted) stays, its events priced and kept. The
+caller that comes back on the same URL with `session=<id>&after=<n>` — the last voice `seq` it read,
+or the number of the container's frames it read — is checked again (the rights, and the session
+must be its own, of this agent, in this project), then gets what it missed, then the live events.
+One key, one pod, each response priced once.
+
+- **Past the grace** the session closes `caller_gone`, its key revoked; a late resume gets 1008.
+  A hang-up (a close frame) still closes at once.
+- **Two sockets**: a newer one takes the session; the older one is closed with 1000.
+- **What is held**: a voice session holds the last 8 MiB of its events in the API process that
+  opened it. A resume after an event no longer held is refused (1008), never skipped; a resume on
+  another API replica is answered 1013 (try again) — sticky sessions keep it on one. A hosted
+  session is read from the journal, on any replica.
+- **Limits**: a hosted session's caller reads the journal every 0.2 s while attached; the
+  container's frames are journaled as text. A pod that restarts replays the caller's frames to the
+  new container, which starts its own conversation again.
 
 ### Signatures, by cosign (S41-14)
 
@@ -521,4 +558,4 @@ While the latest version's build is pending or building, the page asks again eve
 stops once it has ended.
 
 The rest of the stream — signatures, live voice, the cluster proofs — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-14 to S41-21.
+[`docs/plan/`](plan/STATUS.md) as S41-14 to S41-20.

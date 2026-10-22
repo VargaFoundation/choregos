@@ -782,6 +782,11 @@
         "agent_version": {
           "type": "integer",
           "minimum": 1
+        },
+        "socket": {
+          "type": "boolean",
+          "default": false,
+          "description": "The container serves `/invocations_ws`: a session's pod relays the caller's socket to it (S41-21). A workflow step never opens it."
         }
       }
     },

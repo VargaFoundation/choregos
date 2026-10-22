@@ -205,7 +205,7 @@ async def test_an_invocations_agent_gets_its_turns_on_invocations(
     assert seen[0]["protocol"] == "invocations"
 
 
-async def test_a_socket_only_agent_has_no_session_yet(
+async def test_a_socket_only_agent_is_sent_to_realtime(
     client: AsyncClient,
     project: dict[str, Any],
     upstream: Upstream,  # noqa: F811
@@ -214,7 +214,7 @@ async def test_a_socket_only_agent_has_no_session_yet(
 ) -> None:
     await _hosted(client, protocols=["invocations_ws"])
     refused = await _ask(client, "Hi")
-    assert refused.status_code == 422 and "invocations_ws" in refused.text
+    assert refused.status_code == 422 and "/realtime" in refused.text, "its door is the socket (S41-21)"
     assert upstream.gateway.keys == {} and temporal.start_calls == []
 
 

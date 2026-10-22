@@ -8,6 +8,11 @@ through the internal API's courtier) and the CONNECT proxy (the session's networ
 each turn the person asked for from `/internal/agent-sessions/{id}/turns/next`, sends it to the
 container over Foundry's contract, and posts how the container answered. It stops when the API says
 the session ended (410) or on SIGTERM; the pod's workflow fails whatever turn was left waiting.
+
+A container that serves `/invocations_ws` gets the caller's socket too (S41-21, `SocketRelay`): the
+runner reads the caller's frames from `…/socket/next`, writes them to the container's socket, and
+posts what the container sends back to `…/socket/out`, numbered from 1, so a post sent again
+changes nothing.
 """
 
 from __future__ import annotations
@@ -21,6 +26,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
+from choregos_adapters.base import RealtimeClosed, RealtimeConnector, RealtimeLink
+from choregos_adapters.realtime_ws import WebsocketsConnector
 from choregos_contracts import StageInput
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.mcp import METHODE_INCONNUE, erreur, negocier, ok, resultat_texte
@@ -46,6 +53,10 @@ SESSION_MCP = "choregos"
 #: The events one turn reports with its answer; the API keeps no more.
 MAX_EVENTS = 200
 _EXCERPT = 2000
+#: A frame of the container's socket, as the API's `SOCKET_FRAME_BYTES`: a larger one closes it.
+SOCKET_FRAME_BYTES = 1024 * 1024
+#: A close code that says nothing (1005, no status) is a normal close for the caller.
+_NO_STATUS = 1005
 
 
 class SessionEndedError(RuntimeError):
@@ -93,6 +104,23 @@ class SessionClient:
 
     async def post_turn(self, turn_id: str, result: dict[str, Any]) -> None:
         await self._request("POST", f"/turns/{turn_id}", json=result)
+
+    async def socket_next(self, after: int, wait: float) -> dict[str, Any]:
+        """The caller's socket frames journaled after `after` (`AgentSessionSocketNext`)."""
+        answer = await self._request(
+            "GET", "/socket/next", params={"after": after, "wait": wait}, timeout=wait + 30
+        )
+        return dict(answer.json())
+
+    async def socket_out(
+        self,
+        frames: list[dict[str, Any]],
+        closed: dict[str, Any] | None = None,
+        events: list[dict[str, Any]] | None = None,
+    ) -> int:
+        """Posts the container's frames; the last number the journal holds."""
+        body = {"frames": frames, "closed": closed, "events": events or []}
+        return int((await self._request("POST", "/socket/out", json=body)).json()["out_n"])
 
     async def list_tools(self) -> list[dict[str, Any]]:
         return list((await self._request("GET", "/tools")).json().get("tools") or [])
@@ -194,6 +222,140 @@ class TurnEvents:
         return events
 
 
+class SocketRelay:
+    """The caller's socket on the container's `/invocations_ws` (S41-21).
+
+    The caller's `open` connects the container's socket, each `in` is written to it, `close` closes
+    it. Each frame the container sends is posted with the next number; when the container closes
+    its socket, or the gateway refuses the session's key, the close is posted and the API closes the
+    caller's socket with it. Each `in` is a turn for `max_turns`, as a prompt turn is.
+    """
+
+    def __init__(
+        self,
+        client: SessionClient,
+        connector: RealtimeConnector,
+        url: str,
+        model: ModelProxy,
+        events: TurnEvents,
+        ready: Callable[[], Awaitable[bool]],
+    ) -> None:
+        self.client = client
+        self.connector = connector
+        self.url = url
+        self.model = model
+        self.events = events
+        self.ready = ready
+        #: How long one `socket/next` waits for a frame.
+        self.poll_s = 20.0
+        #: The number of the container's last frame the journal holds.
+        self.out_n = 0
+        self.closed = False
+        self._posting = asyncio.Lock()
+
+    async def run(self, stopping: asyncio.Event) -> None:
+        cursor, link, reader = 0, None, None
+        try:
+            first = True
+            while not stopping.is_set() and not self.closed:
+                try:
+                    batch = await self._next(cursor, stopping)
+                except SessionEndedError:
+                    return
+                except (SessionApiError, httpx.HTTPError):
+                    await asyncio.sleep(1)  # the API is restarting: the frames wait in the journal
+                    continue
+                if batch is None:
+                    continue
+                if first:
+                    self.out_n, first = int(batch.get("out_n") or 0), False
+                for frame in batch.get("frames") or []:
+                    kind = frame.get("kind")
+                    if kind == "open" and link is None:
+                        link = await self._open()
+                        if link is None:
+                            return
+                        reader = asyncio.create_task(self._from_container(link))
+                    elif kind == "in" and link is not None:
+                        self.model.turns, self.model.refused_turns = 0, 0
+                        with contextlib.suppress(RealtimeClosed):  # the reader posts the close
+                            await link.send(str(frame.get("text") or ""))
+                        await self._check_budget(link)
+                        if self.closed:
+                            return
+                    elif kind == "close":
+                        return  # `finally` closes the container's socket
+                cursor = int(batch.get("cursor") or cursor)
+                await self._check_budget(link)
+        finally:
+            if reader is not None and not reader.done():
+                reader.cancel()
+                with contextlib.suppress(BaseException):
+                    await reader
+            if link is not None:
+                with contextlib.suppress(Exception):
+                    await link.close()
+
+    async def _next(self, cursor: int, stopping: asyncio.Event) -> dict[str, Any] | None:
+        poll = asyncio.ensure_future(self.client.socket_next(cursor, self.poll_s))
+        stop = asyncio.ensure_future(stopping.wait())
+        done, _ = await asyncio.wait({poll, stop}, return_when=asyncio.FIRST_COMPLETED)
+        stop.cancel()
+        if poll not in done:
+            poll.cancel()
+            with contextlib.suppress(BaseException):
+                await poll
+            return None
+        return poll.result()
+
+    async def _open(self) -> RealtimeLink | None:
+        if not await self.ready():
+            await self._post([], {"code": 1011, "reason": "the agent's container is not ready"})
+            return None
+        try:
+            return await self.connector.connect(self.url, {})
+        except Exception as refused:
+            await self.events.record("hosted.socket_refused", {"error": str(refused)[:300]})
+            await self._post([], {"code": 1011, "reason": "the agent's socket refused the connection"})
+            return None
+
+    async def _from_container(self, link: RealtimeLink) -> None:
+        try:
+            while True:
+                text = await link.recv()
+                await self._post([{"n": self.out_n + 1, "text": text[:SOCKET_FRAME_BYTES]}])
+                await self._check_budget(link)
+        except RealtimeClosed as closed:
+            code = 1000 if closed.code == _NO_STATUS else closed.code
+            await self._post([], {"code": min(max(code, 1000), 4999), "reason": closed.reason[:123]})
+
+    async def _check_budget(self, link: RealtimeLink | None) -> None:
+        """The gateway refused the session's key: the session ends, whatever the container does."""
+        if self.model.budget_refusal and not self.closed:
+            await self._post([], {"code": 1008, "reason": "budget_exceeded"})
+            if link is not None:
+                with contextlib.suppress(Exception):
+                    await link.close()
+
+    async def _post(self, frames: list[dict[str, Any]], closed: dict[str, Any] | None = None) -> None:
+        """Posted until the API holds it; a post sent again changes nothing."""
+        async with self._posting:
+            if self.closed:
+                return
+            events, attempt = self.events.take(), 0
+            while True:
+                try:
+                    self.out_n = await self.client.socket_out(frames, closed, events)
+                    break
+                except SessionEndedError:
+                    self.closed = True
+                    return
+                except (SessionApiError, httpx.HTTPError):
+                    attempt += 1  # the API is restarting: the session's end (410) stops it
+                    await asyncio.sleep(min(0.5 * attempt, 5.0))
+            self.closed = self.closed or closed is not None
+
+
 class SessionServer:
     """Serves one session's turns until the session ends."""
 
@@ -210,6 +372,9 @@ class SessionServer:
         self.model_transport: Any = None
         self.loopback_ports: tuple[int, int, int] = (MODEL_PORT, MCP_PORT, CONNECT_PORT)
         self.readiness_interval = 1.0
+        #: What opens the container's `/invocations_ws`.
+        self.socket_connector: RealtimeConnector = WebsocketsConnector(max_size=SOCKET_FRAME_BYTES)
+        self.socket_poll_s = 20.0
 
     async def serve(self) -> Exit:
         if not self.settings.run_id.startswith(SESSION_PREFIX):
@@ -242,6 +407,7 @@ class SessionServer:
         connect = ConnectProxy(stage_input, turn_events.record, upstream=upstream_proxy(os.environ))
         base = base_url(stage_input)
         hosted = stage_input.hosted
+        socket_task: asyncio.Task[None] | None = None
         try:
             async with (
                 Loopback(model, tools, connect, ports=self.loopback_ports),
@@ -250,6 +416,9 @@ class SessionServer:
                 ) as http,
             ):
                 ready = await wait_ready(http, base, hosted.readiness_timeout_s, self.readiness_interval)
+                if hosted.socket:
+                    relay = self._socket_relay(client, http, base, ready, model, turn_events)
+                    socket_task = asyncio.create_task(relay.run(self.stopping))
                 while not self.stopping.is_set():
                     try:
                         turn = await self._next(client)
@@ -273,7 +442,29 @@ class SessionServer:
                         return Exit.OK
         except OSError:
             return Exit.AGENT_UNREACHABLE
+        finally:
+            if socket_task is not None:
+                socket_task.cancel()
+                with contextlib.suppress(BaseException):
+                    await socket_task
         return Exit.OK
+
+    def _socket_relay(
+        self,
+        client: SessionClient,
+        http: httpx.AsyncClient,
+        base: str,
+        ready: bool,
+        model: ModelProxy,
+        events: TurnEvents,
+    ) -> SocketRelay:
+        async def ready_now() -> bool:
+            return ready or await wait_ready(http, base, 0, self.readiness_interval)
+
+        url = "ws" + base.removeprefix("http") + "/invocations_ws"
+        relay = SocketRelay(client, self.socket_connector, url, model, events, ready_now)
+        relay.poll_s = self.socket_poll_s
+        return relay
 
     async def _next(self, client: SessionClient) -> dict[str, Any] | None:
         """The next turn, or `None` when none came or the runner is stopping."""
@@ -342,4 +533,11 @@ async def serve_session(settings: RunnerSettings) -> Exit:
     return await server.serve()
 
 
-__all__ = ["SessionClient", "SessionEndedError", "SessionServer", "SessionToolsMcp", "serve_session"]
+__all__ = [
+    "SessionClient",
+    "SessionEndedError",
+    "SessionServer",
+    "SessionToolsMcp",
+    "SocketRelay",
+    "serve_session",
+]

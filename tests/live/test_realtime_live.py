@@ -21,7 +21,8 @@ from uuid import uuid4
 
 import pytest
 from choregos_adapters.gateway.litellm import LiteLlmGateway
-from choregos_api.services.agent_realtime import WebsocketsConnector, realtime_url
+from choregos_adapters.realtime_ws import WebsocketsConnector
+from choregos_api.services.agent_realtime import realtime_url
 from choregos_api.services.realtime_spend import realtime_prices, response_cost, session_cap
 
 from .conftest import require
