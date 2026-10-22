@@ -297,5 +297,27 @@ agent's own container, in a pod of its own.
 - An agent that serves only `invocations_ws` has no session yet (422): the WebSocket relay to a
   hosted container is S41-21.
 
-The rest of the stream — the console and the real builder — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-12 to S41-21.
+### In the console (S41-12)
+
+**New agent** offers three more starts beside the blank form and the remote agent:
+`/agents/new/runtime?kind=prompt|voice|hosted`.
+
+- **Prompt agent**: name, identifier, instructions, an optional model, how it answers (text or a
+  JSON object) and how it uses tools. Tools and knowledge are added on the agent's page afterwards.
+- **Voice agent**: the same, with a realtime model required, its voice, its greeting, who detects
+  the end of a turn, and the longest call (120 minutes at most).
+- **Hosted agent**: an image reference (its digest is resolved at publication), or a zip uploaded
+  to `POST /orgs/{org}/hosted-sources` and summarised (hash, files, where the dependencies are
+  declared; a zip that declares none can only be `bundled`), its runtime (only those with a base
+  image can be chosen), its entry point, the protocols it serves (`responses`, `invocations`), its
+  port (4001 to 4003 are refused: they are the runner's) and how long it may take to be ready.
+
+The form sends nothing the API would refuse for a missing field, and says what is still needed.
+**Publish** and **Save as draft** create the agent; a refusal from the API stays on the page. On
+the agent's page, **Model and runtime** shows the runtime of the version, the digest an image runs
+at, and the build of a zip: pending, building, built (with its image) or failed (with its error).
+While the latest version's build is pending or building, the page asks again every 3 seconds, and
+stops once it has ended.
+
+The rest of the stream — the real builder, signatures, live voice, the cluster proofs — is planned
+in [`docs/plan/`](plan/STATUS.md) as S41-13 to S41-21.
