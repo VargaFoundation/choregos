@@ -36,6 +36,7 @@ jobs:
       hosted-admission: ${{ steps.filter.outputs.hosted-admission }}
       hosted-gvisor: ${{ steps.filter.outputs.hosted-gvisor }}
       hosted-foundry: ${{ steps.filter.outputs.hosted-foundry }}
+      hosted-cluster: ${{ steps.filter.outputs.hosted-cluster }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -117,6 +118,24 @@ jobs:
               - 'apps/orchestrator/src/choregos_orchestrator/gitops.py'
               - 'apps/orchestrator/tests/test_gvisor_policy.py'
               - 'dev/scripts/gvisor.sh'
+              - '.github/workflows/ci.yml'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            # A hosted agent's pod on a real Kubernetes (S41-24): the executor that renders it, the
+            # runner that serves a session in it and copies the working tree into it, the tests,
+            # and the clusters they run on.
+            hosted-cluster:
+              - 'tests/cluster/**'
+              - 'dev/kind*.yaml'
+              - 'dev/scripts/gvisor.sh'
+              - 'infra/bootstrap/gvisor.yaml'
+              - 'packages/adapters/src/choregos_adapters/executor/k8s_job.py'
+              - 'packages/core/src/choregos_core/hosted.py'
+              - 'packages/runner/src/choregos_runner/serve_session.py'
+              - 'packages/runner/src/choregos_runner/hosted.py'
+              - 'packages/runner/src/choregos_runner/hosted_workspace.py'
+              - 'examples/hosted/reference/**'
+              - 'Makefile'
               - '.github/workflows/ci.yml'
               - 'pyproject.toml'
               - 'uv.lock'
@@ -543,6 +562,57 @@ jobs:
           # A skip proves nothing: runsc, node or kyverno went missing, and the job says so.
           ! grep -qi skipped pytest.out
 
+  hosted-cluster:
+    # A hosted agent's pod on a real cluster (S41-24): the reference agent as a native sidecar that
+    # SIGTERM stops (1.34), the same start refused and nothing created on 1.28, a session's pod
+    # answering a turn through the real runner image, a sidecar of another user changing the files
+    # the runner copied (`fsGroup`), and the pod under the `gvisor` RuntimeClass (runsc in the kind
+    # node, `make cluster-gvisor`). The unit tests prove the Job's JSON; this proves a kubelet runs it.
+    needs: changes
+    if: needs.changes.outputs.hosted-cluster == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - uses: helm/kind-action@v1
+        with:
+          config: dev/kind-no-ports.yaml
+          cluster_name: choregos
+      - name: CNI
+        # `dev/kind*.yaml` disables the default CNI, so the nodes are not Ready without one.
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
+          kubectl -n kube-system rollout status ds/calico-node --timeout=300s
+          kubectl wait --for=condition=Ready nodes --all --timeout=300s
+      - name: the images, loaded into the cluster
+        run: |
+          docker build -t reference-agent:ci examples/hosted/reference
+          docker build -f tests/cluster/assets/runner.Dockerfile -t choregos-runner:ci .
+          kind load docker-image reference-agent:ci choregos-runner:ci --name choregos
+      - name: gVisor in the runners node
+        run: make cluster-gvisor
+      - name: Kubernetes 1.28, which cannot run a native sidecar
+        run: |
+          kind create cluster --name old --image kindest/node:v1.28.15 --wait 180s
+          kubectl config use-context kind-choregos
+      - name: the hosted pods, on 1.34 and on 1.28
+        shell: bash
+        env:
+          CHOREGOS_HOSTED_REFERENCE_IMAGE: reference-agent:ci
+          CHOREGOS_HOSTED_RUNNER_IMAGE: choregos-runner:ci
+        run: |
+          CHOREGOS_CLUSTER_CONTEXT=kind-choregos uv run pytest tests/cluster/test_hosted_native_sidecar.py \
+            tests/cluster/test_hosted_session_pod.py tests/cluster/test_hosted_gvisor.py \
+            -m cluster -k "not below_1_29" -rs | tee pytest.out
+          CHOREGOS_CLUSTER_CONTEXT=kind-old uv run pytest tests/cluster/test_hosted_native_sidecar.py \
+            -m cluster -k below_1_29 -rs | tee -a pytest.out
+          # A skip proves nothing: a context, an image or the RuntimeClass went missing, and the job says so.
+          ! grep -qi skipped pytest.out
+          grep -c passed pytest.out
+
   hosted-foundry:
     # The Foundry variant of the triager (Agent Framework's `FoundryChatClient`, azure-identity's
     # `DefaultAzureCredential`, Foundry's `ResponsesHostServer`), unchanged, through the eight checks
@@ -644,7 +714,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-foundry, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

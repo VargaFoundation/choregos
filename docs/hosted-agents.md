@@ -174,6 +174,12 @@ the executor creates through autogen. What it proves:
 - the `hosted-gvisor` CI job runs both and fails on a skip;
 - `tests/cluster/test_hosted_gvisor.py` runs S41-16's hosted Job under `gvisor` on a kind cluster
   where `make cluster-gvisor` installed `runsc` (`dev/scripts/gvisor.sh`, release and sha512 pinned).
+- `tests/cluster/test_hosted_native_sidecar.py`, `test_hosted_session_pod.py` (S41-24) run the native
+  sidecar, the refusal below 1.29, a session's pod with the real runner image and the shared
+  workspace's `fsGroup` on kind; the `hosted-cluster` CI job runs them with the gVisor one and fails
+  on a skip. They need `CHOREGOS_HOSTED_REFERENCE_IMAGE` and `CHOREGOS_HOSTED_RUNNER_IMAGE`, images
+  loaded into the cluster (`tests/cluster/assets/runner.Dockerfile` is the slim runner). runsc does
+  not start a pod in kind over WSL2 (cgroup v1): run the gVisor test on a cgroup v2 host.
 
 **Five frameworks pass the conformance suite (S41-06).** [`examples/hosted/`](../examples/hosted/README.md)
 holds one ticket triager on each framework, unchanged by the platform and importing nothing from
