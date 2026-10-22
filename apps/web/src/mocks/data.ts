@@ -3236,6 +3236,19 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/agent-images$/, platformAgentImages],
+    [
+      /^\/platform\/identity$/,
+      {
+        items: [
+          { key: "oidc.issuer", label: "OIDC issuer", value: "https://sso.example.test/realms/choregos", source: "settings" },
+          { key: "oidc.client_id", label: "OIDC client id", value: "choregos", source: "settings" },
+          { key: "oidc.client_secret", label: "OIDC client secret", value: "set", source: "settings" },
+          { key: "oidc.redirect_uri", label: "Redirect URI to register at the identity provider", value: "https://api.example.test/api/v1/auth/callback", source: "derived" },
+          { key: "mcp.oauth.enabled", label: "MCP door accepts OAuth tokens", value: "enabled", source: "settings" },
+          { key: "session.max_age", label: "Session lifetime", value: "8 h", source: "default" },
+        ],
+      },
+    ],
     // What a deployment on agent-sandbox answers (ADR 0072): the others are not run there.
     [
       /^\/platform\/executors$/,
