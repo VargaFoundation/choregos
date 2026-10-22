@@ -110,6 +110,12 @@ global:
     jobs: {}
     agents: {}
     requireDigest: true
+    # Hosted agents (ADR 0080): the registry prefixes an agent version's image may come from, matched
+    # by path segment (`ghcr.io/acme` covers `ghcr.io/acme/triager`, not `ghcr.io/acme-evil`). Empty:
+    # no image source is accepted. Publication pins the tag to the digest the registry serves.
+    hostedRegistries: []
+    # Signatures of hosted images: off | warn (publish, log `hosted.signature_unverified`) | enforce.
+    hostedCosign: "off"
   # Network egress, one model (ADR 0066 and ADR 0070, amended): the organisation decides in the
   # console which hosts it OPENS (its egress allowlist) and the BOUNDS nothing may cross (its policy
   # ceiling's network section); this block is what only the operator sets. It lives under `global`

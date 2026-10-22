@@ -135,6 +135,12 @@ spec:
             {{- end }}
             - name: CHOREGOS_REQUIRE_IMAGE_DIGEST
               value: {{ .requireDigest | default false | quote }}
+            {{- with .hostedRegistries }}
+            - name: CHOREGOS_HOSTED_REGISTRIES
+              value: {{ toJson . | quote }}
+            {{- end }}
+            - name: CHOREGOS_HOSTED_COSIGN
+              value: {{ .hostedCosign | default "off" | quote }}
             {{- end }}
             {{- with (dig "mcp" "oauth" dict .Values.global) }}
             {{- if .enabled }}

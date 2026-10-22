@@ -58,3 +58,19 @@ def test_the_named_images_reach_the_api_and_every_worker() -> None:
 def test_a_bench_can_turn_the_digest_rule_off() -> None:
     envs = _envs("global.images.requireDigest=false")
     assert all(env["CHOREGOS_REQUIRE_IMAGE_DIGEST"] == "false" for env in envs.values())
+
+
+def test_hosted_registries_and_the_signature_mode_reach_the_api_only() -> None:
+    default = _envs()["choregos-api"]
+    assert "CHOREGOS_HOSTED_REGISTRIES" not in default
+    assert default["CHOREGOS_HOSTED_COSIGN"] == "off"
+    envs = _envs(
+        "global.images.hostedRegistries={ghcr.io/acme,registry.internal}",
+        "global.images.hostedCosign=enforce",
+    )
+    assert json.loads(envs["choregos-api"]["CHOREGOS_HOSTED_REGISTRIES"]) == [
+        "ghcr.io/acme",
+        "registry.internal",
+    ]
+    assert envs["choregos-api"]["CHOREGOS_HOSTED_COSIGN"] == "enforce"
+    assert all("CHOREGOS_HOSTED_COSIGN" not in env for name, env in envs.items() if name != "choregos-api")

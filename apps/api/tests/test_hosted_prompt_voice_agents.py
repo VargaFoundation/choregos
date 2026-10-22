@@ -78,16 +78,19 @@ async def test_a_version_that_contradicts_its_runtime_is_refused(
 
 
 @pytest.mark.parametrize(
-    "source",
+    ("source", "message"),
     [
-        {"type": "image", "ref": "ghcr.io/acme/triager:1.2"},
-        {"type": "zip", "sha256": DIGEST, "runtime": "python_3_13", "entry_point": ["python", "main.py"]},
+        ({"type": "image", "ref": "ghcr.io/acme/triager:1.2"}, "under no allowed prefix"),
+        (
+            {"type": "zip", "sha256": DIGEST, "runtime": "python_3_13", "entry_point": ["python", "main.py"]},
+            "not delivered",
+        ),
     ],
 )
-async def test_no_hosted_source_is_accepted_before_the_supply_chain(
-    client: AsyncClient, admin: str, source: dict[str, Any]
+async def test_no_hosted_source_is_accepted_by_default(
+    client: AsyncClient, admin: str, source: dict[str, Any], message: str
 ) -> None:
     refused = await _create(client, _spec(_hosted(source=source)))
     assert refused.status_code == 422, refused.text
     error = refused.json()["errors"][0]
-    assert error["loc"] == ["runtime", "source"] and "not delivered" in error["msg"]
+    assert error["loc"][:2] == ["runtime", "source"] and message in error["msg"]

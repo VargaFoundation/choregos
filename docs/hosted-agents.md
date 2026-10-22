@@ -24,11 +24,19 @@ Azure AI Foundry's Agent Service, so that an agent built for it runs here unchan
 
 ## What is delivered
 
-**The contract only (S41-01).** The registry accepts and validates the three runtimes; the stage
-input carries `hosted` and `prompt` steps. Nothing runs them yet:
+**The contract (S41-01) and the image supply chain (S41-02).** The registry accepts and validates the
+three runtimes; the stage input carries `hosted` and `prompt` steps. Nothing runs them yet:
 
-- a `hosted` version is refused at publication, whatever its source: the registry allowlist and the
-  digest pinning (S41-02) and the source upload and build (S41-07, S41-08) come first;
+- a hosted **image** is accepted only under a prefix of `CHOREGOS_HOSTED_REGISTRIES`
+  (`global.images.hostedRegistries`, matched by path segment); outside it, the version is refused
+  before anything is fetched. Publication (create, publish, trial, template install) resolves the tag
+  to the digest the registry serves and writes it in the version; a digest the caller wrote is resolved
+  again, never trusted; a restore keeps the digest it was published with. The manifest is read through
+  the organisation's egress allowlist, anonymously;
+- `CHOREGOS_HOSTED_COSIGN`: `enforce` refuses an image without a trusted signature, `warn` publishes it
+  and logs `hosted.signature_unverified`, `off` (the default) does not ask. No real verifier is wired
+  yet (S41-14): under `enforce` every image is refused outside the fakes;
+- a hosted **zip** source is refused: the source upload (S41-07) and the build (S41-08) come first;
 - a step whose agent has one of the three runtimes stops before any key is minted, with the reason
   (`AgentIndisponible`, not retried); voice agents are never steps.
 
@@ -39,4 +47,4 @@ a voice agent without a model, a hosted port on the runner's loopback listeners 
 has no base image for.
 
 The rest of the stream — the runner's loopback proxies, the sidecar in the run's pod, the builds,
-the sessions and the console — is planned in [`docs/plan/`](plan/STATUS.md) as S41-02 to S41-21.
+the sessions and the console — is planned in [`docs/plan/`](plan/STATUS.md) as S41-03 to S41-21.
