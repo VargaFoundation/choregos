@@ -585,3 +585,25 @@ def texte_du_resultat(resultat: dict[str, Any]) -> str:
     """Ce que l'agent lira : les blocs texte d'un résultat MCP."""
     blocs = resultat.get("content") or []
     return "\n".join(str(b.get("text", "")) for b in blocs if isinstance(b, dict) and b.get("type") == "text")
+
+
+def readable_text(payload: Any) -> str:
+    """What the agent will read of any tool answer: an MCP result's text blocks, otherwise every
+    string of the JSON, keys included — a catalogue provider or a plugin writes both (S40-18)."""
+    if isinstance(payload, dict) and isinstance(payload.get("content"), list):
+        return texte_du_resultat(payload)
+    strings: list[str] = []
+
+    def walk(value: Any) -> None:
+        if isinstance(value, str):
+            strings.append(value)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v)
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                strings.append(str(k))
+                walk(v)
+
+    walk(payload)
+    return "\n".join(strings)

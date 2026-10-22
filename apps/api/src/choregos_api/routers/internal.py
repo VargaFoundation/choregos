@@ -875,6 +875,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         code, corps = await appeler_outil(outil, body or {})
         # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
         corps = bounded_payload(corps, outil.result_max_bytes)
+        # ... and what it writes may be an injection, read by the same guard (S40-18).
+        code, corps, suspicions = await _garde_contre_l_injection(
+            session, run, project, SimpleNamespace(nom=name), code, corps
+        )
         fournisseur, prix = outil.provider, outil.price_eur
     elif name in du_courtier and du_courtier[name].sous_validation:
         # Sous validation (ADR 0035) : l'appel PROPOSE l'action ; rien ne part vers le serveur. La
@@ -906,6 +910,9 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         greffon = des_greffons[name][0]
         code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
         corps = bounded_payload(corps)
+        code, corps, suspicions = await _garde_contre_l_injection(
+            session, run, project, SimpleNamespace(nom=name), code, corps
+        )
         fournisseur, prix = f"greffon:{greffon}", 0.0
     # A call the organisation's network policy stopped never reached the server: it is not counted
     # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
@@ -1041,10 +1048,10 @@ async def _garde_contre_l_injection(
     """Ce qu'un serveur tiers rend, l'agent le lira : `warn` le dit, `block` le retient."""
     from choregos_core.injection import suspicions as chercher
 
-    from ..services.courtier import texte_du_resultat
+    from ..services.courtier import readable_text
 
     mode = PolicyEngine(await effective_policy(session, project.id)).policy.sandbox.prompt_injection
-    trouvees = [] if mode == "ignore" else chercher(texte_du_resultat(corps), source=f"tool.{outil.nom}")
+    trouvees = [] if mode == "ignore" else chercher(readable_text(corps), source=f"tool.{outil.nom}")
     if not trouvees:
         return code, corps, []
     await persist_event(
