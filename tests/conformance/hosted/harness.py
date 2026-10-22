@@ -260,10 +260,23 @@ def _responses(body: dict[str, Any]) -> tuple[str, bytes]:
     }
     if not body.get("stream"):
         return "application/json", json.dumps(response).encode()
+    # As OpenAI streams it: a function call is added with no arguments, which come in their own
+    # events; a client that reads them only from there (Agent Framework's) sees no call otherwise.
+    added = {**item, "arguments": ""} if kind == "tool" else item
     events: list[dict[str, Any]] = [
         {"type": "response.created", "response": {**response, "status": "in_progress", "output": []}},
-        {"type": "response.output_item.added", "output_index": 0, "item": item},
+        {"type": "response.output_item.added", "output_index": 0, "item": added},
     ]
+    if kind == "tool":
+        events += [
+            {
+                "type": f"response.function_call_arguments.{step}",
+                "output_index": 0,
+                "item_id": item["id"],
+                **({"delta": item["arguments"]} if step == "delta" else {"arguments": item["arguments"]}),
+            }
+            for step in ("delta", "done")
+        ]
     if kind == "text":
         events.append(
             {
@@ -761,11 +774,12 @@ def outside_model() -> Iterator[OutsideModel]:
 
 
 def python_example(directory: str, python: str | None = None) -> HostedAgentSpec:
-    """An example of `examples/hosted/` run as a process: `responses_server.py` in its directory."""
+    """An example of `examples/hosted/` run as a process: `responses_server.py` in its directory, or
+    `main.py` for one that brings its own server (Foundry's hosting adapter, S41-19)."""
     path = ROOT / "examples" / "hosted" / directory
-    return HostedAgentSpec(
-        command=[python or sys.executable, str(path / "responses_server.py")], cwd=str(path)
-    )
+    server = path / "responses_server.py"
+    entry = server if server.exists() else path / "main.py"
+    return HostedAgentSpec(command=[python or sys.executable, str(entry)], cwd=str(path))
 
 
 def node_example(directory: str, node: str | None = None) -> HostedAgentSpec:

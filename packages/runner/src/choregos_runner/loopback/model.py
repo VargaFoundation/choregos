@@ -6,16 +6,25 @@ proxy forwards chat completions, responses, messages and embeddings to the run's
 run's key, which never enters the container, and with the run's model, whatever the container named.
 Every call is a turn: past `max_turns` the proxy refuses the call (400, which no SDK retries) instead
 of forwarding it.
+
+It is also the Foundry project an agent written for Foundry finds in `FOUNDRY_PROJECT_ENDPOINT`
+(S41-19): `/api/projects/<project>/openai/v1/<path>` is the same as `/v1/<path>`, and conversations
+(`conversations[/<id>[/items[/<id>]]]`) are forwarded too, as stored state rather than turns. And it
+is the managed identity `DefaultAzureCredential` finds in `IDENTITY_ENDPOINT`: `GET /msi/token` with
+`X-IDENTITY-HEADER` answers the loopback key as an access token, for any resource, which only this
+listener accepts.
 """
 
 from __future__ import annotations
 
 import json
+import re
+import time
 from typing import Any
 
 import httpx
 from choregos_contracts import StageInput
-from choregos_core.hosted import LOOPBACK_KEY
+from choregos_core.hosted import IDENTITY_HEADER, IDENTITY_PATH, LOOPBACK_KEY
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.requests import Request
@@ -27,6 +36,12 @@ from . import Record
 
 #: What the container may ask of the model, under `/v1/`.
 PATHS = frozenset({"chat/completions", "responses", "messages", "embeddings", "models"})
+#: A Foundry project's OpenAI-compatible root, before the same paths (S41-19).
+_FOUNDRY_ROOT = re.compile(r"^api/projects/[A-Za-z0-9._-]+/openai/")
+#: The conversations API: stored items, not model calls, so not turns.
+_CONVERSATIONS = re.compile(r"^conversations(/[A-Za-z0-9_-]+(/items(/[A-Za-z0-9_-]+)?)?)?$")
+#: How long the identity's token says it lasts; the SDKs fetch another one before it ends.
+_TOKEN_LIFETIME_S = 3600
 #: The request headers that reach the gateway; the container's own credentials never do.
 _FORWARDED = ("content-type", "accept", "anthropic-version", "anthropic-beta", "openai-beta")
 
@@ -43,20 +58,26 @@ class ModelProxy:
 
     def app(self) -> Starlette:
         return Starlette(
-            routes=[Route("/{path:path}", self.handle, methods=["GET", "POST"])],
+            routes=[Route("/{path:path}", self.handle, methods=["GET", "POST", "DELETE"])],
         )
 
     async def aclose(self) -> None:
         await self.http.aclose()
 
     async def handle(self, request: Request) -> Response:
-        path = str(request.path_params["path"]).strip("/").removeprefix("v1/")
-        if path not in PATHS:
+        raw = str(request.path_params["path"]).strip("/")
+        if raw == IDENTITY_PATH.strip("/"):
+            return await self._identity(request)
+        path = _FOUNDRY_ROOT.sub("", raw).removeprefix("v1/")
+        stored = _CONVERSATIONS.match(path) is not None
+        if path not in PATHS and not stored:
             return _error(404, "not_found", f"`/{path}` is not served on the loopback model")
+        if request.method == "DELETE" and not stored:
+            return _error(405, "method_not_allowed", f"`DELETE /{path}` is not served")
         if _key(request) != LOOPBACK_KEY:
             return _error(401, "auth_error", "the loopback model accepts the loopback key only")
-        if request.method == "GET":
-            return await self._forward(request, path, None)
+        if request.method != "POST" or stored:
+            return await self._forward(request, path, None, content=await request.body())
         try:
             body = json.loads(await request.body() or b"{}")
         except json.JSONDecodeError:
@@ -73,7 +94,27 @@ class ModelProxy:
         body["model"] = self.stage_input.model.litellm_model
         return await self._forward(request, path, body)
 
-    async def _forward(self, request: Request, path: str, body: dict[str, Any] | None) -> Response:
+    async def _identity(self, request: Request) -> Response:
+        """App Service's managed identity protocol, which `ManagedIdentityCredential` speaks when
+        `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` are set."""
+        if request.method != "GET":
+            return _error(405, "method_not_allowed", "the identity endpoint answers GET only")
+        if request.headers.get("x-identity-header") != IDENTITY_HEADER:
+            return _error(401, "auth_error", "the identity endpoint wants its `X-IDENTITY-HEADER`")
+        resource = request.query_params.get("resource") or request.query_params.get("scope") or ""
+        await self.record("hosted.identity_token", {"resource": resource[:200]})
+        return JSONResponse(
+            {
+                "access_token": LOOPBACK_KEY,
+                "expires_on": str(int(time.time()) + _TOKEN_LIFETIME_S),
+                "resource": resource,
+                "token_type": "Bearer",
+            }
+        )
+
+    async def _forward(
+        self, request: Request, path: str, body: dict[str, Any] | None, *, content: bytes | None = None
+    ) -> Response:
         model = self.stage_input.model
         headers = {name: request.headers[name] for name in _FORWARDED if name in request.headers}
         if self.stage_input.gateway_key:
@@ -83,8 +124,9 @@ class ModelProxy:
         upstream = self.http.build_request(
             request.method,
             f"{model.base_url.rstrip('/')}/{path}",
+            params=str(request.query_params),
             headers=headers,
-            content=json.dumps(body).encode() if body is not None else None,
+            content=json.dumps(body).encode() if body is not None else content or None,
         )
         try:
             answer = await self.http.send(upstream, stream=True)

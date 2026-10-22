@@ -311,9 +311,10 @@ conformance-agent:  ## The 7 conformance checks of a code agent inside an image:
 	CHOREGOS_CONFORMANCE_CODE_AGENTS='{"image": {"image": "$(IMAGE)", "command": $(COMMAND)}}' \
 	  $(UV) run pytest tests/conformance/backends/test_code_agents.py -m conformance -q -k code_agent_passes
 
-# A Node example serves `responses_server.mjs` (S41-20), the others `responses_server.py`.
+# A Node example serves `responses_server.mjs` (S41-20), the others `responses_server.py`, or
+# `main.py` when they bring their own server (Foundry's hosting adapter, S41-19).
 HOSTED_NODE_SERVER = ["$(or $(NODE),node)", "responses_server.mjs"]
-HOSTED_PYTHON_SERVER = ["$(or $(PYTHON),python3)", "responses_server.py"]
+HOSTED_PYTHON_SERVER = ["$(or $(PYTHON),python3)", "$(if $(wildcard examples/hosted/$(AGENT)/responses_server.py),responses_server.py,main.py)"]
 HOSTED_SERVER = $(if $(wildcard examples/hosted/$(AGENT)/responses_server.mjs),$(HOSTED_NODE_SERVER),$(HOSTED_PYTHON_SERVER))
 
 .PHONY: conformance-hosted

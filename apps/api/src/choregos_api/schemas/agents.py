@@ -280,8 +280,23 @@ class HostedSourceDto(Dto):
 LOOPBACK_PORTS = frozenset({4001, 4002, 4003})
 #: What a version's `env` cannot set: the platform's, the model SDKs' and the proxy variables.
 RESERVED_ENV_PREFIXES = ("CHOREGOS_", "FOUNDRY_", "OPENAI_", "ANTHROPIC_", "AZURE_")
+#: The managed-identity variables too (S41-19): with `IDENTITY_SERVER_THUMBPRINT` beside the
+#: platform's `IDENTITY_*`, azure-identity speaks Service Fabric's protocol instead of App Service's;
+#: `IMDS_ENDPOINT` (Arc) and `MSI_*` (the older App Service) name other ones. `AZURE_*`, which
+#: `DefaultAzureCredential` tries before the managed identity, is a reserved prefix.
 RESERVED_ENV_NAMES = frozenset(
-    {"PORT", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "IDENTITY_ENDPOINT", "IDENTITY_HEADER"}
+    {
+        "PORT",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "IDENTITY_ENDPOINT",
+        "IDENTITY_HEADER",
+        "IDENTITY_SERVER_THUMBPRINT",
+        "IMDS_ENDPOINT",
+        "MSI_ENDPOINT",
+        "MSI_SECRET",
+    }
 )
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 

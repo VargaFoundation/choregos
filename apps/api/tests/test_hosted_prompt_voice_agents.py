@@ -59,6 +59,12 @@ async def test_a_voice_agent_is_published_with_its_audio_defaults(client: AsyncC
         (_spec(_hosted(port=4002)), "loopback"),
         (_spec(_hosted(env={"OPENAI_API_KEY": "sk-x"})), "reserved"),
         (_spec(_hosted(env={"HTTPS_PROXY": "http://elsewhere"})), "reserved"),
+        # S41-19: another managed-identity protocol would bypass the loopback identity.
+        (_spec(_hosted(env={"IDENTITY_SERVER_THUMBPRINT": "ab"})), "reserved"),
+        (_spec(_hosted(env={"IMDS_ENDPOINT": "http://169.254.169.254"})), "reserved"),
+        (_spec(_hosted(env={"MSI_ENDPOINT": "http://elsewhere"})), "reserved"),
+        (_spec(_hosted(env={"MSI_SECRET": "s"})), "reserved"),
+        (_spec(_hosted(env={"FOUNDRY_PROJECT_ENDPOINT": "https://x.services.ai.azure.com"})), "reserved"),
         (_spec(_hosted(protocols=["responses", "responses"])), "listed once"),
         (
             _spec(
