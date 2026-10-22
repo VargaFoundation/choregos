@@ -24,9 +24,18 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
+from choregos_core.domain import (
+    RUN_GATEWAY_KEY_ENV,
+    RUN_REMOTE_TOKEN_ENV,
+    AgentContainer,
+    ExecRef,
+    ExecStatus,
+    StageJobSpec,
+)
+from choregos_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER, native_sidecars_refusal
 from choregos_core.sorties import explication
 
+from ..errors import UnsupportedClusterError
 from .tekton import (
     CORE_API,
     GATEWAY_KEY_FIELD,
@@ -37,6 +46,10 @@ from .tekton import (
 )
 
 BATCH_API = "/apis/batch/v1"
+#: The name of a hosted agent's container in the run's pod (ADR 0080).
+AGENT_CONTAINER = "agent"
+#: The volume a hosted container shares with the runner, the copy of the working tree (S41-18).
+HOSTED_WORKSPACE_VOLUME = "hosted-workspace"
 RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernetes.io/component": "runner"}
 
 
@@ -73,11 +86,31 @@ class KubernetesJobExecutor:
         # plafond, le comportement d'avant : un déploiement qui ne dit rien ne change pas
         # de régime du jour au lendemain.
         self.max_active = max(0, int(max_active))
+        #: The API server's `/version`, read once: a cluster is not upgraded under a running worker
+        #: often enough to read it at every start (S41-16).
+        self._server_version: dict[str, Any] | None = None
+
+    async def server_version(self) -> dict[str, Any]:
+        """The API server's `/version` body, read at the first call and kept. A failed read raises
+        (an `UpstreamError`, retryable) and is not kept."""
+        if self._server_version is None:
+            found = await self.client.request("GET", "/version")
+            self._server_version = found if isinstance(found, dict) else {}
+        return self._server_version
+
+    async def _require_native_sidecars(self) -> None:
+        refusal = native_sidecars_refusal(await self.server_version())
+        if refusal is not None:
+            raise UnsupportedClusterError(refusal)
 
     def _name(self, run_id: str) -> str:
         return f"run-{run_id}"[:63].lower()
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
+        if spec.agent_container is not None:
+            # Below 1.29 the API server drops `restartPolicy: Always` from the init container: the
+            # pod would wait on the agent forever. Refused before anything is created.
+            await self._require_native_sidecars()
         name = self._name(spec.run_id)
         existing = await self.client.request("GET", f"{BATCH_API}/namespaces/{spec.namespace}/jobs/{name}")
         if existing is not None:
@@ -241,7 +274,7 @@ class KubernetesJobExecutor:
                 {
                     "name": "runner",
                     "image": spec.runner_image,
-                    "args": ["run"],
+                    "args": list(spec.runner_command),
                     "env": [
                         {"name": "CHOREGOS_RUN_ID", "value": spec.run_id},
                         {"name": "CHOREGOS_API_URL", "value": spec.api_url},
@@ -287,6 +320,8 @@ class KubernetesJobExecutor:
         }
         if spec.runtime_class:
             pod_spec["runtimeClassName"] = spec.runtime_class
+        if spec.agent_container is not None:
+            self._add_agent_container(pod_spec, spec.agent_container)
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -311,6 +346,54 @@ class KubernetesJobExecutor:
                 },
             },
         }
+
+    @staticmethod
+    def _add_agent_container(pod_spec: dict[str, Any], agent: AgentContainer) -> None:
+        """A hosted agent's container (ADR 0080), as a native sidecar (Kubernetes >= 1.29): an init
+        container with `restartPolicy: Always` starts before the runner, shares its loopback, and is
+        stopped when the runner ends, so the Job completes on the runner's exit alone.
+
+        It gets plain values only: no `secretKeyRef`, no `envFrom`, no volume of the runner's. The
+        runner's token, gateway key and MCP credentials stay in the runner container. A version that
+        asks for the workspace (S41-18) gets one more volume, which the runner fills with a copy of
+        the working tree: the clone and its `.git` stay in the runner's `workspace` volume."""
+        mounts: list[dict[str, Any]] = []
+        if agent.workspace != "none":
+            pod_spec["volumes"].append({"name": HOSTED_WORKSPACE_VOLUME, "emptyDir": {"sizeLimit": "10Gi"}})
+            runner = next(c for c in pod_spec["containers"] if c["name"] == "runner")
+            runner["volumeMounts"].append(
+                {"name": HOSTED_WORKSPACE_VOLUME, "mountPath": SHARED_WORKSPACE_RUNNER}
+            )
+            mounts.append(
+                {
+                    "name": HOSTED_WORKSPACE_VOLUME,
+                    "mountPath": SHARED_WORKSPACE_AGENT,
+                    "readOnly": agent.workspace == "read",
+                }
+            )
+        pod_spec["initContainers"] = [
+            {
+                "name": AGENT_CONTAINER,
+                "image": agent.image,
+                "restartPolicy": "Always",
+                "env": [{"name": key, "value": value} for key, value in sorted(agent.env.items())],
+                "ports": [{"name": "agent", "containerPort": agent.port}],
+                **({"volumeMounts": mounts} if mounts else {}),
+                "resources": {
+                    "requests": {"cpu": agent.cpu, "memory": agent.memory},
+                    "limits": {"cpu": agent.cpu, "memory": agent.memory},
+                },
+                "securityContext": {
+                    "allowPrivilegeEscalation": False,
+                    "capabilities": {"drop": ["ALL"]},
+                    "runAsNonRoot": True,
+                    "seccompProfile": {"type": "RuntimeDefault"},
+                },
+            }
+        ]
+        # The cluster's services are not announced to the container as variables.
+        pod_spec["enableServiceLinks"] = False
+        pod_spec["terminationGracePeriodSeconds"] = agent.termination_grace_s
 
     async def renew(self, ref: ExecRef, run_token: str) -> None:
         """Remplace le jeton d'un run qui n'a pas encore démarré.

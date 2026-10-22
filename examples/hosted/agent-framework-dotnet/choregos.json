@@ -1,0 +1,5 @@
+{
+  "runtime": "dotnet_10",
+  "entry_point": ["dotnet", "Triager.dll"],
+  "dependency_resolution": "remote_build"
+}

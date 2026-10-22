@@ -1,0 +1,11 @@
+{
+  "name": "choregos-hosted-copilot-sdk-node",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The ticket triager on the GitHub Copilot SDK for Node, as a hosted agent (ADR 0080).",
+  "type": "module",
+  "engines": { "node": ">=22.12" },
+  "scripts": { "start": "node responses_server.mjs" },
+  "dependencies": { "@github/copilot-sdk": "1.0.23" }
+}

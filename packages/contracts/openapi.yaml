@@ -880,7 +880,7 @@ paths:
     patch:
       tags: [models]
       operationId: updateModelCatalogueEntry
-      description: Enable or disable a model, set its roles, usages, name, notes or price override; `model:catalogue:manage`.
+      description: Enable or disable a model, set its roles, usages, name, notes, price override or the most a voice session of it may spend per minute; `model:catalogue:manage`.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ModelCataloguePatch" } } }
@@ -1916,6 +1916,32 @@ paths:
         "303": { description: Redirect to the administration page }
         "403": { $ref: "#/components/responses/Forbidden" }
         "502": { description: The provider refused the exchange, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/hosted-sources:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: uploadHostedSource
+      description: "A hosted agent's source zip (ADR 0080 §9), stored under its sha256, which a zip version's `source.sha256` names. Flat (the files at the root, not under one folder), at most 64 MiB and 2,000 files; a symbolic link, an absolute, `\\` or `..` path, an encrypted entry or a name twice refuses it. Asks the right to create an agent somewhere in the organisation; the same bytes twice are one source."
+      requestBody:
+        required: true
+        content: { application/zip: { schema: { type: string, format: binary } } }
+      responses:
+        "201": { description: Stored, content: { application/json: { schema: { $ref: "#/components/schemas/HostedSource" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: The object store refused, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/hosted-sources/{sha256}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: sha256, in: path, required: true, schema: { type: string, pattern: "^sha256:[0-9a-f]{64}$" } }
+    get:
+      tags: [agents]
+      operationId: getHostedSource
+      description: An uploaded source, read back from the object store and checked again.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HostedSource" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1936,6 +1962,45 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/responses:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: createAgentResponse
+      description: "One turn of a direct conversation with a prompt agent (ADR 0080 §10), in the Responses API's shape: a new session without `session_id`, its next turn with it. Needs `item.control` in the project. With `stream`, server-sent events `response.created`, `response.output_text.delta`, `response.completed` or `response.failed`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentResponseCreate" } } }
+      responses:
+        "200":
+          description: The response; `status` is `failed` with an `error` when the model or the budget stopped it
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/AgentResponse" } }
+            text/event-stream: { schema: { type: string } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agent-sessions/{session_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: session_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgentSession
+      description: "A session and its transcript (text only, never audio). Only its opener sees it."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [agents]
+      operationId: closeAgentSession
+      description: "Closes the session: its spend is booked, its gateway key revoked. Idempotent."
+      responses:
+        "204": { description: Closed }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3214,6 +3279,134 @@ paths:
                     version: { type: integer }
                     digest: { type: string }
                     files: { type: object, additionalProperties: { type: string }, description: "path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text" }
+  /internal/agent-sessions/{id}/input:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getAgentSessionInput
+      description: >-
+        A hosted session's stage input (S41-11, ADR 0080 §10), as its pod's workflow wrote it: no gateway key, no
+        token in it. Read by the pod's runner with the token minted for `session-{id}`; any other token is refused.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/StageInput" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /internal/agent-sessions/{id}/turns/next:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: nextAgentSessionTurn
+      description: >-
+        The oldest response the session's person asked for that the pod has not answered. With `wait`, up to that many
+        seconds for one to come; no turn is 204, a session that ended is 410 and the runner stops.
+      parameters:
+        - { name: wait, in: query, required: false, schema: { type: number, minimum: 0, maximum: 30, default: 0 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionTurn" } } } }
+        "204": { description: No turn waits }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /internal/agent-sessions/{id}/turns/{turn_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: turn_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postAgentSessionTurnResult
+      description: >-
+        How the session's container answered a turn. Journaled once: a second post of the same turn changes nothing.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionTurnResult" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, required: [status, turn_id], properties: { status: { type: string, enum: [recorded, already_recorded] }, turn_id: { type: string } } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/agent-sessions/{id}/socket/next:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: nextAgentSessionSocketFrames
+      description: >-
+        What the caller did on a hosted session's socket (S41-21) after the journal's `after`: open the container's
+        `/invocations_ws`, a text frame for it, close it. With `wait`, up to that many seconds for one; `out_n` is the
+        last of the container's frames journaled, which the pod numbers the next one after. A session that ended is
+        410 and the runner stops.
+      parameters:
+        - { name: after, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: wait, in: query, required: false, schema: { type: number, minimum: 0, maximum: 30, default: 0 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionSocketNext" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/agent-sessions/{id}/socket/out:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postAgentSessionSocketFrames
+      description: >-
+        What the container sent on its `/invocations_ws`, numbered by the pod from 1, and whether it closed it. Each
+        number is journaled once: a batch posted again changes nothing; a number that leaves a hole is 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionSocketOut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionSocketRecorded" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: A frame out of order, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/agent-sessions/{id}/tools:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: listAgentSessionTools
+      description: >-
+        The read tools the agent's `mcp_servers` grant in the session's project, as MCP's `tools/list` announces them.
+        The runner serves them to the container on its loopback MCP listener.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionTools" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /internal/agent-sessions/{id}/tools/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: callAgentSessionTool
+      description: >-
+        One of the container's tool calls, through the courtier, the injection guard and the ledger, as a prompt
+        session's. A tool the session is not granted is 404.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionToolCall" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionToolAnswer" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /internal/runs/{id}/network:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3223,6 +3416,7 @@ paths:
       description: >-
         The network THIS run may use (ADR 0070): the agent's hosts narrowed by the project's and the organisation's,
         plus the repository host. Read by the egress proxy with the run's own token; a token of another run is refused.
+        A hosted session's pod (S41-11) reads it as `session-{id}`: its agent version's network.
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunNetwork" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -4362,14 +4556,17 @@ components:
         model: { type: [string, "null"] }
         backend: { type: [string, "null"], description: "the ACP coding agent that carries the version; set only with an `acp` runtime (or none)" }
         runtime:
-          description: "How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062)."
+          description: "How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). `prompt`, `voice` and `hosted` are ADR 0080's: instructions and tools with no code, the same spoken, and the agent's own container serving Foundry's hosted contract."
           oneOf:
             - { $ref: "#/components/schemas/AcpRuntime" }
             - { $ref: "#/components/schemas/CodeRuntime" }
             - { $ref: "#/components/schemas/A2aRuntime" }
+            - { $ref: "#/components/schemas/PromptRuntime" }
+            - { $ref: "#/components/schemas/VoiceRuntime" }
+            - { $ref: "#/components/schemas/HostedRuntime" }
           discriminator:
             propertyName: kind
-            mapping: { acp: "#/components/schemas/AcpRuntime", code: "#/components/schemas/CodeRuntime", a2a: "#/components/schemas/A2aRuntime" }
+            mapping: { acp: "#/components/schemas/AcpRuntime", code: "#/components/schemas/CodeRuntime", a2a: "#/components/schemas/A2aRuntime", prompt: "#/components/schemas/PromptRuntime", voice: "#/components/schemas/VoiceRuntime", hosted: "#/components/schemas/HostedRuntime" }
         limits: { $ref: "#/components/schemas/AgentLimits" }
         budget: { $ref: "#/components/schemas/AgentBudget" }
         skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
@@ -4412,6 +4609,261 @@ components:
         declared_cost: { $ref: "#/components/schemas/A2aDeclaredCost" }
         input: { type: string, enum: [text, text+files], default: text }
         pinned_card: { oneOf: [{ $ref: "#/components/schemas/A2aPinnedCard" }, { type: "null" }], description: "filled by the API at publication: the card as it was read; the runner refuses a card that changed" }
+    PromptRuntime:
+      type: object
+      description: "A prompt agent (ADR 0080): the spec's instructions, model, MCP servers and knowledge, run as a tool loop by the platform - no coding agent, no container code. `backend` must be empty."
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [prompt] }
+        max_output_tokens: { type: [integer, "null"], minimum: 1, maximum: 128000 }
+        tool_choice: { type: string, enum: [auto, required, none], default: auto }
+        response_format: { type: string, enum: [text, json_object], default: text, description: "`json_object` asks the model for a JSON object, read as the step's outputs" }
+    VoiceRuntime:
+      type: object
+      description: "A voice-based prompt agent (ADR 0080): a realtime model spoken to over `GET /agents/{slug}/realtime`. `model` must be a catalogue model marked `realtime`; `backend` and `skills` must be empty. It runs only as a session, never as a workflow step."
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [voice] }
+        voice: { type: string, minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9._-]+$", default: alloy }
+        audio: { $ref: "#/components/schemas/VoiceAudio" }
+        greeting: { type: [string, "null"], maxLength: 2000, description: "what the agent says first, before the caller speaks" }
+        turn_detection: { type: string, enum: [server_vad, none], default: server_vad }
+        max_session_minutes: { type: integer, minimum: 1, maximum: 120, default: 30 }
+    VoiceAudio:
+      type: object
+      properties:
+        format: { type: string, enum: [pcm16], default: pcm16 }
+        sample_rate: { type: integer, enum: [16000, 24000], default: 24000 }
+        channels: { type: integer, enum: [1], default: 1 }
+    HostedRuntime:
+      type: object
+      description: "A hosted agent (ADR 0080): the agent's own container, from an image or built from a source zip, serving Foundry's hosted contract (`GET /readiness`, `POST /responses` and/or `POST /invocations`, optionally `GET /invocations_ws`) on `port`, beside the runner in the run's pod. It holds no credential: the model, the MCP servers and the internet are reached through the runner's loopback listeners. `backend` and `skills` must be empty."
+      required: [kind, source]
+      properties:
+        kind: { type: string, enum: [hosted] }
+        source:
+          oneOf:
+            - { $ref: "#/components/schemas/HostedImageSource" }
+            - { $ref: "#/components/schemas/HostedZipSource" }
+          discriminator:
+            propertyName: type
+            mapping: { image: "#/components/schemas/HostedImageSource", zip: "#/components/schemas/HostedZipSource" }
+        protocols: { type: array, minItems: 1, maxItems: 3, uniqueItems: true, items: { type: string, enum: [responses, invocations, invocations_ws] }, default: [responses] }
+        port: { type: integer, minimum: 1024, maximum: 65535, default: 8088, description: "the port the container listens on; 4001-4003 are the runner's loopback listeners and are refused" }
+        readiness_timeout_s: { type: integer, minimum: 1, maximum: 900, default: 120 }
+        termination_grace_s: { type: integer, minimum: 1, maximum: 300, default: 30 }
+        workspace: { type: string, enum: [none, read, write], default: none, description: "`none`: the repository is not mounted; `read`: read-only; `write`: the container changes it and the runner commits and pushes" }
+        env: { type: object, maxProperties: 64, additionalProperties: { type: string, maxLength: 4096 }, description: "non-secret variables; names are upper-case and the `CHOREGOS_`, `FOUNDRY_`, `OPENAI_`, `ANTHROPIC_` prefixes and the proxy variables are refused" }
+        build: { oneOf: [{ $ref: "#/components/schemas/HostedBuild" }, { type: "null" }], description: "filled by the platform for a zip source, never by the caller" }
+    HostedImageSource:
+      type: object
+      required: [type, ref]
+      properties:
+        type: { type: string, enum: [image] }
+        ref: { type: string, minLength: 1, maxLength: 512, description: "an image reference under a prefix of the operator's `CHOREGOS_HOSTED_REGISTRIES`" }
+        digest: { type: [string, "null"], pattern: "^sha256:[0-9a-f]{64}$", description: "filled by the API at publication: what `ref` resolved to; runs pull `ref@digest`" }
+    HostedZipSource:
+      type: object
+      required: [type, sha256, runtime, entry_point]
+      properties:
+        type: { type: string, enum: [zip] }
+        sha256: { type: string, pattern: "^sha256:[0-9a-f]{64}$", description: "the uploaded source (`POST /orgs/{org}/hosted-sources`)" }
+        runtime: { type: string, enum: [python_3_12, python_3_13, python_3_14, node_22, dotnet_10] }
+        entry_point: { type: array, minItems: 1, maxItems: 64, items: { type: string, minLength: 1, maxLength: 1024 }, description: "the argv started in the built image, e.g. [python, main.py]" }
+        dependency_resolution: { type: string, enum: [remote_build, bundled], default: remote_build, description: "`remote_build` installs the declared dependencies at build time; `bundled`: the zip carries them" }
+    HostedSource:
+      type: object
+      description: "An uploaded source zip (ADR 0080 §9)."
+      required: [sha256, size_bytes, files]
+      properties:
+        sha256: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        size_bytes: { type: integer, minimum: 1 }
+        files: { type: array, maxItems: 2000, items: { type: string } }
+        dependencies: { type: [string, "null"], pattern: "^(requirements\\.txt|pyproject\\.toml|package-lock\\.json|[^/]+\\.csproj)$", description: "the file at the root that declares the dependencies `remote_build` installs: `requirements.txt` or `pyproject.toml` (Python), `package-lock.json` beside its `package.json` (Node), the one `*.csproj` (.NET); null when there is none" }
+    HostedBuild:
+      type: object
+      description: "The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice."
+      required: [status, key]
+      properties:
+        status: { type: string, enum: [pending, building, ready, failed] }
+        key: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        image: { type: [string, "null"], description: "the built image, `ref@sha256:...`, once ready" }
+        error: { type: [string, "null"] }
+        provenance: { type: object, additionalProperties: { type: string } }
+    AgentResponseCreate:
+      type: object
+      description: "One turn of a direct conversation (ADR 0080 §10). The agent's spec decides the model, the instructions and the tools."
+      required: [project, input]
+      additionalProperties: false
+      properties:
+        project: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "the project the session works in: its budget pays, its grants bound the tools" }
+        input:
+          oneOf:
+            - { type: string, minLength: 1 }
+            - { type: array, minItems: 1, items: { $ref: "#/components/schemas/AgentInputMessage" } }
+        session_id: { type: [string, "null"] }
+        stream: { type: boolean, default: false }
+        max_usd: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100, description: "the caller's cap on the whole session, when it opens; the project's budgets still bind" }
+    AgentInputMessage:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        role: { type: string, enum: [user], default: user }
+        content: { type: string, minLength: 1, maxLength: 65536 }
+    AgentOutputText:
+      type: object
+      required: [text]
+      properties:
+        type: { type: string, enum: [output_text], default: output_text }
+        text: { type: string }
+    AgentOutputMessage:
+      type: object
+      required: [content]
+      properties:
+        type: { type: string, enum: [message], default: message }
+        role: { type: string, enum: [assistant], default: assistant }
+        content: { type: array, items: { $ref: "#/components/schemas/AgentOutputText" } }
+    AgentResponseError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: "`budget_exceeded`, `model_error`, `max_turns`" }
+        message: { type: string }
+    AgentResponseUsage:
+      type: object
+      properties:
+        input_tokens: { type: integer, default: 0 }
+        output_tokens: { type: integer, default: 0 }
+        turns: { type: integer, default: 0 }
+        tool_calls: { type: integer, default: 0 }
+    AgentResponse:
+      type: object
+      description: "The part of the Responses API's shape a client reads."
+      required: [id, session_id, status]
+      properties:
+        id: { type: string }
+        object: { type: string, enum: [response], default: response }
+        session_id: { type: string }
+        status: { type: string, enum: [completed, failed] }
+        output: { type: array, items: { $ref: "#/components/schemas/AgentOutputMessage" } }
+        output_text: { type: string, default: "" }
+        usage: { $ref: "#/components/schemas/AgentResponseUsage" }
+        error: { oneOf: [{ $ref: "#/components/schemas/AgentResponseError" }, { type: "null" }] }
+    AgentDelta:
+      type: object
+      description: "A `response.output_text.delta` event."
+      required: [response_id, delta]
+      properties:
+        type: { type: string, enum: [response.output_text.delta], default: response.output_text.delta }
+        response_id: { type: string }
+        delta: { type: string }
+    AgentSessionEvent:
+      type: object
+      required: [seq, type, ts]
+      properties:
+        seq: { type: integer }
+        type: { type: string }
+        ts: { type: string, format: date-time }
+        payload: { type: object, additionalProperties: true }
+    AgentSession:
+      type: object
+      description: "A direct conversation with an agent (ADR 0080 §10), next to runs: its key, its spend and its transcript."
+      required: [id, agent, agent_version, project, status, model, responses, tool_calls, cost_usd, created_at, expires_at]
+      properties:
+        id: { type: string }
+        agent: { type: string }
+        agent_version: { type: integer }
+        project: { type: string }
+        status: { type: string, enum: [open, closed, failed] }
+        reason: { type: [string, "null"] }
+        model: { type: string }
+        responses: { type: integer }
+        tool_calls: { type: integer }
+        cost_usd: { type: number }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        events: { type: array, items: { $ref: "#/components/schemas/AgentSessionEvent" } }
+    AgentSessionTurn:
+      type: object
+      description: "A response a hosted session's person asked for, waiting for the session's pod (S41-11)."
+      required: [turn_id, input, protocol]
+      properties:
+        turn_id: { type: string }
+        input: { type: string }
+        protocol: { type: string, enum: [responses, invocations] }
+    AgentSessionPodEvent:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, minLength: 1, maxLength: 64 }
+        payload: { type: object, additionalProperties: true }
+    AgentSessionTurnResult:
+      type: object
+      description: "How the session's container answered a turn."
+      required: [status]
+      properties:
+        status: { type: string, enum: [answered, failed, not_ready, timeout, max_turns, budget_exceeded] }
+        text: { type: string, maxLength: 200000, default: "" }
+        error: { type: [string, "null"], maxLength: 4000 }
+        response_id: { type: [string, "null"], maxLength: 200 }
+        turns: { type: integer, minimum: 0, default: 0 }
+        tool_calls: { type: integer, minimum: 0, default: 0 }
+        events: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/AgentSessionPodEvent" } }
+    AgentSessionSocketFrame:
+      type: object
+      description: "What a hosted session's caller did on its socket (S41-21): `open`, a text frame `in`, `close`."
+      required: [seq, kind]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [open, in, close] }
+        text: { type: string, maxLength: 1048576, default: "" }
+        code: { type: [integer, "null"] }
+    AgentSessionSocketNext:
+      type: object
+      required: [cursor, out_n]
+      properties:
+        frames: { type: array, items: { $ref: "#/components/schemas/AgentSessionSocketFrame" } }
+        cursor: { type: integer, minimum: 0, description: "The journal's `seq` the pod reads after next time." }
+        out_n: { type: integer, minimum: 0, description: "The last of the container's frames journaled." }
+    AgentSessionSocketOutFrame:
+      type: object
+      required: [n, text]
+      properties:
+        n: { type: integer, minimum: 1 }
+        text: { type: string, maxLength: 1048576 }
+    AgentSessionSocketClosed:
+      type: object
+      required: [code]
+      properties:
+        code: { type: integer, minimum: 1000, maximum: 4999 }
+        reason: { type: string, maxLength: 123, default: "" }
+    AgentSessionSocketOut:
+      type: object
+      description: "What the container sent on its `/invocations_ws`, and whether it closed it."
+      properties:
+        frames: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/AgentSessionSocketOutFrame" } }
+        closed: { oneOf: [{ $ref: "#/components/schemas/AgentSessionSocketClosed" }, { type: "null" }] }
+        events: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/AgentSessionPodEvent" } }
+    AgentSessionSocketRecorded:
+      type: object
+      required: [out_n]
+      properties:
+        out_n: { type: integer, minimum: 0 }
+    AgentSessionTools:
+      type: object
+      properties:
+        tools: { type: array, items: { type: object, additionalProperties: true } }
+    AgentSessionToolCall:
+      type: object
+      properties:
+        arguments: { type: object, additionalProperties: true }
+    AgentSessionToolAnswer:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
     A2aDeclaredCost:
       type: object
       description: What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`.
@@ -5700,6 +6152,9 @@ components:
         provider: { type: string }
         input_cost_per_1k: { type: [number, "null"] }
         output_cost_per_1k: { type: [number, "null"] }
+        input_audio_cost_per_1k: { type: [number, "null"] }
+        output_audio_cost_per_1k: { type: [number, "null"] }
+        cached_input_cost_per_1k: { type: [number, "null"] }
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
@@ -5719,6 +6174,9 @@ components:
         upstream_model: { type: string }
         input_cost_per_1k: { type: [number, "null"] }
         output_cost_per_1k: { type: [number, "null"] }
+        input_audio_cost_per_1k: { type: [number, "null"] }
+        output_audio_cost_per_1k: { type: [number, "null"] }
+        cached_input_cost_per_1k: { type: [number, "null"] }
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
@@ -5734,6 +6192,7 @@ components:
         allowed_roles: { type: array, items: { type: string } }
         usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
         last_seen_at: { type: [string, "null"], format: date-time }
         missing_since: { type: [string, "null"], format: date-time }
@@ -5750,6 +6209,7 @@ components:
         allowed_roles: { type: array, items: { type: string } }
         usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
     ModelCataloguePatch:
       type: object
@@ -5760,6 +6220,8 @@ components:
         usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
+        max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
+        clear_max_usd_per_minute: { type: boolean, default: false }
         notes: { type: [string, "null"] }
     ModelTiers:
       type: object

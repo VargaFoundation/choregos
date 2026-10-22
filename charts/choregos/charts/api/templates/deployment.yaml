@@ -135,7 +135,39 @@ spec:
             {{- end }}
             - name: CHOREGOS_REQUIRE_IMAGE_DIGEST
               value: {{ .requireDigest | default false | quote }}
+            {{- with .hostedRegistries }}
+            - name: CHOREGOS_HOSTED_REGISTRIES
+              value: {{ toJson . | quote }}
             {{- end }}
+            - name: CHOREGOS_HOSTED_COSIGN
+              value: {{ .hostedCosign | default "off" | quote }}
+            {{- if and .hostedCosignKeySecret (or .hostedCosignIdentity .hostedCosignIssuer) }}
+            {{- fail "global.images: hostedCosignKeySecret or hostedCosignIdentity and hostedCosignIssuer, not both: one signer, or the API would trust neither" }}
+            {{- end }}
+            {{- if .hostedCosignKeySecret }}
+            # The operator's public key, from its Secret (S41-14): cosign verifies a hosted image with it.
+            - name: CHOREGOS_HOSTED_COSIGN_KEY
+              value: /etc/choregos/cosign/cosign.pub
+            {{- end }}
+            {{- with .hostedCosignIdentity }}
+            - name: CHOREGOS_HOSTED_COSIGN_IDENTITY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .hostedCosignIssuer }}
+            - name: CHOREGOS_HOSTED_COSIGN_ISSUER
+              value: {{ . | quote }}
+            {{- end }}
+            - name: CHOREGOS_HOSTED_COSIGN_TLOG
+              value: {{ ne (toString .hostedCosignTlog) "false" | quote }}
+            {{- if ne (.hostedCosign | default "off") "off" }}
+            # Cosign's trust root cache (Sigstore's TUF metadata): the root filesystem is read-only.
+            - name: TUF_ROOT
+              value: /tmp/sigstore
+            {{- end }}
+            {{- end }}
+            # The cluster's version: a hosted version is refused at publication below 1.29 (S41-16).
+            - name: CHOREGOS_CLUSTER_VERSION
+              value: {{ $.Values.global.kubernetesVersion | default $.Capabilities.KubeVersion.Version | quote }}
             {{- with (dig "mcp" "oauth" dict .Values.global) }}
             {{- if .enabled }}
             {{- range ($.Values.global.extraEnv | default list) }}
@@ -261,6 +293,9 @@ spec:
             {{- if .Values.mcpCatalogueExtra }}
             - { name: mcp-catalogue, mountPath: /etc/choregos/mcp-catalogue, readOnly: true }
             {{- end }}
+            {{- if (.Values.global.images | default dict).hostedCosignKeySecret }}
+            - { name: cosign, mountPath: /etc/choregos/cosign, readOnly: true }
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
@@ -282,11 +317,15 @@ spec:
         {{- end }}
         {{- /* Volumes the chart owns: a name of `extraVolumes` that collides with one of them would
              give an invalid pod, or worse, silently replace a mount. */}}
-        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" "procedures-extra" }}
+        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" "procedures-extra" "cosign" }}
         {{- range (.Values.extraVolumes | default list) }}
         {{- if has .name $owned }}
         {{- fail (printf "extraVolumes: %q is a volume of the chart; pick another name" .name) }}
         {{- end }}
+        {{- end }}
+        {{- with (.Values.global.images | default dict).hostedCosignKeySecret }}
+        - name: cosign
+          secret: { secretName: {{ . }}, items: [{ key: cosign.pub, path: cosign.pub }] }
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

@@ -10,6 +10,7 @@ de les lire ici.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
@@ -17,6 +18,7 @@ from typing import Any
 from choregos_api.db.models import Run
 from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
+from choregos_api.services.hosted_builds import builds_for
 from choregos_api.services.model_catalogue import load_policy
 from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
 from choregos_contracts import (
@@ -26,11 +28,13 @@ from choregos_contracts import (
     Callbacks,
     ContextPack,
     EventType,
+    HostedCall,
     KnowledgeRef,
     LaunchSpec,
     McpServerRef,
     PlaybookRef,
     ProjectRef,
+    PromptCall,
     RepoRef,
     SkillRef,
     StageInput,
@@ -166,8 +170,16 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         )
         if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
-        code_runtime = _code_runtime(agent)
-        remote_runtime = a2a_runtime(agent)
+        # The runtime that carries the step, if not an ACP agent. `_hosted_call` refuses here, before
+        # any budget is reserved, a hosted image without a digest or a build not ready (ADR 0080).
+        # A zip version's build is read from its row (S41-08): the version keeps the `pending` it
+        # was published with.
+        builds = await builds_for(session, bundle.project.org_id, [agent.spec]) if agent is not None else {}
+        code_runtime, remote_runtime, hosted = (
+            _code_runtime(agent),
+            a2a_runtime(agent),
+            _hosted_call(agent, builds),
+        )
         # Before any budget is reserved: a remote agent the project cannot reach, or whose
         # credential is gone, never gets a reservation or a pod (ADR 0062).
         await check_remote_agent(
@@ -194,7 +206,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             resolved = None
             budget, reserved_usd = remote_budget(remote_runtime, plan.max_minutes)
         else:
-            if code_runtime is None and plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
+            # A runtime fixes its backend: the cross-backend review swaps only coding agents.
+            if (
+                not _fixed_backend(agent)
+                and plan.role == str(StageRole.REVIEW)
+                and engine.cross_backend_review()
+            ):
                 backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
             resolved = _resolve_model(resolver, plan, bundle, item, backend)
             if code_runtime is not None:
@@ -291,8 +308,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 work_branch=bundle.config.branch_for(item.tracker_key),
                 clone_depth=depot.clone_depth,
             )
-            # A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062).
-            if depot and remote_runtime is None
+            # A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062); nor
+            # does a hosted one published with `workspace: none` (S41-18).
+            if depot and remote_runtime is None and (hosted is None or hosted.workspace != "none")
             else None,
             agent=AgentRef(
                 backend=backend,
@@ -303,6 +321,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             remote=remote_call(remote_runtime, agent.agent.slug, budget)
             if remote_runtime is not None
             else None,
+            prompt=_prompt_call(agent),
+            hosted=hosted,
             # In the run's Secret, never here (#523): see `start_run`.
             gateway_key=None,
             budget=budget,
@@ -312,7 +332,10 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             tools=ToolsRef(mcp={} if remote_runtime is not None else _serveurs_mcp(settings, memory_scope)),
             memory_scope=memory_scope,
             memories=resolved_memories.memories,
-            skills=[] if remote_runtime is not None else await _skills_de_l_agent(session, bundle, agent),
+            # The container of a hosted agent reads no file of the runner's: skills would be lost on it.
+            skills=[]
+            if remote_runtime is not None or hosted is not None
+            else await _skills_de_l_agent(session, bundle, agent),
             knowledge=[] if remote_runtime is not None else await _knowledge_of_agent(session, bundle, agent),
             permissions=network_permissions(
                 run_network(bundle, agent.spec.network if agent is not None else None, settings, org_hosts),
@@ -1035,6 +1058,34 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
                 non_retryable=True,
             )
         backend = A2A_BACKEND
+    elif runtime is not None and runtime.kind == "prompt":
+        # A prompt agent is the runner's own tool loop (ADR 0080): no coding agent to choose.
+        if plan.backend and plan.backend != PROMPT_BACKEND:
+            raise ApplicationError(
+                f"the actor asks for the backend `{plan.backend}`, but the agent is a prompt agent "
+                f"(runtime `prompt`): drop `backend:` from the actor",
+                type="AgentIndisponible",
+                non_retryable=True,
+            )
+        backend = PROMPT_BACKEND
+    elif runtime is not None and runtime.kind == "hosted":
+        # A hosted agent is its own container (ADR 0080): no coding agent to choose either.
+        if plan.backend and plan.backend != HOSTED_BACKEND:
+            raise ApplicationError(
+                f"the actor asks for the backend `{plan.backend}`, but the agent is a hosted agent "
+                f"(runtime `hosted`): drop `backend:` from the actor",
+                type="AgentIndisponible",
+                non_retryable=True,
+            )
+        backend = HOSTED_BACKEND
+    elif runtime is not None and runtime.kind in STEPLESS_RUNTIMES:
+        # ADR 0080: a voice agent never runs as a step; a step that started one would run nothing.
+        raise ApplicationError(
+            f"the agent's runtime `{runtime.kind}` cannot run as a workflow step "
+            "(a voice agent runs only as a session)",
+            type="AgentIndisponible",
+            non_retryable=True,
+        )
     elif runtime is not None and runtime.backend:
         backend = runtime.backend
 
@@ -1048,6 +1099,96 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
 
 
 CODE_BACKEND = "code"
+PROMPT_BACKEND = "prompt"
+HOSTED_BACKEND = "hosted"
+#: Runtimes no step can run (ADR 0080): a voice agent runs only as a session.
+STEPLESS_RUNTIMES = frozenset({"voice"})
+
+
+def _fixed_backend(agent: Any) -> bool:
+    """Whether the agent's runtime fixes its backend (`code`, `prompt`, `hosted`): no rotation swaps it."""
+    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
+    return runtime is not None and runtime.kind in {CODE_BACKEND, PROMPT_BACKEND, HOSTED_BACKEND}
+
+
+def _prompt_call(agent: Any) -> PromptCall | None:
+    """The step a prompt agent carries (ADR 0080), from its version's runtime; `None` for any other."""
+    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
+    if runtime is None or runtime.kind != "prompt":
+        return None
+    return PromptCall(
+        max_output_tokens=runtime.max_output_tokens,
+        tool_choice=runtime.tool_choice,
+        response_format=runtime.response_format,
+    )
+
+
+def _hosted_call(
+    agent: Any, builds: Mapping[str, Any] | None = None, *, session: bool = False
+) -> HostedCall | None:
+    """The step a hosted agent carries (ADR 0080), from its version's runtime; `None` for any other.
+
+    Refused, never retried, when no pod could run it as published: an image without a digest, a zip
+    whose build is not `ready`, or, for a workflow step, a version that serves only `invocations_ws`
+    (a `session`'s pod relays that socket, S41-21)."""
+    from temporalio.exceptions import ApplicationError
+
+    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
+    if runtime is None or runtime.kind != "hosted":
+        return None
+    who = f"`{agent.agent.slug}` v{agent.version}"
+    socket = "invocations_ws" in runtime.protocols
+    protocol = next((p for p in runtime.protocols if p in ("responses", "invocations")), None)
+    if protocol is None and session and socket:
+        protocol = "responses"  # never sent: a session reaches it only on `/realtime`
+    if protocol is None:
+        raise ApplicationError(
+            f"the hosted agent {who} serves only `invocations_ws`; a workflow step is sent over "
+            "`responses` or `invocations`",
+            type="hosted_protocol_unsupported",
+            non_retryable=True,
+        )
+    return HostedCall(
+        protocol=protocol,
+        image=_hosted_image(runtime, who, builds),
+        port=runtime.port,
+        readiness_timeout_s=runtime.readiness_timeout_s,
+        termination_grace_s=runtime.termination_grace_s,
+        workspace=runtime.workspace,
+        env=dict(runtime.env),
+        agent_slug=agent.agent.slug,
+        agent_version=agent.version,
+        socket=socket and session,
+    )
+
+
+def _hosted_image(runtime: Any, who: str, builds: Mapping[str, Any] | None = None) -> str:
+    """`ref@sha256:…`: the digest publication pinned, or the image a zip's build produced, as its
+    `hosted_builds` row says (the version's own `build` when there is no row)."""
+    from temporalio.exceptions import ApplicationError
+
+    source = runtime.source
+    if source.type == "zip":
+        build = runtime.build
+        row = (builds or {}).get(build.key) if build is not None else None
+        status = (row or build).status if build is not None else "not started"
+        image = (row or build).image if build is not None else None
+        if status != "ready" or not image or "@sha256:" not in image:
+            raise ApplicationError(
+                f"the hosted agent {who} is built from a zip whose build is {status}: a step runs "
+                "only an image a `ready` build produced",
+                type="hosted_build_not_ready",
+                non_retryable=True,
+            )
+        return str(image)
+    if not source.digest:
+        raise ApplicationError(
+            f"the hosted agent {who} names `{source.ref}` without a digest: publication pins every "
+            "hosted image, and a step never runs a tag",
+            type="hosted_image_unpinned",
+            non_retryable=True,
+        )
+    return f"{source.ref.split('@', 1)[0]}@{source.digest}"
 
 
 def _code_runtime(agent: Any) -> Any:

@@ -125,6 +125,9 @@ class Settings(BaseSettings):
     #: The gateway adapter the deployment uses (`litellm`, `openai-compatible`, `direct`...).
     gateway_type: str = "litellm"
     gateway_master_key: str = ""
+    #: The model a voice session has the gateway transcribe the caller's speech with (ADR 0080 §10):
+    #: the transcript is what is kept of it, never the audio. Empty: the caller's words are not kept.
+    realtime_transcription_model: str = "gpt-4o-mini-transcribe"
     # Ce que CE déploiement sait faire tourner (#245) : un projet neuf en hérite quand sa demande
     # n'en dit rien. Sans eux, il part sur `claude-code` et aucun profil de modèle — sur le dev, qui
     # sert opencode derrière la passerelle, le premier agent du gabarit RH n'a jamais atteint le
@@ -153,6 +156,45 @@ class Settings(BaseSettings):
     agent_images: dict[str, str] = Field(default_factory=dict)
     #: A reference without `@sha256:` is refused at start-up (the chart sets it; a local setup may not).
     require_image_digest: bool = False
+    #: Where a hosted agent's image may come from (ADR 0080 §8), as registry or repository prefixes
+    #: matched by path segment (`ghcr.io/acme` covers `ghcr.io/acme/triager`). Empty: no image is
+    #: accepted, only zip sources the platform builds.
+    hosted_registries: list[str] = Field(default_factory=list)
+    #: Whether a hosted image must carry a trusted signature: `off`, `warn` (log and publish) or
+    #: `enforce` (refuse at publication).
+    hosted_cosign: Literal["off", "warn", "enforce"] = "off"
+    #: Who may sign a hosted image (S41-14): a public key cosign reads (a path, the chart mounts the
+    #: operator's Secret at `/etc/choregos/cosign/cosign.pub`, or a KMS URI), or keyless, the
+    #: certificate identity and its OIDC issuer as regular expressions matched whole. Neither, or
+    #: both: nothing verifies, and `enforce` refuses every image.
+    hosted_cosign_key: str = ""
+    hosted_cosign_identity: str = ""
+    hosted_cosign_issuer: str = ""
+    #: Whether cosign checks the transparency log (Rekor). `false` only for a key whose signatures
+    #: were never uploaded, an air-gapped registry.
+    hosted_cosign_tlog: bool = True
+    #: The base image of each zip runtime, `ref@sha256:…`, over the shipped ones (ADR 0080 §9):
+    #: `{"python_3_13": "registry.internal/python:3.13-slim@sha256:…"}`.
+    hosted_base_images: dict[str, str] = Field(default_factory=dict)
+    #: What builds a zip version's image (ADR 0080 §9): a rootless `buildkitd`, or the Docker of a
+    #: laptop (`docker compose`, `make dev-up`).
+    hosted_builder: Literal["buildkit", "local_docker"] = "buildkit"
+    #: The repository built images are pushed to, `registry/path` (`global.images.buildRegistry`).
+    #: Empty: a zip version is published, and its build fails saying no repository is configured.
+    hosted_build_repository: str = ""
+    #: How long a hosted session's pod lives without a response before it is stopped (S41-11);
+    #: the session's own expiry bounds it too.
+    hosted_session_idle_s: int = Field(default=600, ge=30)
+    #: The Kubernetes version hosted agents run on, as the API server writes it (`v1.29.3-eks-abc`);
+    #: the chart sets it from the cluster it is installed on. Below 1.29 a hosted version is refused
+    #: at publication (S41-16). Empty (`docker compose`, `make dev-up`): no cluster, nothing checked.
+    cluster_version: str = ""
+    #: The `buildkitd` builds go through, as `buildctl --addr` takes it: the one the chart deploys
+    #: (`global.buildkitd`, S41-13) unless `global.images.buildkitAddress` names another.
+    buildkit_address: str = "tcp://choregos-buildkitd:1234"
+    #: A directory holding `ca.crt`, `tls.crt` and `tls.key` for mutual TLS with `buildkitd`;
+    #: empty speaks plain gRPC, which the chart's NetworkPolicy limits to the orchestrator's pods.
+    buildkit_tls_dir: str = ""
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under

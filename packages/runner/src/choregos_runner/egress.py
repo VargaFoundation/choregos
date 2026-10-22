@@ -12,6 +12,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from urllib.parse import quote, urlsplit, urlunsplit
 
+from choregos_contracts import StageInput
+from choregos_core.egress import AllowedRule, EgressPolicy, NetworkBounds, host_port_of, normalize_host
+
 PROXY_VARIABLES = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
 #: `CHOREGOS_EGRESS_AUTH=run` is what the orchestrator sets on the pod when the deployment's proxy
 #: wants credentials.
@@ -41,3 +44,17 @@ def authenticate_proxy_env(env: Mapping[str, str], run_id: str, token: str) -> d
             netloc += f":{parts.port}"
         changes[name] = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
     return changes
+
+
+def step_policy(stage_input: StageInput) -> EgressPolicy:
+    """What the runner's own calls of a prompt or hosted step may reach: the MCP servers the step was granted
+    and its `allow_domains`, never a host of `deny_domains`. The model gateway is the platform's own
+    address, not a call the agent chooses, and does not go through the guarded transport."""
+    granted = [hp for ref in stage_input.tools.mcp.values() if (hp := host_port_of(ref.url))]
+    rules = [AllowedRule(host, (port,)) for host, port in granted]
+    rules += [AllowedRule(normalize_host(host)) for host in stage_input.permissions.allow_domains]
+    return EgressPolicy(
+        rules=tuple(rules),
+        mode="enforce",
+        bounds=NetworkBounds(deny=tuple(stage_input.permissions.deny_domains)),
+    )

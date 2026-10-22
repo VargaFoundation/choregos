@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from . import (
     actions,
+    agent_session,
     bilan,
     children,
     evals,
     execution,
     findings,
     gates,
+    hosted_build,
     knowledge,
     memory,
     provisioning,
@@ -27,6 +29,11 @@ from . import (
 
 ALL_ACTIVITIES = [
     knowledge.sync_knowledge_source,
+    hosted_build.claim_hosted_build,
+    hosted_build.build_hosted_image,
+    hosted_build.record_hosted_build,
+    agent_session.start_session_pod,
+    agent_session.stop_session_pod,
     actions.load_action,
     actions.execute_effect,
     actions.compensate_effect,

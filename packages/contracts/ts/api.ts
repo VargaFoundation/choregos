@@ -945,8 +945,8 @@ export type AgentSpec = {
   model?: string | null;
   /** the ACP coding agent that carries the version; set only with an `acp` runtime (or none) */
   backend?: string | null;
-  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). */
-  runtime?: AcpRuntime | CodeRuntime | A2aRuntime;
+  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). `prompt`, `voice` and `hosted` are ADR 0080's: instructions and tools with no code, the same spoken, and the agent's own container serving Foundry's hosted contract. */
+  runtime?: AcpRuntime | CodeRuntime | A2aRuntime | PromptRuntime | VoiceRuntime | HostedRuntime;
   limits?: AgentLimits;
   budget?: AgentBudget;
   skills?: Array<{
@@ -1000,6 +1000,255 @@ export type A2aRuntime = {
   input?: "text" | "text+files";
   /** filled by the API at publication: the card as it was read; the runner refuses a card that changed */
   pinned_card?: A2aPinnedCard | null;
+};
+
+/** A prompt agent (ADR 0080): the spec's instructions, model, MCP servers and knowledge, run as a tool loop by the platform - no coding agent, no container code. `backend` must be empty. */
+export type PromptRuntime = {
+  kind: "prompt";
+  max_output_tokens?: number | null;
+  tool_choice?: "auto" | "required" | "none";
+  /** `json_object` asks the model for a JSON object, read as the step's outputs */
+  response_format?: "text" | "json_object";
+};
+
+/** A voice-based prompt agent (ADR 0080): a realtime model spoken to over `GET /agents/{slug}/realtime`. `model` must be a catalogue model marked `realtime`; `backend` and `skills` must be empty. It runs only as a session, never as a workflow step. */
+export type VoiceRuntime = {
+  kind: "voice";
+  voice?: string;
+  audio?: VoiceAudio;
+  /** what the agent says first, before the caller speaks */
+  greeting?: string | null;
+  turn_detection?: "server_vad" | "none";
+  max_session_minutes?: number;
+};
+
+export type VoiceAudio = {
+  format?: "pcm16";
+  sample_rate?: 16000 | 24000;
+  channels?: 1;
+};
+
+/** A hosted agent (ADR 0080): the agent's own container, from an image or built from a source zip, serving Foundry's hosted contract (`GET /readiness`, `POST /responses` and/or `POST /invocations`, optionally `GET /invocations_ws`) on `port`, beside the runner in the run's pod. It holds no credential: the model, the MCP servers and the internet are reached through the runner's loopback listeners. `backend` and `skills` must be empty. */
+export type HostedRuntime = {
+  kind: "hosted";
+  source: HostedImageSource | HostedZipSource;
+  protocols?: Array<"responses" | "invocations" | "invocations_ws">;
+  /** the port the container listens on; 4001-4003 are the runner's loopback listeners and are refused */
+  port?: number;
+  readiness_timeout_s?: number;
+  termination_grace_s?: number;
+  /** `none`: the repository is not mounted; `read`: read-only; `write`: the container changes it and the runner commits and pushes */
+  workspace?: "none" | "read" | "write";
+  /** non-secret variables; names are upper-case and the `CHOREGOS_`, `FOUNDRY_`, `OPENAI_`, `ANTHROPIC_` prefixes and the proxy variables are refused */
+  env?: {
+    [key: string]: string;
+  };
+  /** filled by the platform for a zip source, never by the caller */
+  build?: HostedBuild | null;
+};
+
+export type HostedImageSource = {
+  type: "image";
+  /** an image reference under a prefix of the operator's `CHOREGOS_HOSTED_REGISTRIES` */
+  ref: string;
+  /** filled by the API at publication: what `ref` resolved to; runs pull `ref@digest` */
+  digest?: string | null;
+};
+
+export type HostedZipSource = {
+  type: "zip";
+  /** the uploaded source (`POST /orgs/{org}/hosted-sources`) */
+  sha256: string;
+  runtime: "python_3_12" | "python_3_13" | "python_3_14" | "node_22" | "dotnet_10";
+  /** the argv started in the built image, e.g. [python, main.py] */
+  entry_point: Array<string>;
+  /** `remote_build` installs the declared dependencies at build time; `bundled`: the zip carries them */
+  dependency_resolution?: "remote_build" | "bundled";
+};
+
+/** An uploaded source zip (ADR 0080 §9). */
+export type HostedSource = {
+  sha256: string;
+  size_bytes: number;
+  files: Array<string>;
+  /** the file at the root that declares the dependencies `remote_build` installs: `requirements.txt` or `pyproject.toml` (Python), `package-lock.json` beside its `package.json` (Node), the one `*.csproj` (.NET); null when there is none */
+  dependencies?: string | null;
+};
+
+/** The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice. */
+export type HostedBuild = {
+  status: "pending" | "building" | "ready" | "failed";
+  key: string;
+  /** the built image, `ref@sha256:...`, once ready */
+  image?: string | null;
+  error?: string | null;
+  provenance?: {
+    [key: string]: string;
+  };
+};
+
+/** One turn of a direct conversation (ADR 0080 §10). The agent's spec decides the model, the instructions and the tools. */
+export type AgentResponseCreate = {
+  /** the project the session works in: its budget pays, its grants bound the tools */
+  project: string;
+  input: string | Array<AgentInputMessage>;
+  session_id?: string | null;
+  stream?: boolean;
+  /** the caller's cap on the whole session, when it opens; the project's budgets still bind */
+  max_usd?: number | null;
+};
+
+export type AgentInputMessage = {
+  role?: "user";
+  content: string;
+};
+
+export type AgentOutputText = {
+  type?: "output_text";
+  text: string;
+};
+
+export type AgentOutputMessage = {
+  type?: "message";
+  role?: "assistant";
+  content: Array<AgentOutputText>;
+};
+
+export type AgentResponseError = {
+  /** `budget_exceeded`, `model_error`, `max_turns` */
+  code: string;
+  message: string;
+};
+
+export type AgentResponseUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  turns?: number;
+  tool_calls?: number;
+};
+
+/** The part of the Responses API's shape a client reads. */
+export type AgentResponse = {
+  id: string;
+  object?: "response";
+  session_id: string;
+  status: "completed" | "failed";
+  output?: Array<AgentOutputMessage>;
+  output_text?: string;
+  usage?: AgentResponseUsage;
+  error?: AgentResponseError | null;
+};
+
+/** A `response.output_text.delta` event. */
+export type AgentDelta = {
+  type?: "response.output_text.delta";
+  response_id: string;
+  delta: string;
+};
+
+export type AgentSessionEvent = {
+  seq: number;
+  type: string;
+  ts: string;
+  payload?: {
+    [key: string]: unknown;
+  };
+};
+
+/** A direct conversation with an agent (ADR 0080 §10), next to runs: its key, its spend and its transcript. */
+export type AgentSession = {
+  id: string;
+  agent: string;
+  agent_version: number;
+  project: string;
+  status: "open" | "closed" | "failed";
+  reason?: string | null;
+  model: string;
+  responses: number;
+  tool_calls: number;
+  cost_usd: number;
+  created_at: string;
+  expires_at: string;
+  closed_at?: string | null;
+  events?: Array<AgentSessionEvent>;
+};
+
+/** A response a hosted session's person asked for, waiting for the session's pod (S41-11). */
+export type AgentSessionTurn = {
+  turn_id: string;
+  input: string;
+  protocol: "responses" | "invocations";
+};
+
+export type AgentSessionPodEvent = {
+  type: string;
+  payload?: {
+    [key: string]: unknown;
+  };
+};
+
+/** How the session's container answered a turn. */
+export type AgentSessionTurnResult = {
+  status: "answered" | "failed" | "not_ready" | "timeout" | "max_turns" | "budget_exceeded";
+  text?: string;
+  error?: string | null;
+  response_id?: string | null;
+  turns?: number;
+  tool_calls?: number;
+  events?: Array<AgentSessionPodEvent>;
+};
+
+/** What a hosted session's caller did on its socket (S41-21): `open`, a text frame `in`, `close`. */
+export type AgentSessionSocketFrame = {
+  seq: number;
+  kind: "open" | "in" | "close";
+  text?: string;
+  code?: number | null;
+};
+
+export type AgentSessionSocketNext = {
+  frames?: Array<AgentSessionSocketFrame>;
+  /** The journal's `seq` the pod reads after next time. */
+  cursor: number;
+  /** The last of the container's frames journaled. */
+  out_n: number;
+};
+
+export type AgentSessionSocketOutFrame = {
+  n: number;
+  text: string;
+};
+
+export type AgentSessionSocketClosed = {
+  code: number;
+  reason?: string;
+};
+
+/** What the container sent on its `/invocations_ws`, and whether it closed it. */
+export type AgentSessionSocketOut = {
+  frames?: Array<AgentSessionSocketOutFrame>;
+  closed?: AgentSessionSocketClosed | null;
+  events?: Array<AgentSessionPodEvent>;
+};
+
+export type AgentSessionSocketRecorded = {
+  out_n: number;
+};
+
+export type AgentSessionTools = {
+  tools?: Array<{
+    [key: string]: unknown;
+  }>;
+};
+
+export type AgentSessionToolCall = {
+  arguments?: {
+    [key: string]: unknown;
+  };
+};
+
+export type AgentSessionToolAnswer = {
+  text: string;
 };
 
 /** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */
@@ -2351,6 +2600,9 @@ export type GatewayModel = {
   provider?: string;
   input_cost_per_1k?: number | null;
   output_cost_per_1k?: number | null;
+  input_audio_cost_per_1k?: number | null;
+  output_audio_cost_per_1k?: number | null;
+  cached_input_cost_per_1k?: number | null;
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
@@ -2369,6 +2621,9 @@ export type ModelGatewayFacts = {
   upstream_model?: string;
   input_cost_per_1k?: number | null;
   output_cost_per_1k?: number | null;
+  input_audio_cost_per_1k?: number | null;
+  output_audio_cost_per_1k?: number | null;
+  cached_input_cost_per_1k?: number | null;
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
@@ -2383,6 +2638,7 @@ export type ModelCatalogueEntry = {
   allowed_roles: Array<string>;
   usages: Array<"agent" | "embed" | "distill" | "eval">;
   price_override?: PriceOverride | null;
+  max_usd_per_minute?: number | null;
   gateway?: ModelGatewayFacts | null;
   last_seen_at?: string | null;
   missing_since?: string | null;
@@ -2398,6 +2654,7 @@ export type ModelCatalogueEntryCreate = {
   allowed_roles?: Array<string>;
   usages?: Array<"agent" | "embed" | "distill" | "eval">;
   price_override?: PriceOverride | null;
+  max_usd_per_minute?: number | null;
   notes?: string;
 };
 
@@ -2408,6 +2665,8 @@ export type ModelCataloguePatch = {
   usages?: Array<"agent" | "embed" | "distill" | "eval"> | null;
   price_override?: PriceOverride | null;
   clear_price_override?: boolean;
+  max_usd_per_minute?: number | null;
+  clear_max_usd_per_minute?: boolean;
   notes?: string | null;
 };
 
@@ -3399,6 +3658,7 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  callAgentSessionTool: { method: "POST"; path: "/internal/agent-sessions/{id}/tools/{name}"; body: AgentSessionToolCall; response: AgentSessionToolAnswer };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
   [key: string]: unknown;
 }; response: {
@@ -3412,9 +3672,11 @@ export interface Operations {
   checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
   clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
+  closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
+  createAgentResponse: { method: "POST"; path: "/orgs/{org}/agents/{slug}/responses"; body: AgentResponseCreate; response: AgentResponse };
   createGitHubInstallLink: { method: "POST"; path: "/orgs/{org}/github/install-link"; body: GitHubInstallLinkRequest; response: GitHubInstallLink };
   createGlobalMemory: { method: "POST"; path: "/orgs/{org}/memories"; body: MemoryStoreCreate; response: MemoryStore };
   createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
@@ -3480,8 +3742,11 @@ export interface Operations {
   getAgentExposure: { method: "GET"; path: "/orgs/{org}/agents/{slug}/exposure"; body: never; response: AgentExposure };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };
+  getAgentSession: { method: "GET"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: AgentSession };
+  getAgentSessionInput: { method: "GET"; path: "/internal/agent-sessions/{id}/input"; body: never; response: StageInput };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
+  getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
@@ -3636,6 +3901,7 @@ export interface Operations {
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
+  listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
@@ -3681,7 +3947,14 @@ export interface Operations {
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
+  nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
+  nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
+  postAgentSessionSocketFrames: { method: "POST"; path: "/internal/agent-sessions/{id}/socket/out"; body: AgentSessionSocketOut; response: AgentSessionSocketRecorded };
+  postAgentSessionTurnResult: { method: "POST"; path: "/internal/agent-sessions/{id}/turns/{turn_id}"; body: AgentSessionTurnResult; response: {
+  status: "recorded" | "already_recorded";
+  turn_id: string;
+} };
   postDecision: { method: "POST"; path: "/work-items/{id}/decisions"; body: DecisionRequest; response: HumanRequest };
   postFindingAction: { method: "POST"; path: "/findings/{id}/actions"; body: FindingAction; response: FindingRecord };
   postRunEvents: { method: "POST"; path: "/internal/runs/{id}/events"; body: {
@@ -3779,6 +4052,7 @@ export interface Operations {
   updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
+  uploadHostedSource: { method: "POST"; path: "/orgs/{org}/hosted-sources"; body: void; response: HostedSource };
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };
   validateProjectWorkflow: { method: "POST"; path: "/projects/{id}/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
   validateWorkflow: { method: "POST"; path: "/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };

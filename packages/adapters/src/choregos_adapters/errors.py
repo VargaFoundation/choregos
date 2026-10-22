@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from choregos_core import ChoregosError
+from choregos_core.hosted import UNSUPPORTED_CLUSTER
 
 
 class AdapterError(ChoregosError):
@@ -29,3 +30,10 @@ class UpstreamError(AdapterError):
 
 class ConfigurationError(AdapterError):
     """Configuration de connecteur incomplète ou incohérente."""
+
+
+class UnsupportedClusterError(ConfigurationError):
+    """The cluster cannot run what the run asks for: a hosted agent's native sidecar below
+    Kubernetes 1.29 (S41-16). Retrying changes nothing until the cluster is upgraded."""
+
+    code = UNSUPPORTED_CLUSTER

@@ -19,7 +19,7 @@ fields:
 
 - The agent-sandbox **operator**, whose CRDs are cluster-scoped: a platform team installs it, a tenant of
   a shared cluster cannot. `tekton` and `k8s_job` stay the defaults.
-- Read the deployment guide, section "The `agent_sandbox` executor", and ADR 0053: it is the reference;
+- Read the deployment guide, section "The `agent_sandbox` executor": it is the reference;
   this page is its checklist.
 
 ## At the cluster
