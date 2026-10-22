@@ -55,6 +55,12 @@ def knowledge_sync_id(source_id: str) -> str:
     return f"knowledge-sync-{source_id}"
 
 
+def hosted_build_id(org_id: str, key: str, attempt: int) -> str:
+    """One build per organisation, build key and attempt (S41-08): a second version with the same
+    zip starts nothing, a failed build published again is the next attempt."""
+    return f"hosted-build-{org_id}-{key.removeprefix('sha256:')}-{attempt}"
+
+
 def provisioning_id(project_slug: str) -> str:
     return f"prov-{project_slug}"
 
@@ -77,6 +83,7 @@ class TemporalGateway(Protocol):
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def start_hosted_build(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def cancel(self, workflow_id: str) -> None: ...
     async def describe(self, workflow_id: str) -> WorkflowState | None: ...
 
@@ -156,6 +163,10 @@ class FakeTemporal:
         self.started.setdefault(workflow_id, payload)  # one loop per source
         return workflow_id
 
+    async def start_hosted_build(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        self.started.setdefault(workflow_id, payload)  # one build per key and attempt
+        return workflow_id
+
     async def cancel(self, workflow_id: str) -> None:
         self.cancelled.append(workflow_id)
 
@@ -223,6 +234,10 @@ class RealTemporal:
 
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("KnowledgeSync", workflow_id, payload)
+
+    async def start_hosted_build(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """A zip version's image (S41-08): `HostedImageBuild` in the orchestrator."""
+        return await self._start("HostedImageBuild", workflow_id, payload)
 
     async def signal(self, workflow_id: str, name: str, payload: Any) -> None:
         client = await self.client()

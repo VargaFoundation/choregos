@@ -11,6 +11,7 @@ from ..activities.interpretation import (
     signal_train,
 )
 from .action import ActionWorkflow
+from .agent_build import HostedImageBuild
 from .evals import EvalMatrix
 from .findings import FindingsTriage
 from .interpreter import WorkflowInterpreter
@@ -32,6 +33,7 @@ ALL_WORKFLOWS = [
     TrackerReconciliation,
     AgentTrial,
     KnowledgeSync,
+    HostedImageBuild,
 ]
 
 WORKFLOW_ACTIVITIES = [
@@ -49,6 +51,7 @@ __all__ = [
     "AgentTrial",
     "EvalMatrix",
     "FindingsTriage",
+    "HostedImageBuild",
     "KnowledgeSync",
     "MemoryIngestion",
     "ProjectProvisioning",

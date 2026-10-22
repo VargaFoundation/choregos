@@ -8,6 +8,7 @@ peut que la resserrer : un budget plus bas, moins d'outils. Une surcharge qui é
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Literal
 
 from choregos_adapters.storage import ObjectStoreError
@@ -23,6 +24,7 @@ from ..db.models import (
     AgentCredential,
     AgentVersion,
     ApiToken,
+    HostedBuildRecord,
     Membership,
     Organization,
     Project,
@@ -111,6 +113,7 @@ from ..services.agents import (
     resoudre_l_agent,
 )
 from ..services.egress import egress_gate_for_remote_agent
+from ..services.hosted_builds import builds_for, with_current_build
 from ..services.hosted_images import pin_hosted_runtime
 from ..services.hosted_sources import (
     MAX_BYTES,
@@ -158,7 +161,10 @@ async def _versions(session: AsyncSession, agent: Agent) -> list[AgentVersion]:
 
 
 def _version_dto(
-    ligne: AgentVersion, agent: Agent | None = None, pins: dict[int, list[str]] | None = None
+    ligne: AgentVersion,
+    agent: Agent | None = None,
+    pins: dict[int, list[str]] | None = None,
+    builds: Mapping[str, HostedBuildRecord] | None = None,
 ) -> AgentVersionDto:
     channels: list[Literal["stable", "candidate"]] = []
     if agent is not None:
@@ -168,7 +174,7 @@ def _version_dto(
             channels.append("candidate")
     return AgentVersionDto(
         version=ligne.version,
-        spec=AgentSpec.model_validate(ligne.spec),
+        spec=with_current_build(AgentSpec.model_validate(ligne.spec), builds or {}),
         checksum=ligne.checksum,
         created_by=ligne.created_by,
         created_at=ligne.created_at,
@@ -225,6 +231,7 @@ async def _dto(
     dernier = await last_run_at(session, agent.org_id, agent.slug)
     sujet = await subject_of(session, agent)
     pins = await _pins(session, principal, org, agent) if avec_versions else None
+    builds = await builds_for(session, agent.org_id, [v.spec for v in versions]) if avec_versions else {}
     droits, raison = permissions_of(principal, org, sujet)
     return AgentDto(
         scope=agent.scope,
@@ -243,7 +250,7 @@ async def _dto(
         revoked_at=agent.revoked_at,
         latest_version=versions[0].version if versions else 0,
         created_at=agent.created_at,
-        versions=[_version_dto(v, agent, pins) for v in versions] if pins is not None else None,
+        versions=[_version_dto(v, agent, pins, builds) for v in versions] if pins is not None else None,
         lifecycle=agent.lifecycle or "active",
         retired_at=agent.retired_at,
         last_run_at=dernier,
@@ -627,7 +634,7 @@ async def publish_version(
     ligne = await _append_version(
         session, principal, org, organisation, agent, sujet, body, message=None, allow_egress=allow_egress
     )
-    return _version_dto(ligne, agent)
+    return _version_dto(ligne, agent, builds=await builds_for(session, agent.org_id, [ligne.spec]))
 
 
 @router.post(
@@ -654,7 +661,7 @@ async def publish_version_with_message(
         base_version=body.base_version,
         allow_egress=allow_egress,
     )
-    return _version_dto(ligne, agent)
+    return _version_dto(ligne, agent, builds=await builds_for(session, agent.org_id, [ligne.spec]))
 
 
 @router.post(
@@ -688,7 +695,7 @@ async def restore_version(
         restored_from=source,
         base_version=body.base_version,
     )
-    return _version_dto(ligne, agent)
+    return _version_dto(ligne, agent, builds=await builds_for(session, agent.org_id, [ligne.spec]))
 
 
 @router.get(
@@ -705,7 +712,12 @@ async def get_version(org: str, slug: Slug, version: int, session: Db, principal
     ).scalar_one_or_none()
     if ligne is None:
         raise not_found("Agent version", f"{slug}@{version}")
-    return _version_dto(ligne, agent, await _pins(session, principal, org, agent))
+    return _version_dto(
+        ligne,
+        agent,
+        await _pins(session, principal, org, agent),
+        await builds_for(session, agent.org_id, [ligne.spec]),
+    )
 
 
 FINIS = {"succeeded", "failed", "timed_out", "cancelled"}

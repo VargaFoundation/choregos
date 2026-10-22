@@ -9,6 +9,7 @@ méthodes de mise en scène (`seed`, `set_diff`, `set_status`, `queue_result`,
 from __future__ import annotations
 
 from .agent_sandbox import FakeSandboxCluster
+from .builder import FakeImageBuilder
 from .cd import FakeCd
 from .ci import FakeCi
 from .executor import FakeExecutor
@@ -32,6 +33,7 @@ __all__ = [
     "FakeGateway",
     "FakeGitHubApp",
     "FakeHostedAgent",
+    "FakeImageBuilder",
     "FakeImageVerifier",
     "FakeMemory",
     "FakeModelServer",

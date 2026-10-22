@@ -1068,6 +1068,25 @@ class AgentVersion(Base, PkMixin, TimestampMixin):
     restored_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class HostedBuildRecord(Base, PkMixin, TimestampMixin):
+    """The build of a hosted agent's zip (ADR 0080 §9), one per organisation and build key: every
+    version with the same inputs shares it, and the versions themselves stay as published."""
+
+    __tablename__ = "hosted_builds"
+    __table_args__ = (UniqueConstraint("org_id", "key", name="uq_hosted_builds_org_key"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(80))
+    #: `pending`, `building`, `ready` or `failed`.
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    #: Which build of this key: a failed build published again is attempt 2, under its own workflow.
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    image: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provenance: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ProjectAgent(Base, PkMixin, TimestampMixin):
     """L'épingle d'un projet sur une version d'agent, et ses surcharges — qui ne font que resserrer."""
 

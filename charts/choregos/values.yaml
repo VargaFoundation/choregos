@@ -116,6 +116,14 @@ global:
     hostedRegistries: []
     # Signatures of hosted images: off | warn (publish, log `hosted.signature_unverified`) | enforce.
     hostedCosign: "off"
+    # Hosted zips (ADR 0080 §9): the repository the platform pushes the images it builds to, as
+    # `registry/path` (tagged `build-<key>`, run by digest). Empty: a zip version publishes, and its
+    # build fails with the reason. The orchestrator's executor worker pushes there.
+    buildRegistry: ""
+    # buildkit (`buildctl` against `buildkitAddress`) | local_docker (`docker build` + `push`, a
+    # laptop). The chart does not deploy a buildkitd yet (S41-13): point the address at one.
+    hostedBuilder: buildkit
+    buildkitAddress: ""
   # Network egress, one model (ADR 0066 and ADR 0070, amended): the organisation decides in the
   # console which hosts it OPENS (its egress allowlist) and the BOUNDS nothing may cross (its policy
   # ceiling's network section); this block is what only the operator sets. It lives under `global`
