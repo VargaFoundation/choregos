@@ -27,6 +27,7 @@ from choregos_contracts import (
     StageResult,
     StageStatus,
 )
+from choregos_core import telemetry
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
@@ -212,7 +213,25 @@ class Runner:
         self.compressor = None
         self.tools = None
         try:
-            return await self._execute(stage_input, client, workspace, journal)
+            # The agent's session is a span of the run's trace, child of the orchestrator's stage
+            # span (ADR 0018). Its name and its model only: never the prompt, never the transcript.
+            with telemetry.agent_span(
+                stage_input.run_id,
+                trace_parent=stage_input.trace_parent,
+                agent=stage_input.agent.backend,
+                model=stage_input.model.litellm_model,
+                project=stage_input.project.slug,
+                work_item=stage_input.work_item.key,
+                stage=stage_input.transition.role,
+            ) as span:
+                outcome = await self._execute(stage_input, client, workspace, journal)
+                status = outcome.result.status if outcome.result else None
+                telemetry.record_outcome(
+                    span,
+                    str(status) if status else outcome.exit_code.name.lower(),
+                    failed=outcome.exit_code != Exit.OK or status == StageStatus.FAILED,
+                )
+                return outcome
         finally:
             await compression.stop(self.compressor)
             await arreter_outils(self.tools)

@@ -839,6 +839,36 @@ a real tenant on 2026-09-26. The alert rules themselves are written once and ser
 flavours, and a test fails if they ever diverge. An unknown flavour stops the render and names
 itself.
 
+### Traces (OpenTelemetry GenAI, ADR 0018)
+
+Off by default. A process sends spans only when the standard `OTEL_EXPORTER_OTLP_ENDPOINT` (or
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) is set, over OTLP/HTTP, batched; the other `OTEL_*` variables
+of the SDK apply. The API and the workers take it from `global.extraEnv`, the agent pods from
+`global.runner.env`. The agent pods' network policy must let them reach the collector. Sending to
+the collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`, daemonset mode) has not
+been tried yet: check that it exposes an OTLP/HTTP address your pods can reach.
+
+```yaml
+global:
+  extraEnv:
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: http://<collector>:4318
+  runner:
+    env:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://<collector>:4318
+```
+
+A run is one trace. Its root is the orchestrator's `invoke_workflow <stage>` span, which lasts as
+long as the wait for the run; the runner's `invoke_agent <backend>` span (the agent's session) and
+the API's `execute_tool <tool>` spans (each call of the tool route — catalogue, plugin, broker,
+`web_fetch`, `web_search`, refused calls included) are its children. The trace and root span ids are
+derived from the run id, so the three processes agree without a lookup; the runner receives them in
+`StageInput.trace_parent`. Every span carries `run_id`, `project`, `work_item` and `stage`, the keys
+of the JSON logs. A span never carries a prompt, a tool's arguments or its result.
+
+Traces are for reading. No gate, budget or decision reads one, and a collector that is down only
+loses spans: the ledger stays the record of spend, the run journal the record of what happened.
+
 ### Bringing your own workflow templates
 
 ```yaml

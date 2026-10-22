@@ -30,7 +30,7 @@ from choregos_contracts import (
     TransitionRef,
     WorkItemRef,
 )
-from choregos_core import ExecRef, StageJobSpec, utcnow
+from choregos_core import ExecRef, StageJobSpec, telemetry, utcnow
 from choregos_core.hosted import agent_container
 from choregos_core.redaction import REDACTED
 from temporalio import activity
@@ -98,6 +98,8 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
         org_hosts = await org_runner_hosts(session, record.org_id)
         stage_input = StageInput(
             run_id=run_id,
+            # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
+            trace_parent=telemetry.traceparent(run_id),
             attempt=1,
             project=ProjectRef(slug=bundle.slug, org=bundle.org_slug),
             work_item=WorkItemRef(key=f"session:{session_id}", title=f"Session with {served}"),
