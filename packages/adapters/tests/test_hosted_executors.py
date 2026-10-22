@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import ConfigurationError
+from choregos_adapters.errors import ConfigurationError, UnsupportedClusterError, UpstreamError
 from choregos_adapters.executor.aca import AcaExecutor
 from choregos_adapters.executor.agent_sandbox import AgentSandboxExecutor
 from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
@@ -20,11 +20,18 @@ IMAGE = "ghcr.io/acme/triager:1@sha256:" + "a" * 64
 
 
 class _RecordingClient:
-    def __init__(self) -> None:
+    """`version`: the API server's `gitVersion`; `None` plays a `/version` that does not answer."""
+
+    def __init__(self, version: str | None = "v1.30.2") -> None:
         self.calls: list[tuple[str, str, Any]] = []
+        self.version = version
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         self.calls.append((method, path, kwargs.get("json")))
+        if path == "/version":
+            if self.version is None:
+                raise UpstreamError("kubernetes", "GET /version -> 503", status_code=503)
+            return {"gitVersion": self.version}
         return None
 
 
@@ -136,3 +143,55 @@ async def test_an_executor_that_cannot_hold_a_sidecar_refuses_before_creating_an
         await make(client).start(_spec())
     assert named in str(refused.value)
     assert client.calls == [], "nothing is created for a step that cannot run"
+
+
+@pytest.mark.parametrize("version", ["v1.28.15", "v1.27.3-eks-abc", "1.28+", "not-a-version"])
+async def test_a_cluster_older_than_1_29_refuses_a_hosted_step_before_creating_anything(version: str) -> None:
+    """S41-16: below 1.29 `restartPolicy: Always` is dropped, and the pod waits on its agent forever."""
+    client = _RecordingClient(version)
+    with pytest.raises(UnsupportedClusterError) as refused:
+        await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    assert refused.value.code == "hosted_unsupported_cluster"
+    assert str(refused.value).startswith("hosted_unsupported_cluster:")
+    assert [(method, path) for method, path, _ in client.calls] == [("GET", "/version")]
+
+
+@pytest.mark.parametrize("version", ["v1.29.0", "v1.29.3-eks-abc", "1.30+", "v2.0.0"])
+async def test_a_cluster_from_1_29_starts_the_hosted_step(version: str) -> None:
+    client = _RecordingClient(version)
+    await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    assert any(method == "POST" and path.endswith("/jobs") for method, path, _ in client.calls)
+
+
+async def test_the_version_is_read_once_per_executor() -> None:
+    client = _RecordingClient("v1.29.3-eks-abc")
+    executor = KubernetesJobExecutor(client=client)  # type: ignore[arg-type]
+    await executor.start(_spec())
+    await executor.start(_spec().model_copy(update={"run_id": "r-2"}))
+    assert [path for _, path, _ in client.calls].count("/version") == 1
+
+
+async def test_a_failed_read_is_retryable_and_not_kept() -> None:
+    client = _RecordingClient(None)
+    executor = KubernetesJobExecutor(client=client)  # type: ignore[arg-type]
+    with pytest.raises(UpstreamError):
+        await executor.start(_spec())
+    client.version = "v1.31.0"
+    await executor.start(_spec())
+    assert [path for _, path, _ in client.calls].count("/version") == 2
+
+
+async def test_a_step_without_a_hosted_agent_does_not_read_the_version() -> None:
+    client = _RecordingClient("v1.25.0")
+    await KubernetesJobExecutor(client=client).start(_spec(hosted=False))  # type: ignore[arg-type]
+    assert all(path != "/version" for _, path, _ in client.calls), "a plain step runs on any cluster"
+
+
+async def test_the_fake_refuses_as_the_job_executor_does() -> None:
+    fake = FakeExecutor()
+    await fake.start(_spec())
+    fake.server_version = "v1.28.2"
+    with pytest.raises(UnsupportedClusterError):
+        await fake.start(_spec().model_copy(update={"run_id": "r-2"}))
+    await fake.start(_spec(hosted=False).model_copy(update={"run_id": "r-3"}))
+    assert [s.run_id for s in fake.started] == ["r-1", "r-3"]

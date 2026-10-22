@@ -32,8 +32,10 @@ from choregos_core.domain import (
     ExecStatus,
     StageJobSpec,
 )
+from choregos_core.hosted import native_sidecars_refusal
 from choregos_core.sorties import explication
 
+from ..errors import UnsupportedClusterError
 from .tekton import (
     CORE_API,
     GATEWAY_KEY_FIELD,
@@ -82,11 +84,31 @@ class KubernetesJobExecutor:
         # plafond, le comportement d'avant : un déploiement qui ne dit rien ne change pas
         # de régime du jour au lendemain.
         self.max_active = max(0, int(max_active))
+        #: The API server's `/version`, read once: a cluster is not upgraded under a running worker
+        #: often enough to read it at every start (S41-16).
+        self._server_version: dict[str, Any] | None = None
+
+    async def server_version(self) -> dict[str, Any]:
+        """The API server's `/version` body, read at the first call and kept. A failed read raises
+        (an `UpstreamError`, retryable) and is not kept."""
+        if self._server_version is None:
+            found = await self.client.request("GET", "/version")
+            self._server_version = found if isinstance(found, dict) else {}
+        return self._server_version
+
+    async def _require_native_sidecars(self) -> None:
+        refusal = native_sidecars_refusal(await self.server_version())
+        if refusal is not None:
+            raise UnsupportedClusterError(refusal)
 
     def _name(self, run_id: str) -> str:
         return f"run-{run_id}"[:63].lower()
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
+        if spec.agent_container is not None:
+            # Below 1.29 the API server drops `restartPolicy: Always` from the init container: the
+            # pod would wait on the agent forever. Refused before anything is created.
+            await self._require_native_sidecars()
         name = self._name(spec.run_id)
         existing = await self.client.request("GET", f"{BATCH_API}/namespaces/{spec.namespace}/jobs/{name}")
         if existing is not None:

@@ -9,6 +9,7 @@ and an optional MCP tools sidecar — plus four dependencies it can either **emb
 | | Minimum | Notes |
 | :-- | :-- | :-- |
 | Kubernetes | 1.24 | `spec.suspend` on Jobs (GA in 1.24) is used to queue runs |
+| Kubernetes, for hosted agents | 1.29 | A hosted agent runs as a native sidecar; below 1.29 its versions are refused (`hosted_unsupported_cluster`, [hosted agents](hosted-agents.md)) |
 | Helm | 3.12 | The chart is also published as an OCI artifact |
 | PostgreSQL | 15 | Embedded single instance for a bench, an operator in production |
 | Temporal | 1.22 | Embedded dev server for a bench, a cluster in production |
@@ -238,6 +239,12 @@ global:
     hostedCosignTlog: true         # false: skip Rekor, for a key whose signatures were never uploaded
     hostedCosignPolicy: false      # render the Kyverno ClusterPolicy `choregos-hosted-images`
 ```
+
+Hosted agents need Kubernetes 1.29 or later. The chart renders the cluster's version as
+`CHOREGOS_CLUSTER_VERSION` on the API, from `global.kubernetesVersion` or, empty, from the version Helm
+renders for: the cluster's own on `helm install` and under Argo CD, Helm's built-in default under an
+offline `helm template` (pass `--kube-version` or set `global.kubernetesVersion` there). The executor
+also reads the API server's `/version` before it starts a hosted step.
 
 The chart renders `CHOREGOS_HOSTED_REGISTRIES` and `CHOREGOS_HOSTED_COSIGN` on the API only. A prefix
 matches by path segment. The API reads the manifest through the organisation's egress allowlist, so the

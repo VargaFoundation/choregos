@@ -120,6 +120,22 @@ The run's pod then holds two containers:
 - the routing executor sends a hosted step to Jobs even when it uses the pool's image; the warm pool
   (`agent_sandbox`), Tekton and Azure Container Apps refuse it before creating anything.
 
+**The cluster must run Kubernetes 1.29 or later (S41-16).** Below 1.29 the API server drops
+`restartPolicy: Always` from an init container (native sidecars are beta and on by default from
+1.29): the agent becomes a plain init container that never exits, and the runner never starts. The
+platform refuses it twice, with the error `hosted_unsupported_cluster`:
+
+- **at publication**: the chart renders the cluster's version as `CHOREGOS_CLUSTER_VERSION` on the
+  API (`global.kubernetesVersion`, or the version Helm or Argo CD renders for), and a hosted version
+  is refused with a 422 below 1.29. Unset (`docker compose`, `make dev-up`), nothing is checked;
+- **at start**: `KubernetesJobExecutor` reads the API server's `/version` (its `gitVersion`, such as
+  `v1.29.3-eks-abc` or `1.30+`, then `major`/`minor`) the first time it starts a hosted step and keeps
+  it for the worker's life. Below 1.29, or when the version cannot be read, it creates nothing, and
+  the step fails (or the session closes `pod_failed`) without a retry, the activity's error typed
+  `hosted_unsupported_cluster`. A `/version` that does not answer is retried, and not kept. A step
+  without a hosted agent never reads it. `local_docker` needs no version; the executors that cannot
+  hold a sidecar refuse a hosted step whatever the version.
+
 **Five frameworks pass the conformance suite (S41-06).** [`examples/hosted/`](../examples/hosted/README.md)
 holds one ticket triager on each framework, unchanged by the platform and importing nothing from
 it: Microsoft Agent Framework, LangGraph, the OpenAI Agents SDK, the Claude Agent SDK and the GitHub

@@ -185,6 +185,10 @@ class Settings(BaseSettings):
     #: How long a hosted session's pod lives without a response before it is stopped (S41-11);
     #: the session's own expiry bounds it too.
     hosted_session_idle_s: int = Field(default=600, ge=30)
+    #: The Kubernetes version hosted agents run on, as the API server writes it (`v1.29.3-eks-abc`);
+    #: the chart sets it from the cluster it is installed on. Below 1.29 a hosted version is refused
+    #: at publication (S41-16). Empty (`docker compose`, `make dev-up`): no cluster, nothing checked.
+    cluster_version: str = ""
     #: The `buildkitd` builds go through, as `buildctl --addr` takes it: the one the chart deploys
     #: (`global.buildkitd`, S41-13) unless `global.images.buildkitAddress` names another.
     buildkit_address: str = "tcp://choregos-buildkitd:1234"

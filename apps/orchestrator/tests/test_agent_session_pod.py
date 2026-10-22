@@ -146,3 +146,18 @@ async def test_stopping_fails_the_waiting_turns_cancels_the_pod_and_closes_the_s
     assert again == {"state": "stopped", "failed_turns": 0}, "replayed, it changes nothing"
     assert setup.adapters.executor.cancelled == [f"session-{session_id}"]
     assert (await _events(session_id)).count("pod.stopped") == 1, "journaled once, replayed or not"
+
+
+async def test_a_cluster_older_than_1_29_refuses_the_pod_without_a_retry(setup: Fixture) -> None:
+    """S41-16: the session's agent is a native sidecar too."""
+    setup.adapters.executor.server_version = "1.28"
+    await _agent(setup, _hosted())
+    session_id = await _session(setup)
+    with pytest.raises(ApplicationError) as raised:
+        await pod_activities.start_session_pod({"session_id": session_id})
+    assert raised.value.type == "hosted_unsupported_cluster" and raised.value.non_retryable
+    assert setup.adapters.executor.started == []
+
+    setup.adapters.executor.server_version = "v1.29.0"
+    pod = await pod_activities.start_session_pod({"session_id": session_id})
+    assert pod["state"] == "running", "the same session starts once the cluster is upgraded"

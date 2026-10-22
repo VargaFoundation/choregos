@@ -165,6 +165,9 @@ spec:
               value: /tmp/sigstore
             {{- end }}
             {{- end }}
+            # The cluster's version: a hosted version is refused at publication below 1.29 (S41-16).
+            - name: CHOREGOS_CLUSTER_VERSION
+              value: {{ $.Values.global.kubernetesVersion | default $.Capabilities.KubeVersion.Version | quote }}
             {{- with (dig "mcp" "oauth" dict .Values.global) }}
             {{- if .enabled }}
             {{- range ($.Values.global.extraEnv | default list) }}

@@ -269,7 +269,9 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             ref = await bundle.adapters.executor.start(spec)
         except ConfigurationError as refusal:
             await _fail_run_on_configuration(session, bundle, run, payload, stage_input.run_id, refusal)
-            raise ApplicationError(str(refusal), type=START_REFUSED, non_retryable=True) from refusal
+            # A refusal that names itself (`hosted_unsupported_cluster`, S41-16) keeps its name.
+            kind = getattr(refusal, "code", START_REFUSED)
+            raise ApplicationError(str(refusal), type=kind, non_retryable=True) from refusal
         capabilities = _capabilities_for(bundle.adapters.executor, ref, capabilities)
         # Un exécuteur qui sait mettre en file (`queue`) a pu créer le run SANS pod, parce
         # que le plafond de simultanéité était atteint. Le marquer « running » ferait
@@ -317,7 +319,8 @@ async def _fail_run_on_configuration(
     if run is not None:
         run.status = "failed"
         run.ended_at = run.ended_at or utcnow()
-        run.result = StageResult.failure(message[:4000], START_REFUSED).model_dump(mode="json", by_alias=True)
+        reason = getattr(refusal, "code", START_REFUSED)
+        run.result = StageResult.failure(message[:4000], reason).model_dump(mode="json", by_alias=True)
     await persist_event(
         session,
         EventType.RUN_FINISHED,
