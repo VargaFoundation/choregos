@@ -61,3 +61,31 @@ test("Integrations is in the Organisation group, not in the Catalogue (S40-08)",
   await expect(lien).toHaveAttribute("href", "/integrations");
   await expect(navigation.getByRole("list", { name: "Catalogue" }).getByRole("link", { name: "Integrations" })).toHaveCount(0);
 });
+
+test("About opens a panel with the deployed version, from the sidebar and from the rail (S42-12)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const barre = page.getByRole("complementary", { name: "Sidebar" });
+  await barre.getByRole("button", { name: "About" }).click();
+  const panel = page.getByRole("dialog", { name: "About" });
+  await expect(panel.getByText("Community edition")).toBeVisible();
+  await expect(panel.getByTestId("about-core-licence")).toHaveText("Apache-2.0");
+  await expect(panel.getByText("0123abc4567def890123abc4567def890123abc4")).toBeVisible();
+  await expect(panel.getByRole("link", { name: "Source repository" })).toBeVisible();
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toBeHidden();
+
+  // Folded: the icon stays, with its name.
+  await barre.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(barre.getByRole("button", { name: "About" })).toBeVisible();
+  await barre.getByRole("button", { name: "About" }).click();
+  await expect(page.getByRole("dialog", { name: "About" }).getByText("Community edition")).toBeVisible();
+});
+
+test("About is in the mobile menu (S42-12)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Menu/ }).click();
+  await page.getByRole("button", { name: "About" }).click();
+  await expect(page.getByRole("dialog", { name: "About" }).getByText("Community edition")).toBeVisible();
+});

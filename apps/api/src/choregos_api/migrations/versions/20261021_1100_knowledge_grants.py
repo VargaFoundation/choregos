@@ -9,7 +9,7 @@ If the S42-10 migration (`knowledge_distillation_parts`) lands first, rechain `d
 it: there must stay one head.
 
 Revision ID: e4a6c8d0b2f1
-Revises: 9d2e4f6a8b1c
+Revises: b3c5d7e9f1a2
 Create Date: 2026-10-21 11:00:00+00:00
 """
 
@@ -21,7 +21,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e4a6c8d0b2f1"
-down_revision: str | None = "9d2e4f6a8b1c"
+down_revision: str | None = "b3c5d7e9f1a2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

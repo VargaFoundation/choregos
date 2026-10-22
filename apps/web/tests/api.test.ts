@@ -130,3 +130,35 @@ describe("unhandled API errors (S26-02)", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("section upload (S42-13)", () => {
+  it("posts the file as the raw body with its own content type, and answers the ref", async () => {
+    const fetchMock = vi.fn(async (..._args: unknown[]) => new Response(JSON.stringify({ ref: "/api/v1/x/logo.png" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { api } = await import("@/lib/api");
+      const file = new File(["png-bytes"], "logo.png", { type: "image/png" });
+      expect(await api.sectionUpload("/orgs/acme/theme/ressources", file)).toEqual({ ref: "/api/v1/x/logo.png" });
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe("/api/v1/orgs/acme/theme/ressources");
+      expect(init.method).toBe("POST");
+      expect(init.body).toBe(file);
+      expect(init.headers).toEqual({ "Content-Type": "image/png" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("falls back to octet-stream for a file without a type", async () => {
+    const fetchMock = vi.fn(async (..._args: unknown[]) => new Response(JSON.stringify({ ref: "r" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { api } = await import("@/lib/api");
+      await api.sectionUpload("/orgs/acme/up", new File(["x"], "blob"));
+      const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+      expect(init.headers).toEqual({ "Content-Type": "application/octet-stream" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

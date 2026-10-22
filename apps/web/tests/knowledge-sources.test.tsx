@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { api } from "@/lib/api";
-import { nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
+import { nextSyncLabel, pageIdsOf, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
 import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -44,6 +44,12 @@ describe("what a source says", () => {
       url: "https://git.test/r.git", max_depth: 2, max_pages: 50, exclude: ["/es/*", "/pt/*"],
     });
     expect(sourceConfig("web", fields)).toEqual({ url: "https://git.test/r.git", max_depth: 2, max_pages: 50 });
+    expect(sourceConfig("web", { ...fields, pageOnly: true, depth: "4", maxPages: "300" })).toEqual({
+      url: "https://git.test/r.git", max_depth: 0, max_pages: 1,
+    });
+    expect(sourceConfig("web", { ...fields, depth: "9", maxPages: "120", documents: true })).toEqual({
+      url: "https://git.test/r.git", max_depth: 5, max_pages: 120, include_documents: true,
+    });
     expect(sourceConfig("git", fields)).toEqual({ url: "https://git.test/r.git", ref: "main", paths: ["docs/*.md", "*.md"] });
   });
 });
@@ -65,6 +71,34 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "sync now" }));
     await waitFor(() => expect(api.syncKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1"));
     expect(onChange).toHaveBeenCalled();
+  });
+
+  it("adds a single page, or a crawl with linked documents (S42-09b)", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://example.com/offer" } });
+    fireEvent.click(screen.getByLabelText("This page only (no links followed)"));
+    expect(screen.queryByLabelText("crawl depth")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ kind: "web", config: { url: "https://example.com/offer", max_depth: 0, max_pages: 1 } }),
+      ),
+    );
+    fireEvent.click(screen.getByLabelText("This page only (no links followed)"));
+    fireEvent.change(screen.getByLabelText("crawl depth"), { target: { value: "1" } });
+    fireEvent.click(screen.getByLabelText("Include linked documents (PDF, Word, PowerPoint, Excel)"));
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenLastCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ config: { url: "https://example.com/offer", max_depth: 1, max_pages: 50, include_documents: true } }),
+      ),
+    );
   });
 
   it("adds a SharePoint source through its connector", async () => {
@@ -173,7 +207,7 @@ describe("the sources of a base (S33-04)", () => {
     expect(screen.queryByLabelText("site or drive id")).toBeNull();
     fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
     fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
-    fireEvent.change(screen.getByLabelText("page id"), { target: { value: " 12345 " } });
+    fireEvent.change(screen.getByLabelText("page ids"), { target: { value: " 12345 " } });
     fireEvent.click(screen.getByRole("button", { name: "add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
@@ -186,6 +220,38 @@ describe("the sources of a base (S33-04)", () => {
       }),
     );
     expect(screen.getByText(/everything the connector/)).toBeInTheDocument();
+  });
+
+  it("extracts page ids from numbers and pasted Confluence URLs (S42-09d)", () => {
+    const url = "https://acme.atlassian.net/wiki/spaces/ENG/pages/555/Deploy+guide";
+    expect(pageIdsOf(`12, ${url}  12\n https://acme.atlassian.net/wiki/pages/viewpage.action?pageId=77 junk`)).toEqual(["12", "555", "77"]);
+    expect(pageIdsOf("")).toEqual([]);
+    const base = { site: "", folder: "", url: "", ref: "", paths: "", space: "ENG" };
+    expect(sourceConfig("confluence", { ...base, pageId: `${url}, 7`, descendants: false })).toEqual({
+      space_key: "ENG", page_ids: ["555", "7"], descendants: false, include_attachments: false,
+    });
+    expect(sourceConfig("confluence", { ...base, pageId: url })).toEqual({ space_key: "ENG", page_id: "555", include_attachments: false });
+    expect(sourceConfig("confluence", { ...base, pageId: "", descendants: false })).toEqual({ space_key: "ENG", include_attachments: false });
+  });
+
+  it("sends the chosen pages without their sub-pages when the box is cleared", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
+    await screen.findByRole("option", { name: "wiki" });
+    fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
+    fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
+    fireEvent.change(screen.getByLabelText("page ids"), { target: { value: "1, 2" } });
+    fireEvent.click(screen.getByLabelText("and its sub-pages"));
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ config: { space_key: "ENG", page_ids: ["1", "2"], descendants: false, include_attachments: false } }),
+      ),
+    );
   });
 
   it("sends no page id for a whole space, and asks for attachments when ticked", () => {

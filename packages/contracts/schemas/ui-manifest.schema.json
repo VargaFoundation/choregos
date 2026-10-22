@@ -26,6 +26,7 @@
     }
   },
   "$defs": {
+    "block_permission": { "type": "string", "description": "optional: a core permission (same vocabulary as the section's) the caller must hold to see this block; the section's own permission still applies. A section with no visible block is not listed." },
     "path": { "type": "string", "pattern": "^/[A-Za-z0-9_{}/.:-]*$" },
     "form": {
       "type": "object",
@@ -33,9 +34,30 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "form" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "schema": { "type": "object", "description": "the JSON Schema of the values; the console derives the form from it" },
+        "schema": {
+          "type": "object",
+          "description": "the JSON Schema of the values; the console derives the form from it. A string property may carry `format: \"asset\"` (S42-13): the console then shows the current file, a file input and a Remove button, and uploads the chosen file to `x-upload` (a POST path, `{org}` filled in) as the RAW request body with the file's own Content-Type. The response is JSON with a `ref` string, which becomes the field's value; the form's own write then saves that reference. `x-accept` lists the accepted media types and `x-max-bytes` the largest size, both checked in the browser as a courtesy: the upload route stays the judge.",
+          "properties": {
+            "properties": {
+              "type": "object",
+              "additionalProperties": {
+                "if": { "required": ["format"], "properties": { "format": { "const": "asset" } } },
+                "then": {
+                  "required": ["x-upload"],
+                  "properties": {
+                    "type": { "const": "string" },
+                    "x-upload": { "$ref": "#/$defs/path" },
+                    "x-accept": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^[a-z]+/[A-Za-z0-9.+-]+$" } },
+                    "x-max-bytes": { "type": "integer", "minimum": 1 }
+                  }
+                }
+              }
+            }
+          }
+        },
         "read": { "$ref": "#/$defs/path" },
         "write": { "$ref": "#/$defs/path" },
         "write_method": { "enum": ["PUT", "PATCH", "POST"], "default": "PUT" }
@@ -57,6 +79,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "table" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "list": { "$ref": "#/$defs/path" },
@@ -71,6 +94,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "action" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "label": { "type": "string" },
         "description": { "type": "string" },
         "path": { "$ref": "#/$defs/path" },
@@ -87,6 +111,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "const": "secret_once" },
+        "permission": { "$ref": "#/$defs/block_permission" },
         "label": { "type": "string" },
         "description": { "type": "string" },
         "path": { "$ref": "#/$defs/path" },

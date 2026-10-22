@@ -5,6 +5,7 @@
  */
 export type {
   AgentBackendInfo,
+  AgentBackendUpdate,
   AgentImageInfo,
   CodeRuntime,
   AgentNetwork,
@@ -18,6 +19,8 @@ export type {
   AuditPage,
   ConnectorType,
   ExecutorInfo,
+  PlatformIdentity,
+  PlatformIdentityRow,
   Membership,
   MembershipUpsert,
   Org,
@@ -201,6 +204,8 @@ export type { Artifact } from "@choregos/contracts/schemas";
 export type {
   KnowledgeBase,
   KnowledgeBaseCreate,
+  KnowledgeDistillEstimate,
+  KnowledgeDistillRequest,
   ProjectKnowledgeBaseCreate,
   KnowledgeBasePatch,
   KnowledgeDocument,

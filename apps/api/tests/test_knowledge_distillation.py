@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-import pytest
 from httpx import AsyncClient
 
 from . import knowledge_fixtures as fx
@@ -130,19 +129,79 @@ def test_the_distiller_is_in_the_catalogue_in_english() -> None:
     assert "cites at least one source" in distiller.document["spec"]["instructions"]
 
 
-@pytest.mark.parametrize("size", [400_001])
-async def test_a_corpus_too_large_for_one_pass_is_refused(size: int) -> None:
-    from types import SimpleNamespace
+def test_a_base_too_large_for_the_cap_names_its_biggest_documents() -> None:
+    """The refusal says what to do: the size, the number of parts, and which documents weigh most."""
+    from choregos_api.config import Settings
+    from choregos_api.knowledge.distill import Source, build_estimate
+    from choregos_api.services.model_catalogue import Price
 
-    from choregos_api.knowledge.distill import MAX_CORPUS_CHARS, DistillationError, load_corpus
+    sizes = {"budget.xlsx": 1_500_000, "notes.md": 1_000, "prices.xlsx": 700_000, "plan.md": 60_000}
+    corpus = [Source(name, name, "sha256:x", "x" * size) for name, size in sizes.items()]
+    settings = Settings(knowledge_distill_part_chars=100_000, knowledge_distill_max_parts=16)
+    estimate = build_estimate(corpus, "instructions", "m", Price(None, None, "none"), [], settings)
+    assert estimate.refusal is not None and estimate.refusal[0] == "too_large"
+    message = estimate.refusal[1]
+    assert "2.26 M characters" in message and "565 k tokens" in message
+    assert "at most 16" in message and "leave large spreadsheets out" in message
+    assert "budget.xlsx (1.50 M), prices.xlsx (700 k), plan.md (60 k)" in message
+    assert "notes.md" not in message
+    # Leaving the spreadsheets out makes it fit.
+    fitting = build_estimate(corpus, "instructions", "m", Price(None, None, "none"), ["*.xlsx"], settings)
+    assert fitting.refusal is None and fitting.values["parts"] == 1
 
-    class Session:
-        async def execute(self, _query: Any) -> Any:
-            document = SimpleNamespace(
-                filename="big.md", title="Big", digest="sha256:x", markdown="x" * size, id="1"
-            )
-            return SimpleNamespace(scalars=lambda: [document])
 
-    assert size > MAX_CORPUS_CHARS
-    with pytest.raises(DistillationError, match="too large"):
-        await load_corpus(Session(), SimpleNamespace(id="b"))
+async def test_a_stale_running_distillation_does_not_block(client: AsyncClient, admin: str) -> None:
+    """A `running` record older than 30 minutes (or without a start) is a dead one: distil again."""
+    from datetime import timedelta
+
+    from choregos_api.db.models import KnowledgeBase
+    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.knowledge.conversion import conversions
+    from choregos_core import utcnow
+    from sqlalchemy import select
+
+    await _framework(client)
+
+    async def set_distillation(value: dict[str, Any]) -> None:
+        async with session_scope(orgs=TOUT) as session:
+            base = (await session.execute(select(KnowledgeBase))).scalars().one()
+            base.distillation = value
+
+    recent = {"status": "running", "started_at": (utcnow() - timedelta(minutes=5)).isoformat()}
+    await set_distillation(recent)
+    assert (await client.post(f"{BASE}/architecture/distill")).status_code == 409
+
+    stale = {"status": "running", "started_at": (utcnow() - timedelta(minutes=31)).isoformat()}
+    await set_distillation(stale)
+    started = await client.post(f"{BASE}/architecture/distill")
+    assert started.status_code == 202, started.text
+    assert started.json()["distillation"]["started_at"] > stale["started_at"]
+    await conversions.drain()
+    assert (await client.get(f"{BASE}/architecture")).json()["distillation"]["status"] == "pending_review"
+
+    await set_distillation({"status": "running"})  # written before `started_at` existed
+    assert (await client.post(f"{BASE}/architecture/distill")).status_code == 202
+    await conversions.drain()
+
+
+async def test_a_restart_marks_the_running_distillation_failed(client: AsyncClient, admin: str) -> None:
+    from choregos_api.knowledge.conversion import conversions
+    from choregos_core import utcnow
+
+    await _framework(client)
+    started = await client.post(f"{BASE}/architecture/distill")
+    assert started.status_code == 202
+    await conversions.drain()
+    # The task of a replica that stopped leaves `running` behind.
+    from choregos_api.db.models import KnowledgeBase
+    from choregos_api.db.session import TOUT, session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs=TOUT) as session:
+        base = (await session.execute(select(KnowledgeBase))).scalars().one()
+        base.distillation = {"status": "running", "started_at": utcnow().isoformat()}
+    await conversions.recover()
+    outcome = (await client.get(f"{BASE}/architecture")).json()["distillation"]
+    assert outcome["status"] == "failed" and "interrupted by a restart" in outcome["error"]
+    assert (await client.post(f"{BASE}/architecture/distill")).status_code == 202
+    await conversions.drain()

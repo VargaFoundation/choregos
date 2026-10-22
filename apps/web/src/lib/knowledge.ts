@@ -86,14 +86,30 @@ export function syncSummary(summary: Record<string, unknown> | null | undefined)
   return parts.length ? parts.join(" · ") : "no change";
 }
 
+/**
+ * The page ids in a field: numbers, or Confluence page addresses (`…/pages/<id>/Title`, `…pageId=<id>`),
+ * separated by commas, spaces or lines. Order kept, repeats dropped.
+ */
+export function pageIdsOf(text: string): string[] {
+  const found: string[] = [];
+  for (const token of text.split(/[\s,;]+/).filter(Boolean)) {
+    const id = /^\d+$/.test(token) ? token : (token.match(/\/pages\/(\d+)/) ?? token.match(/[?&]pageId=(\d+)/))?.[1];
+    if (id && !found.includes(id)) found.push(id);
+  }
+  return found;
+}
+
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
   kind: "sharepoint" | "confluence" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string },
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean },
 ): Record<string, unknown> {
   if (kind === "confluence") {
-    const page = (fields.pageId ?? "").trim();
-    return { space_key: (fields.space ?? "").trim(), ...(page ? { page_id: page } : {}), include_attachments: Boolean(fields.attachments) };
+    const ids = pageIdsOf(fields.pageId ?? "");
+    const pages = ids.length === 1 ? { page_id: ids[0] } : ids.length > 1 ? { page_ids: ids } : {};
+    // Sub-pages are the default; only "no" is sent, and only when a page was chosen.
+    const alone = ids.length > 0 && fields.descendants === false ? { descendants: false } : {};
+    return { space_key: (fields.space ?? "").trim(), ...pages, ...alone, include_attachments: Boolean(fields.attachments) };
   }
   if (kind === "sharepoint") {
     const site = fields.site.trim();
@@ -102,7 +118,19 @@ export function sourceConfig(
   }
   if (kind === "web") {
     const exclude = (fields.exclude ?? "").split(",").map((p) => p.trim()).filter(Boolean);
-    return { url: fields.url.trim(), max_depth: 2, max_pages: 50, ...(exclude.length ? { exclude } : {}) };
+    // "This page only" is a crawl of depth 0 and one page; otherwise the depth and cap the form shows.
+    const bounded = (raw: string | undefined, fallback: number, low: number, high: number) => {
+      const n = Number.parseInt((raw ?? "").trim(), 10);
+      return Number.isFinite(n) ? Math.max(low, Math.min(high, n)) : fallback;
+    };
+    const pageOnly = Boolean(fields.pageOnly);
+    return {
+      url: fields.url.trim(),
+      max_depth: pageOnly ? 0 : bounded(fields.depth, 2, 0, 5),
+      max_pages: pageOnly ? 1 : bounded(fields.maxPages, 50, 1, 500),
+      ...(exclude.length ? { exclude } : {}),
+      ...(fields.documents ? { include_documents: true } : {}),
+    };
   }
   return {
     url: fields.url.trim(),
@@ -111,11 +139,38 @@ export function sourceConfig(
   };
 }
 
+const FAILURES: Record<string, string> = {
+  too_large: "the base is too large to read in one distillation: leave the biggest documents out",
+  over_budget: "stopped before the budget was spent",
+  no_document: "no converted document to distil",
+  model_refused: "the model is not allowed to distil (see /admin/models)",
+  nothing_cited: "no principle cited a document of the base, so nothing was published",
+  gateway: "the model gateway failed",
+  cancelled: "cancelled",
+};
+
+/** "map 3/8 - $0.92 spent": where a running distillation is. */
+export function distillationProgress(d: Record<string, unknown>): string {
+  const total = Number(d.parts_total ?? 0);
+  const phase = String(d.phase ?? "plan");
+  const where = phase === "map" && total ? `map ${Number(d.parts_done ?? 0)}/${total}` : phase;
+  const spent = Number(d.spent_usd ?? 0);
+  return spent > 0 ? `${where} \u00b7 $${spent.toFixed(2)} spent` : where;
+}
+
 /** The last distillation, in words, and the skill version it waits on. */
 export function distillationLabel(d: Record<string, unknown> | null | undefined): string {
   if (!d) return "not distilled";
-  if (d.status === "running") return "distilling…";
-  if (d.status === "failed") return `failed: ${String(d.error ?? "")}`;
+  if (d.status === "running") {
+    const progress = d.phase && d.phase !== "plan" ? ` ${distillationProgress(d)}` : "";
+    return `distilling\u2026${progress}`;
+  }
+  if (d.status === "failed") {
+    const why = FAILURES[String(d.code ?? "")];
+    const detail = String(d.error ?? "");
+    const spent = Number(d.spent_usd ?? 0);
+    return `failed: ${why ? `${why} (${detail})` : detail}${spent > 0 ? ` \u00b7 $${spent.toFixed(2)} spent` : ""}`;
+  }
   const dropped = Array.isArray(d.dropped) ? d.dropped.length : 0;
   return `${String(d.skill)} v${String(d.version)}: ${String(d.principles)} principles, waiting for review${dropped ? ` (${dropped} dropped: no source)` : ""}`;
 }

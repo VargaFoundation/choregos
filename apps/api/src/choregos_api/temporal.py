@@ -9,6 +9,7 @@ en mémoire enregistre les appels pour que les tests et la démo fonctionnent sa
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -55,6 +56,11 @@ def knowledge_sync_id(source_id: str) -> str:
     return f"knowledge-sync-{source_id}"
 
 
+def knowledge_distill_id(base_id: str, started_at: str) -> str:
+    """One distillation run per request (S42-10c): a finished workflow's id cannot be reused."""
+    return f"knowledge-distill-{base_id}-{re.sub(r'[^0-9]', '', started_at)}"
+
+
 def provisioning_id(project_slug: str) -> str:
     return f"prov-{project_slug}"
 
@@ -77,6 +83,8 @@ class TemporalGateway(Protocol):
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+
+    async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def cancel(self, workflow_id: str) -> None: ...
     async def describe(self, workflow_id: str) -> WorkflowState | None: ...
 
@@ -156,6 +164,28 @@ class FakeTemporal:
         self.started.setdefault(workflow_id, payload)  # one loop per source
         return workflow_id
 
+    async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """Records the start and, as no worker exists here, runs the same steps in this process."""
+        from functools import partial
+
+        from .knowledge.conversion import conversions
+        from .knowledge.distill import distill
+
+        if workflow_id not in self.started:
+            self.started[workflow_id] = payload
+            conversions.spawn(
+                "distill",
+                partial(
+                    distill,
+                    payload["org"],
+                    payload["base_id"],
+                    payload["requested_by"],
+                    exclude=payload.get("exclude") or [],
+                    max_usd=payload.get("max_usd"),
+                ),
+            )
+        return workflow_id
+
     async def cancel(self, workflow_id: str) -> None:
         self.cancelled.append(workflow_id)
 
@@ -223,6 +253,9 @@ class RealTemporal:
 
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("KnowledgeSync", workflow_id, payload)
+
+    async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        return await self._start("KnowledgeDistill", workflow_id, payload)
 
     async def signal(self, workflow_id: str, name: str, payload: Any) -> None:
         client = await self.client()

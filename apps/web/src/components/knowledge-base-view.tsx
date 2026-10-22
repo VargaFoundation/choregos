@@ -6,8 +6,9 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { KnowledgeAccess } from "@/components/knowledge-access";
+import { KnowledgeDistill } from "@/components/knowledge-distill";
 import { KnowledgeSources } from "@/components/knowledge-sources";
-import { Badge, Card, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
+import { Badge, Card, Empty, ErrorNote, Heading, Select, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { distillationLabel, permissionsOf, scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
@@ -103,7 +104,24 @@ export function KnowledgeBaseView({
         {base.data.status !== "active" && ` · ${base.data.status}`}
       </p>
       {base.data.description && <p className="max-w-3xl text-sm">{base.data.description}</p>}
-      <p className="text-sm" data-testid="knowledge-distillation">
+      <div className="space-y-1 text-sm" data-testid="knowledge-serving">
+        <label className="flex flex-wrap items-center gap-2">
+          <span>Serving mode</span>
+          <Select
+            aria-label="serving mode"
+            className="w-auto"
+            value={base.data.serving_mode}
+            onChange={(e) =>
+              void act(() => api.updateKnowledgeBase(org, slug, { serving_mode: e.target.value as "files" | "index" }))
+            }
+          >
+            <option value="files">files</option>
+            <option value="index">index</option>
+          </Select>
+        </label>
+        <p className="text-xs text-ink-muted">index: agents search and cite; recommended above ~200k tokens.</p>
+      </div>
+      <div className="text-sm" data-testid="knowledge-distillation">
         Principles skill: {distillationLabel(base.data.distillation)}
         {base.data.distillation?.skill ? (
           <Link href={`/skills/${String(base.data.distillation.skill)}`} className="ml-2 underline">
@@ -111,15 +129,13 @@ export function KnowledgeBaseView({
           </Link>
         ) : null}
         {can.distill ? (
-          <button type="button" className="ml-2 underline" onClick={() => void act(() => api.distillKnowledgeBase(org, slug))}>
-            Distill
-          </button>
+          <KnowledgeDistill org={org} slug={slug} onStarted={refresh} />
         ) : (
           <button type="button" className="ml-2 text-ink-subtle underline" disabled title={why}>
             Distill
           </button>
         )}
-      </p>
+      </div>
       <Card title="Documents">
         {documents.length === 0 ? (
           <Empty title="No document yet">Upload the corpus below.</Empty>

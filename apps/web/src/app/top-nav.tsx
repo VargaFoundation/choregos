@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChoixDuTheme } from "@/components/choix-du-theme";
 import { Compte, ListeDeNavigation } from "@/components/coquille/navigation";
-import { EditionBadge } from "@/components/edition";
+import { AboutEntry, EditionBadge } from "@/components/edition";
 import { Select } from "@/components/ui";
 import { useADecider, useInboxCount } from "@/lib/a-decider";
 import { api } from "@/lib/api";
@@ -134,6 +134,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
               {session}
               {badgeDemo}
               <ChoixDuTheme />
+              <AboutEntry className="inline-flex min-h-11 items-center gap-2 rounded px-1 text-ink-muted hover:text-ink" />
             </div>
           </div>
         )}

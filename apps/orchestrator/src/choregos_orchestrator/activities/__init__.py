@@ -27,6 +27,11 @@ from . import (
 
 ALL_ACTIVITIES = [
     knowledge.sync_knowledge_source,
+    knowledge.plan_distillation,
+    knowledge.distill_part,
+    knowledge.reduce_distillation,
+    knowledge.publish_distillation,
+    knowledge.fail_distillation,
     actions.load_action,
     actions.execute_effect,
     actions.compensate_effect,
