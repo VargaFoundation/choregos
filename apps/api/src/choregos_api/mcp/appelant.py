@@ -62,7 +62,7 @@ async def identifier(
     scopes: frozenset[str] = PORTEES_MCP,
     door: str = "MCP",
 ) -> Appelant:
-    """Le jeton porteur, lu en portée de plateforme ; le principal borne ensuite la RLS.
+    """The bearer token, read at platform scope; the principal then bounds the RLS.
 
     `scopes` are those of the door asking: the MCP door's, or the A2A door's (ADR 0078), which
     shares everything else — OAuth, agents, revocation — and refuses `*` the same way."""
