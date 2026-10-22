@@ -137,8 +137,12 @@ the six reference tickets each, so 24 real runs. Every case was metered; none wa
   for the 24 runs, mostly output. Each case is priced here at the platform gateway's rates for this model ($2 per million
   input tokens, $10 per million output tokens), with Anthropic's cache ratios (a cache read 0.1×
   the input price, a cache write 1.25×): $6.78 for the 24 runs. The ratios are an assumption about
-  the provider's bill, not read from it. Both gateways price cache reads and writes since
-  2026-10-19 (#737), at these ratios: a later matrix reads its cost from the gateway. The
+  the provider's bill, not read from it. Anthropic prices cache reads on Sonnet 5.5 at 0.05×,
+  not 0.1× (pricing page, read 2026-10-22): these costs overstate the cache reads. They are not
+  recomputed, because this matrix's per-run history was not kept; the second measurement below
+  is. Both gateways price cache reads and writes since 2026-10-19 (#737), the dev one only once
+  restarted on 2026-10-20 (#773), at 0.1× for reads until DiametralGroup/infra#1255 and
+  DiametralGroup/choregos-deploy#87: a later matrix reads its cost from the gateway. The
   confidence interval is a bootstrap of the mean paired difference, ticket by ticket, over the
   six tickets.
 - **Where the money goes.** About 85 % of a run's input is read from the provider's prompt cache.
@@ -170,19 +174,24 @@ six tickets each. That makes 24 real runs. Every case was metered and none was s
 
 | Context | Success | Median cost | Mean cost vs `none`, paired (95 % CI) | Median cache read | Median input not read from the cache | Median output |
 |:--|:--|--:|:--|--:|--:|--:|
-| `none` | 6/6 | $0.218 | — | 287,340 | 53,312 | 2,800 |
-| `rtk` | 6/6 | $0.248 | +5 % (−$0.019 … +$0.040) | 383,229 | 53,070 | 3,708 |
-| `headroom` | 6/6 | $0.339 | **+49 %** (+$0.094 … +$0.137) | 254,426 | 102,310 | 2,990 |
-| `rtk+headroom` | 6/6 | $0.336 | **+50 %** (+$0.092 … +$0.145) | 252,998 | 101,585 | 3,415 |
+| `none` | 6/6 | $0.189 | — | 287,340 | 53,312 | 2,800 |
+| `rtk` | 6/6 | $0.210 | +5 % (−$0.011 … +$0.029) | 383,229 | 53,070 | 3,708 |
+| `headroom` | 6/6 | $0.312 | **+59 %** (+$0.104 … +$0.135) | 254,426 | 102,310 | 2,990 |
+| `rtk+headroom` | 6/6 | $0.310 | **+61 %** (+$0.106 … +$0.138) | 252,998 | 101,585 | 3,415 |
 
 - **How the cost was computed.** The tokens come from the run's ledger (observed). The ledger now
   counts cache reads, but not cache writes. "Input not read from the cache" is therefore cache
   writes plus uncached input, and it is priced here as cache writes (1.25× the input price).
-  Cache reads are priced at 0.1×. The rates are those of the first measurement. The 24 runs come
-  to $7.00, or $6.08 if that input is priced as uncached; the conclusions do not change.
-- **The gateway's own cost is still not usable.** The cost the run records from the gateway is
-  $1.03 for the 24 runs, about the output alone, the same as before #737 was closed. Where the
-  cache price is lost (the gateway, or how the cost is read) is not established here (#773).
+  Cache reads are priced at 0.05×, Anthropic's rate for Sonnet 5.5 (read 2026-10-22). This
+  section first priced them at 0.1×, as the first measurement does: $7.00 for the 24 runs,
+  `headroom` +49 %, `rtk+headroom` +50 %, the same conclusions. The 24 runs come to $6.22, or
+  $5.29 if that input is priced as uncached; the conclusions do not change. The interval is the
+  same bootstrap (10,000 resamples), which gives the 0.1× intervals again to $0.001.
+- **The gateway's own cost was not usable.** The cost the run records from the gateway is
+  $1.03 for the 24 runs, about the output alone, the same as before #737 was closed. The cause
+  (#773): the dev LiteLLM reads its config only at startup, and had run since 2026-10-16. Once
+  restarted (DiametralGroup/choregos-deploy#79), a run's 13 requests recorded $0.2813, the price
+  with the cache, against $1.1997 without it.
 - **Success.** 6/6 in every cell. `py-hors-perimetre` now passes everywhere with S37-17.
 
 The decision holds. headroom costs more, outside the interval, again because the cache is
