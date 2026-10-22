@@ -255,7 +255,8 @@ def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(tmp_path: pathlib.
         pinned[tag] = f"{name}@{_run('crane', 'digest', '--insecure', f'{name}:{tag}')}"
     _run(
         "cosign", "sign", "--yes", "--key", str(tmp_path / "cosign.key"), "--tlog-upload=false",
-        "--allow-http-registry", "--allow-insecure-registry", pinned["signed"],
+        "--use-signing-config=false", "--new-bundle-format=false", "--allow-http-registry",
+        "--allow-insecure-registry", pinned["signed"],
     )  # fmt: skip
     policy = _policy(
         f"global.images.hostedRegistries={{{REGISTRY}/s41-14}}",
