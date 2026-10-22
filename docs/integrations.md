@@ -232,8 +232,14 @@ The card lists the opted-in workflows of the projects the token's person may rea
   console's `decision_url` — a decision is never taken over A2A, and a reply to a task is refused),
   `completed` with the latest revision of each artefact described, `failed`, `canceled`.
 - `tasks/cancel` stops the work item, for a person who may control it.
+- `message/stream` (a `message/send` that stays open) and `tasks/resubscribe` answer server-sent
+  events: the task, then a `status-update` each time its state, its workflow state or its pending
+  request changes, and at the end each artefact as an `artifact-update` before a `final` status. An
+  `input-required` status is not final: the person decides in the console and the stream goes on.
+  The token is read again at each change (revoked, the stream ends with an error); five streams per
+  token at most, an hour each, then resubscribe.
 
-Not served yet: `message/stream`, `tasks/resubscribe`, push notifications, file parts. The card needs
+Not served yet: push notifications, file parts. The card needs
 the token too, since its skills depend on who asks. Calls are audited (`a2a.call`), rate-limited per
 token, and count in the person's daily write budget with the MCP door's.
 
