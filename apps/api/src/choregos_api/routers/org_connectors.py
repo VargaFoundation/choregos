@@ -482,6 +482,16 @@ async def update_operation(
         if body.approver_group and ligne.access != "write":
             raise unprocessable(f"{name}/{operation} is a read: nobody approves it")
         ligne.approver_group = body.approver_group
+    if "result_max_bytes" in body.model_fields_set:
+        from ..config import get_settings
+
+        ceiling = get_settings().broker_result_ceiling_bytes
+        if body.result_max_bytes is not None and body.result_max_bytes > ceiling:
+            raise unprocessable(
+                f"{name}/{operation}: a result cap of {body.result_max_bytes} bytes is above the"
+                f" platform's ceiling ({ceiling} bytes, CHOREGOS_BROKER_RESULT_CEILING_BYTES)"
+            )
+        ligne.result_max_bytes = body.result_max_bytes
     await record(
         session,
         principal,

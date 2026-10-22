@@ -387,6 +387,8 @@ export type ConnectorOperation = {
   description?: string | null;
   /** the identity-provider group whose members approve the actions this operation proposes; none: the project's owners */
   approver_group?: string | null;
+  /** the most one result of this operation may weigh, as JSON bytes, when it reaches the agent; none: the platform's default. Never above the platform's ceiling */
+  result_max_bytes?: number | null;
 };
 
 export type ConnectorDiscovery = {
@@ -651,6 +653,8 @@ export type OperationPatch = {
   price_usd?: number | null;
   /** an identity-provider group; null clears it */
   approver_group?: string | null;
+  /** the most one result may weigh, as JSON bytes; above the platform's ceiling is refused (422); null clears it */
+  result_max_bytes?: number | null;
 };
 
 export type ProjectOperation = {

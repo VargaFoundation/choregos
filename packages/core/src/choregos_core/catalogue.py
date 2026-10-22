@@ -105,6 +105,9 @@ class OutilCatalogue(Model):
     #: Ce qu'un appel coûte, en euros. Zéro pour une API gratuite — mais le compter quand
     #: même, parce qu'un quota gratuit s'épuise aussi.
     price_eur: float = Field(default=0.0, ge=0)
+    #: The most one of its answers may weigh, as JSON bytes, when it reaches the agent; none: the
+    #: platform's default. The platform's ceiling still applies (S40-17).
+    result_max_bytes: int | None = Field(default=None, ge=1024)
 
     @model_validator(mode="after")
     def _une_seule_source(self) -> OutilCatalogue:

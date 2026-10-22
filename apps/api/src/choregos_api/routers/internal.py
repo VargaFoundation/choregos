@@ -874,7 +874,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
 
         code, corps = await appeler_outil(outil, body or {})
         # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
-        corps = bounded_payload(corps)
+        corps = bounded_payload(corps, outil.result_max_bytes)
         fournisseur, prix = outil.provider, outil.price_eur
     elif name in du_courtier and du_courtier[name].sous_validation:
         # Sous validation (ADR 0035) : l'appel PROPOSE l'action ; rien ne part vers le serveur. La
