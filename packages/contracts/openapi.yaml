@@ -1141,6 +1141,35 @@ paths:
                     type: number
                     deprecated: true
                     description: Former name of `tool_cost_eur`, still emitted for one release (ADR 0046)
+                  chain:
+                    type: object
+                    description: >-
+                      Who started the work item and which earlier runs produced what this run read
+                      (ADR 0077 §2). Recorded at stage start by the orchestrator, never sent by the
+                      agent. Absent for a run started before it was recorded.
+                    required: [initiated_by, runs]
+                    properties:
+                      initiated_by:
+                        type: [string, "null"]
+                        description: >-
+                          `<kind>:<subject>` — `person:<email>`, `mcp:<email>`, `a2a:<client>`,
+                          `schedule:<name>`, `work_item:<key>`, `tracker:<kind>`, `finding:<id>`, `eval`,
+                          `demo`, `trial:<email>`; null when the work item predates the record
+                      runs:
+                        type: array
+                        description: The runs of the chain, earliest first; the last one is this run
+                        items:
+                          type: object
+                          required: [run_id, stage, inputs_from]
+                          properties:
+                            run_id: { type: string }
+                            stage: { type: [string, "null"] }
+                            agent_slug: { type: [string, "null"] }
+                            agent_version: { type: [integer, "null"] }
+                            inputs_from:
+                              type: array
+                              items: { type: string }
+                              description: The run ids whose outputs this run read as declared inputs
                   acces:
                     type: array
                     items:

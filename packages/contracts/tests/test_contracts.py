@@ -470,3 +470,37 @@ def test_the_web_search_schema_and_model_declare_the_same_fields() -> None:
     assert list(_validator("policy.schema.json").iter_errors(raw))
     with pytest.raises(ValueError, match="allow_query_reuse"):
         Policy.model_validate(raw)
+
+
+def test_the_run_access_record_carries_an_optional_chain() -> None:
+    """S40-22 (ADR 0077 §2): the chain is optional, and its initiator admits any `<kind>:<subject>`."""
+    spec = contracts.load_openapi()
+    access = spec["paths"]["/runs/{id}/access"]["get"]["responses"]["200"]["content"]["application/json"]
+    schema = access["schema"]
+    assert "chain" in schema["properties"] and "chain" not in schema["required"]
+    validator = Draft202012Validator(schema)
+    record: dict[str, Any] = {"evenements": 0, "refusals": 0, "acces": []}
+    assert not list(validator.iter_errors(record)), "a run recorded before S40-22 stays valid"
+    for initiator in ("person:ada@example.org", "a2a:rovo", "schedule:nightly", None):
+        chain = {
+            "initiated_by": initiator,
+            "runs": [
+                {
+                    "run_id": "T-1-plan-1",
+                    "stage": "plan",
+                    "agent_slug": "planner",
+                    "agent_version": 3,
+                    "inputs_from": [],
+                },
+                {
+                    "run_id": "T-1-implement-1",
+                    "stage": "implement",
+                    "agent_slug": None,
+                    "agent_version": None,
+                    "inputs_from": ["T-1-plan-1"],
+                },
+            ],
+        }
+        assert not list(validator.iter_errors({**record, "chain": chain})), initiator
+    broken = {**record, "chain": {"initiated_by": "person:ada@example.org", "runs": [{"run_id": "x"}]}}
+    assert list(validator.iter_errors(broken)), "a run of the chain names its stage and its inputs"
