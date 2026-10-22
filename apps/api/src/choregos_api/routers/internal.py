@@ -775,8 +775,34 @@ async def _outils_des_greffons(
             if nom in deja or nom in trouves:
                 autre = trouves[nom][0] if nom in trouves else "the catalogue"
                 raise conflict(f"tool `{nom}` declared by {autre} and by the plugin `{greffon}`")
+            _plugin_result_cap(greffon, outil)
             trouves[nom] = (greffon, outil)
     return trouves
+
+
+def _plugin_result_cap(plugin: str, tool: dict[str, Any]) -> int | None:
+    """The result cap a plugin's tool declares (S40-17b), as a catalogue entry does, or None.
+
+    `result_max_bytes` beside `name` in what the plugin lists: an integer of at least 1024, bounded
+    by `CHOREGOS_BROKER_RESULT_CEILING_BYTES` like every cap. Anything else is a plugin bug, refused
+    when the tools are listed rather than read as the default.
+    """
+    declared = tool.get("result_max_bytes")
+    if declared is None:
+        return None
+    if isinstance(declared, bool) or not isinstance(declared, int) or declared < 1024:
+        raise ApiError(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Plugin tool refused",
+            f"tool `{tool.get('name')}` of the plugin `{plugin}` declares result_max_bytes={declared!r}:"
+            " an integer of at least 1024 is expected",
+        )
+    return declared
+
+
+def _announced(tool: dict[str, Any]) -> dict[str, Any]:
+    """A plugin's tool as the agent sees it: the platform's own keys are not the agent's business."""
+    return {k: v for k, v in tool.items() if k != "result_max_bytes"}
 
 
 def json_sha256(valeur: Any) -> str:
@@ -811,7 +837,7 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     return {
         "tools": [
             *({"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils),
-            *(outil for _, outil in des_greffons.values()),
+            *(_announced(outil) for _, outil in des_greffons.values()),
             *(outil.annonce() for outil in du_courtier.values()),
             *web,
         ]
@@ -928,9 +954,9 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         from ..greffons import fournisseurs_d_outils
         from ..services.courtier import bounded_payload
 
-        greffon = des_greffons[name][0]
+        greffon, plugin_tool = des_greffons[name]
         code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
-        corps = bounded_payload(corps)
+        corps = bounded_payload(corps, _plugin_result_cap(greffon, plugin_tool))
         code, corps, suspicions = await _garde_contre_l_injection(
             session, run, project, SimpleNamespace(nom=name), code, corps
         )
