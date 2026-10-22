@@ -4,7 +4,18 @@ version = "0.20.0"
 description = "Cœur Choregos : DSL de workflow, politiques, résolution de modèles, gates"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["choregos-contracts", "pydantic>=2.9", "PyYAML>=6.0", "jsonschema>=4.23", "structlog>=24.4", "jinja2>=3.1"]
+dependencies = [
+    "choregos-contracts",
+    "pydantic>=2.9",
+    "PyYAML>=6.0",
+    "jsonschema>=4.23",
+    "structlog>=24.4",
+    "jinja2>=3.1",
+    # GenAI traces (ADR 0018): `choregos_core.telemetry` is the one module that knows the span and
+    # attribute names; exact pins because the semantic conventions it targets are still incubating.
+    "opentelemetry-sdk==1.45.0",
+    "opentelemetry-exporter-otlp-proto-http==1.45.0",
+]
 
 [build-system]
 requires = ["hatchling"]

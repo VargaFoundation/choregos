@@ -29,7 +29,7 @@ from choregos_contracts import (
     WorkItemLinks,
     WorkItemRef,
 )
-from choregos_core import utcnow
+from choregos_core import telemetry, utcnow
 from choregos_core.redaction import REDACTED
 from temporalio.exceptions import ApplicationError
 
@@ -84,6 +84,8 @@ async def prepare_job(
     depot = bundle.config.repo
     stage_input = StageInput(
         run_id=run_id,
+        # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
+        trace_parent=telemetry.traceparent(run_id),
         attempt=plan.attempt,
         project=ProjectRef(
             slug=bundle.slug,

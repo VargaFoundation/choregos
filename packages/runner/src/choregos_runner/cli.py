@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from choregos_core import telemetry
 
 from .assignment import AssignmentServer
 from .backends import backend_version, known_backends
@@ -42,7 +43,12 @@ def run(
         settings.workspace = workspace
     settings.dry_run = settings.dry_run or dry_run
 
-    outcome = asyncio.run(Runner(settings).run())
+    # Traces only when the deployment names a collector (ADR 0018); flushed before the pod ends.
+    telemetry.configure_tracing("choregos-runner")
+    try:
+        outcome = asyncio.run(Runner(settings).run())
+    finally:
+        telemetry.shutdown_tracing()
     status = str(outcome.result.status) if outcome.result else "failed"
     typer.echo(
         json.dumps(
@@ -112,8 +118,11 @@ async def _serve_then_run(port: int, workspace: Path | None) -> tuple[RunOutcome
         settings.run_token = assignment.run_token
         if workspace is not None:
             settings.workspace = workspace
+        # The collector's address, if any, came with the assignment's environment.
+        telemetry.configure_tracing("choregos-runner")
         return await Runner(settings).run(), settings
     finally:
+        telemetry.shutdown_tracing()
         await server.close()
 
 

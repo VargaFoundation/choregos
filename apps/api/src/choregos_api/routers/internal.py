@@ -7,8 +7,10 @@ descend dans le workspace : tout passe ici (§1.10, §2.2).
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
 from typing import Annotated, Any
 
@@ -23,7 +25,7 @@ from choregos_contracts import (
     StageResult,
     artifact_digest,
 )
-from choregos_core import PolicyEngine, matches_any, utcnow
+from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import func, select
 
@@ -816,7 +818,26 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     }
 
 
+def _traced_tool_call(
+    endpoint: Callable[..., Awaitable[dict[str, Any]]],
+) -> Callable[..., Awaitable[dict[str, Any]]]:
+    """Every call of the tool route is an `execute_tool` span of the run's trace (ADR 0018).
+
+    Opened before anything is checked, so a refused call is a span too, with its error status.
+    """
+
+    @functools.wraps(endpoint)
+    async def traced(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        with telemetry.tool_span(kwargs["id"], kwargs["name"]):
+            outcome = await endpoint(*args, **kwargs)
+            telemetry.record_tool_call(status_code=int(outcome["status_code"]))
+            return outcome
+
+    return traced
+
+
 @router.post("/runs/{id}/tools/{name}", operation_id="callRunTool")
+@_traced_tool_call
 async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claims: RunAuth) -> dict[str, Any]:
     """Appelle un outil du catalogue ou d'un greffon pour le run, et l'inscrit au registre de coûts."""
     run, item, project = await _run_and_item(session, id)
@@ -956,6 +977,13 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         request_sha256=json_sha256(body or {}),
         response_sha256=json_sha256(corps),
         **about_query,
+    )
+    telemetry.record_tool_call(
+        status_code=code,
+        provider=fournisseur,
+        project=project.slug,
+        work_item=item.tracker_key,
+        stage=run.stage_role,
     )
     return {
         "status_code": code,

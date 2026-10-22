@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from choregos_adapters import charger_les_greffons
+from choregos_core import telemetry
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -79,6 +80,7 @@ logger = get_logger("choregos.api")
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
+    telemetry.configure_tracing("choregos-api")
     logger.info("démarrage de l'API", env=settings.env, fakes=settings.fakes)
     if not settings.is_sqlite:
         await _refuser_le_superutilisateur()
@@ -111,6 +113,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await task
     await dispose_engine()
+    telemetry.shutdown_tracing()
     logger.info("arrêt de l'API")
 
 
