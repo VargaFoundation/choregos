@@ -24,6 +24,7 @@ from .db.session import (
     get_sessionmaker,
     limiter_aux_organisations,
     nommer_l_utilisateur,
+    run_after_commit,
 )
 from .errors import forbidden, not_found, unauthorized
 from .logging import bind
@@ -40,6 +41,7 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+        await run_after_commit(session)
 
 
 #: `scope="function"` : la session se ferme — et la transaction se valide — AVANT l'envoi de la
@@ -68,6 +70,7 @@ async def get_db_plateforme() -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+        await run_after_commit(session)
 
 
 DbPlateforme = Annotated[AsyncSession, Depends(get_db_plateforme, scope="function")]

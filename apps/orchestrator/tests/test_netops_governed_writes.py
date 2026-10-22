@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from temporalio.client import WorkflowFailureError
 
 from .conftest import Fixture
 
@@ -167,6 +168,14 @@ async def test_an_action_nobody_approved_writes_nothing_even_when_its_workflow_s
         "update_firewall_rule", {"tracker": "1700000102", "changes": {"destination_port": "9443"}}
     )
     action_id = await _action(setup, [change], status="pending_approval")
-    result = await _run(temporal_env, worker_factory, action_id)
-    assert result["status"] == "failed" and "not approved" in result["error"]
+    # `load_action` refuses it before any effect (ADR 0085): the workflow fails, the row stays pending.
+    with pytest.raises(WorkflowFailureError) as failure:
+        await _run(temporal_env, worker_factory, action_id)
+    assert "not approved" in str(failure.value.cause.cause)
     assert firewall.writes == 0 and firewall.state() == before
+    from choregos_api.db.models import Action
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        row = await session.get(Action, action_id)
+        assert row is not None and row.status == "pending_approval", "still the approvers' to decide"

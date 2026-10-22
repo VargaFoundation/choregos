@@ -210,6 +210,26 @@ async def proposer_pour_une_transition(
     return nouvelle
 
 
+def start_once_committed(session: AsyncSession, action: Action) -> None:
+    """The approved action leaves for Temporal once its approval is COMMITTED, not before (ADR 0085).
+
+    Started inside the transaction, a workflow outlived a commit that failed: it ran the effects of
+    an approval nobody kept. The `approved` row is the outbox: if the start after the commit is lost
+    (Temporal down, the process killed), `action_relay` finds the row and starts it again — under
+    the same id, `action-<id>`, so never twice."""
+    from ..db.session import after_commit
+    from ..temporal import action_id as identifiant
+    from ..temporal import get_temporal
+
+    action_id = action.id
+    action.temporal_wf_id = identifiant(action_id)
+
+    async def start() -> None:
+        await get_temporal().start_action(identifiant(action_id), {"action_id": action_id})
+
+    after_commit(session, start)
+
+
 async def approuvee_par_la_politique(session: AsyncSession, projet: Project, action: Action) -> None:
     """Chaque opération qu'elle appelle est permise à ce projet : la politique décide, l'action naît
     approuvée — journalisée, compensable, jouée par l'`ActionWorkflow` comme toute autre. Qui la
@@ -397,12 +417,7 @@ async def decider(
         status=statut,
     )
     if statut == ActionStatus.APPROVED.value:
-        from ..temporal import action_id as identifiant
-        from ..temporal import get_temporal
-
-        action.temporal_wf_id = await get_temporal().start_action(
-            identifiant(action.id), {"action_id": action.id}
-        )
+        start_once_committed(session, action)
     elif statut == ActionStatus.REJECTED.value:
         await _prevenir_le_ticket(session, projet, action)
     return action
