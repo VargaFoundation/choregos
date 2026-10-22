@@ -126,6 +126,40 @@ async def test_a_manual_entry_can_be_added_and_deleted_a_gateway_entry_cannot(
     assert (await client.delete(f"{BASE}/{from_gateway['id']}")).status_code == 409
 
 
+async def test_the_audio_prices_are_synced_and_a_per_minute_rate_is_set_and_cleared(
+    client: AsyncClient, admin: str, gateway: Scripted
+) -> None:
+    """S41-15: what a voice session is measured and capped at."""
+    gateway.models.append(
+        GatewayModel(
+            model_name="openai/gpt-realtime",
+            litellm_model="openai/gpt-realtime",
+            input_cost_per_1k=0.004,
+            output_cost_per_1k=0.016,
+            input_audio_cost_per_1k=0.032,
+            output_audio_cost_per_1k=0.064,
+            cached_input_cost_per_1k=0.0004,
+        )
+    )
+    await client.post(f"{BASE}/sync")
+    entry = (await _entries(client))["openai/gpt-realtime"]
+    facts = entry["gateway"]
+    assert (facts["input_audio_cost_per_1k"], facts["output_audio_cost_per_1k"]) == (0.032, 0.064)
+    assert facts["cached_input_cost_per_1k"] == 0.0004 and entry["max_usd_per_minute"] is None
+
+    set_ = await client.patch(f"{BASE}/{entry['id']}", json={"max_usd_per_minute": 0.25})
+    assert set_.status_code == 200, set_.text
+    assert set_.json()["max_usd_per_minute"] == 0.25
+    kept = await client.patch(f"{BASE}/{entry['id']}", json={"notes": "voice"})
+    assert kept.json()["max_usd_per_minute"] == 0.25, "a patch that does not name it keeps it"
+    assert (await client.patch(f"{BASE}/{entry['id']}", json={"max_usd_per_minute": 0})).status_code == 422
+    cleared = await client.patch(f"{BASE}/{entry['id']}", json={"clear_max_usd_per_minute": True})
+    assert cleared.json()["max_usd_per_minute"] is None
+
+    added = await client.post(f"{BASE}", json={"model_name": "wild/realtime", "max_usd_per_minute": 0.1})
+    assert added.status_code == 201 and added.json()["max_usd_per_minute"] == 0.1
+
+
 async def test_only_an_org_admin_changes_the_catalogue_and_every_change_is_audited(
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:

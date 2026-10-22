@@ -1,0 +1,5 @@
+{
+  "runtime": "node_22",
+  "entry_point": ["node", "responses_server.mjs"],
+  "dependency_resolution": "remote_build"
+}

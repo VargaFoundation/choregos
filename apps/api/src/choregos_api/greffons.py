@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import APIRouter
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, APIWebSocketRoute
 
 _ROUTEURS: list[APIRouter] = []
 
@@ -50,6 +50,9 @@ def signatures(routeur: APIRouter, prefixe: str = "") -> set[tuple[str, str]]:
     """
     servies: set[tuple[str, str]] = set()
     for route in routeur.routes:
+        if isinstance(route, APIWebSocketRoute):  # a socket is served on its path, like a method
+            servies.add(("WEBSOCKET", prefixe + route.path))
+            continue
         if not isinstance(route, APIRoute):
             raise TypeError(
                 f"route {type(route).__name__} dans un routeur de greffon : seules les routes "

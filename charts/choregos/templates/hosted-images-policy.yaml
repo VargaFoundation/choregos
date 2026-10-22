@@ -1,0 +1,87 @@
+{{- /*
+A hosted agent's image, at admission (S41-14, ADR 0080 §8). Publication pins the tag to a digest and
+asks cosign; this policy is the cluster's own check, for every pod, including one that never went
+through publication. In the release's namespace (where `agent_sandbox` runs pods), `proj-*` and
+`choregos-*`, an image under `global.images.hostedRegistries` runs only pinned by `@sha256:` and,
+under `hostedCosign: enforce`, signed by the operator's key or keyless identity.
+
+Init containers are covered on purpose: a native sidecar is an init container
+(`restartPolicy: Always`), and a rule that reads `containers` alone lets it through (#770).
+Kyverno's `verifyImages` checks every container list of the pod; the digest rule names them.
+*/ -}}
+{{- $i := .Values.global.images | default dict }}
+{{- if $i.hostedCosignPolicy }}
+{{- if not $i.hostedRegistries }}
+{{- fail "global.images.hostedCosignPolicy needs global.images.hostedRegistries: the policy covers the images under them, and with none it would cover nothing while looking on" }}
+{{- end }}
+{{- $keyless := and $i.hostedCosignIdentity $i.hostedCosignIssuer }}
+{{- $enforce := eq ($i.hostedCosign | default "off") "enforce" }}
+{{- if and $enforce (not (or $i.hostedCosignKeySecret $keyless)) }}
+{{- fail "global.images.hostedCosignPolicy with hostedCosign=enforce needs a signer: hostedCosignKeySecret, or hostedCosignIdentity and hostedCosignIssuer" }}
+{{- end }}
+{{- $tlog := ne (toString $i.hostedCosignTlog) "false" }}
+{{- $refs := list }}
+{{- range $i.hostedRegistries }}
+{{- $refs = append $refs (printf "%s/*" (trimSuffix "/" .)) }}
+{{- end }}
+{{- $namespaces := list .Release.Namespace "choregos-*" "proj-*" | uniq }}
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-hosted-images
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+  annotations:
+    policies.kyverno.io/description: >-
+      A hosted agent's image runs pinned by digest and, under enforce, signed by the operator's signer.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: hosted-image-pinned
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: {{ toJson $namespaces }}
+      validate:
+        message: "an image under global.images.hostedRegistries runs pinned by `@sha256:`, never by a tag"
+        foreach:
+          - list: "request.object.spec.[ephemeralContainers, initContainers, containers][]"
+            deny:
+              conditions:
+                all:
+                  - key: "{{`{{ element.image }}`}}"
+                    operator: AnyIn
+                    value: {{ toJson $refs }}
+                  - key: "{{`{{ contains(element.image, '@sha256:') }}`}}"
+                    operator: Equals
+                    value: false
+    {{- if $enforce }}
+    - name: hosted-image-signed
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: {{ toJson $namespaces }}
+      verifyImages:
+        - imageReferences: {{ toJson $refs }}
+          attestors:
+            - entries:
+                {{- if $i.hostedCosignKeySecret }}
+                - keys:
+                    secret: { name: {{ $i.hostedCosignKeySecret }}, namespace: {{ .Release.Namespace }} }
+                    {{- if not $tlog }}
+                    rekor: { ignoreTlog: true }
+                    ctlog: { ignoreSCT: true }
+                    {{- end }}
+                {{- else }}
+                - keyless:
+                    subjectRegExp: {{ $i.hostedCosignIdentity | quote }}
+                    issuerRegExp: {{ $i.hostedCosignIssuer | quote }}
+                {{- end }}
+          mutateDigest: false
+          verifyDigest: true
+          required: true
+    {{- end }}
+{{- end }}

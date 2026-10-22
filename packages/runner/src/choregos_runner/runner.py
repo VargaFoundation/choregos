@@ -15,7 +15,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from choregos_contracts import (
     Artifacts,
@@ -27,6 +27,7 @@ from choregos_contracts import (
     StageResult,
     StageStatus,
 )
+from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
 
@@ -38,16 +39,23 @@ from .backends import get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, get_settings
-from .dod import run_checks
+from .dod import CheckOutcome, DodReport, run_checks
 from .egress import authenticate_proxy_env
 from .exits import Exit
 from .guardrails import GuardRails
+from .hosted import REPORT_HOSTED_IMAGE, REPORT_HOSTED_PROVENANCE, REPORT_RESPONSE, result_of, run_hosted
+from .hosted_workspace import HostedWorkspaceError, export_tree, import_tree
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .job import REPORT_COMMAND, REPORT_IMAGE, command_digest, job_result, run_job, write_fields
 from .knowledge import KnowledgeInvalidError, lay_out
+from .loopback import Loopback
+from .loopback.connect import ConnectProxy, upstream_proxy
+from .loopback.mcp import McpProxy
+from .loopback.model import ModelProxy
 from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
 from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_outputs
+from .prompt import run_prompt
 from .remote import (
     REPORT_CARD,
     REPORT_ENDPOINT,
@@ -147,6 +155,14 @@ class Runner:
         self.client = client
         #: For tests only: the transport the A2A client and the card fetch go through (ADR 0062).
         self.remote_transport: Any = None
+        #: For tests only: the transports a prompt step's model and MCP calls go through (ADR 0080).
+        self.model_transport: Any = None
+        self.mcp_transport: Any = None
+        #: For tests only: how the runner reaches a hosted container, and the loopback listeners'
+        #: ports (ADR 0080); the fixed ones (4001-4003) otherwise.
+        self.hosted_transport: Any = None
+        self.loopback_ports: tuple[int, int, int] = (MODEL_PORT, MCP_PORT, CONNECT_PORT)
+        self.readiness_interval = 1.0
         self.started = time.monotonic()
         #: L'index des skills qu'un backend ne lit pas lui-même, ajouté au prompt.
         self.index_des_skills = ""
@@ -232,10 +248,10 @@ class Runner:
         context = await self._context(client)
         if (refus := await self._write_context(client, journal, stage_input, workspace, context)) is not None:
             return refus
-        if stage_input.job is not None:
-            return await self._execute_job(client, journal, stage_input, workspace, base, depart)
-        if stage_input.remote is not None:
-            return await self._execute_remote(client, journal, stage_input, workspace, base, depart)
+        if (
+            carried := await self._carried(client, journal, stage_input, workspace, base, depart)
+        ) is not None:
+            return carried
 
         # The agent reaches its model through the run's proxy, if the run asks for one.
         if (refusal := await self._compress(stage_input, journal)) is not None:
@@ -533,6 +549,27 @@ class Runner:
             "context.savings", {"compression": "headroom", "provenance": "inferred", **counts}
         )
 
+    async def _carried(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        base: str,
+        depart: str,
+    ) -> RunOutcome | None:
+        """A step no ACP agent carries — a job, a remote agent, a prompt agent, a hosted agent — run
+        its own way; `None` for an ACP step."""
+        if stage_input.job is not None:
+            return await self._execute_job(client, journal, stage_input, workspace, base, depart)
+        if stage_input.remote is not None:
+            return await self._execute_remote(client, journal, stage_input, workspace, base, depart)
+        if stage_input.prompt is not None:
+            return await self._execute_prompt(client, journal, stage_input, workspace, base, depart)
+        if stage_input.hosted is not None:
+            return await self._execute_hosted(client, journal, stage_input, workspace, base, depart)
+        return None
+
     async def _execute_remote(
         self,
         client: InternalClient,
@@ -599,6 +636,210 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _execute_prompt(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        base: str,
+        depart: str,
+    ) -> RunOutcome:
+        """A step a prompt agent carries (ADR 0080): the runner's tool loop instead of an ACP agent,
+        with the same skills, knowledge, checks and publication. Stopped at `max_turns` model calls."""
+        if (
+            refus := await self._poser_les_skills(
+                client, journal, stage_input, get_backend("prompt"), workspace
+            )
+            or await self._lay_out_knowledge(client, journal, stage_input, workspace)
+        ) is not None:
+            return refus
+        guards = GuardRails(
+            stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
+        )
+        step = await run_prompt(
+            stage_input,
+            workspace.path,
+            self._prompt(stage_input, workspace.path),
+            journal.record,
+            guards,
+            model_transport=self.model_transport,
+            mcp_transport=self.mcp_transport,
+            timeout_s=stage_input.budget.max_minutes * 60,
+        )
+        report = await run_checks(stage_input, workspace.path)
+        outcome = step.outcome
+        diagnostics = Diagnostics(
+            turns=outcome.turns if outcome else 0,
+            tool_calls=outcome.tool_calls if outcome else 0,
+            permission_denials=step.denials,
+            duration_s=round(time.monotonic() - self.started, 2),
+            agent_exit={"max_turns": "limit", "timeout": "timeout", "model_error": "crashed"}.get(
+                step.reason or "", "normal"
+            ),
+        )
+        code = Exit.OK
+        if step.result is not None:
+            result = step.result
+        elif step.refused:
+            code = Exit.BUDGET_EXCEEDED
+            result = fallback_result(BUDGET_REASON, f"the gateway refused the run's key: {step.refused}")
+        else:
+            await journal.record("run.stopped", {"reason": step.reason, "detail": (step.error or "")[:500]})
+            if step.reason not in {"max_turns", "timeout"}:
+                code = Exit.INVALID_RESULT
+            result = fallback_result(step.reason or "invalid_result", step.error or "no result")
+        final = complete_result(
+            result,
+            measured=report.evidence(),
+            artifacts=Artifacts(branch=stage_input.repo.work_branch if stage_input.repo else None),
+            diagnostics=diagnostics,
+        )
+        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        return RunOutcome(code, final, transcript_path=journal.path, detail=step.error or "")
+
+    async def _execute_hosted(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        base: str,
+        depart: str,
+    ) -> RunOutcome:
+        """A step a hosted agent carries (ADR 0080): the agent's container, beside the runner, gets
+        the step over Foundry's contract and reaches the platform only through the runner's loopback
+        listeners — the model (with the run's key, `max_turns` calls at most), the granted MCP servers
+        (judged by the guard rails) and a CONNECT proxy (the step's network). Same checks and
+        publication as any step.
+
+        With a workspace (S41-18), the container works in a copy of the working tree, never in the
+        checkout: under `write`, what it changed comes back file by file through the guard rails,
+        then the scope check, and the runner commits and pushes it with its own credentials."""
+        assert stage_input.hosted is not None
+        hosted = stage_input.hosted
+        guards = GuardRails(
+            stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
+        )
+        shared = self.settings.hosted_workspace
+        if hosted.workspace != "none":
+            try:
+                copied = await asyncio.to_thread(export_tree, workspace.path, shared)
+            except (HostedWorkspaceError, OSError) as exc:
+                await journal.record("run.failed", {"phase": "hosted_workspace", "error": str(exc)[:500]})
+                await journal.flush()
+                return RunOutcome(Exit.CLONE_FAILED, detail=str(exc))
+            await journal.record("hosted.workspace", {"mode": hosted.workspace, "files": copied})
+        model = ModelProxy(stage_input, journal.record, transport=self.model_transport)
+        mcp = McpProxy(stage_input, journal.record, guards, transport=self.mcp_transport)
+        # After `authenticate_proxy_env`: the pod's egress proxy with the run's credentials, which
+        # the tunnels carry and the container never sees.
+        connect = ConnectProxy(stage_input, journal.record, upstream=upstream_proxy(os.environ))
+        try:
+            async with Loopback(model, mcp, connect, ports=self.loopback_ports):
+                step = await run_hosted(
+                    stage_input,
+                    self._prompt(stage_input, workspace.path),
+                    journal.record,
+                    transport=self.hosted_transport,
+                    interval=self.readiness_interval,
+                )
+        except OSError as exc:
+            await journal.record("run.failed", {"phase": "loopback", "error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.AGENT_UNREACHABLE, detail=str(exc))
+        scope_blocked: list[str] | None = None
+        if hosted.workspace == "write":
+            # Before `result_of`, which writes `.choregos/result.json`: the container's never comes back.
+            imported = await import_tree(shared, workspace, guards)
+            for refused in imported.refused:
+                await journal.record("hosted.write_refused", {"path": refused.path, "reason": refused.reason})
+            await journal.record(
+                "hosted.workspace.imported", {"written": imported.written, "deleted": imported.deleted}
+            )
+            # The net behind the guard rails, as for an ACP agent: what is out of scope is reverted.
+            scope = await check_scope(workspace, depart, guards.allowed_paths)
+            if scope.reverted:
+                await journal.record("scope.reverted", {"paths": scope.reverted})
+            scope_blocked = scope.remaining
+        code = Exit.OK
+        result: StageResult | None
+        agent_exit: Literal["normal", "crashed", "timeout", "limit"]
+        agent_exit = "limit" if model.refused_turns else "normal"
+        if model.budget_refusal:
+            code = Exit.BUDGET_EXCEEDED
+            refusal = model.budget_refusal
+            result = fallback_result(BUDGET_REASON, f"the gateway refused the run's key: {refusal}")
+        elif step.status == "answered":
+            result, why = result_of(stage_input, workspace.path, step.text)
+            if result is None:
+                code = Exit.INVALID_RESULT
+                result = fallback_result("hosted_result_invalid", why or "invalid result")
+        elif step.status == "not_ready":
+            code, agent_exit = Exit.AGENT_UNREACHABLE, "crashed"
+            result = fallback_result("hosted_not_ready", step.error or "the container was never ready")
+        elif step.status == "timeout":
+            agent_exit = "timeout"
+            result = fallback_result("timeout", step.error or "the container did not answer")
+        elif model.refused_turns:
+            result = fallback_result("max_turns", step.error or "the step used its model calls")
+        else:
+            code, agent_exit = Exit.INVALID_RESULT, "crashed"
+            result = fallback_result("hosted_failed", step.error or "the container failed")
+        if result.status is not StageStatus.DONE:
+            await journal.record("run.stopped", {"reason": result.reason, "detail": (step.error or "")[:500]})
+        report = await self._hosted_checks(journal, stage_input, workspace)
+        reports = {
+            REPORT_HOSTED_IMAGE: hosted.image,
+            REPORT_HOSTED_PROVENANCE: f"hosted:{hosted.agent_slug}@{hosted.agent_version}",
+        }
+        if step.response_id:
+            reports[REPORT_RESPONSE] = step.response_id
+        final = complete_result(
+            result,
+            measured=report.evidence(),
+            artifacts=Artifacts(
+                branch=stage_input.repo.work_branch if stage_input.repo else None, reports=reports
+            ),
+            diagnostics=Diagnostics(
+                turns=model.turns,
+                tool_calls=mcp.calls,
+                permission_denials=guards.denials,
+                duration_s=round(time.monotonic() - self.started, 2),
+                agent_exit=agent_exit,
+            ),
+            scope_blocked=scope_blocked,
+        )
+        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        return RunOutcome(code, final, transcript_path=journal.path, detail=step.error or "")
+
+    async def _hosted_checks(
+        self, journal: EventJournal, stage_input: StageInput, workspace: Workspace
+    ) -> DodReport:
+        """The checks a hosted step gets. Without `write` the container did not change the checkout:
+        the project's test, lint and typecheck commands would judge an unchanged tree, so only its
+        fact commands run. Under `write`, none runs: each would execute, inside the runner, code the
+        container wrote, as the runner's user, beside the run's token and gateway key (in the
+        runner's environment, which `/proc/<pid>/environ` gives any process of that user) and the
+        git token the runner pushes with. The pull request's own CI judges the change, without the
+        run's credentials."""
+        assert stage_input.hosted is not None
+        if stage_input.hosted.workspace == "write":
+            await journal.record(
+                "checks.skipped",
+                {"reason": "a hosted container wrote the tree: its code never runs beside the credentials"},
+            )
+            return DodReport(
+                checks=[
+                    CheckOutcome(name=name, command="", ok=False, skipped=True)
+                    for name in ("tests", "lint", "typecheck")
+                ]
+            )
+        no_repo = stage_input.project.model_copy(
+            update={"test_command": "", "lint_command": "", "typecheck_command": ""}
+        )
+        return await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
 
     async def _poser_les_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any

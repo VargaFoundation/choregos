@@ -70,6 +70,7 @@ checked nothing.
 
 ```bash
 make cluster-up                            # kind + Calico
+make cluster-gvisor                        # runsc in the runners node, RuntimeClass gvisor (S41-17)
 make test-cluster                          # egress, Postgres restore, manifests, node loss
 make cluster-down
 ```

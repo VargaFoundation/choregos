@@ -278,6 +278,10 @@ cluster-up:  ## Cluster kind dédié aux tests (Calico : les NetworkPolicy sont 
 	kubectl --context kind-choregos -n kube-system rollout status ds/calico-node --timeout=300s
 	@echo "✓ cluster prêt — CHOREGOS_CLUSTER_CONTEXT=kind-choregos make test-cluster"
 
+.PHONY: cluster-gvisor
+cluster-gvisor:  ## gVisor in the test cluster's runners node and the `gvisor` RuntimeClass (S41-17), after cluster-up
+	dev/scripts/gvisor.sh kind
+
 .PHONY: cluster-down
 cluster-down:  ## Détruit le cluster de test
 	kind delete cluster --name choregos
@@ -306,6 +310,18 @@ conformance-agent:  ## The 7 conformance checks of a code agent inside an image:
 	@test -n '$(IMAGE)' && test -n '$(COMMAND)' || { echo "usage: make conformance-agent IMAGE=<ref> COMMAND='[\"python\",\"-m\",\"my_agent\"]'"; exit 2; }
 	CHOREGOS_CONFORMANCE_CODE_AGENTS='{"image": {"image": "$(IMAGE)", "command": $(COMMAND)}}' \
 	  $(UV) run pytest tests/conformance/backends/test_code_agents.py -m conformance -q -k code_agent_passes
+
+# A Node example serves `responses_server.mjs` (S41-20), the others `responses_server.py`, or
+# `main.py` when they bring their own server (Foundry's hosting adapter, S41-19).
+HOSTED_NODE_SERVER = ["$(or $(NODE),node)", "responses_server.mjs"]
+HOSTED_PYTHON_SERVER = ["$(or $(PYTHON),python3)", "$(if $(wildcard examples/hosted/$(AGENT)/responses_server.py),responses_server.py,main.py)"]
+HOSTED_SERVER = $(if $(wildcard examples/hosted/$(AGENT)/responses_server.mjs),$(HOSTED_NODE_SERVER),$(HOSTED_PYTHON_SERVER))
+
+.PHONY: conformance-hosted
+conformance-hosted:  ## The 8 checks of a hosted agent (ADR 0080): IMAGE=<ref>, or AGENT=<examples/hosted dir> [PYTHON=<interpreter>|NODE=<node>]
+	@test -n '$(IMAGE)$(AGENT)' || { echo "usage: make conformance-hosted IMAGE=<ref> | AGENT=<dir of examples/hosted> [PYTHON=<interpreter>|NODE=<node>]"; exit 2; }
+	CHOREGOS_CONFORMANCE_HOSTED_AGENTS='$(if $(IMAGE),{"image": {"image": "$(IMAGE)"}},{"$(AGENT)": {"command": $(HOSTED_SERVER), "cwd": "$(CURDIR)/examples/hosted/$(AGENT)"}})' \
+	  $(UV) run pytest tests/conformance/hosted/test_hosted_agents.py -m conformance -q -k passes_every_check
 
 .PHONY: evals
 evals:  ## Evals of the playbooks and of the catalogue agents

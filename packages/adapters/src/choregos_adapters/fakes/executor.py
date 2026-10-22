@@ -9,6 +9,9 @@ from typing import Any
 
 from choregos_contracts import ExecutorKind, StageInput, StageResult, StageStatus
 from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
+from choregos_core.hosted import native_sidecars_refusal
+
+from ..errors import UnsupportedClusterError
 
 StageHandler = Callable[[StageInput], StageResult | Any]
 
@@ -50,6 +53,9 @@ class FakeExecutor:
         self._crashes: list[tuple[ExecStatus, list[str]]] = []
         #: Raised by every `start` while set: an executor that refuses the run (e.g. `ConfigurationError`).
         self.start_error: Exception | None = None
+        #: The Kubernetes version the fake plays, as `/version`'s `gitVersion`: a hosted start
+        #: below 1.29 is refused as `KubernetesJobExecutor` refuses it (S41-16). `None`: no cluster.
+        self.server_version: str | None = None
 
     def queue_result(self, result: StageResult) -> None:
         self._queue.append(result)
@@ -82,6 +88,10 @@ class FakeExecutor:
         self.start_calls_by_run[spec.run_id] = self.start_calls_by_run.get(spec.run_id, 0) + 1
         if self.start_error is not None:
             raise self.start_error
+        if spec.agent_container is not None and self.server_version is not None:
+            refusal = native_sidecars_refusal(self.server_version)
+            if refusal is not None:
+                raise UnsupportedClusterError(refusal)
         if spec.run_id in self.statuses:
             return ExecRef(
                 kind=self.kind, name=f"fake-{spec.run_id}", namespace=spec.namespace, run_id=spec.run_id

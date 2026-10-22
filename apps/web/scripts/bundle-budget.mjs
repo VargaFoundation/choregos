@@ -11,7 +11,13 @@ import { join } from "node:path";
 const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-10-19 (merge of main 0.18.8): 1800 -> 1850 kB. Main stood at 1650 (S39-22's egress modal, S39-23's
 // procedure panel); the union measures 1833 kB.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1850);
+// 2026-10-20 (S41-22): 1850 -> 1875 kB. Main at ea273dd0 measures 1833 kB; the project's network form and
+// its YAML splice (`@lezer/yaml`, already shipped with the policy editor, now in a shared chunk) bring 1854 kB.
+// 2026-10-22 (S41-22 rebased on main cfc8a1dd): 1875 -> 1925 kB. S42-07's backends and executors panel
+// takes main and S41-22 to 1879 kB; the S41 agent forms (S41-12) bring 1883.
+// 2026-10-22 (S42 batch, on main after S41): 1925 -> 1950 kB. The S42 panels (About, instance identity,
+// knowledge sources, rights and distillation, organisation branding) land on top of S41's agent forms.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1950);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {

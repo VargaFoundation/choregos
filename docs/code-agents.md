@@ -6,6 +6,9 @@ ACP to it, decides its permissions, counts its turns, journals its tool calls, c
 reads its result in the contract's shape. The decision and the alternatives are in
 [ADR 0063](adr/0063-agents-written-in-code.md).
 
+An agent you already have, written for Azure AI Foundry's hosted contract or with no code at all,
+is a [prompt, voice or hosted agent](hosted-agents.md) instead.
+
 ## Why no Choregos framework
 
 Choregos has no agent framework and does not need one. `choregos-agent-sdk` is a **run-contract

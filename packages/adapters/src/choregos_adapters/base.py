@@ -39,6 +39,9 @@ from choregos_core.domain import (
     WorkItemData,
 )
 
+from .oci.builder import BuildRequest, BuildResult
+from .oci.signatures import SignatureVerdict
+
 
 @runtime_checkable
 class TrackerAdapter(Protocol):
@@ -146,6 +149,29 @@ class Executor(Protocol):
 
 
 @runtime_checkable
+class RegistryClient(Protocol):
+    """An OCI registry, read-only: the digest a reference names now (ADR 0080). Nothing is pulled."""
+
+    async def resolve(self, reference: str) -> str: ...
+
+
+@runtime_checkable
+class ImageVerifier(Protocol):
+    """Whether a pinned image (`ref@sha256:…`) carries a signature the operator trusts (ADR 0080)."""
+
+    async def verify(self, pinned: str) -> SignatureVerdict: ...
+
+
+@runtime_checkable
+class ImageBuilder(Protocol):
+    """Builds a hosted agent's zip into an image, once per build key (ADR 0080 §9)."""
+
+    name: str
+
+    async def build(self, request: BuildRequest) -> BuildResult: ...
+
+
+@runtime_checkable
 class AgentBackend(Protocol):
     """Un backend ACP : comment le lancer et comment lui donner son modèle."""
 
@@ -175,9 +201,11 @@ class MemoryAdapter(Protocol):
 #: - `hard_budget`: the key's budget is a cap enforced at the source;
 #: - `spend_readback`: the spend of a key can be read back (cost measured at the source);
 #: - `teams`: a project's day budget is held by the gateway;
-#: - `pricing`: the catalogue carries input/output prices.
+#: - `pricing`: the catalogue carries input/output prices;
+#: - `realtime`: relays the realtime WebSocket API (`/realtime?model=`) under a virtual key, which a
+#:   voice agent needs (ADR 0080): one is refused at publication on a gateway that does not.
 GATEWAY_CAPABILITIES: frozenset[str] = frozenset(
-    {"list_models", "virtual_keys", "hard_budget", "spend_readback", "teams", "pricing"}
+    {"list_models", "virtual_keys", "hard_budget", "spend_readback", "teams", "pricing", "realtime"}
 )
 
 
@@ -207,6 +235,31 @@ class GatewayAdapter(Protocol):
 LlmGateway = GatewayAdapter
 
 
+class RealtimeClosed(Exception):  # noqa: N818 - the end of a realtime link, not a failure
+    """The other end closed the realtime link."""
+
+    def __init__(self, code: int = 1000, reason: str = "") -> None:
+        super().__init__(f"closed ({code}) {reason}".strip())
+        self.code = code
+        self.reason = reason
+
+
+@runtime_checkable
+class RealtimeLink(Protocol):
+    """One open realtime WebSocket: JSON text events, both ways."""
+
+    async def send(self, message: str) -> None: ...
+    async def recv(self) -> str: ...
+    async def close(self) -> None: ...
+
+
+@runtime_checkable
+class RealtimeConnector(Protocol):
+    """Opens the gateway's realtime WebSocket (ADR 0080 §10): a voice session's upstream."""
+
+    async def connect(self, url: str, headers: dict[str, str]) -> RealtimeLink: ...
+
+
 @runtime_checkable
 class Notifier(Protocol):
     async def send(self, channel: str, message: Message) -> None: ...
@@ -222,6 +275,9 @@ __all__ = [
     "LlmGateway",
     "MemoryAdapter",
     "Notifier",
+    "RealtimeClosed",
+    "RealtimeConnector",
+    "RealtimeLink",
     "ScmAdapter",
     "TrackerAdapter",
 ]

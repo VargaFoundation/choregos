@@ -1,0 +1,199 @@
+{{- if include "choregos.buildkitdDeployed" . }}
+{{- /*
+`choregos-buildkitd` (S41-13, ADR 0080 §9): the rootless BuildKit daemon that builds hosted zips into
+images and pushes them to `global.images.buildRegistry`. The orchestrator's executor worker sends it
+the context with `buildctl`; nothing else talks to it.
+
+The builder is the one pod of the platform that runs code it did not write with a weaker profile
+than the strict rule: rootless BuildKit makes a user namespace (`newuidmap`, a setuid helper, so
+privilege escalation stays allowed and SETUID/SETGID stay in the bounding set) and mounts inside
+it, which RuntimeDefault seccomp and AppArmor refuse. What contains it instead: no root (uid 1000,
+the image's), no other capability, no service account token, no platform credential (the push
+credential of the build repository only), a read-only root filesystem, and a NetworkPolicy that
+admits the orchestrator alone and lets it out to the Internet, never to the platform's namespaces.
+A cluster that cannot grant this profile sets `global.images.buildkitAddress` to a builder of its
+own, or `hostedBuilder: local_docker` on a bench. See docs/security.md.
+*/ -}}
+{{- $b := .Values.global.buildkitd | default dict }}
+{{- $port := int ($b.port | default 1234) }}
+{{- $tls := $b.tls | default dict }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: choregos-buildkitd
+  labels:
+    app.kubernetes.io/name: choregos-buildkitd
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: builder
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  # One daemon, one cache: a second replica would build each key once more, never wrongly.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-buildkitd
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-buildkitd
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: builder
+        # NOT `part-of: choregos`: `choregos-allow-ingress` admits every pod of the namespace to the
+        # pods that carry it, and NetworkPolicies add up. The builder takes the orchestrator only.
+    spec:
+      automountServiceAccountToken: false
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: buildkitd
+          image: {{ $b.image | quote }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args:
+            - --addr
+            - unix:///run/user/1000/buildkit/buildkitd.sock
+            - --addr
+            - tcp://0.0.0.0:{{ $port }}
+            {{- if $tls.serverSecret }}
+            - --tlscacert
+            - /certs/ca.crt
+            - --tlscert
+            - /certs/tls.crt
+            - --tlskey
+            - /certs/tls.key
+            {{- end }}
+            # No PID namespace per step: the pod is the sandbox, and a rootless daemon cannot make one
+            # without a privileged `/proc`.
+            - --oci-worker-no-process-sandbox
+          securityContext:
+            # Its user namespace and its mounts: the two things the strict rule refuses (above).
+            seccompProfile: { type: Unconfined }
+            appArmorProfile: { type: Unconfined }
+            allowPrivilegeEscalation: true
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"], add: ["SETUID", "SETGID"] }
+          ports:
+            - { name: grpc, containerPort: {{ $port }} }
+          readinessProbe:
+            exec: { command: ["buildctl", "debug", "workers"] }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          livenessProbe:
+            exec: { command: ["buildctl", "debug", "workers"] }
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          resources: {{- toYaml ($b.resources | default dict) | nindent 12 }}
+          volumeMounts:
+            - { name: state, mountPath: /home/user/.local/share/buildkit }
+            - { name: run, mountPath: /run/user/1000 }
+            - { name: tmp, mountPath: /tmp }
+            # The rootless image's TMPDIR, where rootlesskit makes its state before anything starts.
+            - { name: rootlesskit, mountPath: /home/user/.local/tmp }
+            {{- with $b.pushSecret }}
+            - { name: push, mountPath: /home/user/.docker, readOnly: true }
+            {{- end }}
+            {{- if $tls.serverSecret }}
+            - { name: certs, mountPath: /certs, readOnly: true }
+            {{- end }}
+      volumes:
+        # The cache: lost with the pod, which only makes the next build of a key slower.
+        - { name: state, emptyDir: {} }
+        - { name: run, emptyDir: { medium: Memory } }
+        - { name: tmp, emptyDir: {} }
+        - { name: rootlesskit, emptyDir: {} }
+        {{- with $b.pushSecret }}
+        - name: push
+          secret:
+            secretName: {{ . }}
+            items: [{ key: .dockerconfigjson, path: config.json }]
+        {{- end }}
+        {{- with $tls.serverSecret }}
+        - name: certs
+          secret: { secretName: {{ . }} }
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: choregos-buildkitd
+  labels:
+    app.kubernetes.io/name: choregos-buildkitd
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: builder
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - { name: grpc, port: {{ $port }}, targetPort: grpc }
+  selector:
+    app.kubernetes.io/name: choregos-buildkitd
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- if .Values.networkPolicies.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-buildkitd-net
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-buildkitd
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # The orchestrator's workers, which run the build activity, and nothing else.
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-orchestrator } } }]
+      ports: [{ protocol: TCP, port: {{ $port }} }]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    # Base images, `pip install`, and a build registry on the Internet: never a private range.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"]
+      ports:
+        {{- range ($b.egressPorts | default (list 443 80)) }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+    {{- with $b.registryCidrs }}
+    # The build registry, where it lives in a private range the operator names.
+    - to:
+        {{- range . }}
+        - ipBlock: { cidr: {{ . | quote }} }
+        {{- end }}
+      ports:
+        {{- range ($b.registryPorts | default (list 443 5000)) }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- if .Capabilities.APIVersions.Has "kyverno.io/v2/PolicyException" }}
+---
+# The strict rule (infra/policies/pod-security.yaml, `non-root`) would refuse the builder for the two
+# things it cannot do without (above): this exception names it, and only it, for that rule only.
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  name: choregos-buildkitd
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  exceptions:
+    - policyName: choregos-pod-security
+      ruleNames: ["non-root", "autogen-non-root"]
+  match:
+    any:
+      - resources:
+          kinds: [Pod, Deployment, ReplicaSet]
+          namespaces: [{{ .Release.Namespace | quote }}]
+          names: ["choregos-buildkitd*"]
+{{- end }}
+{{- end }}

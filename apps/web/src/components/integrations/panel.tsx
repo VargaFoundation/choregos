@@ -110,7 +110,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
           ) : (
             <Alert tone="warn" title="Not reachable from here yet" className="mt-4">
               {info.label} calls MCP servers from its vendor&apos;s network and signs in with OAuth. It needs a public
-              HTTPS address for <Code>/mcp</Code> and OAuth on the door — the next step of ADR 0030. A platform behind a
+              HTTPS address for <Code>/mcp</Code> and OAuth on the door, which this platform does not offer yet. A platform behind a
               VPN stays out of its reach: use Claude Code or Claude Desktop meanwhile.
             </Alert>
           )}
