@@ -6,7 +6,7 @@ replayed activity or a repeated distillation does not pay for the same call twic
 like every other table of an organisation.
 
 Revision ID: b3c5d7e9f1a2
-Revises: 9d2e4f6a8b1c
+Revises: e4a6c8f0b2d5
 Create Date: 2026-10-21 10:00:00+00:00
 """
 
@@ -20,7 +20,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "b3c5d7e9f1a2"
-down_revision: str | None = "9d2e4f6a8b1c"
+down_revision: str | None = "e4a6c8f0b2d5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

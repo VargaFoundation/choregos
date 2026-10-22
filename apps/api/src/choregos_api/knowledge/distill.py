@@ -97,20 +97,6 @@ def is_running(distillation: dict[str, Any] | None, *, now: datetime | None = No
     return (now or utcnow()) - started < STALE_AFTER
 
 
-def is_running(distillation: dict[str, Any] | None, *, now: datetime | None = None) -> bool:
-    """`running` and recent: a record without `started_at` (written before it existed) or older than
-    `STALE_AFTER` is a dead one, so a restart never blocks the base's distillations for good."""
-    if not distillation or distillation.get("status") != "running":
-        return False
-    try:
-        started = datetime.fromisoformat(str(distillation["started_at"]))
-    except (KeyError, ValueError):
-        return False
-    if started.tzinfo is None:
-        started = started.replace(tzinfo=utcnow().tzinfo)
-    return (now or utcnow()) - started < STALE_AFTER
-
-
 class DistillationError(RuntimeError):
     """The base cannot be distilled, or the answer holds nothing usable; the message says why.
 
