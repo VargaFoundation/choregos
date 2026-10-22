@@ -444,16 +444,14 @@ async def propose(
     await session.flush()
     await _audit(session, project, None, "created", created, proposed_by=actor.as_dict())
     if created.approval["mode"] == "auto":
-        from choregos_api.temporal import action_id as temporal_action_id
-        from choregos_api.temporal import get_temporal
+        from choregos_api.services.actions import start_once_committed
 
         created.status = APPROVED
         created.decisions = [
             {"by": f"policy:{policy['name']}", "decision": "approve", "rule": index, "at": now.isoformat()}
         ]
-        created.temporal_wf_id = await get_temporal().start_action(
-            temporal_action_id(created.id), {"action_id": created.id}
-        )
+        # After the commit (ADR 0085): a proposal whose transaction fails starts nothing.
+        start_once_committed(session, created)
     return 201, describe(created)
 
 

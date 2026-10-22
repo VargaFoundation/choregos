@@ -1993,7 +1993,10 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   last OIDC sign-in stated it. The organisation names one per write operation with
   `PATCH /orgs/{org}/connectors/{name}/operations/{op}` `{"approver_group": "netops-approvers"}`,
   and the actions an agent proposes through it carry that rule (ADR 0052).
-- **Running**: the approval starts `ActionWorkflow` (`action-<id>`) and answers at once. Each effect
+- **Running**: the approval starts `ActionWorkflow` (`action-<id>`) once it is committed, and
+  answers at once. If Temporal was unreachable at that moment, the action stays `approved` and every
+  API replica starts it again within about a minute; a workflow started for an action that is not
+  approved runs nothing and leaves it as it was ([ADR 0085](adr/0085-the-approved-row-is-the-outbox-of-a-governed-action.md)). Each effect
   is recorded under its key (`<action>:<n>`) **before** it is attempted and confirmed after: a
   retried effect finds its key done and does nothing twice; one left started by a dead worker is
   attempted again — effects are idempotent by construction. A transient failure (`429`, `503`,

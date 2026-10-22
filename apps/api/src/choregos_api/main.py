@@ -69,6 +69,7 @@ from .routers import (
     workflows,
     workitems,
 )
+from .services.action_relay import relay_loop
 
 API_PREFIX = "/api/v1"
 logger = get_logger("choregos.api")
@@ -98,14 +99,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await amorcer(settings)
     # Conversions a stopped replica left behind (ADR 0051): pending ones, and stale `converting`.
     await conversions.recover()
+    # Approved actions whose start after the commit was lost (ADR 0085), once the schema exists.
+    action_relay = asyncio.create_task(relay_loop())
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relais is not None:
         await relais.arreter()
-    rafraichissement.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await rafraichissement
+    for task in (rafraichissement, action_relay):
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
     await dispose_engine()
     logger.info("arrêt de l'API")
 
