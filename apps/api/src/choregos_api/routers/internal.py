@@ -646,8 +646,13 @@ async def search_memory(id: str, body: RunMemorySearch, session: Db, claims: Run
 
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
 async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
+    """The work item as the run sees it. `spec_markdown` and `plan_markdown` are earlier steps'
+    outputs, so they follow the same rule as `/inputs/{name}` (ADR 0077 §4): served only when the
+    run's transition declares them, and only what is served leaves a *read* receipt (S25-04)."""
     run, item, project = await _run_and_item(session, id)
     documents = item.documents or {}
+    declared = set(_declared_inputs(run))
+    served = {name: documents.get(name) for name in DOCUMENTS_DU_PROMPT if name in declared}
     # Ce que le run lit ici, sous l'empreinte de ce qu'il lit (S25-04) : la révision exacte.
     await consigner(
         session,
@@ -655,7 +660,7 @@ async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
         work_item_id=item.id,
         run_id=run.id,
         stage=run.stage_role,
-        sorties={nom: documents.get(nom) for nom in DOCUMENTS_DU_PROMPT},
+        sorties=served,
         genre=LUE,
     )
     return RunTicket(
@@ -664,8 +669,8 @@ async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
         body=item.body_snapshot or "",
         fields=dict(item.fields or {}),
         url=item.url,
-        spec_markdown=documents.get("spec_markdown"),
-        plan_markdown=documents.get("plan_markdown"),
+        spec_markdown=served.get("spec_markdown"),
+        plan_markdown=served.get("plan_markdown"),
         comments=[
             RunTicketComment(author=c.get("author", ""), body=c.get("body", ""), ts=c.get("ts", utcnow()))
             for c in documents.get("comments", [])

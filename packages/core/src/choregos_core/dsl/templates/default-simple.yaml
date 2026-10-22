@@ -54,6 +54,7 @@ transitions:
     to: verifying
     by: checker
     gates: [evidence_present]
+    inputs: [spec_markdown]
     on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
   - id: t-open-pr
     from: verifying

@@ -24,7 +24,13 @@ async def _ticket(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any
     return dict(cree.json())
 
 
-async def _run(ticket: dict[str, Any], project: dict[str, Any], run_id: str, role: str) -> dict[str, str]:
+async def _run(
+    ticket: dict[str, Any],
+    project: dict[str, Any],
+    run_id: str,
+    role: str,
+    inputs: list[str] | None = None,
+) -> dict[str, str]:
     from choregos_api.db.models import Run
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
@@ -37,6 +43,7 @@ async def _run(ticket: dict[str, Any], project: dict[str, Any], run_id: str, rol
                 project_id=project["id"],
                 stage_role=role,
                 status="running",
+                stage_input={"transition": {"inputs": inputs or []}},
             )
         )
     jeton = mint_run_token(
@@ -69,7 +76,7 @@ async def test_l_etape_suivante_lit_la_revision_exacte_produite(
     raffiner = await _run(ticket, project, "run-raffiner", "refine")
     await _produire(client, "run-raffiner", raffiner, SPEC)
 
-    implementer = await _run(ticket, project, "run-implementer", "implement")
+    implementer = await _run(ticket, project, "run-implementer", "implement", ["spec_markdown"])
     lu = await client.get("/api/v1/internal/runs/run-implementer/ticket", headers=implementer)
     assert lu.json()["spec_markdown"] == SPEC
     # Lire deux fois ne fait qu'un reçu ; ce qui n'existe pas (le plan) n'en fait aucun.
@@ -102,7 +109,7 @@ async def test_une_sortie_modifiee_apres_coup_change_d_empreinte(
         assert item is not None
         item.documents = {**(item.documents or {}), "spec_markdown": SPEC_REVUE}
 
-    implementer = await _run(ticket, project, "run-i1", "implement")
+    implementer = await _run(ticket, project, "run-i1", "implement", ["spec_markdown"])
     await client.get("/api/v1/internal/runs/run-i1/ticket", headers=implementer)
 
     spec = (await _passages(client, ticket))["spec_markdown"]
@@ -152,3 +159,38 @@ def test_l_empreinte_ne_depend_pas_de_l_ordre_des_cles() -> None:
         "profils": ["a", "b"],
         "spec_markdown": SPEC,
     }
+
+
+async def test_a_step_cannot_read_the_spec_or_plan_it_did_not_declare(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """ADR 0077 section 4 (finding #890): `/ticket` follows the same partition as `/inputs/{name}`.
+    A step that declares nothing gets neither the spec nor the plan, and leaves no read receipt."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    ticket = await _ticket(client, project)
+    raffiner = await _run(ticket, project, "run-raffiner", "refine")
+    await _produire(client, "run-raffiner", raffiner, SPEC)
+    async with session_scope() as session:
+        item = await session.get(WorkItem, ticket["id"])
+        assert item is not None
+        item.documents = {**(item.documents or {}), "plan_markdown": "1. do it"}
+
+    sans = await _run(ticket, project, "run-sans", "review")
+    lu = (await client.get("/api/v1/internal/runs/run-sans/ticket", headers=sans)).json()
+    assert lu["spec_markdown"] is None and lu["plan_markdown"] is None
+    assert lu["title"] == "Avoirs", "the ticket itself is still served"
+
+    seulement_le_plan = await _run(ticket, project, "run-plan", "review", ["plan_markdown"])
+    lu = (await client.get("/api/v1/internal/runs/run-plan/ticket", headers=seulement_le_plan)).json()
+    assert lu["spec_markdown"] is None and lu["plan_markdown"] == "1. do it"
+
+    passages = await _passages(client, ticket)
+    reads = {
+        (passage_name, e["run_id"])
+        for passage_name, p in passages.items()
+        for e in p["events"]
+        if e["kind"] == "read"
+    }
+    assert reads == {("plan_markdown", "run-plan")}, "only what was served leaves a read receipt"

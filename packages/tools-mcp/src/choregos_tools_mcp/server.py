@@ -201,11 +201,17 @@ class McpServer:
 
     async def _tool_get_spec(self, arguments: dict[str, Any]) -> dict[str, Any]:
         ticket = await self.client.fetch_ticket()
-        return text_result(ticket.get("spec_markdown") or "_no approved specification for this work item_")
+        return text_result(
+            ticket.get("spec_markdown")
+            or "_no specification available to this step (none yet, or `spec_markdown` is not declared)_"
+        )
 
     async def _tool_get_plan(self, arguments: dict[str, Any]) -> dict[str, Any]:
         ticket = await self.client.fetch_ticket()
-        return text_result(ticket.get("plan_markdown") or "_no approved plan for this work item_")
+        return text_result(
+            ticket.get("plan_markdown")
+            or "_no plan available to this step (none yet, or `plan_markdown` is not declared)_"
+        )
 
     async def _tool_get_ci_logs(self, arguments: dict[str, Any]) -> dict[str, Any]:
         logs = await self.client.fetch_ci_logs(int(arguments.get("tail", 500)))

@@ -125,7 +125,7 @@ async def test_ask_human_tells_the_agent_to_stop(server: tuple[McpServer, StubCl
 async def test_read_only_tools(server: tuple[McpServer, StubClient]) -> None:
     mcp, _ = server
     assert "## Spec" in (await call(mcp, "get_spec", {}))["content"][0]["text"]
-    assert "no approved plan" in (await call(mcp, "get_plan", {}))["content"][0]["text"]
+    assert "no plan available" in (await call(mcp, "get_plan", {}))["content"][0]["text"]
     assert "acme#1" in (await call(mcp, "get_ticket", {}))["content"][0]["text"]
     assert "ERROR" in (await call(mcp, "get_ci_logs", {"tail": 10}))["content"][0]["text"]
     assert "rounding" in (await call(mcp, "get_context", {}))["content"][0]["text"]
