@@ -29,11 +29,14 @@ export function KnowledgeSources({
   slug,
   sources,
   onChange,
+  canEdit = true,
 }: {
   org: string;
   slug: string;
   sources: KnowledgeSource[];
   onChange: () => void;
+  /** `can.edit` of the base (S42-11): without it the sources are listed and nothing changes them. */
+  canEdit?: boolean;
 }) {
   const [kind, setKind] = useState<Kind>("sharepoint");
   // The procedure opens by itself once the person has chosen a kind, not when the page loads.
@@ -66,7 +69,7 @@ export function KnowledgeSources({
     <Card
       title="sources"
       action={
-        sources.length > 0 ? (
+        sources.length > 0 && canEdit ? (
           <button type="button" className="text-xs underline" onClick={() => void act(() => api.syncKnowledgeBase(org, slug))}>
             sync all now
           </button>
@@ -88,6 +91,7 @@ export function KnowledgeSources({
                   {syncSummary(source.last_summary)} · {source.document_count ?? 0} document(s) · {refreshLabel(source)} · {nextSyncLabel(source)}
                 </span>
                 {source.last_error && <span className="w-full text-xs text-danger">{source.last_error}</span>}
+                {canEdit && (
                 <span className="ml-auto space-x-2 text-xs">
                   <button type="button" className="underline" onClick={() => void act(() => api.syncKnowledgeSource(org, slug, source.id))}>
                     sync now
@@ -107,6 +111,7 @@ export function KnowledgeSources({
                     remove
                   </button>
                 </span>
+                )}
                 {editing === source.id && (
                   <form
                     className="grid w-full gap-2 sm:grid-cols-3"
@@ -139,6 +144,8 @@ export function KnowledgeSources({
             ))}
           </ul>
         )}
+        {canEdit && (
+        <>
         <form
           className="grid gap-2 sm:grid-cols-3"
           onSubmit={(event) => {
@@ -274,6 +281,8 @@ export function KnowledgeSources({
           can read in the space: it becomes readable by everyone this base is open to. The page id is the number in the page&apos;s
           URL (<code>/pages/&lt;id&gt;/…</code>).
         </p>
+        </>
+        )}
         {error && <ErrorNote>{error}</ErrorNote>}
       </div>
     </Card>
