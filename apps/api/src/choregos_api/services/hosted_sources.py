@@ -40,7 +40,10 @@ if TYPE_CHECKING:
 MAX_ENTRIES = 2000
 MAX_BYTES = 64 * 1024 * 1024
 #: The Dockerfile's shape: a new version changes every build key, so every zip builds again.
-TEMPLATE_VERSION = "1"
+#: 2 (S41-13): no `# syntax=` line, which pulled the floating `docker/dockerfile:1` frontend at every
+#: build (the daemon's own, pinned with it, parses instead), and `SOURCE_DATE_EPOCH` reaches `RUN`,
+#: so `useradd` and the bytecode `pip` compiles stamp the epoch rather than the day of the build.
+TEMPLATE_VERSION = "2"
 #: The base image of each runtime the platform builds, pinned by digest; the operator replaces them
 #: with `CHOREGOS_HOSTED_BASE_IMAGES`. Node, .NET and Python 3.14 come with S41-20.
 DEFAULT_BASE_IMAGES = {
@@ -173,10 +176,10 @@ def dockerfile(runtime: HostedRuntime, archive: SourceArchive) -> str:
     source = runtime.source
     assert source.type == "zip"
     lines = [
-        "# syntax=docker/dockerfile:1",
         f"# Written by Choregos (ADR 0080 §9, template {TEMPLATE_VERSION}). The zip's own Dockerfile,",
         "# if it has one, is not read.",
         f"FROM {base_image(source.runtime)}",
+        "ARG SOURCE_DATE_EPOCH",
         "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 "
         f"PIP_DISABLE_PIP_VERSION_CHECK=1 PORT={runtime.port}",
         "RUN useradd --uid 1000 --create-home agent",

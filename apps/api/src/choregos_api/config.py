@@ -175,9 +175,12 @@ class Settings(BaseSettings):
     #: How long a hosted session's pod lives without a response before it is stopped (S41-11);
     #: the session's own expiry bounds it too.
     hosted_session_idle_s: int = Field(default=600, ge=30)
-    #: The `buildkitd` builds go through, as `buildctl --addr` takes it; the chart deploys none
-    #: yet (S41-13).
+    #: The `buildkitd` builds go through, as `buildctl --addr` takes it: the one the chart deploys
+    #: (`global.buildkitd`, S41-13) unless `global.images.buildkitAddress` names another.
     buildkit_address: str = "tcp://choregos-buildkitd:1234"
+    #: A directory holding `ca.crt`, `tls.crt` and `tls.key` for mutual TLS with `buildkitd`;
+    #: empty speaks plain gRPC, which the chart's NetworkPolicy limits to the orchestrator's pods.
+    buildkit_tls_dir: str = ""
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under
