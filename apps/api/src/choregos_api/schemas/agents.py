@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -192,7 +193,149 @@ class A2aRuntime(Dto):
     pinned_card: A2aPinnedCard | None = None
 
 
-AgentRuntime = Annotated[AcpRuntime | CodeRuntime | A2aRuntime, Field(discriminator="kind")]
+class PromptRuntime(Dto):
+    """A prompt agent (ADR 0080): the spec's instructions, model, MCP servers and knowledge, run by
+    the platform as a tool loop. No coding agent, no container code."""
+
+    kind: Literal["prompt"] = "prompt"
+    max_output_tokens: int | None = Field(default=None, ge=1, le=128_000)
+    tool_choice: Literal["auto", "required", "none"] = "auto"
+    #: `json_object` asks the model for a JSON object, read as the step's outputs.
+    response_format: Literal["text", "json_object"] = "text"
+
+
+class VoiceAudio(Dto):
+    format: Literal["pcm16"] = "pcm16"
+    sample_rate: Literal[16000, 24000] = 24000
+    channels: Literal[1] = 1
+
+
+class VoiceRuntime(Dto):
+    """A voice-based prompt agent (ADR 0080): a realtime model spoken to over a WebSocket. It runs
+    only as a session; the agent, not the caller, owns the session's configuration."""
+
+    kind: Literal["voice"] = "voice"
+    voice: str = Field(default="alloy", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    audio: VoiceAudio = Field(default_factory=VoiceAudio)
+    greeting: str | None = Field(default=None, max_length=2000)
+    turn_detection: Literal["server_vad", "none"] = "server_vad"
+    max_session_minutes: int = Field(default=30, ge=1, le=120)
+
+
+class HostedImageSource(Dto):
+    """An image a person names. It must sit under a prefix of the operator's allowlist; publication
+    resolves it to `digest` and runs pull `ref@digest`, never a tag."""
+
+    type: Literal["image"] = "image"
+    ref: str = Field(min_length=1, max_length=512, pattern=r"^[a-z0-9][A-Za-z0-9._/:@-]*$")
+    #: Filled by the API at publication, never by the caller.
+    digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+HostedZipRuntime = Literal["python_3_12", "python_3_13", "python_3_14", "node_22", "dotnet_10"]
+
+
+class HostedZipSource(Dto):
+    """A source zip the platform builds into an image at publication (ADR 0080 §9)."""
+
+    type: Literal["zip"] = "zip"
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    runtime: HostedZipRuntime
+    entry_point: list[str] = Field(min_length=1, max_length=64)
+    dependency_resolution: Literal["remote_build", "bundled"] = "remote_build"
+
+    @field_validator("entry_point")
+    @classmethod
+    def _no_empty_argument(cls, entry_point: list[str]) -> list[str]:
+        if any(not part or len(part) > 1024 for part in entry_point):
+            raise ValueError("every argument of the entry point is 1 to 1024 characters")
+        return entry_point
+
+
+HostedSource = Annotated[HostedImageSource | HostedZipSource, Field(discriminator="type")]
+
+
+class HostedBuild(Dto):
+    """The build of a zip source, keyed by its inputs. The platform fills it, never the caller."""
+
+    status: Literal["pending", "building", "ready", "failed"]
+    key: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    image: str | None = None
+    error: str | None = None
+    provenance: dict[str, str] = Field(default_factory=dict)
+
+
+#: The runner's loopback listeners (model, MCP, egress): a hosted container cannot take them.
+LOOPBACK_PORTS = frozenset({4001, 4002, 4003})
+#: What a version's `env` cannot set: the platform's, the model SDKs' and the proxy variables.
+RESERVED_ENV_PREFIXES = ("CHOREGOS_", "FOUNDRY_", "OPENAI_", "ANTHROPIC_", "AZURE_")
+RESERVED_ENV_NAMES = frozenset(
+    {"PORT", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "IDENTITY_ENDPOINT", "IDENTITY_HEADER"}
+)
+_ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
+
+
+HostedProtocol = Literal["responses", "invocations", "invocations_ws"]
+
+
+def _responses_only() -> list[HostedProtocol]:
+    return ["responses"]
+
+
+class HostedRuntime(Dto):
+    """A hosted agent (ADR 0080): the agent's own container serving Foundry's hosted contract beside
+    the runner. It holds no credential; the runner's loopback listeners stand between it and the
+    model, the MCP servers and the internet."""
+
+    kind: Literal["hosted"] = "hosted"
+    source: HostedSource
+    protocols: list[HostedProtocol] = Field(default_factory=_responses_only, min_length=1, max_length=3)
+    port: int = Field(default=8088, ge=1024, le=65535)
+    readiness_timeout_s: int = Field(default=120, ge=1, le=900)
+    termination_grace_s: int = Field(default=30, ge=1, le=300)
+    workspace: Literal["none", "read", "write"] = "none"
+    env: dict[str, str] = Field(default_factory=dict, max_length=64)
+    #: Filled by the platform for a zip source.
+    build: HostedBuild | None = None
+
+    @field_validator("protocols")
+    @classmethod
+    def _distinct(cls, protocols: list[HostedProtocol]) -> list[HostedProtocol]:
+        if len(set(protocols)) != len(protocols):
+            raise ValueError("a protocol is listed once")
+        return protocols
+
+    @field_validator("port")
+    @classmethod
+    def _not_a_loopback_port(cls, port: int) -> int:
+        if port in LOOPBACK_PORTS:
+            raise ValueError("ports 4001-4003 are the runner's loopback listeners")
+        return port
+
+    @field_validator("env")
+    @classmethod
+    def _env_names(cls, env: dict[str, str]) -> dict[str, str]:
+        problems = [
+            name
+            for name in env
+            if not _ENV_NAME.match(name)
+            or name in RESERVED_ENV_NAMES
+            or name.startswith(RESERVED_ENV_PREFIXES)
+        ]
+        if problems:
+            raise ValueError(
+                "these variable names are malformed or reserved for the platform: "
+                + ", ".join(sorted(problems))
+            )
+        if any(len(value) > 4096 for value in env.values()):
+            raise ValueError("a variable's value is at most 4096 characters")
+        return env
+
+
+AgentRuntime = Annotated[
+    AcpRuntime | CodeRuntime | A2aRuntime | PromptRuntime | VoiceRuntime | HostedRuntime,
+    Field(discriminator="kind"),
+]
 
 
 class AgentNetwork(Dto):
@@ -294,6 +437,12 @@ class AgentSpec(Dto):
                     "an `a2a` runtime runs elsewhere: it uses none of the platform's skills, knowledge "
                     "bases or MCP servers"
                 )
+        if isinstance(self.runtime, PromptRuntime | VoiceRuntime | HostedRuntime) and self.backend:
+            raise ValueError(f"a `{self.runtime.kind}` runtime runs no coding agent: `backend` must be empty")
+        if isinstance(self.runtime, VoiceRuntime | HostedRuntime) and self.skills:
+            raise ValueError(f"a `{self.runtime.kind}` runtime reads no skill: `skills` must be empty")
+        if isinstance(self.runtime, VoiceRuntime) and not self.model:
+            raise ValueError("a `voice` runtime speaks through a realtime model: `model` is required")
         if (
             isinstance(self.runtime, AcpRuntime)
             and self.runtime.backend

@@ -945,8 +945,8 @@ export type AgentSpec = {
   model?: string | null;
   /** the ACP coding agent that carries the version; set only with an `acp` runtime (or none) */
   backend?: string | null;
-  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). */
-  runtime?: AcpRuntime | CodeRuntime | A2aRuntime;
+  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). `prompt`, `voice` and `hosted` are ADR 0080's: instructions and tools with no code, the same spoken, and the agent's own container serving Foundry's hosted contract. */
+  runtime?: AcpRuntime | CodeRuntime | A2aRuntime | PromptRuntime | VoiceRuntime | HostedRuntime;
   limits?: AgentLimits;
   budget?: AgentBudget;
   skills?: Array<{
@@ -1000,6 +1000,82 @@ export type A2aRuntime = {
   input?: "text" | "text+files";
   /** filled by the API at publication: the card as it was read; the runner refuses a card that changed */
   pinned_card?: A2aPinnedCard | null;
+};
+
+/** A prompt agent (ADR 0080): the spec's instructions, model, MCP servers and knowledge, run as a tool loop by the platform - no coding agent, no container code. `backend` must be empty. */
+export type PromptRuntime = {
+  kind: "prompt";
+  max_output_tokens?: number | null;
+  tool_choice?: "auto" | "required" | "none";
+  /** `json_object` asks the model for a JSON object, read as the step's outputs */
+  response_format?: "text" | "json_object";
+};
+
+/** A voice-based prompt agent (ADR 0080): a realtime model spoken to over `GET /agents/{slug}/realtime`. `model` must be a catalogue model marked `realtime`; `backend` and `skills` must be empty. It runs only as a session, never as a workflow step. */
+export type VoiceRuntime = {
+  kind: "voice";
+  voice?: string;
+  audio?: VoiceAudio;
+  /** what the agent says first, before the caller speaks */
+  greeting?: string | null;
+  turn_detection?: "server_vad" | "none";
+  max_session_minutes?: number;
+};
+
+export type VoiceAudio = {
+  format?: "pcm16";
+  sample_rate?: 16000 | 24000;
+  channels?: 1;
+};
+
+/** A hosted agent (ADR 0080): the agent's own container, from an image or built from a source zip, serving Foundry's hosted contract (`GET /readiness`, `POST /responses` and/or `POST /invocations`, optionally `GET /invocations_ws`) on `port`, beside the runner in the run's pod. It holds no credential: the model, the MCP servers and the internet are reached through the runner's loopback listeners. `backend` and `skills` must be empty. */
+export type HostedRuntime = {
+  kind: "hosted";
+  source: HostedImageSource | HostedZipSource;
+  protocols?: Array<"responses" | "invocations" | "invocations_ws">;
+  /** the port the container listens on; 4001-4003 are the runner's loopback listeners and are refused */
+  port?: number;
+  readiness_timeout_s?: number;
+  termination_grace_s?: number;
+  /** `none`: the repository is not mounted; `read`: read-only; `write`: the container changes it and the runner commits and pushes */
+  workspace?: "none" | "read" | "write";
+  /** non-secret variables; names are upper-case and the `CHOREGOS_`, `FOUNDRY_`, `OPENAI_`, `ANTHROPIC_` prefixes and the proxy variables are refused */
+  env?: {
+    [key: string]: string;
+  };
+  /** filled by the platform for a zip source, never by the caller */
+  build?: HostedBuild | null;
+};
+
+export type HostedImageSource = {
+  type: "image";
+  /** an image reference under a prefix of the operator's `CHOREGOS_HOSTED_REGISTRIES` */
+  ref: string;
+  /** filled by the API at publication: what `ref` resolved to; runs pull `ref@digest` */
+  digest?: string | null;
+};
+
+export type HostedZipSource = {
+  type: "zip";
+  /** the uploaded source (`POST /agents/{slug}/sources`) */
+  sha256: string;
+  runtime: "python_3_12" | "python_3_13" | "python_3_14" | "node_22" | "dotnet_10";
+  /** the argv started in the built image, e.g. [python, main.py] */
+  entry_point: Array<string>;
+  /** `remote_build` installs the declared dependencies at build time; `bundled`: the zip carries them */
+  dependency_resolution?: "remote_build" | "bundled";
+};
+
+/** The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice. */
+export type HostedBuild = {
+  status: "pending" | "building" | "ready" | "failed";
+  key: string;
+  /** the built image, `ref@sha256:...`, once ready */
+  image?: string | null;
+  error?: string | null;
+  provenance?: {
+    [key: string]: string;
+  };
 };
 
 /** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */

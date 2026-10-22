@@ -556,6 +556,28 @@ export type StageInput = {
     /** the name of the organisation credential the access token comes from (never the token) */
     credential?: string | null;
   } | null;
+  /** Set for a step a hosted agent carries (ADR 0080): `agent.backend` is `hosted`; the agent's own container serves Foundry's contract beside the runner. No credential is here: the container reaches the model, MCP and the internet only through the runner's loopback listeners. At most one of `job`, `remote`, `hosted`, `prompt` is set. */
+  hosted?: {
+    protocol?: "responses" | "invocations";
+    /** the image started beside the runner, always pinned by digest */
+    image: string;
+    port?: number;
+    readiness_timeout_s?: number;
+    termination_grace_s?: number;
+    workspace?: "none" | "read" | "write";
+    /** non-secret variables the version declares */
+    env?: {
+      [key: string]: string;
+    };
+    agent_slug: string;
+    agent_version: number;
+  } | null;
+  /** Set for a step a prompt agent carries (ADR 0080): `agent.backend` is `prompt`; the runner runs a tool loop on the model with the instructions and the run's MCP tools. */
+  prompt?: {
+    max_output_tokens?: number | null;
+    tool_choice?: "auto" | "required" | "none";
+    response_format?: "text" | "json_object";
+  } | null;
 };
 
 /** Runner → orchestrator contract (docs/plan/01 §1.6). The agent writes .choregos/result.json; the runner completes artifacts/evidence/diagnostics. */

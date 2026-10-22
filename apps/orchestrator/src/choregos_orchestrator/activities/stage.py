@@ -1035,6 +1035,15 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
                 non_retryable=True,
             )
         backend = A2A_BACKEND
+    elif runtime is not None and runtime.kind in STEPLESS_RUNTIMES:
+        # ADR 0080: the contract names these runtimes before a runner can carry them as a step; a
+        # step that started one would run nothing. A voice agent never runs as a step.
+        reason = "a voice agent runs only as a session" if runtime.kind == "voice" else "not yet"
+        raise ApplicationError(
+            f"the agent's runtime `{runtime.kind}` cannot run as a workflow step ({reason})",
+            type="AgentIndisponible",
+            non_retryable=True,
+        )
     elif runtime is not None and runtime.backend:
         backend = runtime.backend
 
@@ -1048,6 +1057,8 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
 
 
 CODE_BACKEND = "code"
+#: Runtimes no step can run yet (ADR 0080); S41-03 and S41-05 take `prompt` and `hosted` out.
+STEPLESS_RUNTIMES = frozenset({"prompt", "voice", "hosted"})
 
 
 def _code_runtime(agent: Any) -> Any:
