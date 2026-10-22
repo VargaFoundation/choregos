@@ -73,9 +73,9 @@ waits for the container (`GET /readiness`, up to `readiness_timeout_s`), sends i
 - **the model, on `:4001`** (`OPENAI_BASE_URL=http://127.0.0.1:4001/v1`, `ANTHROPIC_BASE_URL`):
   chat completions, responses, messages, embeddings and models, forwarded to the run's gateway with
   the run's key and the run's model, whatever model the container names. Only the loopback key
-  (`choregos-loopback`) is accepted. Every call is a turn: past `max_turns` the call is answered 429
-  `max_turns` and never forwarded (`hosted.model_refused`). A gateway budget refusal ends the step on
-  `budget`;
+  (`choregos-loopback`) is accepted. Every call is a turn: past `max_turns` the call is answered 400
+  `max_turns` and never forwarded (`hosted.model_refused`); not 429, which every SDK retries (Claude
+  Code until its own timeout, found by S41-06). A gateway budget refusal ends the step on `budget`;
 - **the MCP servers, on `:4002`** (`CHOREGOS_MCP_URL=http://127.0.0.1:4002/mcp/`, then the server's
   name; `CHOREGOS_MCP_SERVERS` lists them): only the step's granted servers are served (any other is
   404, `hosted.mcp_refused`), only on a host the step's network allows. Each `tools/call` is judged by
@@ -120,5 +120,32 @@ The run's pod then holds two containers:
 - the routing executor sends a hosted step to Jobs even when it uses the pool's image; the warm pool
   (`agent_sandbox`), Tekton and Azure Container Apps refuse it before creating anything.
 
-The rest of the stream — the builds, the sessions and the console — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-06 to S41-21.
+**Five frameworks pass the conformance suite (S41-06).** [`examples/hosted/`](../examples/hosted/README.md)
+holds one ticket triager on each framework, unchanged by the platform and importing nothing from
+it: Microsoft Agent Framework, LangGraph, the OpenAI Agents SDK, the Claude Agent SDK and the GitHub
+Copilot SDK (BYOK, no GitHub account), plus a reference on the standard library alone. Each serves
+the contract with an identical copy of `responses_server.py` and writes one `answer(text)`.
+
+`tests/conformance/hosted/` starts an agent with the environment the executor gives it, serves the
+runner's real loopback listeners in front of a scripted model (chat completions, Responses and
+Anthropic messages) and a scripted MCP server, sends the task the way the runner does
+(`run_hosted`), and checks eight things: `readiness`, `answer`, `model_at_loopback` (the run's key
+only, nothing reaches a model outside), `mcp_at_loopback` (the granted tool, with the runner's
+credential), `result_valid` (built from the tool's answer), `max_turns` (one call allowed, one seen,
+the step still ends), `no_egress` (no tunnel asked) and `sigterm` (exit within the grace period). An
+agent that breaks the contract one way (never ready, its own model URL, no tools, telemetry left on,
+SIGTERM ignored, a refused call retried forever) fails that check and only that one.
+
+```
+make conformance-hosted AGENT=langgraph PYTHON=/path/to/venv/bin/python   # as a process
+make conformance-hosted IMAGE=my-registry/langgraph-triager                # as an image
+```
+
+What an image must do, learnt from the five SDKs: switch the SDK's own traffic off (tracing,
+telemetry, error reports: `no_egress` fails otherwise), give the Claude and Copilot runtimes no
+built-in tool, and fetch what the SDK downloads at first use (the Copilot runtime) when the image is
+built. The blocking CI runs the reference; `.github/workflows/hosted-agent-examples.yml` builds the
+six images and runs the suite against each, nightly, without blocking.
+
+The rest of the stream — the zip sources, the builds, the sessions and the console — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-07 to S41-21.

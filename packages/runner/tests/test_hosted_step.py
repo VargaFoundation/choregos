@@ -191,7 +191,7 @@ async def test_the_model_call_past_max_turns_never_reaches_the_gateway(
     _, client = await _run(_hosted(stage_input), agent, runner_settings, model)
 
     assert len(model.requests) == 2, "max_turns is 2"
-    assert [status for status, _ in agent.seen] == [200, 200, 429]
+    assert [status for status, _ in agent.seen] == [200, 200, 400], "400: no SDK retries it"
     assert agent.seen[2][1]["error"]["type"] == "max_turns"
     assert _events(client, "hosted.model_refused") == [
         {"path": "chat/completions", "reason": "max_turns", "limit": 2}

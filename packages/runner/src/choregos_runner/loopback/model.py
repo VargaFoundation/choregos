@@ -4,7 +4,8 @@
 The container's SDKs point at it with the loopback key (`OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`). The
 proxy forwards chat completions, responses, messages and embeddings to the run's gateway with the
 run's key, which never enters the container, and with the run's model, whatever the container named.
-Every call is a turn: past `max_turns` the proxy refuses the call instead of forwarding it.
+Every call is a turn: past `max_turns` the proxy refuses the call (400, which no SDK retries) instead
+of forwarding it.
 """
 
 from __future__ import annotations
@@ -66,7 +67,8 @@ class ModelProxy:
         if self.turns >= limit:
             self.refused_turns += 1
             await self.record("hosted.model_refused", {"path": path, "reason": "max_turns", "limit": limit})
-            return _error(429, "max_turns", f"the step has used its {limit} model calls (max_turns)")
+            # 400, not 429: every SDK retries a 429 with backoff, and each retry is refused again.
+            return _error(400, "max_turns", f"the step has used its {limit} model calls (max_turns)")
         self.turns += 1
         body["model"] = self.stage_input.model.litellm_model
         return await self._forward(request, path, body)
