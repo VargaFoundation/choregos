@@ -34,7 +34,7 @@ kept for running workflows) carries `lang: fr-ok` in a comment.
   helm-unittest plugin **1.1.2** and Helm ≥ 3.18; without them it **refuses to run** rather than
   give a false verdict, and `tests/charts/` renders the chart and checks it in Python.
 - Policies: `make policies-test` (`kyverno test infra/policies/tests`, Kyverno CLI **1.19.1**,
-  refused otherwise); the `charts` CI job runs it.
+  refused otherwise); the `charts` CI job runs it. `infra/policies/tekton` is opt-in (clusters with Tekton).
 - Generated files to commit: `make contracts` (types from the schemas), `make docs-cli`
   (`docs/cli.md` from the CLI). A test refuses any divergence.
 - Beyond CI: `docker compose up` (local install, S28; proven by the `local-install` job),

@@ -25,6 +25,8 @@ spec:
                 - keyless:
                     subject: "https://github.com/VargaFoundation/choregos/.github/workflows/*"
                     issuer: "https://token.actions.githubusercontent.com"
+                    # Kyverno 1.12 refuses a keyless attestor that names no transparency log.
+                    rekor: { url: "https://rekor.sigstore.dev" }
           mutateDigest: true
           required: true
         # Ecphoria est de la fondation mais pas de ce dépôt : ses images sont signées par les
@@ -38,5 +40,7 @@ spec:
                 - keyless:
                     subject: "https://github.com/VargaFoundation/ecphoria/.github/workflows/*"
                     issuer: "https://token.actions.githubusercontent.com"
+                    # Kyverno 1.12 refuses a keyless attestor that names no transparency log.
+                    rekor: { url: "https://rekor.sigstore.dev" }
           mutateDigest: true
           required: true

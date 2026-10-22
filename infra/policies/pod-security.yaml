@@ -60,7 +60,9 @@ spec:
       match:
         any:
           - resources:
-              kinds: [Pod, PipelineRun, Job]
+              # PipelineRun is Tekton's, an optional executor: its rule is in `tekton/`, since
+              # Kyverno refuses the whole policy on a cluster without that kind.
+              kinds: [Pod, Job]
               namespaces: ["proj-*"]
       validate:
         message: "tout objet d'un namespace projet porte le label `choregos/project`"
