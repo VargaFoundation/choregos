@@ -955,6 +955,16 @@ export type WorkflowBudget = {
   on_exceeded?: WorkflowIdentifier;
 };
 
+/** The workflow served as an A2A skill (ADR 0078). Absent, the workflow is not exposed to A2A callers. */
+export type WorkflowA2a = {
+  /** The skill id on the organisation's agent card. */
+  skill: WorkflowIdentifier;
+  /** What the skill does, as the caller's agent reads it. */
+  description: string;
+  /** The MIME types a caller may send. */
+  input_modes?: Array<string>;
+};
+
 export type WorkflowSpawn = {
   /** the children's workflow, in the same project */
   workflow: string;
@@ -996,6 +1006,7 @@ export type Workflow = {
   transitions: Array<WorkflowTransition>;
   defaults?: WorkflowDefaults;
   budget?: WorkflowBudget;
+  a2a?: WorkflowA2a;
   /** Where the workflow starts. Optional: the parser writes the first declared state there (§1.4). The field exists because the order of an object's keys does not survive jsonb storage, and a workflow that believes it starts at its terminal state closes the work item without doing anything. */
   initial?: string;
 };

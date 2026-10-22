@@ -6481,10 +6481,11 @@ components:
             origin: { type: string, description: "`shipped`, `extra` or `plugin:<name>`" }
     TokenScope:
       type: string
-      enum: ["*", "mcp:read", "mcp:write"]
+      enum: ["*", "mcp:read", "mcp:write", "a2a"]
       description: >-
         `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP door only (ADR 0030) — such
-        a token is refused by the REST API, and the door refuses `*`.
+        a token is refused by the REST API, and the door refuses `*`. `a2a`: the A2A door only
+        (ADR 0078), which also refuses `*`.
     ApiTokenCreate:
       type: object
       required: [name]
