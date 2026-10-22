@@ -33,6 +33,7 @@ jobs:
       local-install: ${{ steps.filter.outputs.local-install }}
       hosted-build: ${{ steps.filter.outputs.hosted-build }}
       hosted-cosign: ${{ steps.filter.outputs.hosted-cosign }}
+      hosted-gvisor: ${{ steps.filter.outputs.hosted-gvisor }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -97,6 +98,21 @@ jobs:
               - 'tests/charts/test_hosted_images_policy.py'
               - 'docker/api.Dockerfile'
               - '.github/workflows/ci.yml'
+            # A hosted agent inside gVisor (S41-17): the suite, the examples it runs, the policy that
+            # asks for the RuntimeClass, the pinned release, and this job.
+            hosted-gvisor:
+              - 'tests/conformance/hosted/**'
+              - 'examples/hosted/reference/**'
+              - 'examples/hosted/reference-node/**'
+              - 'packages/runner/src/choregos_runner/hosted.py'
+              - 'packages/runner/src/choregos_runner/loopback/**'
+              - 'packages/adapters/src/choregos_adapters/executor/k8s_job.py'
+              - 'apps/orchestrator/src/choregos_orchestrator/gitops.py'
+              - 'apps/orchestrator/tests/test_gvisor_policy.py'
+              - 'dev/scripts/gvisor.sh'
+              - '.github/workflows/ci.yml'
+              - 'pyproject.toml'
+              - 'uv.lock'
 
   python:
     needs: changes
@@ -430,6 +446,41 @@ jobs:
           # A skip proves nothing: cosign, crane, kyverno or the registry went missing, and the job says so.
           ! grep -qi skipped pytest.out
 
+  hosted-gvisor:
+    # The hosted conformance suite with the agent inside a gVisor sandbox, and the project policy
+    # that refuses a hosted Job without the RuntimeClass, judged by the real Kyverno CLI (S41-17).
+    # The release is the one dev/scripts/gvisor.sh pins for kind; the script fetches and checks it.
+    needs: changes
+    if: needs.changes.outputs.hosted-gvisor == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - uses: actions/setup-node@v7
+        with: { node-version: 24 }
+      - name: gVisor, the pinned release
+        run: |
+          dev/scripts/gvisor.sh fetch "$RUNNER_TEMP/gvisor"
+          # Ubuntu 24.04 forbids unprivileged user namespaces to unconfined programs; rootless runsc needs one.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: kyverno CLI
+        run: |
+          curl -sSLo kyverno.tar.gz https://github.com/kyverno/kyverno/releases/download/v1.15.2/kyverno-cli_v1.15.2_linux_x86_64.tar.gz
+          echo "c90520ba24fb8b8df003ec22d6d2621e4a3d3c7497665fdcf84e9eab4ff1dfe0  kyverno.tar.gz" | sha256sum -c
+          tar xzf kyverno.tar.gz kyverno && sudo mv kyverno /usr/local/bin/kyverno
+      - name: the hosted suite under gVisor, and the policy that asks for it
+        shell: bash
+        env:
+          CHOREGOS_TEST_RUNSC: ${{ runner.temp }}/gvisor/runsc
+        run: |
+          uv run pytest tests/conformance/hosted/test_hosted_under_gvisor.py -m gvisor -rs | tee pytest.out
+          uv run pytest apps/orchestrator/tests/test_gvisor_policy.py -rs | tee -a pytest.out
+          # A skip proves nothing: runsc, node or kyverno went missing, and the job says so.
+          ! grep -qi skipped pytest.out
+
   secrets:
     # A committed secret cannot be taken back: it is already in the history. Two files
     # had a `noqa S105` and two SQLite databases were tracked by git — without any scan
@@ -507,7 +558,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-gvisor, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

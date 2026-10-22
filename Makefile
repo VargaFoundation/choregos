@@ -278,6 +278,10 @@ cluster-up:  ## Cluster kind dédié aux tests (Calico : les NetworkPolicy sont 
 	kubectl --context kind-choregos -n kube-system rollout status ds/calico-node --timeout=300s
 	@echo "✓ cluster prêt — CHOREGOS_CLUSTER_CONTEXT=kind-choregos make test-cluster"
 
+.PHONY: cluster-gvisor
+cluster-gvisor:  ## gVisor in the test cluster's runners node and the `gvisor` RuntimeClass (S41-17), after cluster-up
+	dev/scripts/gvisor.sh kind
+
 .PHONY: cluster-down
 cluster-down:  ## Détruit le cluster de test
 	kind delete cluster --name choregos

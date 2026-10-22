@@ -136,6 +136,23 @@ platform refuses it twice, with the error `hosted_unsupported_cluster`:
   without a hosted agent never reads it. `local_docker` needs no version; the executors that cannot
   hold a sidecar refuse a hosted step whatever the version.
 
+**Under gVisor (S41-17).** A project whose policy sets `sandbox.runtime: gvisor` runs its steps,
+hosted ones included, under the `gvisor` RuntimeClass: `runtimeClassName` is set on the pod, so the
+runner and the agent's sidecar share one sandbox and its loopback. The project's Kyverno `Policy`
+`require-gvisor` (in `runtimeclass.yaml`, which the project's `kustomization.yaml` now lists: Argo CD
+applied the directory without it) refuses any pod of `proj-<slug>-runners` without it, and the Jobs
+the executor creates through autogen. What it proves:
+
+- `tests/conformance/hosted/test_hosted_under_gvisor.py` (marker `gvisor`, `CHOREGOS_TEST_RUNSC`)
+  runs the eight checks with the agent inside `runsc do` (rootless, the host's network): the Python
+  and Node references pass them, their log showing the sentry's kernel, and the agents that ignore
+  SIGTERM or open a tunnel still fail theirs;
+- `apps/orchestrator/tests/test_gvisor_policy.py` gives the real executor's hosted Job to the
+  `kyverno` CLI: refused without a RuntimeClass or with `runc`, admitted with `gvisor`;
+- the `hosted-gvisor` CI job runs both and fails on a skip;
+- `tests/cluster/test_hosted_gvisor.py` runs S41-16's hosted Job under `gvisor` on a kind cluster
+  where `make cluster-gvisor` installed `runsc` (`dev/scripts/gvisor.sh`, release and sha512 pinned).
+
 **Five frameworks pass the conformance suite (S41-06).** [`examples/hosted/`](../examples/hosted/README.md)
 holds one ticket triager on each framework, unchanged by the platform and importing nothing from
 it: Microsoft Agent Framework, LangGraph, the OpenAI Agents SDK, the Claude Agent SDK and the GitHub
