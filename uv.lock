@@ -372,6 +372,7 @@ dependencies = [
     { name = "structlog" },
     { name = "temporalio" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -395,6 +396,7 @@ requires-dist = [
     { name = "structlog", specifier = ">=24.4" },
     { name = "temporalio", specifier = ">=1.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "websockets", specifier = ">=13" },
 ]
 
 [[package]]

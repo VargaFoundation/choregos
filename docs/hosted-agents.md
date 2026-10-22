@@ -218,7 +218,7 @@ the session with its transcript and close it.
 - **What it runs**: the version the project is served (its pin, channel and overrides), its
   instructions verbatim as the system message (no `{{ ticket.* }}` rendering: there is no work
   item), its model, and the prompt loop of a workflow step. Only a `prompt` agent answers here; a
-  voice session is S41-10, a hosted one S41-11 (422 today).
+  voice agent answers on `/realtime` (below), a hosted one in S41-11 (422 today).
 - **Budget**: the session reserves the smallest of what is left under its `max_usd` (1 USD by
   default), the agent's run, day and month budgets, the project's day and the organisation's month,
   and mints **one** gateway key at that amount for an hour, sealed in the secret store and never
@@ -237,5 +237,33 @@ the session with its transcript and close it.
   `response.output_text.delta` and `response.completed` (or `response.failed`): the text arrives in
   one delta, not token by token.
 
-The rest of the stream — voice and hosted sessions, the console and the real builder — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-10 to S41-21.
+**A person speaks to a voice agent (S41-10).** `/orgs/{org}/agents/{slug}/realtime?project=…`
+(optional `max_usd`) is a WebSocket speaking the OpenAI Realtime events; the API relays it to the
+gateway's realtime socket (`ws(s)://<gateway>/realtime?model=…`), with the session's key.
+
+- **Before the socket is accepted**: a browser's `Origin` must be the console's, the API's or one of
+  `CHOREGOS_CORS_ORIGINS` (no `Origin` — a CLI, a server — passes); the caller signs in with the session
+  cookie or an API token and needs `item.control`, as for `/responses`; the organisation's gateway
+  must declare the `realtime` capability; the session is opened (one key, the same reservation) and
+  the upstream socket connected. Any refusal closes with 1008 and its reason, and no key outlives it.
+- **The agent owns the session**: the relay sends one `session.update` (the agent's instructions,
+  voice, PCM16 24 kHz audio, turn detection, input transcription with
+  `CHOREGOS_REALTIME_TRANSCRIPTION_MODEL`, the grant's read tools), then the greeting. A caller's
+  `session.update`, a `response.create` carrying its own `response`, a `conversation.item.create`
+  that is not its own `input_text`/`input_audio` message (a `function_call_output` would forge a
+  tool's answer) and any other event outside the audio buffer, cancel, truncate and delete events
+  are answered with an `error` event and never reach the model.
+- **Tools**: a function call of the model runs through the courtier like a prompt session's, only
+  if the grant offers it; anything else is journaled `tool.refused` and answered "not granted". The
+  output goes back to the model, then a `response.create`.
+- **Limits**: a caller's frame over 1 MiB closes with 1009; `max_session_minutes` closes with 1000;
+  a gateway error in budget words closes with 1008. Each way, the session closes as a prompt one:
+  the key's spend booked with `session_id`, the key revoked.
+- **Transcript**: the caller's and the agent's transcripts and texts, tool calls and refusals, each
+  `response.done` with its usage. Audio is relayed and never kept.
+
+The voice session's spend is what the gateway counted on its key, read when it closes; booking it
+from `response.done` with a per-minute ceiling is S41-15.
+
+The rest of the stream — hosted sessions, the console and the real builder — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-11 to S41-21.

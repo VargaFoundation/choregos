@@ -156,6 +156,12 @@ agent cannot be a workflow step).
     approval needs a work item to be governed); the key's budget is the smallest of the caps a run
     would meet plus the caller's `max_usd`; its spend is booked with `cost_ledger.session_id` when
     the session closes; streaming sends the computed turn as events, not token deltas yet.
+    *As delivered for voice agents (S41-10)*: the WebSocket is `/orgs/{org}/agents/{slug}/realtime`,
+    the first of the API; everything is decided before it is accepted (a browser's `Origin`, the
+    rights, the gateway's `realtime` capability, the key, the upstream socket), and a refusal closes
+    it with 1008. The relay screens each caller event against an allowlist; a function call runs
+    through the courtier only if the grant offers the tool. The spend is still the gateway's count on
+    the key, read at close; `model` is not yet checked against a catalogue `realtime` mark (S41-15).
 
 ## Consequences
 
