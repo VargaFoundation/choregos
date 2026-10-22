@@ -15,7 +15,7 @@ For a project owner. Procedure `connector.scm.github`, version 1, reviewed 2026-
 
 1. Create the App with the **Webhook URL** `<api_url>/api/v1/webhooks/github`, or reuse the platform's.
 2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's
-   install page and brings you back. The installation is discovered by the platform (ADR 0073): there
+   install page and brings you back. The installation is discovered by the platform: there
    is no number to copy.
 3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).
    Without one, set `merge_queue` to false.
