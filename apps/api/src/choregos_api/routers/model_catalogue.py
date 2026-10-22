@@ -8,7 +8,7 @@ whatever the gateway is. Reads are for every member; changes need `model:catalog
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from choregos_core import utcnow
 from choregos_core.models import PLATFORM_PROFILES, TIERS
@@ -330,29 +330,23 @@ async def usable_models(
             else live.get(name)
         )
         entry = _dto(row) if row else None
-        price_in: float | None
-        price_out: float | None
-        by: Literal["gateway", "override", "none"]
-        if entry is not None and entry.price_override is not None:
-            price_in, price_out, by = (
-                entry.price_override.input_per_1k,
-                entry.price_override.output_per_1k,
-                "override",
-            )
-        elif facts is not None and (
-            facts.input_cost_per_1k is not None or facts.output_cost_per_1k is not None
-        ):
-            price_in, price_out, by = facts.input_cost_per_1k, facts.output_cost_per_1k, "gateway"
-        else:
-            price_in, price_out, by = None, None, "none"
+        price = service.price_from(
+            row,
+            {
+                "input_cost_per_1k": facts.input_cost_per_1k,
+                "output_cost_per_1k": facts.output_cost_per_1k,
+            }
+            if facts is not None
+            else None,
+        )
         out.append(
             UsableModel(
                 model_name=name,
                 display_name=(entry.display_name if entry else name),
                 provider=facts.provider if facts else "",
-                input_cost_per_1k=price_in,
-                output_cost_per_1k=price_out,
-                priced_by=by,
+                input_cost_per_1k=price.input_per_1k,
+                output_cost_per_1k=price.output_per_1k,
+                priced_by=price.priced_by,
                 tiers=[
                     t
                     for t in TIERS
