@@ -11,9 +11,10 @@ from typing import Annotated, Any
 import jwt
 from choregos_contracts import Role
 from choregos_core import utcnow
-from fastapi import Depends, Header, Query, Request
+from fastapi import Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import HTTPConnection
 
 from .config import Settings, get_settings
 from .db.models import ApiToken, Membership, Organization, Project, User
@@ -123,7 +124,7 @@ def jeton_rest(token: ApiToken) -> bool:
     return "*" in (token.scopes or ["*"])
 
 
-def noter_l_usage(token: ApiToken, request: Request) -> None:
+def noter_l_usage(token: ApiToken, request: HTTPConnection) -> None:
     """Le dernier usage et le client qui l'a fait : la page Integrations dit « connecté »."""
     token.last_used_at = utcnow()
     client = request.headers.get("user-agent", "").strip()
@@ -131,7 +132,8 @@ def noter_l_usage(token: ApiToken, request: Request) -> None:
 
 
 async def current_principal(
-    request: Request,
+    # A connection, not a request: the realtime WebSocket (S41-10) authenticates the same way.
+    request: HTTPConnection,
     session: Db,
     settings: Config,
     authorization: Annotated[str | None, Header()] = None,

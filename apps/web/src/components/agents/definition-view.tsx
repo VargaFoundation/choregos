@@ -15,6 +15,7 @@ import { describe, effectiveBindings, writesTo } from "@/lib/memories";
 import type { Agent, AgentSpec, AgentVersion } from "@/lib/types";
 import { AgentDetailsCard } from "./details";
 import { RestoreDialog } from "./history";
+import { RuntimeRow } from "./runtime-row";
 import { sectionSummaries } from "./spec-summary";
 
 /**
@@ -227,6 +228,10 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
             {spec.runtime?.kind === "code" ? (
               <Row label="Runtime">
                 <CodeRuntimeRow runtime={spec.runtime} />
+              </Row>
+            ) : spec.runtime?.kind === "prompt" || spec.runtime?.kind === "voice" || spec.runtime?.kind === "hosted" ? (
+              <Row label="Runtime">
+                <RuntimeRow runtime={spec.runtime} />
               </Row>
             ) : (
               <Row label="Backend">{spec.backend ?? "The project's"}</Row>

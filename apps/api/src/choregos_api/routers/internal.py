@@ -30,7 +30,16 @@ from sqlalchemy import func, select
 from ..catalogue import appeler as appeler_outil
 from ..catalogue import outils_du_projet
 from ..config import get_settings
-from ..db.models import CostLedger, HumanRequest, Organization, Project, Run, RunEvent, WorkItem
+from ..db.models import (
+    AgentSessionRecord,
+    CostLedger,
+    HumanRequest,
+    Organization,
+    Project,
+    Run,
+    RunEvent,
+    WorkItem,
+)
 from ..db.models import Finding as FindingRow
 from ..deps import Db, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
@@ -51,6 +60,7 @@ from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..schemas.memory import RunMemoryHit, RunMemorySearch
 from ..schemas.network import NetworkDecisionBatch, RunNetwork
 from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch
+from ..services.agent_hosted_sessions import session_network
 from ..services.artifacts import (
     ArtifactCorruptedError,
     filename_of,
@@ -68,6 +78,18 @@ from ..services.tickets import sorties_a_ranger
 from ..temporal import get_temporal, interpreter_id
 
 router = APIRouter(tags=["internal"], prefix="/internal")
+
+#: The `run_id` a hosted session's pod speaks as (`session_run_id`).
+SESSION_RUN_PREFIX = "session-"
+
+
+async def _session_of(session: Any, run_id: str) -> AgentSessionRecord:
+    record: AgentSessionRecord | None = await session.get(
+        AgentSessionRecord, run_id.removeprefix(SESSION_RUN_PREFIX)
+    )
+    if record is None:
+        raise not_found("Agent session", run_id)
+    return record
 
 
 async def _run_and_item(session: Any, run_id: str) -> tuple[Run, WorkItem, Project]:
@@ -131,7 +153,10 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
 
 @router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")
 async def get_run_network(id: str, session: Db, claims: RunAuth) -> RunNetwork:
-    """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token."""
+    """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token.
+    A hosted session's pod (S41-11) speaks as `session-{id}` and gets its agent version's network."""
+    if id.startswith(SESSION_RUN_PREFIX):
+        return await session_network(session, await _session_of(session, id))
     run, _, _ = await _run_and_item(session, id)
     return await run_network(session, run)
 
@@ -144,7 +169,12 @@ async def get_run_network(id: str, session: Db, claims: RunAuth) -> RunNetwork:
 async def post_network_decisions(
     id: str, body: NetworkDecisionBatch, session: Db, claims: RunAuth
 ) -> dict[str, int]:
-    """What the proxy or the runner let through or refused: cumulative totals, replay-safe."""
+    """What the proxy or the runner let through or refused: cumulative totals, replay-safe. A
+    session's decisions are not stored yet (a `network_decisions` row belongs to a run): the batch
+    is acknowledged, so its proxy does not retry it."""
+    if id.startswith(SESSION_RUN_PREFIX):
+        await _session_of(session, id)
+        return {"accepted": len(body.decisions)}
     run, _, project = await _run_and_item(session, id)
     return {"accepted": await record_decisions(session, run, project, body)}
 

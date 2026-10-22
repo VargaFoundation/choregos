@@ -372,6 +372,7 @@ dependencies = [
     { name = "structlog" },
     { name = "temporalio" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -395,6 +396,7 @@ requires-dist = [
     { name = "structlog", specifier = ">=24.4" },
     { name = "temporalio", specifier = ">=1.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "websockets", specifier = ">=13" },
 ]
 
 [[package]]
@@ -543,8 +545,11 @@ dependencies = [
     { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
+    { name = "starlette" },
     { name = "structlog" },
     { name = "typer" },
+    { name = "uvicorn" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -556,8 +561,11 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "starlette", specifier = ">=0.40" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "typer", specifier = ">=0.15" },
+    { name = "uvicorn", specifier = ">=0.32" },
+    { name = "websockets", specifier = ">=13" },
 ]
 
 [[package]]

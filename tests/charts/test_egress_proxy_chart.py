@@ -115,12 +115,12 @@ def _namespaces(rules: list[dict[str, Any]]) -> set[str]:
     }
 
 
-def test_the_platform_policy_no_longer_selects_runner_pods_or_the_proxy() -> None:
+def test_the_platform_policy_no_longer_selects_runner_pods_the_proxy_or_the_builder() -> None:
     docs = _docs("global.egress.enabled=true")
     selector = docs[("NetworkPolicy", "choregos-allow-platform")]["spec"]["podSelector"]
     expression = selector["matchExpressions"][0]
     assert expression["key"] == "app.kubernetes.io/name" and expression["operator"] == "NotIn"
-    assert set(expression["values"]) == {"choregos-runner", "choregos-egress"}
+    assert set(expression["values"]) == {"choregos-runner", "choregos-egress", "choregos-buildkitd"}
 
 
 def test_a_runner_reaches_the_api_the_gateway_and_the_proxy_but_not_the_database_or_temporal() -> None:

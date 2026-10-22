@@ -15,6 +15,7 @@ from .others import (
     GooseBackend,
     OpenCodeBackend,
 )
+from .prompt import PromptBackend
 
 BACKENDS: dict[str, type[Backend]] = {
     ClaudeCodeBackend.name: ClaudeCodeBackend,
@@ -24,6 +25,7 @@ BACKENDS: dict[str, type[Backend]] = {
     OpenCodeBackend.name: OpenCodeBackend,
     CopilotCliBackend.name: CopilotCliBackend,
     CodeBackend.name: CodeBackend,
+    PromptBackend.name: PromptBackend,
 }
 
 # Backends retirés : un nom qu'on reconnaît, pour refuser avec la raison plutôt qu'avec un
@@ -49,9 +51,9 @@ def get_backend(name: str) -> Backend:
     return backend_class()
 
 
-#: Backends a runtime brings (ADR 0063): they ship no agent, so they are not "known" in the sense of
+#: Backends a runtime brings (ADR 0063, ADR 0080): they ship no agent, so they are not "known" in the sense of
 #: the CLI listing, the conformance rotation or the image's pinned binaries. `get_backend` has them.
-RUNTIME_BACKENDS: frozenset[str] = frozenset({CodeBackend.name})
+RUNTIME_BACKENDS: frozenset[str] = frozenset({CodeBackend.name, PromptBackend.name})
 
 
 def known_backends() -> list[str]:

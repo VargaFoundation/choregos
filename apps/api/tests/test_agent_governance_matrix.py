@@ -176,6 +176,13 @@ CELLS: list[tuple[Action, str, dict[str, str | None], set[str]]] = [
     ),
     (Action.MOVE, "personal", {"target_scope": "project", "project_slug": "ops"}, {"admin"}),
     (Action.MOVE, "personal", {"target_scope": "platform"}, set()),
+    # converse (S41-09): whoever works on the project, with an agent that may work there
+    (Action.CONVERSE, "platform", {"project_slug": "dev"}, DEV_AND_ABOVE - {"owner_ops"}),
+    (Action.CONVERSE, "org", {"project_slug": "ops"}, DEV_AND_ABOVE - {"owner_dev"}),
+    (Action.CONVERSE, "project", {"project_slug": "dev"}, DEV_AND_ABOVE - {"owner_ops"}),
+    (Action.CONVERSE, "project", {"project_slug": "ops"}, set()),
+    (Action.CONVERSE, "personal", {"project_slug": "dev"}, set()),
+    (Action.CONVERSE, "org", {}, set()),
 ]
 
 
