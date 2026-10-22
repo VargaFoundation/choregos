@@ -249,3 +249,42 @@ async def test_a_finished_runner_stops_the_agent_beside_it() -> None:
     running = _Docker(inspect=(0, json.dumps([{"State": {"Running": True}}]), ""))
     await executeur(running).status(ExecRef(kind="local_docker", name="c"))
     assert not [a for a in running.appels if a[0] == "rm"], "a running sidecar is left alone"
+
+
+def _working(workspace: str) -> StageJobSpec:
+    hosted = hosted_spec()
+    assert hosted.agent_container is not None
+    agent = hosted.agent_container.model_copy(update={"workspace": workspace})
+    return hosted.model_copy(update={"agent_container": agent})
+
+
+def _volumes(args: list[str]) -> list[str]:
+    return [args[i + 1] for i, a in enumerate(args) if a == "--volume"]
+
+
+@pytest.mark.parametrize(("workspace", "mount"), [("read", "/workspace:ro"), ("write", "/workspace")])
+async def test_a_hosted_agent_that_asks_for_the_workspace_gets_the_runners_copy(
+    workspace: str, mount: str
+) -> None:
+    """S41-18: one volume per run, at `/hosted-workspace` in the runner and `/workspace` in the
+    agent, which joins the runner's group to change the files the runner copied."""
+    docker = _Docker(inspect=(1, "", "no such container"))
+    await executeur(docker).start(_working(workspace))
+    runner, agent = [a for a in docker.appels if a[0] == "run"]
+    assert _volumes(runner) == ["choregos-run-r-1-workspace:/hosted-workspace"]
+    assert _volumes(agent) == [f"choregos-run-r-1-workspace:{mount}"]
+    assert agent[agent.index("--group-add") + 1] == "1000"
+
+
+async def test_a_hosted_agent_without_the_workspace_gets_no_volume() -> None:
+    docker = _Docker(inspect=(1, "", "no such container"))
+    await executeur(docker).start(_working("none"))
+    runner, agent = [a for a in docker.appels if a[0] == "run"]
+    assert _volumes(runner) == [] and _volumes(agent) == [] and "--group-add" not in agent
+
+
+async def test_pruning_a_finished_run_removes_its_workspace_volume_too() -> None:
+    names = "\n".join(f"choregos-run-{i}" for i in range(11))
+    docker = _Docker(inspect=(1, "", "no such container"), ps=(0, names, ""))
+    await executeur(docker).start(spec())
+    assert ["volume", "rm", "--force", "choregos-run-10-workspace"] in docker.appels

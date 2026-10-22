@@ -30,6 +30,11 @@ LOOPBACK_KEY = "choregos-loopback"
 NATIVE_SIDECARS_MIN = (1, 29)
 #: The error a hosted version or start gets on a cluster older than `NATIVE_SIDECARS_MIN`.
 UNSUPPORTED_CLUSTER = "hosted_unsupported_cluster"
+#: The volume the runner copies the working tree into for a container that asks for the workspace
+#: (S41-18): where the runner sees it, and where the container does. The runner's own `/workspace`,
+#: its clone and `.git`, is another volume, never mounted in the container.
+SHARED_WORKSPACE_RUNNER = "/hosted-workspace"
+SHARED_WORKSPACE_AGENT = "/workspace"
 
 _VERSION = re.compile(r"^v?(\d+)\.(\d+)")
 _NUMBER = re.compile(r"^(\d+)")
@@ -104,6 +109,8 @@ def sidecar_env(
         "https_proxy": proxy,
         "NO_PROXY": f"{LOOPBACK_HOST},localhost",
         "no_proxy": f"{LOOPBACK_HOST},localhost",
+        # Where the copy of the working tree is, when the version asked for it (S41-18).
+        **({"CHOREGOS_WORKSPACE": SHARED_WORKSPACE_AGENT} if hosted.workspace != "none" else {}),
     }
 
 
@@ -117,7 +124,9 @@ def agent_container(
     """The container an executor starts beside the runner for a hosted step; `None` for any other.
 
     Only the MCP servers the runner's proxy serves are announced: the granted ones with a URL, or
-    `mcp_servers` when the runner serves others (a session's pod serves `choregos`, S41-11)."""
+    `mcp_servers` when the runner serves others (a session's pod serves `choregos`, S41-11). The
+    container gets the workspace its version asked for (S41-18); a session has no repository, so its
+    caller passes a `HostedCall` with `workspace: none`."""
     hosted = stage_input.hosted
     if hosted is None:
         return None
@@ -133,6 +142,7 @@ def agent_container(
         ),
         port=hosted.port,
         termination_grace_s=hosted.termination_grace_s,
+        workspace=hosted.workspace,
         cpu=cpu,
         memory=memory,
     )

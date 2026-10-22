@@ -246,11 +246,14 @@ RUN_REMOTE_TOKEN_ENV = "CHOREGOS_RUN_REMOTE_TOKEN"  # noqa: S105 - a variable na
 class AgentContainer(Model):
     """A hosted agent's container (ADR 0080), started beside the runner in the run's pod and sharing
     its network namespace. Its environment is `choregos_core.hosted.sidecar_env`: no secret, only
-    loopback addresses. No Secret, no volume of the runner is ever given to it."""
+    loopback addresses. No Secret, no volume of the runner is ever given to it: with a `workspace`,
+    it gets a volume of its own that the runner fills with a copy of the working tree (S41-18)."""
 
     image: str = Field(pattern=r"@sha256:[0-9a-f]{64}$")
     env: dict[str, str] = Field(default_factory=dict)
     port: int = 8088
+    #: `read` mounts the copy read-only, `write` lets the container change it; `none`, no volume.
+    workspace: Literal["none", "read", "write"] = "none"
     #: How long the container is given between SIGTERM and SIGKILL.
     termination_grace_s: int = 30
     cpu: str = "1"

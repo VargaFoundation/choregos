@@ -39,11 +39,12 @@ from .backends import get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, get_settings
-from .dod import run_checks
+from .dod import CheckOutcome, DodReport, run_checks
 from .egress import authenticate_proxy_env
 from .exits import Exit
 from .guardrails import GuardRails
 from .hosted import REPORT_HOSTED_IMAGE, REPORT_HOSTED_PROVENANCE, REPORT_RESPONSE, result_of, run_hosted
+from .hosted_workspace import HostedWorkspaceError, export_tree, import_tree
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .job import REPORT_COMMAND, REPORT_IMAGE, command_digest, job_result, run_job, write_fields
 from .knowledge import KnowledgeInvalidError, lay_out
@@ -711,12 +712,25 @@ class Runner:
         the step over Foundry's contract and reaches the platform only through the runner's loopback
         listeners — the model (with the run's key, `max_turns` calls at most), the granted MCP servers
         (judged by the guard rails) and a CONNECT proxy (the step's network). Same checks and
-        publication as any step."""
+        publication as any step.
+
+        With a workspace (S41-18), the container works in a copy of the working tree, never in the
+        checkout: under `write`, what it changed comes back file by file through the guard rails,
+        then the scope check, and the runner commits and pushes it with its own credentials."""
         assert stage_input.hosted is not None
         hosted = stage_input.hosted
         guards = GuardRails(
             stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
         )
+        shared = self.settings.hosted_workspace
+        if hosted.workspace != "none":
+            try:
+                copied = await asyncio.to_thread(export_tree, workspace.path, shared)
+            except (HostedWorkspaceError, OSError) as exc:
+                await journal.record("run.failed", {"phase": "hosted_workspace", "error": str(exc)[:500]})
+                await journal.flush()
+                return RunOutcome(Exit.CLONE_FAILED, detail=str(exc))
+            await journal.record("hosted.workspace", {"mode": hosted.workspace, "files": copied})
         model = ModelProxy(stage_input, journal.record, transport=self.model_transport)
         mcp = McpProxy(stage_input, journal.record, guards, transport=self.mcp_transport)
         # After `authenticate_proxy_env`: the pod's egress proxy with the run's credentials, which
@@ -735,6 +749,20 @@ class Runner:
             await journal.record("run.failed", {"phase": "loopback", "error": str(exc)[:500]})
             await journal.flush()
             return RunOutcome(Exit.AGENT_UNREACHABLE, detail=str(exc))
+        scope_blocked: list[str] | None = None
+        if hosted.workspace == "write":
+            # Before `result_of`, which writes `.choregos/result.json`: the container's never comes back.
+            imported = await import_tree(shared, workspace, guards)
+            for refused in imported.refused:
+                await journal.record("hosted.write_refused", {"path": refused.path, "reason": refused.reason})
+            await journal.record(
+                "hosted.workspace.imported", {"written": imported.written, "deleted": imported.deleted}
+            )
+            # The net behind the guard rails, as for an ACP agent: what is out of scope is reverted.
+            scope = await check_scope(workspace, depart, guards.allowed_paths)
+            if scope.reverted:
+                await journal.record("scope.reverted", {"paths": scope.reverted})
+            scope_blocked = scope.remaining
         code = Exit.OK
         result: StageResult | None
         agent_exit: Literal["normal", "crashed", "timeout", "limit"]
@@ -761,12 +789,7 @@ class Runner:
             result = fallback_result("hosted_failed", step.error or "the container failed")
         if result.status is not StageStatus.DONE:
             await journal.record("run.stopped", {"reason": result.reason, "detail": (step.error or "")[:500]})
-        # The container does not work in the repository (`workspace: none`): the project's test, lint
-        # and typecheck commands would judge an unchanged checkout. Only its fact commands run.
-        no_repo = stage_input.project.model_copy(
-            update={"test_command": "", "lint_command": "", "typecheck_command": ""}
-        )
-        report = await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
+        report = await self._hosted_checks(journal, stage_input, workspace)
         reports = {
             REPORT_HOSTED_IMAGE: hosted.image,
             REPORT_HOSTED_PROVENANCE: f"hosted:{hosted.agent_slug}@{hosted.agent_version}",
@@ -786,9 +809,37 @@ class Runner:
                 duration_s=round(time.monotonic() - self.started, 2),
                 agent_exit=agent_exit,
             ),
+            scope_blocked=scope_blocked,
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
         return RunOutcome(code, final, transcript_path=journal.path, detail=step.error or "")
+
+    async def _hosted_checks(
+        self, journal: EventJournal, stage_input: StageInput, workspace: Workspace
+    ) -> DodReport:
+        """The checks a hosted step gets. Without `write` the container did not change the checkout:
+        the project's test, lint and typecheck commands would judge an unchanged tree, so only its
+        fact commands run. Under `write`, none runs: each would execute, inside the runner, code the
+        container wrote, as the runner's user, beside the run's token and gateway key (in the
+        runner's environment, which `/proc/<pid>/environ` gives any process of that user) and the
+        git token the runner pushes with. The pull request's own CI judges the change, without the
+        run's credentials."""
+        assert stage_input.hosted is not None
+        if stage_input.hosted.workspace == "write":
+            await journal.record(
+                "checks.skipped",
+                {"reason": "a hosted container wrote the tree: its code never runs beside the credentials"},
+            )
+            return DodReport(
+                checks=[
+                    CheckOutcome(name=name, command="", ok=False, skipped=True)
+                    for name in ("tests", "lint", "typecheck")
+                ]
+            )
+        no_repo = stage_input.project.model_copy(
+            update={"test_command": "", "lint_command": "", "typecheck_command": ""}
+        )
+        return await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
 
     async def _poser_les_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any

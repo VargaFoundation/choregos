@@ -99,6 +99,18 @@ async def test_the_pod_runs_the_runner_serving_the_session_beside_the_pinned_ima
     assert KEY not in str(stored) and spec.run_token not in str(stored)
 
 
+async def test_a_session_pod_gets_no_workspace_whatever_the_version_asks(setup: Fixture) -> None:
+    """S41-18: a session works on no repository, so a version published with `workspace: write`
+    still gets no shared tree in its session pod."""
+    await _agent(setup, _hosted(workspace="write"))
+    session_id = await _session(setup)
+    await pod_activities.start_session_pod({"session_id": session_id})
+    (spec,) = setup.adapters.executor.started
+    assert spec.agent_container is not None and spec.agent_container.workspace == "none"
+    assert "CHOREGOS_WORKSPACE" not in spec.agent_container.env
+    assert (await _record(session_id)).stage_input["hosted"]["workspace"] == "none"
+
+
 async def test_a_second_start_starts_nothing(setup: Fixture) -> None:
     await _agent(setup, _hosted())
     session_id = await _session(setup)
