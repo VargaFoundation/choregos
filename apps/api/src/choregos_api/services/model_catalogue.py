@@ -5,7 +5,8 @@ and say what a switch to `curated` would refuse."""
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from choregos_core import CatalogueEntry, GatewayModel, ModelPolicy, Spend, utcnow
 from choregos_core.models import PLATFORM_PROFILES, TIERS, USAGES
@@ -257,3 +258,58 @@ def usable_names(policy: ModelPolicy, names: Iterable[str], role: str | None, us
 
 
 __all__ = ["MODES", "TIERS", "USAGES"]
+
+
+@dataclass(frozen=True)
+class Price:
+    """What a model costs per 1 000 tokens, and who says so: the organisation's override, the
+    gateway's facts, or nobody (`none`: the spend cannot be told)."""
+
+    input_per_1k: float | None
+    output_per_1k: float | None
+    priced_by: Literal["gateway", "override", "none"]
+
+
+def price_from(row: ModelCatalogueRow | None, facts: dict[str, Any] | None) -> Price:
+    """The one rule of price resolution (ADR 0060): an override (both prices) wins, then the gateway's
+    facts (the catalogue row's, else the gateway's live ones), else none."""
+    if row is not None and row.input_per_1k_override is not None and row.output_per_1k_override is not None:
+        return Price(row.input_per_1k_override, row.output_per_1k_override, "override")
+    if facts is None and row is not None:
+        facts = row.gateway_facts or None
+    if facts and (facts.get("input_cost_per_1k") is not None or facts.get("output_cost_per_1k") is not None):
+        return Price(facts.get("input_cost_per_1k"), facts.get("output_cost_per_1k"), "gateway")
+    return Price(None, None, "none")
+
+
+async def price_of(session: AsyncSession, org_id: str, model: str) -> Price:
+    """The price of `model` for an organisation: its catalogue row, else (open mode) the gateway's."""
+    row = (
+        await session.execute(
+            select(ModelCatalogueRow).where(
+                ModelCatalogueRow.org_id == org_id, ModelCatalogueRow.model_name == model
+            )
+        )
+    ).scalar_one_or_none()
+    price = price_from(row, None)
+    if price.priced_by != "none":
+        return price
+    organisation = await session.get(Organization, org_id)
+    if organisation is None or org_settings(organisation)["mode"] != "open":
+        return price
+    try:
+        from .gateway import org_gateway
+
+        gateway = await org_gateway(session, org_id)
+        for listed in await gateway.list_models():
+            if listed.model_name == model:
+                return price_from(
+                    row,
+                    {
+                        "input_cost_per_1k": listed.input_cost_per_1k,
+                        "output_cost_per_1k": listed.output_cost_per_1k,
+                    },
+                )
+    except Exception:  # an unreachable gateway leaves the model unpriced, it does not stop an estimate
+        return price
+    return price

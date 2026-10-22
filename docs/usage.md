@@ -1632,10 +1632,22 @@ document and section it comes from. The platform keeps only principles whose cit
 the base (the others are listed as dropped), writes `SKILL.md` with each principle's sources and
 `references/sources.md` with every document's sha256, and publishes the skill
 `<base>-principles` as a new version **`pending_review`**, whatever its risk tier: no agent carries
-it until an administrator approves it on the skill's page. One model call with the whole corpus in
-the prompt: a base over 400 000 characters is refused, with its size, the limit and its three biggest
-documents (leave large spreadsheets out). A distillation that shows `running` for more than 30 minutes
-(its replica restarted) no longer blocks a new one; a restart marks it failed.
+it until an administrator approves it on the skill's page.
+
+A base is read **in passes**. **Distil** first shows an estimate, with no model call: characters and
+tokens, documents, parts, model calls, the model and its price (`GET …/distill/estimate`; "not priced"
+when the model has no price in `/admin/models`), and the biggest documents, each with a toggle to leave
+it out (`exclude`, globs on the file name such as `*.xlsx`). Confirming starts the run with a cap of the
+estimate plus 25 %. The corpus is cut into parts of at most `CHOREGOS_KNOWLEDGE_DISTILL_PART_CHARS`
+(300 000 characters, whole documents in file-name order, a bigger document cut on its headings); each
+part is distilled once, the candidates are merged (duplicates joined, sources united, none invented),
+and the result is published. The page shows the phase and the spend ("map 3/8 - $0.92 spent"). A call
+is made only if the spend so far plus its estimate stays under the budget
+(`CHOREGOS_KNOWLEDGE_DISTILL_BUDGET_USD`, 10 by default, or the cap if lower): otherwise the run stops,
+says so and publishes nothing. A base needing more than `CHOREGOS_KNOWLEDGE_DISTILL_MAX_PARTS` (16)
+parts is refused with its biggest documents. Each call is kept by the digest of what it read: a retry
+costs nothing, and distilling again after one document changed pays for that document's part only. A
+distillation that shows `running` with no progress for 30 minutes no longer blocks a new one.
 
 ## 4. Write the policy
 

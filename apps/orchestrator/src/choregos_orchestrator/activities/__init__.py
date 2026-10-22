@@ -29,6 +29,11 @@ from . import (
 
 ALL_ACTIVITIES = [
     knowledge.sync_knowledge_source,
+    knowledge.plan_distillation,
+    knowledge.distill_part,
+    knowledge.reduce_distillation,
+    knowledge.publish_distillation,
+    knowledge.fail_distillation,
     hosted_build.claim_hosted_build,
     hosted_build.build_hosted_image,
     hosted_build.record_hosted_build,

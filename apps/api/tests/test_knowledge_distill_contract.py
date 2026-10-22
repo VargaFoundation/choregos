@@ -1,6 +1,6 @@
 """Contract of the distillation in passes (S42-10b, ADR 0001): the estimate route, the optional
 request body, and the `distillation` object's new members are declared in `openapi.yaml` and the DTOs
-say the same thing. The behaviour behind them lands with S42-10c: until then they answer 501."""
+say the same thing. The behaviour behind them is S42-10c (`test_knowledge_distillation_passes.py`)."""
 
 from __future__ import annotations
 
@@ -34,17 +34,16 @@ def test_the_estimate_and_the_optional_body_are_declared() -> None:
     assert "409" in distill["responses"] and "422" in distill["responses"]
 
 
-async def test_the_estimate_is_not_served_before_s42_10c(client: AsyncClient, admin: str) -> None:
+async def test_the_estimate_answers_for_a_known_base_only(client: AsyncClient, admin: str) -> None:
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
-    answer = await client.get(f"{BASE}/architecture/distill/estimate")
-    assert answer.status_code == 501 and answer.json()["code"] == "distill_in_passes_not_implemented"
+    empty = await client.get(f"{BASE}/architecture/distill/estimate")
+    assert empty.status_code == 200 and empty.json()["documents"] == 0
+    assert "no converted document" in empty.json()["refused_reason"]
     assert (await client.get(f"{BASE}/unknown/distill/estimate")).status_code == 404
 
 
-async def test_a_body_is_validated_and_never_silently_ignored(client: AsyncClient, admin: str) -> None:
+async def test_a_body_is_validated(client: AsyncClient, admin: str) -> None:
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
     too_many = await client.post(f"{BASE}/architecture/distill", json={"exclude": ["*.xlsx"] * 21})
     assert too_many.status_code == 422
-    capped = await client.post(f"{BASE}/architecture/distill", json={"max_usd": 2.5})
-    assert capped.status_code == 501  # a cap nothing enforces is refused, not dropped
     assert (await client.post(f"{BASE}/architecture/distill", json={})).status_code == 202

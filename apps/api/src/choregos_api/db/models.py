@@ -1389,6 +1389,36 @@ class KnowledgeSource(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class KnowledgeDistillationPart(Base, PkMixin, TimestampMixin):
+    """One model call of a distillation in passes, kept by the digest of what it read (S42-10c, ADR 0008).
+
+    A part (`part_index >= 0`) holds the principles one slice of the corpus yielded; the merge
+    (`part_index == -1`) holds the final list. The digest covers the model, the instructions and the
+    text read, so a replayed activity, or a new distillation after one document changed, finds the
+    answer instead of paying for it again.
+    """
+
+    __tablename__ = "knowledge_distillation_parts"
+    __table_args__ = (
+        UniqueConstraint("knowledge_base_id", "digest", name="uq_knowledge_distillation_parts"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    digest: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(200))
+    part_index: Mapped[int] = mapped_column(Integer)
+    documents: Mapped[list[str]] = mapped_column(Json, default=list)
+    characters: Mapped[int] = mapped_column(Integer, default=0)
+    answer: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    #: done | failed
+    status: Mapped[str] = mapped_column(String(16), default="done")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class KnowledgeChunk(Base, PkMixin, TimestampMixin):
     """A contextual chunk of a document of an `index` knowledge base (S33-03, ADR 0051).
 
