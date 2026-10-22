@@ -1916,6 +1916,32 @@ paths:
         "303": { description: Redirect to the administration page }
         "403": { $ref: "#/components/responses/Forbidden" }
         "502": { description: The provider refused the exchange, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/hosted-sources:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: uploadHostedSource
+      description: "A hosted agent's source zip (ADR 0080 §9), stored under its sha256, which a zip version's `source.sha256` names. Flat (the files at the root, not under one folder), at most 64 MiB and 2,000 files; a symbolic link, an absolute, `\\` or `..` path, an encrypted entry or a name twice refuses it. Asks the right to create an agent somewhere in the organisation; the same bytes twice are one source."
+      requestBody:
+        required: true
+        content: { application/zip: { schema: { type: string, format: binary } } }
+      responses:
+        "201": { description: Stored, content: { application/json: { schema: { $ref: "#/components/schemas/HostedSource" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: The object store refused, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/hosted-sources/{sha256}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: sha256, in: path, required: true, schema: { type: string, pattern: "^sha256:[0-9a-f]{64}$" } }
+    get:
+      tags: [agents]
+      operationId: getHostedSource
+      description: An uploaded source, read back from the object store and checked again.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HostedSource" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -4441,10 +4467,19 @@ components:
       required: [type, sha256, runtime, entry_point]
       properties:
         type: { type: string, enum: [zip] }
-        sha256: { type: string, pattern: "^sha256:[0-9a-f]{64}$", description: "the uploaded source (`POST /agents/{slug}/sources`)" }
+        sha256: { type: string, pattern: "^sha256:[0-9a-f]{64}$", description: "the uploaded source (`POST /orgs/{org}/hosted-sources`)" }
         runtime: { type: string, enum: [python_3_12, python_3_13, python_3_14, node_22, dotnet_10] }
         entry_point: { type: array, minItems: 1, maxItems: 64, items: { type: string, minLength: 1, maxLength: 1024 }, description: "the argv started in the built image, e.g. [python, main.py]" }
         dependency_resolution: { type: string, enum: [remote_build, bundled], default: remote_build, description: "`remote_build` installs the declared dependencies at build time; `bundled`: the zip carries them" }
+    HostedSource:
+      type: object
+      description: "An uploaded source zip (ADR 0080 §9)."
+      required: [sha256, size_bytes, files]
+      properties:
+        sha256: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        size_bytes: { type: integer, minimum: 1 }
+        files: { type: array, maxItems: 2000, items: { type: string } }
+        dependencies: { type: [string, "null"], enum: [requirements.txt, pyproject.toml, null], description: "the file at the root that declares the dependencies `remote_build` installs" }
     HostedBuild:
       type: object
       description: "The build of a zip source (ADR 0080), at publication, keyed by its inputs: the same inputs never build twice."

@@ -117,6 +117,15 @@ def _owns_project(principal: Principal, org: str, project: str | None) -> bool:
     return _holds_anywhere(principal, org, Permission.AGENT_PROJECT_MANAGE)
 
 
+def may_create_somewhere(principal: Principal, org: str) -> bool:
+    """May create an agent at some scope of the organisation: what uploading its source asks."""
+    return (
+        is_admin(principal, org)
+        or _may_create_personal(principal, org)
+        or _owns_project(principal, org, None)
+    )
+
+
 def _belongs_to(principal: Principal, org: str, project: str | None) -> bool:
     return project is not None and principal.role_for(org, project) is not None
 

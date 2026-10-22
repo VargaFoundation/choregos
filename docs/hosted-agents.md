@@ -36,7 +36,7 @@ three runtimes; the stage input carries `hosted` and `prompt` steps. Nothing run
 - `CHOREGOS_HOSTED_COSIGN`: `enforce` refuses an image without a trusted signature, `warn` publishes it
   and logs `hosted.signature_unverified`, `off` (the default) does not ask. No real verifier is wired
   yet (S41-14): under `enforce` every image is refused outside the fakes;
-- a hosted **zip** source is refused: the source upload (S41-07) and the build (S41-08) come first;
+- a hosted **zip** source names a zip uploaded first (S41-07, below); it is built in S41-08;
 - a step whose agent is hosted stops before any key is minted, with the reason (`AgentIndisponible`,
   not retried); voice agents are never steps.
 
@@ -147,5 +147,37 @@ built-in tool, and fetch what the SDK downloads at first use (the Copilot runtim
 built. The blocking CI runs the reference; `.github/workflows/hosted-agent-examples.yml` builds the
 six images and runs the suite against each, nightly, without blocking.
 
-The rest of the stream — the zip sources, the builds, the sessions and the console — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-07 to S41-21.
+**A source zip is uploaded, checked and keyed for its build (S41-07).** `POST
+/orgs/{org}/hosted-sources` (`application/zip`, by whoever may create an agent somewhere in the
+organisation) stores the zip in the object store under its sha256; the same bytes twice are one
+object. The zip must be **flat** — the agent's files at its root: a zip of the folder rather than of
+its content is refused with the reason, never unwrapped — and holds at most 2,000 files and 64 MiB,
+counted as it is read; a symbolic link, an absolute, `\` or `..` path, an encrypted entry or a name
+twice refuses it. A version then names it:
+
+```json
+{ "type": "zip", "sha256": "sha256:…", "runtime": "python_3_13",
+  "entry_point": ["python", "main.py"], "dependency_resolution": "remote_build" }
+```
+
+Where the version is written (create, publish, trial, template install), the zip is read back from
+the store, refused if its bytes no longer hash to its name, and checked against the version: the
+script the entry point runs (`python main.py`, `./start.sh`) is in the zip (`python -m module` and a
+bare command such as `uvicorn` come from the dependencies), and `remote_build` finds a
+`requirements.txt` or a `pyproject.toml` at the root. `bundled` installs nothing: the zip carries its
+dependencies under `site-packages/` (`pip install --target site-packages -r requirements.txt`), which
+is put on `PYTHONPATH`.
+
+The platform writes the Dockerfile itself — a `Dockerfile` in the zip is not read: `FROM` the
+runtime's base image pinned by digest (`python:3.12-slim-bookworm` and `python:3.13-slim-bookworm`
+from Docker Hub; the operator replaces them with `CHOREGOS_HOSTED_BASE_IMAGES`, and a base without a
+digest is refused), the dependencies installed as root, the files in `/app`, `USER 1000`, the port,
+and the entry point in exec form. The version gets `build: {status: pending, key, provenance}`: the
+key is the hash of that Dockerfile and of the zip, so any input that changes (the zip, the runtime,
+the dependency mode, the entry point, the port, the base image, the template's version) changes it,
+and nothing else does; a `build` the caller writes is replaced. A step refuses the version until a
+build is `ready` (`hosted_build_not_ready`). Node, .NET and Python 3.14 have no base image yet
+(S41-20): such a version is refused.
+
+The rest of the stream — the builds, the sessions and the console — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-08 to S41-21.

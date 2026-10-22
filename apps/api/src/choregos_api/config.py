@@ -160,6 +160,9 @@ class Settings(BaseSettings):
     #: Whether a hosted image must carry a trusted signature: `off`, `warn` (log and publish) or
     #: `enforce` (refuse at publication).
     hosted_cosign: Literal["off", "warn", "enforce"] = "off"
+    #: The base image of each zip runtime, `ref@sha256:…`, over the shipped ones (ADR 0080 §9):
+    #: `{"python_3_13": "registry.internal/python:3.13-slim@sha256:…"}`.
+    hosted_base_images: dict[str, str] = Field(default_factory=dict)
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under

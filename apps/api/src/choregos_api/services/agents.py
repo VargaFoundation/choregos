@@ -77,17 +77,16 @@ def erreurs_d_une_version(spec: AgentSpec) -> None:
 
             allowlisted_ref(spec.runtime.source)
         else:
-            # ADR 0080 §9: a zip is accepted once it was uploaded and built.
-            raise unprocessable(
-                "the agent's hosted source cannot be accepted",
-                [
-                    {
-                        "loc": ["runtime", "source"],
-                        "msg": "no zip source is accepted yet: the source upload (S41-07) and the "
-                        "build (S41-08) are not delivered",
-                    }
-                ],
-            )
+            # ADR 0080 §9: the zip itself is read where the version is written (`pin_hosted_runtime`).
+            from .hosted_sources import SourceRefused, base_image
+
+            try:
+                base_image(spec.runtime.source.runtime)
+            except SourceRefused as exc:
+                raise unprocessable(
+                    "the agent's hosted source cannot be built",
+                    [{"loc": ["runtime", "source", "runtime"], "msg": str(exc)}],
+                ) from exc
 
 
 def _outils(spec: AgentSpec) -> set[str]:
