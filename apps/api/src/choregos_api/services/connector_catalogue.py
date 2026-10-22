@@ -49,6 +49,7 @@ FAMILIES: dict[str, str] = {
     "network_policy": "Network operations",
     "web_server": "Network operations",
     "notify": "Notifications",
+    "web_search": "Web search",
     "mcp": "MCP servers",
 }
 
@@ -62,6 +63,7 @@ FAMILY_ORDER = (
     "Directory",
     "Network operations",
     "Notifications",
+    "Web search",
     "MCP servers",
 )
 

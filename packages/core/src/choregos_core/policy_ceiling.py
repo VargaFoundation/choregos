@@ -79,6 +79,21 @@ class CeilingNetwork(_Strict):
         return None if value is None else list(dict.fromkeys(validate_pattern(p) for p in value))
 
 
+class CeilingWebSearch(_Strict):
+    """The organisation's bound on the built-in `web_search` (ADR 0083). Without this section the tool
+    is not offered: a capability is born closed."""
+
+    mode: Literal["allow", "deny"] = "deny"
+    #: The backend types a search may go through (`brave`, `tavily`...); `None`: any shipped one.
+    backends: list[str] | None = None
+    #: The longest a backend may keep a query; `None`: no cap. An unknown retention fails any cap.
+    max_query_retention_days: int | None = Field(default=None, ge=0)
+    #: Whether a backend may reuse queries; an unknown reuse fails `false`.
+    allow_query_reuse: bool = False
+    #: Where queries may be processed; `None`: anywhere. An unknown region fails any list.
+    regions: list[str] | None = None
+
+
 class PolicyCeiling(_Strict):
     """The caps an organisation sets on every project policy."""
 
@@ -87,6 +102,7 @@ class PolicyCeiling(_Strict):
     scope: CeilingScope = Field(default_factory=CeilingScope)
     findings: CeilingFindings = Field(default_factory=CeilingFindings)
     network: CeilingNetwork = Field(default_factory=CeilingNetwork)
+    web_search: CeilingWebSearch | None = None
 
 
 @dataclass(frozen=True)
@@ -276,10 +292,45 @@ def _network_excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess
         )
 
 
+def _set_web_search(name: str, cap: int | bool | str) -> Callable[[Policy], None]:
+    def lower(p: Policy) -> None:
+        setattr(p.web_search, name, cap)
+
+    return lower
+
+
+def _web_search_excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
+    """A project narrows `web_search`, never widens it. A ceiling without the section reads nothing:
+    the tool is then not offered at all, so no project value is above it. The project's `mode: allow`
+    (the default) is not an excess under a ceiling's `deny`: it means "as far as the ceiling lets",
+    and `shortfalls` applies both."""
+    bound = ceiling.web_search
+    if bound is None:
+        return
+    own = policy.web_search
+    cap = bound.max_query_retention_days
+    if cap is not None and own.max_query_retention_days is not None and own.max_query_retention_days > cap:
+        yield Excess(
+            "web_search.max_query_retention_days",
+            own.max_query_retention_days,
+            cap,
+            _set_web_search("max_query_retention_days", cap),
+        )
+    if not bound.allow_query_reuse and own.allow_query_reuse:
+        yield Excess(
+            "web_search.allow_query_reuse",
+            "true",
+            "false",
+            _set_web_search("allow_query_reuse", False),
+            "`true` is refused, the organisation forbids backends that reuse queries",
+        )
+
+
 def _excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
     yield from _budget_excesses(policy, ceiling)
     yield from _other_excesses(policy, ceiling)
     yield from _network_excesses(policy, ceiling)
+    yield from _web_search_excesses(policy, ceiling)
 
 
 def widenings(policy: Policy, ceiling: PolicyCeiling | None) -> list[str]:
@@ -310,4 +361,4 @@ def clamp(policy: Policy, ceiling: PolicyCeiling | None) -> tuple[Policy, list[s
     return clamped, said
 
 
-__all__ = ["CeilingNetwork", "PolicyCeiling", "clamp", "widenings"]
+__all__ = ["CeilingNetwork", "CeilingWebSearch", "PolicyCeiling", "clamp", "widenings"]

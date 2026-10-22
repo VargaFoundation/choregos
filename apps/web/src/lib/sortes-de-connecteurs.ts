@@ -9,6 +9,7 @@ const LIBELLES: Record<string, string> = {
   shipping: "carrier (shipping)",
   access_control: "physical access (badges)",
   marketdata: "market data (prices)",
+  web_search: "web search",
   mcp: "MCP server",
   tracker: "work tracker",
   scm: "source code",

@@ -74,3 +74,6 @@ release_train:
     auto_rollback: true
     freeze_on_rollback: true
     terraform: { via: atlantis, apply_requires_approval: true }
+# The built-in web_search (ADR 0083): only a backend that keeps no query and reuses none. The
+# organisation's ceiling still has to open the tool.
+web_search: { max_query_retention_days: 0, allow_query_reuse: false }

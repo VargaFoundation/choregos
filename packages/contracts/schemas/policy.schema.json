@@ -192,6 +192,18 @@
       "type": "object",
       "description": "Configuration per environment (docs/plan/05 §5.2).",
       "additionalProperties": { "$ref": "#/$defs/trainEnv" }
+    },
+    "web_search": {
+      "type": "object",
+      "description": "The built-in web_search tool (ADR 0083): a project can only narrow the organisation's ceiling, which opens it.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["allow", "deny"], "default": "allow" },
+        "max_query_retention_days": { "type": ["integer", "null"], "minimum": 0,
+          "description": "The longest a backend may keep a query; null: the ceiling's bound only." },
+        "allow_query_reuse": { "type": "boolean", "default": false,
+          "description": "Whether a backend may reuse queries (train, rank, re-index)." }
+      }
     }
   },
   "$defs": {

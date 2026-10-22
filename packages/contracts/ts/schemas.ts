@@ -306,6 +306,14 @@ export type Policy = {
   release_train?: {
     [key: string]: PolicyTrainEnv;
   };
+  /** The built-in web_search tool (ADR 0083): a project can only narrow the organisation's ceiling, which opens it. */
+  web_search?: {
+    mode?: "allow" | "deny";
+    /** The longest a backend may keep a query; null: the ceiling's bound only. */
+    max_query_retention_days?: number | null;
+    /** Whether a backend may reuse queries (train, rank, re-index). */
+    allow_query_reuse?: boolean;
+  };
 };
 
 export type ProjectProfile = string | {

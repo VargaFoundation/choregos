@@ -132,6 +132,18 @@
   "type": "jira"
  },
  {
+  "kind": "web_search",
+  "type": "brave"
+ },
+ {
+  "kind": "web_search",
+  "type": "firecrawl"
+ },
+ {
+  "kind": "web_search",
+  "type": "tavily"
+ },
+ {
   "kind": "web_server",
   "type": "nginx"
  }
