@@ -48,7 +48,11 @@ organisations must assume **a member of one will try to read another**.
   what is inside it: **method, path, headers and User-Agent are invisible to it**, and one tunnel can
   carry many HTTP/2 requests, so its rate limit is a *connection* rate, not a request rate. robots.txt
   and method rules can hold only where the platform makes the request (the broker, the crawlers, the
-  governed `web_fetch` tool). Claude Code's own `WebSearch` runs **at the model provider**, outside
+  governed `web_fetch` tool). The governed `web_search` (ADR 0083) sends the query from the API, under
+  the ceiling, refuses a query redaction would change, and records only its fingerprint; but what a
+  backend keeps of a query is **declared, not verified**: the shipped backends declare nothing, and an
+  organisation's `data_handling` override is believed on its `terms_ref`.
+  Claude Code's own `WebSearch` runs **at the model provider**, outside
   every Choregos network layer: the only lever is to deny the tool (`builtin_web_tools`), and that is
   a setting in the pod, not a wall. The runner's guardrails are a **net**: the agent shares the pod,
   and a `curl` from Bash is not a URL permission request. On the Diametral tenant the infra's FQDN

@@ -153,6 +153,35 @@ def _objet(proprietes: dict[str, Any], requis: tuple[str, ...] = ()) -> dict[str
 _TEXTE: dict[str, Any] = {"type": "string"}
 _ENTIER: dict[str, Any] = {"type": "integer"}
 
+#: What every `web_search` type configures beside its key (ADR 0083).
+_WEB_SEARCH_CONFIG: dict[str, Any] = {
+    "timeout_s": {"type": "number", "default": 20},
+    "price_usd_per_query": {
+        "type": "number",
+        "minimum": 0,
+        "default": 0,
+        "description": "what one query costs under the organisation's plan, written to the ledger",
+    },
+    "requests_per_minute": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 30,
+        "description": "the organisation's queries to this backend per minute; beyond, a 429",
+    },
+    "data_handling": {
+        "type": "object",
+        "additionalProperties": False,
+        "description": "a stricter declaration than the backend's, from the organisation's contract "
+        "(`terms_ref` required)",
+        "properties": {
+            "query_retention_days": {"type": "integer", "minimum": 0},
+            "query_reuse": {"type": "boolean"},
+            "region": _TEXTE,
+            "terms_ref": _TEXTE,
+        },
+    },
+}
+
 from .familles import FAMILLES as _FAMILLES  # noqa: E402 - après le registre
 from .familles import OPERATIONS_MARKETDATA as _OPERATIONS_MARKETDATA  # noqa: E402 - after the registry
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA  # noqa: E402 - après le registre
@@ -507,6 +536,38 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("stooq_api_key", "alphavantage_api_key"),
         operations=_OPERATIONS_MARKETDATA,
     ),
+    # The `web_search` family (S40-01g, ADR 0083): called by the API's built-in `web_search`, never by a
+    # runner. Each type declares what it does with the queries (`choregos_adapters.web_search`); the
+    # organisation may only make that stricter, naming its terms.
+    ("web_search", "brave"): ConnectorTypeSpec(
+        "Brave Search API",
+        ("web_search",),
+        _objet(_WEB_SEARCH_CONFIG),
+        ("api_key",),
+        egress=lambda _cfg: [("api.search.brave.com", 443)],
+    ),
+    ("web_search", "tavily"): ConnectorTypeSpec(
+        "Tavily search (links and snippets only)",
+        ("web_search",),
+        _objet(_WEB_SEARCH_CONFIG),
+        ("api_key",),
+        egress=lambda _cfg: [("api.tavily.com", 443)],
+    ),
+    ("web_search", "firecrawl"): ConnectorTypeSpec(
+        "Firecrawl search, cloud or self-hosted (no scraping)",
+        ("web_search",),
+        _objet(
+            {
+                "base_url": {
+                    "type": "string",
+                    "default": "https://api.firecrawl.dev",
+                    "description": "Firecrawl's cloud, or the address of a self-hosted instance",
+                },
+                **_WEB_SEARCH_CONFIG,
+            }
+        ),
+        ("api_key",),
+    ),
     # Le train d'un locataire de démonstration (S21-24) : un environnement en mémoire, ou servi par le
     # processus des faux. Aucune opération exposée : c'est le train qui l'appelle, jamais un agent.
     ("cd", "demo"): ConnectorTypeSpec(
@@ -791,6 +852,19 @@ def _faux_marketdata(cfg: dict[str, Any]) -> Any:
     return FAUX_MARKETDATA
 
 
+#: The fake of the `web_search` family, shared in the process (scriptable by tests).
+FAUX_WEB_SEARCH: Any = None
+
+
+def _faux_web_search(cfg: dict[str, Any]) -> Any:
+    global FAUX_WEB_SEARCH  # noqa: PLW0603 - a shared fake, like the platform's other fakes
+    if FAUX_WEB_SEARCH is None:
+        from .fakes.web_search import FakeSearchBackend
+
+        FAUX_WEB_SEARCH = FakeSearchBackend()
+    return FAUX_WEB_SEARCH
+
+
 def _cd_de_demo(cfg: dict[str, Any]) -> Any:
     """La fabrique de `cd: demo` : refusée en staging et en prod ; servie quand elle porte une `url`."""
     from .fakes.cd_de_demo import CdDeDemo, FakeCdDeDemo
@@ -848,6 +922,27 @@ def _register_marketdata() -> None:
         register("marketdata", nom, _SPECS_LIVREES[("marketdata", nom)])(_constructeur(nom))
     register("marketdata", "composite", _SPECS_LIVREES[("marketdata", "composite")])(_composite)
     register("marketdata", "fake")(_faux_marketdata)
+
+
+def _register_web_search() -> None:
+    """The `web_search` family (S40-01g): its backends and its fake."""
+    from .web_search import BACKENDS, SearchBackend
+
+    def _constructeur(nom: str) -> Callable[[dict[str, Any]], SearchBackend]:
+        def construire(cfg: dict[str, Any]) -> SearchBackend:
+            options: dict[str, Any] = {
+                "api_key": str(cfg.get("api_key", "")),
+                "timeout_s": float(cfg.get("timeout_s", 20)),
+            }
+            if nom == "firecrawl" and cfg.get("base_url"):
+                options["base_url"] = str(cfg["base_url"])
+            return BACKENDS[nom](**options)
+
+        return construire
+
+    for nom in BACKENDS:
+        register("web_search", nom, _SPECS_LIVREES[("web_search", nom)])(_constructeur(nom))
+    register("web_search", "fake")(_faux_web_search)
 
 
 def _register_builtins() -> None:
@@ -1098,6 +1193,7 @@ def _register_builtins() -> None:
     register("web_server", "nginx", _SPECS_LIVREES[("web_server", "nginx")])(_nginx)
 
     _register_marketdata()
+    _register_web_search()
     # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
     from .mcp import ClientMcp
 
