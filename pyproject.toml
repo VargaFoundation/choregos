@@ -160,6 +160,7 @@ markers = [
   "cluster: nécessite un vrai cluster Kubernetes (CNI appliquant les NetworkPolicy)",
   "capability(executor, name): this cluster test proves that capability of that executor (S35-04)",
   "buildkit: needs a real buildkitd and a registry (S41-13, the `hosted-build` CI job)",
+  "cosign_real: runs the real cosign against a registry (CHOREGOS_COSIGN_REAL_REGISTRY); skipped without them",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
 

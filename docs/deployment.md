@@ -232,13 +232,20 @@ global:
   images:
     hostedRegistries: [ghcr.io/acme, registry.internal]   # the default, [], accepts no image source
     hostedCosign: "off"                                     # off | warn | enforce
+    hostedCosignKeySecret: ""      # a Secret holding `cosign.pub`, or keyless:
+    hostedCosignIdentity: ""       #   the certificate identity, a regular expression
+    hostedCosignIssuer: ""         #   its OIDC issuer, a regular expression
+    hostedCosignTlog: true         # false: skip Rekor, for a key whose signatures were never uploaded
+    hostedCosignPolicy: false      # render the Kyverno ClusterPolicy `choregos-hosted-images`
 ```
 
 The chart renders `CHOREGOS_HOSTED_REGISTRIES` and `CHOREGOS_HOSTED_COSIGN` on the API only. A prefix
 matches by path segment. The API reads the manifest through the organisation's egress allowlist, so the
 organisation must open the registry's host (and its token host, e.g. `ghcr.io` hands tokens from
-`ghcr.io/token`). Pulls are anonymous: a private registry is not supported yet. `enforce` refuses every
-image until a real signature verifier is configured (S41-14).
+`ghcr.io/token`). Pulls are anonymous: a private registry is not supported yet. The signature is cosign's,
+by the key or the keyless identity above; `enforce` with neither refuses every image. The signer's
+variables (`CHOREGOS_HOSTED_COSIGN_KEY`, `_IDENTITY`, `_ISSUER`, `_TLOG`) and the key's mount are on the
+API only; [`hosted-agents.md`](hosted-agents.md#signatures-by-cosign-s41-14) says what is verified.
 
 ### The `agent_sandbox` executor (the default)
 

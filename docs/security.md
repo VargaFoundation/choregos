@@ -265,7 +265,10 @@ project's memory is not sent to a remote agent.
 
 Images signed with cosign (keyless, GitHub OIDC), **SBOM and SLSA provenance attached**
 (BuildKit attestations) on `main` and on releases, Trivy on the published image before it is
-signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRun`s.
+signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRun`s. A hosted agent's
+image is verified by cosign at publication, on its pinned digest, by the operator's key or keyless
+identity, and, with `global.images.hostedCosignPolicy`, again by Kyverno at admission, init containers
+included ([`hosted-agents.md`](hosted-agents.md#signatures-by-cosign-s41-14)).
 Renovate proposes bumps; every agent bump goes through conformance. A nightly CRITICAL in
 the dependency scan fails the night and opens an issue.
 

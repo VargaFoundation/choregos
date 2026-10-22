@@ -158,3 +158,121 @@ async def test_with_signatures_off_nothing_is_verified(
     registry[0].push(REF, "image one")
     assert (await _create(client, _spec())).status_code == 201
     assert registry[1].verified == []
+
+
+SUBJECT = "https://github.com/acme/triager/.github/workflows/release.yml@refs/tags/v1.2"
+ISSUER = "https://token.actions.githubusercontent.com"
+
+
+def _cosign_answering(case: str) -> Any:
+    """`cosign verify` as a test writes it (S41-14): its answer for the pinned reference it is asked."""
+
+    async def run(argv: Any) -> tuple[int, str, str]:
+        digest = argv[-1].partition("@")[2]
+        if case == "unsigned":
+            return 10, "", "Error: no signatures found"
+        signed = FORGED if case == "wrong_digest" else digest
+        subject = (
+            "https://github.com/evil/triager/.github/workflows/release.yml" if case == "stranger" else SUBJECT
+        )
+        payload = {
+            "critical": {"image": {"docker-manifest-digest": signed}},
+            "optional": {"Subject": subject, "Issuer": ISSUER},
+        }
+        return 0, json.dumps([payload]), ""
+
+    return run
+
+
+@pytest.mark.parametrize(
+    ("case", "refusal"),
+    [
+        ("unsigned", "no signatures found"),
+        ("wrong_digest", "no signature names the pinned digest"),
+        ("stranger", "no signature is by the configured identity and issuer"),
+        ("signed", None),
+    ],
+)
+async def test_under_enforce_cosigns_verdict_decides_the_publication(
+    client: AsyncClient,
+    admin: str,
+    registry: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    refusal: str | None,
+) -> None:
+    from choregos_adapters.oci import CosignVerifier
+    from choregos_api.services.hosted_images import set_image_services
+
+    _cosign(monkeypatch, "enforce")
+    verifier = CosignVerifier(
+        identity=r"https://github\.com/acme/triager/\.github/workflows/release\.yml@refs/tags/v.*",
+        issuer=r"https://token\.actions\.githubusercontent\.com",
+        run=_cosign_answering(case),
+    )
+    set_image_services(registry[0], verifier)
+    digest = registry[0].push(REF, "image one")
+    created = await _create(client, _spec())
+    if refusal is None:
+        assert created.status_code == 201, created.text
+        assert (await _source(client, 1))["digest"] == digest
+    else:
+        assert created.status_code == 422, created.text
+        assert "no trusted signature" in created.text and refusal in created.text
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({}, "no signature verifier is configured"),
+        ({"KEY": "/etc/choregos/cosign/cosign.pub"}, None),
+        ({"IDENTITY": "https://github.com/acme/.*", "ISSUER": ISSUER}, None),
+        ({"IDENTITY": "https://github.com/acme/.*"}, "misconfigured: a keyless verifier needs both"),
+        ({"KEY": "cosign.pub", "ISSUER": ISSUER}, "misconfigured: a cosign verifier takes a public key, or"),
+        ({"IDENTITY": "(", "ISSUER": ISSUER}, "misconfigured: the keyless identity or issuer is not"),
+    ],
+)
+async def test_the_deployment_names_the_signer_and_a_wrong_name_trusts_nothing(
+    monkeypatch: pytest.MonkeyPatch, env: dict[str, str], expected: str | None
+) -> None:
+    from choregos_adapters.oci import CosignVerifier, UnconfiguredVerifier
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.services.hosted_images import image_verifier, set_image_services
+
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    for name, value in env.items():
+        monkeypatch.setenv(f"CHOREGOS_HOSTED_COSIGN_{name}", value)
+    reset_settings_cache()
+    set_image_services(None)
+    try:
+        verifier = image_verifier()
+        if expected is None:
+            assert isinstance(verifier, CosignVerifier)
+        else:
+            assert isinstance(verifier, UnconfiguredVerifier)
+            verdict = await verifier.verify(f"ghcr.io/acme/triager@{FORGED}")
+            assert not verdict.verified and expected in verdict.detail
+    finally:
+        reset_settings_cache()
+
+
+@pytest.mark.parametrize(("tlog", "skipped"), [("true", False), ("false", True)])
+def test_the_deployment_decides_whether_the_transparency_log_is_checked(
+    monkeypatch: pytest.MonkeyPatch, tlog: str, skipped: bool
+) -> None:
+    from choregos_adapters.oci import CosignVerifier
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.services.hosted_images import image_verifier, set_image_services
+
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("CHOREGOS_HOSTED_COSIGN_KEY", "/etc/choregos/cosign/cosign.pub")
+    monkeypatch.setenv("CHOREGOS_HOSTED_COSIGN_TLOG", tlog)
+    reset_settings_cache()
+    set_image_services(None)
+    try:
+        verifier = image_verifier()
+        assert isinstance(verifier, CosignVerifier)
+        argv = verifier.command(f"ghcr.io/acme/triager@{FORGED}")
+        assert ("--insecure-ignore-tlog=true" in argv) is skipped
+    finally:
+        reset_settings_cache()
