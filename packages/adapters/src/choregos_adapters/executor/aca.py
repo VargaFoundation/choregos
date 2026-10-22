@@ -150,6 +150,12 @@ class AcaExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Crée le job s'il n'existe pas, puis le déclenche. Rejouable sans double exécution."""
+        if spec.agent_container is not None:
+            raise ConfigurationError(
+                "a hosted agent's container runs beside the runner in one pod (ADR 0080), which this "
+                "executor's Container Apps job does not declare; use a Kubernetes executor for hosted "
+                "agents"
+            )
         name = self._name(spec.run_id)
         existing = await self.client.request("GET", self._path(name))
         if existing is None:

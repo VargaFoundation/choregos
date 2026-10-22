@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from choregos_contracts import HostedCall
+from choregos_contracts import HostedCall, StageInput
+
+from .domain import AgentContainer
 
 LOOPBACK_HOST = "127.0.0.1"
 MODEL_PORT = 4001
@@ -61,3 +63,23 @@ def sidecar_env(
         "NO_PROXY": f"{LOOPBACK_HOST},localhost",
         "no_proxy": f"{LOOPBACK_HOST},localhost",
     }
+
+
+def agent_container(stage_input: StageInput, *, cpu: str = "1", memory: str = "2Gi") -> AgentContainer | None:
+    """The container an executor starts beside the runner for a hosted step; `None` for any other.
+
+    Only the MCP servers the runner's proxy serves are announced: the granted ones with a URL."""
+    hosted = stage_input.hosted
+    if hosted is None:
+        return None
+    servers = [name for name, ref in stage_input.tools.mcp.items() if ref.url]
+    return AgentContainer(
+        image=hosted.image,
+        env=sidecar_env(
+            hosted, run_id=stage_input.run_id, model=stage_input.model.litellm_model, mcp_servers=servers
+        ),
+        port=hosted.port,
+        termination_grace_s=hosted.termination_grace_s,
+        cpu=cpu,
+        memory=memory,
+    )

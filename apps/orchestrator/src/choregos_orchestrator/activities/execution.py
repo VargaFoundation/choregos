@@ -22,6 +22,7 @@ from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import ExecRef, ExecStatus, StageJobSpec, utcnow
+from choregos_core.hosted import agent_container
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
 from temporalio import activity
@@ -261,6 +262,8 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
                 "choregos/run-id": stage_input.run_id,
                 "choregos/work-item": stage_input.work_item.key.replace("/", "_").replace("#", "-"),
             },
+            # A hosted agent's container beside the runner (ADR 0080): loopback addresses only.
+            agent_container=agent_container(stage_input),
         )
         try:
             ref = await bundle.adapters.executor.start(spec)

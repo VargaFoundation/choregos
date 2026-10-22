@@ -48,6 +48,8 @@ BACKEND_API_FORMAT: dict[str, ApiFormat] = {
     "code": ApiFormat.OPENAI,
     # A prompt agent (ADR 0080): the runner's tool loop speaks chat completions.
     "prompt": ApiFormat.OPENAI,
+    # A hosted agent (ADR 0080): its container's SDKs reach the loopback model, OpenAI-compatible.
+    "hosted": ApiFormat.OPENAI,
 }
 
 # Contraintes dures d'un backend sur la famille de modèles.
@@ -70,8 +72,8 @@ KNOWN_BACKEND_NAMES: tuple[str, ...] = (
 
 #: The backends a runtime fixes, never chosen by rotation (`profile:by_size`, cross-backend review):
 #: an agent written in code runs only as the `code` runtime of its version (ADR 0063), a prompt agent
-#: only as the runner's tool loop (ADR 0080).
-RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt")
+#: only as the runner's tool loop, a hosted agent only as its own container (ADR 0080).
+RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt", "hosted")
 
 
 USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval")

@@ -2,13 +2,14 @@
 """A step with its own image runs on a second executor (ADR 0072, S40-03c).
 
 `agent_sandbox` makes every sandbox from one image: the warm pool's. A step that names its own image
-(a `job` with `image:`, ADR 0056; a code agent in an operator-named image) cannot be honoured there,
-and the executor refuses it. On a deployment whose default executor is `agent_sandbox` that would make
-those steps impossible, so `RoutingExecutor` sends them to a second executor (`k8s_job` by default).
+(a `job` with `image:`, ADR 0056; a code agent in an operator-named image), or a hosted agent's
+container beside the runner (ADR 0080), cannot be honoured there, and the executor refuses it. On a
+deployment whose default executor is `agent_sandbox` that would make those steps impossible, so
+`RoutingExecutor` sends them to a second executor (`k8s_job` by default).
 
-The choice is made once, at `start`, on `spec.runner_image`. Everything after is routed by `ref.kind`,
-which the orchestrator persists per run (`runs.executor_kind`): status, logs, cancel, renew, suspend
-and resume reach the executor that started the run.
+The choice is made once, at `start`, on `spec.runner_image` and `spec.agent_container`. Everything
+after is routed by `ref.kind`, which the orchestrator persists per run (`runs.executor_kind`):
+status, logs, cancel, renew, suspend and resume reach the executor that started the run.
 """
 
 from __future__ import annotations
@@ -35,6 +36,9 @@ class RoutingExecutor:
         return getattr(self.primary, "kind", None)
 
     def _is_custom(self, spec: StageJobSpec) -> bool:
+        # A hosted agent's container beside the runner (ADR 0080): no pool sandbox has one.
+        if spec.agent_container is not None:
+            return True
         return bool(spec.runner_image) and spec.runner_image != self.pool_image
 
     def _delegate(self, ref: ExecRef) -> Executor:
