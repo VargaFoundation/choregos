@@ -1115,8 +1115,14 @@ class AgentSessionRecord(Base, PkMixin, TimestampMixin):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    #: Why it closed: `closed`, `expired`, `budget_exceeded`, `model_error`.
+    #: Why it closed: `closed`, `expired`, `idle`, `budget_exceeded`, `model_error`, `pod_failed`.
     reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: A hosted session's pod (S41-11), as its workflow last wrote it: `{state, kind, name,
+    #: namespace}`, `state` one of `requested`, `running`, `stopped`. Null before the first response.
+    pod: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: What a hosted session's runner reads at start (`GET /internal/agent-sessions/{id}/input`): no
+    #: gateway key, no token — those reach the pod through its Secret only.
+    stage_input: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class AgentSessionEvent(Base, PkMixin):

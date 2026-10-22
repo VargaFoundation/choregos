@@ -65,14 +65,25 @@ def sidecar_env(
     }
 
 
-def agent_container(stage_input: StageInput, *, cpu: str = "1", memory: str = "2Gi") -> AgentContainer | None:
+def agent_container(
+    stage_input: StageInput,
+    *,
+    cpu: str = "1",
+    memory: str = "2Gi",
+    mcp_servers: Iterable[str] | None = None,
+) -> AgentContainer | None:
     """The container an executor starts beside the runner for a hosted step; `None` for any other.
 
-    Only the MCP servers the runner's proxy serves are announced: the granted ones with a URL."""
+    Only the MCP servers the runner's proxy serves are announced: the granted ones with a URL, or
+    `mcp_servers` when the runner serves others (a session's pod serves `choregos`, S41-11)."""
     hosted = stage_input.hosted
     if hosted is None:
         return None
-    servers = [name for name, ref in stage_input.tools.mcp.items() if ref.url]
+    servers = (
+        list(mcp_servers)
+        if mcp_servers is not None
+        else [name for name, ref in stage_input.tools.mcp.items() if ref.url]
+    )
     return AgentContainer(
         image=hosted.image,
         env=sidecar_env(

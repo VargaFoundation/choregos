@@ -250,7 +250,7 @@ class KubernetesJobExecutor:
                 {
                     "name": "runner",
                     "image": spec.runner_image,
-                    "args": ["run"],
+                    "args": list(spec.runner_command),
                     "env": [
                         {"name": "CHOREGOS_RUN_ID", "value": spec.run_id},
                         {"name": "CHOREGOS_API_URL", "value": spec.api_url},

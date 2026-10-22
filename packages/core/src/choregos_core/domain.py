@@ -282,6 +282,8 @@ class StageJobSpec(Model):
     memory: str = "2Gi"
     #: Set for a step a hosted agent carries (ADR 0080): the agent's container beside the runner.
     agent_container: AgentContainer | None = None
+    #: The runner's arguments: `run` for a step, `serve-session` for a hosted session's pod (S41-11).
+    runner_command: list[str] = Field(default_factory=lambda: ["run"])
 
 
 class ExecRef(Model):

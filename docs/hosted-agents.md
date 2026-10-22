@@ -218,7 +218,7 @@ the session with its transcript and close it.
 - **What it runs**: the version the project is served (its pin, channel and overrides), its
   instructions verbatim as the system message (no `{{ ticket.* }}` rendering: there is no work
   item), its model, and the prompt loop of a workflow step. Only a `prompt` agent answers here; a
-  voice agent answers on `/realtime` (below), a hosted one in S41-11 (422 today).
+  voice agent answers on `/realtime` (below), a hosted one in its session's pod (S41-11, below).
 - **Budget**: the session reserves the smallest of what is left under its `max_usd` (1 USD by
   default), the agent's run, day and month budgets, the project's day and the organisation's month,
   and mints **one** gateway key at that amount for an hour, sealed in the secret store and never
@@ -265,5 +265,37 @@ gateway's realtime socket (`ws(s)://<gateway>/realtime?model=…`), with the ses
 The voice session's spend is what the gateway counted on its key, read when it closes; booking it
 from `response.done` with a per-minute ceiling is S41-15.
 
-The rest of the stream — hosted sessions, the console and the real builder — is planned in
-[`docs/plan/`](plan/STATUS.md) as S41-11 to S41-21.
+**A person talks to a hosted agent directly (S41-11).** The same `POST /orgs/{org}/agents/{slug}/responses`,
+the same rights, budget, key, closing and transcript as a prompt session; what answers is the
+agent's own container, in a pod of its own.
+
+- **One pod per session**, started by its first response: the workflow `AgentSessionPod` (id
+  `agent-session-{id}`, so a second start is refused by Temporal) asks the executor, on its own
+  queue, for the pod a step gets — the runner beside the pinned image as a native sidecar — with the
+  runner in `serve-session` mode. A version no pod could run (an unpinned image, a zip not built) is
+  refused without a retry, and the session closes `pod_failed`.
+- **Its Secret carries the session's key and a token whose subject is `session-{id}`**; neither is in
+  the stage input the workflow writes (`agent_sessions.stage_input`), nor in a Temporal payload, nor
+  in the container's environment. That token reads `/internal/agent-sessions/{id}` only: a run's
+  token, or another session's, is refused (403).
+- **A turn**: the response journals `turn.queued` and waits for the pod's answer (the agent's
+  `readiness_timeout_s` plus 300 s at most, then `hosted_timeout`). The runner takes it from
+  `turns/next` (a long poll that holds no transaction), sends it to the container on `POST
+  /responses` or `/invocations`, whichever the agent serves, and posts how it answered; a second post
+  of the same turn changes nothing. A turn the container could not answer fails the response with
+  `hosted_failed`, `hosted_not_ready`, `hosted_timeout`, `max_turns` (the agent's `limits.max_turns`
+  model calls **per turn**, 20 by default) or `budget_exceeded`, which also closes the session.
+- **The walls are a step's**: the model through the loopback with the session's key, the CONNECT
+  proxy with the session's network, and the session's tools served by the runner itself on
+  `/mcp/choregos` (`CHOREGOS_MCP_SERVERS=choregos`): each `tools/call` is judged by the guard rails,
+  then sent through the internal API to the courtier as a prompt session's. No other MCP server is
+  served. What the runner saw — refused model calls, tool calls — is journaled with the turn.
+- **The pod stops** at the first of: the session closed (`DELETE`, a spent key), `CHOREGOS_HOSTED_SESSION_IDLE_S`
+  without a response (600 s by default; each response restarts the wait), the session's expiry.
+  Stopping fails the turns still waiting, cancels the pod and closes the session with that reason;
+  replayed, it changes nothing.
+- An agent that serves only `invocations_ws` has no session yet (422): the WebSocket relay to a
+  hosted container is S41-21.
+
+The rest of the stream — the console and the real builder — is planned in
+[`docs/plan/`](plan/STATUS.md) as S41-12 to S41-21.

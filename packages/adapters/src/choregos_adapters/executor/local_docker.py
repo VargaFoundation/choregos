@@ -106,7 +106,7 @@ class LocalDockerExecutor:
         ]
         for key, value in spec.env.items():
             args += ["--env", f"{key}={value}"]
-        args += [spec.runner_image, "run"]
+        args += [spec.runner_image, *spec.runner_command]
         # The first run pulls the runner image (more than a gigabyte): two minutes are not enough,
         # and a `docker run` cut short keeps pulling, then collides with the retry on the name.
         code, _stdout, stderr = await self._run(*args, timeout=PULL_TIMEOUT_S, env=secrets)

@@ -3247,6 +3247,93 @@ paths:
                     version: { type: integer }
                     digest: { type: string }
                     files: { type: object, additionalProperties: { type: string }, description: "path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text" }
+  /internal/agent-sessions/{id}/input:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getAgentSessionInput
+      description: >-
+        A hosted session's stage input (S41-11, ADR 0080 §10), as its pod's workflow wrote it: no gateway key, no
+        token in it. Read by the pod's runner with the token minted for `session-{id}`; any other token is refused.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/StageInput" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /internal/agent-sessions/{id}/turns/next:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: nextAgentSessionTurn
+      description: >-
+        The oldest response the session's person asked for that the pod has not answered. With `wait`, up to that many
+        seconds for one to come; no turn is 204, a session that ended is 410 and the runner stops.
+      parameters:
+        - { name: wait, in: query, required: false, schema: { type: number, minimum: 0, maximum: 30, default: 0 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionTurn" } } } }
+        "204": { description: No turn waits }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /internal/agent-sessions/{id}/turns/{turn_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: turn_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postAgentSessionTurnResult
+      description: >-
+        How the session's container answered a turn. Journaled once: a second post of the same turn changes nothing.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionTurnResult" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, required: [status, turn_id], properties: { status: { type: string, enum: [recorded, already_recorded] }, turn_id: { type: string } } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/agent-sessions/{id}/tools:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: listAgentSessionTools
+      description: >-
+        The read tools the agent's `mcp_servers` grant in the session's project, as MCP's `tools/list` announces them.
+        The runner serves them to the container on its loopback MCP listener.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionTools" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /internal/agent-sessions/{id}/tools/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: callAgentSessionTool
+      description: >-
+        One of the container's tool calls, through the courtier, the injection guard and the ledger, as a prompt
+        session's. A tool the session is not granted is 404.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionToolCall" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionToolAnswer" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { description: The session ended, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /internal/runs/{id}/network:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3256,6 +3343,7 @@ paths:
       description: >-
         The network THIS run may use (ADR 0070): the agent's hosts narrowed by the project's and the organisation's,
         plus the repository host. Read by the egress proxy with the run's own token; a token of another run is refused.
+        A hosted session's pod (S41-11) reads it as `session-{id}`: its agent version's network.
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunNetwork" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -4624,6 +4712,45 @@ components:
         expires_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
         events: { type: array, items: { $ref: "#/components/schemas/AgentSessionEvent" } }
+    AgentSessionTurn:
+      type: object
+      description: "A response a hosted session's person asked for, waiting for the session's pod (S41-11)."
+      required: [turn_id, input, protocol]
+      properties:
+        turn_id: { type: string }
+        input: { type: string }
+        protocol: { type: string, enum: [responses, invocations] }
+    AgentSessionPodEvent:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, minLength: 1, maxLength: 64 }
+        payload: { type: object, additionalProperties: true }
+    AgentSessionTurnResult:
+      type: object
+      description: "How the session's container answered a turn."
+      required: [status]
+      properties:
+        status: { type: string, enum: [answered, failed, not_ready, timeout, max_turns, budget_exceeded] }
+        text: { type: string, maxLength: 200000, default: "" }
+        error: { type: [string, "null"], maxLength: 4000 }
+        response_id: { type: [string, "null"], maxLength: 200 }
+        turns: { type: integer, minimum: 0, default: 0 }
+        tool_calls: { type: integer, minimum: 0, default: 0 }
+        events: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/AgentSessionPodEvent" } }
+    AgentSessionTools:
+      type: object
+      properties:
+        tools: { type: array, items: { type: object, additionalProperties: true } }
+    AgentSessionToolCall:
+      type: object
+      properties:
+        arguments: { type: object, additionalProperties: true }
+    AgentSessionToolAnswer:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
     A2aDeclaredCost:
       type: object
       description: What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`.

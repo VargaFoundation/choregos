@@ -162,6 +162,13 @@ agent cannot be a workflow step).
     it with 1008. The relay screens each caller event against an allowlist; a function call runs
     through the courtier only if the grant offers the tool. The spend is still the gateway's count on
     the key, read at close; `model` is not yet checked against a catalogue `realtime` mark (S41-15).
+    *As delivered for hosted agents (S41-11)*: `/responses` reaches the container in a pod of the
+    session's own, started once by the workflow `AgentSessionPod` and stopped at the first of a close,
+    an idle wait and the expiry. The pod's runner (`serve-session`) takes each turn from the internal
+    API with a token scoped to the session and keeps a step's walls; `max_turns` counts per turn. The
+    session's tools are served by the runner on the loopback MCP listener and go through the internal
+    API, so the pod holds no tracker credential. `invocations_ws` is not relayed yet (S41-21), and the
+    network decisions of a session's pod are acknowledged but not stored.
 
 ## Consequences
 
