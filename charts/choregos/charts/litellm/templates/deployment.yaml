@@ -35,13 +35,14 @@ data:
       master_key: os.environ/LITELLM_MASTER_KEY
       database_url: os.environ/DATABASE_URL
       store_model_in_db: false
-    # ADR 0084: secrets masked before the provider call. On for every request, it acts only for a
-    # key whose metadata the platform marked (`sandbox.llm_security_analyzer`). Fails closed.
+    # ADR 0084: secrets masked before the provider call and in its answer. On for every request,
+    # it acts only for a key whose metadata the platform marked (`sandbox.llm_security_analyzer`).
+    # Fails closed.
     guardrails:
       - guardrail_name: choregos-secrets
         litellm_params:
           guardrail: choregos_guardrail.ChoregosGuardrail
-          mode: pre_call
+          mode: [pre_call, post_call]
           default_on: true
   choregos_guardrail.py: |
 {{ $guard | indent 4 }}

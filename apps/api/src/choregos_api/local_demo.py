@@ -197,7 +197,7 @@ def litellm_config(provider: Provider | None, *, embed: bool = False) -> dict[st
                 "guardrail_name": "choregos-secrets",
                 "litellm_params": {
                     "guardrail": f"{GUARDRAIL_MODULE}.ChoregosGuardrail",
-                    "mode": "pre_call",
+                    "mode": ["pre_call", "post_call"],
                     "default_on": True,
                 },
             }

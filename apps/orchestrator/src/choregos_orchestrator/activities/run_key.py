@@ -18,6 +18,8 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from choregos_adapters.base import llm_guard_refusal
+from choregos_adapters.errors import ConfigurationError
 from choregos_api.db.models import GatewayKeyRow, Run
 from choregos_api.logging import get_logger
 from choregos_contracts import Budget, StageInput
@@ -82,6 +84,8 @@ async def mint_key(
     if getattr(bundle.policy.sandbox, "llm_security_analyzer", False):
         # The gateway's guard masks secrets for this key only (ADR 0084). Key metadata is the
         # platform's: the agent holds the key, never the right to rewrite it.
+        if (refusal := llm_guard_refusal(bundle.adapters.gateway)) is not None:
+            raise ConfigurationError(refusal)
         metadata = {**metadata, GUARD_METADATA_KEY: GUARD_REDACT}
     team_id = None
     if (daily := bundle.engine.daily_budget()) is not None:
