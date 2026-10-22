@@ -16,14 +16,27 @@ export const RUNTIME_LABEL: Record<RuntimeKind, string> = {
   hosted: "Hosted agent",
 };
 
-/** The zip runtimes the platform has a base image for; the others are refused at publication (S41-20). */
-export const ZIP_RUNTIMES: { value: HostedZipSource["runtime"]; label: string; available: boolean }[] = [
-  { value: "python_3_13", label: "Python 3.13", available: true },
-  { value: "python_3_12", label: "Python 3.12", available: true },
-  { value: "python_3_14", label: "Python 3.14 (not yet)", available: false },
-  { value: "node_22", label: "Node 22 (not yet)", available: false },
-  { value: "dotnet_10", label: ".NET 10 (not yet)", available: false },
+type ZipRuntime = { value: HostedZipSource["runtime"]; label: string; entry: string; carried: string };
+
+/** The zip runtimes the platform builds (S41-20), each with the entry point it suggests and where a
+ * `bundled` zip keeps its dependencies; an operator who takes one away has it refused at publication. */
+const PYTHON_3_13: ZipRuntime = {
+  value: "python_3_13",
+  label: "Python 3.13",
+  entry: "python main.py",
+  carried: "under site-packages/",
+};
+
+export const ZIP_RUNTIMES: ZipRuntime[] = [
+  PYTHON_3_13,
+  { value: "python_3_12", label: "Python 3.12", entry: "python main.py", carried: "under site-packages/" },
+  { value: "python_3_14", label: "Python 3.14", entry: "python main.py", carried: "under site-packages/" },
+  { value: "node_22", label: "Node 22", entry: "node main.js", carried: "in node_modules/" },
+  { value: "dotnet_10", label: ".NET 10", entry: "dotnet Agent.dll", carried: "as the output of dotnet publish" },
 ];
+
+const runtimeOf = (value: HostedZipSource["runtime"]): ZipRuntime =>
+  ZIP_RUNTIMES.find((r) => r.value === value) ?? PYTHON_3_13;
 
 const PROTOCOLS = ["responses", "invocations"] as const;
 const SLUG = /^[a-z][a-z0-9-]{1,62}$/;
@@ -280,15 +293,24 @@ export function RuntimeAgentForm({
                 {zip && (
                   <p className="text-xs" data-testid="zip-summary">
                     <span className="font-mono">{zip.sha256.slice(0, 19)}…</span> · {zip.files.length} file{zip.files.length === 1 ? "" : "s"} ·{" "}
-                    {zip.dependencies ? `dependencies in ${zip.dependencies}` : "no requirements.txt or pyproject.toml: the zip must carry them"}
+                    {zip.dependencies ? `dependencies in ${zip.dependencies}` : "no requirements.txt, pyproject.toml, package-lock.json or .csproj: the zip must carry them"}
                   </p>
                 )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Runtime">
                     {(props) => (
-                      <Select {...props} value={zipRuntime} onChange={(e) => setZipRuntime(e.target.value as typeof zipRuntime)}>
+                      <Select
+                        {...props}
+                        value={zipRuntime}
+                        onChange={(e) => {
+                          const next = e.target.value as typeof zipRuntime;
+                          // The suggested entry point follows the runtime until it is written over.
+                          if (entryPoint === runtimeOf(zipRuntime).entry) setEntryPoint(runtimeOf(next).entry);
+                          setZipRuntime(next);
+                        }}
+                      >
                         {ZIP_RUNTIMES.map((r) => (
-                          <option key={r.value} value={r.value} disabled={!r.available}>
+                          <option key={r.value} value={r.value}>
                             {r.label}
                           </option>
                         ))}
@@ -301,7 +323,7 @@ export function RuntimeAgentForm({
                         <option value="remote_build" disabled={zip !== null && zip.dependencies == null}>
                           Installed when the image is built
                         </option>
-                        <option value="bundled">Carried by the zip, under site-packages/</option>
+                        <option value="bundled">Carried by the zip, {runtimeOf(zipRuntime).carried}</option>
                       </Select>
                     )}
                   </Field>

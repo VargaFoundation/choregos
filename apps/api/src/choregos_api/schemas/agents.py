@@ -271,7 +271,8 @@ class HostedSourceDto(Dto):
     sha256: str
     size_bytes: int
     files: list[str]
-    #: `requirements.txt` or `pyproject.toml` when the zip declares its dependencies at its root.
+    #: The root file the zip declares its dependencies in: `requirements.txt` or `pyproject.toml`,
+    #: `package-lock.json` (beside its `package.json`), or its one `*.csproj`.
     dependencies: str | None = None
 
 

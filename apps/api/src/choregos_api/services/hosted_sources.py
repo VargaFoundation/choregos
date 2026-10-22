@@ -10,7 +10,9 @@ What a zip must hold, checked at upload and again when a version names it:
 - no symbolic link, no absolute, `\\` or `..` path, no encrypted entry, no name twice; at most
   2,000 files and 64 MiB, uncompressed bytes counted as they are read (a zip bomb stops there);
 - for a version: a runtime the platform has a base image for, the entry point's script inside the
-  zip, and with `remote_build` a `requirements.txt` or a `pyproject.toml` at the root.
+  zip, and with `remote_build` the runtime's manifest at the root: a `requirements.txt` or a
+  `pyproject.toml` (Python), a `package.json` with its `package-lock.json` (Node), one `*.csproj`
+  (.NET, S41-20).
 
 The Dockerfile is a pure function of the version and the base image: nothing of the zip's own
 (a `Dockerfile` it carries is not read). The build key is the hash of that Dockerfile and of the zip,
@@ -45,14 +47,26 @@ MAX_BYTES = 64 * 1024 * 1024
 #: so `useradd` and the bytecode `pip` compiles stamp the epoch rather than the day of the build.
 TEMPLATE_VERSION = "2"
 #: The base image of each runtime the platform builds, pinned by digest; the operator replaces them
-#: with `CHOREGOS_HOSTED_BASE_IMAGES`. Node, .NET and Python 3.14 come with S41-20.
+#: with `CHOREGOS_HOSTED_BASE_IMAGES`, where an empty value takes a runtime away. .NET is built in its
+#: SDK image (`dotnet_10_sdk`) and runs in the ASP.NET Core one, which has no compiler.
 DEFAULT_BASE_IMAGES = {
     "python_3_12": "docker.io/library/python:3.12-slim-bookworm"
     "@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258",
     "python_3_13": "docker.io/library/python:3.13-slim-bookworm"
     "@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641",
+    "python_3_14": "docker.io/library/python:3.14-slim-bookworm"
+    "@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83",
+    "node_22": "docker.io/library/node:22-bookworm-slim"
+    "@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392",
+    "dotnet_10": "mcr.microsoft.com/dotnet/aspnet:10.0"
+    "@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac",
+    "dotnet_10_sdk": "mcr.microsoft.com/dotnet/sdk:10.0"
+    "@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa",
 }
+#: The image a runtime compiles in, when it is not the one it runs in.
+BUILD_IMAGES = {"dotnet_10": "dotnet_10_sdk"}
 PYTHON_DEPENDENCIES = ("requirements.txt", "pyproject.toml")
+NODE_DEPENDENCIES = ("package.json", "package-lock.json")
 #: Where a `bundled` Python zip keeps its dependencies: `pip install --target site-packages`.
 BUNDLED_PACKAGES = "site-packages"
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -129,8 +143,33 @@ def read_source(data: bytes) -> SourceArchive:
     )
 
 
-def dependency_file(archive: SourceArchive) -> str | None:
+def family(runtime: str) -> str:
+    """`python`, `node` or `dotnet`: what writes the Dockerfile of a runtime."""
+    return runtime.split("_", 1)[0]
+
+
+def _projects(archive: SourceArchive) -> list[str]:
+    return [name for name in archive.files if "/" not in name and name.endswith(".csproj")]
+
+
+def runtime_dependencies(archive: SourceArchive, runtime: str) -> str | None:
+    """The root file a runtime's `remote_build` installs from: the first Python manifest, Node's
+    lock file (`npm ci` installs nothing without it), or the one .NET project."""
+    kind = family(runtime)
+    if kind == "node":
+        return NODE_DEPENDENCIES[1] if all(archive.has(name) for name in NODE_DEPENDENCIES) else None
+    if kind == "dotnet":
+        projects = _projects(archive)
+        return projects[0] if len(projects) == 1 else None
     return next((name for name in PYTHON_DEPENDENCIES if archive.has(name)), None)
+
+
+def dependency_file(archive: SourceArchive) -> str | None:
+    """What an upload declares, whatever runtime a version will name: Python, then Node, then .NET."""
+    for runtime in ("python", "node", "dotnet"):
+        if declared := runtime_dependencies(archive, runtime):
+            return declared
+    return None
 
 
 def base_image(runtime: str) -> str:
@@ -138,21 +177,49 @@ def base_image(runtime: str) -> str:
     images = {**DEFAULT_BASE_IMAGES, **get_settings().hosted_base_images}
     image = images.get(runtime)
     if not image:
-        known = ", ".join(sorted(images)) or "none"
+        builders = set(BUILD_IMAGES.values())
+        known = ", ".join(sorted(name for name, ref in images.items() if ref and name not in builders))
+        known = known or "none"
         raise SourceRefused(f"no base image for the runtime `{runtime}` (the platform builds: {known})")
     if "@sha256:" not in image:
         raise SourceRefused(f"the base image of `{runtime}` is not pinned by digest: `{image}`")
     return image
 
 
-def _script(entry_point: list[str]) -> str | None:
-    """The file a Python entry point runs, when it names one: `python [-flags] main.py ...` or
-    `./start.sh`. `python -m module` and a bare command (`uvicorn`) come from the dependencies."""
-    if entry_point[0] in ("python", "python3"):
-        for argument in entry_point[1:]:
-            if argument in ("-m", "-c"):
+def build_image(runtime: str) -> str | None:
+    """The pinned image a runtime compiles in, when it has one apart from its base."""
+    name = BUILD_IMAGES.get(runtime)
+    return base_image(name) if name else None
+
+
+#: The interpreter of each family, its options that run code given in the command rather than a
+#: file, and its options whose next word is their value, not the script.
+_INTERPRETERS: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
+    "python": (("python", "python3"), ("-m", "-c"), ("-W", "-X")),
+    "node": (("node",), ("-e", "--eval", "-p", "--print"), ("-r", "--require", "--import", "--loader")),
+    "dotnet": (("dotnet",), (), ()),
+}
+#: What a version's `remote_build` needs at the zip's root, said when it is not there.
+_MANIFESTS = {
+    "python": "neither `requirements.txt` nor `pyproject.toml`",
+    "node": "no `package.json` with its `package-lock.json` (`npm ci` installs from the lock file)",
+    "dotnet": "no `*.csproj`, or more than one,",
+}
+
+
+def _script(entry_point: list[str], kind: str) -> str | None:
+    """The file an entry point runs, when it names one: `python [-flags] main.py ...`,
+    `node main.js`, `dotnet Agent.dll` or `./start.sh`. `python -m module`, `node -e` and a bare
+    command (`uvicorn`, `npm`) come from the dependencies."""
+    interpreters, inline, valued = _INTERPRETERS[kind]
+    if entry_point[0] in interpreters:
+        arguments = iter(entry_point[1:])
+        for argument in arguments:
+            if argument in inline:
                 return None
-            if not argument.startswith("-"):
+            if argument in valued:
+                next(arguments, None)
+            elif not argument.startswith("-"):
                 return argument
         return None
     return entry_point[0] if "/" in entry_point[0] or "." in entry_point[0] else None
@@ -161,13 +228,18 @@ def _script(entry_point: list[str]) -> str | None:
 def check_against(archive: SourceArchive, source: HostedZipSource) -> None:
     """What a version asks of the zip it names."""
     base_image(source.runtime)
-    script = _script(source.entry_point)
-    if script is not None and not archive.has(_safe_path(script)):
+    kind = family(source.runtime)
+    remote = source.dependency_resolution == "remote_build"
+    if remote:
+        build_image(source.runtime)
+    script = _script(source.entry_point, kind)
+    # A .NET build publishes its assembly: only a `bundled` zip has it already.
+    if script is not None and not (kind == "dotnet" and remote) and not archive.has(_safe_path(script)):
         raise SourceRefused(f"the entry point runs `{script}`, which is not in the archive")
-    if source.dependency_resolution == "remote_build" and dependency_file(archive) is None:
+    if remote and runtime_dependencies(archive, source.runtime) is None:
         raise SourceRefused(
-            "`remote_build` installs the declared dependencies: the archive has neither "
-            "`requirements.txt` nor `pyproject.toml` at its root (or say `bundled`)"
+            f"`remote_build` installs the declared dependencies: the archive has {_MANIFESTS[kind]} "
+            "at its root (or say `bundled`)"
         )
 
 
@@ -178,30 +250,80 @@ def dockerfile(runtime: HostedRuntime, archive: SourceArchive) -> str:
     lines = [
         f"# Written by Choregos (ADR 0080 §9, template {TEMPLATE_VERSION}). The zip's own Dockerfile,",
         "# if it has one, is not read.",
-        f"FROM {base_image(source.runtime)}",
-        "ARG SOURCE_DATE_EPOCH",
-        "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 "
-        f"PIP_DISABLE_PIP_VERSION_CHECK=1 PORT={runtime.port}",
-        "RUN useradd --uid 1000 --create-home agent",
-        "WORKDIR /app",
     ]
-    declared = dependency_file(archive)
-    if source.dependency_resolution == "bundled":
-        lines += [f"ENV PYTHONPATH=/app/{BUNDLED_PACKAGES}", "COPY . /app"]
-    elif declared == "requirements.txt":
-        lines += [
-            "COPY requirements.txt /app/requirements.txt",
-            "RUN pip install --no-cache-dir -r /app/requirements.txt",
-            "COPY . /app",
-        ]
+    kind = family(source.runtime)
+    bundled = source.dependency_resolution == "bundled"
+    declared = runtime_dependencies(archive, source.runtime)
+    if kind == "node":
+        lines += _node(source.runtime, runtime.port, bundled)
+    elif kind == "dotnet":
+        lines += _dotnet(source.runtime, runtime.port, None if bundled else declared)
     else:
-        lines += ["COPY . /app", "RUN pip install --no-cache-dir /app"]
+        lines += _python(source.runtime, runtime.port, bundled, declared)
     lines += [
         "USER 1000",
         f"EXPOSE {runtime.port}",
         f"ENTRYPOINT {json.dumps(source.entry_point)}",
     ]
     return "\n".join(lines) + "\n"
+
+
+def _python(runtime: str, port: int, bundled: bool, declared: str | None) -> list[str]:
+    lines = [
+        f"FROM {base_image(runtime)}",
+        "ARG SOURCE_DATE_EPOCH",
+        "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 "
+        f"PIP_DISABLE_PIP_VERSION_CHECK=1 PORT={port}",
+        "RUN useradd --uid 1000 --create-home agent",
+        "WORKDIR /app",
+    ]
+    if bundled:
+        return [*lines, f"ENV PYTHONPATH=/app/{BUNDLED_PACKAGES}", "COPY . /app"]
+    if declared == "requirements.txt":
+        return [
+            *lines,
+            "COPY requirements.txt /app/requirements.txt",
+            "RUN pip install --no-cache-dir -r /app/requirements.txt",
+            "COPY . /app",
+        ]
+    return [*lines, "COPY . /app", "RUN pip install --no-cache-dir /app"]
+
+
+def _node(runtime: str, port: int, bundled: bool) -> list[str]:
+    """Node's image has its user 1000 (`node`) already. A `bundled` zip carries `node_modules/`."""
+    lines = [
+        f"FROM {base_image(runtime)}",
+        "ARG SOURCE_DATE_EPOCH",
+        f"ENV NODE_ENV=production NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false PORT={port}",
+        "WORKDIR /app",
+    ]
+    if bundled:
+        return [*lines, "COPY . /app"]
+    return [*lines, "COPY package.json package-lock.json /app/", "RUN npm ci --omit=dev", "COPY . /app"]
+
+
+def _dotnet(runtime: str, port: int, project: str | None) -> list[str]:
+    """Compiled in the SDK image, run in the ASP.NET Core one (its user 1000 is there already).
+    A `bundled` zip is the output of `dotnet publish`: copied, never compiled."""
+    serve = [
+        f"FROM {base_image(runtime)}",
+        "ARG SOURCE_DATE_EPOCH",
+        f"ENV ASPNETCORE_HTTP_PORTS={port} PORT={port} DOTNET_CLI_TELEMETRY_OPTOUT=1",
+        "WORKDIR /app",
+    ]
+    if project is None:
+        return [*serve, "COPY . /app"]
+    return [
+        f"FROM {build_image(runtime)} AS build",
+        "ARG SOURCE_DATE_EPOCH",
+        "ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1",
+        "WORKDIR /src",
+        "COPY . /src",
+        # The exec form: the project's name is a word of the command, never shell.
+        "RUN " + json.dumps(["dotnet", "publish", project, "--configuration", "Release", "--output", "/out"]),
+        *serve,
+        "COPY --from=build /out /app",
+    ]
 
 
 def build_key(text: str, archive: SourceArchive) -> str:
@@ -215,18 +337,17 @@ def pending_build(runtime: HostedRuntime, archive: SourceArchive) -> HostedBuild
     text = dockerfile(runtime, archive)
     source = runtime.source
     assert source.type == "zip"
-    return HostedBuild(
-        status="pending",
-        key=build_key(text, archive),
-        provenance={
-            "source": archive.sha256,
-            "runtime": source.runtime,
-            "dependency_resolution": source.dependency_resolution,
-            "base_image": base_image(source.runtime),
-            "template": TEMPLATE_VERSION,
-            "dockerfile": "sha256:" + hashlib.sha256(text.encode()).hexdigest(),
-        },
-    )
+    provenance = {
+        "source": archive.sha256,
+        "runtime": source.runtime,
+        "dependency_resolution": source.dependency_resolution,
+        "base_image": base_image(source.runtime),
+        "template": TEMPLATE_VERSION,
+        "dockerfile": "sha256:" + hashlib.sha256(text.encode()).hexdigest(),
+    }
+    if source.dependency_resolution == "remote_build" and (compiler := build_image(source.runtime)):
+        provenance["build_image"] = compiler
+    return HostedBuild(status="pending", key=build_key(text, archive), provenance=provenance)
 
 
 async def store_source(store: ObjectStore, org_id: str, data: bytes) -> SourceArchive:

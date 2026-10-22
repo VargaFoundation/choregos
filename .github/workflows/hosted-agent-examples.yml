@@ -1,7 +1,9 @@
 # Nightly and manual, never blocking: builds each hosted agent example image (Agent Framework,
-# LangGraph, OpenAI Agents SDK, Claude Agent SDK, Copilot SDK) and runs the eight conformance checks
-# of a hosted agent against it (ADR 0080). The frameworks are heavy and stay out of the repository's
-# lock file, so they are not part of the blocking CI; the reference example is (`make test`).
+# LangGraph, OpenAI Agents SDK, Claude Agent SDK, Copilot SDK, in Python, Node and .NET) and runs the
+# eight conformance checks of a hosted agent against it (ADR 0080). The frameworks are heavy and stay
+# out of the repository's lock file, so they are not part of the blocking CI; the reference examples
+# are (`make test`). A zip example (a `choregos.json`, no Dockerfile) is built from the Dockerfile the
+# platform writes for it (`tools/hosted_dockerfile.py`), as a publication would build it (S41-20).
 name: hosted-agent-examples
 
 on:
@@ -21,12 +23,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        example: [reference, agent-framework, langgraph, openai-agents, claude-agent-sdk, copilot-sdk]
+        example:
+          - reference
+          - agent-framework
+          - langgraph
+          - openai-agents
+          - claude-agent-sdk
+          - copilot-sdk
+          - reference-node
+          - claude-agent-sdk-node
+          - copilot-sdk-node
+          - agent-framework-dotnet
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
       - name: build the example image
-        run: docker build -t "${{ matrix.example }}-triager" "examples/hosted/${{ matrix.example }}"
+        env:
+          EXAMPLE: examples/hosted/${{ matrix.example }}
+        run: |
+          if [ -f "$EXAMPLE/choregos.json" ]; then
+            uv run python tools/hosted_dockerfile.py "$EXAMPLE" > "$RUNNER_TEMP/Dockerfile"
+            docker build -t "${{ matrix.example }}-triager" -f "$RUNNER_TEMP/Dockerfile" "$EXAMPLE"
+          else
+            docker build -t "${{ matrix.example }}-triager" "$EXAMPLE"
+          fi
       - name: conformance of the image
         run: make conformance-hosted IMAGE="${{ matrix.example }}-triager"

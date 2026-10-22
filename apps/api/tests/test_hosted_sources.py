@@ -132,6 +132,10 @@ def test_a_flat_zip_is_read_with_its_digest() -> None:
 # ───────────────────────── what a version asks of its zip ─────────────────────────
 
 
+NODE = {"main.js": "", "package.json": "{}", "package-lock.json": "{}"}
+DOTNET = {"entry_point": ["dotnet", "Triager.dll"]}
+
+
 def _source(**changes: Any) -> Any:
     from choregos_api.schemas import HostedZipSource
 
@@ -148,7 +152,38 @@ def _source(**changes: Any) -> Any:
             {"entry_point": ["./start.sh"]},
             "runs `./start.sh`, which is not in the archive",
         ),
-        ({"main.py": AGENT, "requirements.txt": ""}, {"runtime": "node_22"}, "no base image for the runtime"),
+        (
+            {"main.py": "", "package.json": "{}", "package-lock.json": "{}"},
+            {"runtime": "python_3_14"},
+            "neither",
+        ),
+        (NODE, {"runtime": "node_22", "entry_point": ["node", "dist/main.js"]}, "runs `dist/main.js`"),
+        (
+            {"main.ts": "", "package.json": "{}"},
+            {"runtime": "node_22", "entry_point": ["node", "main.ts"]},
+            "no `package.json` with its `package-lock.json`",
+        ),
+        (
+            {"server.js": "", "package.json": "{}", "package-lock.json": "{}"},
+            {"runtime": "node_22", "entry_point": ["node", "--import", "tsx", "main.ts"]},
+            "runs `main.ts`, which is not in the archive",
+        ),
+        (
+            {"Program.cs": "", "requirements.txt": ""},
+            {"runtime": "dotnet_10", **DOTNET},
+            "or more than one",
+        ),
+        ({"A.csproj": "", "B.csproj": ""}, {"runtime": "dotnet_10", **DOTNET}, "or more than one"),
+        (
+            {"Program.cs": "", "src/Triager.csproj": ""},
+            {"runtime": "dotnet_10", **DOTNET},
+            "or more than one",
+        ),
+        (
+            {"Other.dll": ""},
+            {"runtime": "dotnet_10", **DOTNET, "dependency_resolution": "bundled"},
+            "runs `Triager.dll`, which is not in the archive",
+        ),
     ],
 )
 def test_a_version_that_its_zip_cannot_run_is_refused(
@@ -167,6 +202,22 @@ def test_a_version_that_its_zip_cannot_run_is_refused(
         ({"pyproject.toml": ""}, {"entry_point": ["python", "-m", "uvicorn", "app:app"]}),
         ({"serve.py": AGENT}, {"entry_point": ["uvicorn", "serve:app"], "dependency_resolution": "bundled"}),
         ({"main.py": AGENT}, {"dependency_resolution": "bundled"}),
+        ({"main.py": AGENT, "requirements.txt": ""}, {"entry_point": ["python", "-X", "utf8", "main.py"]}),
+        ({"main.py": AGENT, "requirements.txt": ""}, {"runtime": "python_3_14"}),
+        (NODE, {"runtime": "node_22", "entry_point": ["node", "main.js"]}),
+        (
+            {**NODE, "main.ts": ""},
+            {"runtime": "node_22", "entry_point": ["node", "--import", "tsx", "main.ts"]},
+        ),
+        (
+            {"package.json": "{}", "node_modules/x/index.js": ""},
+            {"runtime": "node_22", "entry_point": ["npm", "start"], "dependency_resolution": "bundled"},
+        ),
+        ({"Triager.csproj": "", "Program.cs": ""}, {"runtime": "dotnet_10", **DOTNET}),
+        (
+            {"Triager.dll": "", "Triager.runtimeconfig.json": "{}"},
+            {"runtime": "dotnet_10", **DOTNET, "dependency_resolution": "bundled"},
+        ),
     ],
 )
 def test_a_version_its_zip_can_run_is_accepted(files: dict[str, str], changes: dict[str, Any]) -> None:
@@ -195,6 +246,52 @@ COPY . /app
 USER 1000
 EXPOSE 8088
 ENTRYPOINT ["python", "main.py"]
+"""
+
+
+BASE_NODE = (
+    "docker.io/library/node:22-bookworm-slim"
+    "@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392"
+)
+GOLDEN_NODE = f"""\
+# Written by Choregos (ADR 0080 §9, template 2). The zip's own Dockerfile,
+# if it has one, is not read.
+FROM {BASE_NODE}
+ARG SOURCE_DATE_EPOCH
+ENV NODE_ENV=production NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false PORT=8088
+WORKDIR /app
+COPY package.json package-lock.json /app/
+RUN npm ci --omit=dev
+COPY . /app
+USER 1000
+EXPOSE 8088
+ENTRYPOINT ["node", "main.js"]
+"""
+SDK = (
+    "mcr.microsoft.com/dotnet/sdk:10.0"
+    "@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa"
+)
+ASPNET = (
+    "mcr.microsoft.com/dotnet/aspnet:10.0"
+    "@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac"
+)
+GOLDEN_DOTNET = f"""\
+# Written by Choregos (ADR 0080 §9, template 2). The zip's own Dockerfile,
+# if it has one, is not read.
+FROM {SDK} AS build
+ARG SOURCE_DATE_EPOCH
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+WORKDIR /src
+COPY . /src
+RUN ["dotnet", "publish", "Triager.csproj", "--configuration", "Release", "--output", "/out"]
+FROM {ASPNET}
+ARG SOURCE_DATE_EPOCH
+ENV ASPNETCORE_HTTP_PORTS=8088 PORT=8088 DOTNET_CLI_TELEMETRY_OPTOUT=1
+WORKDIR /app
+COPY --from=build /out /app
+USER 1000
+EXPOSE 8088
+ENTRYPOINT ["dotnet", "Triager.dll"]
 """
 
 
@@ -230,6 +327,37 @@ def test_the_dockerfile_follows_the_dependency_mode_and_never_the_zips_own() -> 
         assert "USER 1000" in text
     argv = dockerfile(_hosted(entry_point=["python", "main.py", '--name="a b"']), read_source(AGENT_ZIP))
     assert argv.endswith('ENTRYPOINT ["python", "main.py", "--name=\\"a b\\""]\n'), "exec form, JSON-quoted"
+
+
+def test_a_node_zip_is_installed_from_its_lock_file_or_carries_node_modules() -> None:
+    from choregos_api.services.hosted_sources import dockerfile, read_source
+
+    own = {"Dockerfile": "FROM evil.example/root\nUSER root\n"}
+    node = {"runtime": "node_22", "entry_point": ["node", "main.js"]}
+    built = dockerfile(_hosted(**node), read_source(_zip({**NODE, "requirements.txt": "", **own})))
+    assert built == GOLDEN_NODE, "the runtime's manifest, never another runtime's"
+    bundled = dockerfile(
+        _hosted(**node, dependency_resolution="bundled"),
+        read_source(_zip({"main.js": "", "node_modules/x/index.js": "", **own})),
+    )
+    assert "npm" not in bundled.replace("NPM_CONFIG", "") and "COPY . /app\nUSER 1000\n" in bundled
+    assert "evil.example" not in bundled and "USER root" not in bundled
+
+
+def test_a_dotnet_zip_is_published_in_the_sdk_and_runs_without_it() -> None:
+    from choregos_api.services.hosted_sources import dockerfile, read_source
+
+    dotnet = {"runtime": "dotnet_10", **DOTNET}
+    project = read_source(_zip({"Triager.csproj": "<Project/>", "Program.cs": ""}))
+    assert dockerfile(_hosted(**dotnet), project) == GOLDEN_DOTNET
+    bundled = dockerfile(
+        _hosted(**dotnet, dependency_resolution="bundled"), read_source(_zip({"Triager.dll": ""}))
+    )
+    assert SDK not in bundled and "dotnet publish" not in bundled and "publish" not in bundled
+    assert bundled.splitlines()[2] == f"FROM {ASPNET}" and "COPY . /app\nUSER 1000\n" in bundled
+    odd = read_source(_zip({'a"$(curl evil)\nRUN x.csproj': "", "Program.cs": ""}))
+    line = next(line for line in dockerfile(_hosted(**dotnet), odd).splitlines() if "publish" in line)
+    assert line.startswith('RUN ["dotnet", "publish", "a\\"$(curl evil)\\nRUN x.csproj"'), "exec form, JSON"
 
 
 def test_the_build_key_changes_with_every_input_and_only_with_them(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -270,6 +398,62 @@ def test_the_build_key_changes_with_every_input_and_only_with_them(monkeypatch: 
         "template",
         "dockerfile",
     }
+
+
+def test_a_dotnet_build_records_and_keys_its_sdk_image(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.services.hosted_sources import pending_build, read_source
+
+    dotnet = {"runtime": "dotnet_10", **DOTNET}
+    project = read_source(_zip({"Triager.csproj": "", "Program.cs": ""}))
+    first = pending_build(_hosted(**dotnet), project)
+    assert first.provenance["build_image"] == SDK and first.provenance["base_image"] == ASPNET
+    bundled = pending_build(
+        _hosted(**dotnet, dependency_resolution="bundled"), read_source(_zip({"Triager.dll": ""}))
+    )
+    assert "build_image" not in bundled.provenance, "a bundled zip compiles nothing"
+    other = "registry.internal/dotnet/sdk:10.0@sha256:" + "2" * 64
+    monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", json.dumps({"dotnet_10_sdk": other}))
+    reset_settings_cache()
+    try:
+        rebased = pending_build(_hosted(**dotnet), project)
+    finally:
+        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        reset_settings_cache()
+    assert rebased.provenance["build_image"] == other and rebased.key != first.key
+
+
+@pytest.mark.parametrize(
+    ("taken", "source", "files", "reason"),
+    [
+        ("node_22", {"runtime": "node_22", "entry_point": ["node", "main.js"]}, NODE, "runtime `node_22`"),
+        (
+            "dotnet_10_sdk",
+            {"runtime": "dotnet_10", **DOTNET},
+            {"Triager.csproj": ""},
+            "runtime `dotnet_10_sdk`",
+        ),
+    ],
+)
+def test_an_operator_takes_a_runtime_away_with_an_empty_base_image(
+    monkeypatch: pytest.MonkeyPatch, taken: str, source: dict[str, Any], files: dict[str, str], reason: str
+) -> None:
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.services.hosted_sources import SourceRefused, check_against, read_source
+
+    monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", f'{{"{taken}": ""}}')
+    reset_settings_cache()
+    try:
+        with pytest.raises(SourceRefused, match=f"no base image for the {reason}") as refused:
+            check_against(read_source(_zip(files)), _source(**source))
+    finally:
+        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        reset_settings_cache()
+    builds = str(refused.value).split("the platform builds: ")[1]
+    assert taken not in builds and "dotnet_10_sdk" not in builds, "only the runtimes a version can name"
+    assert "python_3_14" in builds
 
 
 def test_a_base_image_without_a_digest_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -397,9 +581,38 @@ async def test_a_zip_version_whose_source_cannot_be_built_is_refused(
 
 
 async def test_a_zip_runtime_without_a_base_image_is_refused_before_anything_is_read(
-    client: AsyncClient, admin: str, store: FakeObjectStore
+    client: AsyncClient, admin: str, store: FakeObjectStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    refused = await _create(client, _runtime("sha256:" + "a" * 64, runtime="dotnet_10"))
+    from choregos_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", '{"dotnet_10": ""}')
+    reset_settings_cache()
+    try:
+        refused = await _create(client, _runtime("sha256:" + "a" * 64, runtime="dotnet_10"))
+    finally:
+        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        reset_settings_cache()
     assert refused.status_code == 422, refused.text
     error = refused.json()["errors"][0]
     assert error["loc"] == ["runtime", "source", "runtime"] and "no base image" in error["msg"]
+
+
+@pytest.mark.parametrize(
+    ("files", "declared"),
+    [
+        ({"main.js": "", "package.json": "{}", "package-lock.json": "{}"}, "package-lock.json"),
+        ({"main.js": "", "package.json": "{}"}, None),
+        ({"Triager.csproj": "", "Program.cs": ""}, "Triager.csproj"),
+        ({"A.csproj": "", "B.csproj": ""}, None),
+        (
+            {"main.py": "", "pyproject.toml": "", "package.json": "{}", "package-lock.json": "{}"},
+            "pyproject.toml",
+        ),
+    ],
+)
+async def test_an_upload_says_which_manifest_it_declares_whatever_the_runtime(
+    client: AsyncClient, admin: str, store: FakeObjectStore, files: dict[str, str], declared: str | None
+) -> None:
+    uploaded = await _upload(client, _zip(files))
+    assert uploaded.status_code == 201, uploaded.text
+    assert uploaded.json()["dependencies"] == declared

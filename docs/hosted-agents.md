@@ -178,24 +178,50 @@ twice refuses it. A version then names it:
 
 Where the version is written (create, publish, trial, template install), the zip is read back from
 the store, refused if its bytes no longer hash to its name, and checked against the version: the
-script the entry point runs (`python main.py`, `./start.sh`) is in the zip (`python -m module` and a
-bare command such as `uvicorn` come from the dependencies), and `remote_build` finds a
-`requirements.txt` or a `pyproject.toml` at the root. `bundled` installs nothing: the zip carries its
-dependencies under `site-packages/` (`pip install --target site-packages -r requirements.txt`), which
-is put on `PYTHONPATH`.
+script the entry point runs (`python main.py`, `node main.js`, `./start.sh`) is in the zip
+(`python -m module`, `node -e …` and a bare command such as `uvicorn` come from the dependencies; an
+option's value, `node -r ./setup.js main.js`, is not taken for the script), and `remote_build` finds
+the runtime's manifest at the root. `bundled` installs nothing: the zip carries its dependencies.
+
+| Runtime | `remote_build` needs at the root | `bundled` carries |
+| --- | --- | --- |
+| `python_3_12`, `python_3_13`, `python_3_14` | `requirements.txt` or `pyproject.toml` | `site-packages/` (`pip install --target site-packages -r requirements.txt`), put on `PYTHONPATH` |
+| `node_22` | `package.json` **and** `package-lock.json`: `npm ci --omit=dev` installs from the lock file | `node_modules/` |
+| `dotnet_10` | exactly one `*.csproj`, published by `dotnet publish` in the SDK image | the output of `dotnet publish` |
+
+The upload's `dependencies` says which manifest the zip declares (`package-lock.json` for Node, the
+`*.csproj` for .NET). For .NET with `remote_build`, the assembly the entry point runs
+(`dotnet Triager.dll`) comes out of the publish: it is not looked for in the zip.
 
 The platform writes the Dockerfile itself — a `Dockerfile` in the zip is not read: `FROM` the
-runtime's base image pinned by digest (`python:3.12-slim-bookworm` and `python:3.13-slim-bookworm`
-from Docker Hub; the operator replaces them with `CHOREGOS_HOSTED_BASE_IMAGES`, and a base without a
-digest is refused), the dependencies installed as root, the files in `/app`, `USER 1000`, the port,
-and the entry point in exec form. Template 2 (S41-13) has no `# syntax=` line, which pulled the
+runtime's base image pinned by digest, the dependencies installed as root, the files in `/app`,
+`USER 1000`, the port, and the entry point in exec form. Template 2 (S41-13) has no `# syntax=` line, which pulled the
 floating `docker/dockerfile:1` frontend at each build (the daemon's own frontend parses it), and
-passes `SOURCE_DATE_EPOCH` to `RUN`. The version gets `build: {status: pending, key, provenance}`: the
-key is the hash of that Dockerfile and of the zip, so any input that changes (the zip, the runtime,
-the dependency mode, the entry point, the port, the base image, the template's version) changes it,
-and nothing else does; a `build` the caller writes is replaced. A step refuses the version until a
-build is `ready` (`hosted_build_not_ready`). Node, .NET and Python 3.14 have no base image yet
-(S41-20): such a version is refused.
+passes `SOURCE_DATE_EPOCH` to the `RUN` steps of every stage. Node installs with `npm ci --omit=dev`
+before the files are copied; .NET is two stages: `dotnet publish` in the SDK image (an exec-form
+`RUN`, so a project name is never read by a shell), then the published output alone on the ASP.NET
+runtime, which has no SDK.
+
+| Key of `CHOREGOS_HOSTED_BASE_IMAGES` | Default, pinned by digest |
+| --- | --- |
+| `python_3_12`, `python_3_13`, `python_3_14` | `docker.io/library/python:3.1x-slim-bookworm` |
+| `node_22` | `docker.io/library/node:22-bookworm-slim` |
+| `dotnet_10` | `mcr.microsoft.com/dotnet/aspnet:10.0` (where the agent runs) |
+| `dotnet_10_sdk` | `mcr.microsoft.com/dotnet/sdk:10.0` (where a `remote_build` is published) |
+
+The operator replaces any of them with `CHOREGOS_HOSTED_BASE_IMAGES` (JSON, merged over the
+defaults); a base without a digest is refused, and an empty value takes the runtime away: its
+versions are then refused, saying which runtimes the platform builds (an empty `dotnet_10_sdk`
+leaves `bundled` .NET zips and refuses `remote_build` ones). The version gets `build: {status:
+pending, key, provenance}`, the provenance naming the base image and, for a .NET `remote_build`,
+the `build_image`: the key is the hash of that Dockerfile and of the zip, so any input that changes
+(the zip, the runtime, the dependency mode, the entry point, the port, the base and SDK images, the
+template's version) changes it, and nothing else does; a `build` the caller writes is replaced. A
+step refuses the version until a build is `ready` (`hosted_build_not_ready`).
+
+The Node and .NET examples of [`examples/hosted/`](../examples/hosted/README.md) are zips:
+`tools/hosted_dockerfile.py <dir>` zips one as an upload would, checks it as the API does and
+prints the Dockerfile the platform writes for it; a test runs it on every zip example (S41-20).
 
 **Publication builds the zip's image; a channel waits for it (S41-08).** A version is immutable,
 so the build's state lives in its own row (`hosted_builds`, one per organisation and build key),
@@ -390,8 +416,9 @@ of the hosted prefixes.
   the end of a turn, and the longest call (120 minutes at most).
 - **Hosted agent**: an image reference (its digest is resolved at publication), or a zip uploaded
   to `POST /orgs/{org}/hosted-sources` and summarised (hash, files, where the dependencies are
-  declared; a zip that declares none can only be `bundled`), its runtime (only those with a base
-  image can be chosen), its entry point, the protocols it serves (`responses`, `invocations`), its
+  declared; a zip that declares none can only be `bundled`), its runtime (Python 3.12 to 3.14,
+  Node 22, .NET 10; the suggested entry point follows the runtime until it is written over, and a
+  runtime the operator took away is refused by the API, on the page), its entry point, the protocols it serves (`responses`, `invocations`), its
   port (4001 to 4003 are refused: they are the runner's) and how long it may take to be ready.
 
 The form sends nothing the API would refuse for a missing field, and says what is still needed.
