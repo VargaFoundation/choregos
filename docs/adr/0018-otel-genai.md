@@ -1,7 +1,7 @@
 # 0018 — OpenTelemetry GenAI conventions from the runner and the gateway
 
 - **Status**: proposed, 2026-09-25 — partially implemented on 2026-10-22 (S40-20: points 1 and 4;
-  points 2 and 3 not yet, see *Implementation*)
+  S40-20b: point 2, the collector's pipeline and the dashboard; point 3 not yet, see *Implementation*)
 - **Concerns**: the runner, LiteLLM, the API and orchestrator logging, `infra/bootstrap/otel-collector.yaml`
 
 ## Context
@@ -73,7 +73,34 @@ client spans natively through its OTel callback.
   route (catalogue, plugin, broker, `web_fetch`, `web_search`), so tools are traced where the platform
   serves them rather than in the runner's tool server. `is_error` is the span's error status with
   `error.type` (the HTTP status of the call), the conventions' form of it.
-- Not done yet: LiteLLM's callback (point 2), the nightly drift job (point 3), the collector's
-  pipeline and dashboards. A Temporal retry of `await_run` emits a second root span with the same
+- Not done yet: the nightly drift job (point 3). A Temporal retry of `await_run` emits a second root span with the same
   id; the tools the runner's own tool server answers without the API (`report_finding`, `ask_human`)
   have no span.
+
+## Implementation (S40-20b, 2026-10-22)
+
+- **Point 2 is a callback of ours, not LiteLLM's `otel` one.** LiteLLM's callback starts a trace of
+  its own unless the request carries a `traceparent` header, which an agent never sends, and it
+  records the messages unless told not to. `choregos_core.llm_spans` (stdlib and the OpenTelemetry
+  SDK only: LiteLLM's image has no Choregos package) reads the run id from the **key's** metadata
+  (`user_api_key_metadata`, written by `mint_run_key`, set by the proxy from the key on every
+  request; the request's own `metadata` is ignored), derives the run's trace id and stage span id
+  as `telemetry.run_trace_ids` does, and emits `chat <model>` (or `embeddings`, `text_completion`)
+  as a CLIENT child of the stage span: provider, requested and answering model, the provider's
+  token counts (none on a failed call), `error.type` and an error status on a failure, the run's
+  correlation keys (`stage` is the key's `role`). A key that names no run gets no span. The chart
+  ships a byte-identical copy (`charts/choregos/charts/litellm/files/choregos_llm_spans.py`, a test
+  keeps them equal) loaded through `litellm_settings.callbacks`.
+- **One value turns tracing on**: `global.tracing.otlpEndpoint` becomes `OTEL_EXPORTER_OTLP_ENDPOINT`
+  on the API, each worker, the migration Job and the embedded gateway. The agent pods do not get it:
+  their only way out is the run's egress proxy.
+- **The collector**: the bootstrap values were `mode: daemonset` alone, which the chart refuses to
+  render (`image.repository` must be set) and which exported nowhere. It is now a Deployment of the
+  contrib image behind `otel-collector.monitoring.svc` (OTLP on 4317/4318), sending every span to
+  Tempo and to a `spanmetrics` connector whose dimensions are bounded (operation, model, provider,
+  project, stage, `error.type`; never a run id). Its Prometheus exporter is scraped through a
+  ServiceMonitor.
+- **The dashboard** `traces.json`: rate, errors and p95 duration per stage, model and tool, from the
+  span metrics. A test refuses a panel that reads a label the connector does not produce, and the
+  live test (`tests/live/test_otel_collector_live.py`, LiteLLM + the rendered collector config +
+  Tempo in Docker) refuses one that the collector never actually writes.

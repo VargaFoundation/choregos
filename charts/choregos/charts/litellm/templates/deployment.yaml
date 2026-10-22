@@ -1,5 +1,7 @@
 {{- $name := printf "%s-litellm" .Release.Name }}
 {{- $guard := .Files.Get "files/choregos_guardrail.py" }}
+{{- $spans := .Files.Get "files/choregos_llm_spans.py" }}
+{{- $otlp := (.Values.global.tracing | default dict).otlpEndpoint | default "" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -26,6 +28,9 @@ data:
       # Drops from a call the parameters the target provider does not know, instead of
       # failing — model generations do not agree on `temperature`.
       drop_params: true
+      # ADR 0018 §2: each call made with a run's key is a span of the run's trace. Inert until
+      # `global.tracing.otlpEndpoint` gives LiteLLM an OTLP endpoint.
+      callbacks: ["choregos_llm_spans.handler"]
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY
       database_url: os.environ/DATABASE_URL
@@ -40,6 +45,8 @@ data:
           default_on: true
   choregos_guardrail.py: |
 {{ $guard | indent 4 }}
+  choregos_llm_spans.py: |
+{{ $spans | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -59,7 +66,7 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: gateway
       annotations:
-        checksum/config: {{ print (toJson .Values.models) (toJson .Values.upstream) $guard | sha256sum }}
+        checksum/config: {{ print (toJson .Values.models) (toJson .Values.upstream) $guard $spans $otlp | sha256sum }}
     spec:
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       # The Kyverno `non-root` rule has been strict since 2026-09-25: the pod context is
@@ -93,6 +100,10 @@ spec:
             # without requiring a certificate the bench's PostgreSQL does not have.
             - name: DATABASE_URL
               value: "postgresql://{{ .Values.global.database.user }}:$(DATABASE_PASSWORD)@{{ include "choregos.databaseHost" . }}:{{ .Values.global.database.port }}/{{ .Values.database.name }}?sslmode=prefer"
+            {{- with $otlp }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
           ports:
             - { name: http, containerPort: 4000 }
           readinessProbe:

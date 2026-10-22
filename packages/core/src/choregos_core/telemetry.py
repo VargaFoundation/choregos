@@ -15,6 +15,8 @@ The tree of a run:
 - `invoke_agent <agent>`: the runner, for the agent's session, child of the stage span.
 - `execute_tool <tool>`: the API, for each tool call through the internal route, child of the stage
   span (the API never sees the runner's span).
+- `chat <model>` (or `embeddings`, `text_completion`): the gateway, for each model call made with
+  the run's key, child of the stage span (`choregos_core.llm_spans`, loaded by LiteLLM).
 
 What a span never carries: the prompt, the tool arguments, the tool result (ADR 0018 conditions).
 No gate reads a span: tracing is off unless an exporter is configured, and a failure to export is
@@ -52,6 +54,15 @@ PROVIDER_NAME = "gen_ai.provider.name"
 REQUEST_MODEL = "gen_ai.request.model"
 TOOL_NAME = "gen_ai.tool.name"
 ERROR_TYPE = "error.type"
+#: The gateway's model-call spans (ADR 0018 §2): `choregos_core.llm_spans` spells these too, in
+#: LiteLLM's process where this module is not installed; a test keeps the two equal.
+CHAT = "chat"
+TEXT_COMPLETION = "text_completion"
+EMBEDDINGS = "embeddings"
+RESPONSE_MODEL = "gen_ai.response.model"
+USAGE_INPUT_TOKENS = "gen_ai.usage.input_tokens"
+USAGE_OUTPUT_TOKENS = "gen_ai.usage.output_tokens"
+USAGE_CACHE_READ_INPUT_TOKENS = "gen_ai.usage.cache_read.input_tokens"
 
 #: The correlation keys: the structlog keys, so a log line and a span meet on the same values.
 RUN_ID = "run_id"

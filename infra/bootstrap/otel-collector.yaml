@@ -1,4 +1,13 @@
-# opentelemetry-collector — vague 2. Installé par Argo CD, jamais à la main.
+# opentelemetry-collector — wave 2. Installed by Argo CD, never by hand.
+#
+# The platform's traces (ADR 0018, S40-20b): the API, the workers and the gateway send OTLP/HTTP
+# to `http://otel-collector.monitoring.svc:4318` (`global.tracing.otlpEndpoint` in the chart); the
+# collector hands every span to Tempo and derives the RED metrics of the dashboard `traces.json`
+# from them (`spanmetrics`). A dimension the dashboard reads is listed here, and a test refuses a
+# panel that reads a label this connector does not produce (`tests/charts/test_dashboards.py`).
+#
+# Until S40-20b the values were `mode: daemonset` alone: the chart refuses to render without an
+# image (`'image.repository' must be set`), and nothing was exported anywhere.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -15,9 +24,67 @@ spec:
     chart: opentelemetry-collector
     targetRevision: 0.111.0
     helm:
-      values: 'mode: daemonset
-
-        '
+      values: |
+        # A Deployment behind a Service, not a DaemonSet on host ports: the senders are pods that
+        # name a Service, and a node's port 4318 is nobody's business.
+        mode: deployment
+        fullnameOverride: otel-collector
+        image:
+          # The contrib distribution: `spanmetrics` is not in the core one.
+          repository: otel/opentelemetry-collector-contrib
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { cpu: "1", memory: 512Mi }
+        ports:
+          jaeger-compact: { enabled: false }
+          jaeger-thrift: { enabled: false }
+          jaeger-grpc: { enabled: false }
+          zipkin: { enabled: false }
+          span-metrics:
+            enabled: true
+            containerPort: 8889
+            servicePort: 8889
+            protocol: TCP
+        serviceMonitor:
+          enabled: true
+          # kube-prometheus-stack's release (`monitoring.yaml`) selects on this label.
+          extraLabels: { release: monitoring }
+          metricsEndpoints:
+            - port: span-metrics
+        config:
+          receivers:
+            jaeger: null
+            zipkin: null
+            prometheus: null
+          connectors:
+            spanmetrics:
+              namespace: traces.span.metrics
+              # Bounded values only: never `run_id`, `work_item` or `gen_ai.conversation.id`, one
+              # series per run. Those stay on the span, in Tempo.
+              dimensions:
+                - name: gen_ai.operation.name
+                - name: gen_ai.request.model
+                - name: gen_ai.provider.name
+                - name: project
+                - name: stage
+                - name: error.type
+          exporters:
+            otlp/tempo:
+              endpoint: tempo.monitoring.svc:4317
+              tls: { insecure: true }
+            prometheus:
+              endpoint: ${env:MY_POD_IP}:8889
+          service:
+            pipelines:
+              traces:
+                receivers: [otlp]
+                processors: [memory_limiter, batch]
+                exporters: [otlp/tempo, spanmetrics]
+              metrics:
+                receivers: [spanmetrics]
+                processors: [memory_limiter, batch]
+                exporters: [prometheus]
+              logs: null
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
