@@ -35,6 +35,32 @@ GIT_ENV = {
 }
 
 
+#: Variables that make git ignore where it is run and act on ANOTHER repository. A parent that
+#: runs inside a git hook, or inside a checkout's own tooling, exports them; inherited by the
+#: runner's `git init`, `GIT_DIR` alone turns the developer's repository into a bare one
+#: (`core.bare = true`) and every `git config`/`git commit` after it lands there (#891).
+INHERITED_GIT_REPOSITORY_VARIABLES = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+)
+
+
+def clean_git_environment(base: Mapping[str, str], cwd: Path) -> dict[str, str]:
+    """`base` without the variables that point git at another repository, and git's discovery
+    stopped above `cwd`: a workspace never reads or writes a repository it did not create."""
+    kept = {k: v for k, v in base.items() if k not in INHERITED_GIT_REPOSITORY_VARIABLES}
+    kept["GIT_CEILING_DIRECTORIES"] = str(cwd.resolve().parent)
+    return kept
+
+
 def _git_env(workspace: Path) -> dict[str, str]:
     """L'environnement git d'un run, workspace compris.
 
@@ -113,7 +139,7 @@ async def run_command(
 ) -> CommandResult:
     """Exécute une commande, capture tout, ne lève jamais sur un code non nul."""
     # `cwd` est le workspace du run : c'est lui que git doit considérer comme sûr.
-    merged = {**os.environ, **_git_env(Path(cwd)), **(env or {})}
+    merged = {**clean_git_environment(os.environ, Path(cwd)), **_git_env(Path(cwd)), **(env or {})}
     if isinstance(command, str):
         process = await asyncio.create_subprocess_shell(
             command,
@@ -171,6 +197,7 @@ class Workspace:
                 init = await self.git("init", "--initial-branch", "travail")
                 if not init.ok:
                     raise WorkspaceError(f"git init failed: {init.output}")
+            await self._require_own_repository()
             await self.git("config", "user.name", self.user_name)
             await self.git("config", "user.email", self.user_email)
             await self.git("config", "commit.gpgsign", "false")
@@ -187,6 +214,7 @@ class Workspace:
             await self.git("remote", "add", "origin", url)
         else:
             await self.git("remote", "set-url", "origin", url)
+        await self._require_own_repository()
         await self.git("config", "user.name", self.user_name)
         await self.git("config", "user.email", self.user_email)
         await self.git("config", "commit.gpgsign", "false")
@@ -209,6 +237,18 @@ class Workspace:
         if not checkout.ok:
             raise WorkspaceError(f"cannot check out {repo.work_branch}: {checkout.output}")
         self._exclude_runner_files()
+
+    async def _require_own_repository(self) -> None:
+        """Refuse to configure a repository that is not the workspace's own (#891): git climbs
+        to an enclosing checkout when the workspace has no repository of its own."""
+        top = await self.git("rev-parse", "--show-toplevel")
+        reported = top.stdout.strip()
+        own = top.ok and await asyncio.to_thread(lambda: Path(reported).resolve() == self.path.resolve())
+        if not own:
+            raise WorkspaceError(
+                f"the repository at {self.path} is not the workspace's own "
+                f"(top level: {top.stdout.strip() or top.output}): refusing to configure it"
+            )
 
     def _exclude_runner_files(self) -> None:
         """Les fichiers du runner ne doivent jamais apparaître dans un commit d'agent."""
