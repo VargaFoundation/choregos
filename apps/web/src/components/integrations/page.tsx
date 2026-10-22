@@ -10,6 +10,7 @@ import { Empty, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { estClient } from "@/lib/integrations";
 import { useSession } from "@/lib/session";
+import { A2aAgent } from "./a2a";
 import { IntegrationsPanel } from "./panel";
 
 /**
@@ -58,6 +59,7 @@ function ClientsDeLOrganisation() {
   return (
     <>
       <ClientsMcp org={org} clients={(jetons.data ?? []).filter(estUnClientMcp)} agents={agents.data ?? []} />
+      <A2aAgent org={org} />
       <AiClientCatalogue org={org} />
     </>
   );

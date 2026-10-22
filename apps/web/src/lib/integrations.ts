@@ -101,6 +101,11 @@ export function origineDe(urlMcp: string): string {
   return urlMcp.replace(/\/mcp(\/.*)?$/, "");
 }
 
+/** The organisation's A2A agent card (ADR 0078): beside `/mcp`, at the platform's origin. */
+export function a2aCardUrl(urlMcp: string, org: string): string {
+  return `${origineDe(urlMcp)}/a2a/orgs/${encodeURIComponent(org)}/.well-known/agent-card.json`;
+}
+
 export interface Extrait {
   /** Où le coller : un fichier, un terminal. */
   where: string;

@@ -12,6 +12,7 @@ in this layer. Push notifications are `push.py`'s (ADR 0078 §5).
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import time
@@ -21,6 +22,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
+from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import Control
 from choregos_core.mcp import ERREUR_DE_SYNTAXE as PARSE_ERROR
 from choregos_core.mcp import (
@@ -42,7 +44,7 @@ from sse_starlette import EventSourceResponse
 from .. import __version__
 from ..audit import record
 from ..config import Settings
-from ..db.models import HumanRequest, Organization, Project, WorkflowDef, WorkItem
+from ..db.models import ArtifactRecord, HumanRequest, Organization, Project, WorkflowDef, WorkItem
 from ..db.session import session_scope
 from ..deps import Config, Db
 from ..errors import ApiError
@@ -52,10 +54,11 @@ from ..mcp.appelant import SCOPES_A2A, Appelant, Refus, identifier
 from ..mcp.garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour
 from ..mcp.oauth import emetteur
 from ..mcp.transport import TAILLE_MAX_DU_CORPS, _origines_admises, _refus_http
+from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
 from ..services import creer_un_ticket, workflow_du_ticket, workflow_model
-from ..services.artifacts import artifacts_of
+from ..services.artifacts import ArtifactCorruptedError, artifacts_of, filename_of, read_content
 from ..temporal import InterpreterNotRunningError, deliver_control
 
 router = APIRouter(include_in_schema=False)
@@ -67,6 +70,9 @@ PROTOCOL_VERSION = "0.3.0"
 MAX_PARTS = 20
 MAX_TEXT = 100_000
 MAX_MESSAGE_ID = 200
+#: A finished task carries its artefacts' content while it stays small: 256 KiB each, 1 MiB in all.
+MAX_ARTIFACT_INLINE = 256 * 1024
+MAX_ARTIFACTS_INLINE = 1024 * 1024
 #: A2A's own JSON-RPC errors (0.3.0 §8.2).
 TASK_NOT_FOUND = -32001
 TASK_NOT_CANCELABLE = -32002
@@ -523,31 +529,69 @@ async def task_of(door: Door, item: WorkItem, project: Project) -> dict[str, Any
 
 
 async def _artifacts(door: Door, item: WorkItem, link: str) -> list[dict[str, Any]]:
-    """The latest revision of each artefact, described; its content is read in the console."""
-    latest: dict[str, Any] = {}
+    """The latest revision of each artefact, its content in parts while the task stays small.
+
+    The content is read through `read_content`, which checks the digest: bytes that no longer match
+    are withheld, as on the console's download. A larger artefact, or one past the task's budget, is
+    described and read in the console."""
+    latest: dict[str, ArtifactRecord] = {}
     for row in await artifacts_of(door.session, item.id):
         latest[row.name] = row
-    return [
-        {
-            "artifactId": f"{row.name}@{row.version}",
+    budget = MAX_ARTIFACTS_INLINE
+    served: list[dict[str, Any]] = []
+    for row in latest.values():
+        description: dict[str, Any] = {
             "name": row.name,
-            "parts": [
-                {
-                    "kind": "data",
-                    "data": {
-                        "name": row.name,
-                        "type": row.type,
-                        "media_type": row.media_type,
-                        "version": row.version,
-                        "digest": row.digest,
-                        "size": row.size,
-                        "console_url": link,
-                    },
-                }
-            ],
+            "type": row.type,
+            "media_type": row.media_type,
+            "version": row.version,
+            "digest": row.digest,
+            "size": row.size,
+            "console_url": link,
         }
-        for row in latest.values()
-    ]
+        part: dict[str, Any] | None = None
+        if row.size > MAX_ARTIFACT_INLINE:
+            description["content"] = (
+                f"not in the task: over {MAX_ARTIFACT_INLINE} bytes, read it in the console"
+            )
+        elif row.size > budget:
+            description["content"] = (
+                f"not in the task: its artefacts' content is capped at {MAX_ARTIFACTS_INLINE} bytes, "
+                "read it in the console"
+            )
+        else:
+            try:
+                part = _content_part(row, await read_content(object_store(), row))
+                budget -= row.size
+            except ArtifactCorruptedError:
+                description["content"] = "withheld: its bytes no longer match its digest"
+            except ObjectStoreError:
+                description["content"] = "unavailable: the object store did not serve it, try again"
+        served.append(
+            {
+                "artifactId": f"{row.name}@{row.version}",
+                "name": row.name,
+                "parts": [part or {"kind": "data", "data": description}],
+                "metadata": {"choregos": description},
+            }
+        )
+    return served
+
+
+def _content_part(row: ArtifactRecord, data: bytes) -> dict[str, Any]:
+    """Markdown is text, a JSON object is data; anything else travels as a file, its bytes in base64."""
+    if row.storage_key is None and row.type == "markdown" and isinstance(row.content, str):
+        return {"kind": "text", "text": row.content}
+    if row.storage_key is None and isinstance(row.content, dict):
+        return {"kind": "data", "data": row.content}
+    return {
+        "kind": "file",
+        "file": {
+            "name": filename_of(row),
+            "mimeType": row.media_type,
+            "bytes": base64.b64encode(data).decode("ascii"),
+        },
+    }
 
 
 async def _cancel(door: Door, params: dict[str, Any]) -> dict[str, Any]:
