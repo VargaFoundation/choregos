@@ -19,6 +19,10 @@ only if the grant offers the tool; its output goes back to the model, never to t
 What is kept is text: the caller's transcript, the agent's transcript and text, tool calls and
 refusals. Audio is relayed and forgotten. A frame over `MAX_FRAME_BYTES` closes the caller's socket
 with 1009; `max_session_minutes` closes it with 1000; either way the session closes, its spend booked.
+
+The spend is the relay's own (S41-15, `realtime_spend`): each `response.done` is priced from its
+usage at the prices the session opened with, and the session closes with 1008 `budget_exceeded` the
+moment the sum reaches its cap, the reservation or the per-minute rate of the catalogue.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
@@ -47,6 +52,7 @@ from .agent_sessions import (
     session_gateway,
     tool_parameters,
 )
+from .realtime_spend import RealtimePrices, response_cost, session_cap
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -270,7 +276,19 @@ class VoiceSession:
     spec: AgentSpec
     tools: dict[str, OutilDuCourtier]
     max_seconds: float
+    prices: RealtimePrices
+    reserved_usd: float
+    usd_per_minute: float | None = None
+    #: A minute, in seconds: of the rate as of `max_seconds` (a test shortens both).
+    minute_s: float = 60.0
+    spent_usd: float = 0.0
+    started: float = field(default_factory=time.monotonic)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    def cap(self) -> float:
+        return session_cap(
+            self.reserved_usd, self.usd_per_minute, time.monotonic() - self.started, self.minute_s
+        )
 
     async def write(self, act: Callable[[AsyncSession, AgentSessionRecord, Project], Awaitable[Any]]) -> Any:
         """One short transaction on the session's rows: a voice session lasts minutes, a database
@@ -386,26 +404,51 @@ async def _from_model(caller: CallerSocket, upstream: RealtimeLink, voice: Voice
         if not isinstance(event, dict):
             continue
         type_ = str(event.get("type"))
+        spent: Ending | None = None
         if type_ in _SPOKEN:
             kind, key = _SPOKEN[type_]
             await voice.note(kind, {"text": str(event.get(key) or "")[:2000]})
         elif type_ == "response.done":
-            await _count_the_response(voice, event.get("response") or {})
+            spent = await _count_the_response(voice, event.get("response") or {})
         elif type_ == "error" and budget_refusal(raw):
             await caller.send_text(raw)
             return Ending("budget_exceeded", 1008, "the session's budget is spent")
         await caller.send_text(raw)
+        if spent is not None:
+            return spent
         if type_ == "response.function_call_arguments.done":
             await _answer_the_call(upstream, voice, event)
 
 
-async def _count_the_response(voice: VoiceSession, response: dict[str, Any]) -> None:
+async def _count_the_response(voice: VoiceSession, response: dict[str, Any]) -> Ending | None:
+    """Journals the response with its price; past the cap, the ending of the session."""
+    usage = response.get("usage") or {}
+    cost = response_cost(usage if isinstance(usage, dict) else {}, voice.prices)
+    voice.spent_usd = round(voice.spent_usd + cost.cost_usd, 8)
+    cap = voice.cap()
+
     async def counted(db: AsyncSession, record: AgentSessionRecord, _: Project) -> None:
         record.responses += 1
-        payload = {"status": response.get("status"), "usage": response.get("usage") or {}}
+        payload = {
+            "status": response.get("status"),
+            "usage": usage,
+            "priced_by": "relay",
+            "cost_usd": cost.cost_usd,
+            "tokens_in": cost.tokens_in,
+            "tokens_out": cost.tokens_out,
+            "tokens_cached": cost.tokens_cached,
+            "spent_usd": voice.spent_usd,
+            "cap_usd": round(cap, 8),
+        }
         await journal(db, record, "response.done", payload)
 
     await voice.write(counted)
+    if voice.spent_usd < cap:
+        return None
+    log.info(
+        "agent_realtime.cap_reached", session_id=voice.session_id, spent_usd=voice.spent_usd, cap_usd=cap
+    )
+    return Ending("budget_exceeded", 1008, f"the session spent {voice.spent_usd:.4f} of its {cap:.4f} USD")
 
 
 async def _answer_the_call(upstream: RealtimeLink, voice: VoiceSession, event: dict[str, Any]) -> None:

@@ -331,8 +331,32 @@ gateway's realtime socket (`ws(s)://<gateway>/realtime?model=…`), with the ses
 - **Transcript**: the caller's and the agent's transcripts and texts, tool calls and refusals, each
   `response.done` with its usage. Audio is relayed and never kept.
 
-The voice session's spend is what the gateway counted on its key, read when it closes; booking it
-from `response.done` with a per-minute ceiling is S41-15.
+**What a voice session spends (S41-15)** is measured by the relay, not read from the gateway, which
+prices a realtime socket late or not at all, while an audio token costs several times a text one.
+
+- **Prices**: when the session opens, the API takes the model's prices from the organisation's
+  override (`input_per_1k_override`/`output_per_1k_override`, then applied to every token) or else
+  from the gateway: text in and out, audio in and out (`input_cost_per_audio_token`,
+  `output_cost_per_audio_token` in LiteLLM), cached input (`cache_read_input_token_cost`, else the
+  text price). A model with neither override nor the four gateway prices opens no session (422,
+  "no audio price"): an unpriced token is a spend no cap can stop. The prices are journaled in
+  `session.opened`.
+- **Each `response.done`** is priced from its `usage`: `input_token_details` (text, audio, cached
+  with its own split) and `output_token_details`. A total without its split is priced at the dearer
+  kind, a cached total without its split is taken from text first; the model is never measured
+  cheaper than it may cost. The event is journaled with `priced_by: relay`, its cost and tokens, the
+  sum so far and the cap.
+- **The cap** is the session's reservation (`max_usd` and the project's budgets, as for a prompt
+  session) and, when the catalogue entry sets `max_usd_per_minute` (`PATCH /orgs/{org}/models/{id}`,
+  `clear_max_usd_per_minute` to remove it), that rate for each minute begun, the first one whole.
+  Once the sum reaches it, the caller first receives that `response.done`, then the socket closes
+  with 1008 "the session spent X of its Y USD".
+- **Booking**: the ledger books the relay's sum with `session_id`; the gateway's count on the key is
+  kept in `session.closed` as `gateway_cost_usd`, for comparison only. A voice session that never
+  answered books what the gateway counted, as before.
+- **Live check**: `tests/live/test_realtime_live.py` (`make test-live`, with
+  `CHOREGOS_LIVE_LITELLM_URL`, `CHOREGOS_LIVE_LITELLM_KEY` and `CHOREGOS_LIVE_REALTIME_MODEL`) opens a
+  real realtime socket through the gateway and prices its `response.done`.
 
 **A person talks to a hosted agent directly (S41-11).** The same `POST /orgs/{org}/agents/{slug}/responses`,
 the same rights, budget, key, closing and transcript as a prompt session; what answers is the

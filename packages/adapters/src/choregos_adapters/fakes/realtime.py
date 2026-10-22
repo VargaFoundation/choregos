@@ -28,7 +28,7 @@ AUDIO_B64 = "AAABAAIAAwAEAAUABgAHAAgACQ=="
 class FakeRealtimeUpstream:
     script: list[list[dict[str, Any]]] = field(default_factory=list)
     heard: list[str] = field(default_factory=list)
-    usage: dict[str, int] = field(default_factory=lambda: {"input_tokens": 120, "output_tokens": 40})
+    usage: dict[str, Any] = field(default_factory=lambda: {"input_tokens": 120, "output_tokens": 40})
     received: list[dict[str, Any]] = field(default_factory=list)
     url: str = ""
     headers: dict[str, str] = field(default_factory=dict)

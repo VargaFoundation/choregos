@@ -27,7 +27,7 @@ from uuid import uuid4
 import httpx
 from choregos_adapters.registry import fakes_enabled
 from choregos_contracts import EventType, ProjectConfig
-from choregos_core import ModelResolutionError, ModelResolver, utcnow
+from choregos_core import GatewayModel, ModelResolutionError, ModelResolver, Spend, utcnow
 from choregos_core.domain import aware
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
 from sqlalchemy import func, select
@@ -39,6 +39,7 @@ from ..db.models import (
     AgentSessionRecord,
     CostLedger,
     GatewayKeyRow,
+    ModelCatalogueRow,
     Organization,
     Project,
 )
@@ -176,6 +177,12 @@ async def open_session(
     config = ProjectConfig.model_validate(project.config or {})
     gateway = await session_gateway(session, organisation.id)
     model = await _resolve_model(session, organisation.id, gateway, spec, config)
+    # A voice session is measured by its relay (S41-15): its prices are settled before any key.
+    terms = (
+        await _voice_terms(session, organisation.id, gateway, model.litellm_model)
+        if runtime == "voice"
+        else {}
+    )
 
     record = AgentSessionRecord(
         id=str(uuid4()),
@@ -237,7 +244,7 @@ async def open_session(
         session,
         record,
         "session.opened",
-        {"model": record.model, "reserved_usd": reservation.usd, "bound_by": reservation.bound_by},
+        {"model": record.model, "reserved_usd": reservation.usd, "bound_by": reservation.bound_by, **terms},
     )
     log.info(
         "agent_session.opened",
@@ -263,6 +270,37 @@ async def _resolve_model(
         return resolver.resolve(spec.model or "profile:by_size", project=config, backend="prompt")
     except ModelResolutionError as refusal:
         raise unprocessable(str(refusal), [{"loc": ["agent", "model"], "msg": str(refusal)}]) from refusal
+
+
+async def _voice_terms(
+    session: AsyncSession, org_id: str, gateway: GatewayAdapter, name: str
+) -> dict[str, Any]:
+    """The prices and the per-minute rate a voice session of the model `name` is measured and capped
+    at, as `session.opened` keeps them; a model with no audio price opens none."""
+    from .realtime_spend import realtime_prices
+
+    listed = [m for m in await gateway.list_models() if name in (m.model_name, m.litellm_model)]
+    model = listed[0] if listed else GatewayModel(model_name=name, litellm_model=name)
+    row = (
+        (
+            await session.execute(
+                select(ModelCatalogueRow).where(
+                    ModelCatalogueRow.org_id == org_id,
+                    ModelCatalogueRow.model_name.in_({model.model_name, model.litellm_model}),
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    prices = realtime_prices(model, row)
+    if prices is None:
+        message = (
+            f"the gateway gives `{model.model_name}` no audio price, and the catalogue no price override: "
+            "a voice session it could not measure does not open"
+        )
+        raise unprocessable(message, [{"loc": ["agent", "model"], "msg": "no realtime price"}])
+    return {"prices": prices.as_payload(), "max_usd_per_minute": row.max_usd_per_minute if row else None}
 
 
 async def _reserve(
@@ -532,18 +570,26 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
     gateway = await session_gateway(session, record.org_id)
     settings = get_settings()
     key_row = None
+    priced: dict[str, Any] = {}
     if record.gateway_key_id:
         key_row = (
             await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.key_id == record.gateway_key_id))
         ).scalar_one_or_none()
         spend = await gateway.spend(record.gateway_key_id)
-        spend, _ = await priced_spend(
-            session,
-            record.org_id,
-            [record.model, *spend.models_used],
-            spend,
-            measured="spend_readback" in getattr(gateway, "capabilities", {"spend_readback"}),
-        )
+        relayed = await _relayed(session, record)
+        if relayed is not None:
+            # A voice session books what its relay measured (S41-15); the gateway's count is kept
+            # beside it, never booked.
+            priced = {"priced_by": "relay", "gateway_cost_usd": spend.cost_usd}
+            spend = relayed
+        else:
+            spend, priced = await priced_spend(
+                session,
+                record.org_id,
+                [record.model, *spend.models_used],
+                spend,
+                measured="spend_readback" in getattr(gateway, "capabilities", {"spend_readback"}),
+            )
         entry = await record_cost(
             session,
             project_id=record.project_id,
@@ -580,8 +626,42 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
     record.status = "closed" if reason in _CLEAN_ENDS else "failed"
     record.reason = reason
     record.closed_at = utcnow()
-    await journal(session, record, "session.closed", {"reason": reason, "cost_usd": record.cost_usd})
+    closed = {"reason": reason, "cost_usd": record.cost_usd}
+    if priced.get("priced_by") == "relay":
+        closed.update(priced)
+    await journal(session, record, "session.closed", closed)
     log.info("agent_session.closed", session_id=record.id, reason=reason, cost_usd=record.cost_usd)
+
+
+async def opened_terms(session: AsyncSession, record: AgentSessionRecord) -> dict[str, Any]:
+    """What `session.opened` journaled: the reservation and, for a voice session, its prices."""
+    payload = (
+        (
+            await session.execute(
+                select(AgentSessionEvent.payload)
+                .where(AgentSessionEvent.session_id == record.id, AgentSessionEvent.type == "session.opened")
+                .order_by(AgentSessionEvent.seq)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return dict(payload or {})
+
+
+async def _relayed(session: AsyncSession, record: AgentSessionRecord) -> Spend | None:
+    """What a voice session's relay priced, summed from its journal: what a relay that died left
+    there is booked by the sweep the same way."""
+    from .realtime_spend import relayed_spend
+
+    payloads = (
+        await session.execute(
+            select(AgentSessionEvent.payload).where(
+                AgentSessionEvent.session_id == record.id, AgentSessionEvent.type == "response.done"
+            )
+        )
+    ).scalars()
+    return relayed_spend(list(payloads), record.model)
 
 
 async def sweep_expired(session: AsyncSession, project_id: str) -> int:
