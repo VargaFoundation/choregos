@@ -14,6 +14,7 @@ from typing import Any
 
 from choregos_api.db.models import Run
 from choregos_api.services import persist_event
+from choregos_api.services.artifacts import producing_runs
 from choregos_contracts import (
     AgentRef,
     Budget,
@@ -161,6 +162,9 @@ async def prepare_job(
     run.playbook_checksum = stage_input.playbook.ref
     run.allowed_paths = allowed_paths
     run.started_at = utcnow()
+    # The run's chain (ADR 0077 §2): a job has no prompt, it reads only its declared inputs.
+    run.initiated_by = item.initiated_by
+    run.inputs_from = await producing_runs(session, item.id, list(plan.inputs or []), {}, reader=run_id)
     if existing is None:
         session.add(run)
     await persist_event(

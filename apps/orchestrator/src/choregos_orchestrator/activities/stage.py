@@ -18,6 +18,7 @@ from typing import Any
 from choregos_api.db.models import Run
 from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
+from choregos_api.services.artifacts import producing_runs
 from choregos_api.services.hosted_builds import builds_for
 from choregos_api.services.model_catalogue import load_policy
 from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
@@ -385,13 +386,14 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         await _journal_skipped_memories(session, run_id, resolved_memories.skipped)
         # Ce que le prompt de ce run embarque des étapes d'avant, sous l'empreinte de la révision
         # embarquée (S25-04). Rejouable : un reçu existant ne se réécrit pas (ADR 0008).
+        # From the same reads, `_record_chain` writes the run's chain on the row (ADR 0077 §2).
         await consigner(
             session,
             org_id=bundle.project.org_id,
             work_item_id=item.id,
             run_id=run_id,
             stage=plan.role,
-            sorties=lu_par_le_prompt(item.documents or {}, list(plan.inputs or []), playbook_prompt),
+            sorties=await _record_chain(session, run, item, list(plan.inputs or []), playbook_prompt),
             genre=LUE,
         )
         await persist_event(
@@ -711,6 +713,15 @@ async def _memories_and_pack(
         return resolved, await _context_pack(bundle, item, plan, resolved, None)
     resolved = await _memory_bindings(session, bundle, agent)
     return resolved, await _context_pack(bundle, item, plan, resolved, await org_memory(session, bundle))
+
+
+async def _record_chain(session: Any, run: Run, item: Any, inputs: list[str], prompt: str) -> dict[str, Any]:
+    """The run's chain (ADR 0077 §2), from what the platform holds, never from the agent: who started
+    the work item, and the runs that produced what this step reads. Returns what the prompt embeds."""
+    embedded = lu_par_le_prompt(item.documents or {}, inputs, prompt)
+    run.initiated_by = item.initiated_by
+    run.inputs_from = await producing_runs(session, item.id, [*inputs, *embedded], embedded, reader=run.id)
+    return embedded
 
 
 async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dict[str, str]]) -> None:

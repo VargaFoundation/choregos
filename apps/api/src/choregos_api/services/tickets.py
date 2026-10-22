@@ -45,6 +45,7 @@ from ..temporal import get_temporal, interpreter_id
 from .couts import estimate_cost
 from .definitions import workflow_du_ticket, workflow_model
 from .evenements import persist_event
+from .initiator import of_principal
 from .routage import Naissance, nouveau_ticket, verifier_la_naissance
 
 
@@ -335,6 +336,7 @@ async def creer_un_ticket(
     *,
     canal: str = "api",
     cle: str | None = None,
+    initiated_by: str | None = None,
 ) -> WorkItem:
     """Files a work item in Choregos, whatever the project's tracker (ADR 0059).
 
@@ -345,6 +347,9 @@ async def creer_un_ticket(
     `agent-ready` (the webhook must not race this transaction), and records the work item under
     the issue's key. The initial state is the chosen workflow's, and the interpreter starts at once
     unless `start=False`.
+
+    `initiated_by` names who started it when the principal does not (a schedule, a parent work
+    item); otherwise it is the principal through `canal` (ADR 0077 §2).
     """
     row, adapter = await tracker_du_projet(session, project)
     url: str | None = None
@@ -380,6 +385,7 @@ async def creer_un_ticket(
             size=demande.size,
             risk=demande.risk,
             created_by=principal.email,
+            initiated_by=initiated_by or of_principal(principal, canal),
             workflow=demande.workflow,
             labels=tuple(demande.labels),
             fields=dict(demande.fields),

@@ -70,6 +70,31 @@ async def latest(session: AsyncSession, work_item_id: str, name: str) -> Artifac
     ).scalar_one_or_none()
 
 
+async def producing_runs(
+    session: AsyncSession,
+    work_item_id: str,
+    names: list[str],
+    documents: dict[str, Any],
+    *,
+    reader: str,
+) -> list[str]:
+    """The runs whose outputs a step reads: the producer of the latest revision of each name (S40-22).
+
+    `documents` are the values the step's prompt embeds: one that no longer equals its latest
+    revision was edited by a person after the run, and that run is not where the step's value came
+    from, so it is left out rather than credited. The reader itself is never its own source.
+    """
+    runs: list[str] = []
+    for name in dict.fromkeys(names):
+        row = await latest(session, work_item_id, name)
+        if row is None or row.run_id == reader or row.run_id in runs:
+            continue
+        if name in documents and row.storage_key is None and row.content not in _as_recorded(documents[name]):
+            continue
+        runs.append(row.run_id)
+    return runs
+
+
 async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
     session: AsyncSession,
     *,
@@ -116,6 +141,11 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
             continue
         return row
     raise RuntimeError(f"artifact `{name}`: could not take a version after {_ROUNDS} attempts")
+
+
+def _as_recorded(value: Any) -> list[Any]:
+    """A document's value as an inline revision may hold it: as written, or parsed when declared `json`."""
+    return [value, _parsed(value)]
 
 
 def _parsed(raw: Any) -> Any:
