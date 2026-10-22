@@ -174,6 +174,9 @@ async def test_a_resent_message_is_the_same_task(client: AsyncClient, project: d
     assert sorted(i.id for i in items) == sorted([first["id"], other["id"]])
     assert [i.title for i in items] == ["Add credit notes"] * 2
     assert all(c.payload["canal"] == "a2a" for c in created)
+    assert all((i.initiated_by or "").startswith("a2a:") and len(i.initiated_by or "") > 4 for i in items), [
+        i.initiated_by for i in items
+    ]
     assert len(calls) == 3
     assert [c.payload["ecriture"] for c in calls].count(True) == 2, "a resent message writes nothing"
 

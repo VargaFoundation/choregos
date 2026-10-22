@@ -33,4 +33,4 @@ def of_principal(principal: Principal, channel: str) -> str:
     """The initiator of a work item a principal creates through a door (`creer_un_ticket`)."""
     if principal.kind != "user":
         return initiator("system")
-    return initiator("mcp" if channel == "mcp" else "person", principal.email)
+    return initiator(channel if channel in ("mcp", "a2a") else "person", principal.email)

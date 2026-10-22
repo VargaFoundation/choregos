@@ -102,6 +102,7 @@ def test_the_initiator_names_its_door_and_refuses_an_unknown_kind() -> None:
     ada = Principal(user_id="u1", email="ada@example.org")
     assert of_principal(ada, "api") == "person:ada@example.org"
     assert of_principal(ada, "mcp") == "mcp:ada@example.org"
+    assert of_principal(ada, "a2a") == "a2a:ada@example.org"
     assert of_principal(SYSTEM, "schedule") == "system", "a system principal is never a person"
     assert initiator("a2a", "rovo") == "a2a:rovo", "the inbound A2A door (S40-23) has its kind"
     assert initiator("eval") == "eval"
