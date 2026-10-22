@@ -81,6 +81,9 @@
     "budget": {
       "$ref": "#/$defs/budget"
     },
+    "a2a": {
+      "$ref": "#/$defs/a2a"
+    },
     "initial": {
       "type": "string",
       "description": "Where the workflow starts. Optional: the parser writes the first declared state there (§1.4). The field exists because the order of an object's keys does not survive jsonb storage, and a workflow that believes it starts at its terminal state closes the work item without doing anything."
@@ -687,6 +690,39 @@
         "on_exceeded": {
           "$ref": "#/$defs/identifier",
           "description": "Where a work item goes when its budget is spent; before defaults.from_any_agent_state.on_budget_exceeded."
+        }
+      }
+    },
+    "a2a": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The workflow served as an A2A skill (ADR 0078). Absent, the workflow is not exposed to A2A callers.",
+      "required": [
+        "skill",
+        "description"
+      ],
+      "properties": {
+        "skill": {
+          "$ref": "#/$defs/identifier",
+          "description": "The skill id on the organisation's agent card."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "What the skill does, as the caller's agent reads it."
+        },
+        "input_modes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+/[a-z0-9.+-]+$"
+          },
+          "default": [
+            "text/plain"
+          ],
+          "description": "The MIME types a caller may send."
         }
       }
     },

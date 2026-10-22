@@ -504,3 +504,31 @@ def test_the_run_access_record_carries_an_optional_chain() -> None:
         assert not list(validator.iter_errors({**record, "chain": chain})), initiator
     broken = {**record, "chain": {"initiated_by": "person:ada@example.org", "runs": [{"run_id": "x"}]}}
     assert list(validator.iter_errors(broken)), "a run of the chain names its stage and its inputs"
+
+
+def test_a_workflow_a2a_block_is_read_the_same_by_the_schema_and_the_model() -> None:
+    """ADR 0078: a workflow opts in as an A2A skill; the schema and the model accept and refuse alike."""
+    from choregos_contracts import WorkflowA2a
+
+    gaps: list[str] = []
+    node = contracts.load_schema("workflow.schema.json")["$defs"]["a2a"]
+    _comparer("workflow.a2a", node, WorkflowA2a, gaps)
+    assert not gaps, "\n".join(gaps)
+
+    validator = _validator("workflow.schema.json")
+    base = _load("workflow.default-simple.json")
+    opted_in = base | {"a2a": {"skill": "triage", "description": "Triage a request"}}
+    assert not list(validator.iter_errors(opted_in))
+    a2a = Workflow.model_validate(opted_in).a2a
+    assert a2a is not None and a2a.input_modes == ["text/plain"]
+    assert Workflow.model_validate(base).a2a is None
+    for bad in (
+        {"skill": "triage"},
+        {"skill": "triage", "description": "x", "secret": "y"},
+        {"skill": "Triage!", "description": "x"},
+        {"skill": "triage", "description": "x", "input_modes": []},
+        {"skill": "triage", "description": "x", "input_modes": ["plain"]},
+    ):
+        assert list(validator.iter_errors(base | {"a2a": bad})), bad
+        with pytest.raises(ValueError):
+            Workflow.model_validate(base | {"a2a": bad})

@@ -332,6 +332,19 @@ class WorkflowBudget(Strict):
     on_exceeded: Identifier | None = None
 
 
+#: A MIME type an A2A caller may send (`text/plain`, `application/json`).
+MediaType = Annotated[str, Field(pattern=r"^[a-z]+/[a-z0-9.+-]+$")]
+
+
+class WorkflowA2a(Strict):
+    """The workflow served as an A2A skill (ADR 0078). Absent, the workflow is not exposed: an agent
+    outside Choregos sees only the workflows that opt in, on the card of their organisation."""
+
+    skill: Identifier
+    description: str = Field(min_length=1, max_length=1000)
+    input_modes: list[MediaType] = Field(default_factory=lambda: ["text/plain"], min_length=1)
+
+
 class Workflow(Strict):
     """Définition complète d'un workflow. La validation statique vit dans `choregos_core.dsl`."""
 
@@ -343,6 +356,8 @@ class Workflow(Strict):
     transitions: list[Transition]
     defaults: WorkflowDefaults | None = None
     budget: WorkflowBudget | None = None
+    #: Served as an A2A skill (ADR 0078); absent: not exposed.
+    a2a: WorkflowA2a | None = None
     #: Où commence le workflow. **Facultatif dans le YAML** : le parseur le remplit avec le premier
     #: état déclaré, qui reste la règle (§1.4). Mais il faut que ce soit ÉCRIT dans le document, et
     #: non déduit de l'ordre des clés — parce que cet ordre ne survit pas au stockage.
