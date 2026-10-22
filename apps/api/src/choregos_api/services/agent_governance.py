@@ -57,6 +57,8 @@ class Action(StrEnum):
     TRIAL = "trial"
     FORK = "fork"
     MOVE = "move"
+    #: Talk to the agent in production directly, in a project (S41-09, ADR 0080 §10).
+    CONVERSE = "converse"
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +218,20 @@ def _trial(principal: Principal, org: str, subject: Subject, request: Request) -
     return ALLOWED
 
 
+def _converse(principal: Principal, org: str, subject: Subject, request: Request) -> Decision:
+    """A session is work in a project, paid by its budget: whoever drives that project's work items,
+    and no one else. The agent's own reach stays its own: a project's agent only in its project, and a
+    personal agent in none (ADR 0061), as for a run."""
+    target = request.project_slug
+    if target is None or not principal.can(Permission.ITEM_CONTROL, org, target):
+        return _no(f"talking to an agent in {org}/{target} requires working on that project")
+    if subject.scope == PROJECT and subject.project_slug != target:
+        return _no(f"`{subject.slug}` belongs to project `{subject.project_slug}`: talk to it there")
+    if subject.scope == PERSONAL:
+        return _no(f"`{subject.slug}` is a personal agent: it works in no project", unprocessable=True)
+    return ALLOWED
+
+
 def _create_in(principal: Principal, org: str, scope: str | None, project: str | None) -> Decision:
     if is_admin(principal, org):
         return ALLOWED
@@ -281,6 +297,7 @@ TABLE: dict[Action, Rule] = {
     Action.MANAGE: _change,
     Action.PIN: _pin,
     Action.TRIAL: _trial,
+    Action.CONVERSE: _converse,
     Action.FORK: _fork,
     Action.MOVE: _move,
 }

@@ -1962,6 +1962,45 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/responses:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: createAgentResponse
+      description: "One turn of a direct conversation with a prompt agent (ADR 0080 §10), in the Responses API's shape: a new session without `session_id`, its next turn with it. Needs `item.control` in the project. With `stream`, server-sent events `response.created`, `response.output_text.delta`, `response.completed` or `response.failed`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentResponseCreate" } } }
+      responses:
+        "200":
+          description: The response; `status` is `failed` with an `error` when the model or the budget stopped it
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/AgentResponse" } }
+            text/event-stream: { schema: { type: string } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agent-sessions/{session_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: session_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgentSession
+      description: "A session and its transcript (text only, never audio). Only its opener sees it."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSession" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [agents]
+      operationId: closeAgentSession
+      description: "Closes the session: its spend is booked, its gateway key revoked. Idempotent."
+      responses:
+        "204": { description: Closed }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -4490,6 +4529,101 @@ components:
         image: { type: [string, "null"], description: "the built image, `ref@sha256:...`, once ready" }
         error: { type: [string, "null"] }
         provenance: { type: object, additionalProperties: { type: string } }
+    AgentResponseCreate:
+      type: object
+      description: "One turn of a direct conversation (ADR 0080 §10). The agent's spec decides the model, the instructions and the tools."
+      required: [project, input]
+      additionalProperties: false
+      properties:
+        project: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "the project the session works in: its budget pays, its grants bound the tools" }
+        input:
+          oneOf:
+            - { type: string, minLength: 1 }
+            - { type: array, minItems: 1, items: { $ref: "#/components/schemas/AgentInputMessage" } }
+        session_id: { type: [string, "null"] }
+        stream: { type: boolean, default: false }
+        max_usd: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100, description: "the caller's cap on the whole session, when it opens; the project's budgets still bind" }
+    AgentInputMessage:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        role: { type: string, enum: [user], default: user }
+        content: { type: string, minLength: 1, maxLength: 65536 }
+    AgentOutputText:
+      type: object
+      required: [text]
+      properties:
+        type: { type: string, enum: [output_text], default: output_text }
+        text: { type: string }
+    AgentOutputMessage:
+      type: object
+      required: [content]
+      properties:
+        type: { type: string, enum: [message], default: message }
+        role: { type: string, enum: [assistant], default: assistant }
+        content: { type: array, items: { $ref: "#/components/schemas/AgentOutputText" } }
+    AgentResponseError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: "`budget_exceeded`, `model_error`, `max_turns`" }
+        message: { type: string }
+    AgentResponseUsage:
+      type: object
+      properties:
+        input_tokens: { type: integer, default: 0 }
+        output_tokens: { type: integer, default: 0 }
+        turns: { type: integer, default: 0 }
+        tool_calls: { type: integer, default: 0 }
+    AgentResponse:
+      type: object
+      description: "The part of the Responses API's shape a client reads."
+      required: [id, session_id, status]
+      properties:
+        id: { type: string }
+        object: { type: string, enum: [response], default: response }
+        session_id: { type: string }
+        status: { type: string, enum: [completed, failed] }
+        output: { type: array, items: { $ref: "#/components/schemas/AgentOutputMessage" } }
+        output_text: { type: string, default: "" }
+        usage: { $ref: "#/components/schemas/AgentResponseUsage" }
+        error: { oneOf: [{ $ref: "#/components/schemas/AgentResponseError" }, { type: "null" }] }
+    AgentDelta:
+      type: object
+      description: "A `response.output_text.delta` event."
+      required: [response_id, delta]
+      properties:
+        type: { type: string, enum: [response.output_text.delta], default: response.output_text.delta }
+        response_id: { type: string }
+        delta: { type: string }
+    AgentSessionEvent:
+      type: object
+      required: [seq, type, ts]
+      properties:
+        seq: { type: integer }
+        type: { type: string }
+        ts: { type: string, format: date-time }
+        payload: { type: object, additionalProperties: true }
+    AgentSession:
+      type: object
+      description: "A direct conversation with an agent (ADR 0080 §10), next to runs: its key, its spend and its transcript."
+      required: [id, agent, agent_version, project, status, model, responses, tool_calls, cost_usd, created_at, expires_at]
+      properties:
+        id: { type: string }
+        agent: { type: string }
+        agent_version: { type: integer }
+        project: { type: string }
+        status: { type: string, enum: [open, closed, failed] }
+        reason: { type: [string, "null"] }
+        model: { type: string }
+        responses: { type: integer }
+        tool_calls: { type: integer }
+        cost_usd: { type: number }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        events: { type: array, items: { $ref: "#/components/schemas/AgentSessionEvent" } }
     A2aDeclaredCost:
       type: object
       description: What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`.

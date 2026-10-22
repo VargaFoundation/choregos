@@ -101,15 +101,26 @@ async def _selection(session: AsyncSession, run: Run) -> dict[str, list[str]]:
     ).scalar_one_or_none()
     # Comme pour la porte (S18-06) : un serveur nommé sans motif n'ouvre RIEN ; tout, c'est `*`,
     # écrit — une version d'agent dit ce qu'elle prend, elle ne le prend pas par omission.
+    return selection_of_spec(spec)
+
+
+def selection_of_spec(spec: dict[str, Any] | None) -> dict[str, list[str]]:
+    """{connector: patterns} a version's `mcp_servers` names (see `_selection`)."""
     selection: dict[str, list[str]] = {}
-    for serveur in (spec or {}).get("mcp_servers") or []:
-        if isinstance(serveur, dict) and serveur.get("connector"):
-            selection[str(serveur["connector"])] = [str(m) for m in serveur.get("tools") or []]
+    for server in (spec or {}).get("mcp_servers") or []:
+        if isinstance(server, dict) and server.get("connector"):
+            selection[str(server["connector"])] = [str(m) for m in server.get("tools") or []]
     return selection
 
 
 async def outils_du_courtier(session: AsyncSession, run: Run, project: Project) -> dict[str, OutilDuCourtier]:
-    selection = await _selection(session, run)
+    return await tools_of_selection(session, await _selection(session, run), project)
+
+
+async def tools_of_selection(
+    session: AsyncSession, selection: dict[str, list[str]], project: Project
+) -> dict[str, OutilDuCourtier]:
+    """What a selection reaches in a project: the run's, or a session's agent's (S41-09)."""
     if not selection:
         return {}
     groupes = {str(g) for g in ((project.config or {}).get("groups") or [])}

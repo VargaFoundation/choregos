@@ -404,6 +404,10 @@ class CostLedger(Base, PkMixin):
     agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     workflow_name: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     workflow_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The agent session that spent it (S41-09, ADR 0080 §10): no run, no work item.
+    session_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_sessions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class AuditLog(Base, PkMixin):
@@ -1085,6 +1089,49 @@ class HostedBuildRecord(Base, PkMixin, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     provenance: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentSessionRecord(Base, PkMixin, TimestampMixin):
+    """A person talking to an agent directly (S41-09, ADR 0080 §10), next to runs: no work item, no
+    workflow. Its gateway key is minted once, when it opens, sealed in the secret store, and revoked
+    when it closes; its transcript is `agent_session_events`."""
+
+    __tablename__ = "agent_sessions"
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    agent_slug: Mapped[str] = mapped_column(String(64))
+    agent_version: Mapped[int] = mapped_column(Integer)
+    #: Who opened it: the only person who may talk in it, read it or close it.
+    user_id: Mapped[str] = mapped_column(String(200), index=True)
+    #: `open`, `closed` (by its person or at its expiry) or `failed` (the budget, the model).
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    model: Mapped[str] = mapped_column(String(200), default="")
+    gateway_key_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    #: The chat history the next response continues, the system message first.
+    messages: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    responses: Mapped[int] = mapped_column(Integer, default=0)
+    tool_calls: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Why it closed: `closed`, `expired`, `budget_exceeded`, `model_error`.
+    reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
+class AgentSessionEvent(Base, PkMixin):
+    """One event of a session's transcript, in order: what the person said, each model turn, each
+    tool call or refusal, how each response ended. Text only: audio is never journaled."""
+
+    __tablename__ = "agent_session_events"
+    __table_args__ = (UniqueConstraint("session_id", "seq", name="uq_agent_session_events_seq"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("agent_sessions.id", ondelete="CASCADE"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    type: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ProjectAgent(Base, PkMixin, TimestampMixin):
