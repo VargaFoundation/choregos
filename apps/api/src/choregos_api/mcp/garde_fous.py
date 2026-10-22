@@ -34,7 +34,10 @@ async def ecritures_du_jour(session: AsyncSession, user_id: str) -> int:
     lignes = (
         await session.execute(
             select(AuditLog.payload).where(
-                AuditLog.action == "mcp.call", AuditLog.actor_id == user_id, AuditLog.ts >= depuis
+                # The A2A door's writes (ADR 0078) count against the same daily budget.
+                AuditLog.action.in_(("mcp.call", "a2a.call")),
+                AuditLog.actor_id == user_id,
+                AuditLog.ts >= depuis,
             )
         )
     ).scalars()

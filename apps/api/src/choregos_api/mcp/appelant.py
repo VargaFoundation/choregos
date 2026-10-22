@@ -19,6 +19,8 @@ from ..security import hash_api_token
 from .oauth import JetonRefuse, emetteur, valider
 
 PORTEES_MCP = frozenset({"mcp:read", "mcp:write"})
+#: The A2A door's scope (ADR 0078): one scope, since a task is opened or read, never decided.
+SCOPES_A2A = frozenset({"a2a"})
 
 
 class Refus(Exception):  # noqa: N818 - une décision de la porte, pas une panne
@@ -52,15 +54,26 @@ class Appelant:
         return "mcp:write" in self.portees
 
 
-async def identifier(session: AsyncSession, request: Request, settings: Settings) -> Appelant:
-    """Le jeton porteur, lu en portée de plateforme ; le principal borne ensuite la RLS."""
+async def identifier(
+    session: AsyncSession,
+    request: Request,
+    settings: Settings,
+    *,
+    scopes: frozenset[str] = PORTEES_MCP,
+    door: str = "MCP",
+) -> Appelant:
+    """Le jeton porteur, lu en portée de plateforme ; le principal borne ensuite la RLS.
+
+    `scopes` are those of the door asking: the MCP door's, or the A2A door's (ADR 0078), which
+    shares everything else — OAuth, agents, revocation — and refuses `*` the same way."""
     entete = request.headers.get("authorization", "")
     if not entete.lower().startswith("bearer "):
-        raise Refus(401, "missing token: Authorization: Bearer chg_… (scope mcp:read or mcp:write)")
+        wanted = " or ".join(sorted(scopes))
+        raise Refus(401, f"missing token: Authorization: Bearer chg_… (scope {wanted})")
     brut = entete.split(" ", 1)[1].strip()
     await limiter_aux_organisations(session, TOUT)
     if not brut.startswith("chg_") and settings.mcp_oauth_enabled:
-        return await _par_oauth(session, brut, settings)
+        return await _par_oauth(session, brut, settings, scopes=scopes)
     jeton = (
         await session.execute(select(ApiToken).where(ApiToken.hash == hash_api_token(brut)))
     ).scalar_one_or_none()
@@ -69,12 +82,12 @@ async def identifier(session: AsyncSession, request: Request, settings: Settings
     if jeton.expires_at is not None and _aware(jeton.expires_at) <= utcnow():
         raise Refus(401, "expired token", erreur="invalid_token")
     portees = frozenset(jeton.scopes or ["*"])
-    if not portees & PORTEES_MCP:
+    if not portees & scopes:
         # Un jeton `*` ouvre l'API REST : on n'en veut pas dans la configuration d'un client.
         raise Refus(
             403,
-            "the MCP door refuses a token with the `*` scope: "
-            "create an mcp:read or mcp:write token for this client",
+            f"the {door} door refuses a token without its scope (`*` included): "
+            f"create a {' or '.join(sorted(scopes))} token for this client",
             erreur="insufficient_scope",
         )
     user = await session.get(User, jeton.user_id)
@@ -93,7 +106,9 @@ async def identifier(session: AsyncSession, request: Request, settings: Settings
     return appelant
 
 
-async def _par_oauth(session: AsyncSession, brut: str, settings: Settings) -> Appelant:
+async def _par_oauth(
+    session: AsyncSession, brut: str, settings: Settings, *, scopes: frozenset[str] = PORTEES_MCP
+) -> Appelant:
     """Un jeton émis par l'IdP pour la porte (RFC 9728) : l'humain se retrouve par son `sub`, puis
     par son e-mail vérifié. Il doit s'être connecté une fois à la console : la porte ne crée personne.
 
@@ -117,7 +132,14 @@ async def _par_oauth(session: AsyncSession, brut: str, settings: Settings) -> Ap
             "user unknown to Choregos: sign in to the console once",
             erreur="invalid_token",
         )
-    demandees = set(str(revendications.get("scope") or "").split()) & PORTEES_MCP
+    demandees = set(str(revendications.get("scope") or "").split()) & scopes
+    if not demandees and scopes != PORTEES_MCP:
+        # Only the MCP door reads by default: opening an A2A task is asked for, never implied.
+        raise Refus(
+            403,
+            f"the identity provider did not grant the {' or '.join(sorted(scopes))} scope",
+            erreur="insufficient_scope",
+        )
     principal = await _principal_from_user(session, user)
     client = str(revendications.get("azp") or revendications.get("client_id") or "?")
     appelant = Appelant(

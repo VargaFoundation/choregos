@@ -337,6 +337,7 @@ async def creer_un_ticket(
     canal: str = "api",
     cle: str | None = None,
     initiated_by: str | None = None,
+    item_id: str | None = None,
 ) -> WorkItem:
     """Files a work item in Choregos, whatever the project's tracker (ADR 0059).
 
@@ -346,7 +347,7 @@ async def creer_un_ticket(
     (GitHub, Jira, GitLab) it first creates the issue there, labelled `source:choregos` and NOT
     `agent-ready` (the webhook must not race this transaction), and records the work item under
     the issue's key. The initial state is the chosen workflow's, and the interpreter starts at once
-    unless `start=False`.
+    unless `start=False`. `item_id` is a caller-derived id (ADR 0008), the A2A door's (ADR 0078).
 
     `initiated_by` names who started it when the principal does not (a schedule, a parent work
     item); otherwise it is the principal through `canal` (ADR 0077 §2).
@@ -390,6 +391,7 @@ async def creer_un_ticket(
             labels=tuple(demande.labels),
             fields=dict(demande.fields),
             budget_usd=demande.budget_usd,
+            item_id=item_id,
         ),
     )
     await persist_event(

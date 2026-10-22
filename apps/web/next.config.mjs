@@ -38,6 +38,8 @@ const nextConfig = {
       // en développement, le relais évite d'avoir deux origines à configurer dans un client.
       { source: "/mcp", destination: `${apiUrl}/mcp` },
       { source: "/mcp/:path*", destination: `${apiUrl}/mcp/:path*` },
+      // The A2A door (ADR 0078): an outside agent's card and task calls.
+      { source: "/a2a/:path*", destination: `${apiUrl}/a2a/:path*` },
       // Ses métadonnées OAuth (RFC 9728), lues par claude.ai avant de se connecter.
       {
         source: "/.well-known/oauth-protected-resource/:path*",

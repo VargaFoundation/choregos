@@ -165,10 +165,13 @@ def tokens_create(
     expires_in_days: Annotated[int, typer.Option()] = 90,
     scope: Annotated[
         list[str] | None,
-        typer.Option(help="`*` (REST API and CLI, the default), or `mcp:read` / `mcp:write` (MCP gate)"),
+        typer.Option(
+            help="`*` (REST API and CLI, the default), `mcp:read` / `mcp:write` (MCP gate), "
+            "or `a2a` (A2A door)"
+        ),
     ] = None,
     project: Annotated[
-        str | None, typer.Option(help="`org:slug`: limits an MCP token to one project")
+        str | None, typer.Option(help="`org:slug`: limits an MCP or A2A token to one project")
     ] = None,
 ) -> None:
     """Issue an API token for the caller. The secret is shown HERE, once."""
