@@ -321,3 +321,22 @@ async def test_a_suspected_injection_in_a_tool_result_is_withheld_under_block(
     (_, last) = upstream.model.requests[-1]
     (result,) = [m["content"] for m in last["messages"] if m["role"] == "tool"]
     assert "withheld" in result and "Ignore all previous" not in result
+
+
+async def test_the_policy_s_llm_guard_marks_the_session_key(
+    client: AsyncClient, project: dict[str, Any], upstream: Upstream
+) -> None:
+    """S40-21 (ADR 0084): a session's model calls go through the gateway's guard like a run's."""
+    import yaml
+    from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
+
+    url = f"/api/v1/projects/{project['id']}/policy"
+    policy = yaml.safe_load((await client.get(url)).json()["yaml"])
+    policy.setdefault("sandbox", {})["llm_security_analyzer"] = True
+    saved = await client.put(url, json={"yaml": yaml.safe_dump(policy)})
+    assert saved.status_code == 200, saved.text
+    await _agent(client)
+    upstream.model.say("Order 42 shipped yesterday.")
+    assert (await _ask(client, "Where is order 42?")).status_code == 200
+    (key,) = upstream.gateway.keys.values()
+    assert key.metadata[GUARD_METADATA_KEY] == GUARD_REDACT

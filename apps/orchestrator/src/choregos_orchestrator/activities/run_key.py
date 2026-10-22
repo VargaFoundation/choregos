@@ -22,6 +22,7 @@ from choregos_api.db.models import GatewayKeyRow, Run
 from choregos_api.logging import get_logger
 from choregos_contracts import Budget, StageInput
 from choregos_core import utcnow
+from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
 from sqlalchemy import select
 
 from .base import without_secrets
@@ -78,6 +79,10 @@ async def mint_key(
     (S27-10): the reservation is the platform's read of it, the team is the hard stop. A resumed
     run's key joins it too, so the continuation counts against the project's day like any run.
     """
+    if getattr(bundle.policy.sandbox, "llm_security_analyzer", False):
+        # The gateway's guard masks secrets for this key only (ADR 0084). Key metadata is the
+        # platform's: the agent holds the key, never the right to rewrite it.
+        metadata = {**metadata, GUARD_METADATA_KEY: GUARD_REDACT}
     team_id = None
     if (daily := bundle.engine.daily_budget()) is not None:
         from .provisioning import project_team_id

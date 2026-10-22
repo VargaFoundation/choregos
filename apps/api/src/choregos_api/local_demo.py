@@ -35,6 +35,7 @@ from collections.abc import Mapping
 from typing import Any, Literal
 
 import yaml
+from choregos_core import llm_guardrail
 from sqlalchemy import select
 
 from .config import Settings, get_settings
@@ -127,6 +128,8 @@ PROVIDER_BACKENDS: dict[str, str] = {"anthropic": "opencode", "openai": "opencod
 #: The compose network, named in `compose.yaml`: run containers join it to reach the API and LiteLLM.
 LOCAL_NETWORK = "choregos"
 MOCK_RESPONSE = "simulated answer: the local install has no model key"
+#: The module name LiteLLM loads the LLM guard from, next to its config (ADR 0084).
+GUARDRAIL_MODULE = "choregos_guardrail"
 #: The connectors that follow the mode; every other one is created once and left alone.
 MODE_KINDS = ("runtime", "gateway")
 
@@ -188,6 +191,17 @@ def litellm_config(provider: Provider | None, *, embed: bool = False) -> dict[st
             "master_key": "os.environ/LITELLM_MASTER_KEY",
             "database_url": "os.environ/DATABASE_URL",
         },
+        # ADR 0084, as in the chart: the file sits next to this config (`write_litellm_config`).
+        "guardrails": [
+            {
+                "guardrail_name": "choregos-secrets",
+                "litellm_params": {
+                    "guardrail": f"{GUARDRAIL_MODULE}.ChoregosGuardrail",
+                    "mode": "pre_call",
+                    "default_on": True,
+                },
+            }
+        ],
     }
 
 
@@ -358,6 +372,9 @@ def write_litellm_config(directory: pathlib.Path, env: Mapping[str, str]) -> Pro
         yaml.safe_dump(litellm_config(provider, embed=embed), sort_keys=False), encoding="utf-8"
     )
     (directory / "provider").write_text(provider or "fakes", encoding="utf-8")
+    # LiteLLM's image has no Choregos package: the guard travels as a file, stdlib only.
+    guard_source = pathlib.Path(llm_guardrail.__file__).read_text(encoding="utf-8")
+    (directory / f"{GUARDRAIL_MODULE}.py").write_text(guard_source, encoding="utf-8")
     return provider
 
 

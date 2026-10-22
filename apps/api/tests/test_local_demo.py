@@ -223,3 +223,15 @@ async def test_development_sign_in_is_refused_outside_a_development_environment(
         with pytest.raises(pydantic.ValidationError, match="DEV_LOGIN_ENABLED"):
             Settings(env=env, dev_login_enabled=True)
     assert Settings(env="dev", dev_login_enabled=True).dev_login_enabled
+
+
+def test_the_local_gateway_loads_the_llm_guard_next_to_its_config(tmp_path: pathlib.Path) -> None:
+    """S40-21 (ADR 0084): LiteLLM's image has no Choregos package; the guard travels as a file."""
+    import choregos_core.llm_guardrail
+
+    write_litellm_config(tmp_path, {})
+    (guard,) = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))["guardrails"]
+    module, _, cls = guard["litellm_params"]["guardrail"].rpartition(".")
+    assert cls == "ChoregosGuardrail" and guard["litellm_params"]["mode"] == "pre_call"
+    source = pathlib.Path(choregos_core.llm_guardrail.__file__).read_text(encoding="utf-8")
+    assert (tmp_path / f"{module}.py").read_text(encoding="utf-8") == source
