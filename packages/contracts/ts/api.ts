@@ -2198,6 +2198,8 @@ export type KnowledgeBaseCreate = {
   groups?: Array<string>;
   /** `files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search */
   serving_mode?: "files" | "index";
+  /** people read it only through a grant (or as an administrator or owning-project owner); runs that the base is attached to are still served (S42-11, ADR 0081) */
+  restricted?: boolean;
 };
 
 export type ProjectKnowledgeBaseCreate = {
@@ -2215,6 +2217,43 @@ export type KnowledgeBasePatch = {
   groups?: Array<string> | null;
   serving_mode?: "files" | "index" | null;
   status?: "active" | "archived" | null;
+  /** `agent:manage` only, like the rest of the reach (S42-11) */
+  restricted?: boolean | null;
+};
+
+/** A role on one knowledge base given to a person, a group or a project. Never serves a run (ADR 0081). */
+export type KnowledgeGrant = {
+  subject_type: "user" | "group" | "project";
+  /** a member id or an email (`user`), an IdP group name (`group`), a project slug (`project`) */
+  subject: string;
+  /** a name to show; set by the server on reads */
+  display?: string | null;
+  role: "viewer" | "editor" | "owner";
+  /** read-only: an email with no member yet; it resolves when that person signs in */
+  pending?: boolean;
+  created_by?: string | null;
+  created_at?: string | null;
+};
+
+export type KnowledgeGrants = {
+  grants: Array<KnowledgeGrant>;
+};
+
+export type KnowledgeGrantsPut = {
+  grants: Array<KnowledgeGrant>;
+};
+
+/** What the caller may do with a knowledge base, decided by the server (ADR 0081, same pattern as ADR 0061 and 0074). */
+export type KnowledgePermissions = {
+  /** upload, delete, convert, sources, sync, eval, reindex, rename, serving mode */
+  edit: boolean;
+  /** distil the base into a skill (spends model budget) */
+  distill: boolean;
+  /** change the grants */
+  share: boolean;
+  archive: boolean;
+  /** change scope, projects, groups or restricted (organisation administrator only) */
+  widen: boolean;
 };
 
 export type KnowledgeDocument = {
@@ -2303,6 +2342,15 @@ export type KnowledgeBase = {
   sources?: Array<KnowledgeSource> | null;
   /** the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base */
   owner_project?: string | null;
+  /** people read it only through a grant; runs that the base is attached to are still served (S42-11) */
+  restricted?: boolean;
+  can?: KnowledgePermissions;
+  /** the server's sentence when the caller may not edit: shown as is, never guessed from roles */
+  cannot_reason?: string | null;
+  /** the caller's role on the base through grants or ownership; null for a plain reader through the reach */
+  my_role?: "viewer" | "editor" | "owner" | null;
+  /** returned by the reading of one base */
+  grants?: Array<KnowledgeGrant> | null;
   /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one) */
   distillation?: {
     [key: string]: unknown;
@@ -3868,6 +3916,7 @@ export interface Operations {
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
+  listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
@@ -3937,6 +3986,7 @@ export interface Operations {
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
   putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
+  putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };

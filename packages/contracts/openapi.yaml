@@ -2611,6 +2611,38 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/grants:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [knowledge]
+      operationId: listKnowledgeGrants
+      description: >-
+        The roles granted on this base to people, groups and projects (S42-11, ADR 0081). Who holds a role is
+        shown to a caller who may change it (`can.share`) only; another reader of the base is 403, and a
+        base the caller may not read is 404.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeGrants" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [knowledge]
+      operationId: putKnowledgeGrants
+      description: >-
+        Replaces the whole list, so repeating a call changes nothing. `agent:manage`, or a caller whose
+        role on the base is owner (`can.share`). A user is named by member id or by email (an email with no
+        member yet is kept and resolves when that person signs in); a project must exist; a group is a free
+        IdP group name. A grant gives people a role on the base and never serves a run. Audited as
+        `knowledge.grant.set`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeGrantsPut" } } }
+      responses:
+        "200": { description: The list as stored, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeGrants" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/knowledge/{slug}/documents:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -5712,6 +5744,7 @@ components:
         projects: { type: array, items: { type: string }, maxItems: 200 }
         groups: { type: array, items: { type: string }, maxItems: 200 }
         serving_mode: { type: string, enum: [files, index], default: files, description: "`files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search" }
+        restricted: { type: boolean, default: false, description: "people read it only through a grant (or as an administrator or owning-project owner); runs that the base is attached to are still served (S42-11, ADR 0081)" }
     ProjectKnowledgeBaseCreate:
       type: object
       required: [slug, name]
@@ -5732,6 +5765,41 @@ components:
         groups: { type: [array, "null"], items: { type: string }, maxItems: 200 }
         serving_mode: { type: [string, "null"], enum: [files, index, null] }
         status: { type: [string, "null"], enum: [active, archived, null] }
+        restricted: { type: [boolean, "null"], description: "`agent:manage` only, like the rest of the reach (S42-11)" }
+    KnowledgeGrant:
+      type: object
+      required: [subject_type, subject, role]
+      additionalProperties: false
+      description: A role on one knowledge base given to a person, a group or a project. Never serves a run (ADR 0081).
+      properties:
+        subject_type: { type: string, enum: [user, group, project] }
+        subject: { type: string, minLength: 1, maxLength: 320, description: "a member id or an email (`user`), an IdP group name (`group`), a project slug (`project`)" }
+        display: { type: [string, "null"], description: "a name to show; set by the server on reads" }
+        role: { type: string, enum: [viewer, editor, owner] }
+        pending: { type: boolean, description: "read-only: an email with no member yet; it resolves when that person signs in" }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+    KnowledgeGrants:
+      type: object
+      required: [grants]
+      properties:
+        grants: { type: array, items: { $ref: "#/components/schemas/KnowledgeGrant" }, maxItems: 200 }
+    KnowledgeGrantsPut:
+      type: object
+      required: [grants]
+      additionalProperties: false
+      properties:
+        grants: { type: array, items: { $ref: "#/components/schemas/KnowledgeGrant" }, maxItems: 200 }
+    KnowledgePermissions:
+      type: object
+      description: What the caller may do with a knowledge base, decided by the server (ADR 0081, same pattern as ADR 0061 and 0074).
+      required: [edit, distill, share, archive, widen]
+      properties:
+        edit: { type: boolean, description: "upload, delete, convert, sources, sync, eval, reindex, rename, serving mode" }
+        distill: { type: boolean, description: "distil the base into a skill (spends model budget)" }
+        share: { type: boolean, description: "change the grants" }
+        archive: { type: boolean }
+        widen: { type: boolean, description: "change scope, projects, groups or restricted (organisation administrator only)" }
     KnowledgeDocument:
       type: object
       required: [id, filename, title, mime, size_bytes, digest, source, status]
@@ -5810,6 +5878,11 @@ components:
         eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
         sources: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeSource" }, description: returned by the reading of one base }
         owner_project: { type: [string, "null"], description: "the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base" }
+        restricted: { type: boolean, description: "people read it only through a grant; runs that the base is attached to are still served (S42-11)" }
+        can: { $ref: "#/components/schemas/KnowledgePermissions" }
+        cannot_reason: { type: [string, "null"], description: "the server's sentence when the caller may not edit: shown as is, never guessed from roles" }
+        my_role: { type: [string, "null"], enum: [viewer, editor, owner, null], description: "the caller's role on the base through grants or ownership; null for a plain reader through the reach" }
+        grants: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeGrant" }, description: returned by the reading of one base, to a caller who may share it }
         distillation:
           type: [object, "null"]
           description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one)"
