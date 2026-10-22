@@ -351,6 +351,10 @@ def create_app() -> FastAPI:
     from .mcp import router as porte_mcp
 
     app.include_router(porte_mcp)
+    # The A2A door (ADR 0078), beside it and out of the OpenAPI document for the same reason.
+    from .a2a import router as a2a_door
+
+    app.include_router(a2a_door)
 
     @app.get("/metrics", tags=["session"], operation_id="metrics", include_in_schema=False)
     async def metrics() -> Response:

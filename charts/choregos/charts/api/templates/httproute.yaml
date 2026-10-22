@@ -18,8 +18,9 @@ spec:
       http:
         paths:
           {{- /* `/mcp`: the gateway for external MCP clients (ADR 0030), served by the API, and its
-               OAuth metadata (RFC 9728) that claude.ai reads before connecting. */}}
-          {{- range list "/api" "/mcp" "/healthz" "/readyz" "/.well-known/oauth-protected-resource" }}
+               OAuth metadata (RFC 9728) that claude.ai reads before connecting. `/a2a`: the A2A door
+               (ADR 0078), last so that the paths before it keep their place. */}}
+          {{- range list "/api" "/mcp" "/healthz" "/readyz" "/.well-known/oauth-protected-resource" "/a2a" }}
           - path: {{ . }}
             pathType: Prefix
             backend:
@@ -47,6 +48,7 @@ spec:
         - path: { type: PathPrefix, value: /healthz }
         - path: { type: PathPrefix, value: /readyz }
         - path: { type: PathPrefix, value: /.well-known/oauth-protected-resource }
+        - path: { type: PathPrefix, value: /a2a }
       backendRefs:
         - name: choregos-api
           port: {{ .Values.service.port }}

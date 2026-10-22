@@ -439,9 +439,10 @@ Usage: choregos tokens create [OPTIONS]
 Options:
   --name <str>             [required]
   --expires-in-days <int>  [default: 90]
-  --scope <str>            `*` (REST API and CLI, the default), or `mcp:read`
-                           / `mcp:write` (MCP gate)
-  --project <str>          `org:slug`: limits an MCP token to one project
+  --scope <str>            `*` (REST API and CLI, the default), `mcp:read` /
+                           `mcp:write` (MCP gate), or `a2a` (A2A door)
+  --project <str>          `org:slug`: limits an MCP or A2A token to one
+                           project
   --help                   Show this message and exit.
 ```
 

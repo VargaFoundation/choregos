@@ -46,6 +46,8 @@ class Naissance:
     fields: dict[str, Any] = field(default_factory=dict)
     #: The budget given at launch (S27-06): only tightens the workflow's and the policy's.
     budget_usd: float | None = None
+    #: An id derived by the caller (ADR 0008): an A2A message sent twice finds its work item (ADR 0078).
+    item_id: str | None = None
 
 
 def _correspond(condition: dict[str, Any], etiquettes: set[str], type_: str | None) -> bool:
@@ -158,6 +160,8 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         fields=dict(naissance.fields),
         budget_usd=await _budget_at_launch(session, project, workflow, naissance),
     )
+    if naissance.item_id is not None:
+        item.id = naissance.item_id
     if naissance.labels:
         noter_les_etiquettes(item, naissance.labels)
     session.add(item)

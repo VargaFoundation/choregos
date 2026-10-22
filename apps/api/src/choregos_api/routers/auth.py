@@ -496,7 +496,9 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
     projet_nom: str | None = None
     if body.project is not None:
         if "*" in portees:
-            raise unprocessable("only an MCP token (scope mcp:read or mcp:write) can be bound to a project")
+            raise unprocessable(
+                "only an MCP or A2A token (scope mcp:read, mcp:write or a2a) can be bound to a project"
+            )
         # Un jeton ne voit jamais plus que son humain : le projet doit lui être lisible, et un
         # projet illisible répond comme un projet inexistant.
         try:

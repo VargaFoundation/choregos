@@ -1,6 +1,9 @@
 # 0078 — Governed workflows served as A2A skills (inbound A2A)
 
-- **Status**: proposed, 2026-10-20 — not implemented (#757)
+- **Status**: accepted, 2026-10-22; S40-23 implements §1–4 and §6 partially: the opt-in, the card,
+  `message/send`, `tasks/get`, `tasks/cancel`, the `a2a` scope, audit, rate limit and parts cap.
+  Not yet: `message/stream`, `tasks/resubscribe`, push notifications (§5), file parts, the
+  initiator record (ADR 0077) and the card URL on the Integrations page (#757)
 - **Concerns**: a new `/a2a` route at the root of the API process (beside `/mcp`), the workflow
   definitions (an opt-in per workflow), the work items service, the events stream, `chg_` token
   scopes; builds on [ADR 0030](0030-an-mcp-door-for-external-clients.md) (the MCP door, its tokens and
@@ -18,7 +21,7 @@ An agent-to-agent architecture reviewed on 2026-10-20 had its client poll a gate
 A2A gives the caller a task with a lifecycle, streaming and push notifications; a governed workflow
 already has that lifecycle, durably, in Temporal.
 
-## Decision (proposed)
+## Decision
 
 1. **What is exposed: a workflow, never a bare agent.** A workflow definition opts in with
    `a2a: {skill: <id>, description, input_modes}`; nothing is exposed by default. An agent outside a
