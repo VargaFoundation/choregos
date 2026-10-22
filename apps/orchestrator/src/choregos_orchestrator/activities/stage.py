@@ -31,6 +31,7 @@ from choregos_contracts import (
     McpServerRef,
     PlaybookRef,
     ProjectRef,
+    PromptCall,
     RepoRef,
     SkillRef,
     StageInput,
@@ -194,7 +195,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             resolved = None
             budget, reserved_usd = remote_budget(remote_runtime, plan.max_minutes)
         else:
-            if code_runtime is None and plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
+            # A runtime fixes its backend: the cross-backend review swaps only coding agents.
+            if (
+                not _fixed_backend(agent)
+                and plan.role == str(StageRole.REVIEW)
+                and engine.cross_backend_review()
+            ):
                 backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
             resolved = _resolve_model(resolver, plan, bundle, item, backend)
             if code_runtime is not None:
@@ -303,6 +309,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             remote=remote_call(remote_runtime, agent.agent.slug, budget)
             if remote_runtime is not None
             else None,
+            prompt=_prompt_call(agent),
             # In the run's Secret, never here (#523): see `start_run`.
             gateway_key=None,
             budget=budget,
@@ -1035,6 +1042,16 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
                 non_retryable=True,
             )
         backend = A2A_BACKEND
+    elif runtime is not None and runtime.kind == "prompt":
+        # A prompt agent is the runner's own tool loop (ADR 0080): no coding agent to choose.
+        if plan.backend and plan.backend != PROMPT_BACKEND:
+            raise ApplicationError(
+                f"the actor asks for the backend `{plan.backend}`, but the agent is a prompt agent "
+                f"(runtime `prompt`): drop `backend:` from the actor",
+                type="AgentIndisponible",
+                non_retryable=True,
+            )
+        backend = PROMPT_BACKEND
     elif runtime is not None and runtime.kind in STEPLESS_RUNTIMES:
         # ADR 0080: the contract names these runtimes before a runner can carry them as a step; a
         # step that started one would run nothing. A voice agent never runs as a step.
@@ -1057,8 +1074,27 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
 
 
 CODE_BACKEND = "code"
-#: Runtimes no step can run yet (ADR 0080); S41-03 and S41-05 take `prompt` and `hosted` out.
-STEPLESS_RUNTIMES = frozenset({"prompt", "voice", "hosted"})
+PROMPT_BACKEND = "prompt"
+#: Runtimes no step can run (ADR 0080): a voice agent never, a hosted one until S41-05.
+STEPLESS_RUNTIMES = frozenset({"voice", "hosted"})
+
+
+def _fixed_backend(agent: Any) -> bool:
+    """Whether the agent's runtime fixes its backend (`code`, `prompt`): no rotation swaps it."""
+    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
+    return runtime is not None and runtime.kind in {CODE_BACKEND, PROMPT_BACKEND}
+
+
+def _prompt_call(agent: Any) -> PromptCall | None:
+    """The step a prompt agent carries (ADR 0080), from its version's runtime; `None` for any other."""
+    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
+    if runtime is None or runtime.kind != "prompt":
+        return None
+    return PromptCall(
+        max_output_tokens=runtime.max_output_tokens,
+        tool_choice=runtime.tool_choice,
+        response_format=runtime.response_format,
+    )
 
 
 def _code_runtime(agent: Any) -> Any:

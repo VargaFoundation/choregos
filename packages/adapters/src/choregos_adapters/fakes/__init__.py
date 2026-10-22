@@ -15,6 +15,7 @@ from .executor import FakeExecutor
 from .gateway import BudgetExceeded, BudgetExceededError, FakeGateway
 from .github_app import FakeGitHubApp
 from .memory import FakeMemory
+from .model_server import FakeModelServer
 from .notify import FakeNotifier
 from .oci import FakeImageVerifier, FakeRegistryClient
 from .scm import FakeScm
@@ -31,6 +32,7 @@ __all__ = [
     "FakeGitHubApp",
     "FakeImageVerifier",
     "FakeMemory",
+    "FakeModelServer",
     "FakeNotifier",
     "FakeObjectStore",
     "FakeRegistryClient",
