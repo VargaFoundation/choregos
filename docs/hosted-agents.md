@@ -497,7 +497,7 @@ One key, one pod, each response priced once.
 
 ### Signatures, by cosign (S41-14)
 
-Publication asks the `cosign` binary the API image carries (v2.6.5) about the **pinned** reference,
+Publication asks the `cosign` binary the API image carries (v3.1.3) about the **pinned** reference,
 `ref@sha256:…`, never a tag: `cosign verify --output json`, by the operator's signer.
 
 - **By key**: `global.images.hostedCosignKeySecret` names a Secret of the release's namespace holding

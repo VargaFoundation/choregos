@@ -2577,6 +2577,14 @@ export type PolicyCeiling = {
   findings?: {
     max_per_run?: number | null;
   };
+  /** The built-in web_search tool (ADR 0083). Absent or `mode: deny`: not offered. An unknown data-handling value fails every bound that reads it. */
+  web_search?: {
+    mode?: "allow" | "deny";
+    backends?: Array<string> | null;
+    max_query_retention_days?: number | null;
+    allow_query_reuse?: boolean;
+    regions?: Array<string> | null;
+  } | null;
 };
 
 export type PolicyCeilingState = {

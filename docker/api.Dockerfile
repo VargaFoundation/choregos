@@ -91,7 +91,7 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 FROM commun AS api
 # `cosign`: publication verifies a hosted agent's image signature on its digest (S41-14, ADR 0080
 # §8). The same release as the `hosted-cosign` CI job, pinned by digest.
-COPY --from=ghcr.io/sigstore/cosign/cosign:v2.6.5@sha256:ad281047f85c5e1fc6ffbc30c2b55be3b07b4032bef715a12122ce5829619aca \
+COPY --from=ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 \
   /ko-app/cosign /usr/local/bin/cosign
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \

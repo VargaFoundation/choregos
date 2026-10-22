@@ -38,6 +38,7 @@ class Signed:
     signed: str
     unsigned: str
     altered: str
+    bundled: str
 
 
 def _run(*argv: str, cwd: Path | None = None) -> str:
@@ -72,10 +73,16 @@ def signed(tmp_path_factory: pytest.TempPathFactory) -> Signed:
     signed = _image(tmp, "signed", b"the image the operator's key signed " + run)
     unsigned = _image(tmp, "unsigned", b"an image nobody signed " + run)
     altered = _image(tmp, "altered", b"other bytes under the signed image's signature " + run)
-    _run(
-        "cosign", "sign", "--yes", "--key", str(tmp / "trusted" / "cosign.key"),
-        "--tlog-upload=false", "--allow-http-registry", "--allow-insecure-registry", signed,
+    bundled = _image(tmp, "bundled", b"an image signed in cosign 3's bundle format " + run)
+    # Without Rekor, cosign 3 signs only outside a signing config. `signed` gets the `.sig` tag
+    # format, the one a signature can be copied by; `bundled` cosign 3's default, a Sigstore bundle
+    # attached as an OCI referrer.
+    sign = (
+        "cosign", "sign", "--yes", "--key", str(tmp / "trusted" / "cosign.key"), "--tlog-upload=false",
+        "--use-signing-config=false", "--allow-http-registry", "--allow-insecure-registry",
     )  # fmt: skip
+    _run(*sign, "--new-bundle-format=false", signed)
+    _run(*sign, bundled)
     # The signature of `signed`, copied to the tag cosign reads for `altered`: valid by the key,
     # about other bytes.
     name, _, digest = signed.partition("@")
@@ -84,7 +91,9 @@ def signed(tmp_path_factory: pytest.TempPathFactory) -> Signed:
         "crane", "copy", "--insecure",
         f"{name}:{digest.replace(':', '-')}.sig", f"{name}:{altered_digest.replace(':', '-')}.sig",
     )  # fmt: skip
-    return Signed(tmp / "trusted" / "cosign.pub", tmp / "other" / "cosign.pub", signed, unsigned, altered)
+    return Signed(
+        tmp / "trusted" / "cosign.pub", tmp / "other" / "cosign.pub", signed, unsigned, altered, bundled
+    )
 
 
 def _verifier(key: Path) -> CosignVerifier:
@@ -112,3 +121,13 @@ async def test_a_signature_by_another_key_is_refused(signed: Signed) -> None:
     verdict = await _verifier(signed.other_key).verify(signed.signed)
     assert not verdict.verified
     assert "invalid signature" in verdict.detail, verdict.detail
+
+
+async def test_an_image_signed_in_the_bundle_format_is_accepted(signed: Signed) -> None:
+    verdict = await _verifier(signed.key).verify(signed.bundled)
+    assert verdict.verified, verdict.detail
+
+
+async def test_a_bundle_by_another_key_is_refused(signed: Signed) -> None:
+    verdict = await _verifier(signed.other_key).verify(signed.bundled)
+    assert not verdict.verified

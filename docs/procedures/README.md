@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-52 procedures.
+55 procedures.
 
 ## Connectors
 
@@ -45,6 +45,9 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
 | [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-16 |
+| [Search the web through Brave Search API](connector.web_search.brave.md) | an organisation administrator | `web_search/brave` | 2026-10-20 |
+| [Search the web through Firecrawl](connector.web_search.firecrawl.md) | an organisation administrator | `web_search/firecrawl` | 2026-10-20 |
+| [Search the web through Tavily](connector.web_search.tavily.md) | an organisation administrator | `web_search/tavily` | 2026-10-20 |
 | [Read nginx configuration from the GitOps repository](connector.web_server.nginx.md) | an organisation administrator | `web_server/nginx` | 2026-10-16 |
 
 ## Knowledge sources

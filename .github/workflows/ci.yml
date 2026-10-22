@@ -439,9 +439,11 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with: { enable-cache: true }
       - run: uv sync --frozen
-      # v2: the signing flags v3 changed; the release docker/api.Dockerfile copies.
-      - uses: sigstore/cosign-installer@v3
-        with: { cosign-release: v2.6.5 }
+      # The release docker/api.Dockerfile copies: v3, whose grpc carries no known CRITICAL (v2.6.5's
+      # grpc 1.77 has CVE-2026-33186, which the images job's Trivy gate refuses). Installer v3
+      # cannot install a v3 cosign (its bootstrap check fails, exit 22); v4 can.
+      - uses: sigstore/cosign-installer@v4.1.2
+        with: { cosign-release: v3.1.3 }
       - uses: imjasonh/setup-crane@v0.4
         with: { version: v0.20.7 }
       - name: kyverno CLI

@@ -1874,6 +1874,38 @@ the egress proxy cannot see inside TLS. An agent that is still allowed its built
 `builtin_web_tools` to `deny` and tell their agents to use `web_fetch`. Its name is reserved: a tool of
 the catalogue or of a plugin with the same name makes the tool list answer 409.
 
+**`web_search`: how an agent should search the web (ADR 0083).** A search query is outbound text written
+by an agent that has read the work item: what matters is what the search provider keeps. The built-in
+`web_search` is **closed until the organisation opens it** in its policy ceiling:
+
+```yaml
+web_search:
+  mode: allow                    # default deny: not offered
+  backends: [brave, firecrawl]   # optional: the connector types allowed
+  max_query_retention_days: 0    # optional cap; null: none
+  allow_query_reuse: false       # default: a backend that trains, ranks or re-indexes on queries is refused
+  regions: [eu]                  # optional
+```
+
+The backend is an organisation connector of kind **Web search** (`brave`, `tavily`, `firecrawl`), its
+key sealed in the API. Each type declares what it does with queries; the shipped ones declare **every
+field unknown** (their terms were not reviewed), and an unknown value fails every bound that reads it.
+To use one under a cap, state your contract in the connector's `data_handling`, for example
+`{"query_retention_days": 0, "query_reuse": false, "terms_ref": "contract ref, §4"}`: a declaration
+can only be made stricter, and `terms_ref` is required. A project's policy can narrow (`web_search:
+{mode: deny}`, a shorter `max_query_retention_days`) but never widen the ceiling; the `regulated` preset
+sets `max_query_retention_days: 0` and `allow_query_reuse: false`.
+
+The agent sends `query` (up to 400 characters), `max_results` (up to 10), optional `site` (a host name)
+and `recency` (`day`, `week`, `month`, `year`). It gets links and snippets, never pages, each with
+`fetchable`: whether the run's network lets `web_fetch` read it. A query that holds what looks like a
+secret is refused (`query_redacted`) and nothing is sent. The backend's host stays under the
+organisation's network ceiling; `requests_per_minute` on the connector (30 by default) bounds the
+organisation's queries per backend (`429`, `retry_after_s`). Each search counts in
+`tool_calls_per_run`, writes a ledger row `search:<type>` at the connector's `price_usd_per_query`, and
+emits `choregos.tool.called` with the query's SHA-256 and length, never its text. Snippets are
+third-party text and go through the prompt-injection guard.
+
 **Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
 the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session
 and the stage fails with `reason: max_turns`. The same tool with the same arguments

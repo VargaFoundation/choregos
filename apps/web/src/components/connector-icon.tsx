@@ -23,6 +23,7 @@ import {
   Laptop,
   Library,
   ListTodo,
+  Search,
   MessageSquare,
   Plug,
   Rocket,
@@ -82,6 +83,7 @@ const LUCIDE_OF_KIND: Record<string, LucideIcon> = {
   shipping: Truck,
   access_control: DoorClosedLocked,
   marketdata: ChartLine,
+  web_search: Search,
 };
 
 /** A pure choice, so a test can pin every `(kind, type)` of the registry to an icon. */

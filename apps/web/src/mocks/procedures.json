@@ -2732,6 +2732,190 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.web_search.brave",
+    "title": "Search the web through Brave Search API",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "web_search/brave"
+    },
+    "link": null,
+    "reviewed": "2026-10-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Brave Search API subscription and its key. Read the plan's terms on query retention before you\n  fill `data_handling`.\n- The built-in `web_search` returns links and snippets, never pages."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Create a key in the Brave Search API dashboard."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The key only searches. It stays in the API: no runner ever sees it."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Connectors, **Web search**, type **Brave Search API**. `api_key` in the password field (sealed, shown once).\n2. Choregos does **not** know what Brave Search API keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill `data_handling` from\n   your contract, for example `{\"query_retention_days\": 0, \"query_reuse\": false, \"terms_ref\": \"contract\n   ref, section\"}`. A declaration can only be stricter, and `terms_ref` is required.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then start a run: the agent's tool list shows `web_search`. Each query writes a ledger\nrow `search:brave` and an event with the query's fingerprint, never its text."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- The tool is not offered: the ceiling is closed, the backend is not in its `backends`, or the declared\n  data handling does not meet its bounds (an unknown value fails every bound that reads it).\n- `query_redacted`: the query held what looks like a secret; nothing was sent.\n- `rate_limited`: `requests_per_minute`, or Brave Search API's own quota, is reached; the answer says when to retry.\n- `network_policy`: the organisation's network ceiling refuses `api.search.brave.com`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.search.brave.com"
+    ],
+    "fields": {
+      "api_key": "your Brave Search API API key, typed once",
+      "price_usd_per_query": "what one query costs under your plan, written to the ledger",
+      "requests_per_minute": "the organisation's queries per minute to this backend; beyond, the agent gets a 429",
+      "data_handling": "what your contract grants (retention, reuse, region) with its reference in terms_ref",
+      "timeout_s": "request timeout in seconds"
+    },
+    "vendor_docs": [
+      {
+        "title": "Brave Search API: plans and keys",
+        "url": "https://api-dashboard.search.brave.com/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.web_search.firecrawl",
+    "title": "Search the web through Firecrawl",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "web_search/firecrawl"
+    },
+    "link": null,
+    "reviewed": "2026-10-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- Firecrawl's cloud and its key, or a self-hosted instance (a key is then optional). Choregos never\n  asks Firecrawl to scrape: reading a result goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "On the cloud, create a key in the Firecrawl dashboard. Self-hosted: note the instance's address."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The key only searches. It stays in the API: no runner ever sees it."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Connectors, **Web search**, type **Firecrawl**. `api_key` in the password field (sealed, shown once).\n2. Choregos does **not** know what Firecrawl keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill `data_handling` from\n   your contract, for example `{\"query_retention_days\": 0, \"query_reuse\": false, \"terms_ref\": \"contract\n   ref, section\"}`. A declaration can only be stricter, and `terms_ref` is required.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then start a run: the agent's tool list shows `web_search`. Each query writes a ledger\nrow `search:firecrawl` and an event with the query's fingerprint, never its text."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- The tool is not offered: the ceiling is closed, the backend is not in its `backends`, or the declared\n  data handling does not meet its bounds (an unknown value fails every bound that reads it).\n- `query_redacted`: the query held what looks like a secret; nothing was sent.\n- `rate_limited`: `requests_per_minute`, or Firecrawl's own quota, is reached; the answer says when to retry.\n- `network_policy`: the organisation's network ceiling refuses `api.firecrawl.dev`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.firecrawl.dev"
+    ],
+    "fields": {
+      "base_url": "Firecrawl's cloud, or the address of your self-hosted instance",
+      "api_key": "your Firecrawl API key, typed once (optional when self-hosted)",
+      "price_usd_per_query": "what one query costs under your plan, written to the ledger",
+      "requests_per_minute": "the organisation's queries per minute to this backend; beyond, the agent gets a 429",
+      "data_handling": "what your contract grants (retention, reuse, region) with its reference in terms_ref",
+      "timeout_s": "request timeout in seconds"
+    },
+    "vendor_docs": [
+      {
+        "title": "Firecrawl: search endpoint",
+        "url": "https://docs.firecrawl.dev/features/search"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.web_search.tavily",
+    "title": "Search the web through Tavily",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "web_search/tavily"
+    },
+    "link": null,
+    "reviewed": "2026-10-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Tavily account and its API key. Choregos never asks Tavily for page contents: reading a result\n  goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Create a key in the Tavily dashboard."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The key only searches. It stays in the API: no runner ever sees it."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Connectors, **Web search**, type **Tavily**. `api_key` in the password field (sealed, shown once).\n2. Choregos does **not** know what Tavily keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill `data_handling` from\n   your contract, for example `{\"query_retention_days\": 0, \"query_reuse\": false, \"terms_ref\": \"contract\n   ref, section\"}`. A declaration can only be stricter, and `terms_ref` is required.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**, then start a run: the agent's tool list shows `web_search`. Each query writes a ledger\nrow `search:tavily` and an event with the query's fingerprint, never its text."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- The tool is not offered: the ceiling is closed, the backend is not in its `backends`, or the declared\n  data handling does not meet its bounds (an unknown value fails every bound that reads it).\n- `query_redacted`: the query held what looks like a secret; nothing was sent.\n- `rate_limited`: `requests_per_minute`, or Tavily's own quota, is reached; the answer says when to retry.\n- `network_policy`: the organisation's network ceiling refuses `api.tavily.com`."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.tavily.com"
+    ],
+    "fields": {
+      "api_key": "your Tavily API key, typed once",
+      "price_usd_per_query": "what one query costs under your plan, written to the ledger",
+      "requests_per_minute": "the organisation's queries per minute to this backend; beyond, the agent gets a 429",
+      "data_handling": "what your contract grants (retention, reuse, region) with its reference in terms_ref",
+      "timeout_s": "request timeout in seconds"
+    },
+    "vendor_docs": [
+      {
+        "title": "Tavily: API keys",
+        "url": "https://app.tavily.com/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.web_server.nginx",
     "title": "Read nginx configuration from the GitOps repository",
     "version": 1,
