@@ -79,6 +79,18 @@ async def identifier(
     ).scalar_one_or_none()
     if jeton is None:
         raise Refus(401, "unknown or revoked token", erreur="invalid_token")
+    appelant = await caller_of_token(session, jeton, scopes=scopes, door=door)
+    noter_l_usage(jeton, request)
+    return appelant
+
+
+async def caller_of_token(
+    session: AsyncSession, jeton: ApiToken, *, scopes: frozenset[str] = PORTEES_MCP, door: str = "MCP"
+) -> Appelant:
+    """A `chg_` token read again without its request: expiry, scope, user, agent and project.
+
+    The A2A door replays it before each push notification (ADR 0078 §5): a token revoked, expired,
+    or whose agent was suspended since the registration stops the deliveries."""
     if jeton.expires_at is not None and _aware(jeton.expires_at) <= utcnow():
         raise Refus(401, "expired token", erreur="invalid_token")
     portees = frozenset(jeton.scopes or ["*"])
@@ -93,7 +105,6 @@ async def identifier(
     user = await session.get(User, jeton.user_id)
     if user is None:
         raise Refus(401, "orphaned token", erreur="invalid_token")
-    noter_l_usage(jeton, request)
     principal = await _principal_from_user(session, user)
     appelant = Appelant(principal=principal, jeton=jeton, portees=portees, cle=f"jeton:{jeton.id}")
     await incarner_l_agent(session, appelant, jeton_id=jeton.id)

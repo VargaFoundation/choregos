@@ -238,8 +238,19 @@ The card lists the opted-in workflows of the projects the token's person may rea
   `input-required` status is not final: the person decides in the console and the stream goes on.
   The token is read again at each change (revoked, the stream ends with an error); five streams per
   token at most, an hour each, then resubscribe.
+- `tasks/pushNotificationConfig/set|get|list|delete` register an `https` URL to hear of a task, with
+  a `chg_` token (an OAuth token is refused: it cannot be read again at delivery). The host must be
+  open in the organisation's egress list ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)) when it is
+  registered. The answer to `set` carries `signing.secret`, **shown once**: `get` and `list` never
+  return it, and a `set` on the same id draws a new one. Each notification POSTs the task as it is
+  now, after its event is persisted, with `X-Choregos-Event-Id` (also `Idempotency-Key`: a receiver
+  may see one twice), your `token` in `X-A2A-Notification-Token`, and
+  `X-Choregos-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`. Events in between
+  are coalesced. A non-2xx answer is retried with a growing delay, eight times at most; a revoked or
+  expired token ends the registration; so does the final state, once delivered. Registering inline
+  in `message/send` is refused: its answer has no place for the secret.
 
-Not served yet: push notifications, file parts. The card needs
+Not served yet: file parts. The card needs
 the token too, since its skills depend on who asks. Calls are audited (`a2a.call`), rate-limited per
 token, and count in the person's daily write budget with the MCP door's.
 

@@ -149,7 +149,7 @@ async def test_the_card_lists_the_opted_in_workflow_and_parses_as_a2a(
     assert [s.id for s in card.skills] == ["billing-api/ship-a-change"]
     assert AUTH_BEARER in card.auth_types
     assert raw["capabilities"]["streaming"] is True
-    assert raw["capabilities"]["pushNotifications"] is False
+    assert raw["capabilities"]["pushNotifications"] is True
 
 
 # ───────────────────────────── message/send ─────────────────────────────
@@ -295,14 +295,8 @@ async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: di
     controls = [s[2] for s in get_temporal().signals if s[1] == "control"]  # type: ignore[attr-defined]
     assert [c["action"] for c in controls] == ["stop"]
 
+    # ───────────────────────────── guards ─────────────────────────────
 
-# ───────────────────────────── guards ─────────────────────────────
-
-
-async def test_push_is_not_served(client: AsyncClient, project: dict[str, Any]) -> None:
-    token = await _ready(client, project)
-    push = (await _rpc(client, token, "tasks/pushNotificationConfig/set", {})).json()
-    assert push["error"]["code"] == -32003
     unknown = (await _rpc(client, token, "agent/dance", {})).json()
     assert unknown["error"]["code"] == -32601
 
