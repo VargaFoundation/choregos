@@ -1,0 +1,6 @@
+# Opt-in: only on a cluster where Tekton is installed (`global.runner.executor: tekton`).
+# `kubectl apply -k infra/policies/tekton`, after `infra/policies`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - tekton-labels.yaml

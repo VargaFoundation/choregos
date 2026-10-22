@@ -1,0 +1,28 @@
+# The project label of `choregos-pod-security`, applied to Tekton's PipelineRun.
+#
+# A separate ClusterPolicy, outside the default set: Kyverno refuses a policy whose kinds the
+# cluster does not know, and Tekton is an optional executor. In `choregos-pod-security` this rule
+# kept every pod rule off a cluster without Tekton (the dev cluster, Kyverno 1.12.5).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-tekton-labels
+  annotations:
+    policies.kyverno.io/description: >-
+      Every PipelineRun of a project namespace carries the `choregos/project` label.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: project-label
+      match:
+        any:
+          - resources:
+              kinds: [PipelineRun]
+              namespaces: ["proj-*"]
+      validate:
+        message: "every object of a project namespace carries the `choregos/project` label"
+        pattern:
+          metadata:
+            labels:
+              choregos/project: "?*"
