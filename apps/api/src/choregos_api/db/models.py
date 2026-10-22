@@ -831,6 +831,9 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: The identity-provider group whose members approve the actions it proposes (ADR 0052).
     approver_group: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: The most one of its results may weigh when it reaches the agent; none: the platform's default
+    #: (S40-17). Never above the platform's ceiling.
+    result_max_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):

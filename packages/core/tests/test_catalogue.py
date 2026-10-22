@@ -205,3 +205,13 @@ def test_un_outil_sans_schema_n_impose_rien() -> None:
     assert outil is not None
     outil.input_schema = {}
     valider_les_arguments(outil, {"n_importe": "quoi"})
+
+
+def test_a_catalogue_tool_declares_its_result_cap_and_no_cap_below_one_kibibyte() -> None:
+    """S40-17: an entry may say how much of its answer the agent reads; a cap so small that the
+    truncation marker would not fit is refused at load, not at the first call."""
+    declared = CATALOGUE + "    result_max_bytes: 4096\n"
+    assert charger_catalogue(declared).outils[0].result_max_bytes == 4096
+    assert charger_catalogue(CATALOGUE).outils[0].result_max_bytes is None
+    with pytest.raises(ValueError, match="result_max_bytes"):
+        charger_catalogue(CATALOGUE + "    result_max_bytes: 512\n")

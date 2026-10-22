@@ -455,7 +455,12 @@ outils:
       headers: { Authorization: "Bearer {{ credential }}" }
     credential_env: FOURNISSEUR_MCP_KEY   # the variable name, never the key
     price_eur: 0.05
+    result_max_bytes: 16384               # optional: how much of an answer the agent reads
 ```
+
+`result_max_bytes` (at least 1024) replaces `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB) for that
+entry; `CHOREGOS_BROKER_RESULT_CEILING_BYTES` (1 MiB) bounds both, and an organisation's
+per-operation caps on its connectors too ([usage](usage.md), S40-17).
 
 ### How a tool reaches the agent
 

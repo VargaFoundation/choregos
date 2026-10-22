@@ -204,6 +204,8 @@ class OperationDto(Dto):
     description: str | None = None
     #: the identity-provider group whose members approve the actions it proposes (ADR 0052)
     approver_group: str | None = None
+    #: the most one result may weigh when it reaches the agent; none: the platform's default (S40-17)
+    result_max_bytes: int | None = None
 
 
 class OrgConnectorDto(Dto):
@@ -274,6 +276,8 @@ class OperationPatch(Dto):
     price_usd: float | None = Field(default=None, ge=0)
     #: null (sent) clears it; absent leaves it
     approver_group: str | None = Field(default=None, min_length=1, max_length=200)
+    #: null (sent) clears it; absent leaves it; above the platform's ceiling is refused (S40-17)
+    result_max_bytes: int | None = Field(default=None, ge=1024)
 
 
 class ProjectOperationDto(Dto):

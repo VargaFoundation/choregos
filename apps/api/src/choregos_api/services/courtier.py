@@ -292,7 +292,8 @@ async def ecrire_par_une_action(
     if action.status == ActionStatus.SUCCEEDED.value:
         # The write is done: its result is masked and capped like a read's (#755), never refused —
         # a 422 would tell the agent that an effect that happened did not.
-        return 200, bounded_result(await _resultat_de_l_action(session, action)), nouvelle
+        resultat = await _resultat_de_l_action(session, action)
+        return 200, bounded_result(resultat, outil.operation.result_max_bytes), nouvelle
     if action.status in finies:
         refus = {"error": action.error or f"action {action.status}", "action": action.id}
         return 422, refus, nouvelle
@@ -431,7 +432,9 @@ async def _appeler(
     refusal = output_refusal(outil, resultat)
     if refusal is not None:
         return 422, {"error": refusal, "type": "output_schema"}
-    return (200 if not resultat.get("isError") else 422), bounded_result(resultat)
+    return (200 if not resultat.get("isError") else 422), bounded_result(
+        resultat, outil.operation.result_max_bytes
+    )
 
 
 #: The marker a capped result ends with: the agent knows it did not read everything.
@@ -465,14 +468,21 @@ def output_refusal(outil: OutilDuCourtier, resultat: dict[str, Any]) -> str | No
     return None
 
 
-def bounded_result(resultat: dict[str, Any]) -> dict[str, Any]:
-    """A tool result as the agent may read it (#755): secrets masked in what it says, and no larger
-    than `broker_result_max_bytes`. A larger one keeps its text, cut, with `TRUNCATED` at the end;
-    its `structuredContent` is dropped, since half an object is not the object."""
+def result_limit(declared: int | None = None) -> int:
+    """The cap a tool result is held to (S40-17): what its operation or its catalogue entry declares,
+    else `broker_result_max_bytes` — and never above `broker_result_ceiling_bytes`."""
     from ..config import get_settings
 
+    settings = get_settings()
+    return min(declared or settings.broker_result_max_bytes, settings.broker_result_ceiling_bytes)
+
+
+def bounded_result(resultat: dict[str, Any], declared: int | None = None) -> dict[str, Any]:
+    """A tool result as the agent may read it (#755): secrets masked in what it says, and no larger
+    than `result_limit(declared)`. A larger one keeps its text, cut, with `TRUNCATED` at the end;
+    its `structuredContent` is dropped, since half an object is not the object."""
     masked = _masked(resultat)
-    limit = get_settings().broker_result_max_bytes
+    limit = result_limit(declared)
     total = len(_json(masked).encode("utf-8"))
     if total <= limit:
         return masked
@@ -485,16 +495,14 @@ def bounded_result(resultat: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def bounded_payload(payload: Any) -> Any:
+def bounded_payload(payload: Any, declared: int | None = None) -> Any:
     """Any tool answer as the agent may read it (#759): a catalogue tool's JSON, a plugin's body. An
     MCP result goes through `bounded_result`; anything else has its strings masked and, when larger
-    than `broker_result_max_bytes`, becomes `{"text": <its JSON, cut, with TRUNCATED>, "truncated"}`."""
-    from ..config import get_settings
-
+    than `result_limit(declared)`, becomes `{"text": <its JSON, cut, with TRUNCATED>, "truncated"}`."""
     if isinstance(payload, dict) and isinstance(payload.get("content"), list):
-        return bounded_result(payload)
+        return bounded_result(payload, declared)
     masked = _masked_strings(payload)
-    limit = get_settings().broker_result_max_bytes
+    limit = result_limit(declared)
     total = len(_json(masked).encode("utf-8"))
     if total <= limit:
         return masked

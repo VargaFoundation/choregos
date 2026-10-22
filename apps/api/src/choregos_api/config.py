@@ -141,6 +141,9 @@ class Settings(BaseSettings):
     #: larger one is cut to its text with a marker that says so. A third-party server does not decide
     #: how much of the agent's context, and of its token budget, it fills.
     broker_result_max_bytes: int = Field(default=65536, ge=1024)
+    #: The most an operation or a catalogue tool may raise its own cap to (S40-17): an organisation
+    #: that needs one large answer opens it for that operation, never for the whole platform.
+    broker_result_ceiling_bytes: int = Field(default=1048576, ge=1024)
     allowed_agent_backends: list[str] = Field(default_factory=list)
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
