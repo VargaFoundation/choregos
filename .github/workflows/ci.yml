@@ -33,6 +33,7 @@ jobs:
       local-install: ${{ steps.filter.outputs.local-install }}
       hosted-build: ${{ steps.filter.outputs.hosted-build }}
       hosted-cosign: ${{ steps.filter.outputs.hosted-cosign }}
+      hosted-admission: ${{ steps.filter.outputs.hosted-admission }}
       hosted-gvisor: ${{ steps.filter.outputs.hosted-gvisor }}
       hosted-foundry: ${{ steps.filter.outputs.hosted-foundry }}
     steps:
@@ -95,9 +96,14 @@ jobs:
             hosted-cosign:
               - 'packages/adapters/src/choregos_adapters/oci/**'
               - 'packages/adapters/tests/test_cosign*.py'
-              - 'charts/choregos/templates/hosted-images-policy.yaml'
+              - 'charts/choregos/templates/hosted-images-policy*.yaml'
               - 'tests/charts/test_hosted_images_policy.py'
               - 'docker/api.Dockerfile'
+              - '.github/workflows/ci.yml'
+            # The chart's hosted-images policy in a real Kyverno on a real cluster (S41-25).
+            hosted-admission:
+              - 'charts/choregos/templates/hosted-images-policy*.yaml'
+              - 'tests/cluster/test_hosted_images_admission.py'
               - '.github/workflows/ci.yml'
             # A hosted agent inside gVisor (S41-17): the suite, the examples it runs, the policy that
             # asks for the RuntimeClass, the pinned release, and this job.
@@ -434,6 +440,8 @@ jobs:
         ports: ["5000:5000"]
     env:
       CHOREGOS_COSIGN_REAL_REGISTRY: localhost:5000
+      # Keyless against the real Sigstore (S41-25): the network is the point of this test.
+      CHOREGOS_COSIGN_KEYLESS_REAL: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -456,8 +464,48 @@ jobs:
       - name: cosign and the chart's Kyverno policy against the registry
         shell: bash
         run: |
-          uv run pytest packages/adapters/tests/test_cosign_real.py tests/charts/test_hosted_images_policy.py -rs | tee pytest.out
+          uv run pytest packages/adapters/tests/test_cosign_real.py packages/adapters/tests/test_cosign_keyless_real.py tests/charts/test_hosted_images_policy.py -rs | tee pytest.out
           # A skip proves nothing: cosign, crane, kyverno or the registry went missing, and the job says so.
+          ! grep -qi skipped pytest.out
+
+  hosted-admission:
+    # The chart's `choregos-hosted-images` ClusterPolicy in a real Kyverno (chart 3.9.1, v1.19.1) on a
+    # kind cluster, with a registry the host and the cluster both reach (S41-25): an unsigned image
+    # refused, a key-signed one admitted, a tag without a digest refused. kind and the registry
+    # container are the runner's; the Kyverno admission controller is told the registry speaks HTTP.
+    needs: changes
+    if: needs.changes.outputs.hosted-admission == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CHOREGOS_CLUSTER_CONTEXT: kind-admission
+      CHOREGOS_ADMISSION_REGISTRY_PUSH: localhost:5001
+      CHOREGOS_ADMISSION_REGISTRY_CLUSTER: kind-registry:5000
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - uses: sigstore/cosign-installer@v4.1.2
+        with: { cosign-release: v3.1.3 }
+      - uses: imjasonh/setup-crane@v0.4
+        with: { version: v0.20.7 }
+      - uses: azure/setup-helm@v5
+        with: { version: v3.22.0 }
+      - name: kind cluster, registry and Kyverno
+        run: |
+          kind create cluster --name admission --wait 120s
+          docker run -d --restart=always -p 127.0.0.1:5001:5000 --network kind --name kind-registry registry:2.8.3
+          helm repo add kyverno https://kyverno.github.io/kyverno/
+          helm install kyverno kyverno/kyverno --version 3.9.1 -n kyverno --create-namespace \
+            --set admissionController.container.extraArgs.allowInsecureRegistry=true \
+            --set admissionController.replicas=1 --set backgroundController.enabled=false \
+            --set cleanupController.enabled=false --set reportsController.enabled=false --wait --timeout 300s
+      - name: the policy admits and refuses
+        shell: bash
+        run: |
+          uv run pytest tests/cluster/test_hosted_images_admission.py -rs -rx | tee pytest.out
+          # A skip proves nothing: a tool, the registry or the cluster went missing, and the job says so.
           ! grep -qi skipped pytest.out
 
   hosted-gvisor:
@@ -596,7 +644,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-gvisor, hosted-foundry, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-foundry, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

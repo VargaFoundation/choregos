@@ -6,7 +6,9 @@ keyless identity, the certificate's subject and its OIDC issuer as regular expre
 runs `cosign verify --output json` on `ref@sha256:…` and reads what cosign verified: a signature
 counts only when its payload names the very digest that was pinned, so a signature of another image
 (a re-tagged one, a copied `.sig`) does not vouch for this one. Keyless, the certificate's subject and
-issuer cosign reports are matched again, whole (`re.fullmatch`), against the operator's expressions.
+issuer cosign reports are matched again, whole (`re.fullmatch`), against the operator's expressions;
+cosign 3 reports none for a bundle signature, so the expressions are passed to it anchored (`^(?:…)$`)
+and its exit code is the verdict on the signer.
 
 Every failure is a verdict, never an exception: cosign missing, a timeout, an exit code, an output
 that is not cosign's. Publication decides what a refusal means (`CHOREGOS_HOSTED_COSIGN`).
@@ -91,9 +93,9 @@ class CosignVerifier:
             assert self._identity is not None and self._issuer is not None
             argv += [
                 "--certificate-identity-regexp",
-                self._identity.pattern,
+                _whole(self._identity.pattern),
                 "--certificate-oidc-issuer-regexp",
-                self._issuer.pattern,
+                _whole(self._issuer.pattern),
             ]
         if not self._tlog:
             argv.append("--insecure-ignore-tlog=true")
@@ -132,12 +134,22 @@ class CosignVerifier:
             return f"the key {self._key}"
         assert self._identity is not None and self._issuer is not None
         optional = payload.get("optional")
-        if not isinstance(optional, dict):
+        subject = str(optional.get("Subject") or "") if isinstance(optional, dict) else ""
+        issuer = str(optional.get("Issuer") or "") if isinstance(optional, dict) else ""
+        if subject or issuer:
+            # A legacy signature reports its certificate: matched again, whole.
+            if self._identity.fullmatch(subject) and self._issuer.fullmatch(issuer):
+                return f"{subject} ({issuer})"
             return None
-        subject, issuer = str(optional.get("Subject") or ""), str(optional.get("Issuer") or "")
-        if self._identity.fullmatch(subject) and self._issuer.fullmatch(issuer):
-            return f"{subject} ({issuer})"
-        return None
+        # A cosign 3 bundle reports no certificate in this JSON (only GIT_* annotations). Cosign
+        # itself judged the certificate against the whole-anchored expressions of `command()`, so
+        # exit 0 means a signer matching them (proven against the real Sigstore, S41-25).
+        return f"an identity matching {self._identity.pattern} ({self._issuer.pattern}), checked by cosign"
+
+
+def _whole(pattern: str) -> str:
+    """`pattern` anchored for cosign, which searches (an unanchored `a@b` accepts `evil-a@b.evil`)."""
+    return f"^(?:{pattern})$"
 
 
 def _reason(err: str, code: int) -> str:

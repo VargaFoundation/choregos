@@ -506,8 +506,11 @@ Publication asks the `cosign` binary the API image carries (v3.1.3) about the **
   cosign reads).
 - **Keyless**: `hostedCosignIdentity` and `hostedCosignIssuer` (`CHOREGOS_HOSTED_COSIGN_IDENTITY`,
   `_ISSUER`), the certificate's subject and its OIDC issuer as regular expressions. Cosign searches
-  them; the API then matches cosign's reported subject and issuer **whole** (`re.fullmatch`), so
-  `https://github\.com/acme/.+` does not accept `https://evil.example/?https://github.com/acme/x`.
+  them **anchored** (`^(?:…)$`: cosign searches, so a bare `a@b` would accept `evil-a@b.evil`) and,
+  when cosign reports the certificate (a legacy signature), the API matches its subject and issuer
+  **whole** (`re.fullmatch`) again. A cosign 3 bundle reports none in `--output json`: there cosign's
+  own exit code, with the anchored expressions, is the verdict (proved against the real Sigstore,
+  S41-25). `https://github\.com/acme/.+` does not accept `https://evil.example/?https://github.com/acme/x`.
   Anchor them anyway (`^…$`): Kyverno searches them too.
 - `hostedCosignTlog: false` (`CHOREGOS_HOSTED_COSIGN_TLOG`) skips the transparency log, for a key
   whose signatures were never uploaded to Rekor.
@@ -523,8 +526,17 @@ the publisher: cosign missing, 60 s without an answer, cosign's own `Error:` lin
 an image under `hostedRegistries` in `containers`, `initContainers` (a native sidecar is one) or
 `ephemeralContainers` runs only pinned by `@sha256:`; under `enforce`, Kyverno also verifies it
 against the same key Secret or keyless identity. The chart refuses to render the policy without
-`hostedRegistries`, or under `enforce` without a signer. Kyverno must be allowed to read the key
-Secret.
+`hostedRegistries`, or under `enforce` without a signer. Kyverno reads the key Secret as its
+admission controller's ServiceAccount: the chart renders a `get` Role on that one Secret for
+`kyverno:kyverno-admission-controller` (`hostedCosignKyvernoGrant: false` leaves it to the platform
+team; `hostedCosignKyverno` names another ServiceAccount). Kyverno must also be able to reach the
+registry (an HTTP one needs `--allowInsecureRegistry`).
+
+**Signing for admission.** Kyverno 1.19.1's `keys` attestor reads cosign's legacy `.sig` signature and
+finds none in a cosign 3 bundle (an OCI referrer, cosign 3's default): sign with
+`cosign sign --new-bundle-format=false` (or both) an image the policy must admit. The API's own check
+(cosign 3) reads both formats. Proved in a cluster by `tests/cluster/test_hosted_images_admission.py`
+(job `hosted-admission`).
 
 What is not covered: the cosign subprocess does not go through the platform's egress client; the
 registry was judged by the organisation's egress allowlist when the digest was resolved, and keyless

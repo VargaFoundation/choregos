@@ -87,8 +87,8 @@ async def test_keyless_the_subject_and_the_issuer_are_matched_again() -> None:
     assert verdict.verified, verdict.detail
     assert SUBJECT in verdict.detail
     (argv,) = script.calls
-    assert argv[argv.index("--certificate-identity-regexp") + 1] == IDENTITY
-    assert argv[argv.index("--certificate-oidc-issuer-regexp") + 1] == ISSUER
+    assert argv[argv.index("--certificate-identity-regexp") + 1] == f"^(?:{IDENTITY})$"
+    assert argv[argv.index("--certificate-oidc-issuer-regexp") + 1] == f"^(?:{ISSUER})$"
     assert "--key" not in argv
 
 
@@ -167,3 +167,20 @@ async def test_a_refusal_keeps_cosigns_error_not_its_warnings() -> None:
     assert verdict.detail == "cosign refused the signature: no signatures found"
     silent = await CosignVerifier(key="cosign.pub", run=Script(10, "", "")).verify(PINNED)
     assert silent.detail == "cosign refused the signature: exit code 10"
+
+
+async def test_keyless_a_cosign_3_bundle_reports_no_certificate_and_cosigns_exit_is_the_verdict() -> None:
+    # S41-25: a Sigstore bundle's JSON carries only GIT_* annotations. The identity is enforced by
+    # cosign, which gets the expressions anchored: `a@b` must not accept `evil-a@b.evil`.
+    script = _signed(_payload(GIT_VERSION="v3.1.3"))
+    verdict = await CosignVerifier(identity=IDENTITY, issuer=ISSUER, run=script).verify(PINNED)
+    assert verdict.verified, verdict.detail
+    (argv,) = script.calls
+    assert argv[argv.index("--certificate-identity-regexp") + 1].startswith("^(?:")
+    assert argv[argv.index("--certificate-oidc-issuer-regexp") + 1].endswith(")$")
+
+
+async def test_keyless_a_bundle_signature_of_another_digest_is_still_refused() -> None:
+    script = _signed(_payload(OTHER, GIT_VERSION="v3.1.3"))
+    verdict = await CosignVerifier(identity=IDENTITY, issuer=ISSUER, run=script).verify(PINNED)
+    assert not verdict.verified
