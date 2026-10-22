@@ -205,8 +205,15 @@ make conformance-hosted IMAGE=my-registry/langgraph-triager                # as 
 What an image must do, learnt from the five SDKs: switch the SDK's own traffic off (tracing,
 telemetry, error reports: `no_egress` fails otherwise), give the Claude and Copilot runtimes no
 built-in tool, and fetch what the SDK downloads at first use (the Copilot runtime) when the image is
-built. The blocking CI runs the reference; `.github/workflows/hosted-agent-examples.yml` builds the
-images and runs the suite against each, nightly, without blocking.
+built. The blocking CI runs the reference as a process, and, in the `hosted-images` job (S41-23),
+builds every example (the zips through the platform's own Dockerfile and `LocalDockerBuilder`, into a
+registry) and runs each image through the suite; the `hosted-docker` job runs a hosted container in
+the runner's workspace volume and relays a real container's `/invocations_ws`. Locally:
+`CHOREGOS_TEST_HOSTED_DOCKER=1 CHOREGOS_TEST_HOSTED_REGISTRY=localhost:5055 pytest tests/conformance/hosted_real`
+(with `docker run -d -p 5055:5000 registry:2`). Under Docker Desktop, `--network=host` is the VM's, so
+the harness joins the agent to a socat relay container; `CHOREGOS_CONFORMANCE_DOCKER_NETWORK=relay|host`
+forces the choice. `.github/workflows/hosted-agent-examples.yml` (nightly, non-blocking) is the older,
+hand-written version of the same builds.
 
 **An agent written for Foundry runs unchanged (S41-19).** `examples/hosted/agent-framework-foundry`
 is the triager as a Foundry deployment holds it: Agent Framework's `FoundryChatClient` with

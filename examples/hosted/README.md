@@ -67,5 +67,8 @@ The blocking CI runs `reference` and `reference-node` (skipped where `node` is n
 `agent-framework-foundry` in a venv of its own.
 `.github/workflows/hosted-agent-examples.yml` builds each image (a zip example from the Dockerfile
 the platform writes) and runs the suite against it, nightly and on demand, without blocking a merge:
-the frameworks are heavy and stay out of the repository's lock file. The .NET example is compiled
-there only: nothing in the blocking CI has the .NET SDK.
+the frameworks are heavy and stay out of the repository's lock file. The blocking CI job
+`hosted-images` (S41-23) builds and runs all eleven examples too, one matrix leg each, with Docker
+(`tests/conformance/hosted_real/test_images.py`; the .NET one is compiled in the SDK image of the platform's
+template). To run one: `CHOREGOS_TEST_HOSTED_DOCKER=1 CHOREGOS_TEST_HOSTED_REGISTRY=localhost:5055
+CHOREGOS_TEST_HOSTED_EXAMPLES=copilot-sdk pytest tests/conformance/hosted_real/test_images.py`.

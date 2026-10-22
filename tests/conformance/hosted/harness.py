@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import random
 import re
 import shutil
 import signal
@@ -94,6 +95,20 @@ def free_port() -> int:
         probe.bind(("127.0.0.1", 0))
         port: int = probe.getsockname()[1]
         return port
+
+
+def published_port() -> int:
+    """A port Docker Desktop can publish: on Windows it refuses the ephemeral ranges the OS keeps
+    for itself (`bind: … forbidden by its access permissions`), where `free_port` likes to land."""
+    for _ in range(50):
+        port = random.randint(10000, 29999)
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+        return port
+    raise RuntimeError("no free port in 10000-29999")
 
 
 @contextmanager
@@ -527,15 +542,55 @@ class HostedAgentSpec:
         return cls(command=list(raw)) if isinstance(raw, list) else cls(**raw)
 
 
-def container_command(image: str, env: dict[str, str], name: str) -> list[str]:
+def container_command(image: str, env: dict[str, str], name: str, *, network: str = "host") -> list[str]:
     """`docker run` for an agent in an image: the host's network (the runner's listeners are on the
-    host's loopback, as they are on the pod's), the environment passed by name, no capability."""
+    host's loopback, as they are on the pod's), the environment passed by name, no capability.
+
+    `network` is another network namespace (`container:<relay>`) where Docker's "host" is not the
+    machine that runs the harness (see `needs_relay`)."""
     flags: list[str] = []
     for variable in sorted(env):
         flags += ["-e", variable]
     return [
-        "docker", "run", "--rm", "--name", name, "--network=host", "--cap-drop=ALL",
+        "docker", "run", "--rm", "--name", name, f"--network={network}", "--cap-drop=ALL",
         "--security-opt=no-new-privileges", *flags, image,
+    ]  # fmt: skip
+
+
+#: Forwards a loopback port of the agent's namespace to the same port on the harness's host.
+RELAY_IMAGE = "alpine/socat:1.8.0.3"
+NETWORK_ENV = "CHOREGOS_CONFORMANCE_DOCKER_NETWORK"
+
+
+def needs_relay() -> bool:
+    """Whether `--network=host` is not the harness's own loopback.
+
+    Under Docker Desktop the daemon runs in a VM: its "host" network is the VM's, so an agent
+    started on it never reaches the listeners of the harness (S41-23). `CHOREGOS_CONFORMANCE_DOCKER_NETWORK`
+    (`host` or `relay`) forces the answer; otherwise Docker Desktop is told from `docker info`."""
+    forced = os.environ.get(NETWORK_ENV, "")
+    if forced:
+        return forced == "relay"
+    info = subprocess.run(
+        ["docker", "info", "--format", "{{.OperatingSystem}}"], capture_output=True, text=True, check=False
+    )
+    return "Docker Desktop" in info.stdout
+
+
+def relay_command(name: str, listeners: list[int], published: int) -> list[str]:
+    """A container whose network namespace the agent joins, as a pod's containers share one: each
+    of the harness's `listeners` is reachable at the loopback of the namespace (so the agent's
+    variables, which name `127.0.0.1`, are unchanged), and the agent's own port is published back
+    to the harness's loopback."""
+    forwards = " & ".join(
+        f"socat TCP-LISTEN:{port},bind=127.0.0.1,fork,reuseaddr "
+        f"TCP:host.docker.internal:{port},retry=8,interval=0.25"
+        for port in listeners
+    )
+    return [
+        "docker", "run", "-d", "--name", name, "--cap-drop=ALL", "--security-opt=no-new-privileges",
+        "--add-host=host.docker.internal:host-gateway", "-p", f"127.0.0.1:{published}:{published}",
+        "--entrypoint", "sh", RELAY_IMAGE, "-c", f"{forwards} & wait",
     ]  # fmt: skip
 
 
@@ -548,13 +603,39 @@ class AgentProcess:
         self.spec, self.env = spec, env
         self.name = f"choregos-conformance-{uuid.uuid4().hex[:8]}"
         self.process: subprocess.Popen[bytes] | None = None
+        #: The container that holds the agent's network namespace, where the host's is not the harness's.
+        self.relay: str | None = None
         self.log = Path(os.environ.get("TMPDIR", "/tmp")) / f"{self.name}.log"
 
     def start(self) -> None:
         host = {k: os.environ[k] for k in _HOST_ENV if k in os.environ}
         env = {**host, **self.env}
+        if self.spec.image and needs_relay():
+            self.relay = f"{self.name}-net"
+            listeners = [
+                int(self.env[k].rsplit(":", 1)[1].split("/")[0])
+                for k in ("OPENAI_BASE_URL", "CHOREGOS_MCP_URL", "HTTPS_PROXY")
+            ]
+            for _ in range(2):  # the published port can be taken between its choice and the start
+                subprocess.run(["docker", "rm", "-f", self.relay], capture_output=True, check=False)
+                started = subprocess.run(
+                    relay_command(self.relay, listeners, int(self.env["PORT"])),
+                    capture_output=True,
+                    check=False,
+                )
+                if started.returncode == 0:
+                    break
+            if started.returncode != 0:
+                raise RuntimeError(f"the network relay did not start: {started.stderr.decode()[-500:]}")
         command = (
-            container_command(self.spec.image, self.env, self.name) if self.spec.image else self.spec.command
+            container_command(
+                self.spec.image,
+                self.env,
+                self.name,
+                network=f"container:{self.relay}" if self.relay else "host",
+            )
+            if self.spec.image
+            else self.spec.command
         )
         with self.log.open("wb") as log:
             self.process = subprocess.Popen(
@@ -583,6 +664,8 @@ class AgentProcess:
                 subprocess.run(["docker", "rm", "-f", self.name], capture_output=True, check=False)
             self.process.kill()
             self.process.wait(timeout=10)
+        if self.relay:
+            subprocess.run(["docker", "rm", "-f", self.relay], capture_output=True, check=False)
 
     def tail(self, lines: int = 15) -> str:
         try:
@@ -674,8 +757,9 @@ async def run_hosted_suite(name: str, spec: HostedAgentSpec, *, timeout_s: float
             result.failed[check] = why
 
     with fake_gateway() as gateway, fake_tickets() as tickets, outside_model() as outside:
-        loopback = (free_port(), free_port(), free_port())
-        port = free_port()
+        pick = published_port if spec.image and needs_relay() else free_port
+        loopback = (pick(), pick(), pick())
+        port = pick()
         for limit, label in ((8, "first"), (1, "bounded")):
             stage_input = hosted_stage_input(spec, gateway, tickets, max_turns=limit, port=port)
             assert stage_input.hosted is not None
@@ -708,7 +792,8 @@ async def run_hosted_suite(name: str, spec: HostedAgentSpec, *, timeout_s: float
                     verdict(
                         "mcp_at_loopback",
                         bool(tool_calls) and all(key == f"Bearer {TICKETS_TOKEN}" for key in tool_calls),
-                        f"tools/call seen {len(tool_calls)} times at the MCP server",
+                        f"tools/call seen {len(tool_calls)} times at the MCP server "
+                        f"(methods seen: {[method for method, _ in tickets.seen[mcp_before:]]})",
                     )
                     with tempfile.TemporaryDirectory() as workspace:
                         step_result, why = (

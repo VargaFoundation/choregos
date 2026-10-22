@@ -161,6 +161,7 @@ markers = [
   "capability(executor, name): this cluster test proves that capability of that executor (S35-04)",
   "buildkit: needs a real buildkitd and a registry (S41-13, the `hosted-build` CI job)",
   "cosign_real: runs the real cosign against a registry (CHOREGOS_COSIGN_REAL_REGISTRY); skipped without them",
+  "hosted_docker: builds and runs hosted agents with a real Docker daemon (S41-23, the `hosted-images` CI job); skipped without one",
   "gvisor: runs the agent inside a gVisor sandbox (CHOREGOS_TEST_RUNSC, S41-17, the `hosted-gvisor` CI job)",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
