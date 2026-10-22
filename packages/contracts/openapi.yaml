@@ -4064,6 +4064,7 @@ components:
         input_schema: { type: [object, "null"], additionalProperties: true, description: "the input schema the broker announces to the agent and checks before the call" }
         description: { type: [string, "null"] }
         approver_group: { type: [string, "null"], description: "the identity-provider group whose members approve the actions this operation proposes; none: the project's owners" }
+        result_max_bytes: { type: [integer, "null"], minimum: 1024, description: "the most one result of this operation may weigh, as JSON bytes, when it reaches the agent; none: the platform's default. Never above the platform's ceiling" }
     ConnectorDiscovery:
       type: object
       properties:
@@ -4271,6 +4272,7 @@ components:
         groups: { type: [array, "null"], items: { type: string } }
         price_usd: { type: [number, "null"], minimum: 0 }
         approver_group: { type: [string, "null"], description: "an identity-provider group; null clears it" }
+        result_max_bytes: { type: [integer, "null"], minimum: 1024, description: "the most one result may weigh, as JSON bytes; above the platform's ceiling is refused (422); null clears it" }
     ProjectOperation:
       type: object
       required: [connector, operation, access, org_policy, effective_policy]
