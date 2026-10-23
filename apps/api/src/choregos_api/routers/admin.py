@@ -18,7 +18,6 @@ from ..audit import record
 from ..db.models import (
     AuditLog,
     BackendRegistryRow,
-    ExecutorRow,
     GatewayKeyRow,
     Membership,
     NetworkDecision,
@@ -160,34 +159,6 @@ async def list_executors(principal: Me) -> list[ExecutorInfo]:
         )
         for kind in ("agent_sandbox", "k8s_job", "tekton", "aca", "local_docker")
     ]
-
-
-@router.put("/platform/executors", response_model=ExecutorInfo, operation_id="putExecutor")
-async def put_executor(body: ExecutorInfo, session: Db, principal: Me) -> ExecutorInfo:
-    """Store an executor row. It has NO runtime effect: nothing reads it (ADR 0072) and
-    `GET /platform/executors` no longer reports it. Kept, with its audit entry, because removing
-    it would be a contract change; what a deployment runs is set in its chart and environment."""
-    await exiger_admin_de_plateforme(session, principal)
-    row = (
-        await session.execute(select(ExecutorRow).where(ExecutorRow.kind == body.kind))
-    ).scalar_one_or_none()
-    if row is None:
-        row = ExecutorRow(kind=body.kind)
-        session.add(row)
-    row.enabled = body.enabled
-    row.cluster = body.cluster
-    row.namespace_pattern = body.namespace_pattern
-    row.runner_image = body.runner_image
-    row.default_timeout_minutes = body.default_timeout_minutes
-    await record(
-        session,
-        principal,
-        "executor.update",
-        org_id=None,  # idem
-        target_type="executor",
-        target_id=body.kind,
-    )
-    return body
 
 
 @router.get("/platform/gateway/keys", response_model=list[GatewayKeyInfo], operation_id="listGatewayKeys")

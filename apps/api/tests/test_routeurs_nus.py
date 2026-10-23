@@ -581,24 +581,12 @@ async def test_backends_et_executeurs_se_listent_et_se_reglent(client: AsyncClie
     )
     executeurs = (await client.get("/api/v1/platform/executors")).json()
     assert {e["kind"] for e in executeurs} == {"tekton", "k8s_job", "local_docker", "aca", "agent_sandbox"}
-    regle = await client.put(
-        "/api/v1/platform/executors",
-        json={
-            "kind": "k8s_job",
-            "enabled": True,
-            "namespace_pattern": "choregos",
-            "runner_image": "local/choregos-runner:demo",
-        },
-    )
-    assert regle.status_code == 200
-    # S42-07: a stored row no longer replaces the deployment's list (nothing reads it, ADR 0072)
-    assert {e["kind"] for e in (await client.get("/api/v1/platform/executors")).json()} == {
-        "tekton",
-        "k8s_job",
-        "local_docker",
-        "aca",
-        "agent_sandbox",
-    }
+    # S42-07b: the executors are the deployment's answer; there is no PUT to store one any more
+    for method in ("PUT", "POST", "PATCH", "DELETE"):
+        gone = await client.request(
+            method, "/api/v1/platform/executors", json={"kind": "aca", "enabled": True}
+        )
+        assert gone.status_code == 405, method
     assert (await client.get("/api/v1/platform/gateway/keys")).json() == []
 
 
@@ -608,9 +596,6 @@ async def test_les_reglages_de_plateforme_sont_reserves_aux_administrateurs(
     await login(client, "dev@varga.dev")
     assert (
         await client.put("/api/v1/platform/backends", json={"name": "codex", "enabled": False})
-    ).status_code == 403
-    assert (
-        await client.put("/api/v1/platform/executors", json={"kind": "aca", "enabled": True})
     ).status_code == 403
     assert (await client.get("/api/v1/platform/gateway/keys")).status_code == 403
     assert (await client.get("/api/v1/platform/backends")).status_code == 200, "lire reste ouvert"
