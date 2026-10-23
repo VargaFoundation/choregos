@@ -89,11 +89,13 @@ from .memory_bindings import (
 from .memory_scope import MemoryScope, memory_namespace, parse_namespace, split_namespace
 from .models import (
     BY_SIZE_MAP,
+    DEFAULT_ENABLED_BACKEND,
     KNOWN_BACKEND_NAMES,
     CatalogueEntry,
     ModelPolicy,
     ModelResolver,
     ResolvedModel,
+    backend_enabled,
     estimate_tokens,
 )
 from .network import EffectiveNetwork, effective_network, host_matches, pattern_within, validate_pattern
@@ -111,6 +113,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "BY_SIZE_MAP",
+    "DEFAULT_ENABLED_BACKEND",
     "KNOWN_BACKEND_NAMES",
     "PRESET_NAMES",
     "TEMPLATE_NAMES",
@@ -175,6 +178,7 @@ __all__ = [
     "analyser",
     "artifact_flow",
     "aware",
+    "backend_enabled",
     "binding_problems",
     "charger_catalogue",
     "checksum",

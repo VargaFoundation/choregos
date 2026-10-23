@@ -73,19 +73,67 @@ async def test_an_enabled_backend_runs(setup: Fixture) -> None:
     assert "refused" not in await prepare_stage(_plan(setup))
 
 
-async def test_no_setting_means_enabled(setup: Fixture) -> None:
-    """A fresh install has no `agent_backends` row: nothing was switched off."""
-    from choregos_orchestrator.activities.stage import prepare_stage
+async def test_no_setting_means_enabled_for_claude_code_only(setup: Fixture) -> None:
+    """A fresh install has no `agent_backends` row: only `claude-code` is on, as the console says."""
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import _require_backend_enabled
 
-    assert "refused" not in await prepare_stage(_plan(setup))
+    async with session_scope() as session:
+        await _require_backend_enabled(session, None, "claude-code")
+        with pytest.raises(ApplicationError) as refused:
+            await _require_backend_enabled(session, None, "gemini-cli")
+    assert refused.value.type == "BackendDisabled"
+    assert "gemini-cli" in str(refused.value)
 
 
-async def test_another_backend_disabled_does_not_matter(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+async def test_the_listing_and_the_orchestrator_agree_on_the_same_rows(setup: Fixture) -> None:
+    from choregos_api.db.session import session_scope
+    from choregos_api.routers.admin import list_backends
+    from choregos_orchestrator.activities.stage import _require_backend_enabled
 
-    backend = await _planned_backend(setup)
-    await _switch("opencode" if backend != "opencode" else "gemini-cli", enabled=False)
-    assert "refused" not in await prepare_stage(_plan(setup))
+    await _switch("claude-code", enabled=False)
+    await _switch("gemini-cli", enabled=True)  # opencode, codex...: no row
+    async with session_scope() as session:
+        listed = {b.name: b.enabled for b in await list_backends(session, None)}  # type: ignore[arg-type]
+        for name, enabled in listed.items():
+            try:
+                await _require_backend_enabled(session, None, name)
+                decided = True
+            except ApplicationError:
+                decided = False
+            assert decided == enabled, name
+    assert listed["claude-code"] is False and listed["gemini-cli"] is True and listed["opencode"] is False
+
+
+async def test_the_reviewer_swap_skips_a_disabled_backend(setup: Fixture) -> None:
+    from choregos_api.db.session import session_scope
+    from choregos_core import ModelResolver
+    from choregos_orchestrator.activities import stage as st
+    from choregos_orchestrator.activities.base import project_bundle
+
+    await _switch("gemini-cli", enabled=False)
+    await _switch("opencode", enabled=True)
+    async with session_scope() as session:
+        bundle = await project_bundle(session, setup.project_id)
+        item = type("I", (), {"id": setup.work_item_id, "size": "m", "tracker_key": "K-1"})()
+        from choregos_api.db.models import Run
+
+        session.add(
+            Run(
+                id="run-impl",
+                work_item_id=setup.work_item_id,
+                project_id=setup.project_id,
+                stage_role="implement",
+                status="succeeded",
+                backend="claude-code",
+            )
+        )
+        await session.flush()
+        bundle.config.agent.allowed_backends = ["claude-code", "gemini-cli", "opencode"]
+        resolver = ModelResolver(gateway_url="", gateway_models=[], validated_backends={})
+        plan = st.StagePlan(**(_plan(setup) | {"role": "review"}))
+        chosen = await st._reviewer_backend(session, bundle, item, "claude-code", resolver, plan)
+    assert chosen != "gemini-cli"
 
 
 async def test_a_disabled_backend_escalates_then_runs_once_enabled(

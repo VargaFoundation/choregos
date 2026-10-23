@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from choregos_adapters.registry import allowed_executor_kinds
 from choregos_contracts import Role
-from choregos_core import utcnow
+from choregos_core import backend_enabled, utcnow
 from choregos_core.images import is_digest_pinned
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
@@ -84,7 +84,7 @@ async def list_backends(session: Db, principal: Me) -> list[AgentBackendInfo]:
         out.append(
             AgentBackendInfo(
                 name=name,
-                enabled=row.enabled if row else name == "claude-code",
+                enabled=backend_enabled(name, row.enabled if row else None),
                 version=row.version if row else None,
                 capabilities=list(row.capabilities) if row and row.capabilities else capabilities,
                 conformance=ConformanceReport.model_validate(row.conformance)

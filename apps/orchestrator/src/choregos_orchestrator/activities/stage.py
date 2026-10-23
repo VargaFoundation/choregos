@@ -46,7 +46,14 @@ from choregos_contracts import (
     WorkItemLinks,
     WorkItemRef,
 )
-from choregos_core import KNOWN_BACKEND_NAMES, ModelResolutionError, ModelResolver, telemetry, utcnow
+from choregos_core import (
+    KNOWN_BACKEND_NAMES,
+    ModelResolutionError,
+    ModelResolver,
+    backend_enabled,
+    telemetry,
+    utcnow,
+)
 from choregos_core.memory_bindings import Binding, legacy_scope, merge_context_packs
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
@@ -609,6 +616,12 @@ async def _resolve_on_enabled_backend(
     return _resolve_model(resolver, plan, bundle, item, backend)
 
 
+async def _backend_row(session: Any, backend: str) -> Any:
+    return (
+        await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == backend))
+    ).scalar_one_or_none()
+
+
 async def _require_backend_enabled(session: Any, agent: Any, backend: str) -> None:
     """Refuse the stage when the platform administrator disabled its coding-agent backend.
 
@@ -620,11 +633,16 @@ async def _require_backend_enabled(session: Any, agent: Any, backend: str) -> No
 
     if _fixed_backend(agent):
         return
-    row = (
-        await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == backend))
-    ).scalar_one_or_none()
-    if row is None or row.enabled:
+    row = await _backend_row(session, backend)
+    if backend_enabled(backend, row.enabled if row else None):
         return
+    if row is None:
+        raise ApplicationError(
+            f"the agent backend `{backend}` is disabled by the platform administrator (it was never "
+            "enabled on the platform page). Enable it there, or choose another backend.",
+            type="BackendDisabled",
+            non_retryable=True,
+        )
     reason = f" Reason given: {row.disabled_reason}." if row.disabled_reason else ""
     logger.info("stage refused: backend disabled", backend=backend)
     raise ApplicationError(
@@ -1297,6 +1315,9 @@ async def _reviewer_backend(
     for candidate in allowed:
         if candidate == implementer:
             continue
+        stored = await _backend_row(session, candidate)
+        if not backend_enabled(candidate, stored.enabled if stored else None):
+            continue  # S42-07c: a backend the platform disabled is not a reviewer
         try:
             resolver.resolve(
                 plan.model_request, project=bundle.config, size=item.size, backend=candidate, role=plan.role

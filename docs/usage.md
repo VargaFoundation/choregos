@@ -1200,7 +1200,7 @@ without naming one, which you can register, then name in the workflow (`agent: <
   would run on it is refused when it starts ("the agent backend `x` is disabled by the platform
   administrator"), before any budget, key or runner pod, and the work item escalates to a person
   like any configuration refusal; a stage already running is not stopped. With no setting stored
-  (fresh install) every backend is enabled. Which backends a project may use is still set by the
+  (fresh install) only `claude-code` is enabled, as the page shows. Which backends a project may use is still set by the
   deployment (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
   `allowedBackends`) and by the project's policy. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
