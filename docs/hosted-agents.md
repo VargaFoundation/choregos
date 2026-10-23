@@ -545,11 +545,15 @@ admission controller's ServiceAccount: the chart renders a `get` Role on that on
 team; `hostedCosignKyverno` names another ServiceAccount). Kyverno must also be able to reach the
 registry (an HTTP one needs `--allowInsecureRegistry`).
 
-**Signing for admission.** Kyverno 1.19.1's `keys` attestor reads cosign's legacy `.sig` signature and
-finds none in a cosign 3 bundle (an OCI referrer, cosign 3's default): sign with
-`cosign sign --new-bundle-format=false` (or both) an image the policy must admit. The API's own check
-(cosign 3) reads both formats. Proved in a cluster by `tests/cluster/test_hosted_images_admission.py`
-(job `hosted-admission`).
+**Signing for admission.** Kyverno reads one signature format per policy, so
+`hostedCosignFormat` names it: `bundle` (the default, cosign 3's own: `cosign sign` writes a Sigstore
+bundle as an OCI referrer, or under its fallback tag on a registry without the referrers API) or
+`legacy` (the `.sig` tag of `cosign sign --new-bundle-format=false`). Under `bundle` the policy's
+`verifyImages` entry has `type: SigstoreBundle`, which finds no `.sig`; under `legacy` it keeps
+Kyverno's default `Cosign` type, which finds no signature in a bundle. An image signed only in the
+other format is refused at admission; sign in both to serve either. The API's own check (cosign 3)
+reads both formats. Proved in a cluster for both values by `tests/cluster/test_hosted_images_admission.py`
+(job `hosted-admission`, Kyverno 1.19.1).
 
 What is not covered: the cosign subprocess does not go through the platform's egress client; the
 registry was judged by the organisation's egress allowlist when the digest was resolved, and keyless
