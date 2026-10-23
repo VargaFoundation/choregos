@@ -12,6 +12,7 @@ pnpm dev                                   # contre l'API locale (http://localho
 NEXT_PUBLIC_API_MODE=mock pnpm dev         # mode démo : fixtures, sans API
 pnpm lint && pnpm typecheck && pnpm test   # ce que la CI vérifie
 pnpm e2e                                   # parcours Playwright (mode démo)
+pnpm e2e:live                              # live journeys: the real API on fakes (uv), not in CI
 ```
 
 ## Écrans

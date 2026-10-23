@@ -94,6 +94,8 @@ STREAM_PING = 15
 #: The task states after which nothing changes: the stream says `final` and closes.
 TERMINAL = frozenset({"completed", "failed", "canceled"})
 _STREAMS: Counter[str] = Counter()
+#: The stream's clock for its lifetime; a test moves it instead of waiting an hour.
+_clock = time.monotonic
 #: Derives a task id from (org, client, messageId): a resent message finds its work item.
 TASK_NAMESPACE = uuid5(NAMESPACE_URL, "https://choregos.dev/a2a/task")
 
@@ -676,10 +678,10 @@ async def _follow(
     try:
         yield _frame(ident, first)
         task, seen = first, _mark(first)
-        deadline = time.monotonic() + STREAM_LIFETIME
+        deadline = _clock() + STREAM_LIFETIME
         with get_bus().listen(f"project:{project_slug}") as queue:
             while task["status"]["state"] not in TERMINAL:
-                left = deadline - time.monotonic()
+                left = deadline - _clock()
                 if left <= 0:
                     return
                 await _wake(queue, tracker_key, min(STREAM_POLL, left))

@@ -789,10 +789,18 @@ an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, 
 becomes `{text: <its JSON, cut, with the marker>, truncated}`. A catalogue entry may declare its
 own `result_max_bytes`, bounded by the same ceiling, and so may a plugin's tool, beside its `name`
 in what the plugin lists (S40-17b); the agent is not shown it, and a value that is not an integer of
-at least 1024 is refused when the tools are listed. Neither declares an output schema.
+at least 1024 is refused when the tools are listed. The ontology plugin declares 256 KiB for a page
+of objects (`<type>_search`, a link, `action_list`) and for `ontology_describe`, so that a full page
+keeps its `next_cursor`, and 64 KiB for one object, one proposal or its status (S40-17c). Neither
+declares an output schema.
 The injection guard then reads what is left (S40-18): an MCP-shaped answer's text blocks and every
 string of its `structuredContent` (S40-18b), any other JSON's strings, keys included; `sandbox.prompt_injection` decides as for a broker result (`warn`
 returns `suspicions` beside the result, `block` withholds it with `status_code: 451`).
+
+A session (prompt, hosted or realtime) gives its model text: the answer's text blocks, then its
+`structuredContent` as JSON unless a text block already serializes it, as MCP asks a server to
+(S40-18c). Both come after the cap and the masking, and the injection guard reads exactly that text;
+over the cap, the structured part is dropped and the model reads the cut text with its marker.
 
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.

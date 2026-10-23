@@ -14,6 +14,7 @@
     "theme:defaults": "node scripts/export-theme-defaults.mts",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:live": "playwright test -c playwright.live.config.ts",
     "mock:api": "prism mock ../../packages/contracts/openapi.yaml -p 4010"
   },
   "dependencies": {

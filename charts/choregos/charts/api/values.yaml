@@ -28,6 +28,13 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
 migrations:
   enabled: true
+# The nightly ledger-vs-trace comparison, rendered when `global.tracing.tempoUrl` is set (ADR 0018).
+traceDrift:
+  schedule: "17 3 * * *"
+  # The runs whose spend was collected in the last `hours`, but not in the last `settleMinutes`:
+  # a span reaches Tempo after its batch is flushed.
+  hours: 24
+  settleMinutes: 30
 ingress:
   enabled: true
   # Ingress annotations (`kind: ingress`). For a controller that refuses two Ingresses on the same

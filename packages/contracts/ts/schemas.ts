@@ -378,6 +378,11 @@ export type Project = {
     /** The workflow of the work item; the project's routing when absent. */
     workflow?: string | null;
   }>;
+  /** What the A2A door takes for this project's skills (ADR 0078 §6). */
+  a2a?: {
+    /** The file parts a message carries: each one, and all of them together, at most this many bytes once decoded. 10 MiB by default, 50 MiB at most. */
+    max_file_bytes?: number;
+  };
   /** The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue. */
   groups?: Array<string>;
   labels?: {
