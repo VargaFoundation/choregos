@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections import defaultdict, deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 from choregos_contracts import ChoregosEvent, EventType
@@ -83,6 +83,16 @@ class EventBus:
                 yield event
             while True:
                 yield await queue.get()
+        finally:
+            self._subscribers[topic].discard(queue)
+
+    @contextlib.contextmanager
+    def listen(self, topic: str, size: int = 100) -> Iterator[asyncio.Queue[ChoregosEvent]]:
+        """A queue that receives the topic's live events, nothing replayed; a full queue drops."""
+        queue: asyncio.Queue[ChoregosEvent] = asyncio.Queue(maxsize=size)
+        self._subscribers[topic].add(queue)
+        try:
+            yield queue
         finally:
             self._subscribers[topic].discard(queue)
 

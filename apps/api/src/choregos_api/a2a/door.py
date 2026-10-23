@@ -3,14 +3,21 @@
 
 `GET /a2a/orgs/{org}/.well-known/agent-card.json` and `POST /a2a/orgs/{org}`. The task IS the work
 item: `message/send` opens one through `creer_un_ticket`, under an id derived from the
-organisation, the client and the `messageId` (ADR 0008), and `tasks/get` reads it back. No state
-lives in this layer. Streaming, `tasks/resubscribe` and push notifications are not served yet.
+organisation, the client and the `messageId` (ADR 0008), and `tasks/get` reads it back.
+`message/stream` and `tasks/resubscribe` follow it over server-sent events: an event of the work
+item only wakes the stream up, the task is read again from the database each time. No state lives
+in this layer. Push notifications are not served yet.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
-from dataclasses import dataclass
+import time
+from collections import Counter
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, replace
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
@@ -30,13 +37,16 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette import EventSourceResponse
 
 from .. import __version__
 from ..audit import record
 from ..config import Settings
 from ..db.models import HumanRequest, Organization, Project, WorkflowDef, WorkItem
+from ..db.session import session_scope
 from ..deps import Config, Db
 from ..errors import ApiError
+from ..events import get_bus
 from ..logging import get_logger
 from ..mcp.appelant import SCOPES_A2A, Appelant, Refus, identifier
 from ..mcp.garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour
@@ -65,6 +75,19 @@ UNSUPPORTED_OPERATION = -32004
 CONTENT_TYPE_NOT_SUPPORTED = -32005
 #: Implementation-defined: the person's daily write budget, shared with the MCP door.
 BUDGET_EXHAUSTED = -32050
+#: Implementation-defined: too many streams open for one token.
+TOO_MANY_STREAMS = -32051
+#: A stream holds a connection: a few per token, an hour at most, then the caller resubscribes.
+MAX_STREAMS = 5
+STREAM_LIFETIME = 3600.0
+#: The task is read again on an event of the work item, and at least this often if none comes.
+STREAM_POLL = 30.0
+#: Events come in bursts (a state change, a comment, a request): one read for the burst.
+STREAM_SETTLE = 0.2
+STREAM_PING = 15
+#: The task states after which nothing changes: the stream says `final` and closes.
+TERMINAL = frozenset({"completed", "failed", "canceled"})
+_STREAMS: Counter[str] = Counter()
 #: Derives a task id from (org, client, messageId): a resent message finds its work item.
 TASK_NAMESPACE = uuid5(NAMESPACE_URL, "https://choregos.dev/a2a/task")
 
@@ -190,7 +213,7 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
         "preferredTransport": "JSONRPC",
         "version": __version__,
         "provider": {"organization": "Choregos", "url": door.console},
-        "capabilities": {"streaming": False, "pushNotifications": False, "stateTransitionHistory": False},
+        "capabilities": {"streaming": True, "pushNotifications": False, "stateTransitionHistory": False},
         "defaultInputModes": ["text/plain"],
         "defaultOutputModes": ["text/plain", "application/json"],
         "securitySchemes": schemes,
@@ -248,6 +271,11 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
     try:
         if not isinstance(params, dict):
             raise Fault(PARAMETRES_INVALIDES, "`params` is an object")
+        if method in {"message/stream", "tasks/resubscribe"}:
+            stream = await _open_stream(door, settings, ident, method, params)
+            await _audit(door, method, outcome)
+            await session.commit()
+            return stream
         answer = ok(ident, await _dispatch(door, method, params))
     except Fault as refused:
         outcome = "refus"
@@ -264,8 +292,6 @@ async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> dict[str
         return await task_of(door, item, project)
     if method == "tasks/cancel":
         return await _cancel(door, params)
-    if method in {"message/stream", "tasks/resubscribe"}:
-        raise Fault(UNSUPPORTED_OPERATION, f"{method} is not served yet: poll with tasks/get")
     if method.startswith("tasks/pushNotificationConfig/"):
         raise Fault(PUSH_NOT_SUPPORTED, "push notifications are not served yet: poll with tasks/get")
     raise Fault(METHODE_INCONNUE, f"unknown method: {method}")
@@ -540,3 +566,118 @@ async def _cancel(door: Door, params: dict[str, Any]) -> dict[str, Any]:
         reason="canceled over A2A",
     )
     return await task_of(door, item, project)
+
+
+# ───────────────────────── message/stream, tasks/resubscribe ─────────────────────────
+
+
+async def _open_stream(
+    door: Door, settings: Settings, ident: Any, method: str, params: dict[str, Any]
+) -> Response:
+    """The refusals come as a plain JSON-RPC answer; past them, the task's events as SSE."""
+    if _STREAMS[door.caller.cle] >= MAX_STREAMS:
+        raise Fault(TOO_MANY_STREAMS, f"too many streams: {MAX_STREAMS} open at most for one token")
+    if method == "message/stream":
+        first = await _send(door, params)
+        item, project = await _task(door, first["id"])
+    else:
+        item, project = await _task(door, params.get("id"))
+        first = await task_of(door, item, project)
+    events = _follow(door, settings, ident, first, project.slug, item.tracker_key)
+    return EventSourceResponse(events, ping=STREAM_PING)
+
+
+def _frame(ident: Any, result: dict[str, Any]) -> dict[str, str]:
+    return {"data": json.dumps(ok(ident, result))}
+
+
+def _status_update(task: dict[str, Any], final: bool) -> dict[str, Any]:
+    return {
+        "kind": "status-update",
+        "taskId": task["id"],
+        "contextId": task["contextId"],
+        "status": task["status"],
+        "final": final,
+        "metadata": task["metadata"],
+    }
+
+
+def _mark(task: dict[str, Any]) -> tuple[str, str, Any]:
+    """What makes a new status worth sending: the A2A state, the workflow's state, the request."""
+    data = [p.get("data") for p in task["status"]["message"]["parts"] if p.get("kind") == "data"]
+    request = data[0].get("request_id") if data and isinstance(data[0], dict) else None
+    return task["status"]["state"], task["metadata"]["choregos"]["state"], request
+
+
+async def _follow(
+    door: Door, settings: Settings, ident: Any, first: dict[str, Any], project_slug: str, tracker_key: str
+) -> AsyncIterator[dict[str, str]]:
+    """The task, then a status each time it changes, its artefacts and a `final` status at the end.
+
+    An input-required status is not final: the decision is taken in the console, not by this
+    caller, and the task goes on. A token revoked or a right lost ends the stream at the next read.
+    """
+    key = door.caller.cle
+    _STREAMS[key] += 1
+    try:
+        yield _frame(ident, first)
+        task, seen = first, _mark(first)
+        deadline = time.monotonic() + STREAM_LIFETIME
+        with get_bus().listen(f"project:{project_slug}") as queue:
+            while task["status"]["state"] not in TERMINAL:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    return
+                await _wake(queue, tracker_key, min(STREAM_POLL, left))
+                try:
+                    task = await _reread(door, settings, task["id"])
+                except Fault as lost:
+                    yield {"data": json.dumps(erreur(ident, lost.code, str(lost)))}
+                    return
+                if _mark(task) == seen:
+                    continue
+                seen = _mark(task)
+                final = task["status"]["state"] in TERMINAL
+                for artifact in task["artifacts"] if final else []:
+                    yield _frame(
+                        ident,
+                        {
+                            "kind": "artifact-update",
+                            "taskId": task["id"],
+                            "contextId": task["contextId"],
+                            "artifact": artifact,
+                            "append": False,
+                            "lastChunk": True,
+                        },
+                    )
+                yield _frame(ident, _status_update(task, final))
+        if first["status"]["state"] in TERMINAL:
+            yield _frame(ident, _status_update(first, True))
+    finally:
+        _STREAMS[key] -= 1
+        if _STREAMS[key] <= 0:
+            del _STREAMS[key]
+
+
+async def _wake(queue: asyncio.Queue[Any], tracker_key: str, wait: float) -> None:
+    """Back on an event of this work item, settled for its burst, or after `wait` seconds anyway."""
+    with contextlib.suppress(TimeoutError):
+        async with asyncio.timeout(wait):
+            while (await queue.get()).subject != tracker_key:
+                pass
+        await asyncio.sleep(STREAM_SETTLE)
+    while not queue.empty():
+        queue.get_nowait()
+
+
+async def _reread(door: Door, settings: Settings, task_id: str) -> dict[str, Any]:
+    """The task from the database, for a caller identified again: the stream holds no rights."""
+    async with session_scope() as session:
+        try:
+            caller = await identifier(session, door.request, settings, scopes=SCOPES_A2A, door="A2A")
+        except Refus as refus:
+            raise Fault(TASK_NOT_FOUND, f"the stream's credential no longer opens the door: {refus}") from (
+                refus
+            )
+        again = replace(door, session=session, caller=caller)
+        return await task_of(again, *await _task(again, task_id))

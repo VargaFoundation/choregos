@@ -2,11 +2,13 @@
 
 The caller simulated here is another agent holding a person's `a2a` token. Each guard of the
 door has its test: the scope, the refusal of `*`, the opt-in, the derived task id, the decision
-that stays in the console, the rate and the parts cap.
+that stays in the console, the rate and the parts cap; a stream's end, its credential read again,
+and the cap on open streams.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -146,7 +148,7 @@ async def test_the_card_lists_the_opted_in_workflow_and_parses_as_a2a(
     assert card.url.endswith("/a2a/orgs/varga")
     assert [s.id for s in card.skills] == ["billing-api/ship-a-change"]
     assert AUTH_BEARER in card.auth_types
-    assert raw["capabilities"]["streaming"] is False
+    assert raw["capabilities"]["streaming"] is True
     assert raw["capabilities"]["pushNotifications"] is False
 
 
@@ -297,10 +299,8 @@ async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: di
 # ───────────────────────────── guards ─────────────────────────────
 
 
-async def test_streaming_and_push_are_not_served(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_push_is_not_served(client: AsyncClient, project: dict[str, Any]) -> None:
     token = await _ready(client, project)
-    stream = (await _rpc(client, token, "message/stream", _message("x"))).json()
-    assert stream["error"]["code"] == -32004
     push = (await _rpc(client, token, "tasks/pushNotificationConfig/set", {})).json()
     assert push["error"]["code"] == -32003
     unknown = (await _rpc(client, token, "agent/dance", {})).json()
@@ -333,3 +333,174 @@ async def test_a_reference_a2a_client_drives_the_door(
         read = await remote.get_task(sent.id)
     assert sent.state == read.state == "working"
     assert read.id == sent.id
+
+
+# ───────────────────────────── message/stream, tasks/resubscribe ─────────────────────────────
+
+
+async def _stream(
+    client: AsyncClient, token: str, method: str, params: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """The JSON-RPC answers of one SSE answer, in order; a stream that does not end fails the test."""
+    import json
+
+    async def read() -> list[dict[str, Any]]:
+        frames: list[dict[str, Any]] = []
+        async with client.stream(
+            "POST",
+            ENDPOINT,
+            json={"jsonrpc": "2.0", "id": 7, "method": method, "params": params},
+            headers={"Authorization": f"Bearer {token}", "Accept": "text/event-stream"},
+        ) as answer:
+            assert answer.status_code == 200
+            if not answer.headers["content-type"].startswith("text/event-stream"):
+                return [json.loads(await answer.aread())]
+            async for line in answer.aiter_lines():
+                if line.startswith("data:"):
+                    frames.append(json.loads(line.removeprefix("data:").strip()))
+        return frames
+
+    return await asyncio.wait_for(read(), 10)
+
+
+async def _when_followed(then: Any) -> None:
+    """Runs `then` once a stream listens to the project, as the orchestrator's events would come."""
+    from choregos_api.events import get_bus
+
+    for _ in range(200):
+        if get_bus().subscriber_count("project:billing-api"):
+            break
+        await asyncio.sleep(0.02)
+    await then()
+
+
+async def _touch(key: str) -> None:
+    from choregos_api.events import get_bus
+    from choregos_contracts import ChoregosEvent, EventType
+
+    get_bus().publish(
+        ChoregosEvent.emit(
+            EventType.WORKITEM_STATE_CHANGED, source="/test", subject=key, project_slug="billing-api"
+        )
+    )
+
+
+async def test_message_stream_follows_the_work_item_to_its_end(
+    app: Any, client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_adapters.a2a import A2aClient, text_part
+    from choregos_api.db.models import ArtifactRecord, HumanRequest, Project, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+    from sqlalchemy import select
+
+    token = await _ready(client, project)
+    card = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
+    assert card["capabilities"]["streaming"] is True
+
+    async def drive() -> None:
+        async with session_scope() as session:
+            item = (await session.execute(select(WorkItem))).scalar_one()
+            session.add(
+                HumanRequest(
+                    work_item_id=item.id,
+                    project_id=project["id"],
+                    kind="approval",
+                    payload={"question": "Merge?"},
+                    requested_at=utcnow(),
+                )
+            )
+            key = item.tracker_key
+        await _touch(key)
+        await _touch("SOMEONE-ELSE-1")
+        await asyncio.sleep(0.5)
+        async with session_scope() as session:
+            item = (await session.execute(select(WorkItem))).scalar_one()
+            (await session.execute(select(HumanRequest))).scalar_one().decided_at = utcnow()
+            item.state = "deployed_prod"
+            session.add(
+                ArtifactRecord(
+                    org_id=(await session.get(Project, project["id"])).org_id,  # type: ignore[union-attr]
+                    work_item_id=item.id,
+                    name="release-notes",
+                    version=1,
+                    type="markdown",
+                    kind="inline",
+                    media_type="text/markdown",
+                    digest="sha256:" + "0" * 64,
+                    size=3,
+                    content="ok",
+                    run_id="run-1",
+                )
+            )
+        await _touch(key)
+
+    async def follow() -> list[Any]:
+        async with A2aClient(f"http://test{ENDPOINT}", token, transport=ASGITransport(app=app)) as remote:
+            return [e async for e in remote.stream(remote.message([text_part("Add credit notes")]))]
+
+    events, _ = await asyncio.wait_for(asyncio.gather(follow(), _when_followed(drive)), 10)
+    assert [(e.kind, e.state, e.final) for e in events] == [
+        ("task", "working", False),
+        ("status", "input-required", False),
+        ("artifact", None, False),
+        ("status", "completed", True),
+    ], "a status per change, none for another work item's event, the artefacts before the final one"
+    assert events[2].artifact is not None and events[2].artifact.name == "release-notes"
+
+
+async def test_resubscribe_to_a_finished_task_says_final_and_closes(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    token = await _ready(client, project)
+    task = await _send(client, token)
+    async with session_scope() as session:
+        item = await session.get(WorkItem, task["id"])
+        assert item is not None
+        item.failure = {"reason": "boom"}
+    frames = await _stream(client, token, "tasks/resubscribe", {"id": task["id"]})
+    results = [f["result"] for f in frames]
+    assert [r["kind"] for r in results] == ["task", "status-update"]
+    assert results[1]["status"]["state"] == "failed" and results[1]["final"] is True
+    unknown = await _stream(client, token, "tasks/resubscribe", {"id": "nope"})
+    assert unknown[0]["error"]["code"] == -32001, "refused before the stream, as plain JSON-RPC"
+
+
+async def test_a_revoked_token_ends_the_stream(client: AsyncClient, project: dict[str, Any]) -> None:
+    from choregos_api.db.models import ApiToken, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+    from sqlalchemy import select
+
+    token = await _ready(client, project)
+    task = await _send(client, token)
+
+    async def revoke() -> None:
+        async with session_scope() as session:
+            (await session.execute(select(ApiToken))).scalar_one().expires_at = utcnow()
+            item = await session.get(WorkItem, task["id"])
+            assert item is not None
+            item.state = "refining"
+        await _touch(task["metadata"]["choregos"]["key"])
+
+    frames, _ = await asyncio.gather(
+        _stream(client, token, "tasks/resubscribe", {"id": task["id"]}), _when_followed(revoke)
+    )
+    assert frames[0]["result"]["status"]["state"] == "working"
+    assert frames[-1]["error"]["code"] == -32001, "the stream reads its credential again, and stops"
+    assert len(frames) == 2, "nothing of the new state reached a caller whose token is gone"
+
+
+async def test_open_streams_are_capped_per_token(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.a2a import door
+
+    token = await _ready(client, project)
+    monkeypatch.setattr(door, "MAX_STREAMS", 0)
+    refused = await _stream(client, token, "message/stream", _message("x"))
+    assert refused[0]["error"]["code"] == -32051
+    assert door._STREAMS == {}, "a refused stream holds no slot"
