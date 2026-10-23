@@ -432,8 +432,11 @@ async def _appeler(
     refusal = output_refusal(outil, resultat)
     if refusal is not None:
         return 422, {"error": refusal, "type": "output_schema"}
+    # A job (ADR 0056) has no model to protect: a snapshot's seven years of bars are its input, and a
+    # cut answer is no bars at all. It is masked, never cut (S40-13b).
+    job = run is not None and run.backend == "job"
     return (200 if not resultat.get("isError") else 422), bounded_result(
-        resultat, outil.operation.result_max_bytes
+        resultat, outil.operation.result_max_bytes, cut=not job
     )
 
 
@@ -477,11 +480,16 @@ def result_limit(declared: int | None = None) -> int:
     return min(declared or settings.broker_result_max_bytes, settings.broker_result_ceiling_bytes)
 
 
-def bounded_result(resultat: dict[str, Any], declared: int | None = None) -> dict[str, Any]:
+def bounded_result(
+    resultat: dict[str, Any], declared: int | None = None, *, cut: bool = True
+) -> dict[str, Any]:
     """A tool result as the agent may read it (#755): secrets masked in what it says, and no larger
     than `result_limit(declared)`. A larger one keeps its text, cut, with `TRUNCATED` at the end;
-    its `structuredContent` is dropped, since half an object is not the object."""
+    its `structuredContent` is dropped, since half an object is not the object. `cut=False` masks
+    only: a job reads the answer, not a model (S40-13b)."""
     masked = _masked(resultat)
+    if not cut:
+        return masked
     limit = result_limit(declared)
     total = len(_json(masked).encode("utf-8"))
     if total <= limit:
