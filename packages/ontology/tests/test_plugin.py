@@ -257,6 +257,39 @@ async def test_the_run_sees_the_generated_tools_the_trial_can_serve(
     assert all(set(t) == {"name", "description", "inputSchema"} for t in response.json()["tools"])
 
 
+def test_every_served_kind_declares_its_result_cap() -> None:
+    from choregos_ontology.mcpgen import MAX_SEARCH_LIMIT
+    from choregos_ontology.service.tools import RESULT_CAPS, SERVED_KINDS
+
+    assert set(RESULT_CAPS) == SERVED_KINDS, "a kind without a cap falls back to the deployment's default"
+    assert all(isinstance(cap, int) and cap >= 1024 for cap in RESULT_CAPS.values()), "the core refuses less"
+    assert all(RESULT_CAPS[kind] >= MAX_SEARCH_LIMIT * 2048 for kind in ("search", "link", "list"))
+
+
+async def test_a_full_page_of_hosts_reaches_the_agent_whole(
+    client: AsyncClient, project: dict[str, Any], infra_run: dict[str, str]
+) -> None:
+    """A page of 100 hosts weighs about 130 KiB: past the core's 64 KiB default it would be cut, its
+    `next_cursor` lost; the plugin's declared cap keeps it whole (S40-17c)."""
+    from choregos_api.db.session import session_scope
+    from choregos_ontology.service.store import ManagedObject
+
+    async with session_scope() as session:
+        for n in range(100):
+            ident = f"bulk-{n:03d}"
+            properties = {"id": ident, "name": ident, "os": "ubuntu " + "x" * 1200, "ip": "10.0.1.1"}
+            session.add(
+                ManagedObject(project_id=project["id"], object_type="host", id=ident, properties=properties)
+            )
+
+    page = await _call(client, infra_run, "host_search", {"limit": 100})
+    assert page["status_code"] == 200, page
+    assert "truncated" not in page["result"], "the page was cut at the default cap"
+    assert len(page["result"]["objects"]) == 100
+    assert page["result"]["next_cursor"] is not None, "two more hosts wait on the next page"
+    assert len(json.dumps(page["result"])) > 65536, "the page is larger than the default cap"
+
+
 async def test_the_agent_reads_the_findings_and_a_host_through_the_tools(
     client: AsyncClient, infra_run: dict[str, str]
 ) -> None:
