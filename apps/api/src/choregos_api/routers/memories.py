@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from choregos_core.memory_bindings import OWN, RESERVED_SLUGS, SHARED
-from choregos_core.memory_scope import global_store_namespace
+from choregos_core.memory_scope import global_store_namespace, memory_key
 from fastapi import APIRouter, Path, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -279,7 +279,10 @@ async def search_global_memory(
     _member(principal, org)
     organisation, store = await _global(session, principal, org, slug)
     adapter = await global_adapter(session, organisation)
-    return [memory_dto(m) for m in await adapter.search(global_store_namespace(org, store.slug), q, k)]
+    return [
+        memory_dto(m)
+        for m in await adapter.search(global_store_namespace(memory_key(organisation), store.slug), q, k)
+    ]
 
 
 @router.get(
@@ -292,7 +295,7 @@ async def list_global_pending(org: str, slug: Slug, session: Db, principal: Me) 
     _manage(principal, org)
     organisation, store = await _global(session, principal, org, slug)
     adapter = await global_adapter(session, organisation)
-    rows = await adapter.list_pending(global_store_namespace(org, store.slug))
+    rows = await adapter.list_pending(global_store_namespace(memory_key(organisation), store.slug))
     return [memory_dto(m) for m in rows]
 
 
@@ -303,7 +306,7 @@ async def decide_global_pending(
     _manage(principal, org)
     organisation, store = await _global(session, principal, org, slug)
     adapter = await global_adapter(session, organisation)
-    namespace = global_store_namespace(org, store.slug)
+    namespace = global_store_namespace(memory_key(organisation), store.slug)
     if body.action == "accept":
         done = await adapter.accept_pending(namespace, body.id)
     else:

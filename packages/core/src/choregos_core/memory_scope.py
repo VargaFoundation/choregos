@@ -24,7 +24,7 @@ read a named memory as the project's shared one.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 MemoryScope = Literal["none", "project", "agent"]
 SEPARATOR = "#agent:"
@@ -59,6 +59,21 @@ def memory_namespace(project: str, scope: str, agent: str | None) -> str | None:
 
 def project_store_namespace(project: str, store: str) -> str:
     return f"{project}{STORE_SEPARATOR}{store}"
+
+
+MEMORY_KEY_SETTING = "memory_key"
+
+
+def memory_key(organisation: Any) -> str:
+    """The key an organisation's global memories live under (S40-24).
+
+    The slug the organisation had when its slug first changed (`settings["memory_key"]`, written once
+    and never overwritten), else its current slug. The slug is in every URL and may be renamed; the
+    memory tenant `org:<key>` and the namespaces `org:<key>#memory:<store>` must not move with it, or
+    every global memory would become invisible.
+    """
+    key = (getattr(organisation, "settings", None) or {}).get(MEMORY_KEY_SETTING)
+    return str(key) if key else str(organisation.slug)
 
 
 def global_store_namespace(org: str, store: str) -> str:
@@ -100,12 +115,14 @@ def split_namespace(namespace: str) -> tuple[str, str | None]:
 
 
 __all__ = [
+    "MEMORY_KEY_SETTING",
     "ORG_PREFIX",
     "SEPARATOR",
     "STORE_SEPARATOR",
     "MemoryScope",
     "ParsedNamespace",
     "global_store_namespace",
+    "memory_key",
     "memory_namespace",
     "parse_namespace",
     "project_store_namespace",

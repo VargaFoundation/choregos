@@ -8,8 +8,19 @@ import pytest
 from choregos_orchestrator.activities import stage as stage_activities
 
 from .conftest import Fixture
+from .test_backend_toggle_enforced import _switch
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+async def _every_backend_enabled(setup: Fixture) -> None:
+    """Review rotation is the subject here, not the platform's switch (S42-07c): on a fresh install
+    only `claude-code` is enabled, and a reviewer is never drawn from a disabled backend."""
+    from choregos_core import KNOWN_BACKEND_NAMES
+
+    for name in KNOWN_BACKEND_NAMES:
+        await _switch(name, enabled=True)
 
 
 async def _set_cross_backend(project_id: str, value: bool) -> None:

@@ -22,6 +22,7 @@ from choregos_api.services.definitions import ceiling_of
 from choregos_api.services.github_app import pin_for_runtime
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import Message, PolicyEngine
+from choregos_core.memory_scope import memory_key
 from choregos_core.policy_ceiling import PolicyCeiling, clamp
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,9 @@ class ProjectBundle:
     adapters: AdapterSet
     #: La version de ce défaut, pour épingler un ticket à sa naissance.
     workflow_def_id: str | None = None
+    #: The key the organisation's global memories live under (S40-24): its first slug, which a later
+    #: rename does not move. Empty when the bundle has no organisation.
+    org_memory_key: str = ""
     #: The adapter of the organisation's global memories (S40-11); built on first use by `org_memory`.
     org_memory_adapter: Any = None
     #: The organisation's policy ceiling, if it set one: its `network` section bounds the run's
@@ -109,6 +113,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     return ProjectBundle(
         project=project,
         org_slug=org.slug if org else "",
+        org_memory_key=memory_key(org) if org else "",
         config=ProjectConfig.model_validate(project.config),
         workflow=workflow_model(workflow_row),
         workflow_def_id=workflow_row.id if workflow_row is not None else None,
