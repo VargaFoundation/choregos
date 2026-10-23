@@ -106,6 +106,23 @@ export function a2aCardUrl(urlMcp: string, org: string): string {
   return `${origineDe(urlMcp)}/a2a/orgs/${encodeURIComponent(org)}/.well-known/agent-card.json`;
 }
 
+/** `a2a.max_file_bytes` when a project does not set it, and the most it may set (`project.schema.json`). */
+export const A2A_MAX_FILE_BYTES_DEFAULT = 10 * 1024 * 1024;
+export const A2A_MAX_FILE_BYTES_CEILING = 50 * 1024 * 1024;
+
+/** What one A2A message may carry in file parts for this project: each file, and all of them together. */
+export function a2aFileLimit(config: { a2a?: { max_file_bytes?: number } } | null | undefined): number {
+  return config?.a2a?.max_file_bytes ?? A2A_MAX_FILE_BYTES_DEFAULT;
+}
+
+/** `10485760` as `10 MiB`; a limit that is not a whole number of MiB keeps one decimal, or reads in KiB. */
+export function formatMiB(bytes: number): string {
+  const mib = bytes / (1024 * 1024);
+  if (Number.isInteger(mib)) return `${mib} MiB`;
+  if (mib >= 0.1) return `${mib.toFixed(1)} MiB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KiB`;
+}
+
 export interface Extrait {
   /** Où le coller : un fichier, un terminal. */
   where: string;

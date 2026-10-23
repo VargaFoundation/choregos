@@ -597,6 +597,49 @@ async def test_a_reference_a2a_client_drives_the_door(
     assert read.id == sent.id
 
 
+async def test_a_reference_a2a_client_sends_a_file_a_step_reads(
+    app: Any, client: AsyncClient, project: dict[str, Any], store: Any
+) -> None:
+    """The outbound client's own `file_part`, not a hand-built dict: what a caller sends, a step reads."""
+    from choregos_adapters.a2a import A2aClient, file_part, text_part
+    from choregos_api.db.models import ArtifactRecord, Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import mint_run_token
+    from choregos_contracts import artifact_digest
+    from sqlalchemy import select
+
+    token = await _ready(client, project, modes=FILE_MODES)
+    async with A2aClient(f"http://test{ENDPOINT}", token, transport=ASGITransport(app=app)) as remote:
+        parts = [text_part("Review the contract"), file_part("contract.pdf", PDF, "application/pdf")]
+        sent = await remote.send(remote.message(parts))
+    assert sent.state == "working"
+    async with session_scope() as session:
+        rows = list((await session.execute(select(ArtifactRecord))).scalars())
+        item = await session.get(WorkItem, sent.id)
+        assert item is not None
+        session.add(
+            Run(
+                id="run-read",
+                work_item_id=item.id,
+                project_id=project["id"],
+                stage_role="review",
+                status="running",
+                stage_input={"transition": {"outputs": [], "inputs": ["contract.pdf"]}},
+            )
+        )
+        key = item.tracker_key
+    assert [(r.name, r.run_id, r.digest) for r in rows] == [
+        ("contract.pdf", f"a2a:{sent.id}", artifact_digest(PDF))
+    ]
+    assert store.puts == 1
+    headers = {
+        "Authorization": "Bearer "
+        + mint_run_token("run-read", project_slug="billing-api", work_item_key=key, ttl_minutes=5)
+    }
+    read = await client.get("/api/v1/internal/runs/run-read/inputs/contract.pdf", headers=headers)
+    assert read.status_code == 200 and read.content == PDF
+
+
 # ───────────────────────────── message/stream, tasks/resubscribe ─────────────────────────────
 
 

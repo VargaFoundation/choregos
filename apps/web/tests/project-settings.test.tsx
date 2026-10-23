@@ -191,6 +191,27 @@ describe("the project settings page (S40-03b)", () => {
     expect(body.config?.notify).toEqual({ slack_channel: "#choregos-dev", emails: ["po@acme.dev", "lead@acme.dev"] });
   });
 
+  it("the A2A section saves the file limit in bytes, and the default is not written down", async () => {
+    await renderPage();
+    const section = await screen.findByTestId("section-a2a");
+    const field = await within(section).findByLabelText("Largest file a message may carry (MiB)");
+    expect((field as HTMLInputElement).value).toBe("10");
+    fireEvent.change(field, { target: { value: "60" } });
+    expect(within(section).getByText("At most 50 MiB")).toBeTruthy();
+    expect(within(section).getByRole("button", { name: "Save the file limit" })).toBeDisabled();
+    fireEvent.change(field, { target: { value: "25" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Save the file limit" }));
+    await vi.waitFor(() =>
+      expect(vi.mocked(api.updateProject).mock.calls.some(([, b]) => b.config?.a2a?.max_file_bytes === 25 * 1024 * 1024)).toBe(true),
+    );
+    expect(vi.mocked(api.updateProject).mock.calls.at(-1)![1].config).toMatchObject({ envs: ["dev", "prod"], groups: ["dev"] });
+    vi.mocked(api.updateProject).mockClear();
+    fireEvent.change(field, { target: { value: "10" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Save the file limit" }));
+    await vi.waitFor(() => expect(api.updateProject).toHaveBeenCalled());
+    expect(vi.mocked(api.updateProject).mock.calls.at(-1)![1].config).not.toHaveProperty("a2a");
+  });
+
   it("opens a drawer to configure a connector", async () => {
     await renderPage();
     const scm = await screen.findByTestId("connecteur-scm");

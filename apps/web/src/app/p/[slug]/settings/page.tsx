@@ -2,6 +2,7 @@
 "use client";
 
 import { use } from "react";
+import { A2aSection } from "@/components/project-settings/a2a-section";
 import { AgentsModelsSection } from "@/components/project-settings/agents-models-section";
 import { ConnectionsSection } from "@/components/project-settings/connections-section";
 import { DangerZoneSection } from "@/components/project-settings/danger-zone-section";
@@ -26,6 +27,7 @@ const SECTIONS = [
   { id: "network", label: "Network" },
   { id: "notifications", label: "Notifications" },
   { id: "tools", label: "Tools" },
+  { id: "a2a", label: "A2A" },
   { id: "people", label: "People" },
   { id: "knowledge-memory", label: "Knowledge & memory" },
   { id: "danger-zone", label: "Danger zone" },
@@ -62,6 +64,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         </SettingsSection>
         <NotificationsSection slug={slug} />
         <ToolsSection slug={slug} />
+        <A2aSection slug={slug} />
         <PeopleSection slug={slug} />
         <KnowledgeMemorySection slug={slug} />
         <DangerZoneSection slug={slug} />
