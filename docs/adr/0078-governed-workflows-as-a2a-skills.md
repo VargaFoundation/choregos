@@ -4,9 +4,8 @@
   `message/send`, `tasks/get`, `tasks/cancel`, the `a2a` scope, audit, rate limit, parts cap and
   the `a2a:` initiator (ADR 0077); S40-23c adds `message/stream` and `tasks/resubscribe`, S40-23d
   push notifications (§5), S40-23e the artefacts' content in parts (256 KiB each, 1 MiB per task,
-  digest checked) and the card URL on the Integrations page (#757). File parts in a message stay
-  refused: a work item has no store for a file it did not produce, and the project has no size limit
-  to count it against
+  digest checked) and the card URL on the Integrations page (#757). §6 amended on 2026-10-23: file
+  parts in a message become input artefacts, within a per-project limit (S40-23g contract, S40-23h)
 - **Concerns**: a new `/a2a` route at the root of the API process (beside `/mcp`), the workflow
   definitions (an opt-in per workflow), the work items service, the events stream, `chg_` token
   scopes; builds on [ADR 0030](0030-an-mcp-door-for-external-clients.md) (the MCP door, its tokens and
@@ -50,6 +49,19 @@ already has that lifecycle, durably, in Temporal.
    registration.
 6. **Guards: the door's.** Every call audited (`a2a.call`), rate-limited per token, message parts
    capped and wrapped as data, not instructions; a file part counts against the project's limits.
+
+   **Amended 2026-10-23 (Vincent's decision; S40-23g, S40-23h).** S40-23e left file parts refused
+   because a work item had nowhere to keep a file it did not produce and a project had no limit to
+   count it against. Both now exist:
+   - a file part sent with `bytes` becomes an **input artefact of the work item**, stored like any
+     other artefact (ADR 0049: the object store, its digest checked on every read), under the part's
+     `name`; a step that declares that name in its `inputs` reads it from `.choregos/inputs/`;
+   - the project bounds them: `a2a.max_file_bytes` in the project's configuration, **10 MiB by
+     default**, 50 MiB at most, applies to each file part and to all the file parts of one message
+     together, once decoded;
+   - a file part must carry a media type the skill lists in `input_modes`;
+   - a file part sent by `uri` is refused: fetching a URL the caller chose would be a request the
+     platform makes on a stranger's behalf, and the A2A door makes none.
 
 ## Alternatives rejected
 
