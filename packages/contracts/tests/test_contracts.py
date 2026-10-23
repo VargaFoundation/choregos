@@ -541,3 +541,31 @@ def test_the_platform_executors_are_read_only_in_the_contract() -> None:
         m for m in spec["paths"]["/platform/executors"] if m in {"get", "put", "post", "patch", "delete"}
     }
     assert operations == {"get"}
+
+
+def test_a_project_a2a_block_bounds_file_parts_the_same_in_the_schema_and_the_model() -> None:
+    """ADR 0078 §6 (S40-23g): a project bounds the A2A file parts it takes, 10 MiB unless it says so."""
+    from choregos_contracts import A2A_MAX_FILE_BYTES_CEILING, A2A_MAX_FILE_BYTES_DEFAULT, A2aConfig
+
+    gaps: list[str] = []
+    node = contracts.load_schema("project.schema.json")["properties"]["a2a"]
+    _comparer("project.a2a", node, A2aConfig, gaps)
+    assert not gaps, "\n".join(gaps)
+    assert node["properties"]["max_file_bytes"]["default"] == A2A_MAX_FILE_BYTES_DEFAULT == 10 * 1024 * 1024
+    assert node["properties"]["max_file_bytes"]["maximum"] == A2A_MAX_FILE_BYTES_CEILING
+
+    validator = _validator("project.schema.json")
+    base = _load("project.example.json")
+    assert ProjectConfig.model_validate(base).a2a.max_file_bytes == A2A_MAX_FILE_BYTES_DEFAULT
+    raised = base | {"a2a": {"max_file_bytes": 20 * 1024 * 1024}}
+    assert not list(validator.iter_errors(raised))
+    assert ProjectConfig.model_validate(raised).a2a.max_file_bytes == 20 * 1024 * 1024
+    for bad in (
+        {"max_file_bytes": 0},
+        {"max_file_bytes": A2A_MAX_FILE_BYTES_CEILING + 1},
+        {"max_file_bytes": "10MB"},
+        {"max_file_bytes": 1024, "max_files": 3},
+    ):
+        assert list(validator.iter_errors(base | {"a2a": bad})), bad
+        with pytest.raises(ValueError):
+            ProjectConfig.model_validate(base | {"a2a": bad})

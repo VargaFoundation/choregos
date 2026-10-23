@@ -182,6 +182,20 @@
       },
       "default": []
     },
+    "a2a": {
+      "description": "What the A2A door takes for this project's skills (ADR 0078 §6).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_file_bytes": {
+          "description": "The file parts a message carries: each one, and all of them together, at most this many bytes once decoded. 10 MiB by default, 50 MiB at most.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52428800,
+          "default": 10485760
+        }
+      }
+    },
     "groups": {
       "description": "The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue.",
       "type": "array",
