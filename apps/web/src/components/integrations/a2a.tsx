@@ -2,10 +2,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { Button, Card, Code, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
-import { a2aCardUrl } from "@/lib/integrations";
+import { a2aCardUrl, a2aFileLimit, formatMiB } from "@/lib/integrations";
 import type { ApiTokenCreated } from "@/lib/types";
 
 /**
@@ -15,6 +16,7 @@ import type { ApiTokenCreated } from "@/lib/types";
  */
 export function A2aAgent({ org }: { org: string }) {
   const infos = useQuery({ queryKey: ["integrations"], queryFn: () => api.integrations(), staleTime: Infinity });
+  const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
   const [token, setToken] = useState<ApiTokenCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
   const card = infos.data ? a2aCardUrl(infos.data.mcp_url, org) : "…";
@@ -42,6 +44,21 @@ export function A2aAgent({ org }: { org: string }) {
         <p className="break-all">
           JSON-RPC endpoint <Code data-testid="a2a-endpoint">{endpoint}</Code>
         </p>
+        {(projects.data?.items.length ?? 0) > 0 && (
+          <div>
+            <p>Files a message may carry, each and all together:</p>
+            <ul className="ml-4 list-disc" data-testid="a2a-file-limits">
+              {projects.data!.items.map((project) => (
+                <li key={project.id}>
+                  {project.name}: up to {formatMiB(a2aFileLimit(project.config))}{" "}
+                  <Link href={`/p/${project.slug}/settings#a2a`} className="text-xs">
+                    change it in its settings
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {error && <ErrorNote>{error}</ErrorNote>}
         {token ? (
           <p className="break-all">
