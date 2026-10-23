@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import __version__
+from .a2a.push import push_loop
 from .adaptateurs import brancher_memoire_lexicale
 from .amorcage import amorcer
 from .config import get_settings
@@ -103,12 +104,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await conversions.recover()
     # Approved actions whose start after the commit was lost (ADR 0085), once the schema exists.
     action_relay = asyncio.create_task(relay_loop())
+    # A2A push notifications (ADR 0078 §5): read from the persisted events, at least once.
+    a2a_push = asyncio.create_task(push_loop())
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relais is not None:
         await relais.arreter()
-    for task in (rafraichissement, action_relay):
+    for task in (rafraichissement, action_relay, a2a_push):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task

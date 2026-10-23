@@ -6,7 +6,7 @@ item: `message/send` opens one through `creer_un_ticket`, under an id derived fr
 organisation, the client and the `messageId` (ADR 0008), and `tasks/get` reads it back.
 `message/stream` and `tasks/resubscribe` follow it over server-sent events: an event of the work
 item only wakes the stream up, the task is read again from the database each time. No state lives
-in this layer. Push notifications are not served yet.
+in this layer. Push notifications are `push.py`'s (ADR 0078 §5).
 """
 
 from __future__ import annotations
@@ -114,7 +114,8 @@ class Door:
     caller: Appelant
     org: Organization
     console: str
-    request: Request
+    #: `None` for a push notification, which reads the task without a request.
+    request: Request | None
     #: Set by a call that writes: the daily budget counts it.
     wrote: bool = False
 
@@ -213,7 +214,7 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
         "preferredTransport": "JSONRPC",
         "version": __version__,
         "provider": {"organization": "Choregos", "url": door.console},
-        "capabilities": {"streaming": True, "pushNotifications": False, "stateTransitionHistory": False},
+        "capabilities": {"streaming": True, "pushNotifications": True, "stateTransitionHistory": False},
         "defaultInputModes": ["text/plain"],
         "defaultOutputModes": ["text/plain", "application/json"],
         "securitySchemes": schemes,
@@ -284,7 +285,7 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
     return JSONResponse(answer)
 
 
-async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> dict[str, Any]:
+async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> Any:
     if method == "message/send":
         return await _send(door, params)
     if method == "tasks/get":
@@ -293,7 +294,9 @@ async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> dict[str
     if method == "tasks/cancel":
         return await _cancel(door, params)
     if method.startswith("tasks/pushNotificationConfig/"):
-        raise Fault(PUSH_NOT_SUPPORTED, "push notifications are not served yet: poll with tasks/get")
+        from .push import configure
+
+        return await configure(door, method, params)
     raise Fault(METHODE_INCONNUE, f"unknown method: {method}")
 
 
@@ -310,7 +313,7 @@ async def _audit(door: Door, method: str, outcome: str) -> None:
         issue=outcome,
         jeton=door.caller.cle,
         agent=door.caller.agent,
-        client=(door.request.headers.get("user-agent") or "")[:100] or None,
+        client=(door.request.headers.get("user-agent") or "")[:100] or None if door.request else None,
     )
     log.info("a2a.call", method=method[:100], issue=outcome, appelant=door.caller.cle)
 
@@ -373,6 +376,13 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     message = params.get("message")
     if not isinstance(message, dict):
         raise Fault(PARAMETRES_INVALIDES, "`message` is missing")
+    configuration = params.get("configuration")
+    if isinstance(configuration, dict) and configuration.get("pushNotificationConfig"):
+        # Its secret would have nowhere to be shown: `set` is the one answer that carries it.
+        raise Fault(
+            PARAMETRES_INVALIDES,
+            "register push notifications with tasks/pushNotificationConfig/set once the task exists",
+        )
     message_id = message.get("messageId")
     if not isinstance(message_id, str) or not message_id or len(message_id) > MAX_MESSAGE_ID:
         raise Fault(
@@ -672,6 +682,7 @@ async def _wake(queue: asyncio.Queue[Any], tracker_key: str, wait: float) -> Non
 
 async def _reread(door: Door, settings: Settings, task_id: str) -> dict[str, Any]:
     """The task from the database, for a caller identified again: the stream holds no rights."""
+    assert door.request is not None, "a stream is always opened by a request"
     async with session_scope() as session:
         try:
             caller = await identifier(session, door.request, settings, scopes=SCOPES_A2A, door="A2A")

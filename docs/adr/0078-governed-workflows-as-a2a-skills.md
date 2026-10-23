@@ -2,8 +2,8 @@
 
 - **Status**: accepted, 2026-10-22; S40-23 implements §1–4 and §6 partially: the opt-in, the card,
   `message/send`, `tasks/get`, `tasks/cancel`, the `a2a` scope, audit, rate limit, parts cap and
-  the `a2a:` initiator (ADR 0077); S40-23c adds `message/stream` and `tasks/resubscribe`. Not yet:
-  push notifications (§5), file parts and the card URL on the Integrations page (#757)
+  the `a2a:` initiator (ADR 0077); S40-23c adds `message/stream` and `tasks/resubscribe`, S40-23d
+  push notifications (§5). Not yet: file parts and the card URL on the Integrations page (#757)
 - **Concerns**: a new `/a2a` route at the root of the API process (beside `/mcp`), the workflow
   definitions (an opt-in per workflow), the work items service, the events stream, `chg_` token
   scopes; builds on [ADR 0030](0030-an-mcp-door-for-external-clients.md) (the MCP door, its tokens and
