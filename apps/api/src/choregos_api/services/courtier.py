@@ -588,10 +588,14 @@ def texte_du_resultat(resultat: dict[str, Any]) -> str:
 
 
 def readable_text(payload: Any) -> str:
-    """What the agent will read of any tool answer: an MCP result's text blocks, otherwise every
-    string of the JSON, keys included — a catalogue provider or a plugin writes both (S40-18)."""
+    """What the agent will read of any tool answer: an MCP result's text blocks and every string of
+    its `structuredContent` (S40-18b), otherwise every string of the JSON, keys included — a
+    catalogue provider or a plugin writes both (S40-18)."""
     if isinstance(payload, dict) and isinstance(payload.get("content"), list):
-        return texte_du_resultat(payload)
+        structured = payload.get("structuredContent")
+        if structured is None:
+            return texte_du_resultat(payload)
+        return f"{texte_du_resultat(payload)}\n{readable_text(structured)}"
     strings: list[str] = []
 
     def walk(value: Any) -> None:

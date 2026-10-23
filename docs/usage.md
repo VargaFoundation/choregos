@@ -788,8 +788,8 @@ an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, 
 becomes `{text: <its JSON, cut, with the marker>, truncated}`. A catalogue entry may declare its
 own `result_max_bytes`, bounded by the same ceiling; a plugin's tool has no such declaration and
 stays at the default. Neither declares an output schema.
-The injection guard then reads what is left (S40-18): an MCP-shaped answer's text blocks, any other
-JSON's strings, keys included; `sandbox.prompt_injection` decides as for a broker result (`warn`
+The injection guard then reads what is left (S40-18): an MCP-shaped answer's text blocks and every
+string of its `structuredContent` (S40-18b), any other JSON's strings, keys included; `sandbox.prompt_injection` decides as for a broker result (`warn`
 returns `suspicions` beside the result, `block` withholds it with `status_code: 451`).
 
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
