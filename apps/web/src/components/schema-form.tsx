@@ -2,6 +2,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { DataHandlingField } from "@/components/data-handling-field";
 import { GitHubRepoField } from "@/components/github-repo-field";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -60,6 +61,7 @@ export function SchemaForm({
   onChange,
   disabled,
   org,
+  connectorType,
 }: {
   schema: JsonSchema;
   value: Valeurs;
@@ -67,6 +69,8 @@ export function SchemaForm({
   disabled?: boolean;
   /** Fills `{org}` in an asset field's `x-upload`; without it such a field cannot upload. */
   org?: string;
+  /** The `web_search` backend type being configured: gives `data_handling` its structured editor (S40-01j). */
+  connectorType?: string;
 }) {
   const base = useId();
   const requis = new Set(schema.required ?? []);
@@ -84,6 +88,7 @@ export function SchemaForm({
           valeur={value[nom]}
           disabled={disabled}
           org={org}
+          connectorType={connectorType}
           onChange={(valeur) => {
             const suivantes = { ...value };
             if (valeur === undefined) delete suivantes[nom];
@@ -104,6 +109,7 @@ function Champ({
   valeur,
   disabled,
   org,
+  connectorType,
   onChange,
 }: {
   id: string;
@@ -113,6 +119,7 @@ function Champ({
   valeur: unknown;
   disabled?: boolean;
   org?: string;
+  connectorType?: string;
   onChange: (valeur: unknown) => void;
 }) {
   const libelle = propriete.title ?? nom.replaceAll("_", " ");
@@ -187,6 +194,8 @@ function Champ({
         onChange={onChange}
       />
     );
+  } else if (nom === "data_handling" && connectorType && propriete.properties?.terms_ref) {
+    controle = <DataHandlingField id={id} type={connectorType} value={valeur} disabled={disabled} onChange={onChange} />;
   } else if (propriete.type === "object") {
     controle = <Correspondance id={id} valeur={valeur} disabled={disabled} aide={aide} onChange={onChange} />;
   } else if (propriete.format === "multiline") {
@@ -240,7 +249,7 @@ function Champ({
     );
   }
   return (
-    <div className="space-y-1">
+    <div className={nom === "data_handling" && connectorType ? "space-y-1 md:col-span-2" : "space-y-1"}>
       {etiquette}
       {controle}
       {indication}

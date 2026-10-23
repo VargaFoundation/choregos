@@ -10,6 +10,7 @@ import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Glossaire } from "@/components/glossaire";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
+import { dataHandlingProblems } from "@/lib/data-handling";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import { EMPTY_DRAFT, SecretField, bodyOfDrafts, problemOfDraft, type SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
@@ -138,6 +139,9 @@ export default function OrgConnectorsPage() {
     </div>
   );
 }
+
+/** The backend type of a `web_search` connector, which gives its `data_handling` a structured editor (S40-01j). */
+const webSearchType = (kind: string, type: string) => (kind === "web_search" ? type : undefined);
 
 const NO_SEARCH = () => "";
 const subscribeToLocation = (notify: () => void) => {
@@ -287,8 +291,14 @@ function Secrets({
             void saveConfig();
           }}
         >
-          <SchemaForm schema={jsonSchema} value={config} onChange={setConfig} />
-          <Button size="sm" tone="primary" type="submit" disabled={champsManquants(jsonSchema, config).length > 0}>
+          <SchemaForm
+            schema={jsonSchema}
+            value={config}
+            onChange={setConfig}
+            connectorType={webSearchType(instance.kind, instance.type)}
+          />
+          <Button size="sm" tone="primary" type="submit" disabled={champsManquants(jsonSchema, config).length > 0 || dataHandlingProblems(instance.type, config.data_handling).length > 0}
+          >
             Save settings
           </Button>
           {erreur && <ErrorNote>{erreur}</ErrorNote>}
@@ -631,7 +641,14 @@ function Declarer({ org }: { org: string }) {
               />
             </div>
           )}
-          {type && <SchemaForm schema={schema} value={config} onChange={setConfig} />}
+          {type && (
+            <SchemaForm
+              schema={schema}
+              value={config}
+              onChange={setConfig}
+              connectorType={webSearchType(type.kind, type.type)}
+            />
+          )}
           {(type?.secret_fields ?? []).map((champ) => (
             <SecretField
               key={champ}
@@ -644,7 +661,13 @@ function Declarer({ org }: { org: string }) {
           <Button
             type="submit"
             tone="accent"
-            disabled={!nom || !type || champsManquants(schema, config).length > 0 || illisibles.length > 0}
+            disabled={
+              !nom ||
+              !type ||
+              champsManquants(schema, config).length > 0 ||
+              illisibles.length > 0 ||
+              dataHandlingProblems(type.type, config.data_handling).length > 0
+            }
           >
             Declare
           </Button>
