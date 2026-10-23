@@ -4,6 +4,7 @@
 The URLs an A2A client registered to hear of a task, bound to the `chg_` token that registered them
 (deleted with it), with the cursor of the last event delivered. The signing secret is a sealed value
 of `org_secrets`, never a column here. Under forced RLS like the rest of the organisation's rows.
+The downgrade drops the table and every registration in it; the sealed secrets stay in `org_secrets`.
 
 Revision ID: d9f1b3c5e7a2
 Revises: c7e9a1b3d5f8
