@@ -405,3 +405,26 @@ async def test_journaling_the_same_skip_twice_leaves_one_event(setup: Fixture) -
             .all()
         )
     assert len(events) == 1
+
+
+async def test_a_renamed_organisation_keeps_its_global_namespaces_at_run_time(setup: Fixture) -> None:
+    """S40-24: the run resolves `org:<memory key>`, not `org:<current slug>`, so a slug change does not
+    hide the facts already written."""
+    from choregos_api.db.models import Organization, Project
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import prepare_stage
+    from sqlalchemy import select
+
+    await _stores(setup)
+    await _seed(setup)
+    await _agent(setup, FULL)
+    async with session_scope(orgs="*") as session:
+        org = (await session.execute(select(Organization))).scalar_one()
+        org.settings = {**(org.settings or {}), "memory_key": "varga"}
+        org.slug = "diametral"
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+    prepared = await prepare_stage(_plan(setup))
+    namespaces = {m["label"]: m["namespace"] for m in prepared["stage_input"]["memories"]}
+    assert namespaces["global:security-lessons"] == SEC
+    assert namespaces["global:architecture-decisions"] == ARCH

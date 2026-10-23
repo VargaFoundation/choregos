@@ -113,7 +113,8 @@ apart from knowledge bases (a corpus a human curates, read-only):
   agent learnt in that project, read by that agent only);
 - a project owner may add **named project memories** (`decisions`), read by that project's runs only;
 - an organisation administrator may add **global memories** (`security-lessons`), with a **reach**: every
-  project, or a listed few.
+  project, or a listed few. They are filed under the organisation's **memory key** (its first slug), so renaming
+  the organisation's slug does not hide them (`docs/usage.md`, *Administration*).
 
 An agent version **binds** up to eight of them, in order, each read or read-and-write
 (`"memories": [{"scope": "global", "slug": "security-lessons"}, {"scope": "project", "slug": "shared",

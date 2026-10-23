@@ -102,3 +102,16 @@ memories at the same time.
   the fake before) and covers the project's shared, own and named memories, never a global one.
 - Ecphoria's acceptance of the `org:<org>` tenant and of the namespace header is untested against a
   real Ecphoria (as for S32-02).
+
+## Update 2026-10-23 — a global memory is filed under a key, not under the slug (S40-24)
+
+The namespace `org:<org>#memory:<store>` and the backend tenant `org:<org>` were built from the
+organisation's **slug**, which a platform administrator may change (`PATCH /orgs/{org}`): renaming
+`varga` to `diametral` would have hidden every global memory. The organisation now keeps a **memory
+key**: `settings["memory_key"]` is set to the old slug the first time the slug changes and is never
+overwritten; `memory_key(organisation)` (`choregos_core.memory_scope`) returns it, else the slug. Every
+place that turns an organisation into a global namespace or tenant uses it (the API's global routes and
+adapter, the stage's memory resolution, the lexical memory's lookup of the organisation). The slug stays
+in URLs; only the memory tenant uses the key. No migration (a JSON setting). A slug that is another
+organisation's memory key is refused (409), on rename and on creation.
+

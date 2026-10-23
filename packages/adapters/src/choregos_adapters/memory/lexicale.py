@@ -24,7 +24,7 @@ from typing import Any
 
 from choregos_contracts import ContextPack, MemoryItem
 from choregos_core.domain import Fact, Memory, Provenance, utcnow
-from choregos_core.memory_scope import parse_namespace
+from choregos_core.memory_scope import memory_key, parse_namespace
 from choregos_core.models import estimate_tokens
 
 from ..errors import ConfigurationError
@@ -131,11 +131,10 @@ class LexicalMemory:
         if parsed.kind == "global_store":
             if modeles.Organization is None or modeles.MemoryStore is None:
                 raise ConfigurationError("lexical memory: the organisation and store models are not injected")
-            organisation = (
-                await session.execute(
-                    _select(modeles.Organization).where(modeles.Organization.slug == parsed.org)
-                )
-            ).scalar_one_or_none()
+            # `parsed.org` is the organisation's memory key (S40-24): the slug it had when its slug
+            # first changed, else its slug.
+            candidates = (await session.execute(_select(modeles.Organization))).scalars().all()
+            organisation = next((o for o in candidates if memory_key(o) == parsed.org), None)
             if organisation is None:
                 raise ValueError(f"unknown organisation for the memory: {parsed.org}")
             store = (

@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 from choregos_contracts import EventType, ProjectConfig, Role
 from choregos_core import utcnow
+from choregos_core.memory_scope import MEMORY_KEY_SETTING, memory_key
 from fastapi import APIRouter, Path, Request, status
 from sqlalchemy import func, select
 from sse_starlette.sse import EventSourceResponse
@@ -84,6 +85,10 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
         await session.execute(select(Organization).where(Organization.slug == body.slug))
     ).scalar_one_or_none():
         raise conflict(f"organisation `{body.slug}` already exists")
+    if any(
+        memory_key(other) == body.slug for other in (await session.execute(select(Organization))).scalars()
+    ):
+        raise conflict(f"organisation `{body.slug}` already exists")  # a renamed organisation's memory key
     org = Organization(slug=body.slug, name=body.name)
     session.add(org)
     await session.flush()
@@ -105,6 +110,10 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     l'administrateur de la plateforme : il est dans chaque URL de la console, chaque adresse de la
     porte MCP (`/mcp/projects/<org>:<projet>`), chaque identifiant qualifié (`<org>:<projet>`) et le
     nom des groupes de l'IdP (`choregos:<org>:<groupe>`) — le changer est un geste d'instance.
+
+    Global memories (S40-11) follow: their tenant is `org:<memory key>`, and the key is the slug the
+    organisation had when its slug first changed (`settings["memory_key"]`, set once, never
+    overwritten), so a rename never orphans them.
 
     Projets, appartenances, jetons et tout ce qui en dépend suivent : ils tiennent à l'organisation
     par son identifiant, pas par son slug. Ce qui ne suit pas : les adresses déjà copiées ailleurs, et
@@ -128,6 +137,17 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         pris = await session.execute(select(Organization.id).where(Organization.slug == body.slug))
         if pris.first() is not None:
             raise conflict(f"organisation `{body.slug}` already exists")
+        # A slug another organisation keeps as its memory key is not free either: two organisations
+        # would share one memory tenant.
+        for other in (await session.execute(select(Organization))).scalars():
+            if other.id != organisation.id and memory_key(other) == body.slug:
+                raise conflict(f"organisation `{body.slug}` already exists")
+        # The first rename pins the memory key to the old slug; a later rename keeps the first.
+        if not (organisation.settings or {}).get(MEMORY_KEY_SETTING):
+            organisation.settings = {
+                **(organisation.settings or {}),
+                MEMORY_KEY_SETTING: organisation.slug,
+            }
         organisation.slug = body.slug
     if body.name is not None:
         organisation.name = body.name

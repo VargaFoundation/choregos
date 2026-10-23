@@ -25,6 +25,7 @@ export type {
   MembershipUpsert,
   Org,
   OrgCreate,
+  OrgUpdate,
   ProjectModels,
   TemplateSummary,
   WorkItemCreate,

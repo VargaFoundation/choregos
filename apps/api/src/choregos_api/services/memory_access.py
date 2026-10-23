@@ -18,6 +18,7 @@ import asyncio
 from typing import Any
 
 from choregos_core.memory_bindings import RESERVED_SLUGS
+from choregos_core.memory_scope import memory_key
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -91,7 +92,7 @@ async def global_adapter(session: AsyncSession, organisation: Organization) -> A
         .scalars()
         .first()
     )
-    type_name, config = adapter_config(row, tenant=f"org:{organisation.slug}", org=organisation.slug)
+    type_name, config = adapter_config(row, tenant=f"org:{memory_key(organisation)}", org=organisation.slug)
     return build("memory", type_name, config)
 
 
