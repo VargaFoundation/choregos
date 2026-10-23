@@ -16,7 +16,7 @@ function wrap(node: React.ReactNode) {
 const STORED = {
   budgets: { ticket_usd: { M: 20 } },
   attempts: { default_max: 2 },
-  network: { allow_domains: ["github.com", "pypi.org"], deny_domains: ["news.ycombinator.com"], per_host_per_minute: 60, builtin_web_tools: "deny" },
+  network: { allow_domains: ["github.com", "pypi.org"], deny_domains: ["news.ycombinator.com"], per_host_per_minute: 60, builtin_web_tools: "deny" as const },
 };
 
 describe("the organisation's network access (ADR 0070)", () => {
