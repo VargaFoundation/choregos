@@ -295,7 +295,6 @@ EXEMPTEES = {
     # Catalogues de l'instance, en lecture ouverte par décision (`test_routeurs_nus.py`) :
     # aucune donnée d'organisation.
     "agent_backends": "catalogue de l'instance",
-    "executors": "catalogue de l'instance",
     "templates": "catalogue de l'instance",
     "model_profiles": "catalogue de l'instance (seules des lignes `scope=platform` sont écrites)",
     "webhook_deliveries": "empreintes de déduplication, sans contenu ni organisation",

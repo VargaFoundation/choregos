@@ -591,17 +591,6 @@ class BackendRegistryRow(Base, PkMixin, TimestampMixin):
     disabled_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class ExecutorRow(Base, PkMixin, TimestampMixin):
-    __tablename__ = "executors"
-
-    kind: Mapped[str] = mapped_column(String(32), unique=True, index=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    cluster: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    namespace_pattern: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    runner_image: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    default_timeout_minutes: Mapped[int] = mapped_column(Integer, default=120)
-
-
 class GatewayKeyRow(Base, PkMixin, TimestampMixin):
     __tablename__ = "gateway_keys"
 
@@ -1539,7 +1528,6 @@ ALL_TABLES = [
     MemoryFact,
     WebhookDelivery,
     BackendRegistryRow,
-    ExecutorRow,
     GatewayKeyRow,
     Agent,
     AgentVersion,
