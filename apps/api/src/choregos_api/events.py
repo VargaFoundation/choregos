@@ -31,6 +31,9 @@ from .logging import get_logger
 
 MAX_BUFFER = 500
 CANAL = "choregos_events"
+#: How the relay's `LISTEN` connection is named in `pg_stat_activity`, and how often it is checked.
+APPLICATION_NAME = "choregos-events-relay"
+KEEPALIVE_S = 30.0
 #: Au-delà, PostgreSQL refuse la notification (8000 octets) : on allège `data`.
 TAILLE_MAX = 7500
 logger = get_logger("choregos.events")
@@ -184,16 +187,21 @@ class RelaisPostgres:
         attente = 1.0
         while True:
             try:
-                conn = await asyncpg.connect(self.dsn)
+                conn = await asyncpg.connect(self.dsn, server_settings={"application_name": APPLICATION_NAME})
+                # S40-23j: a connection the server closes (a failover, `pg_terminate_backend`) is
+                # seen at once, not at the next keepalive: until then the replica heard nothing.
+                lost = asyncio.Event()
+                conn.add_termination_listener(lambda _conn, lost=lost: lost.set())
                 try:
                     await conn.add_listener(CANAL, self._recevoir)
                     logger.info("relais d'événements PostgreSQL branché", canal=CANAL)
                     attente = 1.0
-                    while True:
-                        await asyncio.sleep(30)
-                        await conn.execute(
-                            "SELECT 1"
-                        )  # une connexion morte se voit ici, pas au prochain événement
+                    while not lost.is_set():
+                        with contextlib.suppress(TimeoutError):
+                            await asyncio.wait_for(lost.wait(), timeout=KEEPALIVE_S)
+                        if not lost.is_set():
+                            await conn.execute("SELECT 1")  # a connection dead without a word
+                    raise ConnectionError("the LISTEN connection was closed by the server")
                 finally:
                     with contextlib.suppress(Exception):
                         await conn.close()

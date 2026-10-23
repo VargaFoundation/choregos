@@ -57,8 +57,9 @@ async def _set(client: AsyncClient, token: str, task_id: str, **config: Any) -> 
 
 
 async def _happen(task_id: str, state: str | None = None) -> str:
-    """An event of the work item, persisted; with `state`, the work item moved first."""
-    from choregos_api.db.models import WorkItem
+    """An event of the work item, persisted as the product persists one: with its project's slug,
+    so that it also reaches that project's streams (S40-23j); with `state`, the item moved first."""
+    from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.services.evenements import persist_event
     from choregos_contracts import EventType
@@ -66,6 +67,8 @@ async def _happen(task_id: str, state: str | None = None) -> str:
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, task_id)
         assert item is not None
+        project = await session.get(Project, item.project_id)
+        assert project is not None
         if state:
             item.state = state
         event = await persist_event(
@@ -74,6 +77,7 @@ async def _happen(task_id: str, state: str | None = None) -> str:
             project_id=item.project_id,
             work_item_id=item.id,
             subject=item.tracker_key,
+            project_slug=project.slug,
         )
         await session.flush()
         return event.id
