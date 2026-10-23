@@ -1,0 +1,19 @@
+# Tempo 2.6.1 (the chart tempo 1.14.0's appVersion), single binary, local storage.
+multitenancy_enabled: false
+usage_report:
+  reporting_enabled: false
+server:
+  http_listen_port: 3100
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/traces
+    wal:
+      path: /tmp/tempo/wal

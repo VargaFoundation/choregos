@@ -62,6 +62,15 @@ global:
   extraEnv: []
   #   - name: CHOREGOS_ESSAI_ONTOLOGIE
   #     value: "1"
+  # OpenTelemetry GenAI traces (ADR 0018). The collector's OTLP/HTTP endpoint, given as
+  # `OTEL_EXPORTER_OTLP_ENDPOINT` to the API, each worker, the migration Job and the embedded
+  # gateway, whose callback puts each model call in its run's trace. Empty: tracing off, nothing
+  # is exported. The bootstrap collector (`infra/bootstrap/otel-collector.yaml`) listens on
+  # `http://otel-collector.monitoring.svc:4318`; `choregos-allow-platform` already lets the
+  # platform's pods reach port 4318 in `monitoring`. The agent pods are not given it: their only
+  # way out is the run's egress proxy.
+  tracing:
+    otlpEndpoint: ""
   # Platform canary (S7-08). Disabled by default: it requires Argo Rollouts in the
   # cluster, and a chart that assumes an absent operator is a chart that does not install.
   # Environments that enable it do so in `values/staging.yaml` and `values/prod.yaml`.

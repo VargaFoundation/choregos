@@ -845,20 +845,28 @@ itself.
 
 Off by default. A process sends spans only when the standard `OTEL_EXPORTER_OTLP_ENDPOINT` (or
 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) is set, over OTLP/HTTP, batched; the other `OTEL_*` variables
-of the SDK apply. The API and the workers take it from `global.extraEnv`, the agent pods from
-`global.runner.env`. The agent pods' network policy must let them reach the collector. Sending to
-the collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`, daemonset mode) has not
-been tried yet: check that it exposes an OTLP/HTTP address your pods can reach.
+of the SDK apply. `global.tracing.otlpEndpoint` sets it on the API, each worker, the migration Job
+and the embedded gateway (S40-20b); `choregos-allow-platform` already lets them reach port 4318 in
+`monitoring`. The collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`) listens
+at `http://otel-collector.monitoring.svc:4318`, sends every span to Tempo and derives the span
+metrics of the `Choregos — Traces` dashboard. An install that set the variable through
+`global.extraEnv` still renders, as long as `global.tracing.otlpEndpoint` is empty.
 
 ```yaml
 global:
-  extraEnv:
-    - name: OTEL_EXPORTER_OTLP_ENDPOINT
-      value: http://<collector>:4318
-  runner:
-    env:
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://<collector>:4318
+  tracing:
+    otlpEndpoint: http://otel-collector.monitoring.svc:4318
 ```
+
+The agent pods are not given the endpoint: their only way out is the run's egress proxy. To trace
+the runner's `invoke_agent` span anyway, set `choregos-orchestrator.runner.env` and open the
+collector in the runner's network policy yourself; this path has not been tried.
+
+The gateway's spans: the embedded LiteLLM loads `choregos_llm_spans` (`litellm_settings.callbacks`),
+and each model call made with a run's key becomes `chat <model>` (or `embeddings`,
+`text_completion`), a child of the run's stage span, with the provider, the requested and answering
+model, the provider's token counts and, on a failure, `error.type`. The run comes from the key's
+metadata, never from the request; a call made with a key that names no run has no span.
 
 A run is one trace. Its root is the orchestrator's `invoke_workflow <stage>` span, which lasts as
 long as the wait for the run; the runner's `invoke_agent <backend>` span (the agent's session) and

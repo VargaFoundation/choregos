@@ -1,0 +1,61 @@
+# The bootstrap collector's configuration, as the chart renders it (`helm template otel-collector
+# opentelemetry-collector --version 0.111.0` with the values of `infra/bootstrap/otel-collector.yaml`,
+# the `relay` key of its ConfigMap). `tests/charts/test_tracing.py` refuses a drift between the two.
+connectors:
+  spanmetrics:
+    dimensions:
+    - name: gen_ai.operation.name
+    - name: gen_ai.request.model
+    - name: gen_ai.provider.name
+    - name: project
+    - name: stage
+    - name: error.type
+    namespace: traces.span.metrics
+exporters:
+  debug: {}
+  otlp/tempo:
+    endpoint: tempo.monitoring.svc:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: ${env:MY_POD_IP}:8889
+extensions:
+  health_check:
+    endpoint: ${env:MY_POD_IP}:13133
+processors:
+  batch: {}
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: ${env:MY_POD_IP}:4317
+      http:
+        endpoint: ${env:MY_POD_IP}:4318
+service:
+  extensions:
+  - health_check
+  pipelines:
+    metrics:
+      exporters:
+      - prometheus
+      processors:
+      - memory_limiter
+      - batch
+      receivers:
+      - spanmetrics
+    traces:
+      exporters:
+      - otlp/tempo
+      - spanmetrics
+      processors:
+      - memory_limiter
+      - batch
+      receivers:
+      - otlp
+  telemetry:
+    metrics:
+      address: ${env:MY_POD_IP}:8888

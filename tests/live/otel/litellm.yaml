@@ -1,0 +1,20 @@
+# The embedded gateway's settings that matter here (`charts/choregos/charts/litellm`), with mocked
+# models: `platform/standard` answers, `platform/broken` fails as a provider at its rate limit.
+model_list:
+  - model_name: platform/standard
+    litellm_params:
+      model: openai/gpt-5.5
+      mock_response: "A mocked answer."
+  - model_name: platform/broken
+    litellm_params:
+      model: openai/gpt-5.5
+      mock_response: litellm.RateLimitError
+litellm_settings:
+  drop_params: true
+  callbacks: ["choregos_llm_spans.handler"]
+router_settings:
+  num_retries: 0
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: false

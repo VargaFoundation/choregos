@@ -36,6 +36,13 @@ def test_the_names_are_the_pinned_conventions() -> None:
     assert telemetry.REQUEST_MODEL == gen_ai.GEN_AI_REQUEST_MODEL
     assert telemetry.TOOL_NAME == gen_ai.GEN_AI_TOOL_NAME
     assert telemetry.ERROR_TYPE == error_attributes.ERROR_TYPE
+    assert gen_ai.GenAiOperationNameValues.CHAT.value == telemetry.CHAT
+    assert gen_ai.GenAiOperationNameValues.TEXT_COMPLETION.value == telemetry.TEXT_COMPLETION
+    assert gen_ai.GenAiOperationNameValues.EMBEDDINGS.value == telemetry.EMBEDDINGS
+    assert telemetry.RESPONSE_MODEL == gen_ai.GEN_AI_RESPONSE_MODEL
+    assert telemetry.USAGE_INPUT_TOKENS == gen_ai.GEN_AI_USAGE_INPUT_TOKENS
+    assert telemetry.USAGE_OUTPUT_TOKENS == gen_ai.GEN_AI_USAGE_OUTPUT_TOKENS
+    assert telemetry.USAGE_CACHE_READ_INPUT_TOKENS == gen_ai.GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS
 
 
 def test_off_without_an_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
