@@ -19,8 +19,18 @@ provider. A real scanner does more; this one would rather miss than shred a prom
 
 The answer is guarded on the way back too (`post_call`): a secret the model writes — one it
 inferred, or read through a tool that does not go through the gateway — is masked before it
-reaches the agent, and so before it reaches the run's record. A streamed answer is held line by
-line, since a secret can straddle chunks.
+reaches the agent, and so before it reaches the run's record. Every string of the answer is read,
+whatever the route (`/chat/completions`, `/v1/messages`, `/v1/responses`) and whatever the field:
+the text, a tool call's arguments, the model's reasoning (`reasoning_content`, thinking blocks, a
+reasoning summary). What the provider signs or encrypts is left as it is (a thinking block's
+`signature`, a reasoning item's `encrypted_content`, a redacted thinking block): it carries no
+text, and a changed one is refused when the agent sends it back. A thinking block whose text was
+masked no longer matches its signature either; the provider then refuses the next request that
+carries it, which is visible, where the secret would not have been.
+
+A streamed answer is held line by line where a secret can straddle chunks: a choice's content and
+reasoning, a tool call's arguments, an Anthropic block's text, JSON or thinking, a Responses
+event's `delta`. Each chunk is then masked whole on its way out, for the fields no channel holds.
 
 Stdlib only: LiteLLM's image has no Choregos package. When LiteLLM is importable the class is a
 `CustomGuardrail`; otherwise a plain class the tests drive the same way.
@@ -69,6 +79,21 @@ _MEDIA_TYPES = frozenset(
     {"image", "image_url", "input_image", "document", "file", "input_file", "input_audio", "audio"}
 )
 
+#: Blocks the provider produced opaque: an encrypted thinking, a generated image, a signature.
+_OPAQUE_TYPES = _MEDIA_TYPES | {
+    "redacted_thinking",
+    "signature_delta",
+    "image_generation_call",
+    "image_generation.partial_image",
+}
+
+#: The provider's signed or encrypted fields, by the type of the block that holds them — never by
+#: key name alone: a tool call's `signature` argument is text the model wrote.
+_OPAQUE_FIELDS: dict[str, frozenset[str]] = {
+    "thinking": frozenset({"signature"}),
+    "reasoning": frozenset({"encrypted_content"}),
+}
+
 
 def mask(text: str) -> tuple[str, int]:
     """`text` with every high-precision secret replaced by `REDACTED`, and how many were."""
@@ -89,9 +114,22 @@ def mask(text: str) -> tuple[str, int]:
     return masked, count
 
 
+def _kind(value: Any) -> str | None:
+    """A block's or an event's `type`, LiteLLM's enums included (they are `str` subclasses)."""
+    value = getattr(value, "value", value)
+    return value if isinstance(value, str) else None
+
+
 def _walk(value: Any) -> tuple[Any, int]:
+    """`value` with its strings masked: lists and dicts rebuilt, any other object in place.
+
+    The objects are LiteLLM's (pydantic models: their fields and extras) or the tests' namespaces;
+    a name with a leading underscore is the object's own state, not what the client receives.
+    """
     if isinstance(value, str):
         return mask(value)
+    if value is None or isinstance(value, (bool, int, float, bytes)):
+        return value, 0
     if isinstance(value, list):
         total = 0
         items = []
@@ -101,15 +139,36 @@ def _walk(value: Any) -> tuple[Any, int]:
             total += count
         return items, total
     if isinstance(value, dict):
-        if value.get("type") in _MEDIA_TYPES:
+        kind = _kind(value.get("type"))
+        if kind in _OPAQUE_TYPES:
             return value, 0
+        opaque = _OPAQUE_FIELDS.get(kind or "", frozenset())
         total = 0
         out: dict[Any, Any] = {}
         for key, item in value.items():
+            if key in opaque:
+                out[key] = item
+                continue
             out[key], count = _walk(item)
             total += count
         return out, total
-    return value, 0
+    kind = _kind(getattr(value, "type", None))
+    if kind in _OPAQUE_TYPES:
+        return value, 0
+    opaque = _OPAQUE_FIELDS.get(kind or "", frozenset())
+    fields = dict(vars(value)) if hasattr(value, "__dict__") else {}
+    extra = getattr(value, "__pydantic_extra__", None)
+    if isinstance(extra, dict):
+        fields.update(extra)
+    total = 0
+    for name, item in fields.items():
+        if name.startswith("_") or name in opaque:
+            continue
+        masked, count = _walk(item)
+        if count:
+            setattr(value, name, masked)
+            total += count
+    return value, total
 
 
 def guard_request(data: dict[str, Any]) -> int:
@@ -125,34 +184,26 @@ def guard_request(data: dict[str, Any]) -> int:
 def guard_response(response: Any) -> int:
     """Masks a whole provider answer in place; returns how many secrets it masked.
 
-    Two shapes reach the hook: LiteLLM's `ModelResponse` for `/chat/completions` (an object:
-    `choices[].message.content` and its tool calls' `arguments`) and a dict for `/v1/messages`
-    (Anthropic's `content` blocks: a text's `text`, a tool use's `input`).
+    Three shapes reach the hook: LiteLLM's `ModelResponse` for `/chat/completions` (an object:
+    `choices[].message` with its content, reasoning, thinking blocks and tool calls), a dict for
+    `/v1/messages` (Anthropic's `content` blocks) and LiteLLM's `ResponsesAPIResponse` for
+    `/v1/responses` (an object: `output[]` with its messages, reasoning and function calls). Every
+    string is read, so a field this list forgot is masked all the same.
     """
     if isinstance(response, dict):
-        if "content" not in response:
-            return 0
-        response["content"], count = _walk(response["content"])
+        masked, count = _walk(response)
+        if count:
+            response.clear()
+            response.update(masked)
         return count
-    total = 0
-    for choice in getattr(response, "choices", None) or []:
-        message = getattr(choice, "message", None)
-        if message is None:
-            continue
-        if isinstance(getattr(message, "content", None), str):
-            message.content, count = mask(message.content)
-            total += count
-        for call in getattr(message, "tool_calls", None) or []:
-            function = getattr(call, "function", None)
-            arguments = getattr(function, "arguments", None)
-            if isinstance(arguments, str):
-                function.arguments, count = mask(arguments)  # type: ignore[union-attr]
-                total += count
-    return total
+    return int(_walk(response)[1])
 
 
 #: How much text a stream may hold back without a line break before it is released at a space.
 HOLD_MAX = 4096
+
+#: An Anthropic `content_block_delta`'s text field, by delta type; `signature_delta` is opaque.
+_SSE_DELTA_FIELDS = {"text_delta": "text", "input_json_delta": "partial_json", "thinking_delta": "thinking"}
 
 
 class _Slot:
@@ -214,8 +265,10 @@ class StreamGuard:
 
     Each chunk is fed in; `ready()` returns, in order, the chunks no open channel still holds. A
     chunk is LiteLLM's `ModelResponseStream` (`/chat/completions`: a choice's `delta.content`, its
-    tool calls' `arguments`) or SSE bytes (`/v1/messages`: a block's `text_delta` or
-    `input_json_delta`). Reasoning deltas are passed through as they are.
+    `reasoning_content` and thinking blocks, its tool calls' `arguments`), SSE bytes
+    (`/v1/messages`: a block's `text_delta`, `input_json_delta` or `thinking_delta`) or a Responses
+    event (`/v1/responses`: any `response.*.delta`, closed by its `.done`). Once no channel holds
+    it, a chunk is masked whole: the `.done` events and the final response repeat the text whole.
     """
 
     def __init__(self) -> None:
@@ -223,10 +276,11 @@ class StreamGuard:
         self._channels: dict[tuple[Any, ...], _Channel] = {}
         self._events: dict[int, list[dict[str, Any]]] = {}
         self._next = 0
+        self._whole = 0
 
     @property
     def masked(self) -> int:
-        return sum(channel.masked for channel in self._channels.values())
+        return self._whole + sum(channel.masked for channel in self._channels.values())
 
     def _add(self, key: tuple[Any, ...], slot: _Slot) -> None:
         self._channels.setdefault(key, _Channel()).add(slot)
@@ -246,16 +300,34 @@ class StreamGuard:
         self._held.append((owner, chunk))
 
     def _feed_object(self, owner: int, chunk: Any) -> None:
+        kind = _kind(getattr(chunk, "type", None))
+        if kind and kind.startswith("response."):
+            self._feed_responses(owner, chunk, kind)
+            return
         for choice in getattr(chunk, "choices", None) or []:
             index = getattr(choice, "index", 0)
             delta = getattr(choice, "delta", None)
-            content = getattr(delta, "content", None)
-            if isinstance(content, str) and content:
+            for field in ("content", "reasoning_content"):
+                text = getattr(delta, field, None)
+                if isinstance(text, str) and text:
 
-                def write(text: str, delta: Any = delta) -> None:
-                    delta.content = text
+                    def write(new: str, delta: Any = delta, field: str = field) -> None:
+                        setattr(delta, field, new)
 
-                self._add(("chat", index, "content"), _Slot(owner, content, write))
+                    self._add(("chat", index, field), _Slot(owner, text, write))
+            for number, block in enumerate(getattr(delta, "thinking_blocks", None) or []):
+                thinking = (
+                    block.get("thinking") if isinstance(block, dict) else getattr(block, "thinking", None)
+                )
+                if isinstance(thinking, str) and thinking:
+
+                    def write_thinking(new: str, block: Any = block) -> None:
+                        if isinstance(block, dict):
+                            block["thinking"] = new
+                        else:
+                            block.thinking = new
+
+                    self._add(("chat", index, "thinking", number), _Slot(owner, thinking, write_thinking))
             for call in getattr(delta, "tool_calls", None) or []:
                 function = getattr(call, "function", None)
                 arguments = getattr(function, "arguments", None)
@@ -268,6 +340,22 @@ class StreamGuard:
                     self._add(key, _Slot(owner, arguments, write_arguments))
             if getattr(choice, "finish_reason", None):
                 self._close(("chat", index))
+
+    def _feed_responses(self, owner: int, event: Any, kind: str) -> None:
+        output = getattr(event, "output_index", None)
+        delta = getattr(event, "delta", None)
+        if kind.endswith(".delta") and isinstance(delta, str):
+            if delta:
+
+                def write(new: str, event: Any = event) -> None:
+                    event.delta = new
+
+                where = (getattr(event, "content_index", None), getattr(event, "summary_index", None))
+                self._add(("responses", output, *where, kind), _Slot(owner, delta, write))
+        elif kind.endswith(".done"):
+            self._close(("responses", output))
+        elif kind in {"response.completed", "response.incomplete", "response.failed"}:
+            self._close(("responses",))
 
     def _feed_sse(self, owner: int, raw: bytes) -> None:
         events: list[dict[str, Any]] = []
@@ -283,9 +371,10 @@ class StreamGuard:
                 continue
             if not isinstance(data, dict):
                 continue
+            event["data"] = data
             kind, index, delta = data.get("type"), data.get("index"), data.get("delta")
             if kind == "content_block_delta" and isinstance(delta, dict):
-                field = {"text_delta": "text", "input_json_delta": "partial_json"}.get(str(delta.get("type")))
+                field = _SSE_DELTA_FIELDS.get(str(delta.get("type")))
                 text = delta.get(field) if field else None
                 if field and isinstance(text, str) and text:
 
@@ -296,7 +385,7 @@ class StreamGuard:
                         field: str = field,
                     ) -> None:
                         data["delta"][field] = new
-                        event["data"] = data  # re-serialized when the chunk goes out
+                        event["written"] = True  # re-serialized when the chunk goes out
 
                     self._add(("sse", index), _Slot(owner, text, write))
             elif kind == "content_block_stop":
@@ -306,13 +395,22 @@ class StreamGuard:
         self._events[owner] = events
 
     def _render(self, owner: int, chunk: Any) -> Any:
+        """The chunk on its way out, masked whole: what no channel held is masked here."""
         events = self._events.pop(owner, None)
-        if events is None or not any("data" in event for event in events):
+        if events is None:
+            self._whole += _walk(chunk)[1]
+            return chunk
+        for event in events:
+            if "data" in event:
+                event["data"], count = _walk(event["data"])
+                self._whole += count
+                event["written"] = event.get("written", False) or bool(count)
+        if not any(event.get("written") for event in events):
             return chunk
         blocks = []
         for event in events:
             lines = event["raw"].split(b"\n")
-            if "data" in event:
+            if event.get("written"):
                 payload = b"data: " + json.dumps(event["data"]).encode()
                 lines = [payload if line.startswith(b"data:") else line for line in lines]
             blocks.append(b"\n".join(lines))
