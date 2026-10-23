@@ -129,6 +129,26 @@ async def setup(tmp_path: Any) -> AsyncIterator[Fixture]:
     reset_settings_cache()
 
 
+async def enable_backends(*names: str) -> None:
+    """Switch coding-agent backends on, as `PUT /platform/backends` would (S42-07c).
+
+    With no `agent_backends` row only `claude-code` may start a stage, so a test that runs
+    another backend enables it first."""
+    from choregos_api.db.models import BackendRegistryRow
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        for name in names:
+            row = (
+                await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == name))
+            ).scalar_one_or_none()
+            if row is None:
+                row = BackendRegistryRow(name=name, capabilities=[])
+                session.add(row)
+            row.enabled = True
+
+
 def _fake_item(key: str, title: str) -> Any:
     from choregos_core.domain import WorkItemData
 

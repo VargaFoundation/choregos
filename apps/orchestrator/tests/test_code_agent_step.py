@@ -9,7 +9,7 @@ import pytest
 from choregos_orchestrator.activities import stage as stage_activities
 from temporalio.exceptions import ApplicationError
 
-from .conftest import Fixture
+from .conftest import Fixture, enable_backends
 
 pytestmark = pytest.mark.asyncio
 
@@ -146,6 +146,7 @@ async def test_an_actor_backend_that_contradicts_the_runtime_is_refused(setup: F
 
 
 async def test_an_acp_runtime_names_the_backend(setup: Fixture, images: None) -> None:
+    await enable_backends("opencode")
     await _agent(setup, {"kind": "acp", "backend": "opencode"})
     prepared = await stage_activities.prepare_stage(_plan(setup))
     assert prepared["stage_input"]["agent"]["backend"] == "opencode"

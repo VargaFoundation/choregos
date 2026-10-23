@@ -7,12 +7,13 @@ from typing import Any
 import pytest
 from choregos_orchestrator.activities import stage as stage_activities
 
-from .conftest import Fixture
+from .conftest import Fixture, enable_backends
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _set_cross_backend(project_id: str, value: bool) -> None:
+    """Also switches every candidate backend on: the reviewer swap picks among enabled ones (S42-07c)."""
     from choregos_api.db.session import session_scope
     from choregos_api.services import active_policy, policy_model
 
@@ -22,6 +23,7 @@ async def _set_cross_backend(project_id: str, value: bool) -> None:
         model = policy_model(row)
         model.review.cross_backend = value
         row.json_doc = model.model_dump(mode="json", exclude_none=True)
+    await enable_backends("claude-code", "codex", "gemini-cli", "goose", "opencode", "copilot-cli")
 
 
 async def _implemented_by(setup: Fixture, backend: str) -> None:
