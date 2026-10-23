@@ -222,5 +222,8 @@ nothing was republished. `RESEARCH-7` was opened with `RESEARCH-6`'s fields (low
 Cost of the run: $0.611, nine minutes from `open` to the third memo.
 
 Not proven by this run: the cross-check of two sources (`cross_checked=0`: no symbol was checked
-against a second source; why was not investigated, the free Alpha Vantage key's 25 requests a day
-being the first suspect).
+against a second source). Cause, reproduced on 2026-10-24 from the API pod with the tenant's key: a
+range of several years asks Alpha Vantage for `outputsize=full`, which the free key refuses ("a
+premium feature for the TIME_SERIES_DAILY endpoint"); the adapter reports it as `RateLimited`, the
+composite records it as a fallback and keeps Yahoo alone. A multi-year cross-check needs a premium
+key, or a second free source that serves full history.
