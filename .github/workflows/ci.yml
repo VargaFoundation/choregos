@@ -39,6 +39,7 @@ jobs:
       hosted-cluster: ${{ steps.filter.outputs.hosted-cluster }}
       hosted-images: ${{ steps.filter.outputs.hosted-images }}
       llm-guard: ${{ steps.filter.outputs.llm-guard }}
+      web-live: ${{ steps.filter.outputs.web-live }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -177,6 +178,13 @@ jobs:
               - 'charts/choregos/charts/litellm/**'
               - 'tests/live/test_llm_guard_live.py'
               - 'tests/live/llm_guard_upstream.py'
+              - '.github/workflows/ci.yml'
+            web-live:
+              - 'apps/web/**'
+              - 'apps/api/**'
+              - 'packages/contracts/**'
+              - 'packages/adapters/src/choregos_adapters/fakes/**'
+              - 'tools/e2e_live_api.py'
               - '.github/workflows/ci.yml'
 
   python:
@@ -818,6 +826,35 @@ jobs:
       - name: containers that are still up
         if: failure()
         run: docker ps -a
+  web-live:
+    # The console against the real API, not its mock (S40-17c, S40-17d): `tools/e2e_live_api.py` starts
+    # the API on fakes with a throwaway SQLite database, the console runs in `next dev` with `/api/v1`
+    # rewritten to it, and the journeys of `apps/web/e2e-live/` set an operation's fields and read
+    # them back from the API and the page. A field the console names differently from the API is
+    # accepted with a 200 and ignored: only this job sees it.
+    needs: changes
+    if: needs.changes.outputs.web-live == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run: { working-directory: apps/web }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+        working-directory: .
+      - uses: pnpm/action-setup@v6
+        with: { package_json_file: apps/web/package.json }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: pnpm, cache-dependency-path: apps/web/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e:live
+        env: { CI: "true" }
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with: { name: playwright-live-report, path: apps/web/test-results, retention-days: 7 }
   ci-ok:
     # Single target for branch protection and the merge queue.
     #
@@ -834,7 +871,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, web-live, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

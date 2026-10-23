@@ -3,8 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Live journeys: the console against the real API, not its mock (S40-17c). The API runs on fakes
  * with a throwaway SQLite database (`tools/e2e_live_api.py`), the console in `next dev` with its
- * `/api/v1` rewritten to it. Opt-in, not run by CI: `pnpm e2e:live` (needs `uv` and Playwright's
- * Chromium).
+ * `/api/v1` rewritten to it. `pnpm e2e:live` (needs `uv` and Playwright's Chromium); CI runs it in
+ * the `web-live` job (S40-17d).
  */
 const port = process.env.PORT ?? "3100";
 const apiPort = process.env.API_PORT ?? "8765";
