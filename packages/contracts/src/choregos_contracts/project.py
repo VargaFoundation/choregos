@@ -107,6 +107,21 @@ class ScheduleConfig(Strict):
         return value
 
 
+#: What a project's A2A skills take in file parts by default, and the most it may set (ADR 0078 §6).
+A2A_MAX_FILE_BYTES_DEFAULT = 10 * 1024 * 1024
+A2A_MAX_FILE_BYTES_CEILING = 50 * 1024 * 1024
+
+
+class A2aConfig(Strict):
+    """What the A2A door takes for this project's skills (ADR 0078 §6).
+
+    `max_file_bytes` bounds the file parts of one message: each one, and all of them together,
+    once decoded. A file part becomes an input artefact of the work item.
+    """
+
+    max_file_bytes: int = Field(default=A2A_MAX_FILE_BYTES_DEFAULT, ge=1, le=A2A_MAX_FILE_BYTES_CEILING)
+
+
 class ProjectConfig(Strict):
     slug: Slug
     org: Slug
@@ -142,6 +157,8 @@ class ProjectConfig(Strict):
     #: Work items the platform opens by itself (S38-11). Needs the internal tracker: an external
     #: tracker is where its requests are created.
     schedules: list[ScheduleConfig] = Field(default_factory=list)
+    #: What the A2A door takes for this project's skills (ADR 0078 §6).
+    a2a: A2aConfig = Field(default_factory=A2aConfig)
     labels: dict[str, str] = Field(default_factory=dict)
 
     @property
@@ -170,6 +187,9 @@ class ProjectConfig(Strict):
 
 
 __all__ = [
+    "A2A_MAX_FILE_BYTES_CEILING",
+    "A2A_MAX_FILE_BYTES_DEFAULT",
+    "A2aConfig",
     "AgentConfig",
     "AnyUrl",
     "GitopsConfig",

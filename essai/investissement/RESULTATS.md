@@ -201,3 +201,26 @@ states the thresholds), workflows `product-memo` v2 and `campaign` v3. `RESEARCH
 Cost of the run: $0.482. The memos say plainly that the bar was lowered: read alone, neither passes
 for a product that met the usual one (DSR 0.95, ten trades).
 
+
+## 2026-10-23, evening — `RESEARCH-7`, 0.20.2: the snapshot reads its bars again
+
+0.20.0 had cut every broker answer to 64 KiB (#767), so a snapshot job got no bars and every
+campaign stopped at `snapshot`; #893 (S40-13b) lets a job read the answer whole. The dev tenant runs
+0.20.2. Readiness `workflow-template` was done (the project's workflows are the template's), so
+nothing was republished. `RESEARCH-7` was opened with `RESEARCH-6`'s fields (lowered bar: `min_dsr`
+0, `min_trades` 1), under `preset:regulated`.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | snapshot (job) | 20 symbols, 39,180 rows, `missing=0`, `bars_sha256=ec1c8449…`; `cross_checked=0` |
+| 2 | profile, backtest (jobs) | 80 trials over 20 products, best out-of-sample DSR 0.384, `relevant_count=3` |
+| 3 | strategize, real model | first attempt, $0.263 (108,381 tokens in) |
+| 4 | fan-out | three `product-memo` children: `RESEARCH-7.1` (IEF), `.2` (TLT), `.3` (XLU), each with `thresholds` = `{min_dsr: 0.0, max_drawdown: 0.35, min_trades: 1}` |
+| 5 | memos, real model | all three at the first attempt ($0.108, $0.103, $0.136); each states the bar, quotes only its product's measured figures, lists what would make it wrong and carries the notice |
+| 6 | decision | waiting for the owner (not signed by the agent) |
+
+Cost of the run: $0.611, nine minutes from `open` to the third memo.
+
+Not proven by this run: the cross-check of two sources (`cross_checked=0`: no symbol was checked
+against a second source; why was not investigated, the free Alpha Vantage key's 25 requests a day
+being the first suspect).
