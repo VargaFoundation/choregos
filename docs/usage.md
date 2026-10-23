@@ -1834,6 +1834,12 @@ it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `un
 24 hours, or since `since`, optionally for one `decision` or `project`. The first refusal of a host for a
 run is also an event on the work item (`choregos.network.denied`).
 
+The `opencode` backend would otherwise call home from every run: it fetches its model catalogue
+(`models.opencode.ai`), checks for updates and may download language servers, and on the dev tenant each run
+showed 8 refused calls to that host here. The runner therefore sets `OPENCODE_DISABLE_MODELS_FETCH`,
+`OPENCODE_DISABLE_AUTOUPDATE` and `OPENCODE_DISABLE_LSP_DOWNLOAD` to `1` for it (an agent's own `launch.env`
+can still override them); the agent only uses the `choregos` provider of its `opencode.json`.
+
 **Calls the platform makes for an agent obey the same ceiling.** An MCP connector, a knowledge source
 (web or git) and a git skill source are fetched by the API, which sees the whole request, so the
 organisation's `network` section applies to them twice:
