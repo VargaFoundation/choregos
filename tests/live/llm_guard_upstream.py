@@ -1,9 +1,11 @@
-"""A fake OpenAI provider for `test_llm_guard_live.py`, run in a container next to LiteLLM.
+"""A fake provider for `test_llm_guard_live.py`, run in a container next to LiteLLM.
 
 Stdlib only. It records every request body (`GET /_seen`, `DELETE /_seen` clears) and answers with
 secrets: in the text, in the model's reasoning, and in a tool call's arguments, on
-`/chat/completions` and `/responses` (what LiteLLM calls for `/v1/messages` and `/v1/responses`),
-streamed or not. Streams are cut every few characters, so that every secret straddles chunks.
+`/chat/completions` and `/responses` (what LiteLLM calls for an OpenAI model, whatever route the
+client used), and on Anthropic's own `/v1/messages` (S40-21d: what LiteLLM calls for an
+`anthropic/` model), streamed or not, a signed thinking block included. Streams are cut every few
+characters, so that every secret straddles chunks.
 """
 
 from __future__ import annotations
@@ -20,6 +22,8 @@ PASSWORD = "hunter2" * 2
 ANSWER = f"Here is the key {SECRET}\nand a clone https://bot:{PASSWORD}@git.example/a.git\nbye"
 ARGUMENTS = json.dumps({"path": "k.txt", "content": SECRET})
 REASONING = f"The file holds {SECRET}\nso I clone https://bot:{PASSWORD}@git.example/a.git\n"
+#: What Anthropic signs a thinking block with: opaque, low entropy (gitleaks reads every branch).
+SIGNATURE = "sig-" + "s" * 24
 
 SEEN: list[dict[str, Any]] = []
 
@@ -65,6 +69,9 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         SEEN.append({"path": self.path, "body": body})
         model = body.get("model", "gpt-5.5")
+        if self.path.endswith("/v1/messages"):
+            self._anthropic(model, bool(body.get("stream")))
+            return
         if self.path.endswith("/responses"):
             self._responses(model, bool(body.get("stream")))
             return
@@ -115,6 +122,55 @@ class Handler(BaseHTTPRequestHandler):
         events.append(chunk(call({"name": "write_file", "arguments": ""}, id="call_1", type="function")))
         events += [chunk(call({"arguments": piece})) for piece in _pieces(ARGUMENTS, 9)]
         events += [chunk({}, "tool_calls"), "data: [DONE]\n\n"]
+        self._events(events)
+
+    def _anthropic(self, model: str, stream: bool) -> None:
+        """Anthropic's Messages API, as an `anthropic/` model makes LiteLLM call it."""
+        thinking = {"type": "thinking", "thinking": REASONING, "signature": SIGNATURE}
+        text = {"type": "text", "text": ANSWER}
+        tool = {"type": "tool_use", "id": "toolu_1", "name": "write_file", "input": json.loads(ARGUMENTS)}
+        usage = {"input_tokens": 5, "output_tokens": 5}
+        message = {
+            "id": "msg_1",
+            "type": "message",
+            "role": "assistant",
+            "model": model,
+            "content": [thinking, text, tool],
+            "stop_reason": "tool_use",
+            "stop_sequence": None,
+            "usage": usage,
+        }
+        if not stream:
+            self._json(message)
+            return
+
+        def event(kind: str, **data: Any) -> str:
+            return f"event: {kind}\ndata: {json.dumps({'type': kind, **data})}\n\n"
+
+        def block(
+            index: int, start: dict[str, Any], kind: str, field: str, value: str, size: int
+        ) -> list[str]:
+            events = [event("content_block_start", index=index, content_block=start)]
+            events += [
+                event("content_block_delta", index=index, delta={"type": kind, field: piece})
+                for piece in _pieces(value, size)
+            ]
+            return events
+
+        events = [event("message_start", message={**message, "content": [], "stop_reason": None})]
+        events += block(0, {"type": "thinking", "thinking": ""}, "thinking_delta", "thinking", REASONING, 6)
+        events.append(
+            event("content_block_delta", index=0, delta={"type": "signature_delta", "signature": SIGNATURE})
+        )
+        events.append(event("content_block_stop", index=0))
+        events += block(1, {"type": "text", "text": ""}, "text_delta", "text", ANSWER, 7)
+        events.append(event("content_block_stop", index=1))
+        events += block(2, {**tool, "input": {}}, "input_json_delta", "partial_json", ARGUMENTS, 9)
+        events.append(event("content_block_stop", index=2))
+        events.append(
+            event("message_delta", delta={"stop_reason": "tool_use", "stop_sequence": None}, usage=usage)
+        )
+        events.append(event("message_stop"))
         self._events(events)
 
     def _responses(self, model: str, stream: bool) -> None:
