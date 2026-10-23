@@ -232,6 +232,6 @@ def test_the_local_gateway_loads_the_llm_guard_next_to_its_config(tmp_path: path
     write_litellm_config(tmp_path, {})
     (guard,) = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))["guardrails"]
     module, _, cls = guard["litellm_params"]["guardrail"].rpartition(".")
-    assert cls == "ChoregosGuardrail" and guard["litellm_params"]["mode"] == "pre_call"
+    assert cls == "ChoregosGuardrail" and guard["litellm_params"]["mode"] == ["pre_call", "post_call"]
     source = pathlib.Path(choregos_core.llm_guardrail.__file__).read_text(encoding="utf-8")
     assert (tmp_path / f"{module}.py").read_text(encoding="utf-8") == source

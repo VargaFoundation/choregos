@@ -1,12 +1,15 @@
-"""The gateway's LLM guard masks secrets before the provider call, for a marked key only (S40-21).
+"""The gateway's LLM guard masks secrets for a marked key: in the request and in the answer (S40-21).
 
 ADR 0084.
 """
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
+from collections.abc import AsyncIterator
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -147,4 +150,169 @@ def test_the_known_shapes_are_the_no_secrets_gate_s() -> None:
 def test_the_guard_imports_nothing_but_the_standard_library() -> None:
     source = pathlib.Path(llm_guardrail.__file__).read_text(encoding="utf-8")
     imported = set(re.findall(r"^(?:from|import) ([a-z_.]+)", source, flags=re.MULTILINE))
-    assert imported <= {"__future__", "importlib", "logging", "re", "collections.abc", "typing"}, imported
+    assert imported <= {"__future__", "importlib", "json", "logging", "re", "collections.abc", "typing"}, (
+        imported
+    )
+
+
+# The answer, on the way back (S40-21b). LiteLLM's objects are stood in for by namespaces: the
+# hook reads attributes, and the gateway image is where the real ones are (`tests/live/`).
+_ANSWER = f"Here is the key {_AWS}\nand a clone https://bot:{_PASSWORD}@git.example/a.git\nbye"
+_MASKED_ANSWER = mask(_ANSWER)[0]
+_ARGUMENTS = json.dumps({"path": "k.txt", "content": _GH})
+
+
+def _chat_answer() -> SimpleNamespace:
+    call = SimpleNamespace(id="c1", function=SimpleNamespace(name="write_file", arguments=_ARGUMENTS))
+    message = SimpleNamespace(role="assistant", content=_ANSWER, tool_calls=[call])
+    return SimpleNamespace(choices=[SimpleNamespace(index=0, message=message, finish_reason="tool_calls")])
+
+
+def _anthropic_answer() -> dict[str, Any]:
+    return {
+        "type": "message",
+        "content": [
+            {"type": "text", "text": _ANSWER},
+            {
+                "type": "tool_use",
+                "id": "t1",
+                "name": "write_file",
+                "input": {"path": "k.txt", "content": _GH},
+            },
+        ],
+    }
+
+
+async def _answer(response: Any, metadata: dict[str, Any] | None) -> Any:
+    guard = ChoregosGuardrail(guardrail_name="choregos-secrets", event_hook="post_call", default_on=True)
+    return await guard.async_post_call_success_hook({}, _Key(metadata), response)
+
+
+def _pieces(text: str, size: int) -> list[str]:
+    return [text[i : i + size] for i in range(0, len(text), size)]
+
+
+def _chat_stream() -> list[SimpleNamespace]:
+    """The answer cut every 5 characters, so that every secret straddles chunks, then a tool call."""
+
+    def chunk(finish: str | None = None, **delta: Any) -> SimpleNamespace:
+        choice = SimpleNamespace(index=0, delta=SimpleNamespace(**delta), finish_reason=finish)
+        return SimpleNamespace(choices=[choice])
+
+    def call(arguments: str) -> SimpleNamespace:
+        return SimpleNamespace(index=0, function=SimpleNamespace(arguments=arguments))
+
+    chunks = [chunk(role="assistant", content="")]
+    chunks += [chunk(content=piece) for piece in _pieces(_ANSWER, 5)]
+    chunks += [chunk(content=None, tool_calls=[call(piece)]) for piece in _pieces(_ARGUMENTS, 4)]
+    return [*chunks, chunk(finish="tool_calls", content=None)]
+
+
+def _sse(data: dict[str, Any]) -> bytes:
+    return f"event: {data['type']}\ndata: {json.dumps(data)}\n\n".encode()
+
+
+def _anthropic_stream() -> list[bytes]:
+    def delta(index: int, kind: str, field: str, text: str) -> bytes:
+        return _sse({"type": "content_block_delta", "index": index, "delta": {"type": kind, field: text}})
+
+    events = [_sse({"type": "message_start", "message": {"content": []}})]
+    events += [
+        _sse({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
+    ]
+    events += [delta(0, "text_delta", "text", piece) for piece in _pieces(_ANSWER, 5)]
+    events += [_sse({"type": "content_block_stop", "index": 0})]
+    events += [_sse({"type": "content_block_start", "index": 1, "content_block": {"type": "tool_use"}})]
+    events += [delta(1, "input_json_delta", "partial_json", piece) for piece in _pieces(_ARGUMENTS, 4)]
+    events += [_sse({"type": "content_block_stop", "index": 1}), _sse({"type": "message_stop"})]
+    return events
+
+
+async def _streamed(chunks: list[Any], metadata: dict[str, Any] | None) -> list[Any]:
+    async def upstream() -> AsyncIterator[Any]:
+        for chunk in chunks:
+            yield chunk
+
+    guard = ChoregosGuardrail(guardrail_name="choregos-secrets", event_hook="post_call", default_on=True)
+    hook = guard.async_post_call_streaming_iterator_hook(_Key(metadata), upstream(), {})
+    return [chunk async for chunk in hook]
+
+
+def _chat_text(chunks: list[Any]) -> tuple[str, str]:
+    deltas = [chunk.choices[0].delta for chunk in chunks]
+    content = "".join(getattr(delta, "content", None) or "" for delta in deltas)
+    calls = [call for delta in deltas for call in getattr(delta, "tool_calls", [])]
+    return content, "".join(call.function.arguments for call in calls)
+
+
+def _anthropic_text(chunks: list[bytes]) -> tuple[str, str]:
+    deltas = [
+        json.loads(line[5:])["delta"]
+        for chunk in chunks
+        for line in chunk.split(b"\n")
+        if line.startswith(b"data:") and b"content_block_delta" in line
+    ]
+    return "".join(d.get("text", "") for d in deltas), "".join(d.get("partial_json", "") for d in deltas)
+
+
+@pytest.mark.asyncio
+async def test_a_marked_key_has_the_secrets_in_the_model_s_answer_masked_chat_shape() -> None:
+    message = (await _answer(_chat_answer(), {GUARD_METADATA_KEY: GUARD_REDACT})).choices[0].message
+    assert message.content == _MASKED_ANSWER
+    assert _AWS not in message.content and _PASSWORD not in message.content
+    assert json.loads(message.tool_calls[0].function.arguments) == {"path": "k.txt", "content": REDACTED}
+
+
+@pytest.mark.asyncio
+async def test_a_marked_key_has_the_secrets_in_the_model_s_answer_masked_anthropic_shape() -> None:
+    answer = await _answer(_anthropic_answer(), {GUARD_METADATA_KEY: GUARD_REDACT})
+    assert answer["content"][0]["text"] == _MASKED_ANSWER
+    assert answer["content"][1]["input"] == {"path": "k.txt", "content": REDACTED}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("metadata", [None, {"run_id": "r1"}, {GUARD_METADATA_KEY: "off"}])
+async def test_an_unmarked_key_gets_the_answer_unchanged(metadata: dict[str, Any] | None) -> None:
+    assert await _answer(_anthropic_answer(), metadata) == _anthropic_answer()
+    assert _chat_text(await _streamed(_chat_stream(), metadata)) == (_ANSWER, _ARGUMENTS)
+    assert await _streamed(_anthropic_stream(), metadata) == _anthropic_stream()
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_answer_is_masked_though_each_secret_straddles_chunks_chat_shape() -> None:
+    chunks = await _streamed(_chat_stream(), {GUARD_METADATA_KEY: GUARD_REDACT})
+    assert len(chunks) == len(_chat_stream()), "chunks are emptied, never dropped or merged"
+    content, arguments = _chat_text(chunks)
+    assert content == _MASKED_ANSWER
+    assert json.loads(arguments) == {"path": "k.txt", "content": REDACTED}
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_answer_is_masked_though_each_secret_straddles_chunks_anthropic_shape() -> None:
+    chunks = await _streamed(_anthropic_stream(), {GUARD_METADATA_KEY: GUARD_REDACT})
+    assert len(chunks) == len(_anthropic_stream())
+    text, partial_json = _anthropic_text(chunks)
+    assert text == _MASKED_ANSWER
+    assert json.loads(partial_json) == {"path": "k.txt", "content": REDACTED}
+    assert chunks[0] == _anthropic_stream()[0], "an event no secret touched goes out byte for byte"
+
+
+def test_a_streamed_answer_is_released_line_by_line_not_at_the_end() -> None:
+    """Holding back is per line: the agent still sees its answer stream."""
+    guard = llm_guardrail.StreamGuard()
+    out: list[Any] = []
+    for chunk in _chat_stream()[:12]:
+        guard.feed(chunk)
+        out += guard.ready()
+    assert _chat_text(out)[0] == mask(_ANSWER.split("\n", maxsplit=1)[0] + "\n")[0]
+
+
+def test_a_long_line_is_released_at_a_space_after_hold_max(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(llm_guardrail, "HOLD_MAX", 20)
+    guard = llm_guardrail.StreamGuard()
+    out: list[Any] = []
+    for piece in _pieces("one two three four five six seven eight nine", 4):
+        delta = SimpleNamespace(content=piece)
+        guard.feed(SimpleNamespace(choices=[SimpleNamespace(index=0, delta=delta, finish_reason=None)]))
+        out += guard.ready()
+    assert _chat_text(out)[0].startswith("one two three four")

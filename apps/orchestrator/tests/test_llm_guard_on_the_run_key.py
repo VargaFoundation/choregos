@@ -59,3 +59,44 @@ async def test_the_policy_marks_the_run_key_for_the_gateway_guard(setup: Fixture
 async def test_without_the_policy_the_key_is_not_marked(setup: Fixture) -> None:
     await _analyzer(setup, False)
     assert GUARD_METADATA_KEY not in await _start(setup)
+
+
+async def test_a_gateway_without_the_guard_refuses_the_stage_before_anything_is_reserved(
+    setup: Fixture,
+) -> None:
+    """S40-21b: on `direct` or `openai-compatible` the mark would reach no guard. The stage is
+    refused as a configuration the project cannot run, which the interpreter escalates."""
+    from choregos_orchestrator.activities.stage import prepare_stage
+    from temporalio.exceptions import ApplicationError
+
+    await _analyzer(setup, True)
+    setup.adapters.gateway.capabilities = frozenset({"virtual_keys", "hard_budget"})
+    with pytest.raises(ApplicationError) as refused:
+        await prepare_stage(_plan(setup))
+    assert refused.value.type == "ModelResolutionError" and refused.value.non_retryable
+    assert "llm_guard" in str(refused.value)
+    assert not setup.adapters.gateway.keys
+
+
+async def test_without_the_policy_a_gateway_without_the_guard_still_runs(setup: Fixture) -> None:
+    await _analyzer(setup, False)
+    setup.adapters.gateway.capabilities = frozenset({"virtual_keys", "hard_budget"})
+    assert GUARD_METADATA_KEY not in await _start(setup)
+
+
+async def test_a_key_is_never_minted_unguarded_on_a_resume_either() -> None:
+    """`mint_key` is every run key's door, the resumed run's included: it refuses on its own."""
+    from types import SimpleNamespace
+
+    from choregos_adapters.errors import ConfigurationError
+    from choregos_adapters.fakes.gateway import FakeGateway
+    from choregos_orchestrator.activities.run_key import mint_key
+
+    gateway = FakeGateway(capabilities=frozenset({"virtual_keys"}))
+    bundle = SimpleNamespace(
+        policy=SimpleNamespace(sandbox=SimpleNamespace(llm_security_analyzer=True)),
+        adapters=SimpleNamespace(gateway=gateway),
+    )
+    with pytest.raises(ConfigurationError, match="llm_guard"):
+        await mint_key(bundle, {"run_id": "r1"}, budget_usd=1.0, ttl_s=60, models=[])
+    assert not gateway.keys

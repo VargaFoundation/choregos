@@ -203,10 +203,37 @@ class MemoryAdapter(Protocol):
 #: - `teams`: a project's day budget is held by the gateway;
 #: - `pricing`: the catalogue carries input/output prices;
 #: - `realtime`: relays the realtime WebSocket API (`/realtime?model=`) under a virtual key, which a
-#:   voice agent needs (ADR 0080): one is refused at publication on a gateway that does not.
+#:   voice agent needs (ADR 0080): one is refused at publication on a gateway that does not;
+#: - `llm_guard`: masks secrets in what a marked key sends the provider and in the answer
+#:   (ADR 0084): a policy with `sandbox.llm_security_analyzer` is refused on a gateway without it.
 GATEWAY_CAPABILITIES: frozenset[str] = frozenset(
-    {"list_models", "virtual_keys", "hard_budget", "spend_readback", "teams", "pricing", "realtime"}
+    {
+        "list_models",
+        "virtual_keys",
+        "hard_budget",
+        "spend_readback",
+        "teams",
+        "pricing",
+        "realtime",
+        "llm_guard",
+    }
 )
+
+
+def llm_guard_refusal(gateway: Any) -> str | None:
+    """Why `gateway` cannot hold the LLM guard a policy asks for (ADR 0084), or None when it can.
+
+    The guard lives in the gateway, not in the agent: a gateway without one (`direct`,
+    `openai-compatible`) would carry the key's mark to nobody, so the key is refused, never minted
+    unguarded.
+    """
+    if "llm_guard" in getattr(gateway, "capabilities", frozenset()):
+        return None
+    return (
+        "the policy masks secrets on the LLM path (`sandbox.llm_security_analyzer`) and the "
+        f"`{type(gateway).__name__}` gateway declares no `llm_guard`: use the LiteLLM gateway, "
+        "or turn the analyzer off"
+    )
 
 
 @runtime_checkable
@@ -280,4 +307,5 @@ __all__ = [
     "RealtimeLink",
     "ScmAdapter",
     "TrackerAdapter",
+    "llm_guard_refusal",
 ]
