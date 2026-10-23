@@ -107,9 +107,15 @@ def test_the_ci_daemon_writes_where_the_charts_does_and_rootlesskit_can_start() 
     assert tmpfs == writable
 
 
-def test_the_strict_rule_faults_the_builder_for_one_thing_and_an_exception_names_it_alone() -> None:
+def test_the_strict_rule_faults_the_builder_for_what_it_does_unconfined_and_an_exception_names_it_alone() -> (
+    None
+):
     plain = _docs(BUILDS)
-    assert manquements(_builder(plain)) == ["buildkitd.allowPrivilegeEscalation"]
+    assert manquements(_builder(plain)) == [
+        "buildkitd.seccompProfile",
+        "buildkitd.appArmorProfile",
+        "buildkitd.allowPrivilegeEscalation",
+    ]
     assert ("PolicyException", "choregos-buildkitd") not in plain, "no Kyverno, no exception to render"
     docs = _docs(BUILDS, api_versions=(KYVERNO,))
     exception = docs[("PolicyException", "choregos-buildkitd")]["spec"]

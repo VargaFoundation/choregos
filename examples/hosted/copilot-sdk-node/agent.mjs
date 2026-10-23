@@ -38,6 +38,11 @@ export async function answer(text) {
       availableTools: new ToolSet().addMcp("*"),
       workingDirectory: home,
     });
+    // The runtime connects the MCP servers in the background: the first model call can leave before
+    // the tools are known, and the model then answers without reading the ticket (S41-23: seen
+    // through a slower loopback). `mcp.list` starts them and waits for their status.
+    const { servers } = await session.rpc.mcp.list();
+    console.error("mcp servers:", JSON.stringify(servers.map(({ name, status, error }) => ({ name, status, error }))));
     const reply = await session.sendAndWait(text, 300_000);
     await session.disconnect();
     return String(reply?.data?.content ?? "");

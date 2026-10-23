@@ -52,11 +52,13 @@ transitions:
     to: verifying
     by: checker
     gates: [evidence_present, { name: coverage_delta_min, params: { x: -0.5 } }]
+    inputs: [spec_markdown]
     on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
   - id: t-review
     from: verifying
     to: reviewing
     by: reviewer
+    inputs: [spec_markdown]
     on_changes_requested: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
     on_fail: { to: verifying, max_attempts: 2, escalate_to: needs_human }
   - id: t-open-pr
@@ -71,6 +73,7 @@ transitions:
     from: fixing_ci
     to: pr_open
     by: fixer
+    inputs: [spec_markdown]
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   - id: t-merge
     from: pr_open

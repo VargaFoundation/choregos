@@ -106,8 +106,14 @@ data_handling:
 - The query goes through `choregos_core.redaction`.
 - If redaction changes it (a known secret or a token pattern), the call is refused with 422
   `query_redacted`. The agent is told why; the query is not silently altered, and nothing is sent.
-- The same check is due for `web_fetch` URLs, which today send their path and query unchecked. That is
+- The same check is due for `web_fetch` URLs, which sent their path and query unchecked. That was
   recorded here as a finding, not fixed by this decision.
+- **As delivered (S40-01h, finding #785):** `web_fetch` applies the rule to the address it is given
+  (as written and percent-decoded; the fragment never leaves the client). If redaction would change it,
+  the call is refused with 422 `url_redacted` before any DNS lookup or robots.txt request, journaled in
+  `network_decisions` (`denied`, reason `redacted`), and not counted in the ledger. `web_fetch` sends
+  no request body, so the address is the only outbound text. Redirect targets are chosen by the
+  remote site, not the agent, and are not checked.
 
 **6. Audit without disclosure.** Each call:
 - writes a ledger row (`kind = tool`, provider `search:<backend>`, the backend's declared price);

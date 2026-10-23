@@ -61,6 +61,9 @@ cannot tell *which person* an agent acted for, and the record cannot show the ch
    inputs; A's own memory (`own`, ADR 0075) stays A's. This is today's behaviour for memories; the
    story that implements point 2 checks it for artefacts and adds the test that fails if a step can
    read an artefact it did not declare.
+   S40-22b closes the one gap found: `GET /internal/runs/{id}/ticket` served the work item's
+   `spec_markdown` and `plan_markdown` to every run; it now serves them only when the run's
+   transition declares them, like `/inputs/{name}`, and a *read* receipt follows what was served (#890).
 
 ## Implementation (S40-22)
 

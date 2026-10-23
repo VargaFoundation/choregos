@@ -12,12 +12,15 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import time
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 
 import pytest
+from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
+from choregos_adapters.executor.tekton import KubernetesClient
 
 
 def context(*, non_destructive: bool = False) -> str:
@@ -143,3 +146,37 @@ def run_probe(namespace: str, name: str, command: str, *, timeout_s: int = 180) 
     kubectl("-n", namespace, "delete", "pod", name, "--ignore-not-found", check=False)
     assert phase in {"Succeeded", "Failed"}, f"the probe did not finish (phase={phase or 'unknown'})"
     return logs.strip()
+
+
+@pytest.fixture(scope="module")
+def ns() -> Iterator[str]:
+    name = f"choregos-hosted-{secrets.token_hex(3)}"
+    kubectl_shared("create", "namespace", name)
+    try:
+        kubectl_shared("create", "serviceaccount", "choregos-runner", "-n", name)
+        yield name
+    finally:
+        kubectl_shared("delete", "namespace", name, "--wait=false", "--ignore-not-found", check=False)
+
+
+@pytest.fixture
+async def executor() -> AsyncIterator[KubernetesJobExecutor]:
+    """The real executor, against the API server through `kubectl proxy` (it authenticates)."""
+    proxy = subprocess.Popen(
+        ["kubectl", "--context", context(non_destructive=True), "proxy", "--port=0"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert proxy.stdout is not None
+        # "Starting to serve on 127.0.0.1:41373"
+        address = proxy.stdout.readline().strip().rsplit(" ", 1)[-1]
+        client = KubernetesClient(f"http://{address}", token=None, verify=False)
+        try:
+            yield KubernetesJobExecutor(client=client, ttl_seconds=600)
+        finally:
+            await client.aclose()
+    finally:
+        proxy.terminate()
+        proxy.wait(timeout=10)

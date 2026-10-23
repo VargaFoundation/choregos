@@ -1,0 +1,21 @@
+# Same cluster as kind.yaml without the host port mappings (a machine or a CI job where 8080, 3000, 8000, 8088 are taken, S41-24).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: choregos
+networking:
+  # kindnet does not enforce NetworkPolicy: without a CNI that enforces them, the runners'
+  # sandbox is only an intention. Calico is installed by `make cluster-up`.
+  disableDefaultCNI: true
+  podSubnet: 192.168.0.0/16
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+  - role: worker
+    labels: { role: platform }
+  - role: worker
+    labels: { role: runners }

@@ -15,6 +15,10 @@ makes the request:
   `retry_after_s`; the run's own rate too;
 - `User-Agent: Choregos/<version> (+<contact>)`;
 - at most three redirects, each target going through every check above;
+- the address the agent writes is checked like a search query (ADR 0083 §5): path and query go through
+  `choregos_core.redaction`, as written and percent-decoded, and an address that redaction would change
+  is refused (422 `url_redacted`) before any DNS lookup or robots.txt request: nothing is rewritten, nothing
+  is sent. The tool sends no request body;
 - the answer is capped (2 MiB) and only text, HTML (as text), JSON and markdown come back;
 - what comes back is third-party text: it goes through the injection guard like a connector's answer.
 
@@ -32,13 +36,14 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from html.parser import HTMLParser
 from typing import Any, ClassVar, Protocol
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
 from choregos_adapters.documents.web import is_private_address
 from choregos_core import utcnow
 from choregos_core.network import allowed
+from choregos_core.redaction import redact
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -393,6 +398,21 @@ def _parse(raw: str) -> tuple[str, str, str]:
     return parts.scheme, host, parts._replace(fragment="").geturl()
 
 
+def _check_redaction(raw_url: str) -> None:
+    """Refuses an address that holds what looks like a secret or a credential, as written or once
+    percent-decoded: a run must not be able to send one to an allowed host in a path or a query."""
+    parts = urlsplit(raw_url.strip())
+    sent = parts._replace(fragment="").geturl()  # a fragment never leaves the client
+    for text in (sent, unquote(sent)):
+        if redact(text) != text:
+            raise Refused(
+                422,
+                "url_redacted",
+                "the address holds what looks like a secret or a credential: it was not requested. "
+                "Write it without it.",
+            )
+
+
 async def _check_host(ctx: Context, host: str, *, hop: str = "") -> str:
     """The host against the run's network, then the address it resolves to; returns the address to
     connect to. A refusal is journaled once per host and call."""
@@ -562,7 +582,10 @@ async def fetch(
     cap = min(int(arguments.get("max_bytes") or MAX_BYTES), MAX_BYTES)
     try:
         scheme, host, url = _parse(str(arguments["url"]))
+        _check_redaction(url)
     except Refused as refused:
+        if refused.kind == "url_redacted":
+            await _refuse_journal(ctx, host, "denied", "redacted")
         return refused.code, refused.body(), f"web:{urlsplit(str(arguments.get('url', ''))).hostname or '-'}"
     first_host = host
     try:

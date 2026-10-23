@@ -13,7 +13,6 @@ image of S41-16's test (`CHOREGOS_HOSTED_REFERENCE_IMAGE`); without either, it i
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import subprocess
 import time
 
@@ -22,14 +21,12 @@ from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExe
 from choregos_core.hosted import NATIVE_SIDECARS_MIN
 
 from .conftest import context, kubectl_shared
-from .test_hosted_native_sidecar import (  # noqa: F401 - `ns` and `executor` are fixtures
+from .test_hosted_native_sidecar import (
     RUNNER,
     _cluster_version,
     _pod,
     _reference_image,
     _spec,
-    executor,
-    ns,
 )
 
 pytestmark = pytest.mark.cluster
@@ -47,13 +44,13 @@ def _needs_the_runtime_class() -> None:
         pytest.skip("no `gvisor` RuntimeClass in this cluster: `make cluster-gvisor`")
 
 
-async def test_a_hosted_run_finishes_under_gvisor(ns: str, executor: KubernetesJobExecutor) -> None:  # noqa: F811
+async def test_a_hosted_run_finishes_under_gvisor(ns: str, executor: KubernetesJobExecutor) -> None:
     image = _reference_image()
     _needs_the_runtime_class()
     if await _cluster_version(executor) < NATIVE_SIDECARS_MIN:
         pytest.skip("the cluster is older than 1.29: no native sidecar")
-    spec = dataclasses.replace(
-        _spec(ns, image), runtime_class="gvisor", runner_command=["sh", "-c", f"uname -r; {RUNNER}"]
+    spec = _spec(ns, image).model_copy(
+        update={"runtime_class": "gvisor", "runner_command": ["sh", "-c", f"uname -r; {RUNNER}"]}
     )
     ref = await executor.start(spec)
     state, deadline = "pending", time.monotonic() + 300

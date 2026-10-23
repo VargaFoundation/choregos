@@ -6,6 +6,7 @@
 // (`CHOREGOS_MCP_URL<name>`, streamable HTTP).
 
 using System.ClientModel;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Client;
 using OpenAI;
@@ -40,7 +41,7 @@ static class Agent
                 clients.Add(client);
                 tools.AddRange(await client.ListToolsAsync(cancellationToken: cancellation));
             }
-            var agent = chat.AsAIAgent(instructions: Instructions, name: "triager", tools: tools);
+            var agent = chat.AsIChatClient().AsAIAgent(instructions: Instructions, name: "triager", tools: tools);
             var response = await agent.RunAsync(text, cancellationToken: cancellation);
             return response.Text;
         }
