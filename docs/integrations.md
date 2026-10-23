@@ -212,7 +212,8 @@ workflow opts in.
 a2a:
   skill: ship-a-change            # the skill id is `<project>/ship-a-change`
   description: Ship a change through review and release.
-  input_modes: [text/plain]       # add application/json to take one data part as the fields
+  input_modes: [text/plain]       # add application/json to take one data part as the fields,
+                                  # a file's media type (application/pdf…) to take that file
 ```
 
 The organisation's card is at `/a2a/orgs/<org>/.well-known/agent-card.json`, its JSON-RPC endpoint at
@@ -228,6 +229,13 @@ The card lists the opted-in workflows of the projects the token's person may rea
 - `message/send` opens a work item through the same path as the console, under an id derived from the
   organisation, the client and the `messageId`: a message sent twice is one work item. Text parts make
   its body, one data part its fields; name the skill in `message.metadata.skill` when there are several.
+  A file part (`file.bytes` in base64, `file.mimeType` among the skill's `input_modes`) becomes an
+  **input artefact** of the work item, named after `file.name` (`attachment-<n>` when it has none):
+  a step that lists that name in its transition's `inputs` finds it in `.choregos/inputs/`. The
+  project bounds them with `a2a.max_file_bytes` in its configuration, **10 MiB by default** (50 MiB
+  at most), for each file and for all the files of one message together. A file sent by `uri` is
+  refused: the door fetches nothing on a caller's behalf. The interpreter starts once the files are
+  stored, and a store that fails creates nothing.
 - `tasks/get` reads the work item: `working`, `input-required` while a person must decide (with the
   console's `decision_url` — a decision is never taken over A2A, and a reply to a task is refused),
   `completed` with the latest revision of each artefact, `failed`, `canceled`. An artefact's content
@@ -257,10 +265,9 @@ The card lists the opted-in workflows of the projects the token's person may rea
 The organisation's card and endpoint are also on the console's **Integrations** page, which creates
 an `a2a` token for the person (30 days, shown once).
 
-Not served yet: file parts in a message
-(refused with -32005: a work item has nowhere yet to keep a file it did not produce, and no
-per-project size limit exists to count it against). The card needs the token too, since its skills depend on who asks. Calls are audited (`a2a.call`), rate-limited per
-token, and count in the person's daily write budget with the MCP door's.
+The card needs the token too, since its skills depend on who asks. Calls are audited (`a2a.call`),
+each stored file too (`workitem.input_file`, with its name, size and digest); they are rate-limited
+per token, and count in the person's daily write budget with the MCP door's.
 
 ## Atlassian's Rovo MCP Server, as a connector
 
