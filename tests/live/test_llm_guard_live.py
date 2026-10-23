@@ -6,6 +6,10 @@ LiteLLM image with the chart's very `config.yaml` and guard file, in front of a 
 that answers with secrets (`llm_guard_upstream.py`), and calls it with a key minted marked, as
 the platform mints a run's key under `sandbox.llm_security_analyzer`, and with one unmarked.
 
+S40-21d adds a native Anthropic model (`anthropic/...`, pointed at the same fake provider, which then
+speaks Anthropic's own Messages API): its thinking comes signed, as Anthropic's does, and the
+signature of a thinking block the guard masked must not reach the agent.
+
 Docker and Helm, and an opt-in — it pulls images and takes a minute:
 
     CHOREGOS_LIVE_LLM_GUARD=1 uv run pytest tests/live/test_llm_guard_live.py -m live
@@ -32,7 +36,7 @@ import yaml
 from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT, REDACTED
 
 from .conftest import require
-from .llm_guard_upstream import ARGUMENTS, PASSWORD, SECRET
+from .llm_guard_upstream import ARGUMENTS, PASSWORD, SECRET, SIGNATURE
 
 pytestmark = pytest.mark.live
 
@@ -40,6 +44,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 UPSTREAM = pathlib.Path(__file__).with_name("llm_guard_upstream.py")
 MASTER = "sk-master-" + uuid4().hex
 MODEL = "platform/standard"
+#: A native Anthropic model added to the chart's config (S40-21d): LiteLLM calls `/v1/messages`.
+ANTHROPIC = "platform/anthropic"
 
 
 @dataclass
@@ -51,14 +57,16 @@ class Gateway:
         minted = httpx.post(
             f"{self.url}/key/generate",
             headers={"Authorization": f"Bearer {MASTER}"},
-            json={"metadata": metadata, "models": [MODEL]},
+            json={"metadata": metadata, "models": [MODEL, ANTHROPIC]},
             timeout=30,
         )
         minted.raise_for_status()
         return str(minted.json()["key"])
 
-    def post(self, key: str, route: str, stream: bool, content: str = "hi") -> httpx.Response:
-        body: dict[str, Any] = {"model": MODEL, "stream": stream}
+    def post(
+        self, key: str, route: str, stream: bool, content: str = "hi", model: str = MODEL
+    ) -> httpx.Response:
+        body: dict[str, Any] = {"model": model, "stream": stream}
         if route == "/v1/responses":
             body["input"] = content
         else:
@@ -69,8 +77,8 @@ class Gateway:
             f"{self.url}{route}", headers={"Authorization": f"Bearer {key}"}, json=body, timeout=60
         )
 
-    def call(self, key: str, route: str, stream: bool, content: str = "hi") -> str:
-        answer = self.post(key, route, stream, content)
+    def call(self, key: str, route: str, stream: bool, content: str = "hi", model: str = MODEL) -> str:
+        answer = self.post(key, route, stream, content, model)
         assert answer.status_code == 200, answer.text
         return answer.text
 
@@ -120,6 +128,18 @@ def _chart_gateway(into: pathlib.Path) -> str:
     (deployment,) = [doc for doc in docs if doc["kind"] == "Deployment"]
     for name, text in config["data"].items():
         (into / name).write_text(text, encoding="utf-8")
+    litellm = yaml.safe_load(config["data"]["config.yaml"])
+    litellm["model_list"].append(
+        {
+            "model_name": ANTHROPIC,
+            "litellm_params": {
+                "model": "anthropic/claude-sonnet-5-5",
+                "api_base": "http://upstream:8080",
+                "api_key": "os.environ/UPSTREAM_API_KEY",
+            },
+        }
+    )
+    (into / "config.yaml").write_text(yaml.safe_dump(litellm, sort_keys=False), encoding="utf-8")
     (container,) = deployment["spec"]["template"]["spec"]["containers"]
     return str(container["image"])
 
@@ -334,3 +354,39 @@ def test_a_marked_key_s_request_reaches_the_provider_masked(gateway: Gateway) ->
     marked, unmarked = (json.dumps(seen["body"]["messages"]) for seen in gateway.seen())
     assert SECRET not in marked and PASSWORD not in marked and REDACTED in marked
     assert SECRET in unmarked
+
+
+#: The routes an `anthropic/` model answers on: Anthropic's own `/v1/messages`, and the chat route
+#: LiteLLM translates it to (`reasoning_content`, `thinking_blocks` with their signature).
+NATIVE = [
+    ("/v1/messages", False),
+    ("/v1/messages", True),
+    ("/v1/chat/completions", False),
+    ("/v1/chat/completions", True),
+]
+
+
+@pytest.mark.parametrize(("route", "stream"), NATIVE)
+def test_a_native_anthropic_answer_is_masked_and_its_masked_thinking_unsigned(
+    gateway: Gateway, route: str, stream: bool
+) -> None:
+    """S40-21d: Anthropic's own stream shape through the guard, and no signature that no longer
+    matches the thinking it signed."""
+    answer = gateway.call(gateway.key({GUARD_METADATA_KEY: GUARD_REDACT}), route, stream, model=ANTHROPIC)
+    read = _read(answer)
+    assert SECRET not in answer and PASSWORD not in answer
+    assert REDACTED in read.words and REDACTED in read.reasoning
+    assert json.loads(read.arguments) == {"path": "k.txt", "content": REDACTED}
+    assert SIGNATURE not in answer, "the signature of a thinking block the guard masked reached the agent"
+
+
+@pytest.mark.parametrize(("route", "stream"), NATIVE)
+def test_a_native_anthropic_answer_reaches_an_unmarked_key_signed(
+    gateway: Gateway, route: str, stream: bool
+) -> None:
+    """The proof that the fake provider signs its thinking and writes secrets: the test above is
+    not vacuous."""
+    answer = gateway.call(gateway.key({"run_id": "r1"}), route, stream, model=ANTHROPIC)
+    read = _read(answer)
+    assert SECRET in read.words and SECRET in read.reasoning
+    assert SIGNATURE in answer

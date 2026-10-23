@@ -25,12 +25,14 @@ the text, a tool call's arguments, the model's reasoning (`reasoning_content`, t
 reasoning summary). What the provider signs or encrypts is left as it is (a thinking block's
 `signature`, a reasoning item's `encrypted_content`, a redacted thinking block): it carries no
 text, and a changed one is refused when the agent sends it back. A thinking block whose text was
-masked no longer matches its signature either; the provider then refuses the next request that
-carries it, which is visible, where the secret would not have been.
+masked is no longer the block the provider signed: it goes out **without its signature**, streamed
+or not, rather than with one that no longer matches (ADR 0084 §6). Sent back as it is, the provider
+refuses it for the missing signature, which is visible, where the secret would not have been.
 
-A streamed answer is held line by line where a secret can straddle chunks: a choice's content and
-reasoning, a tool call's arguments, an Anthropic block's text, JSON or thinking, a Responses
-event's `delta`. Each chunk is then masked whole on its way out, for the fields no channel holds.
+A streamed answer is held line by line where a secret can straddle chunks: a choice's content,
+reasoning and refusal, a tool call's arguments (a legacy `function_call`'s too), an Anthropic
+block's text, JSON or thinking, a Responses event's `delta`. Each chunk is then masked whole on its
+way out, for the fields no channel holds.
 
 Stdlib only: LiteLLM's image has no Choregos package. When LiteLLM is importable the class is a
 `CustomGuardrail`; otherwise a plain class the tests drive the same way.
@@ -120,6 +122,11 @@ def _kind(value: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _field(block: Any, name: str) -> Any:
+    """A block's field, whether LiteLLM hands it over as a dict or as an object."""
+    return block.get(name) if isinstance(block, dict) else getattr(block, name, None)
+
+
 def _walk(value: Any) -> tuple[Any, int]:
     """`value` with its strings masked: lists and dicts rebuilt, any other object in place.
 
@@ -139,19 +146,29 @@ def _walk(value: Any) -> tuple[Any, int]:
             total += count
         return items, total
     if isinstance(value, dict):
-        kind = _kind(value.get("type"))
-        if kind in _OPAQUE_TYPES:
-            return value, 0
-        opaque = _OPAQUE_FIELDS.get(kind or "", frozenset())
-        total = 0
-        out: dict[Any, Any] = {}
-        for key, item in value.items():
-            if key in opaque:
-                out[key] = item
-                continue
-            out[key], count = _walk(item)
-            total += count
-        return out, total
+        return _walk_dict(value)
+    return _walk_object(value)
+
+
+def _walk_dict(value: dict[Any, Any]) -> tuple[Any, int]:
+    kind = _kind(value.get("type"))
+    if kind in _OPAQUE_TYPES:
+        return value, 0
+    opaque = _OPAQUE_FIELDS.get(kind or "", frozenset())
+    total = 0
+    out: dict[Any, Any] = {}
+    for key, item in value.items():
+        if key in opaque:
+            out[key] = item
+            continue
+        out[key], count = _walk(item)
+        total += count
+    if kind == "thinking" and total:
+        out.pop("signature", None)  # masked: no longer the block the provider signed
+    return out, total
+
+
+def _walk_object(value: Any) -> tuple[Any, int]:
     kind = _kind(getattr(value, "type", None))
     if kind in _OPAQUE_TYPES:
         return value, 0
@@ -168,6 +185,8 @@ def _walk(value: Any) -> tuple[Any, int]:
         if count:
             setattr(value, name, masked)
             total += count
+    if kind == "thinking" and total and getattr(value, "signature", None) is not None:
+        value.signature = None  # masked: no longer the block the provider signed
     return value, total
 
 
@@ -275,8 +294,12 @@ class StreamGuard:
         self._held: list[tuple[int, Any]] = []
         self._channels: dict[tuple[Any, ...], _Channel] = {}
         self._events: dict[int, list[dict[str, Any]]] = {}
+        #: A chunk's signatures, with the channel of the thinking they sign: dropped on the way out
+        #: when that channel masked anything.
+        self._signed: dict[int, list[tuple[tuple[Any, ...], Callable[[], None]]]] = {}
         self._next = 0
         self._whole = 0
+        self.unsigned = 0
 
     @property
     def masked(self) -> int:
@@ -284,6 +307,9 @@ class StreamGuard:
 
     def _add(self, key: tuple[Any, ...], slot: _Slot) -> None:
         self._channels.setdefault(key, _Channel()).add(slot)
+
+    def _sign(self, owner: int, key: tuple[Any, ...], unsign: Callable[[], None]) -> None:
+        self._signed.setdefault(owner, []).append((key, unsign))
 
     def _close(self, prefix: tuple[Any, ...]) -> None:
         for key, channel in self._channels.items():
@@ -307,7 +333,7 @@ class StreamGuard:
         for choice in getattr(chunk, "choices", None) or []:
             index = getattr(choice, "index", 0)
             delta = getattr(choice, "delta", None)
-            for field in ("content", "reasoning_content"):
+            for field in ("content", "reasoning_content", "refusal"):
                 text = getattr(delta, field, None)
                 if isinstance(text, str) and text:
 
@@ -316,30 +342,46 @@ class StreamGuard:
 
                     self._add(("chat", index, field), _Slot(owner, text, write))
             for number, block in enumerate(getattr(delta, "thinking_blocks", None) or []):
-                thinking = (
-                    block.get("thinking") if isinstance(block, dict) else getattr(block, "thinking", None)
-                )
-                if isinstance(thinking, str) and thinking:
-
-                    def write_thinking(new: str, block: Any = block) -> None:
-                        if isinstance(block, dict):
-                            block["thinking"] = new
-                        else:
-                            block.thinking = new
-
-                    self._add(("chat", index, "thinking", number), _Slot(owner, thinking, write_thinking))
-            for call in getattr(delta, "tool_calls", None) or []:
-                function = getattr(call, "function", None)
+                self._feed_thinking(owner, ("chat", index, "thinking", number), block)
+            calls: list[tuple[tuple[Any, ...], Any]] = [
+                (("chat", index, "function_call"), getattr(delta, "function_call", None))
+            ]
+            calls += [
+                (("chat", index, "tool", getattr(call, "index", 0)), getattr(call, "function", None))
+                for call in getattr(delta, "tool_calls", None) or []
+            ]
+            for key, function in calls:
                 arguments = getattr(function, "arguments", None)
                 if isinstance(arguments, str) and arguments:
 
                     def write_arguments(text: str, function: Any = function) -> None:
                         function.arguments = text
 
-                    key = ("chat", index, "tool", getattr(call, "index", 0))
                     self._add(key, _Slot(owner, arguments, write_arguments))
             if getattr(choice, "finish_reason", None):
                 self._close(("chat", index))
+
+    def _feed_thinking(self, owner: int, key: tuple[Any, ...], block: Any) -> None:
+        """A chat delta's thinking block: its text is a channel, its signature waits on it."""
+        thinking, signature = _field(block, "thinking"), _field(block, "signature")
+        if isinstance(thinking, str) and thinking:
+
+            def write(new: str, block: Any = block) -> None:
+                if isinstance(block, dict):
+                    block["thinking"] = new
+                else:
+                    block.thinking = new
+
+            self._add(key, _Slot(owner, thinking, write))
+        if signature:
+
+            def unsign(block: Any = block) -> None:
+                if isinstance(block, dict):
+                    block.pop("signature", None)
+                else:
+                    block.signature = None
+
+            self._sign(owner, key, unsign)
 
     def _feed_responses(self, owner: int, event: Any, kind: str) -> None:
         output = getattr(event, "output_index", None)
@@ -388,6 +430,12 @@ class StreamGuard:
                         event["written"] = True  # re-serialized when the chunk goes out
 
                     self._add(("sse", index), _Slot(owner, text, write))
+                elif delta.get("type") == "signature_delta":
+
+                    def drop(event: dict[str, Any] = event) -> None:
+                        event["dropped"] = True
+
+                    self._sign(owner, ("sse", index), drop)
             elif kind == "content_block_stop":
                 self._close(("sse", index))
             elif kind == "message_stop":
@@ -396,6 +444,11 @@ class StreamGuard:
 
     def _render(self, owner: int, chunk: Any) -> Any:
         """The chunk on its way out, masked whole: what no channel held is masked here."""
+        for key, unsign in self._signed.pop(owner, []):
+            channel = self._channels.get(key)
+            if channel is not None and channel.masked:
+                unsign()
+                self.unsigned += 1
         events = self._events.pop(owner, None)
         if events is None:
             self._whole += _walk(chunk)[1]
@@ -405,10 +458,12 @@ class StreamGuard:
                 event["data"], count = _walk(event["data"])
                 self._whole += count
                 event["written"] = event.get("written", False) or bool(count)
-        if not any(event.get("written") for event in events):
+        if not any(event.get("written") or event.get("dropped") for event in events):
             return chunk
         blocks = []
         for event in events:
+            if event.get("dropped"):
+                continue  # the signature of a thinking block the guard masked
             lines = event["raw"].split(b"\n")
             if event.get("written"):
                 payload = b"data: " + json.dumps(event["data"]).encode()
@@ -499,7 +554,11 @@ class ChoregosGuardrail(_Base):  # type: ignore[misc]
         for ready in guard.finish():
             yield ready
         if guard.masked:
-            _logger.info("choregos llm guard masked %d secret(s) in a streamed answer", guard.masked)
+            _logger.info(
+                "choregos llm guard masked %d secret(s) in a streamed answer, dropped %d signature(s)",
+                guard.masked,
+                guard.unsigned,
+            )
 
 
 __all__ = [
