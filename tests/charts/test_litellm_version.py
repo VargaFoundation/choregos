@@ -14,6 +14,8 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "compose.yaml"
+# The live tracing stack says it runs the chart's image: what it proves must be what the chart ships.
+LIVE_OTEL_COMPOSE = ROOT / "tests" / "live" / "otel" / "compose.yaml"
 CHART_VALUES = ROOT / "charts" / "choregos" / "charts" / "litellm" / "values.yaml"
 REPOSITORY = "ghcr.io/berriai/litellm-database"
 # The first release out of GHSA-7hp6-4w63-5g45 on the main line (also fixed: 1.101.3, 1.102.2, 1.103.1).
@@ -26,8 +28,8 @@ def _version(tag: str) -> tuple[int, ...]:
     return tuple(int(part) for part in match.groups())
 
 
-def _compose_tag() -> str:
-    image = yaml.safe_load(COMPOSE.read_text())["services"]["litellm"]["image"]
+def _compose_tag(compose: pathlib.Path = COMPOSE) -> str:
+    image = yaml.safe_load(compose.read_text())["services"]["litellm"]["image"]
     repository, _, tag = image.partition(":")
     assert repository == REPOSITORY, image
     return str(tag)
@@ -49,3 +51,7 @@ def test_the_chart_runs_a_litellm_out_of_the_critical_advisory() -> None:
 
 def test_the_local_install_and_the_chart_run_the_same_litellm() -> None:
     assert _compose_tag() == _chart_tag()
+
+
+def test_the_live_tracing_stack_runs_the_charts_litellm() -> None:
+    assert _compose_tag(LIVE_OTEL_COMPOSE) == _chart_tag()
