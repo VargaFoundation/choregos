@@ -2,7 +2,8 @@
 """An operation may declare its own result cap (S40-17): `connector_operations.result_max_bytes`
 
 The organisation sets it per operation; null keeps the platform's default (#755). Nullable, no
-backfill: every existing operation keeps the default it had.
+backfill: every existing operation keeps the default it had. The downgrade drops the column: every
+operation is back to the default, whatever cap it declared.
 
 Revision ID: b7d1f3a5c9e2
 Revises: e4a6c8d0b2f1

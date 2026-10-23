@@ -3,7 +3,8 @@
 
 One row per model call of a distillation, unique per (knowledge base, digest of what it read), so a
 replayed activity or a repeated distillation does not pay for the same call twice. Under forced RLS
-like every other table of an organisation.
+like every other table of an organisation. The downgrade drops the table: a distillation run after
+it pays again for the calls it had kept.
 
 Revision ID: b3c5d7e9f1a2
 Revises: 3c5e7a9b1d2f

@@ -3,7 +3,8 @@
 
 A grant gives a person, a group or a project a role on one base. Under forced RLS like every other
 table of an organisation. No backfill: implicit owners stay computed from `owner_project`, so the
-behaviour of every existing base is unchanged.
+behaviour of every existing base is unchanged. The downgrade drops the grants and `restricted`: a
+restricted base is open to its scope again.
 
 If the S42-10 migration (`knowledge_distillation_parts`) lands first, rechain `down_revision` after
 it: there must stay one head.
