@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 from choregos_core.memory_scope import (
+    MEMORY_KEY_SETTING,
     global_store_namespace,
+    memory_key,
     memory_namespace,
     parse_namespace,
     project_store_namespace,
@@ -48,3 +50,20 @@ def test_split_namespace_refuses_the_new_forms(namespace: str) -> None:
 def test_malformed_namespaces_raise(namespace: str) -> None:
     with pytest.raises(ValueError):
         parse_namespace(namespace)
+
+
+class _Org:
+    def __init__(self, slug: str, settings: dict[str, str] | None) -> None:
+        self.slug = slug
+        self.settings = settings
+
+
+def test_the_memory_key_is_the_first_slug_else_the_slug() -> None:
+    assert memory_key(_Org("varga", None)) == "varga"
+    assert memory_key(_Org("varga", {})) == "varga"
+    assert memory_key(_Org("diametral", {MEMORY_KEY_SETTING: "varga"})) == "varga"
+    assert memory_key(_Org("diametral", {MEMORY_KEY_SETTING: ""})) == "diametral"
+    namespace = global_store_namespace(
+        memory_key(_Org("diametral", {MEMORY_KEY_SETTING: "varga"})), "lessons"
+    )
+    assert parse_namespace(namespace).org == "varga"

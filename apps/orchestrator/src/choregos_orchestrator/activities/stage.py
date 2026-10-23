@@ -741,7 +741,9 @@ async def _memory_bindings(session: Any, bundle: Any, agent: Any) -> ResolvedMem
         if reason is not None:
             skipped.append({"memory": binding.label, "reason": reason})
             continue
-        namespace = namespace_of_binding(bundle.org_slug, bundle.slug, agent_slug, binding)
+        namespace = namespace_of_binding(
+            bundle.org_memory_key or bundle.org_slug, bundle.slug, agent_slug, binding
+        )
         if namespace is None:  # unreachable: `own` without an agent is refused above
             continue
         resolved.append(

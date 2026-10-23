@@ -2270,13 +2270,31 @@ administrator administers the instance), `organisation : org_admin` under each o
 the enterprise edition, and `project/<slug> : <role>` for each project. `choregos whoami` gives the
 same as a table with an organisation column.
 
+**The Organisation card.** *Administration* opens on the **Organisation** card (S40-24): the display
+name and the cost currency (EUR or USD), which the organisation's administrator changes and saves
+(`PATCH /orgs/{org}` with `name` and `currency`; anyone else sees the fields read-only), and the slug,
+shown read-only with what it is used for. The organisation list and the switcher show the new name at
+once. Only a **platform administrator** also sees *Change the slug*: it opens a confirmation listing what
+the change breaks, asks for the new slug to be typed (lowercase letters, digits and dashes) and, on
+success, switches the console to the new slug and reloads *Administration*. A refusal (`403`, or `409`
+when the slug is taken) is shown on the card.
+
 **Renaming an organisation.** `PATCH /orgs/{org}` changes its `name` (its administrator) or its
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id
-`<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names
+`<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, every A2A address
+`/a2a/orgs/<org>`, the CLI profiles that name `--org <slug>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
 organisation by its id. A platform administrator granted by an edition plugin can rename an
-organisation they do not belong to (the response then carries no `role`). What does not follow: addresses already copied elsewhere (an MCP client's
-configuration), IdP groups that still name the old slug, and `oidc.defaultOrg` if it names it.
+organisation they do not belong to (the response then carries no `role`). What does not follow: addresses
+already copied elsewhere (an MCP client's configuration), CLI profiles, IdP groups that still name the
+old slug, and `oidc.defaultOrg` if it names it.
+
+**Global memories follow a slug change.** They live under a **memory key**, not under the slug: the
+first time an organisation's slug changes, `settings.memory_key` is set to the old slug and never
+overwritten (a second rename keeps the first key); an organisation never renamed uses its slug. The
+namespace `org:<key>#memory:<store>` and the memory backend's tenant `org:<key>` use that key
+everywhere (API, runs, the lexical memory), so no fact is orphaned. A slug that another organisation
+keeps as its memory key cannot be reused (`409`): two organisations would share one memory tenant.
 
 ```bash
 curl -X PATCH $API/orgs/acme -d '{"slug": "acme-corp", "name": "Acme Corporation"}'

@@ -10,6 +10,7 @@ from choregos_orchestrator.activities import stage as stage_activities
 from temporalio.exceptions import ApplicationError
 
 from .conftest import Fixture
+from .test_backend_toggle_enforced import _switch
 
 pytestmark = pytest.mark.asyncio
 
@@ -146,9 +147,21 @@ async def test_an_actor_backend_that_contradicts_the_runtime_is_refused(setup: F
 
 
 async def test_an_acp_runtime_names_the_backend(setup: Fixture, images: None) -> None:
+    # An ACP runtime names a coding-agent backend, so the platform's switch applies (S42-07c).
+    await _switch("opencode", enabled=True)
     await _agent(setup, {"kind": "acp", "backend": "opencode"})
     prepared = await stage_activities.prepare_stage(_plan(setup))
     assert prepared["stage_input"]["agent"]["backend"] == "opencode"
+
+
+async def test_an_acp_runtime_on_a_disabled_backend_is_refused(setup: Fixture, images: None) -> None:
+    """Unlike `code`, `prompt` and `hosted`, an ACP runtime does not fix its backend away from the switch."""
+    await _switch("opencode", enabled=False, reason="under review")
+    await _agent(setup, {"kind": "acp", "backend": "opencode"})
+    with pytest.raises(ApplicationError) as raised:
+        await stage_activities.prepare_stage(_plan(setup))
+    assert raised.value.type == "BackendDisabled" and raised.value.non_retryable
+    assert setup.adapters.gateway.keys == {}
 
 
 async def test_a_prompt_agent_is_carried_by_the_runners_own_loop(setup: Fixture, images: None) -> None:
