@@ -1,0 +1,67 @@
+# The trace path of ADR 0018, for real and on one machine (S40-20b): LiteLLM with the platform's
+# span callback, the bootstrap collector's own configuration, and Tempo. A mocked model answers:
+# no provider key, no cost. Every port is bound to 127.0.0.1.
+#
+#   docker compose -p s4020b -f tests/live/otel/compose.yaml up -d --wait
+#   CHOREGOS_LIVE_OTEL=1 uv run pytest tests/live/test_otel_collector_live.py -m live
+#   docker compose -p s4020b -f tests/live/otel/compose.yaml down -v
+name: s4020b
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: local-dev-only
+      POSTGRES_DB: litellm
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "litellm"]
+      interval: 2s
+      retries: 30
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
+    networks:
+      default:
+        # The name the bootstrap collector exports to.
+        aliases: [tempo.monitoring.svc]
+    ports:
+      - "127.0.0.1:13200:3100"
+
+  collector:
+    # The chart 0.111.0's appVersion, the image `infra/bootstrap/otel-collector.yaml` runs.
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otelcol/relay.yaml"]
+    environment:
+      MY_POD_IP: 0.0.0.0
+    volumes:
+      - ./collector.yaml:/etc/otelcol/relay.yaml:ro
+    depends_on: [tempo]
+    ports:
+      - "127.0.0.1:14318:4318"
+      - "127.0.0.1:18889:8889"
+
+  litellm:
+    # The chart's image (`charts/choregos/charts/litellm/values.yaml`).
+    image: ghcr.io/berriai/litellm-database:v1.95.0
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    user: "1000:1000"
+    environment:
+      LITELLM_MASTER_KEY: sk-local-otel-only
+      DATABASE_URL: postgresql://litellm:local-dev-only@postgres:5432/litellm
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
+    volumes:
+      - ./litellm.yaml:/etc/litellm/config.yaml:ro
+      # The chart's copy, the file the embedded gateway loads.
+      - ../../../charts/choregos/charts/litellm/files/choregos_llm_spans.py:/etc/litellm/choregos_llm_spans.py:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      collector: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/readiness')"]
+      interval: 5s
+      retries: 40
+    ports:
+      - "127.0.0.1:14400:4000"
