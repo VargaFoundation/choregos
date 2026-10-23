@@ -12,6 +12,17 @@ from .conftest import Fixture
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+async def _every_backend_enabled(setup: Fixture) -> None:
+    """A fresh install enables only `claude-code` (S42-07c); these tests rotate across backends."""
+    from choregos_core import KNOWN_BACKEND_NAMES
+
+    from .test_backend_toggle_enforced import _switch
+
+    for name in KNOWN_BACKEND_NAMES:
+        await _switch(name, enabled=True)
+
+
 async def _set_cross_backend(project_id: str, value: bool) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.services import active_policy, policy_model
