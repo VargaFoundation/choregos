@@ -1203,8 +1203,8 @@ without naming one, which you can register, then name in the workflow (`agent: <
 - **Executors (where agent stages run).** Read-only: `agent_sandbox`, `k8s_job`, `tekton`, `aca`,
   `local_docker`, each with a one-line explanation and its set-up procedure. The list is the
   deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
-  chart (`global.runner.allowedExecutors`). `PUT /platform/executors` still exists but has no
-  runtime effect and `GET` ignores what it stores.
+  chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
+  was removed (S42-07b), only the `GET` remains.
 
 ### Models
 
