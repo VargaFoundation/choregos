@@ -212,6 +212,7 @@ function Instance({ org, instance, highlighted }: { org: string; instance: OrgCo
                 <th className="py-1 font-normal">Policy</th>
                 <th className="py-1 font-normal">Project groups</th>
                 <th className="py-1 font-normal">Approver group</th>
+                <th className="py-1 font-normal">Result cap</th>
               </tr>
             </thead>
             <tbody>
@@ -335,6 +336,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
   const [approbateurs, setApprobateurs] = useState(operation.approver_group ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
   const [assouplir, setAssouplir] = useState<OperationPatch["policy"] | null>(null);
+  const [cap, setCap] = useState(operation.result_max_bytes?.toString() ?? "");
   async function changer(corps: OperationPatch) {
     setErreur(null);
     try {
@@ -457,7 +459,70 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
           <span className="text-xs text-ink-muted">A read: nobody approves it</span>
         )}
       </td>
+      <td>
+        <ResultCap
+          id={`cap-${connecteur}-${operation.name}`}
+          operation={operation.name}
+          value={cap}
+          stored={operation.result_max_bytes ?? null}
+          onChange={setCap}
+          onSubmit={(bytes) => void changer({ result_max_bytes: bytes })}
+        />
+      </td>
     </tr>
+  );
+}
+
+/** The least a cap may be; the platform's ceiling is the API's to enforce, with its reason (S40-17). */
+const MIN_RESULT_CAP = 1024;
+
+/**
+ * How much of one result of an operation the agent reads, in bytes (S40-17b). Empty returns it to the
+ * platform's default; below 1024 is not sent.
+ */
+function ResultCap({
+  id,
+  operation,
+  value,
+  stored,
+  onChange,
+  onSubmit,
+}: {
+  id: string;
+  operation: string;
+  value: string;
+  stored: number | null;
+  onChange: (value: string) => void;
+  onSubmit: (bytes: number | null) => void;
+}) {
+  const text = value.trim();
+  const bytes = text === "" ? null : Number(text);
+  const valid = bytes === null || (Number.isInteger(bytes) && bytes >= MIN_RESULT_CAP);
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (valid) onSubmit(bytes);
+      }}
+    >
+      <label className="sr-only" htmlFor={id}>
+        Result cap of {operation}
+      </label>
+      <Input
+        id={id}
+        className="w-32"
+        inputMode="numeric"
+        placeholder="Platform default"
+        aria-invalid={!valid}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <Button size="sm" type="submit" disabled={!valid || bytes === stored}>
+        Set
+      </Button>
+      {!valid && <span className="text-xs text-ink-muted">at least {MIN_RESULT_CAP} bytes</span>}
+    </form>
   );
 }
 

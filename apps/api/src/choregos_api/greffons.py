@@ -165,7 +165,10 @@ def chemins_d_une_section(manifeste: dict[str, Any]) -> list[tuple[str, str]]:
 class FournisseurDOutils:
     """`lister(session, run, projet)` rend des outils au format MCP (`name`, `description`,
     `inputSchema`) ; `appeler(session, run, projet, nom, arguments)` rend `(code HTTP, corps)`.
-    Un code ≥ 400 est une réponse que l'agent lit, pas une panne."""
+    A code of 400 or more is an answer the agent reads, not a failure.
+
+    A listed tool may carry `result_max_bytes` (an integer of at least 1024): how much of its answer
+    the agent reads, as a catalogue entry declares it (S40-17b); the agent is never shown it."""
 
     lister: Any
     appeler: Any

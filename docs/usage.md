@@ -781,13 +781,15 @@ curl -X PATCH "$API/api/v1/orgs/varga/connectors/fournisseur/operations/read_log
 `null` returns it to the default; less than 1024 bytes is refused. Every cap, the default and an
 operation's, is bounded by `CHOREGOS_BROKER_RESULT_CEILING_BYTES` (1 MiB by default): a cap above
 it is refused with a `422` naming the ceiling, and a ceiling lowered later clips the caps already
-set, without rewriting them. The console does not edit this field yet: the API does.
+set, without rewriting them. The console edits it too: *Administration → Installed connectors*, the
+operation's *Result cap* column (empty returns it to the default).
 
 A YAML catalogue tool and a plugin's tool answer through the same cap and the same masking (#759):
 an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, over the cap,
 becomes `{text: <its JSON, cut, with the marker>, truncated}`. A catalogue entry may declare its
-own `result_max_bytes`, bounded by the same ceiling; a plugin's tool has no such declaration and
-stays at the default. Neither declares an output schema.
+own `result_max_bytes`, bounded by the same ceiling, and so may a plugin's tool, beside its `name`
+in what the plugin lists (S40-17b); the agent is not shown it, and a value that is not an integer of
+at least 1024 is refused when the tools are listed. Neither declares an output schema.
 The injection guard then reads what is left (S40-18): an MCP-shaped answer's text blocks and every
 string of its `structuredContent` (S40-18b), any other JSON's strings, keys included; `sandbox.prompt_injection` decides as for a broker result (`warn`
 returns `suspicions` beside the result, `block` withholds it with `status_code: 451`).
