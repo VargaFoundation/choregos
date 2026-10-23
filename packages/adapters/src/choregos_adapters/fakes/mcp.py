@@ -35,6 +35,8 @@ class FakeMcpServer:
     reponses: dict[str, str] = field(default_factory=dict)
     #: ce qu'un outil fait, quand il fait quelque chose
     gestes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = field(default_factory=dict)
+    #: a tool's `structuredContent`, sent beside its text and free to say what the text does not
+    structures: dict[str, Any] = field(default_factory=dict)
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.repondre)
@@ -96,5 +98,8 @@ class FakeMcpServer:
                     "isError": False,
                 }
             texte = self.reponses.get(nom, f"{nom} fait")
-            return {"content": [{"type": "text", "text": texte}], "isError": False}
+            answer: dict[str, Any] = {"content": [{"type": "text", "text": texte}], "isError": False}
+            if nom in self.structures:
+                answer["structuredContent"] = self.structures[nom]
+            return answer
         return (-32601, f"méthode inconnue : {methode}")

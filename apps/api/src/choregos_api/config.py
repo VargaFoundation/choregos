@@ -274,6 +274,12 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 600
     #: Période de recalcul des métriques Prometheus depuis la base (voir `metriques.py`).
     metrics_refresh_seconds: float = 15.0
+    #: Tempo's query address, read by the nightly ledger-vs-trace job (`trace_drift.py`, ADR 0018
+    #: point 3). Empty: the job refuses to run.
+    tempo_url: str = ""
+    #: How far a trace's token count may stray from the ledger's before it is a drift: a share of
+    #: the ledger's figure, never less than one token.
+    trace_drift_tolerance: float = 0.01
     log_level: str = "INFO"
     log_json: bool = True
     fx_usd_eur: float = 0.92

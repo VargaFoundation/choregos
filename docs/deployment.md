@@ -856,7 +856,20 @@ metrics of the `Choregos — Traces` dashboard. An install that set the variable
 global:
   tracing:
     otlpEndpoint: http://otel-collector.monitoring.svc:4318
+    tempoUrl: http://tempo.monitoring.svc:3200   # the nightly ledger-vs-trace job (S40-20c)
 ```
+
+`global.tracing.tempoUrl` renders the CronJob `choregos-trace-drift` (`api.traceDrift.schedule`,
+03:17 by default) and a network policy that opens that port in `monitoring` to its pods only. Each
+night it reads the runs whose spend was collected in the last 24 hours (`api.traceDrift.hours`),
+leaving out the last 30 minutes (`settleMinutes`, spans arrive late), and compares each run's model
+tokens in the ledger with the usage on the gateway's spans of its trace (input and output, within
+`CHOREGOS_TRACE_DRIFT_TOLERANCE`, 1 % of the ledger's figure by default). The ledger is never
+corrected (ADR 0004). A drift is a platform audit line `trace.drift` (no organisation, so only a
+platform session reads it: `GET /audit` as a platform administrator), written once per run; a run
+whose trace has no gateway usage is counted as `missing` and not recorded, since a trace may be
+sampled or dropped. The job prints its counts as one JSON line and fails only when Tempo answers
+with an error. Run it by hand with `python -m choregos_api.trace_drift --hours 72`.
 
 The agent pods are not given the endpoint: their only way out is the run's egress proxy. To trace
 the runner's `invoke_agent` span anyway, set `choregos-orchestrator.runner.env` and open the

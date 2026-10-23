@@ -27,6 +27,20 @@ from choregos_ontology.service.objects import ToolRefusal
 SERVED_KINDS = frozenset({"describe", "search", "get", "link", "action", "status", "list"})
 PAGE = 20
 CLEARANCE = objects.DEFAULT_CLEARANCE
+#: How much of each kind's answer the agent reads (`result_max_bytes`, S40-17c), declared to the
+#: core beside the tool's name. A page of objects (`search`, `link`, `list`, up to
+#: `MAX_SEARCH_LIMIT` of them) and the description of a whole ontology are read whole up to 256 KiB:
+#: past the core's 64 KiB default, a page cut in the middle loses its `next_cursor`. One object, one
+#: proposal or its status stays at 64 KiB, whatever the deployment's default.
+RESULT_CAPS: dict[str, int] = {
+    "describe": 262144,
+    "search": 262144,
+    "link": 262144,
+    "list": 262144,
+    "get": 65536,
+    "action": 65536,
+    "status": 65536,
+}
 #: The key, in an announced tool, that tells the core's MCP gate the tool writes (read by
 #: `choregos_api.mcp`: a protocol key, not prose).
 WRITES_KEY = "ecriture"  # lang: fr-ok - read by the core's MCP gate
@@ -104,7 +118,12 @@ async def list_tools(session: AsyncSession, run: Any, project: Any) -> list[dict
     if version is None:
         return []
     return [
-        {"name": t["name"], "description": t["description"], "inputSchema": t["input_schema"]}
+        {
+            "name": t["name"],
+            "description": t["description"],
+            "inputSchema": t["input_schema"],
+            "result_max_bytes": RESULT_CAPS[t["kind"]],
+        }
         for t in served_tools(version.compiled_ir)
     ]
 

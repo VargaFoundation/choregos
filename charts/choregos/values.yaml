@@ -71,6 +71,10 @@ global:
   # way out is the run's egress proxy.
   tracing:
     otlpEndpoint: ""
+    # Tempo's query address (the bootstrap Tempo: `http://tempo.monitoring.svc:3200`). Set, it renders
+    # the nightly ledger-vs-trace CronJob (`api.traceDrift`, ADR 0018 point 3) and opens that port
+    # in `monitoring` to the job's pods only. Empty: no job.
+    tempoUrl: ""
   # Platform canary (S7-08). Disabled by default: it requires Argo Rollouts in the
   # cluster, and a chart that assumes an absent operator is a chart that does not install.
   # Environments that enable it do so in `values/staging.yaml` and `values/prod.yaml`.

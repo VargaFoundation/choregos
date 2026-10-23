@@ -128,4 +128,22 @@ spec:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: gateway } }
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
         - podSelector: {}
+{{- with (.Values.global.tracing | default dict).tempoUrl }}
+{{- $tempoPort := regexFind "[0-9]+$" (urlParse .).host | default "80" }}
+---
+# The nightly ledger-vs-trace job reads Tempo's query port (ADR 0018 point 3); no other pod does.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-trace-drift-tempo
+  labels: {{- include "choregos.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-trace-drift
+  policyTypes: ["Egress"]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+      ports: [{ protocol: TCP, port: {{ int $tempoPort }} }]
+{{- end }}
 {{- end }}
