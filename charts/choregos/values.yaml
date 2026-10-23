@@ -144,6 +144,11 @@ global:
     # false: cosign does not check the transparency log, for a key whose signatures were never
     # uploaded to Rekor (an air-gapped registry).
     hostedCosignTlog: true
+    # The signature format Kyverno's admission check reads (S41-25b): `bundle`, cosign 3's default (an
+    # OCI referrer), or `legacy`, the `.sig` tag of `cosign sign --new-bundle-format=false`. Kyverno
+    # reads one of them per policy, so an image signed only in the other format is refused at
+    # admission. The API's own check (cosign 3) reads both.
+    hostedCosignFormat: bundle
     # Renders the `choregos-hosted-images` Kyverno ClusterPolicy: in `proj-*` and `choregos-*`, a
     # container, init container or native sidecar whose image is under `hostedRegistries` runs only
     # pinned by `@sha256:` and, under `enforce`, signed by the signer above. Requires Kyverno.
