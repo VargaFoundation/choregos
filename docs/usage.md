@@ -1920,9 +1920,11 @@ web_search:
 The backend is an organisation connector of kind **Web search** (`brave`, `tavily`, `firecrawl`), its
 key sealed in the API. Each type declares what it does with queries; the shipped ones declare **every
 field unknown** (their terms were not reviewed), and an unknown value fails every bound that reads it.
-To use one under a cap, state your contract in the connector's `data_handling`, for example
-`{"query_retention_days": 0, "query_reuse": false, "terms_ref": "contract ref, §4"}`: a declaration
-can only be made stricter, and `terms_ref` is required. A project's policy can narrow (`web_search:
+To use one under a cap, state your contract in the connector's **Data handling** fields (Admin, Connectors:
+retention in days, reuse yes or no, region, and the terms reference, for example retention 0, reuse no,
+terms "contract ref, §4"; stored as `data_handling` in the connector's configuration). The form shows what
+Choregos declares for the backend and refuses a widening or a missing terms reference; a declaration can
+only be made stricter, and the terms reference is required. A project's policy can narrow (`web_search:
 {mode: deny}`, a shorter `max_query_retention_days`) but never widen the ceiling; the `regulated` preset
 sets `max_query_retention_days: 0` and `allow_query_reuse: false`.
 
