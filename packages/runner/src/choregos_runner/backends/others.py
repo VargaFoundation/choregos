@@ -114,6 +114,18 @@ class GooseBackend(Backend):
         }
 
 
+# opencode fetches its model catalogue (models.opencode.ai) at start, checks for updates and may
+# download language servers. The agent uses only the `choregos` provider of its `opencode.json`, so
+# none of it is needed; measured on the dev tenant (2026-10-23), a run made 8 calls to
+# models.opencode.ai:443, each refused by the per-run egress proxy (ADR 0070) and listed under
+# Admin > Network activity. Set in the launch plan, so it holds with or without a gateway key.
+OPENCODE_OFFLINE_ENV: dict[str, str] = {
+    "OPENCODE_DISABLE_MODELS_FETCH": "1",
+    "OPENCODE_DISABLE_AUTOUPDATE": "1",
+    "OPENCODE_DISABLE_LSP_DOWNLOAD": "1",
+}
+
+
 class OpenCodeBackend(Backend):
     name: ClassVar[str] = "opencode"
     skills_dir: ClassVar[str | None] = ".opencode/skills"
@@ -148,7 +160,8 @@ class OpenCodeBackend(Backend):
         }
         return LaunchPlan(
             command=command,
-            env=dict(stage_input.agent.launch.env),
+            # The agent's own `launch.env` comes last, so it can still override these.
+            env={**OPENCODE_OFFLINE_ENV, **stage_input.agent.launch.env},
             files={
                 "opencode.json": json.dumps(config, indent=2, ensure_ascii=False),
                 **stage_input.agent.launch.files,
