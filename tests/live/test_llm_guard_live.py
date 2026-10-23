@@ -13,6 +13,7 @@ Docker and Helm, and an opt-in — it pulls images and takes a minute:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import pathlib
@@ -56,17 +57,20 @@ class Gateway:
         minted.raise_for_status()
         return str(minted.json()["key"])
 
-    def call(self, key: str, route: str, stream: bool, content: str = "hi") -> str:
-        body: dict[str, Any] = {
-            "model": MODEL,
-            "stream": stream,
-            "messages": [{"role": "user", "content": content}],
-        }
+    def post(self, key: str, route: str, stream: bool, content: str = "hi") -> httpx.Response:
+        body: dict[str, Any] = {"model": MODEL, "stream": stream}
+        if route == "/v1/responses":
+            body["input"] = content
+        else:
+            body["messages"] = [{"role": "user", "content": content}]
         if route == "/v1/messages":
             body["max_tokens"] = 50
-        answer = httpx.post(
+        return httpx.post(
             f"{self.url}{route}", headers={"Authorization": f"Bearer {key}"}, json=body, timeout=60
         )
+
+    def call(self, key: str, route: str, stream: bool, content: str = "hi") -> str:
+        answer = self.post(key, route, stream, content)
         assert answer.status_code == 200, answer.text
         return answer.text
 
@@ -132,8 +136,21 @@ def _wait(url: str, seconds: int = 240) -> None:
     raise TimeoutError(url)
 
 
-@pytest.fixture(scope="module")
-def gateway(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Gateway]:
+#: What the guard file becomes in the second gateway: the answer side raises, the request side is
+#: the chart's. LiteLLM must then withhold the answer, never pass it on unmasked.
+SABOTAGE = """
+
+def _fails(*args, **kwargs):
+    raise RuntimeError("the guard fails on purpose")
+
+
+guard_response = _fails
+StreamGuard.feed = _fails
+"""
+
+
+def _files(tmp_path_factory: pytest.TempPathFactory, sabotage: str = "") -> tuple[pathlib.Path, str]:
+    """The chart's LiteLLM files and the fake provider in a directory; returns it and the image."""
     require("CHOREGOS_LIVE_LLM_GUARD")
     for tool in ("docker", "helm"):
         if shutil.which(tool) is None:
@@ -141,9 +158,29 @@ def gateway(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Gateway]:
     files = tmp_path_factory.mktemp("litellm")
     files.chmod(0o755)
     image = _chart_gateway(files)
+    with (files / "choregos_guardrail.py").open("a", encoding="utf-8") as guard:
+        guard.write(sabotage)
     shutil.copy(UPSTREAM, files / UPSTREAM.name)
     for path in files.iterdir():
         path.chmod(0o644)
+    return files, image
+
+
+@pytest.fixture(scope="module")
+def gateway(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Gateway]:
+    with _stack(*_files(tmp_path_factory)) as running:
+        yield running
+
+
+@pytest.fixture(scope="module")
+def broken_gateway(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Gateway]:
+    with _stack(*_files(tmp_path_factory, SABOTAGE)) as running:
+        yield running
+
+
+@contextlib.contextmanager
+def _stack(files: pathlib.Path, image: str) -> Iterator[Gateway]:
+    """PostgreSQL, the fake provider and LiteLLM on a network of their own, removed afterwards."""
     name = f"choregos-llm-guard-{uuid4().hex[:8]}"
     gateway_port, upstream_port = _free_port(), _free_port()
     user = f"{os.getuid()}:{os.getgid()}"
@@ -179,7 +216,18 @@ ROUTES = [
     ("/v1/chat/completions", True),
     ("/v1/messages", False),
     ("/v1/messages", True),
+    ("/v1/responses", False),
+    ("/v1/responses", True),
 ]
+
+
+@dataclass
+class Read:
+    """An answer put back together: its text, its tool call's arguments, the model's reasoning."""
+
+    words: str
+    arguments: str
+    reasoning: str
 
 
 def _events(text: str) -> list[dict[str, Any]]:
@@ -190,29 +238,56 @@ def _events(text: str) -> list[dict[str, Any]]:
     ]
 
 
-def _read(text: str) -> tuple[str, str]:
-    """The answer's text and its tool call's arguments, put back together from whichever shape
-    the route answered in: a stream cuts every secret across chunks."""
+def _read_whole(answer: dict[str, Any]) -> Read:
+    if "choices" in answer:
+        message = answer["choices"][0]["message"]
+        thinking = "".join(block.get("thinking", "") for block in message.get("thinking_blocks") or [])
+        return Read(
+            str(message["content"]),
+            str(message["tool_calls"][0]["function"]["arguments"]),
+            (message.get("reasoning_content") or "") + thinking,
+        )
+    if "output" in answer:
+        items = answer["output"]
+        (call,) = [item for item in items if item["type"] == "function_call"]
+        words = [
+            part.get("text", "") for item in items if item["type"] == "message" for part in item["content"]
+        ]
+        summary = [part["text"] for item in items if item["type"] == "reasoning" for part in item["summary"]]
+        return Read("".join(words), str(call["arguments"]), "".join(summary))
+    blocks = answer["content"]
+    (tool,) = [block for block in blocks if block["type"] == "tool_use"]
+    words = "".join(block["text"] for block in blocks if block["type"] == "text")
+    thinking = "".join(block["thinking"] for block in blocks if block["type"] == "thinking")
+    return Read(words, json.dumps(tool["input"]), thinking)
+
+
+def _read(text: str) -> Read:
+    """The answer put back together from whichever shape the route answered in: a stream cuts
+    every secret across chunks."""
     if not text.startswith(("data:", "event:")):
-        answer = json.loads(text)
-        if "choices" in answer:
-            message = answer["choices"][0]["message"]
-            return str(message["content"]), str(message["tool_calls"][0]["function"]["arguments"])
-        blocks = answer["content"]
-        (tool,) = [block for block in blocks if block["type"] == "tool_use"]
-        words = "".join(block["text"] for block in blocks if block["type"] == "text")
-        return words, json.dumps(tool["input"])
-    words, arguments = [], []
+        return _read_whole(json.loads(text))
+    words, arguments, reasoning = [], [], []
     for event in _events(text):
         for choice in event.get("choices", []):
             delta = choice.get("delta", {})
             words.append(delta.get("content") or "")
+            reasoning.append(delta.get("reasoning_content") or "")
             for call in delta.get("tool_calls") or []:
                 arguments.append(call.get("function", {}).get("arguments") or "")
-        if event.get("type") == "content_block_delta":
+        kind = event.get("type")
+        if kind == "content_block_delta":
             words.append(event["delta"].get("text", ""))
             arguments.append(event["delta"].get("partial_json", ""))
-    return "".join(words), "".join(arguments)
+            reasoning.append(event["delta"].get("thinking", ""))
+        delta = event.get("delta") if isinstance(event.get("delta"), str) else ""
+        if kind == "response.output_text.delta":
+            words.append(delta)
+        if kind == "response.function_call_arguments.delta":
+            arguments.append(delta)
+        if kind == "response.reasoning_summary_text.delta":
+            reasoning.append(delta)
+    return Read("".join(words), "".join(arguments), "".join(reasoning))
 
 
 @pytest.mark.parametrize(("route", "stream"), ROUTES)
@@ -220,11 +295,12 @@ def test_a_marked_key_never_sees_a_secret_in_the_model_s_answer(
     gateway: Gateway, route: str, stream: bool
 ) -> None:
     answer = gateway.call(gateway.key({GUARD_METADATA_KEY: GUARD_REDACT}), route, stream)
-    words, arguments = _read(answer)
-    for seen in (answer, words):
-        assert SECRET not in seen and PASSWORD not in seen
-    assert REDACTED in words
-    assert json.loads(arguments) == {"path": "k.txt", "content": REDACTED}
+    read = _read(answer)
+    # The whole body: a stream's `.done` events and its final response repeat the text whole.
+    assert SECRET not in answer and PASSWORD not in answer
+    assert REDACTED in read.words
+    assert json.loads(read.arguments) == {"path": "k.txt", "content": REDACTED}
+    assert REDACTED in read.reasoning, "the model's reasoning reached the agent, masked"
 
 
 @pytest.mark.parametrize(("route", "stream"), ROUTES)
@@ -232,9 +308,22 @@ def test_an_unmarked_key_gets_the_answer_as_the_provider_wrote_it(
     gateway: Gateway, route: str, stream: bool
 ) -> None:
     """The proof that the fake provider does answer with secrets: the test above is not vacuous."""
-    words, arguments = _read(gateway.call(gateway.key({"run_id": "r1"}), route, stream))
-    assert SECRET in words and PASSWORD in words and REDACTED not in words
-    assert json.loads(arguments) == json.loads(ARGUMENTS)
+    read = _read(gateway.call(gateway.key({"run_id": "r1"}), route, stream))
+    assert SECRET in read.words and PASSWORD in read.words and REDACTED not in read.words
+    assert json.loads(read.arguments) == json.loads(ARGUMENTS)
+    assert SECRET in read.reasoning and PASSWORD in read.reasoning
+
+
+@pytest.mark.parametrize(("route", "stream"), ROUTES)
+def test_an_answer_the_guard_fails_on_is_withheld_not_passed_on(
+    broken_gateway: Gateway, route: str, stream: bool
+) -> None:
+    """Fail closed, in LiteLLM itself: the guard's answer side raises, nothing of the answer leaves."""
+    answer = broken_gateway.post(broken_gateway.key({GUARD_METADATA_KEY: GUARD_REDACT}), route, stream)
+    assert SECRET not in answer.text and PASSWORD not in answer.text
+    assert "bye" not in answer.text, answer.text
+    if not stream:
+        assert answer.status_code >= 500, answer.text
 
 
 def test_a_marked_key_s_request_reaches_the_provider_masked(gateway: Gateway) -> None:

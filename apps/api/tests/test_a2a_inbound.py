@@ -32,14 +32,17 @@ async def _token(client: AsyncClient, *scopes: str, project: str | None = None) 
     return str(created.json()["token"])
 
 
-async def _publish(client: AsyncClient, project: dict[str, Any], *, opt_in: bool = True) -> None:
+async def _publish(
+    client: AsyncClient, project: dict[str, Any], *, opt_in: bool = True, modes: list[str] | None = None
+) -> None:
     from choregos_core.dsl import template_yaml
 
     tracker = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
     )
     assert tracker.status_code == 200, tracker.text
-    text = template_yaml("default-simple").rstrip("\n") + "\n" + (OPT_IN if opt_in else "")
+    block = OPT_IN + (f"  input_modes: [{', '.join(modes)}]\n" if modes else "")
+    text = template_yaml("default-simple").rstrip("\n") + "\n" + (block if opt_in else "")
     published = await client.put(f"/api/v1/projects/{project['id']}/workflow", json={"yaml": text})
     assert published.status_code == 200, published.text
 
@@ -71,8 +74,10 @@ async def _send(client: AsyncClient, token: str, text: str = "Add credit notes",
     return dict(answer.json()["result"])
 
 
-async def _ready(client: AsyncClient, project: dict[str, Any], *, opt_in: bool = True) -> str:
-    await _publish(client, project, opt_in=opt_in)
+async def _ready(
+    client: AsyncClient, project: dict[str, Any], *, opt_in: bool = True, modes: list[str] | None = None
+) -> str:
+    await _publish(client, project, opt_in=opt_in, modes=modes)
     token = await _token(client, "a2a")
     client.cookies.clear()
     return token
@@ -201,12 +206,213 @@ async def test_the_parts_are_capped(client: AsyncClient, project: dict[str, Any]
     long = (await _rpc(client, token, "message/send", _message("y" * 100_001))).json()
     assert long["error"]["code"] == -32602
     with_file = _message("x")
-    with_file["message"]["parts"].append({"kind": "file", "file": {"name": "a", "bytes": "eA=="}})
-    assert (await _rpc(client, token, "message/send", with_file)).json()["error"]["code"] == -32005
+    with_file["message"]["parts"].append(
+        {"kind": "file", "file": {"name": "a", "mimeType": "application/pdf", "bytes": "eA=="}}
+    )
+    refused = (await _rpc(client, token, "message/send", with_file)).json()
+    assert refused["error"]["code"] == -32005, "the skill does not list application/pdf"
     data = _message("x")
     data["message"]["parts"].append({"kind": "data", "data": {"k": 1}})
     refused = (await _rpc(client, token, "message/send", data)).json()
     assert refused["error"]["code"] == -32005, "the skill takes text/plain only"
+
+
+# ───────────────────────────── file parts (ADR 0078 §6) ─────────────────────────────
+
+PDF = b"%PDF-1.7 a signed contract"
+FILE_MODES = ["text/plain", "application/pdf"]
+
+
+def _file(name: str | None, data: bytes, mime: str | None = "application/pdf") -> dict[str, Any]:
+    import base64
+
+    file: dict[str, Any] = {"bytes": base64.b64encode(data).decode()}
+    if name is not None:
+        file["name"] = name
+    if mime is not None:
+        file["mimeType"] = mime
+    return {"kind": "file", "file": file}
+
+
+def _with_files(*parts: dict[str, Any], message_id: str = "m-f") -> dict[str, Any]:
+    message = _message("Review the contract", message_id=message_id)
+    message["message"]["parts"].extend(parts)
+    return message
+
+
+@pytest.fixture
+def store() -> Any:
+    from choregos_adapters.fakes import FakeObjectStore
+    from choregos_api.object_store import use_object_store
+
+    fake = FakeObjectStore()
+    use_object_store(fake)
+    yield fake
+    use_object_store(None)
+
+
+async def test_a_file_part_is_an_input_artefact_a_step_reads(
+    client: AsyncClient, project: dict[str, Any], store: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.a2a import door
+    from choregos_api.db.models import ArtifactRecord, AuditLog, Project, Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import mint_run_token
+    from choregos_api.temporal import get_temporal
+    from choregos_contracts import artifact_digest
+    from sqlalchemy import select
+
+    token = await _ready(client, project, modes=FILE_MODES)
+    order: list[str] = []
+    real_start, real_record = door.start_work_item, door.record_input_file
+
+    async def start(owner: Any, item: Any) -> None:
+        order.append("start")
+        await real_start(owner, item)
+
+    async def record_file(session: Any, **kw: Any) -> Any:
+        order.append(f"record {kw['stored'].name}")
+        return await real_record(session, **kw)
+
+    monkeypatch.setattr(door, "start_work_item", start)
+    monkeypatch.setattr("choregos_api.services.tickets.start_work_item", start)
+    monkeypatch.setattr(door, "record_input_file", record_file)
+    answer = (await _rpc(client, token, "message/send", _with_files(_file("contract.pdf", PDF)))).json()
+    task = answer["result"]
+    assert order == ["record contract.pdf", "start"], "the interpreter starts once the file is recorded"
+    assert any(task["id"] in str(payload) for payload in get_temporal().started.values())  # type: ignore[attr-defined]
+    again = (await _rpc(client, token, "message/send", _with_files(_file("contract.pdf", PDF)))).json()
+    assert again["result"]["id"] == task["id"]
+    assert store.puts == 1, "a resent message stores nothing"
+
+    async with session_scope() as session:
+        rows = list((await session.execute(select(ArtifactRecord))).scalars())
+        audits = list(
+            (
+                await session.execute(select(AuditLog).where(AuditLog.action == "workitem.input_file"))
+            ).scalars()
+        )
+        item = await session.get(WorkItem, task["id"])
+        assert item is not None
+        assert "`contract.pdf` (application/pdf" in (item.body_snapshot or "")
+        session.add(
+            Run(
+                id="run-review",
+                work_item_id=item.id,
+                project_id=project["id"],
+                stage_role="review",
+                status="running",
+                stage_input={"transition": {"outputs": [], "inputs": ["contract.pdf"]}},
+            )
+        )
+        key = item.tracker_key
+    assert [(r.name, r.type, r.media_type, r.digest) for r in rows] == [
+        ("contract.pdf", "pdf", "application/pdf", artifact_digest(PDF))
+    ]
+    assert rows[0].run_id == f"a2a:{task['id']}" and rows[0].storage_key in store.objects
+    assert [(a.payload["name"], a.payload["size"]) for a in audits] == [("contract.pdf", len(PDF))]
+
+    headers = {
+        "Authorization": "Bearer "
+        + mint_run_token("run-review", project_slug="billing-api", work_item_key=key, ttl_minutes=5)
+    }
+    listed = (await client.get("/api/v1/internal/runs/run-review/inputs", headers=headers)).json()
+    assert [(f["name"], f["filename"], f["digest"]) for f in listed] == [
+        ("contract.pdf", "contract.pdf", artifact_digest(PDF))
+    ]
+    read = await client.get("/api/v1/internal/runs/run-review/inputs/contract.pdf", headers=headers)
+    assert read.status_code == 200 and read.content == PDF
+    from choregos_api.services.artifacts import producing_runs
+
+    async with session_scope() as session:
+        sources = await producing_runs(session, task["id"], ["contract.pdf"], {}, reader="run-review")
+    assert sources == [], "a file the caller sent is no run of the chain"
+
+    async with session_scope() as session:
+        done = await session.get(WorkItem, task["id"])
+        owner = await session.get(Project, project["id"])
+        assert done is not None and owner is not None
+        done.state = "deployed_prod"
+    completed = (await _rpc(client, token, "tasks/get", {"id": task["id"]})).json()["result"]
+    assert completed["status"]["state"] == "completed"
+    assert "contract.pdf" not in [a["name"] for a in completed.get("artifacts", [])], "not sent back"
+
+
+async def test_file_parts_are_bounded_by_the_project(
+    client: AsyncClient, project: dict[str, Any], store: Any
+) -> None:
+    from choregos_api.db.models import ArtifactRecord, Project, WorkItem
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    token = await _ready(client, project, modes=FILE_MODES)
+    async with session_scope() as session:
+        owner = await session.get(Project, project["id"])
+        assert owner is not None
+        owner.config = {**owner.config, "a2a": {"max_file_bytes": 10}}
+
+    async def code(*parts: dict[str, Any]) -> tuple[int, str]:
+        error = (await _rpc(client, token, "message/send", _with_files(*parts))).json()["error"]
+        return error["code"], error["message"]
+
+    assert await code(_file("big.pdf", b"x" * 11)) == (
+        -32602,
+        "file `big.pdf` too large: 10 bytes at most for this project",
+    )
+    assert (await code(_file("a.pdf", b"x" * 6), _file("b.pdf", b"y" * 6)))[1].endswith(
+        "10 bytes at most together for this project"
+    )
+    uri = {"kind": "file", "file": {"uri": "https://elsewhere.example/c.pdf", "mimeType": "application/pdf"}}
+    assert (await code(uri))[0] == -32602 and "`uri` is not fetched" in (await code(uri))[1]
+    assert (await code(_file("p.png", b"png", mime="image/png")))[0] == -32005, (
+        "not in the skill's input modes"
+    )
+    assert "names its `mimeType`" in (await code(_file("c.pdf", b"x", mime=None)))[1]
+    assert (
+        "not base64"
+        in (
+            await code(
+                {"kind": "file", "file": {"name": "c.pdf", "mimeType": "application/pdf", "bytes": "%%%"}}
+            )
+        )[1]
+    )
+    assert "file name refused" in (await code(_file("../c.pdf", b"x")))[1]
+    assert "two files named" in (await code(_file("c.pdf", b"x"), _file("c.pdf", b"y")))[1]
+
+    store.fail_next()
+    assert (await code(_file("c.pdf", b"x")))[0] == -32603, "a store that fails creates nothing"
+    async with session_scope() as session:
+        assert not list((await session.execute(select(WorkItem))).scalars())
+        assert not list((await session.execute(select(ArtifactRecord))).scalars())
+    assert not store.objects
+
+    named = (await _rpc(client, token, "message/send", _with_files(_file(None, b"x")))).json()["result"]
+    async with session_scope() as session:
+        names = [r.name for r in (await session.execute(select(ArtifactRecord))).scalars()]
+    assert named["id"] and names == ["attachment-1"], "a file without a name gets one"
+
+
+async def test_the_door_reads_a_body_only_as_large_as_the_organisation_takes(
+    client: AsyncClient, project: dict[str, Any], store: Any
+) -> None:
+    from choregos_api.a2a.door import MAX_BODY
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+    from choregos_api.mcp.transport import TAILLE_MAX_DU_CORPS
+
+    token = await _ready(client, project, modes=FILE_MODES)
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    too_large = await client.post(
+        ENDPOINT, content=b"{}", headers={**headers, "Content-Length": str(MAX_BODY + 1)}
+    )
+    assert too_large.status_code == 413
+    async with session_scope() as session:
+        owner = await session.get(Project, project["id"])
+        assert owner is not None
+        owner.config = {**owner.config, "a2a": {"max_file_bytes": 10}}
+    body = b" " * (TAILLE_MAX_DU_CORPS + 17)
+    refused = await client.post(ENDPOINT, content=body, headers=headers)
+    assert refused.status_code == 413 and "for this organisation" in refused.text
 
 
 # ───────────────────────────── no decision over A2A ─────────────────────────────

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
@@ -82,12 +83,13 @@ async def producing_runs(
 
     `documents` are the values the step's prompt embeds: one that no longer equals its latest
     revision was edited by a person after the run, and that run is not where the step's value came
-    from, so it is left out rather than credited. The reader itself is never its own source.
+    from, so it is left out rather than credited. The reader itself is never its own source, and a
+    file the caller sent is no run: the chain's initiator already names who sent it.
     """
     runs: list[str] = []
     for name in dict.fromkeys(names):
         row = await latest(session, work_item_id, name)
-        if row is None or row.run_id == reader or row.run_id in runs:
+        if row is None or row.run_id == reader or row.run_id in runs or sent_by_caller(row):
             continue
         if name in documents and row.storage_key is None and row.content not in _as_recorded(documents[name]):
             continue
@@ -100,7 +102,7 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
     *,
     org_id: str,
     item: WorkItem,
-    run: Run,
+    run: Run | None,
     name: str,
     type_: str,
     digest: str,
@@ -108,8 +110,12 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
     content: Any = None,
     key: str | None = None,
     url: str | None = None,
+    producer: str | None = None,
 ) -> ArtifactRecord:
     entry = artifact_type(type_)
+    produced_by = run.id if run is not None else producer
+    if produced_by is None:
+        raise ValueError(f"artifact `{name}`: a revision names its producer")
     for _ in range(_ROUNDS):
         previous = await latest(session, item.id, name)
         if previous is not None and previous.digest == digest:
@@ -127,11 +133,11 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
             content=content,
             storage_key=key,
             storage_url=url,
-            run_id=run.id,
-            stage=run.stage_role,
-            attempt=run.attempt,
-            agent_slug=run.agent_slug,
-            agent_version=run.agent_version,
+            run_id=produced_by,
+            stage=run.stage_role if run is not None else None,
+            attempt=run.attempt if run is not None else None,
+            agent_slug=run.agent_slug if run is not None else None,
+            agent_version=run.agent_version if run is not None else None,
         )
         try:
             async with session.begin_nested():
@@ -233,6 +239,66 @@ async def store_file(
         size=len(data),
         key=key,
         url=url,
+    )
+
+
+#: The producer of a file a caller sent with its message (ADR 0078 §6): `a2a:<task id>`, not a run.
+SENT_BY_A2A = "a2a:"
+
+
+def sent_by_caller(row: ArtifactRecord) -> bool:
+    """An input artefact a caller sent, as opposed to an output a step produced."""
+    return row.run_id.startswith(SENT_BY_A2A)
+
+
+@dataclass(frozen=True, slots=True)
+class StoredInput:
+    """A file a caller sent, already in the object store, waiting for its work item's row."""
+
+    name: str
+    type: str
+    digest: str
+    size: int
+    key: str
+    url: str
+
+
+async def put_input_file(
+    store: ObjectStore, *, org_id: str, work_item_id: str, name: str, type_: str, data: bytes
+) -> StoredInput:
+    """Writes a file a caller sent with its A2A message to the object store (ADR 0078 §6).
+
+    Done before the work item exists, under the id it will have: a store that fails then leaves
+    no work item behind, and content addressing makes a retry write the same object.
+    """
+    if not _NAME.fullmatch(name):
+        raise ValueError(f"artifact name `{name}` refused: {ARTIFACT_NAME_PATTERN}")
+    entry = artifact_type(type_)
+    digest = artifact_digest(data)
+    key = storage_key(org_id, work_item_id, name, digest)
+    url = await store.put(key, data, entry.media_type)
+    return StoredInput(name=name, type=type_, digest=digest, size=len(data), key=key, url=url)
+
+
+async def record_input_file(
+    session: AsyncSession, *, org_id: str, item: WorkItem, stored: StoredInput
+) -> ArtifactRecord:
+    """The input artefact of a file a caller sent: stored like a step's file, produced by no run.
+
+    Its producer is `a2a:<work item id>`; a step reads it by declaring its name in `inputs`.
+    """
+    return await _record(
+        session,
+        org_id=org_id,
+        item=item,
+        run=None,
+        producer=f"{SENT_BY_A2A}{item.id}",
+        name=stored.name,
+        type_=stored.type,
+        digest=stored.digest,
+        size=stored.size,
+        key=stored.key,
+        url=stored.url,
     )
 
 

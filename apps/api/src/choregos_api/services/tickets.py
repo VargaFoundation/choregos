@@ -405,17 +405,7 @@ async def creer_un_ticket(
         title=demande.title,
     )
     if demande.start:
-        workflow_id = interpreter_id(project.slug, key)
-        await get_temporal().start_interpreter(
-            workflow_id,
-            {
-                "project_id": project.id,
-                "project_slug": project.slug,
-                "work_item_id": item.id,
-                "tracker_key": key,
-            },
-        )
-        item.temporal_wf_id = workflow_id
+        await start_work_item(project, item)
     await record(
         session,
         principal,
@@ -428,6 +418,24 @@ async def creer_un_ticket(
         tracker=row.type if row is not None else "internal",
     )
     return item
+
+
+async def start_work_item(project: Project, item: WorkItem) -> None:
+    """Starts the work item's interpreter: what `creer_un_ticket` does unless `start=False`.
+
+    The A2A door starts it itself, once the files a message carried are stored: the first step
+    must find the inputs it declares (ADR 0078 §6)."""
+    workflow_id = interpreter_id(project.slug, item.tracker_key)
+    await get_temporal().start_interpreter(
+        workflow_id,
+        {
+            "project_id": project.id,
+            "project_slug": project.slug,
+            "work_item_id": item.id,
+            "tracker_key": item.tracker_key,
+        },
+    )
+    item.temporal_wf_id = workflow_id
 
 
 async def _classer_dans_le_tracker(

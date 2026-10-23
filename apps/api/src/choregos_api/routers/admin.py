@@ -144,9 +144,9 @@ async def list_executors(principal: Me) -> list[ExecutorInfo]:
     """The executors this deployment runs agent stages on, read from its own configuration.
 
     Always the deployment's answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`, the
-    chart's `global.runner.allowedExecutors`), never a stored row: nothing reads `ExecutorRow` at
-    runtime (ADR 0072), so listing it would show the console a list that nothing applies, and it
-    would hide the real one (S42-07). Not a hand-written list either: it used to claim Tekton was
+    chart's `global.runner.allowedExecutors`), never a stored row: the table is dropped (S42-07d,
+    ADR 0072), as a stored list showed the console a list that nothing applied and hid the real
+    one (S42-07). Not a hand-written list either: it used to claim Tekton was
     on everywhere, and a project that picked it on a cluster without Tekton died at its first run.
     """
     allowed = allowed_executor_kinds()

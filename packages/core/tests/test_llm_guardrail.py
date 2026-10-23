@@ -316,3 +316,210 @@ def test_a_long_line_is_released_at_a_space_after_hold_max(monkeypatch: pytest.M
         guard.feed(SimpleNamespace(choices=[SimpleNamespace(index=0, delta=delta, finish_reason=None)]))
         out += guard.ready()
     assert _chat_text(out)[0].startswith("one two three four")
+
+
+# The model's reasoning, `/v1/responses`, and a guard that fails (S40-21c).
+_REASONING = f"The file holds {_AWS}\nso I clone https://bot:{_PASSWORD}@git.example/a.git\n"
+_MASKED_REASONING = mask(_REASONING)[0]
+#: What the provider signs or encrypts; shaped like a secret on purpose: it must still go out as is.
+_OPAQUE = "sk-" + "Z" * 40
+_MARKED = {GUARD_METADATA_KEY: GUARD_REDACT}
+
+
+def _responses_answer() -> SimpleNamespace:
+    """LiteLLM's `ResponsesAPIResponse`: a reasoning item, a message, a function call."""
+    summary = SimpleNamespace(type="summary_text", text=_REASONING)
+    reasoning = SimpleNamespace(type="reasoning", id="rs_1", summary=[summary], encrypted_content=_OPAQUE)
+    text = SimpleNamespace(type="output_text", text=_ANSWER, annotations=[])
+    message = SimpleNamespace(type="message", id="msg_1", role="assistant", content=[text])
+    call = SimpleNamespace(type="function_call", id="fc_1", name="write_file", arguments=_ARGUMENTS)
+    return SimpleNamespace(id="resp_1", object="response", output=[reasoning, message, call])
+
+
+@pytest.mark.asyncio
+async def test_a_responses_answer_is_masked_its_reasoning_too_its_encrypted_content_left() -> None:
+    reasoning, message, call = (await _answer(_responses_answer(), _MARKED)).output
+    assert message.content[0].text == _MASKED_ANSWER
+    assert json.loads(call.arguments) == {"path": "k.txt", "content": REDACTED}
+    assert reasoning.summary[0].text == _MASKED_REASONING
+    assert reasoning.encrypted_content == _OPAQUE
+
+
+@pytest.mark.asyncio
+async def test_a_chat_answer_s_reasoning_and_thinking_are_masked_the_signature_left() -> None:
+    answer = _chat_answer()
+    message = answer.choices[0].message
+    message.reasoning_content = _REASONING
+    message.thinking_blocks = [{"type": "thinking", "thinking": _REASONING, "signature": _OPAQUE}]
+    message.refusal = f"I will not print {_GH}"
+    masked = (await _answer(answer, _MARKED)).choices[0].message
+    assert masked.reasoning_content == _MASKED_REASONING
+    assert masked.thinking_blocks == [
+        {"type": "thinking", "thinking": _MASKED_REASONING, "signature": _OPAQUE}
+    ]
+    assert masked.refusal == f"I will not print {REDACTED}", "a field with no rule of its own is read too"
+
+
+@pytest.mark.asyncio
+async def test_an_anthropic_answer_s_thinking_is_masked_what_is_signed_or_encrypted_left() -> None:
+    answer = _anthropic_answer()
+    answer["content"][:0] = [
+        {"type": "thinking", "thinking": _REASONING, "signature": _OPAQUE},
+        {"type": "redacted_thinking", "data": _OPAQUE},
+    ]
+    answer["content"][3]["input"]["signature"] = _GH
+    thinking, redacted, text, tool = (await _answer(answer, _MARKED))["content"]
+    assert thinking == {"type": "thinking", "thinking": _MASKED_REASONING, "signature": _OPAQUE}
+    assert redacted == {"type": "redacted_thinking", "data": _OPAQUE}
+    assert text["text"] == _MASKED_ANSWER
+    assert tool["input"] == {"path": "k.txt", "content": REDACTED, "signature": REDACTED}, (
+        "a tool's `signature` argument is the model's text: opaque is a block's type, never a key name"
+    )
+
+
+def _chat_reasoning_stream() -> list[SimpleNamespace]:
+    """Reasoning first, cut every 5 characters, both as `reasoning_content` and a thinking block."""
+
+    def chunk(**delta: Any) -> SimpleNamespace:
+        return SimpleNamespace(
+            choices=[SimpleNamespace(index=0, delta=SimpleNamespace(**delta), finish_reason=None)]
+        )
+
+    chunks = [
+        chunk(reasoning_content=piece, thinking_blocks=[{"type": "thinking", "thinking": piece}])
+        for piece in _pieces(_REASONING, 5)
+    ]
+    chunks.append(chunk(thinking_blocks=[{"type": "thinking", "thinking": "", "signature": _OPAQUE}]))
+    return chunks + _chat_stream()
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_chat_reasoning_is_masked_though_each_secret_straddles_chunks() -> None:
+    chunks = await _streamed(_chat_reasoning_stream(), _MARKED)
+    assert len(chunks) == len(_chat_reasoning_stream())
+    deltas = [chunk.choices[0].delta for chunk in chunks]
+    assert "".join(getattr(d, "reasoning_content", None) or "" for d in deltas) == _MASKED_REASONING
+    blocks = [block for d in deltas for block in getattr(d, "thinking_blocks", None) or []]
+    assert "".join(block["thinking"] for block in blocks) == _MASKED_REASONING
+    assert blocks[-1]["signature"] == _OPAQUE
+    assert _chat_text(chunks)[0] == _MASKED_ANSWER
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_anthropic_thinking_is_masked_its_signature_left() -> None:
+    def delta(kind: str, field: str, text: str) -> bytes:
+        return _sse({"type": "content_block_delta", "index": 0, "delta": {"type": kind, field: text}})
+
+    events = [_sse({"type": "content_block_start", "index": 0, "content_block": {"type": "thinking"}})]
+    events += [delta("thinking_delta", "thinking", piece) for piece in _pieces(_REASONING, 5)]
+    events += [
+        delta("signature_delta", "signature", _OPAQUE),
+        _sse({"type": "content_block_stop", "index": 0}),
+    ]
+    chunks = await _streamed(events, _MARKED)
+    assert len(chunks) == len(events)
+    sent = [json.loads(chunk.split(b"\ndata: ")[1]) for chunk in chunks]
+    thinking = "".join(event["delta"].get("thinking", "") for event in sent if "delta" in event)
+    assert thinking == _MASKED_REASONING
+    assert chunks[-2] == events[-2], "the signature goes out byte for byte"
+
+
+def _responses_stream() -> list[SimpleNamespace]:
+    """LiteLLM's Responses events: deltas cut every 5 characters, then `.done` events repeating the
+    text whole, then the final response."""
+
+    def event(kind: str, **fields: Any) -> SimpleNamespace:
+        return SimpleNamespace(type=kind, **fields)
+
+    events = [event("response.created", response=SimpleNamespace(output=[]))]
+    events += [
+        event("response.reasoning_summary_text.delta", output_index=0, summary_index=0, delta=piece)
+        for piece in _pieces(_REASONING, 5)
+    ]
+    events.append(
+        event("response.reasoning_summary_text.done", output_index=0, summary_index=0, text=_REASONING)
+    )
+    events += [
+        event("response.output_text.delta", output_index=1, content_index=0, delta=piece)
+        for piece in _pieces(_ANSWER, 5)
+    ]
+    events.append(event("response.output_text.done", output_index=1, content_index=0, text=_ANSWER))
+    events += [
+        event("response.function_call_arguments.delta", output_index=2, delta=piece)
+        for piece in _pieces(_ARGUMENTS, 4)
+    ]
+    events.append(event("response.function_call_arguments.done", output_index=2, arguments=_ARGUMENTS))
+    return [*events, event("response.completed", response=_responses_answer())]
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_responses_answer_is_masked_its_deltas_its_done_events_its_final_response() -> None:
+    chunks = await _streamed(_responses_stream(), _MARKED)
+    assert len(chunks) == len(_responses_stream())
+
+    def joined(kind: str) -> str:
+        return "".join(chunk.delta for chunk in chunks if chunk.type == kind)
+
+    assert joined("response.reasoning_summary_text.delta") == _MASKED_REASONING
+    assert joined("response.output_text.delta") == _MASKED_ANSWER
+    assert json.loads(joined("response.function_call_arguments.delta")) == {
+        "path": "k.txt",
+        "content": REDACTED,
+    }
+    done = {chunk.type: chunk for chunk in chunks if chunk.type.endswith(".done")}
+    assert done["response.output_text.done"].text == _MASKED_ANSWER
+    assert done["response.reasoning_summary_text.done"].text == _MASKED_REASONING
+    reasoning, message, _call = chunks[-1].response.output
+    assert message.content[0].text == _MASKED_ANSWER and reasoning.encrypted_content == _OPAQUE
+    assert await _streamed(_responses_stream(), None) != chunks, "the unmarked stream is the provider's"
+
+
+@pytest.mark.asyncio
+async def test_a_chunk_field_no_channel_reads_is_masked_whole_on_its_way_out() -> None:
+    chunk = SimpleNamespace(choices=[], provider_specific_fields={"note": f"key {_AWS}"})
+    (sent,) = await _streamed([chunk], _MARKED)
+    assert sent.provider_specific_fields == {"note": f"key {REDACTED}"}
+    start = {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {"type": "text", "text": f"key {_AWS}"},
+    }
+    (event,) = await _streamed([_sse(start)], _MARKED)
+    assert json.loads(event.split(b"\ndata: ")[1])["content_block"]["text"] == f"key {REDACTED}"
+
+
+def _failing_mask(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The guard breaks on the first text that holds the secret, as a bug or a new shape would."""
+    real = llm_guardrail.mask
+
+    def failing(text: str) -> tuple[str, int]:
+        if _AWS in text:
+            raise RuntimeError("the guard fails")
+        return real(text)
+
+    monkeypatch.setattr(llm_guardrail, "mask", failing)
+
+
+@pytest.mark.asyncio
+async def test_a_guard_that_fails_on_an_answer_withholds_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    _failing_mask(monkeypatch)
+    with pytest.raises(RuntimeError, match="the guard fails"):
+        await _answer(_chat_answer(), _MARKED)
+
+
+@pytest.mark.asyncio
+async def test_a_guard_that_fails_on_a_stream_stops_it_before_the_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _failing_mask(monkeypatch)
+
+    async def upstream() -> AsyncIterator[Any]:
+        for chunk in _chat_stream():
+            yield chunk
+
+    guard = ChoregosGuardrail(guardrail_name="choregos-secrets", event_hook="post_call", default_on=True)
+    sent: list[Any] = []
+    with pytest.raises(RuntimeError, match="the guard fails"):
+        async for chunk in guard.async_post_call_streaming_iterator_hook(_Key(_MARKED), upstream(), {}):
+            sent.append(chunk)
+    assert _chat_text(sent) == ("", ""), "the first line holds the secret: no text of it went out"
