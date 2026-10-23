@@ -16,7 +16,7 @@ spec:
         any:
           - resources:
               kinds: [Pod]
-              namespaces: ["choregos-*", "proj-*"]
+              namespaces: ["choregos", "choregos-*", "proj-*"]
       validate:
         message: >-
           les conteneurs Choregos tournent en non-root, sans escalade de privilèges, sous
@@ -70,7 +70,7 @@ spec:
         any:
           - resources:
               kinds: [Pod]
-              namespaces: ["choregos-*", "proj-*"]
+              namespaces: ["choregos", "choregos-*", "proj-*"]
       validate:
         message: "hostPath est interdit : un runner ne touche pas le nœud"
         pattern:

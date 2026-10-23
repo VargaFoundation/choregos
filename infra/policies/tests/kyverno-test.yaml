@@ -250,3 +250,29 @@ results:
   - choregos-buildkitd-7d9f
   kind: Pod
   result: skip
+# A release installed in namespace `choregos`, exactly (#911): the `choregos-*` glob alone left it
+# out of every rule.
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - platform-no-context
+  kind: Pod
+  result: fail
+- policy: choregos-pod-security
+  rule: non-root
+  resources:
+  - platform-confined
+  kind: Pod
+  result: pass
+- policy: choregos-pod-security
+  rule: pas-de-hostpath
+  resources:
+  - platform-host-path
+  kind: Pod
+  result: fail
+- policy: choregos-image-tags
+  rule: interdire-latest
+  resources:
+  - platform-latest
+  kind: Pod
+  result: fail
