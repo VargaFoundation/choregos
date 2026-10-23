@@ -532,3 +532,12 @@ def test_a_workflow_a2a_block_is_read_the_same_by_the_schema_and_the_model() -> 
         assert list(validator.iter_errors(base | {"a2a": bad})), bad
         with pytest.raises(ValueError):
             Workflow.model_validate(base | {"a2a": bad})
+
+
+def test_the_platform_executors_are_read_only_in_the_contract() -> None:
+    """S42-07b: executors come from the deployment's environment; only the GET is part of the contract."""
+    spec = contracts.load_openapi()
+    operations = {
+        m for m in spec["paths"]["/platform/executors"] if m in {"get", "put", "post", "patch", "delete"}
+    }
+    assert operations == {"get"}
