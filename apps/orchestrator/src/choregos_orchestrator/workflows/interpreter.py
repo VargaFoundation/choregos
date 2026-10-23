@@ -181,6 +181,7 @@ CONFIGURATION_REFUSALS = frozenset(
         "SkillPendingReview",
         "SkillAbsente",  # lang: fr-ok — an error type the activities already raise
         "KnowledgeRefused",
+        "BackendDisabled",  # S42-07c: the platform administrator switched the backend off
     }
 )
 

@@ -1196,15 +1196,19 @@ without naming one, which you can register, then name in the workflow (`agent: <
   capabilities, version, conformance (passed over total, last run, report, failures) and, when it is
   off, the reason. A platform administrator can **Disable** a backend (a reason is required and
   audited as `backend.update`) or **Enable** it; anyone else is told "Only a platform administrator
-  can change this." **Enabled here only means counted as usable by the readiness check.** The
-  orchestrator does not read the switch: which backends a project may use is set by the deployment
-  (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and `allowedBackends`) and
-  by the project's policy. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
+  can change this." **A disabled backend is enforced**: a stage that
+  would run on it is refused when it starts ("the agent backend `x` is disabled by the platform
+  administrator"), before any budget, key or runner pod, and the work item escalates to a person
+  like any configuration refusal; a stage already running is not stopped. With no setting stored
+  (fresh install) only `claude-code` is enabled, as the page shows. Which backends a project may use is still set by the
+  deployment (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
+  `allowedBackends`) and by the project's policy. A runtime that fixes its own backend (`code`,
+  `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
 - **Executors (where agent stages run).** Read-only: `agent_sandbox`, `k8s_job`, `tekton`, `aca`,
   `local_docker`, each with a one-line explanation and its set-up procedure. The list is the
   deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
-  chart (`global.runner.allowedExecutors`). `PUT /platform/executors` still exists but has no
-  runtime effect and `GET` ignores what it stores.
+  chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
+  was removed (S42-07b), only the `GET` remains.
 
 ### Models
 

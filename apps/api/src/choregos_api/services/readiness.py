@@ -21,7 +21,7 @@ from typing import Any
 import yaml
 from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import ARTIFACT_TYPES, ProjectConfig
-from choregos_core import ModelResolutionError, checksum, parse_workflow
+from choregos_core import ModelResolutionError, backend_enabled, checksum, parse_workflow
 from choregos_core import ValidationError as WorkflowInvalid
 from choregos_core.models import ModelResolver
 from sqlalchemy import func, select
@@ -744,7 +744,7 @@ async def _usable_backends(session: AsyncSession) -> frozenset[str]:
     usable = {
         name
         for name, _capabilities in KNOWN_BACKENDS
-        if (rows[name].enabled if name in rows else name == "claude-code")
+        if backend_enabled(name, rows[name].enabled if name in rows else None)
         and (not allowed or name in allowed)
     }
     return frozenset(usable)
