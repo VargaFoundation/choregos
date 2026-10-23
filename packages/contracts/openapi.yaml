@@ -6136,8 +6136,9 @@ components:
             stage_usd: { type: object, additionalProperties: { type: object, additionalProperties: { type: number } } }
             max_turns: { type: object, additionalProperties: { type: integer } }
             max_minutes: { type: object, additionalProperties: { type: integer } }
-            tool_calls_per_run: { type: [integer, "null"], minimum: 0 }
+            tool_calls_per_run: { type: [integer, "null"], minimum: 1 }
             daily_project_usd: { type: [number, "null"], exclusiveMinimum: 0 }
+            monthly_org_usd: { type: [number, "null"], exclusiveMinimum: 0, description: "What all the organisation's projects may spend in a calendar month (UTC). Not a field of a project policy: nothing is clamped, it enters every stage's reservation (S27-11)." }
         attempts:
           type: object
           additionalProperties: false
@@ -6157,6 +6158,8 @@ components:
           additionalProperties: false
           properties:
             max_per_run: { type: [integer, "null"], minimum: 0 }
+        network:
+          $ref: "#/components/schemas/CeilingNetwork"
         web_search:
           type: [object, "null"]
           additionalProperties: false
@@ -6167,6 +6170,17 @@ components:
             max_query_retention_days: { type: [integer, "null"], minimum: 0 }
             allow_query_reuse: { type: boolean, default: false }
             regions: { type: [array, "null"], items: { type: string } }
+    CeilingNetwork:
+      type: object
+      additionalProperties: false
+      description: "The organisation's network bound (ADR 0070): no project or agent goes beyond it."
+      properties:
+        allow_domains: { type: [array, "null"], items: { type: string }, description: "The widest set of hosts a project may allow; null: no cap. `[\"*\"]`: any public host." }
+        deny_domains: { type: array, items: { type: string }, default: [], description: "Hosts no run may reach, whatever a project or an agent says." }
+        per_host_per_minute: { type: [integer, "null"], minimum: 1 }
+        per_run_per_minute: { type: [integer, "null"], minimum: 1 }
+        builtin_web_tools: { type: [string, "null"], enum: [allow, deny, null] }
+        user_agent_contact: { type: [string, "null"], maxLength: 200, description: "Where an operator can reach the organisation, written into the User-Agent of what the platform fetches for it." }
     PolicyCeilingState:
       type: object
       properties:
