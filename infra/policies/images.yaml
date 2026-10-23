@@ -17,7 +17,7 @@ spec:
         any:
           - resources:
               kinds: [Pod]
-              namespaces: ["choregos-*", "proj-*"]
+              namespaces: ["choregos", "choregos-*", "proj-*"]
       verifyImages:
         - imageReferences: ["ghcr.io/vargafoundation/choregos-*"]
           attestors:

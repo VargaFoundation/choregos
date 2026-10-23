@@ -158,7 +158,13 @@ policies-test:  ## The Kyverno engine judges infra/policies against infra/polici
 	  echo "  https://github.com/kyverno/kyverno/releases/tag/v1.19.1 (kyverno-cli_v1.19.1_*)"; \
 	  exit 1; \
 	fi
-	kyverno test infra/policies/tests
+	@# 1.19.1 also counts a resource no rule matched as a pass ("Excluded"): a "want fail" pod
+	@# whose namespace drifted out of the match stayed green (#911). Every listed pod is matched.
+	@out=$$(kyverno test infra/policies/tests 2>&1); status=$$?; echo "$$out"; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	if echo "$$out" | grep -q 'Excluded'; then \
+	  echo "✗ a tested pod is matched by no rule (Excluded): its verdict proves nothing"; exit 1; \
+	fi
 
 # ───────────────────────── images ─────────────────────────
 # `--target` n'est pas optionnel sur `api.Dockerfile` : sans lui, Docker construit la dernière

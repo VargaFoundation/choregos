@@ -25,7 +25,7 @@ spec:
         any:
           - resources:
               kinds: [Pod]
-              namespaces: ["choregos-*", "proj-*"]
+              namespaces: ["choregos", "choregos-*", "proj-*"]
       validate:
         message: "images must be referenced by digest or by version: never `latest`, never without a tag"
         foreach:
