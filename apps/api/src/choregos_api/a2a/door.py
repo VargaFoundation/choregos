@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import contextlib
 import json
+import re
 import time
 from collections import Counter
 from collections.abc import AsyncIterator
@@ -23,8 +25,17 @@ from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
 from choregos_adapters.storage import ObjectStoreError
-from choregos_contracts import Control
+from choregos_contracts import (
+    A2A_MAX_FILE_BYTES_CEILING,
+    A2A_MAX_FILE_BYTES_DEFAULT,
+    ARTIFACT_NAME_PATTERN,
+    ARTIFACT_TYPES,
+    A2aConfig,
+    Control,
+    type_of_filename,
+)
 from choregos_core.mcp import ERREUR_DE_SYNTAXE as PARSE_ERROR
+from choregos_core.mcp import ERREUR_INTERNE as INTERNAL_ERROR
 from choregos_core.mcp import (
     METHODE_INCONNUE,
     PARAMETRES_INVALIDES,
@@ -58,7 +69,17 @@ from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
 from ..services import creer_un_ticket, workflow_du_ticket, workflow_model
-from ..services.artifacts import ArtifactCorruptedError, artifacts_of, filename_of, read_content
+from ..services.artifacts import (
+    ArtifactCorruptedError,
+    StoredInput,
+    artifacts_of,
+    filename_of,
+    put_input_file,
+    read_content,
+    record_input_file,
+    sent_by_caller,
+)
+from ..services.tickets import start_work_item
 from ..temporal import InterpreterNotRunningError, deliver_control
 
 router = APIRouter(include_in_schema=False)
@@ -98,6 +119,35 @@ _STREAMS: Counter[str] = Counter()
 _clock = time.monotonic
 #: Derives a task id from (org, client, messageId): a resent message finds its work item.
 TASK_NAMESPACE = uuid5(NAMESPACE_URL, "https://choregos.dev/a2a/task")
+_ARTIFACT_NAME = re.compile(ARTIFACT_NAME_PATTERN)
+
+
+def _encoded(size: int) -> int:
+    """The length of `size` bytes in base64, as a file part carries them."""
+    return 4 * ((size + 2) // 3)
+
+
+#: The largest body the door reads before it knows the organisation: a message and, in base64,
+#: the most file bytes a project may take (ADR 0078 §6). The organisation's own cap comes next.
+MAX_BODY = TAILLE_MAX_DU_CORPS + _encoded(A2A_MAX_FILE_BYTES_CEILING)
+
+
+def file_limit(project: Project) -> int:
+    """What a project's skills take in file parts, per part and per message (`a2a.max_file_bytes`)."""
+    try:
+        return A2aConfig.model_validate((project.config or {}).get("a2a") or {}).max_file_bytes
+    except ValidationError:
+        return A2A_MAX_FILE_BYTES_DEFAULT
+
+
+@dataclass(frozen=True, slots=True)
+class SentFile:
+    """A file part of a message, decoded and checked, not stored yet."""
+
+    name: str
+    media_type: str
+    type: str
+    data: bytes
 
 
 class Fault(Exception):  # noqa: N818 - a JSON-RPC error answered to the caller, not a crash
@@ -256,14 +306,17 @@ async def agent_card(org: str, request: Request, session: Db, settings: Config) 
 @router.post("/a2a/orgs/{org}")
 async def endpoint(org: str, request: Request, session: Db, settings: Config) -> Response:
     length = request.headers.get("content-length")
-    if length and length.isdigit() and int(length) > TAILLE_MAX_DU_CORPS:
-        return _refus_http(413, "message too large (1 MiB at most)")
+    if length and length.isdigit() and int(length) > MAX_BODY:
+        return _refus_http(413, f"message too large ({MAX_BODY} bytes at most)")
     door = await _open(request, session, settings, org)
     if isinstance(door, Response):
         return door
+    cap = await _body_cap(door)
+    if length and length.isdigit() and int(length) > cap:
+        return _refus_http(413, f"message too large ({cap} bytes at most for this organisation)")
     body = await request.body()
-    if len(body) > TAILLE_MAX_DU_CORPS:
-        return _refus_http(413, "message too large (1 MiB at most)")
+    if len(body) > cap:
+        return _refus_http(413, f"message too large ({cap} bytes at most for this organisation)")
     try:
         message = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -291,6 +344,13 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
         answer = erreur(ident, refused.code, str(refused), refused.data)
     await _audit(door, method, outcome)
     return JSONResponse(answer)
+
+
+async def _body_cap(door: Door) -> int:
+    """A message, and the file bytes the most generous project of the organisation takes, in base64."""
+    configs = (await door.session.execute(select(Project).where(Project.org_id == door.org.id))).scalars()
+    largest = max((file_limit(project) for project in configs), default=0)
+    return TAILLE_MAX_DU_CORPS + _encoded(largest)
 
 
 async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> Any:
@@ -345,14 +405,54 @@ def _pick_skill(served: list[Skill], metadata: dict[str, Any]) -> Skill:
     return matches[0]
 
 
-def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any]]:
-    """The text parts become the work item's body, one data part its fields; files are not taken."""
+def _type_of(media_type: str, name: str) -> str:
+    """The artefact type of a sent file: the one its media type names, else its extension's."""
+    named = next((t for t, entry in ARTIFACT_TYPES.items() if entry.media_type == media_type), None)
+    return named or type_of_filename(name)
+
+
+def _read_file(part: dict[str, Any], skill: Skill, index: int, limit: int) -> SentFile:
+    """A file part (A2A 0.3.0 `FilePart`): its bytes in base64, a media type the skill takes."""
+    file = part.get("file")
+    if not isinstance(file, dict):
+        raise Fault(PARAMETRES_INVALIDES, "a file part carries `file`, with its content in `bytes`")
+    if "bytes" not in file:
+        # Fetching a URL the caller chose would be a request made on a stranger's behalf.
+        raise Fault(PARAMETRES_INVALIDES, "a file part by `uri` is not fetched: send its content in `bytes`")
+    media_type = file.get("mimeType")
+    if not isinstance(media_type, str) or not media_type:
+        raise Fault(PARAMETRES_INVALIDES, "a file part names its `mimeType`")
+    if media_type not in skill.input_modes:
+        raise Fault(CONTENT_TYPE_NOT_SUPPORTED, f"skill {skill.id} does not take {media_type}")
+    name = file.get("name") or f"attachment-{index}"
+    if not isinstance(name, str) or not _ARTIFACT_NAME.fullmatch(name):
+        raise Fault(
+            PARAMETRES_INVALIDES,
+            f"file name refused: {str(name)[:130]!r} (letters, digits, `_`, `.` and `-`, 128 at most)",
+        )
+    raw = file["bytes"]
+    if not isinstance(raw, str) or len(raw) > _encoded(limit):
+        raise Fault(PARAMETRES_INVALIDES, f"file `{name}` too large: {limit} bytes at most for this project")
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError) as unreadable:
+        raise Fault(PARAMETRES_INVALIDES, f"file `{name}`: `bytes` is not base64") from unreadable
+    if len(data) > limit:
+        raise Fault(PARAMETRES_INVALIDES, f"file `{name}` too large: {limit} bytes at most for this project")
+    return SentFile(name=name, media_type=media_type, type=_type_of(media_type, name), data=data)
+
+
+def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any], list[SentFile]]:
+    """The text parts become the work item's body, one data part its fields, each file an input
+    artefact (ADR 0078 §6), within the project's limit for one part and for all of them."""
     if not isinstance(parts, list) or not parts:
         raise Fault(PARAMETRES_INVALIDES, "`message.parts` is a non-empty list")
     if len(parts) > MAX_PARTS:
         raise Fault(PARAMETRES_INVALIDES, f"too many parts: {MAX_PARTS} at most")
+    limit = file_limit(skill.project)
     texts: list[str] = []
     fields: dict[str, Any] = {}
+    files: list[SentFile] = []
     for part in parts:
         kind = part.get("kind") if isinstance(part, dict) else None
         if kind == "text" and isinstance(part.get("text"), str):
@@ -366,13 +466,21 @@ def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any]]:
                 raise Fault(PARAMETRES_INVALIDES, "one data part at most: it carries the work item's fields")
             fields = part["data"]
         elif kind == "file":
-            raise Fault(CONTENT_TYPE_NOT_SUPPORTED, "file parts are not taken yet: send text or data")
+            sent = _read_file(part, skill, len(files) + 1, limit)
+            if any(f.name == sent.name for f in files):
+                raise Fault(PARAMETRES_INVALIDES, f"two files named `{sent.name}`: a name is an artefact's")
+            files.append(sent)
+            if sum(len(f.data) for f in files) > limit:
+                raise Fault(
+                    PARAMETRES_INVALIDES,
+                    f"the files of a message: {limit} bytes at most together for this project",
+                )
         else:
-            raise Fault(PARAMETRES_INVALIDES, "a part is `text` or `data`")
+            raise Fault(PARAMETRES_INVALIDES, "a part is `text`, `data` or `file`")
     text = "\n\n".join(texts)
     if len(text) > MAX_TEXT:
         raise Fault(PARAMETRES_INVALIDES, f"message too long: {MAX_TEXT} characters of text at most")
-    return text, fields
+    return text, fields, files
 
 
 def task_id_of(org_id: str, client: str, message_id: str) -> str:
@@ -415,7 +523,7 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     project, principal = skill.project, door.caller.principal
     if not principal.can(Permission.ITEM_CONTROL, door.org.slug, project.slug):
         raise Fault(PARAMETRES_INVALIDES, f"you cannot open work items in {door.org.slug}:{project.slug}")
-    text, fields = _read_parts(message.get("parts"), skill)
+    text, fields, files = _read_parts(message.get("parts"), skill)
     if await ecritures_du_jour(door.session, principal.user_id) >= ECRITURES_PAR_JOUR:
         raise Fault(
             BUDGET_EXHAUSTED, f"budget_exhausted: {ECRITURES_PAR_JOUR} writes a day through MCP and A2A"
@@ -424,16 +532,70 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     title = (title or next((line for line in text.splitlines() if line.strip()), "") or skill.id).strip()[
         :200
     ]
+    body = text + _files_note(files) if text else _files_note(files).lstrip()
     try:
-        demande = WorkItemCreate(title=title, body=text, workflow=skill.workflow, fields=fields, start=True)
+        # With files, the interpreter starts once they are recorded: the first step finds its inputs.
+        demande = WorkItemCreate(
+            title=title, body=body, workflow=skill.workflow, fields=fields, start=not files
+        )
     except ValidationError as refused:
         raise Fault(PARAMETRES_INVALIDES, f"invalid message: {refused.errors()[0]['msg']}") from refused
+    stored = await _put_files(door, task_id, files)
     try:
         item = await creer_un_ticket(door.session, principal, project, demande, canal="a2a", item_id=task_id)
     except ApiError as refused:
         raise Fault(PARAMETRES_INVALIDES, refused.detail or refused.title) from refused
+    for one in stored:
+        row = await record_input_file(door.session, org_id=door.org.id, item=item, stored=one)
+        await record(
+            door.session,
+            principal,
+            "workitem.input_file",
+            org_id=door.org.id,
+            target_type="work_item",
+            target_id=item.id,
+            name=row.name,
+            version=row.version,
+            digest=row.digest,
+            size=row.size,
+            canal="a2a",
+        )
+    if stored:
+        await start_work_item(project, item)
     door.wrote = True
     return await task_of(door, item, project)
+
+
+def _files_note(files: list[SentFile]) -> str:
+    """What the work item's body says of the files: a reader of the console sees what came with it."""
+    if not files:
+        return ""
+    lines = "\n".join(f"- `{f.name}` ({f.media_type}, {len(f.data)} bytes)" for f in files)
+    return f"\n\nFiles sent with the message, kept as input artefacts:\n{lines}"
+
+
+async def _put_files(door: Door, task_id: str, files: list[SentFile]) -> list[StoredInput]:
+    """The files in the object store before the work item exists: a failure leaves nothing behind."""
+    store = object_store()
+    stored: list[StoredInput] = []
+    for sent in files:
+        try:
+            stored.append(
+                await put_input_file(
+                    store,
+                    org_id=door.org.id,
+                    work_item_id=task_id,
+                    name=sent.name,
+                    type_=sent.type,
+                    data=sent.data,
+                )
+            )
+        except ObjectStoreError as failed:
+            log.error("a2a.input_file_not_stored", name=sent.name, error=str(failed))
+            raise Fault(
+                INTERNAL_ERROR, f"file `{sent.name}` could not be stored; nothing was created"
+            ) from failed
+    return stored
 
 
 # ───────────────────────── the task, a view of the work item ─────────────────────────
@@ -535,10 +697,11 @@ async def _artifacts(door: Door, item: WorkItem, link: str) -> list[dict[str, An
 
     The content is read through `read_content`, which checks the digest: bytes that no longer match
     are withheld, as on the console's download. A larger artefact, or one past the task's budget, is
-    described and read in the console."""
+    described and read in the console. A file the caller sent is not sent back to it."""
     latest: dict[str, ArtifactRecord] = {}
     for row in await artifacts_of(door.session, item.id):
         latest[row.name] = row
+    latest = {name: row for name, row in latest.items() if not sent_by_caller(row)}
     budget = MAX_ARTIFACTS_INLINE
     served: list[dict[str, Any]] = []
     for row in latest.values():
