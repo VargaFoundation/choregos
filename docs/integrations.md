@@ -230,7 +230,11 @@ The card lists the opted-in workflows of the projects the token's person may rea
   its body, one data part its fields; name the skill in `message.metadata.skill` when there are several.
 - `tasks/get` reads the work item: `working`, `input-required` while a person must decide (with the
   console's `decision_url` — a decision is never taken over A2A, and a reply to a task is refused),
-  `completed` with the latest revision of each artefact described, `failed`, `canceled`.
+  `completed` with the latest revision of each artefact, `failed`, `canceled`. An artefact's content
+  is in its part while it is small — markdown as text, a JSON object as data, anything else as a file
+  in base64 — up to 256 KiB each and 1 MiB per task, and only when its bytes still match its digest;
+  otherwise the part describes it (`content` says why) and the console serves it. Its description is
+  in the artefact's `metadata.choregos` either way.
 - `tasks/cancel` stops the work item, for a person who may control it.
 - `message/stream` (a `message/send` that stays open) and `tasks/resubscribe` answer server-sent
   events: the task, then a `status-update` each time its state, its workflow state or its pending
@@ -238,9 +242,24 @@ The card lists the opted-in workflows of the projects the token's person may rea
   `input-required` status is not final: the person decides in the console and the stream goes on.
   The token is read again at each change (revoked, the stream ends with an error); five streams per
   token at most, an hour each, then resubscribe.
+- `tasks/pushNotificationConfig/set|get|list|delete` register an `https` URL to hear of a task, with
+  a `chg_` token (an OAuth token is refused: it cannot be read again at delivery). The host must be
+  open in the organisation's egress list ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)) when it is
+  registered. The answer to `set` carries `signing.secret`, **shown once**: `get` and `list` never
+  return it, and a `set` on the same id draws a new one. Each notification POSTs the task as it is
+  now, after its event is persisted, with `X-Choregos-Event-Id` (also `Idempotency-Key`: a receiver
+  may see one twice), your `token` in `X-A2A-Notification-Token`, and
+  `X-Choregos-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`. Events in between
+  are coalesced. A non-2xx answer is retried with a growing delay, eight times at most; a revoked or
+  expired token ends the registration; so does the final state, once delivered. Registering inline
+  in `message/send` is refused: its answer has no place for the secret.
 
-Not served yet: push notifications, file parts. The card needs
-the token too, since its skills depend on who asks. Calls are audited (`a2a.call`), rate-limited per
+The organisation's card and endpoint are also on the console's **Integrations** page, which creates
+an `a2a` token for the person (30 days, shown once).
+
+Not served yet: file parts in a message
+(refused with -32005: a work item has nowhere yet to keep a file it did not produce, and no
+per-project size limit exists to count it against). The card needs the token too, since its skills depend on who asks. Calls are audited (`a2a.call`), rate-limited per
 token, and count in the person's daily write budget with the MCP door's.
 
 ## Atlassian's Rovo MCP Server, as a connector

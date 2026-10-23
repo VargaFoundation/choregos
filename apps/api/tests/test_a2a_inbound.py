@@ -149,7 +149,7 @@ async def test_the_card_lists_the_opted_in_workflow_and_parses_as_a2a(
     assert [s.id for s in card.skills] == ["billing-api/ship-a-change"]
     assert AUTH_BEARER in card.auth_types
     assert raw["capabilities"]["streaming"] is True
-    assert raw["capabilities"]["pushNotifications"] is False
+    assert raw["capabilities"]["pushNotifications"] is True
 
 
 # ───────────────────────────── message/send ─────────────────────────────
@@ -285,6 +285,68 @@ async def test_states_map_one_way(client: AsyncClient, project: dict[str, Any]) 
     assert [a["name"] for a in states[0]["artifacts"]] == ["release-notes"]
 
 
+async def test_a_completed_task_carries_its_artefacts_content(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Small artefacts travel in parts, checked against their digest; a large one stays in the console."""
+    import base64
+
+    from choregos_api.a2a.door import MAX_ARTIFACT_INLINE
+    from choregos_api.db.models import ArtifactRecord, Project, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.object_store import object_store
+    from choregos_contracts import artifact_digest, inline_bytes
+
+    token = await _ready(client, project)
+    task_id = (await _send(client, token))["id"]
+    pdf, tampered, large = b"%PDF-1.7 notes", b"original", b"x" * (MAX_ARTIFACT_INLINE + 1)
+    store = object_store()
+    async with session_scope() as session:
+        done = await session.get(WorkItem, task_id)
+        owner = await session.get(Project, project["id"])
+        assert done and owner
+        done.state = "deployed_prod"
+
+        def row(name: str, type_: str, media: str, data: bytes, **where: Any) -> ArtifactRecord:
+            kind = "inline" if "content" in where else "file"
+            return ArtifactRecord(
+                org_id=owner.org_id, work_item_id=done.id, name=name, version=1, type=type_, kind=kind,
+                media_type=media, digest=artifact_digest(data), size=len(data), run_id="run-1", **where,
+            )  # fmt: skip
+
+        for key, data in (("k/pdf", pdf), ("k/tampered", tampered), ("k/large", large)):
+            await store.put(key, data, "application/octet-stream")
+        store.tamper("k/tampered", b"rewritten")  # type: ignore[attr-defined]
+        session.add_all(
+            [
+                row("notes", "markdown", "text/markdown", inline_bytes("Shipped."), content="Shipped."),
+                row("summary", "json", "application/json", inline_bytes({"ok": 1}), content={"ok": 1}),
+                row("deck", "pdf", "application/pdf", pdf, storage_key="k/pdf"),
+                row("tampered", "pdf", "application/pdf", tampered, storage_key="k/tampered"),
+                row("large", "pdf", "application/pdf", large, storage_key="k/large"),
+            ]
+        )
+    task = (await _rpc(client, token, "tasks/get", {"id": task_id})).json()["result"]
+    parts = {a["name"]: a["parts"][0] for a in task["artifacts"]}
+    assert parts["notes"] == {"kind": "text", "text": "Shipped."}
+    assert parts["summary"] == {"kind": "data", "data": {"ok": 1}}
+    assert parts["deck"]["kind"] == "file"
+    assert parts["deck"]["file"]["name"] == "deck.pdf"
+    assert base64.b64decode(parts["deck"]["file"]["bytes"]) == pdf
+    assert parts["tampered"]["kind"] == "data"
+    assert parts["tampered"]["data"]["content"].startswith("withheld")
+    assert parts["large"]["kind"] == "data"
+    assert parts["large"]["data"]["content"].startswith("not in the task")
+    assert {a["metadata"]["choregos"]["digest"] for a in task["artifacts"]} >= {artifact_digest(pdf)}
+
+    # The task's own budget: once the deck is in, the rest is read in the console.
+    monkeypatch.setattr("choregos_api.a2a.door.MAX_ARTIFACTS_INLINE", len(pdf))
+    task = (await _rpc(client, token, "tasks/get", {"id": task_id})).json()["result"]
+    parts = {a["name"]: a["parts"][0] for a in task["artifacts"]}
+    assert parts["deck"]["kind"] == "file"
+    assert "capped" in parts["notes"]["data"]["content"]
+
+
 async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:
     from choregos_api.temporal import get_temporal
 
@@ -295,14 +357,8 @@ async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: di
     controls = [s[2] for s in get_temporal().signals if s[1] == "control"]  # type: ignore[attr-defined]
     assert [c["action"] for c in controls] == ["stop"]
 
+    # ───────────────────────────── guards ─────────────────────────────
 
-# ───────────────────────────── guards ─────────────────────────────
-
-
-async def test_push_is_not_served(client: AsyncClient, project: dict[str, Any]) -> None:
-    token = await _ready(client, project)
-    push = (await _rpc(client, token, "tasks/pushNotificationConfig/set", {})).json()
-    assert push["error"]["code"] == -32003
     unknown = (await _rpc(client, token, "agent/dance", {})).json()
     assert unknown["error"]["code"] == -32601
 

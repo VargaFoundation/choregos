@@ -340,3 +340,22 @@ async def test_the_policy_s_llm_guard_marks_the_session_key(
     assert (await _ask(client, "Where is order 42?")).status_code == 200
     (key,) = upstream.gateway.keys.values()
     assert key.metadata[GUARD_METADATA_KEY] == GUARD_REDACT
+
+
+async def test_a_gateway_without_the_guard_refuses_the_session_the_policy_guards(
+    client: AsyncClient, project: dict[str, Any], upstream: Upstream
+) -> None:
+    """S40-21b: on `direct` or `openai-compatible` the key's mark would reach no guard: refused."""
+    import yaml
+
+    url = f"/api/v1/projects/{project['id']}/policy"
+    policy = yaml.safe_load((await client.get(url)).json()["yaml"])
+    policy.setdefault("sandbox", {})["llm_security_analyzer"] = True
+    saved = await client.put(url, json={"yaml": yaml.safe_dump(policy)})
+    assert saved.status_code == 200, saved.text
+    await _agent(client)
+    upstream.gateway.capabilities = frozenset({"virtual_keys", "hard_budget"})
+    upstream.model.say("Order 42 shipped yesterday.")
+    answer = await _ask(client, "Where is order 42?")
+    assert answer.status_code == 422 and "llm_guard" in answer.text
+    assert not upstream.gateway.keys and not upstream.model.requests

@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 from choregos_adapters import available, build
-from choregos_adapters.base import GATEWAY_CAPABILITIES, GatewayAdapter, LlmGateway
+from choregos_adapters.base import GATEWAY_CAPABILITIES, GatewayAdapter, LlmGateway, llm_guard_refusal
 from choregos_adapters.fakes.gateway import FakeGateway
 from choregos_adapters.gateway.direct import DirectGateway
 from choregos_adapters.gateway.litellm import LiteLlmGateway
@@ -49,3 +49,13 @@ async def test_a_gateway_without_spend_readback_reports_an_unmeasured_spend() ->
     gateway = DirectGateway()
     assert "spend_readback" not in gateway.capabilities
     assert (await gateway.spend("k")).cost_usd == 0
+
+
+def test_only_a_gateway_that_holds_the_llm_guard_can_carry_a_marked_key() -> None:
+    """S40-21b (ADR 0084): the guard is LiteLLM's custom guardrail; the other gateways have none."""
+    client = httpx.AsyncClient()
+    assert llm_guard_refusal(LiteLlmGateway("http://x", "k", client=client)) is None
+    for gateway in (DirectGateway(), OpenAiCompatibleGateway("http://x/v1", client=client)):
+        refusal = llm_guard_refusal(gateway)
+        assert refusal is not None and type(gateway).__name__ in refusal
+    assert llm_guard_refusal(object()) is not None, "a gateway that declares nothing has no guard"

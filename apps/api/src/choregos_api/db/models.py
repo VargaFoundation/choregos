@@ -456,6 +456,39 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class A2aPushConfig(Base, PkMixin, TimestampMixin):
+    """A URL an A2A client registered to hear of a task (ADR 0078 §5, S40-23d).
+
+    Bound to the `chg_` token that registered it: deleted with it, and read again before each
+    delivery. The signing secret and the client's own token are sealed in the secret store under
+    `a2a/push/<id>`, never here. `cursor_*` is the last event delivered: a delivery that fails
+    leaves it, and the next pass sends again (at least once)."""
+
+    __tablename__ = "a2a_push_configs"
+    __table_args__ = (
+        UniqueConstraint("work_item_id", "client", "config_id", name="uq_a2a_push_configs_client_config"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
+    api_token_id: Mapped[str] = mapped_column(ForeignKey("api_tokens.id", ondelete="CASCADE"), index=True)
+    #: `jeton:<id>`, as the door's rate limit and audit name the client.
+    client: Mapped[str] = mapped_column(String(255))
+    #: The client's id for this registration (A2A `pushNotificationConfig.id`).
+    config_id: Mapped[str] = mapped_column(String(200))
+    url: Mapped[str] = mapped_column(Text)
+    cursor_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cursor_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    #: What the last delivery said (A2A state, workflow state, pending request): an event that
+    #: changes none of it moves the cursor without a call.
+    last_view: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    #: Set once the final state is delivered, or the registration given up: no more deliveries.
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class MemoryStore(Base, PkMixin, TimestampMixin):
     """A named memory (S40-11, ADR 0075): `global` (the organisation's, curated by an administrator,
     with a reach) or `project` (a project's, curated by its owners, read by its runs only).

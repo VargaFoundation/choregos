@@ -6,12 +6,13 @@ item: `message/send` opens one through `creer_un_ticket`, under an id derived fr
 organisation, the client and the `messageId` (ADR 0008), and `tasks/get` reads it back.
 `message/stream` and `tasks/resubscribe` follow it over server-sent events: an event of the work
 item only wakes the stream up, the task is read again from the database each time. No state lives
-in this layer. Push notifications are not served yet.
+in this layer. Push notifications are `push.py`'s (ADR 0078 §5).
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import time
@@ -21,6 +22,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
+from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import Control
 from choregos_core.mcp import ERREUR_DE_SYNTAXE as PARSE_ERROR
 from choregos_core.mcp import (
@@ -42,7 +44,7 @@ from sse_starlette import EventSourceResponse
 from .. import __version__
 from ..audit import record
 from ..config import Settings
-from ..db.models import HumanRequest, Organization, Project, WorkflowDef, WorkItem
+from ..db.models import ArtifactRecord, HumanRequest, Organization, Project, WorkflowDef, WorkItem
 from ..db.session import session_scope
 from ..deps import Config, Db
 from ..errors import ApiError
@@ -52,10 +54,11 @@ from ..mcp.appelant import SCOPES_A2A, Appelant, Refus, identifier
 from ..mcp.garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour
 from ..mcp.oauth import emetteur
 from ..mcp.transport import TAILLE_MAX_DU_CORPS, _origines_admises, _refus_http
+from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
 from ..services import creer_un_ticket, workflow_du_ticket, workflow_model
-from ..services.artifacts import artifacts_of
+from ..services.artifacts import ArtifactCorruptedError, artifacts_of, filename_of, read_content
 from ..temporal import InterpreterNotRunningError, deliver_control
 
 router = APIRouter(include_in_schema=False)
@@ -67,6 +70,9 @@ PROTOCOL_VERSION = "0.3.0"
 MAX_PARTS = 20
 MAX_TEXT = 100_000
 MAX_MESSAGE_ID = 200
+#: A finished task carries its artefacts' content while it stays small: 256 KiB each, 1 MiB in all.
+MAX_ARTIFACT_INLINE = 256 * 1024
+MAX_ARTIFACTS_INLINE = 1024 * 1024
 #: A2A's own JSON-RPC errors (0.3.0 §8.2).
 TASK_NOT_FOUND = -32001
 TASK_NOT_CANCELABLE = -32002
@@ -114,7 +120,8 @@ class Door:
     caller: Appelant
     org: Organization
     console: str
-    request: Request
+    #: `None` for a push notification, which reads the task without a request.
+    request: Request | None
     #: Set by a call that writes: the daily budget counts it.
     wrote: bool = False
 
@@ -213,7 +220,7 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
         "preferredTransport": "JSONRPC",
         "version": __version__,
         "provider": {"organization": "Choregos", "url": door.console},
-        "capabilities": {"streaming": True, "pushNotifications": False, "stateTransitionHistory": False},
+        "capabilities": {"streaming": True, "pushNotifications": True, "stateTransitionHistory": False},
         "defaultInputModes": ["text/plain"],
         "defaultOutputModes": ["text/plain", "application/json"],
         "securitySchemes": schemes,
@@ -284,7 +291,7 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
     return JSONResponse(answer)
 
 
-async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> dict[str, Any]:
+async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> Any:
     if method == "message/send":
         return await _send(door, params)
     if method == "tasks/get":
@@ -293,7 +300,9 @@ async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> dict[str
     if method == "tasks/cancel":
         return await _cancel(door, params)
     if method.startswith("tasks/pushNotificationConfig/"):
-        raise Fault(PUSH_NOT_SUPPORTED, "push notifications are not served yet: poll with tasks/get")
+        from .push import configure
+
+        return await configure(door, method, params)
     raise Fault(METHODE_INCONNUE, f"unknown method: {method}")
 
 
@@ -310,7 +319,7 @@ async def _audit(door: Door, method: str, outcome: str) -> None:
         issue=outcome,
         jeton=door.caller.cle,
         agent=door.caller.agent,
-        client=(door.request.headers.get("user-agent") or "")[:100] or None,
+        client=(door.request.headers.get("user-agent") or "")[:100] or None if door.request else None,
     )
     log.info("a2a.call", method=method[:100], issue=outcome, appelant=door.caller.cle)
 
@@ -373,6 +382,13 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     message = params.get("message")
     if not isinstance(message, dict):
         raise Fault(PARAMETRES_INVALIDES, "`message` is missing")
+    configuration = params.get("configuration")
+    if isinstance(configuration, dict) and configuration.get("pushNotificationConfig"):
+        # Its secret would have nowhere to be shown: `set` is the one answer that carries it.
+        raise Fault(
+            PARAMETRES_INVALIDES,
+            "register push notifications with tasks/pushNotificationConfig/set once the task exists",
+        )
     message_id = message.get("messageId")
     if not isinstance(message_id, str) or not message_id or len(message_id) > MAX_MESSAGE_ID:
         raise Fault(
@@ -513,31 +529,69 @@ async def task_of(door: Door, item: WorkItem, project: Project) -> dict[str, Any
 
 
 async def _artifacts(door: Door, item: WorkItem, link: str) -> list[dict[str, Any]]:
-    """The latest revision of each artefact, described; its content is read in the console."""
-    latest: dict[str, Any] = {}
+    """The latest revision of each artefact, its content in parts while the task stays small.
+
+    The content is read through `read_content`, which checks the digest: bytes that no longer match
+    are withheld, as on the console's download. A larger artefact, or one past the task's budget, is
+    described and read in the console."""
+    latest: dict[str, ArtifactRecord] = {}
     for row in await artifacts_of(door.session, item.id):
         latest[row.name] = row
-    return [
-        {
-            "artifactId": f"{row.name}@{row.version}",
+    budget = MAX_ARTIFACTS_INLINE
+    served: list[dict[str, Any]] = []
+    for row in latest.values():
+        description: dict[str, Any] = {
             "name": row.name,
-            "parts": [
-                {
-                    "kind": "data",
-                    "data": {
-                        "name": row.name,
-                        "type": row.type,
-                        "media_type": row.media_type,
-                        "version": row.version,
-                        "digest": row.digest,
-                        "size": row.size,
-                        "console_url": link,
-                    },
-                }
-            ],
+            "type": row.type,
+            "media_type": row.media_type,
+            "version": row.version,
+            "digest": row.digest,
+            "size": row.size,
+            "console_url": link,
         }
-        for row in latest.values()
-    ]
+        part: dict[str, Any] | None = None
+        if row.size > MAX_ARTIFACT_INLINE:
+            description["content"] = (
+                f"not in the task: over {MAX_ARTIFACT_INLINE} bytes, read it in the console"
+            )
+        elif row.size > budget:
+            description["content"] = (
+                f"not in the task: its artefacts' content is capped at {MAX_ARTIFACTS_INLINE} bytes, "
+                "read it in the console"
+            )
+        else:
+            try:
+                part = _content_part(row, await read_content(object_store(), row))
+                budget -= row.size
+            except ArtifactCorruptedError:
+                description["content"] = "withheld: its bytes no longer match its digest"
+            except ObjectStoreError:
+                description["content"] = "unavailable: the object store did not serve it, try again"
+        served.append(
+            {
+                "artifactId": f"{row.name}@{row.version}",
+                "name": row.name,
+                "parts": [part or {"kind": "data", "data": description}],
+                "metadata": {"choregos": description},
+            }
+        )
+    return served
+
+
+def _content_part(row: ArtifactRecord, data: bytes) -> dict[str, Any]:
+    """Markdown is text, a JSON object is data; anything else travels as a file, its bytes in base64."""
+    if row.storage_key is None and row.type == "markdown" and isinstance(row.content, str):
+        return {"kind": "text", "text": row.content}
+    if row.storage_key is None and isinstance(row.content, dict):
+        return {"kind": "data", "data": row.content}
+    return {
+        "kind": "file",
+        "file": {
+            "name": filename_of(row),
+            "mimeType": row.media_type,
+            "bytes": base64.b64encode(data).decode("ascii"),
+        },
+    }
 
 
 async def _cancel(door: Door, params: dict[str, Any]) -> dict[str, Any]:
@@ -672,6 +726,7 @@ async def _wake(queue: asyncio.Queue[Any], tracker_key: str, wait: float) -> Non
 
 async def _reread(door: Door, settings: Settings, task_id: str) -> dict[str, Any]:
     """The task from the database, for a caller identified again: the stream holds no rights."""
+    assert door.request is not None, "a stream is always opened by a request"
     async with session_scope() as session:
         try:
             caller = await identifier(session, door.request, settings, scopes=SCOPES_A2A, door="A2A")

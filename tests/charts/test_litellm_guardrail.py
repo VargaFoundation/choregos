@@ -36,14 +36,14 @@ def _litellm(*overrides: str) -> dict[str, dict[str, Any]]:
 
 
 @pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
-def test_litellm_runs_the_guard_before_every_provider_call() -> None:
+def test_litellm_runs_the_guard_before_every_provider_call_and_on_its_answer() -> None:
     docs = _litellm()
     data = docs["ConfigMap"]["data"]
     assert data["choregos_guardrail.py"] == SOURCE.read_text(encoding="utf-8")
     (guard,) = yaml.safe_load(data["config.yaml"])["guardrails"]
     assert guard["litellm_params"] == {
         "guardrail": "choregos_guardrail.ChoregosGuardrail",
-        "mode": "pre_call",
+        "mode": ["pre_call", "post_call"],
         "default_on": True,
     }
     # LiteLLM finds `choregos_guardrail` next to its config: both come from the same ConfigMap.

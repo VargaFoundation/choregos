@@ -230,8 +230,13 @@ async def open_session(
     }
     if policy.sandbox.llm_security_analyzer:
         # The gateway's guard masks secrets for this key, as for a run's (ADR 0084).
+        from choregos_adapters.base import llm_guard_refusal
         from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
 
+        if (unguarded := llm_guard_refusal(gateway)) is not None:
+            raise unprocessable(
+                unguarded, [{"loc": ["policy", "sandbox", "llm_security_analyzer"], "msg": unguarded}]
+            )
         key_metadata[GUARD_METADATA_KEY] = GUARD_REDACT
     key = await gateway.mint_key(
         key_metadata,

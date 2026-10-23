@@ -40,6 +40,10 @@ so bound it there.
 Chart (`global.gateway.type: openai-compatible`) or Connectors, **Gateway**: `base_url`, optional `headers`
 and `timeout_s`, then `api_key` and `run_key` in their password fields.
 
+With `sandbox.llm_security_analyzer` in the project's policy (the `team` and `regulated` presets), this
+gateway is refused: it has no guard to mask secrets on the LLM path. Use the LiteLLM gateway,
+or turn the flag off in the policy.
+
 ## Test it
 
 Open the administration's models list: it shows what `GET {base_url}/models` returns.

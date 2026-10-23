@@ -29,6 +29,10 @@ The key is used as is by every run. Give it only the models you list.
 
 Connectors, **Gateway**, type **direct**: `models` (a list of names), `key` in the password field.
 
+With `sandbox.llm_security_analyzer` in the project's policy (the `team` and `regulated` presets), this
+gateway is refused: it has no guard to mask secrets on the LLM path. Use the LiteLLM gateway,
+or turn the flag off in the policy.
+
 ## Test it
 
 Run a stage on a development project.

@@ -431,12 +431,26 @@ def _resolve_model(resolver: ModelResolver, plan: StagePlan, bundle: Any, item: 
     changes the configuration. The interpreter escalates the work item on it (#543)."""
     from temporalio.exceptions import ApplicationError
 
+    _require_llm_guard(bundle)
     try:
         return resolver.resolve(
             plan.model_request, project=bundle.config, size=item.size, backend=backend, role=plan.role
         )
     except ModelResolutionError as refusal:
         raise ApplicationError(str(refusal), type="ModelResolutionError", non_retryable=True) from refusal
+
+
+def _require_llm_guard(bundle: Any) -> None:
+    """A policy that masks secrets on the LLM path needs a gateway that can (ADR 0084): refused
+    before the budget is reserved, and escalated like a model the project cannot use — the
+    configuration, not the run, has to change."""
+    from choregos_adapters.base import llm_guard_refusal
+    from temporalio.exceptions import ApplicationError
+
+    if not getattr(bundle.policy.sandbox, "llm_security_analyzer", False):
+        return
+    if (refusal := llm_guard_refusal(bundle.adapters.gateway)) is not None:
+        raise ApplicationError(refusal, type="ModelResolutionError", non_retryable=True)
 
 
 async def _admettre(
