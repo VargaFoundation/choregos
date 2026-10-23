@@ -1,6 +1,7 @@
 # 0083 — Web search is a governed tool whose backend declares what it keeps
 
-- **Status**: accepted, 2026-10-20 — implemented by S40-01g except the `vertex-enterprise` adapter
+- **Status**: accepted, 2026-10-20; amended 2026-10-23 by [ADR 0086](0086-firecrawl-is-self-hosted-only.md)
+  (§2, `firecrawl` is self-hosted only) — implemented by S40-01g except the `vertex-enterprise` adapter
   (deferred, §2) and the region bound on the shipped adapters, whose terms were not reviewed (§3)
 - **Concerns**: the contract (`policy.schema.json`, `PolicyCeiling`, `openapi.yaml`), the adapters (a
   `SearchBackend` port, its fake and its first adapters), the API (`routers/internal.py`, a
@@ -68,7 +69,8 @@ but only through a provider that keeps nothing". It can only forbid every web to
   - `vertex-enterprise`: Vertex AI Web Grounding for Enterprise. It is a grounded Gemini call, so it goes
     **through the gateway** as an auxiliary call. This needs a gateway capability (ADR 0060) saying the
     gateway passes the `enterpriseWebSearch` tool through; the adapter refuses to start without it.
-  - `firecrawl`: its search endpoint, on Firecrawl's cloud or self-hosted.
+  - `firecrawl`: its search endpoint, **on a self-hosted instance only** (amended 2026-10-23 by
+    [ADR 0086](0086-firecrawl-is-self-hosted-only.md); it was "on Firecrawl's cloud or self-hosted").
   - `brave` and `tavily`: plain search APIs.
 
 **3. Every backend declares its data handling, and the declaration is code.**

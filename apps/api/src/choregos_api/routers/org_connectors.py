@@ -49,7 +49,13 @@ from ..services.catalogue_rights import (
     enabled_projects_of,
     visible_projects,
 )
-from ..services.connecteurs import RANG, plus_stricte, spec_du_type, verifier_les_secrets
+from ..services.connecteurs import (
+    RANG,
+    check_type_config,
+    plus_stricte,
+    spec_du_type,
+    verifier_les_secrets,
+)
 from ..services.connector_secrets import (
     drop_replaced_store_values,
     put_values,
@@ -196,6 +202,7 @@ async def declare_org_connector(
     name, kind, type_name = body.name, body.kind, body.type
     config, secret_refs = body.config, body.secret_refs
     spec = spec_du_type(kind, type_name)
+    check_type_config(kind, type_name, config)
     prefix = f"connector/{name}"
     verifier_les_secrets(
         spec,
@@ -298,6 +305,8 @@ async def update_org_connector(
     spec = spec_du_type(instance.kind, instance.type)
     prefix = f"connector/{name}"
     config = body.config if body.config is not None else dict(instance.config or {})
+    if body.config is not None:
+        check_type_config(instance.kind, instance.type, config)
     refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
     verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
     store = require_store(values)

@@ -353,3 +353,92 @@ async def test_the_organisations_network_policy_holds_for_the_backend_host(
     refused = await _search(client, base, headers)
     assert refused["status_code"] == 403 and refused["result"]["type"] == "network_policy"
     assert backend.calls == []
+
+
+# ───────────────────────── firecrawl is self-hosted only (S40-01k) ─────────────────────────
+
+SELF_HOSTED = "http://firecrawl.internal:3002"
+
+
+async def _firecrawl(client: AsyncClient, **config: Any) -> Any:
+    body = {"name": "search-firecrawl", "kind": "web_search", "type": "firecrawl", "config": config}
+    return await client.post(f"{ORG}/connectors", json=body)
+
+
+async def test_a_firecrawl_connector_needs_a_self_hosted_base_url(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    missing = await _firecrawl(client)
+    assert missing.status_code == 422 and "base_url is required" in missing.text
+
+    for cloud in ("https://api.firecrawl.dev", "https://eu.api.firecrawl.dev/v1"):
+        refused = await _firecrawl(client, base_url=cloud)
+        assert refused.status_code == 422, refused.text
+        assert "self-hosted" in refused.text and "SaaS" in refused.text
+
+    made = await _firecrawl(client, base_url=SELF_HOSTED, data_handling=ZERO)
+    assert made.status_code == 201, made.text
+    again = await client.patch(
+        f"{ORG}/connectors/search-firecrawl", json={"config": {"base_url": "https://api.firecrawl.dev"}}
+    )
+    assert again.status_code == 422, "an edit cannot point a saved connector at the cloud"
+    kept = await client.patch(
+        f"{ORG}/connectors/search-firecrawl", json={"config": {"base_url": SELF_HOSTED, "timeout_s": 5}}
+    )
+    assert kept.status_code == 200, kept.text
+
+
+async def test_the_network_ceiling_is_checked_against_the_self_hosted_host(
+    client: AsyncClient, project: dict[str, Any], backend: Any
+) -> None:
+    saved = await client.put(
+        f"/api/v1/projects/{project['id']}/policy", json={"yaml": _policy(["docs.example.org"])}
+    )
+    assert saved.status_code == 200, saved.text
+    assert (await _firecrawl(client, base_url=SELF_HOSTED, data_handling=ZERO)).status_code == 201
+    stored = await client.put(
+        CEILING_URL,
+        json={
+            "ceiling": {
+                "web_search": {"mode": "allow"},
+                "network": {"deny_domains": ["firecrawl.internal"]},
+            }
+        },
+    )
+    assert stored.status_code == 200, stored.text
+    headers = await _run(project, "run-search-fc")
+    base = "/api/v1/internal/runs/run-search-fc/tools"
+    refused = await _search(client, base, headers)
+    assert refused["status_code"] == 403 and refused["result"]["type"] == "network_policy"
+    assert "firecrawl.internal" in refused["result"]["error"], "the host the connector really calls"
+    assert backend.calls == []
+
+
+async def test_a_stored_firecrawl_without_base_url_fails_closed_and_sends_nothing(
+    client: AsyncClient, project: dict[str, Any], backend: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A row saved when the cloud was the default has no `base_url`: the search is refused with the
+    decision named, the cloud is never reached, and the fake backend is never asked."""
+    from choregos_api.db.models import OrgConnector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    saved = await client.put(
+        f"/api/v1/projects/{project['id']}/policy", json={"yaml": _policy(["docs.example.org"])}
+    )
+    assert saved.status_code == 200, saved.text
+    assert (await _firecrawl(client, base_url=SELF_HOSTED, data_handling=ZERO)).status_code == 201
+    async with session_scope() as session:
+        row = (
+            await session.execute(select(OrgConnector).where(OrgConnector.type == "firecrawl"))
+        ).scalar_one()
+        row.config = {"data_handling": ZERO}  # what a row saved before S40-01k looked like
+    ceiling = await client.put(CEILING_URL, json={"ceiling": {"web_search": {"mode": "allow"}}})
+    assert ceiling.status_code == 200, ceiling.text
+    headers = await _run(project, "run-search-fc2")
+    monkeypatch.setattr("choregos_adapters.registry.fakes_enabled", lambda: False)
+    failed = await _search(client, "/api/v1/internal/runs/run-search-fc2/tools", headers)
+    assert failed["status_code"] == 502, failed
+    message = failed["result"]["error"]
+    assert "base_url is required" in message and "self-hosted" in message
+    assert backend.calls == []
