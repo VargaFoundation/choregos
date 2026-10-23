@@ -293,9 +293,12 @@ def _run(*argv: str, cwd: pathlib.Path | None = None) -> str:
     not REGISTRY or shutil.which("cosign") is None or shutil.which("crane") is None,
     reason="no registry (CHOREGOS_COSIGN_REAL_REGISTRY), or no cosign or crane on the path",
 )
-def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize("signature_format", ["bundle", "legacy"])
+def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(
+    tmp_path: pathlib.Path, signature_format: str
+) -> None:
     _run("cosign", "generate-key-pair", cwd=tmp_path)
-    name, pinned = f"{REGISTRY}/s41-14/policy", {}
+    name, pinned = f"{REGISTRY}/s41-14/policy-{signature_format}", {}
     for tag in ("signed", "unsigned"):
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w") as archive:
@@ -308,8 +311,8 @@ def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(tmp_path: pathlib.
         pinned[tag] = f"{name}@{_run('crane', 'digest', '--insecure', f'{name}:{tag}')}"
     _run(
         "cosign", "sign", "--yes", "--key", str(tmp_path / "cosign.key"), "--tlog-upload=false",
-        "--use-signing-config=false", "--new-bundle-format=false", "--allow-http-registry",
-        "--allow-insecure-registry", pinned["signed"],
+        "--use-signing-config=false", f"--new-bundle-format={signature_format == 'bundle'}".lower(),
+        "--allow-http-registry", "--allow-insecure-registry", pinned["signed"],
     )  # fmt: skip
     policy = _policy(
         f"global.images.hostedRegistries={{{REGISTRY}/s41-14}}",
@@ -317,6 +320,7 @@ def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(tmp_path: pathlib.
         "global.images.hostedCosignKeySecret=acme-cosign",
         "global.images.hostedCosignTlog=false",
         "global.images.hostedCosignPolicy=true",
+        f"global.images.hostedCosignFormat={signature_format}",
     )
     (entry,) = policy["spec"]["rules"][1]["verifyImages"][0]["attestors"][0]["entries"]
     assert entry["keys"].pop("secret") == {"name": "acme-cosign", "namespace": "tenant-a"}
