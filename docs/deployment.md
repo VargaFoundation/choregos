@@ -368,7 +368,7 @@ global:
 
 These values, and `global.runner.allowedExecutors` / `CHOREGOS_EXECUTOR_KIND` for the executors,
 are where backends and executors are configured; *Administration → Platform* only displays them
-(its backend switch is enforced at stage start and feeds readiness, and `PUT /platform/executors` has no effect).
+(its backend switch is enforced at stage start and feeds readiness; there is no `PUT /platform/executors`, S42-07b).
 
 A project that names its own `agent` or `models` keeps them. When a runner pod dies before it can
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit

@@ -2565,6 +2565,8 @@ export type PolicyCeiling = {
     };
     tool_calls_per_run?: number | null;
     daily_project_usd?: number | null;
+    /** What all the organisation's projects may spend in a calendar month (UTC). Not a field of a project policy: nothing is clamped, it enters every stage's reservation (S27-11). */
+    monthly_org_usd?: number | null;
   };
   attempts?: {
     default_max?: number | null;
@@ -2581,6 +2583,7 @@ export type PolicyCeiling = {
   findings?: {
     max_per_run?: number | null;
   };
+  network?: CeilingNetwork;
   /** The built-in web_search tool (ADR 0083). Absent or `mode: deny`: not offered. An unknown data-handling value fails every bound that reads it. */
   web_search?: {
     mode?: "allow" | "deny";
@@ -2589,6 +2592,19 @@ export type PolicyCeiling = {
     allow_query_reuse?: boolean;
     regions?: Array<string> | null;
   } | null;
+};
+
+/** The organisation's network bound (ADR 0070): no project or agent goes beyond it. */
+export type CeilingNetwork = {
+  /** The widest set of hosts a project may allow; null: no cap. `["*"]`: any public host. */
+  allow_domains?: Array<string> | null;
+  /** Hosts no run may reach, whatever a project or an agent says. */
+  deny_domains?: Array<string>;
+  per_host_per_minute?: number | null;
+  per_run_per_minute?: number | null;
+  builtin_web_tools?: "allow" | "deny" | null;
+  /** Where an operator can reach the organisation, written into the User-Agent of what the platform fetches for it. */
+  user_agent_contact?: string | null;
 };
 
 export type PolicyCeilingState = {
@@ -4010,7 +4026,6 @@ export interface Operations {
   publishSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions"; body: SkillFiles; response: SkillVersion };
   putBackend: { method: "PUT"; path: "/platform/backends"; body: AgentBackendUpdate; response: AgentBackendInfo };
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
-  putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
   putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
