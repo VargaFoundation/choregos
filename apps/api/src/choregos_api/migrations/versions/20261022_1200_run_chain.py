@@ -2,7 +2,8 @@
 """The run's chain (S40-22, ADR 0077 §2): `work_items.initiated_by`, `runs.initiated_by`, `runs.inputs_from`
 
 Three nullable columns, no backfill: a work item or a run recorded before stays `NULL`, and the
-access record says its initiator is unknown rather than guess one from `created_by`.
+access record says its initiator is unknown rather than guess one from `created_by`. The downgrade
+drops the three columns and the chains they held; an upgrade after it starts them at `NULL` again.
 
 Revision ID: c7e9a1b3d5f8
 Revises: b7d1f3a5c9e2
