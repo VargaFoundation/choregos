@@ -10,6 +10,7 @@ operation that does not exist there): nothing ran one before this test. It runs 
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -87,6 +88,26 @@ async def _compare() -> list[Any]:
         await engine.dispose()
 
 
+async def _postgres_only_missing() -> set[str]:
+    """What of `POSTGRES_ONLY` the migrated base lacks: the comparison skips them by name, this does
+    not. `embedding_vec` is expected only where the image carries pgvector."""
+    import asyncpg
+
+    connection = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
+    try:
+        columns = await connection.fetch(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'knowledge_chunks'"
+        )
+        indexes = await connection.fetch(
+            "SELECT indexname FROM pg_indexes WHERE tablename = 'knowledge_chunks'"
+        )
+        vector = await connection.fetchval("SELECT count(*) FROM pg_extension WHERE extname = 'vector'")
+    finally:
+        await connection.close()
+    expected = POSTGRES_ONLY if vector else POSTGRES_ONLY - {"embedding_vec"}
+    return expected - {row["column_name"] for row in columns} - {row["indexname"] for row in indexes}
+
+
 async def test_every_migration_goes_down_and_up_again_on_postgres(monkeypatch: pytest.MonkeyPatch) -> None:
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
@@ -102,6 +123,7 @@ async def test_every_migration_goes_down_and_up_again_on_postgres(monkeypatch: p
         await asyncio.to_thread(command.upgrade, config, "heads")
         assert {"runs", "work_items"} <= await _tables()
         assert not await _compare(), "the migrated PostgreSQL schema is not the models' schema"
+        assert not await _postgres_only_missing(), "skipped by the comparison, not absent"
 
         await asyncio.to_thread(command.downgrade, config, "base")
         assert await _tables() <= {"alembic_version"}, "every table must be dropped on the way down"
@@ -109,6 +131,220 @@ async def test_every_migration_goes_down_and_up_again_on_postgres(monkeypatch: p
 
         await asyncio.to_thread(command.upgrade, config, "heads")
         assert not await _compare(), "the schema after a round trip is not the models' schema"
+        assert not await _postgres_only_missing(), "skipped by the comparison, not absent"
+    finally:
+        await db_session.dispose_engine()
+        await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+        reset_settings_cache()
+
+
+# ───────────────────────────── over data (S40-22d) ─────────────────────────────
+
+#: The latest migrations, newest first, each with what its downgrade drops. Seeded at the newest,
+#: walked down one step at a time over the rows, then up again to the heads: every row a migration
+#: did not create must survive both ways, and what it created goes with its downgrade, as its
+#: docstring says.
+WINDOW: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("d9f1b3c5e7a2", ("a2a_push_configs",)),
+    ("c7e9a1b3d5f8", ("runs.inputs_from", "runs.initiated_by", "work_items.initiated_by")),
+    ("b7d1f3a5c9e2", ("connector_operations.result_max_bytes",)),
+    ("e4a6c8d0b2f1", ("knowledge_grants", "knowledge_bases.restricted")),
+    ("b3c5d7e9f1a2", ("knowledge_distillation_parts",)),
+)
+
+#: One row in each table the window touches, and in what they hang from, in the order of their
+#: foreign keys. A JSON value is a string: asyncpg sends it as `jsonb` text.
+NOW = datetime.now(UTC)
+SEED: tuple[tuple[str, dict[str, Any]], ...] = (
+    ("organizations", {"id": "o1", "slug": "varga", "name": "Varga", "settings": "{}"}),
+    ("users", {"id": "u1", "email": "ada@example.org", "display_name": "Ada", "is_service": False}),
+    (
+        "projects",
+        {
+            "id": "p1",
+            "org_id": "o1",
+            "slug": "billing-api",
+            "name": "Billing",
+            "config": "{}",
+            "status": "active",
+        }
+        | {"provision_state": "{}"},
+    ),
+    (
+        "work_items",
+        {
+            "id": "w1",
+            "project_id": "p1",
+            "tracker_key": "BIL-1",
+            "title": "Add credit notes",
+            "state": "build",
+        }
+        | {"paused": False, "allowed_paths": "[]", "totals": "{}", "documents": "[]"}
+        | {"initiated_by": "a2a:ada@example.org"},
+    ),
+    (
+        "runs",
+        {"id": "r1", "work_item_id": "w1", "project_id": "p1", "stage_role": "builder", "attempt": 1}
+        | {"status": "succeeded", "tokens": "{}", "cost_usd": 0.25, "allowed_paths": "[]"}
+        | {"initiated_by": "a2a:ada@example.org", "inputs_from": '["r0"]'},
+    ),
+    (
+        "org_connectors",
+        {"id": "c1", "org_id": "o1", "name": "tracker", "kind": "mcp", "type": "internal", "config": "{}"}
+        | {"status": "ok", "created_at": NOW, "updated_at": NOW},
+    ),
+    (
+        "connector_operations",
+        {
+            "id": "op1",
+            "org_id": "o1",
+            "connector_id": "c1",
+            "name": "search",
+            "access": "read",
+            "policy": "allow",
+        }
+        | {"groups": "[]", "created_at": NOW, "updated_at": NOW, "result_max_bytes": 4096},
+    ),
+    ("api_tokens", {"id": "t1", "user_id": "u1", "name": "partner", "hash": "h", "scopes": '["a2a"]'}),
+    (
+        "a2a_push_configs",
+        {"id": "pc1", "org_id": "o1", "work_item_id": "w1", "api_token_id": "t1", "client": "partner"}
+        | {"config_id": "cfg", "url": "https://hooks.example.org/a2a", "attempts": 0},
+    ),
+    (
+        "knowledge_bases",
+        {
+            "id": "kb1",
+            "org_id": "o1",
+            "slug": "handbook",
+            "name": "Handbook",
+            "scope": "org",
+            "projects": "[]",
+        }
+        | {"groups": "[]", "serving_mode": "files", "status": "active", "restricted": True},
+    ),
+    (
+        "knowledge_grants",
+        {"id": "g1", "org_id": "o1", "knowledge_base_id": "kb1", "subject_type": "person"}
+        | {"subject": "ada@example.org", "role": "reader"},
+    ),
+    (
+        "knowledge_documents",
+        {"id": "d1", "org_id": "o1", "knowledge_base_id": "kb1", "source": "upload", "filename": "ledger.md"}
+        | {
+            "title": "Ledger",
+            "mime": "text/markdown",
+            "size_bytes": 20,
+            "digest": "sha256:0",
+            "status": "indexed",
+        },
+    ),
+    (
+        "knowledge_chunks",
+        {"id": "k1", "org_id": "o1", "knowledge_base_id": "kb1", "document_id": "d1", "ordinal": 0}
+        | {"heading_path": "[]", "body": "Credit notes ledger", "text": "credit notes ledger"},
+    ),
+    (
+        "knowledge_distillation_parts",
+        {"id": "dp1", "org_id": "o1", "knowledge_base_id": "kb1", "digest": "sha256:1", "model": "model"}
+        | {"part_index": 0, "documents": "[]", "characters": 20, "cost_usd": 0.01, "status": "done"},
+    ),
+)
+
+
+async def _seed() -> None:
+    """As the superuser: the rows are the test's, not a request's, and RLS does not apply."""
+    import asyncpg
+
+    connection = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
+    try:
+        for table, row in SEED:
+            places = ", ".join(f"${i}" for i in range(1, len(row) + 1))
+            await connection.execute(
+                f"INSERT INTO {table} ({', '.join(row)}) VALUES ({places})", *row.values()
+            )
+    finally:
+        await connection.close()
+
+
+#: What no migration of the window created: it must read the same at every step, down and up.
+KEPT = (
+    "SELECT title, state FROM work_items WHERE id = 'w1'",
+    "SELECT status, cost_usd FROM runs WHERE id = 'r1'",
+    "SELECT name, access FROM connector_operations WHERE id = 'op1'",
+    "SELECT name, scopes::text FROM api_tokens WHERE id = 't1'",
+    "SELECT slug, scope FROM knowledge_bases WHERE id = 'kb1'",
+    "SELECT text FROM knowledge_chunks WHERE id = 'k1' AND search_tsv @@ to_tsquery('simple', 'ledger')",
+)
+
+
+async def _fetch(*queries: str) -> list[list[tuple[Any, ...]]]:
+    import asyncpg
+
+    connection = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
+    try:
+        return [[tuple(row) for row in await connection.fetch(query)] for query in queries]
+    finally:
+        await connection.close()
+
+
+async def _columns(table: str) -> set[str]:
+    [rows] = await _fetch(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}'")
+    return {str(row[0]) for row in rows}
+
+
+async def _dropped(what: str) -> bool:
+    table, _, column = what.partition(".")
+    if column:
+        return column not in await _columns(table)
+    return table not in await _tables()
+
+
+async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    from alembic.script import ScriptDirectory
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.db import session as db_session
+    from choregos_api.migrer import configuration
+
+    await _preparer_postgres()
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
+    reset_settings_cache()
+    await db_session.dispose_engine()
+    config = configuration()
+    scripts = ScriptDirectory.from_config(config)
+    try:
+        await asyncio.to_thread(command.upgrade, config, WINDOW[0][0])
+        await _seed()
+        kept = await _fetch(*KEPT)
+        assert all(kept), "every seeded row reads back, the chunk found by its generated `search_tsv`"
+
+        for revision, drops in WINDOW:
+            script = scripts.get_revision(revision)
+            assert script is not None and "downgrade" in (script.module.__doc__ or "").lower(), (
+                f"{revision} drops {', '.join(drops)} on the way down: its docstring says so"
+            )
+            await asyncio.to_thread(command.downgrade, config, str(script.down_revision))
+            for what in drops:
+                assert await _dropped(what), f"{what} outlived the downgrade of {revision}"
+            assert await _fetch(*KEPT) == kept, (
+                f"the downgrade of {revision} lost or changed a row it did not create"
+            )
+
+        await asyncio.to_thread(command.upgrade, config, "heads")
+        assert await _fetch(*KEPT) == kept, "the upgrade back to the heads lost or changed a row"
+        assert not await _compare(), "the schema after the round trip over data is not the models' schema"
+        chain, cap, restricted, created = await _fetch(
+            "SELECT w.initiated_by, r.initiated_by, r.inputs_from"
+            " FROM work_items w JOIN runs r ON r.work_item_id = w.id",
+            "SELECT result_max_bytes FROM connector_operations WHERE id = 'op1'",
+            "SELECT restricted FROM knowledge_bases WHERE id = 'kb1'",
+            "SELECT (SELECT count(*) FROM a2a_push_configs) + (SELECT count(*) FROM knowledge_grants)"
+            " + (SELECT count(*) FROM knowledge_distillation_parts)",
+        )
+        assert chain == [(None, None, None)], "no backfill: the access record says the initiator is unknown"
+        assert cap == [(None,)], "no backfill: the operation is back to the platform's default cap"
+        assert restricted == [(False,)], "an unrestricted base, as before the grants existed"
+        assert created == [(0,)], "what a downgrade dropped does not come back"
     finally:
         await db_session.dispose_engine()
         await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
