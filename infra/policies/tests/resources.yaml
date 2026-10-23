@@ -616,3 +616,82 @@ spec:
     runAsUser: 1000
     seccompProfile:
       type: RuntimeDefault
+---
+# The platform's own namespace is often named `choregos` exactly, which the `choregos-*` glob
+# does not match (#911): these pods are judged there too.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: platform-no-context
+  namespace: choregos
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:0.19.1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: platform-host-path
+  namespace: choregos
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:0.19.1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+  - name: node
+    hostPath:
+      path: /var/run
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: platform-latest
+  namespace: choregos
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:latest
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: platform-confined
+  namespace: choregos
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:0.19.1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault

@@ -1,6 +1,6 @@
 """Our pods satisfy the strict Kyverno rule -- checked on the rendered chart.
 
-`infra/policies/pod-security.yaml` requires, for every pod in a `choregos-*` or
+`infra/policies/pod-security.yaml` requires, for every pod in `choregos`, a `choregos-*` or a
 `proj-*` namespace: `runAsNonRoot`, a seccomp profile at pod level, and for each container
 `allowPrivilegeEscalation: false` and `capabilities.drop: [ALL]`. A strict rule that
 would refuse our own pods would be a chart that does not install: this test renders the chart
