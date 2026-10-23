@@ -1172,7 +1172,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "Connectors, **Gateway**, type **direct**: `models` (a list of names), `key` in the password field."
+        "markdown": "Connectors, **Gateway**, type **direct**: `models` (a list of names), `key` in the password field.\n\nWith `sandbox.llm_security_analyzer` in the project's policy (the `team` and `regulated` presets), this\ngateway is refused: it has no guard to mask secrets on the LLM path (ADR 0084). Use the LiteLLM gateway,\nor turn the flag off in the policy."
       },
       {
         "key": "test",
@@ -1284,7 +1284,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "Chart (`global.gateway.type: openai-compatible`) or Connectors, **Gateway**: `base_url`, optional `headers`\nand `timeout_s`, then `api_key` and `run_key` in their password fields."
+        "markdown": "Chart (`global.gateway.type: openai-compatible`) or Connectors, **Gateway**: `base_url`, optional `headers`\nand `timeout_s`, then `api_key` and `run_key` in their password fields.\n\nWith `sandbox.llm_security_analyzer` in the project's policy (the `team` and `regulated` presets), this\ngateway is refused: it has no guard to mask secrets on the LLM path (ADR 0084). Use the LiteLLM gateway,\nor turn the flag off in the policy."
       },
       {
         "key": "test",
