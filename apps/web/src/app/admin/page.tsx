@@ -10,6 +10,7 @@ import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { ROLE_LABELS } from "@/components/members";
 import { isMultiOrg, membershipGroups } from "@/lib/memberships";
+import { OrganisationCard } from "@/components/admin/organisation-card";
 import { NetworkActivityCard } from "@/components/admin/network-activity";
 import { NetworkCeilingCard } from "@/components/admin/network-ceiling";
 import { PolicyCeilingCard } from "@/components/admin/policy-ceiling";
@@ -47,6 +48,7 @@ export default function AdminPage() {
       {error && <ErrorNote>{error}</ErrorNote>}
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <OrganisationCard org={org} canEdit={orgAdmin} />
         <Card title="Session">
           <p className="text-sm">
             {me?.display_name} — {me?.email}

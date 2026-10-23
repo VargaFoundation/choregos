@@ -27,6 +27,9 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const row = (org: string, role: string, project_slug?: string) => ({ org, role, project_slug: project_slug ?? null });
 
+/** The Session card; the Organisation card (S40-24) names the slug on its own. */
+const sessionCard = () => screen.getByRole("heading", { name: "Session" }).closest("section")!;
+
 function wrap() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -56,7 +59,7 @@ describe("administration overview, your roles", () => {
       ]),
     );
     expect(within(list).queryByText(/varga/)).toBeNull();
-    expect(screen.queryByText("varga")).toBeNull();
+    expect(within(sessionCard()).queryByText("varga")).toBeNull();
   });
 
   it("enterprise: the organisation named once, 'organisation : org_admin', a group per organisation", async () => {
@@ -65,7 +68,16 @@ describe("administration overview, your roles", () => {
     wrap();
     const list = await screen.findByRole("list", { name: "Your roles in varga" });
     expect(within(list).getAllByTestId("membership")[0]!.textContent).toBe("organisation : org_admin");
-    expect(screen.getAllByText("varga")).toHaveLength(1);
+    expect(within(sessionCard()).getAllByText("varga")).toHaveLength(1);
     expect(screen.getByRole("list", { name: "Your roles in acme" })).toBeTruthy();
+  });
+
+  it("opens with the Organisation card, ahead of the session and the tokens (S40-24)", async () => {
+    vi.mocked(api.edition).mockResolvedValue({ edition: "community", features: [] } as never);
+    wrap();
+    const titles = (await screen.findAllByRole("heading")).map((h) => h.textContent);
+    expect(titles[0]).toBe("Organisation");
+    expect(titles.indexOf("Organisation")).toBeLessThan(titles.indexOf("Session"));
+    expect(await screen.findByLabelText("Display name")).toBeTruthy();
   });
 });

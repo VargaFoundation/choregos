@@ -109,6 +109,7 @@ import type {
   MembershipUpsert,
   Org,
   OrgCreate,
+  OrgUpdate,
   ProjectModels,
   TemplateSummary,
   WorkItemCreate,
@@ -351,6 +352,9 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   orgs: () => request<Org[]>("/orgs"),
   createOrg: (body: OrgCreate) => request<Org>("/orgs", { method: "POST", body: JSON.stringify(body) }),
+  /** `PATCH /orgs/{org}`: the name and currency (its administrator), the slug (a platform administrator only). */
+  updateOrg: (org: string, body: OrgUpdate) =>
+    request<Org>(`/orgs/${encodeURIComponent(org)}`, { method: "PATCH", body: JSON.stringify(body) }),
   /** The organisation's memberships; with `project`, that project's only (S30-06). */
   members: (org: string, project?: string) =>
     request<Membership[]>(`/orgs/${org}/members${project ? `?project=${encodeURIComponent(project)}` : ""}`),

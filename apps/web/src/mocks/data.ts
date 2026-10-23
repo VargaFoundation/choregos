@@ -2512,6 +2512,14 @@ let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string;
   ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
 };
 
+/** The demo organisation, kept for the time of the page: the Organisation card on /admin renames it (S40-24). */
+const mockOrg: { slug: string; name: string; role: string; currency: string } = {
+  slug: "acme",
+  name: "Varga Foundation",
+  role: "org_admin",
+  currency: "EUR",
+};
+
 /** The demo project's policy, kept for the time of the page: the network card and the Policy editor write it (S41-22). */
 let mockPolicyYaml = [
   "budgets:",
@@ -2596,6 +2604,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       target.disabled_reason = update.enabled ? null : (update.disabled_reason ?? null);
       return structuredClone(target) as T;
     }
+  }
+  if (method === "PATCH" && /^\/orgs\/[^/]+$/.test(bare)) {
+    const update = body as { name?: string; slug?: string; currency?: string };
+    if (update.slug === "taken") throw new ApiError(409, { title: "Conflict", detail: "organisation `taken` already exists" });
+    Object.assign(mockOrg, Object.fromEntries(Object.entries(update).filter(([, v]) => v !== undefined)));
+    return structuredClone(mockOrg) as T;
   }
   if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
     if (method === "PUT") {
@@ -3307,7 +3321,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/ui\/admin-sections$/, [sectionScim, sectionAcmeLayered]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
-    [/^\/orgs$/, [{ slug: "acme", name: "Varga Foundation", role: "org_admin", currency: "EUR" }]],
+    [/^\/orgs$/, [mockOrg]],
     [/^\/orgs\/[^/]+\/members$/, membersOf(path)],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],
