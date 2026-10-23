@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
-from choregos_api.db.models import Run
+from choregos_api.db.models import BackendRegistryRow, Run
 from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
 from choregos_api.services.artifacts import producing_runs
@@ -46,7 +46,14 @@ from choregos_contracts import (
     WorkItemLinks,
     WorkItemRef,
 )
-from choregos_core import KNOWN_BACKEND_NAMES, ModelResolutionError, ModelResolver, telemetry, utcnow
+from choregos_core import (
+    KNOWN_BACKEND_NAMES,
+    ModelResolutionError,
+    ModelResolver,
+    backend_enabled,
+    telemetry,
+    utcnow,
+)
 from choregos_core.memory_bindings import Binding, legacy_scope, merge_context_packs
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
@@ -214,7 +221,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 and engine.cross_backend_review()
             ):
                 backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
-            resolved = _resolve_model(resolver, plan, bundle, item, backend)
+            # S42-07c: the platform administrator's switch (`PUT /platform/backends`) is applied
+            # here, at stage start, before any budget, key or pod. A stage already running is not
+            # touched. A runtime fixes its own backend (`code`): the switch does not concern it.
+            resolved = await _resolve_on_enabled_backend(
+                session, agent, resolver, plan, bundle, item, backend
+            )
             if code_runtime is not None:
                 resolved.api_format = ApiFormat(code_runtime.api_format)
             budget = _stage_budget(engine, plan, item, resolved)
@@ -594,6 +606,51 @@ async def _stage_cap(
         f"the policy's max_stages_per_ticket is {cap}"
     )
     return {"run_id": run_id, "refused": {"reason": "max_stages", "detail": detail}}
+
+
+async def _resolve_on_enabled_backend(
+    session: Any, agent: Any, resolver: ModelResolver, plan: StagePlan, bundle: Any, item: Any, backend: str
+) -> Any:
+    """The model of the stage, once its backend is known to be enabled (S42-07c)."""
+    await _require_backend_enabled(session, agent, backend)
+    return _resolve_model(resolver, plan, bundle, item, backend)
+
+
+async def _backend_row(session: Any, backend: str) -> Any:
+    return (
+        await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == backend))
+    ).scalar_one_or_none()
+
+
+async def _require_backend_enabled(session: Any, agent: Any, backend: str) -> None:
+    """Refuse the stage when the platform administrator disabled its coding-agent backend.
+
+    Read from the `agent_backends` table inside the activity (ADR 0008: a replay reads it again
+    and a stage that already started is never re-checked). No row means nothing was ever
+    switched off: the backend stays enabled (fresh install). The refusal is a typed, non
+    retryable error the interpreter escalates as a configuration refusal."""
+    from temporalio.exceptions import ApplicationError
+
+    if _fixed_backend(agent):
+        return
+    row = await _backend_row(session, backend)
+    if backend_enabled(backend, row.enabled if row else None):
+        return
+    if row is None:
+        raise ApplicationError(
+            f"the agent backend `{backend}` is disabled by the platform administrator (it was never "
+            "enabled on the platform page). Enable it there, or choose another backend.",
+            type="BackendDisabled",
+            non_retryable=True,
+        )
+    reason = f" Reason given: {row.disabled_reason}." if row.disabled_reason else ""
+    logger.info("stage refused: backend disabled", backend=backend)
+    raise ApplicationError(
+        f"the agent backend `{backend}` is disabled by the platform administrator.{reason} "
+        "Enable it on the platform page, or choose another backend.",
+        type="BackendDisabled",
+        non_retryable=True,
+    )
 
 
 async def _refuse_on_budget(
@@ -1258,6 +1315,9 @@ async def _reviewer_backend(
     for candidate in allowed:
         if candidate == implementer:
             continue
+        stored = await _backend_row(session, candidate)
+        if not backend_enabled(candidate, stored.enabled if stored else None):
+            continue  # S42-07c: a backend the platform disabled is not a reviewer
         try:
             resolver.resolve(
                 plan.model_request, project=bundle.config, size=item.size, backend=candidate, role=plan.role
