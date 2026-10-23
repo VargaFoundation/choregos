@@ -1,7 +1,8 @@
 # 0018 — OpenTelemetry GenAI conventions from the runner and the gateway
 
 - **Status**: proposed, 2026-09-25 — partially implemented on 2026-10-22 (S40-20: points 1 and 4;
-  S40-20b: point 2, the collector's pipeline and the dashboard; point 3 not yet, see *Implementation*)
+  S40-20b: point 2, the collector's pipeline and the dashboard), point 3 on 2026-10-23 (S40-20c, the
+  drift job; see *Implementation*)
 - **Concerns**: the runner, LiteLLM, the API and orchestrator logging, `infra/bootstrap/otel-collector.yaml`
 
 ## Context
@@ -104,3 +105,19 @@ client spans natively through its OTel callback.
   span metrics. A test refuses a panel that reads a label the connector does not produce, and the
   live test (`tests/live/test_otel_collector_live.py`, LiteLLM + the rendered collector config +
   Tempo in Docker) refuses one that the collector never actually writes.
+
+## Implementation (S40-20c, 2026-10-23)
+
+- **The drift job** (point 3) is `python -m choregos_api.trace_drift`, run nightly by the CronJob
+  `choregos-trace-drift` when `global.tracing.tempoUrl` names Tempo's query address. For each run
+  whose spend was collected in the window, it sums the ledger's `model` rows and the
+  `gen_ai.usage.input_tokens` / `output_tokens` of the gateway's spans in the run's trace (read by
+  the derived trace id), and compares them within a tolerance (1 % of the ledger's figure, at least
+  one token). A drift becomes a **platform** audit line `trace.drift` (`org_id` NULL, so only a
+  platform session reads it), once per run whatever the number of nights that see it; the ledger is
+  never touched. A run whose trace has no gateway usage is `missing`, counted and not recorded: a
+  trace can be sampled, dropped or late. A remote agent's `external` line is not compared.
+- Only spans whose resource `service.name` is `choregos-gateway` count. That name is a claim, not
+  an identity: any process that reaches the collector can write it, the runner pods included, whose
+  network policy opens port 4318 in `monitoring` (#946). A forged span can raise a false drift; it
+  cannot change the ledger.
