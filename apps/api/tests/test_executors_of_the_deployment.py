@@ -49,19 +49,18 @@ async def test_a_bare_server_runs_agent_sandbox(
     assert enabled["tekton"] is False and enabled["local_docker"] is False
 
 
-async def test_a_stored_row_does_not_change_the_reported_executors(
+async def test_there_is_no_route_to_store_an_executor(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """S42-07: `PUT /platform/executors` writes a row nothing reads at runtime (ADR 0072), so
-    the console must keep showing what the deployment really runs."""
+    """S42-07b: `PUT /platform/executors` is gone (it stored a row nothing reads, ADR 0072). The
+    path answers 405 to a write, and the list is still the deployment's own."""
     monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "agent_sandbox")
     monkeypatch.setenv("CHOREGOS_EXECUTORS_ALLOWED", "agent_sandbox")
     before = (await client.get("/api/v1/platform/executors")).json()
-    stored = await client.put("/api/v1/platform/executors", json={"kind": "tekton", "enabled": True})
-    assert stored.status_code == 200
-    stored = await client.put("/api/v1/platform/executors", json={"kind": "agent_sandbox", "enabled": False})
-    assert stored.status_code == 200
+    for kind, enabled in (("tekton", True), ("agent_sandbox", False)):
+        gone = await client.put("/api/v1/platform/executors", json={"kind": kind, "enabled": enabled})
+        assert gone.status_code == 405
     after = (await client.get("/api/v1/platform/executors")).json()
     assert after == before
-    enabled = {e["kind"]: e["enabled"] for e in after}
-    assert enabled["tekton"] is False and enabled["agent_sandbox"] is True
+    flags = {e["kind"]: e["enabled"] for e in after}
+    assert flags["tekton"] is False and flags["agent_sandbox"] is True
