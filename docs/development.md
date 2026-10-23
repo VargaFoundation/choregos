@@ -75,6 +75,9 @@ make test-cluster                          # egress, Postgres restore, manifests
 make cluster-down
 ```
 
+If another cluster holds ports 8080, 3000, 8000 or 8088, use
+`make cluster-up KIND_CONFIG=dev/kind-no-ports.yaml` (S41-24).
+
 The CNI must **enforce** NetworkPolicies. Neither kindnet nor Docker Desktop do: they accept
 the policy and let traffic through. That is why `make cluster-up` installs Calico, and why
 the first test of the suite checks this before anything else. `CHOREGOS_CLUSTER_CONTEXT`

@@ -22,19 +22,16 @@ import asyncio
 import json
 import os
 import secrets
-import subprocess
 import time
-from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
 from choregos_adapters.errors import UnsupportedClusterError
 from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
-from choregos_adapters.executor.tekton import KubernetesClient
 from choregos_core.domain import AgentContainer, StageJobSpec
 from choregos_core.hosted import NATIVE_SIDECARS_MIN, kubernetes_version
 
-from .conftest import context, kubectl_shared
+from .conftest import kubectl_shared
 
 pytestmark = pytest.mark.cluster
 
@@ -54,48 +51,16 @@ def _reference_image() -> str:
     return image
 
 
-@pytest.fixture(scope="module")
-def ns() -> Iterator[str]:
-    name = f"choregos-hosted-{secrets.token_hex(3)}"
-    kubectl_shared("create", "namespace", name)
-    try:
-        kubectl_shared("create", "serviceaccount", "choregos-runner", "-n", name)
-        yield name
-    finally:
-        kubectl_shared("delete", "namespace", name, "--wait=false", "--ignore-not-found", check=False)
-
-
-@pytest.fixture
-async def executor() -> AsyncIterator[KubernetesJobExecutor]:
-    """The real executor, against the API server through `kubectl proxy` (it authenticates)."""
-    proxy = subprocess.Popen(
-        ["kubectl", "--context", context(non_destructive=True), "proxy", "--port=0"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    try:
-        assert proxy.stdout is not None
-        # "Starting to serve on 127.0.0.1:41373"
-        address = proxy.stdout.readline().strip().rsplit(" ", 1)[-1]
-        client = KubernetesClient(f"http://{address}", token=None, verify=False)
-        try:
-            yield KubernetesJobExecutor(client=client, ttl_seconds=600)
-        finally:
-            await client.aclose()
-    finally:
-        proxy.terminate()
-        proxy.wait(timeout=10)
-
-
 def _spec(ns: str, image: str) -> StageJobSpec:
+    # `AgentContainer` only holds a digest-pinned image, and `kind load` leaves a tag. The pin is
+    # kept for the type and replaced by the loaded tag, which is what the node can run.
     agent = AgentContainer(
-        image=image,
+        image="registry.invalid/agent@sha256:" + "a" * 64,
         env={"PORT": "8088", "CHOREGOS_RUN_ID": "hosted-1", "CHOREGOS_MODEL": "reference"},
         termination_grace_s=30,
         cpu="250m",
         memory="256Mi",
-    )
+    ).model_copy(update={"image": image})
     return StageJobSpec(
         run_id=f"hosted-{secrets.token_hex(3)}",
         project_slug="demo",

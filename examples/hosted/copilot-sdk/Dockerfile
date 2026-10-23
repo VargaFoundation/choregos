@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # The Copilot runtime is fetched at build time, never when a run starts: a step's network does not
 # reach GitHub's releases.
 ENV COPILOT_CLI_EXTRACT_DIR=/opt/copilot-cli COPILOT_SKIP_CLI_DOWNLOAD=1
-RUN COPILOT_SKIP_CLI_DOWNLOAD=0 python -m copilot download-runtime
+# The download extracts it as root, mode 0700: the agent (uid 1000) must be able to run it (S41-23).
+RUN COPILOT_SKIP_CLI_DOWNLOAD=0 python -m copilot download-runtime && chmod -R a+rX /opt/copilot-cli
 COPY *.py ./
 USER 1000
 ENV PORT=8088 PYTHONUNBUFFERED=1

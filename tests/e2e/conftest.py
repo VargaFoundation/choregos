@@ -11,6 +11,7 @@ import contextlib
 import os
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -66,6 +67,27 @@ def environnement_e2e() -> Iterator[None]:
     """
     with environnement_pose(ENVIRONNEMENT_E2E):
         yield
+
+
+@pytest.fixture(autouse=True)
+def isolated_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No e2e scenario reads or writes the developer's git (#891): the workspaces the runner
+    creates live under `tmp_path`, with their own `HOME` and no system or global git config, and
+    no inherited variable points git at the checkout the tests were started from."""
+    for name in (
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_NAMESPACE",
+        "GIT_PREFIX",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "home" / ".gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
 
 
 class BridgedTemporal:

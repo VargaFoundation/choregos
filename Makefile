@@ -2,6 +2,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 UV ?= uv
+KIND_CONFIG ?= dev/kind.yaml
 # La version de pnpm est LUE dans `apps/web/package.json`, jamais recopiée. Le commentaire
 # précédent disait déjà « c'est celle de package.json » au-dessus d'un 9.15.0 écrit à la main,
 # resté là quand le dépôt est passé à pnpm 12 : `make web-install` échouait sur « packages field
@@ -272,7 +273,7 @@ e2e:  ## Scénarios bout en bout (kind requis)
 .PHONY: cluster-up
 cluster-up:  ## Cluster kind dédié aux tests (Calico : les NetworkPolicy sont appliquées)
 	@command -v kind >/dev/null || { echo "✗ kind est requis (voir docs/development.md)"; exit 1; }
-	kind create cluster --config dev/kind.yaml --wait 180s || true
+	kind create cluster --config $(KIND_CONFIG) --wait 180s || true
 	kubectl --context kind-choregos apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
 	@echo "· attente du CNI…"
 	kubectl --context kind-choregos -n kube-system rollout status ds/calico-node --timeout=300s

@@ -342,3 +342,277 @@ spec:
   - name: node
     hostPath:
       path: /
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: container-unconfined-seccomp
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: Unconfined
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: container-unconfined-apparmor
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+      appArmorProfile:
+        type: Unconfined
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-unconfined-apparmor
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+    appArmorProfile:
+      type: Unconfined
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-unconfined-seccomp
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  initContainers:
+  - name: sidecar
+    image: ghcr.io/example/side:1
+    restartPolicy: Always
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: Unconfined
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-unconfined-apparmor
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  initContainers:
+  - name: sidecar
+    image: ghcr.io/example/side:1
+    restartPolicy: Always
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      appArmorProfile:
+        type: Unconfined
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ephemeral-unconfined-seccomp
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  ephemeralContainers:
+  - name: debugger
+    image: ghcr.io/example/debug:1
+    securityContext:
+      seccompProfile:
+        type: Unconfined
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ephemeral-unconfined-apparmor
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  ephemeralContainers:
+  - name: debugger
+    image: ghcr.io/example/debug:1
+    securityContext:
+      appArmorProfile:
+        type: Unconfined
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: profiles-confined
+  namespace: proj-demo-runners
+  labels:
+    choregos/project: demo
+spec:
+  containers:
+  - name: main
+    image: ghcr.io/example/api:1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+      appArmorProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+    appArmorProfile:
+      type: Localhost
+      localhostProfile: choregos
+  initContainers:
+  - name: sidecar
+    image: ghcr.io/example/side:1
+    restartPolicy: Always
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: Localhost
+      appArmorProfile:
+        type: RuntimeDefault
+  ephemeralContainers:
+  - name: debugger
+    image: ghcr.io/example/debug:1
+    securityContext:
+      seccompProfile:
+        type: RuntimeDefault
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: choregos-buildkitd-7d9f
+  namespace: choregos-platform
+spec:
+  containers:
+  - name: buildkitd
+    image: ghcr.io/example/buildkit:1
+    securityContext:
+      seccompProfile:
+        type: Unconfined
+      appArmorProfile:
+        type: Unconfined
+      allowPrivilegeEscalation: true
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+        add:
+        - SETUID
+        - SETGID
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault

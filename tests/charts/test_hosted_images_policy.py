@@ -154,6 +154,43 @@ def test_the_policy_pins_every_container_list_and_verifies_the_signer() -> None:
     assert entry == {"keys": {"secret": {"name": "acme-cosign", "namespace": "tenant-a"}}}
 
 
+def _grant(*overrides: str) -> dict[str, dict[str, Any]]:
+    return {
+        d["kind"]: d
+        for d in _documents(*overrides)
+        if d["kind"] in {"Role", "RoleBinding"} and d["metadata"]["name"] == "choregos-kyverno-cosign-key"
+    }
+
+
+def test_kyverno_may_read_the_key_secret_and_nothing_else() -> None:
+    # S41-25: on a real cluster Kyverno refused every pod, "cannot get resource secrets".
+    grant = _grant(*ENFORCED)
+    (rule,) = grant["Role"]["rules"]
+    assert rule == {
+        "apiGroups": [""],
+        "resources": ["secrets"],
+        "resourceNames": ["acme-cosign"],
+        "verbs": ["get"],
+    }
+    assert grant["RoleBinding"]["subjects"] == [
+        {"kind": "ServiceAccount", "name": "kyverno-admission-controller", "namespace": "kyverno"}
+    ]
+
+
+def test_no_grant_when_the_platform_team_gives_it() -> None:
+    assert _grant(*ENFORCED, "global.images.hostedCosignKyvernoGrant=false") == {}
+
+
+def test_no_grant_for_a_keyless_signer() -> None:
+    assert not _grant(
+        "global.images.hostedRegistries={ghcr.io/acme}",
+        "global.images.hostedCosign=enforce",
+        "global.images.hostedCosignIdentity=^a$",
+        "global.images.hostedCosignIssuer=^b$",
+        "global.images.hostedCosignPolicy=true",
+    )
+
+
 def test_under_warn_the_policy_pins_and_keyless_verifies_the_identity() -> None:
     warned = _policy(
         "global.images.hostedRegistries={ghcr.io/acme}",

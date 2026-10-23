@@ -1885,6 +1885,11 @@ answers 429 (or 503 with `Retry-After`).
   `max_bytes`; anything else is a `415`. What comes back is third-party text: it goes through the
   prompt-injection guard like a connector's answer.
 
+The address is checked like a search query (ADR 0083 §5): if its path or query (as written or
+percent-decoded) holds what redaction would change, a remembered secret or a token or credential
+pattern, the call is refused with 422 `url_redacted` before any DNS lookup or request, journaled
+(`denied`, `redacted`) and not counted. Nothing is rewritten; the agent writes the address without it.
+
 Every fetch is a tool call: it counts in `tool_calls_per_run`, writes a ledger row (`provider:
 web:<host>`) and a `choregos.tool.called` event, and is journaled under Network activity with layer
 `broker`. `web_fetch` is the only place where method and robots.txt can hold for what an agent reads:

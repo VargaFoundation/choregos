@@ -144,6 +144,11 @@ global:
     # container, init container or native sidecar whose image is under `hostedRegistries` runs only
     # pinned by `@sha256:` and, under `enforce`, signed by the signer above. Requires Kyverno.
     hostedCosignPolicy: false
+    # With a key Secret, the policy has Kyverno read it at admission: this renders the Role and
+    # RoleBinding (that one Secret, `get`) for Kyverno's admission controller (S41-25). false: the
+    # platform team grants it; `hostedCosignKyverno` names the ServiceAccount if it is not this one.
+    hostedCosignKyvernoGrant: true
+    hostedCosignKyverno: { namespace: kyverno, serviceAccount: kyverno-admission-controller }
     # Hosted zips (ADR 0080 §9): the repository the platform pushes the images it builds to, as
     # `registry/path` (tagged `build-<key>`, run by digest). Empty: a zip version publishes, and its
     # build fails with the reason. The orchestrator's executor worker pushes there.

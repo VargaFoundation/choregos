@@ -39,6 +39,8 @@ spec:
                   runAsNonRoot: true
                   seccompProfile:
                     type: "RuntimeDefault | Localhost"
+                  =(appArmorProfile):
+                    type: "RuntimeDefault | Localhost"
                 containers:
                   - securityContext:
                       allowPrivilegeEscalation: false
@@ -46,6 +48,12 @@ spec:
                       capabilities:
                         drop:
                           - ALL
+                      # A container's own profile overrides the pod's: `Unconfined` on a container
+                      # would pass a rule that only reads the pod level (finding #784).
+                      =(seccompProfile):
+                        type: "RuntimeDefault | Localhost"
+                      =(appArmorProfile):
+                        type: "RuntimeDefault | Localhost"
                 # Same container-level rules for init containers (native sidecars included);
                 # optional anchor so a pod without any still passes.
                 =(initContainers):
@@ -55,6 +63,19 @@ spec:
                       capabilities:
                         drop:
                           - ALL
+                      # A container's own profile overrides the pod's: `Unconfined` on a container
+                      # would pass a rule that only reads the pod level (finding #784).
+                      =(seccompProfile):
+                        type: "RuntimeDefault | Localhost"
+                      =(appArmorProfile):
+                        type: "RuntimeDefault | Localhost"
+                # Ephemeral containers (kubectl debug) carry their own profiles too.
+                =(ephemeralContainers):
+                  - =(securityContext):
+                      =(seccompProfile):
+                        type: "RuntimeDefault | Localhost"
+                      =(appArmorProfile):
+                        type: "RuntimeDefault | Localhost"
     - name: no-hostpath
       match:
         any:

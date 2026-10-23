@@ -174,6 +174,12 @@ the executor creates through autogen. What it proves:
 - the `hosted-gvisor` CI job runs both and fails on a skip;
 - `tests/cluster/test_hosted_gvisor.py` runs S41-16's hosted Job under `gvisor` on a kind cluster
   where `make cluster-gvisor` installed `runsc` (`dev/scripts/gvisor.sh`, release and sha512 pinned).
+- `tests/cluster/test_hosted_native_sidecar.py`, `test_hosted_session_pod.py` (S41-24) run the native
+  sidecar, the refusal below 1.29, a session's pod with the real runner image and the shared
+  workspace's `fsGroup` on kind; the `hosted-cluster` CI job runs them with the gVisor one and fails
+  on a skip. They need `CHOREGOS_HOSTED_REFERENCE_IMAGE` and `CHOREGOS_HOSTED_RUNNER_IMAGE`, images
+  loaded into the cluster (`tests/cluster/assets/runner.Dockerfile` is the slim runner). runsc does
+  not start a pod in kind over WSL2 (cgroup v1): run the gVisor test on a cgroup v2 host.
 
 **Five frameworks pass the conformance suite (S41-06).** [`examples/hosted/`](../examples/hosted/README.md)
 holds one ticket triager on each framework, unchanged by the platform and importing nothing from
@@ -199,8 +205,15 @@ make conformance-hosted IMAGE=my-registry/langgraph-triager                # as 
 What an image must do, learnt from the five SDKs: switch the SDK's own traffic off (tracing,
 telemetry, error reports: `no_egress` fails otherwise), give the Claude and Copilot runtimes no
 built-in tool, and fetch what the SDK downloads at first use (the Copilot runtime) when the image is
-built. The blocking CI runs the reference; `.github/workflows/hosted-agent-examples.yml` builds the
-images and runs the suite against each, nightly, without blocking.
+built. The blocking CI runs the reference as a process, and, in the `hosted-images` job (S41-23),
+builds every example (the zips through the platform's own Dockerfile and `LocalDockerBuilder`, into a
+registry) and runs each image through the suite; the `hosted-docker` job runs a hosted container in
+the runner's workspace volume and relays a real container's `/invocations_ws`. Locally:
+`CHOREGOS_TEST_HOSTED_DOCKER=1 CHOREGOS_TEST_HOSTED_REGISTRY=localhost:5055 pytest tests/conformance/hosted_real`
+(with `docker run -d -p 5055:5000 registry:2`). Under Docker Desktop, `--network=host` is the VM's, so
+the harness joins the agent to a socat relay container; `CHOREGOS_CONFORMANCE_DOCKER_NETWORK=relay|host`
+forces the choice. `.github/workflows/hosted-agent-examples.yml` (nightly, non-blocking) is the older,
+hand-written version of the same builds.
 
 **An agent written for Foundry runs unchanged (S41-19).** `examples/hosted/agent-framework-foundry`
 is the triager as a Foundry deployment holds it: Agent Framework's `FoundryChatClient` with
@@ -506,8 +519,11 @@ Publication asks the `cosign` binary the API image carries (v3.1.3) about the **
   cosign reads).
 - **Keyless**: `hostedCosignIdentity` and `hostedCosignIssuer` (`CHOREGOS_HOSTED_COSIGN_IDENTITY`,
   `_ISSUER`), the certificate's subject and its OIDC issuer as regular expressions. Cosign searches
-  them; the API then matches cosign's reported subject and issuer **whole** (`re.fullmatch`), so
-  `https://github\.com/acme/.+` does not accept `https://evil.example/?https://github.com/acme/x`.
+  them **anchored** (`^(?:…)$`: cosign searches, so a bare `a@b` would accept `evil-a@b.evil`) and,
+  when cosign reports the certificate (a legacy signature), the API matches its subject and issuer
+  **whole** (`re.fullmatch`) again. A cosign 3 bundle reports none in `--output json`: there cosign's
+  own exit code, with the anchored expressions, is the verdict (proved against the real Sigstore,
+  S41-25). `https://github\.com/acme/.+` does not accept `https://evil.example/?https://github.com/acme/x`.
   Anchor them anyway (`^…$`): Kyverno searches them too.
 - `hostedCosignTlog: false` (`CHOREGOS_HOSTED_COSIGN_TLOG`) skips the transparency log, for a key
   whose signatures were never uploaded to Rekor.
@@ -523,8 +539,17 @@ the publisher: cosign missing, 60 s without an answer, cosign's own `Error:` lin
 an image under `hostedRegistries` in `containers`, `initContainers` (a native sidecar is one) or
 `ephemeralContainers` runs only pinned by `@sha256:`; under `enforce`, Kyverno also verifies it
 against the same key Secret or keyless identity. The chart refuses to render the policy without
-`hostedRegistries`, or under `enforce` without a signer. Kyverno must be allowed to read the key
-Secret.
+`hostedRegistries`, or under `enforce` without a signer. Kyverno reads the key Secret as its
+admission controller's ServiceAccount: the chart renders a `get` Role on that one Secret for
+`kyverno:kyverno-admission-controller` (`hostedCosignKyvernoGrant: false` leaves it to the platform
+team; `hostedCosignKyverno` names another ServiceAccount). Kyverno must also be able to reach the
+registry (an HTTP one needs `--allowInsecureRegistry`).
+
+**Signing for admission.** Kyverno 1.19.1's `keys` attestor reads cosign's legacy `.sig` signature and
+finds none in a cosign 3 bundle (an OCI referrer, cosign 3's default): sign with
+`cosign sign --new-bundle-format=false` (or both) an image the policy must admit. The API's own check
+(cosign 3) reads both formats. Proved in a cluster by `tests/cluster/test_hosted_images_admission.py`
+(job `hosted-admission`).
 
 What is not covered: the cosign subprocess does not go through the platform's egress client; the
 registry was judged by the organisation's egress allowlist when the digest was resolved, and keyless

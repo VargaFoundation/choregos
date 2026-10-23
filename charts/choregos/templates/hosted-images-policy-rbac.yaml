@@ -1,0 +1,35 @@
+{{- /*
+Kyverno reads the signer's public key itself, at admission (`k8s://<namespace>/<secret>`), as its
+admission controller's ServiceAccount. Without this Role, the policy of `hosted-images-policy.yaml`
+refuses every pod under the hosted registries with "cannot get resource secrets" (found on a real
+cluster, S41-25). One Secret, `get` only. `hostedCosignKyvernoGrant: false` leaves the grant to the
+platform team.
+*/ -}}
+{{- $i := .Values.global.images | default dict }}
+{{- if and $i.hostedCosignPolicy $i.hostedCosignKeySecret (ne (toString $i.hostedCosignKyvernoGrant) "false") }}
+{{- $kyverno := $i.hostedCosignKyverno | default dict }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: choregos-kyverno-cosign-key
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ $i.hostedCosignKeySecret | quote }}]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: choregos-kyverno-cosign-key
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: choregos-kyverno-cosign-key
+subjects:
+  - kind: ServiceAccount
+    name: {{ $kyverno.serviceAccount | default "kyverno-admission-controller" | quote }}
+    namespace: {{ $kyverno.namespace | default "kyverno" | quote }}
+{{- end }}

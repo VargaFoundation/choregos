@@ -29,8 +29,10 @@ from .harness import (
     HostedAgentSpec,
     container_command,
     free_port,
+    needs_relay,
     node_example,
     python_example,
+    relay_command,
     run_hosted_suite,
 )
 
@@ -132,3 +134,19 @@ def test_an_image_agent_runs_through_docker_with_the_environment_by_name() -> No
     assert command[-5:] == ["-e", "A", "-e", "B", "registry.example/a@sha256:" + "0" * 64], (
         "variables are passed by name, never by value"
     )
+
+
+def test_under_docker_desktop_the_agent_joins_a_relay_that_forwards_the_loopback_listeners(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    """S41-23: Docker Desktop's `--network=host` is the VM's, so the agent joins a socat container."""
+    command = container_command("img@sha256:" + "0" * 64, {"A": "1"}, "c-1", network="container:c-1-net")
+    assert "--network=container:c-1-net" in command and "--network=host" not in command
+    relay = relay_command("c-1-net", [4000, 4001], 8088)
+    assert relay[relay.index("-p") : relay.index("-p") + 2] == ["-p", "127.0.0.1:8088:8088"]
+    script = relay[-1]
+    assert "TCP-LISTEN:4000,bind=127.0.0.1" in script and "TCP:host.docker.internal:4001" in script
+    monkeypatch.setenv("CHOREGOS_CONFORMANCE_DOCKER_NETWORK", "relay")
+    assert needs_relay()
+    monkeypatch.setenv("CHOREGOS_CONFORMANCE_DOCKER_NETWORK", "host")
+    assert not needs_relay()

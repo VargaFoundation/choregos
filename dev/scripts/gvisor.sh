@@ -28,7 +28,8 @@ fetch() {
   echo "${GVISOR_SHA512}  $dir/gvisor.tar.bz2" | sha512sum -c - >/dev/null \
     || { echo "✗ gvisor.tar.bz2 does not match the pinned sha512" >&2; rm -f "$dir/gvisor.tar.bz2"; exit 1; }
   tar -xjf "$dir/gvisor.tar.bz2" -C "$dir"
-  "$dir/runsc" --version | head -1
+  # sed, not head: head closes the pipe early, and under pipefail runsc's SIGPIPE fails the script (141).
+  "$dir/runsc" --version | sed -n 1p
 }
 
 install_kind() {
