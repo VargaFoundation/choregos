@@ -4026,7 +4026,6 @@ export interface Operations {
   publishSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions"; body: SkillFiles; response: SkillVersion };
   putBackend: { method: "PUT"; path: "/platform/backends"; body: AgentBackendUpdate; response: AgentBackendInfo };
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
-  putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
   putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };

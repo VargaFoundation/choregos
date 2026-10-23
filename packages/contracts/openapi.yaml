@@ -1728,14 +1728,6 @@ paths:
       operationId: listExecutors
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ExecutorInfo" } } } } }
-    put:
-      tags: [admin]
-      operationId: putExecutor
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ExecutorInfo" } } }
-      responses:
-        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutorInfo" } } } }
   /platform/identity:
     get:
       tags: [admin]
