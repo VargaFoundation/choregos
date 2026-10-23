@@ -240,7 +240,7 @@ Base `/api/v1`. Auth : session OIDC (cookie) ou `Authorization: Bearer <api_toke
 | Mémoire | `GET /projects/{id}/memory/search?q=`, `GET/POST /projects/{id}/memory/pending`, `POST /projects/{id}/memory/reimport` |
 | Coûts | `GET /projects/{id}/costs?group_by=day|stage|model|backend|size`, `GET /orgs/{org}/costs` |
 | Templates | `GET /templates`, `GET /templates/{name}` ; admin `POST/PUT` |
-| Admin | `GET/PUT /platform/backends`, `GET/PUT /platform/executors`, `GET /platform/gateway/keys`, `GET/POST /orgs/{org}/members`, `GET /audit` |
+| Admin | `GET/PUT /platform/backends`, `GET /platform/executors`, `GET /platform/gateway/keys`, `GET/POST /orgs/{org}/members`, `GET /audit` |
 | Webhooks (entrants) | `POST /webhooks/github` (HMAC), `POST /webhooks/jira`, `POST /webhooks/gitlab`, `POST /webhooks/tekton` (CloudEvents), `POST /webhooks/argocd`, `POST /webhooks/alertmanager` |
 | Internal (runner → API, JWT de run) | `GET /internal/runs/{id}/input`, `POST /internal/runs/{id}/events` (batch), `POST /internal/runs/{id}/result`, `POST /internal/runs/{id}/findings`, `POST /internal/runs/{id}/scope-change`, `POST /internal/runs/{id}/question`, `GET /internal/runs/{id}/context`, `GET /internal/runs/{id}/ticket`, `GET /internal/runs/{id}/ci-logs` |
 
