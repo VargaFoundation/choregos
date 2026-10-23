@@ -1,0 +1,54 @@
+{{- $tempo := (.Values.global.tracing | default dict).tempoUrl }}
+{{- if and .Values.enabled $tempo }}
+# The nightly ledger-vs-trace comparison (ADR 0018 point 3, `python -m choregos_api.trace_drift`):
+# each run's model tokens in the ledger against the gateway's spans of its trace, read from Tempo.
+# A drift is a platform audit line (`trace.drift`), never a correction of the ledger. Rendered
+# only with `global.tracing.tempoUrl`: without Tempo there is no trace to read.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: choregos-trace-drift
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.traceDrift.schedule | quote }}
+  # One comparison at a time: a slow night does not overlap the next one.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: choregos-trace-drift
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/component: trace-drift
+        spec:
+          restartPolicy: Never
+          serviceAccountName: choregos-api
+          # It talks to the database and to Tempo, never to the Kubernetes API.
+          automountServiceAccountToken: false
+          {{- include "choregos.imagePullSecrets" $ | nindent 10 }}
+          securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 12 }}
+          containers:
+            - name: trace-drift
+              image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
+              command:
+                - python
+                - -m
+                - choregos_api.trace_drift
+                - --hours
+                - {{ .Values.traceDrift.hours | quote }}
+                - --settle-minutes
+                - {{ .Values.traceDrift.settleMinutes | quote }}
+              env:
+                {{- include "choregos.commonEnv" . | nindent 16 }}
+                - name: CHOREGOS_TEMPO_URL
+                  value: {{ $tempo | quote }}
+              securityContext: {{- toYaml .Values.global.securityContext | nindent 16 }}
+              resources:
+                requests: { cpu: 50m, memory: 192Mi }
+                limits: { cpu: 500m, memory: 384Mi }
+{{- end }}
