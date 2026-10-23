@@ -69,6 +69,18 @@ KNOWN_BACKEND_NAMES: tuple[str, ...] = (
     "copilot-cli",
 )
 
+#: The one backend enabled when the platform administrator never stored a setting for it.
+DEFAULT_ENABLED_BACKEND = "claude-code"
+
+
+def backend_enabled(name: str, stored: bool | None) -> bool:
+    """Whether a coding-agent backend may start a stage (S42-07c).
+
+    `stored` is the `enabled` flag of the platform's `agent_backends` row, `None` when there is
+    none (fresh install): then only `claude-code` is on. The API listing, the readiness check and
+    the orchestrator all call this, so the console and the enforcement cannot diverge."""
+    return stored if stored is not None else name == DEFAULT_ENABLED_BACKEND
+
 
 #: The backends a runtime fixes, never chosen by rotation (`profile:by_size`, cross-backend review):
 #: an agent written in code runs only as the `code` runtime of its version (ADR 0063), a prompt agent
