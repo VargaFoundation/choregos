@@ -513,11 +513,12 @@ async def call_session_tool(
     arguments: dict[str, Any],
 ) -> str:
     """One read through the courtier, as a run's: the policy's cap, the schema, the connector's key
-    resolved here, the injection guard, a ledger line. What the model reads back is text."""
+    resolved here, the injection guard, a ledger line. What the model reads back is text: the text
+    blocks and, when they do not serialize it, the `structuredContent` (S40-18c), guarded as read."""
     from choregos_core.injection import suspicions as find
     from choregos_core.policy import PolicyEngine
 
-    from .courtier import ArgumentsRefuses, appeler, texte_du_resultat, verifier_les_arguments
+    from .courtier import ArgumentsRefuses, appeler, session_text, verifier_les_arguments
     from .definitions import effective_policy
 
     engine = PolicyEngine(await effective_policy(session, project.id))
@@ -530,7 +531,7 @@ async def call_session_tool(
         return str(refusal)
     code, body = await appeler(session, tool, arguments, project=project)
     refused_by_network = isinstance(body, dict) and body.get("type") in {"network_policy", "rate_limited"}
-    text = texte_du_resultat(body) if code < 400 else json.dumps(body, default=str)[:2000]
+    text = session_text(body) if code < 400 else json.dumps(body, default=str)[:2000]
     mode = engine.policy.sandbox.prompt_injection
     found = [] if mode == "ignore" or refused_by_network else find(text, source=f"tool.{tool.nom}")
     if found:

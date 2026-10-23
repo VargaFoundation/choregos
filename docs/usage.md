@@ -794,6 +794,11 @@ The injection guard then reads what is left (S40-18): an MCP-shaped answer's tex
 string of its `structuredContent` (S40-18b), any other JSON's strings, keys included; `sandbox.prompt_injection` decides as for a broker result (`warn`
 returns `suspicions` beside the result, `block` withholds it with `status_code: 451`).
 
+A session (prompt, hosted or realtime) gives its model text: the answer's text blocks, then its
+`structuredContent` as JSON unless a text block already serializes it, as MCP asks a server to
+(S40-18c). Both come after the cap and the masking, and the injection guard reads exactly that text;
+over the cap, the structured part is dropped and the model reads the cut text with its marker.
+
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
 

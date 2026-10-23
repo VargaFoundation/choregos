@@ -587,6 +587,28 @@ def texte_du_resultat(resultat: dict[str, Any]) -> str:
     return "\n".join(str(b.get("text", "")) for b in blocs if isinstance(b, dict) and b.get("type") == "text")
 
 
+def session_text(result: dict[str, Any]) -> str:
+    """What a session's model reads of a tool answer (S40-18c): its text blocks, then its
+    `structuredContent` as JSON unless a text block already serializes it, as MCP asks a server to
+    do. The answer was bounded and masked before (`bounded_result`), its structured part with it."""
+    text = texte_du_resultat(result)
+    structured = result.get("structuredContent")
+    if structured is None or _serialized_in_text(result, structured):
+        return text
+    return f"{text}\n{_json(structured)}" if text else _json(structured)
+
+
+def _serialized_in_text(result: dict[str, Any], structured: Any) -> bool:
+    for block in result.get("content") or []:
+        if isinstance(block, dict) and block.get("type") == "text":
+            try:
+                if json.loads(str(block.get("text", ""))) == structured:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
 def readable_text(payload: Any) -> str:
     """What the agent will read of any tool answer: an MCP result's text blocks and every string of
     its `structuredContent` (S40-18b), otherwise every string of the JSON, keys included — a
