@@ -38,6 +38,7 @@ jobs:
       hosted-foundry: ${{ steps.filter.outputs.hosted-foundry }}
       hosted-cluster: ${{ steps.filter.outputs.hosted-cluster }}
       hosted-images: ${{ steps.filter.outputs.hosted-images }}
+      llm-guard: ${{ steps.filter.outputs.llm-guard }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -169,6 +170,14 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'pyproject.toml'
               - 'uv.lock'
+            # The LLM guard in the chart's real LiteLLM (S40-21b, S40-21c): the guard, the chart that
+            # ships it with the gateway's image and config, the live test and its fake provider.
+            llm-guard:
+              - 'packages/core/src/choregos_core/llm_guardrail.py'
+              - 'charts/choregos/charts/litellm/**'
+              - 'tests/live/test_llm_guard_live.py'
+              - 'tests/live/llm_guard_upstream.py'
+              - '.github/workflows/ci.yml'
 
   python:
     needs: changes
@@ -782,6 +791,33 @@ jobs:
           uv run pytest tests/conformance/hosted_real/test_shared_workspace.py packages/runner/tests/test_serve_session_socket_docker.py -rs 2>&1 | tee pytest.out
           test "${PIPESTATUS[0]}" -eq 0
           ! grep -qi skipped pytest.out
+  llm-guard:
+    # The LLM guard in the gateway as the chart ships it (S40-21b, S40-21c): the chart's LiteLLM image,
+    # config and guard file, in front of a fake provider that answers with secrets, on every route
+    # (`/chat/completions`, `/v1/messages`, `/v1/responses`), streamed or not, reasoning included;
+    # and a second gateway whose guard fails on the answer, which must withhold it. The unit tests
+    # stand LiteLLM's objects in; only LiteLLM itself proves which hooks fire with which shapes.
+    needs: changes
+    if: needs.changes.outputs.llm-guard == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CHOREGOS_LIVE_LLM_GUARD: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - uses: azure/setup-helm@v5
+        with: { version: v3.22.0 }
+      - name: the guard in the chart's LiteLLM
+        run: |
+          uv run pytest tests/live/test_llm_guard_live.py -m live -rs 2>&1 | tee pytest.out
+          test "${PIPESTATUS[0]}" -eq 0
+          ! grep -qi skipped pytest.out
+      - name: containers that are still up
+        if: failure()
+        run: docker ps -a
   ci-ok:
     # Single target for branch protection and the merge queue.
     #
@@ -798,7 +834,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:
