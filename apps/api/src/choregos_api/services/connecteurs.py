@@ -44,6 +44,18 @@ def spec_du_type(kind: str, type_name: str) -> ConnectorTypeSpec:
     return spec
 
 
+def check_type_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
+    """The type's own configuration check (S40-01k: a Firecrawl `base_url` is required and never the
+    cloud): 422 with the adapter's message, before anything is written."""
+    from choregos_adapters import validate_config
+    from choregos_adapters.errors import AdapterError
+
+    try:
+        validate_config(kind, type_name, config)
+    except AdapterError as refused:
+        raise unprocessable(str(refused)) from refused
+
+
 def check_runtime_allowed(type_name: str) -> None:
     """Refuse a `runtime` connector the deployment does not run (ADR 0072).
 

@@ -123,10 +123,16 @@ async def put_connector(
             "the `direct` gateway is refused in this environment: it measures no cost and "
             "enforces no cap. Use `litellm`."
         )
-    from ..services.connecteurs import check_runtime_allowed, spec_du_type, verifier_les_secrets
+    from ..services.connecteurs import (
+        check_runtime_allowed,
+        check_type_config,
+        spec_du_type,
+        verifier_les_secrets,
+    )
     from ..services.github_app import checked_config
     from ..services.platform_network import check_connector_declaration
 
+    check_type_config(kind, body.type, body.config)
     await check_connector_declaration(session, ctx.project.org_id, body.config, kind)
     if kind == "runtime":
         check_runtime_allowed(body.type)

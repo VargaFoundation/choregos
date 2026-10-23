@@ -1930,7 +1930,8 @@ web_search:
 ```
 
 The backend is an organisation connector of kind **Web search** (`brave`, `tavily`, `firecrawl`), its
-key sealed in the API. Each type declares what it does with queries; the shipped ones declare **every
+key sealed in the API. `firecrawl` is **self-hosted only** (ADR 0086): its `base_url` is required and
+Firecrawl's cloud (`*.firecrawl.dev`) is refused. Each type declares what it does with queries; the shipped ones declare **every
 field unknown** (their terms were not reviewed), and an unknown value fails every bound that reads it.
 To use one under a cap, state your contract in the connector's `data_handling`, for example
 `{"query_retention_days": 0, "query_reuse": false, "terms_ref": "contract ref, §4"}`: a declaration

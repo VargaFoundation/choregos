@@ -39,6 +39,7 @@ from .registry import (
     register,
     spec_of,
     type_par_defaut,
+    validate_config,
 )
 
 
@@ -76,6 +77,7 @@ __all__ = [
     "register",
     "spec_of",
     "type_par_defaut",
+    "validate_config",
 ]
 
 
@@ -87,6 +89,22 @@ def _confluence_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
     if config.get("auth") == "scoped" and ("api.atlassian.com", 443) not in hosts:
         hosts.append(("api.atlassian.com", 443))
     return hosts
+
+
+def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
+    """The self-hosted instance's host and port, and nothing else (S40-01k): the organisation's network
+    ceiling is checked against what the connector really calls. No `base_url`: no host, and the
+    adapter refuses to be built."""
+    from choregos_core.egress import host_port_of
+
+    found = host_port_of(config.get("base_url"))
+    return [found] if found else []
+
+
+def _firecrawl_check(config: dict[str, Any]) -> None:
+    from .web_search.firecrawl import checked_base_url
+
+    checked_base_url(config.get("base_url"))
 
 
 def _github_client(config: dict[str, Any]) -> Any:
@@ -554,19 +572,22 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         egress=lambda _cfg: [("api.tavily.com", 443)],
     ),
     ("web_search", "firecrawl"): ConnectorTypeSpec(
-        "Firecrawl search, cloud or self-hosted (no scraping)",
+        "Firecrawl search, self-hosted only (no scraping)",
         ("web_search",),
         _objet(
             {
                 "base_url": {
                     "type": "string",
-                    "default": "https://api.firecrawl.dev",
-                    "description": "Firecrawl's cloud, or the address of a self-hosted instance",
+                    "description": "the address of your self-hosted Firecrawl instance, required; "
+                    "Firecrawl's cloud (firecrawl.dev) is refused",
                 },
                 **_WEB_SEARCH_CONFIG,
-            }
+            },
+            ("base_url",),
         ),
         ("api_key",),
+        egress=_firecrawl_egress,
+        check_config=_firecrawl_check,
     ),
     # Le train d'un locataire de démonstration (S21-24) : un environnement en mémoire, ou servi par le
     # processus des faux. Aucune opération exposée : c'est le train qui l'appelle, jamais un agent.
@@ -934,8 +955,9 @@ def _register_web_search() -> None:
                 "api_key": str(cfg.get("api_key", "")),
                 "timeout_s": float(cfg.get("timeout_s", 20)),
             }
-            if nom == "firecrawl" and cfg.get("base_url"):
-                options["base_url"] = str(cfg["base_url"])
+            if nom == "firecrawl":
+                # No default: an absent base_url is refused by the adapter, never replaced by the cloud.
+                options["base_url"] = str(cfg.get("base_url") or "")
             return BACKENDS[nom](**options)
 
         return construire
