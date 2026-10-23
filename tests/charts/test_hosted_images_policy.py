@@ -154,6 +154,22 @@ def test_the_policy_pins_every_container_list_and_verifies_the_signer() -> None:
     assert entry == {"keys": {"secret": {"name": "acme-cosign", "namespace": "tenant-a"}}}
 
 
+@pytest.mark.parametrize(
+    ("overrides", "kind"),
+    [((), "SigstoreBundle"), (("global.images.hostedCosignFormat=legacy",), "Cosign")],
+)
+def test_kyverno_reads_the_signature_format_the_operator_names(overrides: tuple[str, ...], kind: str) -> None:
+    # S41-25b: the default `Cosign` type finds no signature in a cosign 3 bundle, `SigstoreBundle`
+    # finds no `.sig`; a cluster test admits and refuses both ways (test_hosted_images_admission).
+    (verify,) = _policy(*ENFORCED, *overrides)["spec"]["rules"][1]["verifyImages"]
+    assert verify["type"] == kind
+
+
+def test_an_unknown_signature_format_does_not_render() -> None:
+    rendered = _render(*ENFORCED, "global.images.hostedCosignFormat=v2", show=POLICY)
+    assert rendered.returncode != 0 and "bundle or legacy" in rendered.stderr
+
+
 def _grant(*overrides: str) -> dict[str, dict[str, Any]]:
     return {
         d["kind"]: d

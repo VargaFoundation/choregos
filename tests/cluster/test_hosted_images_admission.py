@@ -1,4 +1,4 @@
-"""S41-25 - the chart's hosted-images Kyverno policy, in a real Kyverno on a real cluster.
+"""S41-25, S41-25b - the chart's hosted-images Kyverno policy, in a real Kyverno on a real cluster.
 
 `tests/charts/test_hosted_images_policy.py` judges the rendered policy with the `kyverno` CLI. This
 test installs nothing itself: it needs a cluster with Kyverno running (the admission controller
@@ -7,13 +7,15 @@ reaches (`CHOREGOS_ADMISSION_REGISTRY_PUSH`, e.g. `localhost:5025`) and the clus
 another name (`CHOREGOS_ADMISSION_REGISTRY_CLUSTER`, e.g. `s41-25-reg:5000`). Both name the same
 registry; without them, or without `cosign`, `crane`, `helm` or `kubectl`, every test is skipped.
 
-It renders the chart's policy (`hostedCosign=enforce`, a key), applies it, and creates Pods:
+It renders the chart's policy (`hostedCosign=enforce`, a key) once per `hostedCosignFormat`, applies
+it, and creates Pods:
 
 - an image nobody signed: refused;
-- an image signed in cosign's legacy `.sig` format: admitted;
-- an image signed in cosign 3's bundle format (an OCI referrer): REFUSED by Kyverno 1.19.1 ("no
-  signatures found"), pinned here as a strict `xfail` so the day Kyverno reads bundles the suite says so;
-- a signature of one image copied onto another's tag: refused;
+- an image signed in the format the policy names (cosign 3's bundle, or the legacy `.sig`): admitted;
+- an image signed only in the other format: refused. Kyverno reads one format per `verifyImages`
+  entry: its default `Cosign` type finds "no signatures found" in a bundle (S41-25's finding), and
+  `SigstoreBundle` finds none in a `.sig` (S41-25b);
+- a signature of one image copied onto another's tag (both formats' tags): refused;
 - a signed image named by a tag, without a digest: refused by the digest rule;
 - a signed image from a registry the policy does not cover: not asked about its signature.
 
@@ -77,6 +79,7 @@ def _kubectl(
 
 @dataclass(frozen=True)
 class Images:
+    format: str
     signed_legacy: str
     signed_bundle: str
     unsigned: str
@@ -100,8 +103,9 @@ def _image(tmp: pathlib.Path, repository: str, tag: str) -> str:
     return _run("crane", "digest", "--insecure", f"{name}:{tag}").stdout.strip()
 
 
-@pytest.fixture(scope="module")
-def images(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Images]:
+@pytest.fixture(scope="module", params=["bundle", "legacy"])
+def images(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Iterator[Images]:
+    signature_format: str = request.param
     tmp = tmp_path_factory.mktemp("admission")
     _run("cosign", "generate-key-pair", cwd=tmp)
     digests = {tag: _image(tmp, "hosted/agent", tag) for tag in ("legacy", "bundle", "unsigned", "altered")}
@@ -117,6 +121,11 @@ def images(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Images]:
         f"{PUSH}/hosted/agent:{digests['legacy'].replace(':', '-')}.sig",
         f"{PUSH}/hosted/agent:{digests['altered'].replace(':', '-')}.sig",
     )  # fmt: skip
+    _run(  # the bundle of `bundle`, on the referrers fallback tag Kyverno reads for `altered`
+        "crane", "copy", "--insecure",
+        f"{PUSH}/hosted/agent:{digests['bundle'].replace(':', '-')}",
+        f"{PUSH}/hosted/agent:{digests['altered'].replace(':', '-')}",
+    )  # fmt: skip
 
     def inside(repository: str, digest: str) -> str:
         return f"{INCLUSTER}/{repository}@{digest}"
@@ -128,6 +137,7 @@ def images(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Images]:
         "--set", f"global.images.hostedCosignKeySecret={SECRET}",
         "--set", "global.images.hostedCosignTlog=false",
         "--set", "global.images.hostedCosignPolicy=true",
+        "--set", f"global.images.hostedCosignFormat={signature_format}",
         "--show-only", "templates/hosted-images-policy.yaml",
         "--show-only", "templates/hosted-images-policy-rbac.yaml",
         "--api-versions", "extensions.agents.x-k8s.io/v1beta1/SandboxTemplate",
@@ -145,11 +155,13 @@ def images(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Images]:
     _wait_for_policy()
     try:
         yield Images(
+            format=signature_format,
             signed_legacy=inside("hosted/agent", digests["legacy"]),
             signed_bundle=inside("hosted/agent", digests["bundle"]),
             unsigned=inside("hosted/agent", digests["unsigned"]),
             altered=inside("hosted/agent", digests["altered"]),
-            tagged=f"{INCLUSTER}/hosted/agent:legacy",  # signed, but named by a tag
+            # signed in the policy's format, but named by a tag
+            tagged=f"{INCLUSTER}/hosted/agent:{signature_format}",
             uncovered=inside("elsewhere/agent", digests["uncovered"]),
         )
     finally:
@@ -191,28 +203,30 @@ def _create(name: str, image: str, *, sidecar: bool = False) -> subprocess.Compl
     return _kubectl("create", "-f", "-", input_text=yaml.safe_dump(json.loads(json.dumps(pod))), check=False)
 
 
+def _refused_unsigned(done: subprocess.CompletedProcess[str]) -> bool:
+    return done.returncode != 0 and "hosted-image-signed" in done.stderr
+
+
 def test_an_unsigned_image_is_refused(images: Images) -> None:
     done = _create("unsigned", images.unsigned)
-    assert done.returncode != 0 and "no signatures found" in done.stderr, done.stderr
+    assert _refused_unsigned(done), done.stderr
 
 
 def test_an_unsigned_native_sidecar_is_refused(images: Images) -> None:
     done = _create("unsigned-sidecar", images.unsigned, sidecar=True)
-    assert done.returncode != 0 and "no signatures found" in done.stderr, done.stderr
+    assert _refused_unsigned(done), done.stderr
 
 
-def test_an_image_signed_in_the_legacy_format_is_admitted(images: Images) -> None:
-    done = _create("legacy", images.signed_legacy)
+def test_an_image_signed_in_the_named_format_is_admitted(images: Images) -> None:
+    signed = images.signed_bundle if images.format == "bundle" else images.signed_legacy
+    done = _create("signed", signed)
     assert done.returncode == 0, done.stderr
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Kyverno 1.19.1's `keys` attestor finds no signature in a cosign 3 bundle (finding S41-25)",
-)
-def test_an_image_signed_in_the_bundle_format_is_admitted(images: Images) -> None:
-    done = _create("bundle", images.signed_bundle)
-    assert done.returncode == 0, done.stderr
+def test_an_image_signed_only_in_the_other_format_is_refused(images: Images) -> None:
+    other = images.signed_legacy if images.format == "bundle" else images.signed_bundle
+    done = _create("other-format", other)
+    assert _refused_unsigned(done), done.stderr
 
 
 def test_a_signature_copied_onto_other_bytes_is_refused(images: Images) -> None:

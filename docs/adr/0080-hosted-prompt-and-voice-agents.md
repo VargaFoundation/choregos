@@ -129,6 +129,15 @@ agent cannot be a workflow step).
    runs pull `ref@sha256:…`, never a tag. With `CHOREGOS_HOSTED_COSIGN=enforce` the publication
    refuses an image whose signature does not verify against the operator's identities; `warn`
    records the failure; `off` skips it.
+
+   *At admission (S41-25b).* The chart's Kyverno policy reads one signature format, named by
+   `global.images.hostedCosignFormat`: `bundle` (default, cosign 3's Sigstore bundle, Kyverno
+   `type: SigstoreBundle`) or `legacy` (the `.sig` tag, Kyverno's `Cosign` type). Kyverno 1.19.1
+   reads one per `verifyImages` entry, and two entries would require both signatures, not either,
+   so the format is the operator's choice, not a fallback. The default follows cosign 3's default.
+   `kyverno.io/v1` ClusterPolicy is deprecated for `ImageValidatingPolicy`, but 1.19.1's IVP `key`
+   attestor finds no signature in a bundle, even as a real OCI 1.1 referrer: the policy stays a
+   ClusterPolicy until it does.
 9. **A zip source is built at publication, never at run start** — ADR 0063's refusal of installing
    code when a run starts stands. The zip is flat, at most 64 MiB and 2,000 entries, refused on a
    symlink, an absolute or `..` path, or a missing entry point; it is stored by its sha256
