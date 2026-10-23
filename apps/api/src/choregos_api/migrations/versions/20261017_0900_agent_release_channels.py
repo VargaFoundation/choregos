@@ -139,6 +139,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if _postgres():
+        # As in the upgrade: without it, the DELETE below sees zero rows under forced RLS and the
+        # NOT NULL that follows fails on the channel pins it left (S40-22e).
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
         op.execute(f"DROP POLICY IF EXISTS {TABLE}_org_isolation ON {TABLE}")
     op.drop_index("ix_agent_releases_agent_created", table_name=TABLE)
     op.drop_index(op.f("ix_agent_releases_agent_id"), table_name=TABLE)

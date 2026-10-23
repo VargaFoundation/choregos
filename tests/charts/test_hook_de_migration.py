@@ -90,6 +90,38 @@ def test_le_compte_du_hook_ne_monte_pas_de_jeton(env: str) -> None:
     assert comptes[0].get("automountServiceAccountToken") is False
 
 
+def _database_url(pod: dict[str, Any]) -> Any:
+    """The URL the first container gets: when a name is listed twice, Kubernetes keeps the last."""
+    found = [
+        variable.get("value") or variable.get("valueFrom")
+        for variable in pod["containers"][0].get("env", [])
+        if variable["name"] == "CHOREGOS_DATABASE_URL"
+    ]
+    return found[-1] if found else None
+
+
+@pytest.mark.parametrize("env", ENVIRONNEMENTS)
+def test_the_migrations_connect_as_the_api_does(env: str) -> None:
+    """S40-22e: the Job migrates as the API's own role, never the database's administrator.
+
+    So a migration runs under the same forced RLS as a request: a data step that does not open
+    every organisation (`set_config('app.current_orgs', '*', true)`) sees zero rows.
+    `apps/api/tests/test_migrations_postgres.py` migrates as that role for this reason."""
+    documents = _rendu(env)
+    jobs = [d for d in documents if d.get("kind") == "Job" and "migrations" in d["metadata"]["name"]]
+    if not jobs:
+        pytest.skip(f"{env} does not render a migration Job")
+    job_url = _database_url(jobs[0]["spec"]["template"]["spec"])
+    api_url = _database_url(_un(documents, "Deployment", "choregos-api")["spec"]["template"]["spec"])
+    assert job_url is not None and job_url == api_url, (
+        f"{env}: the Job connects as {job_url}, the API as {api_url}"
+    )
+    if isinstance(job_url, str):
+        assert job_url.startswith("postgresql+asyncpg://choregos_app:"), (
+            f"{env}: the embedded database is migrated by its administrator, who ignores RLS"
+        )
+
+
 def test_les_annotations_de_compte_de_service_suivent_sur_le_compte_du_hook() -> None:
     """A database that authenticates through workload identity (IRSA, Workload
     Identity) carries that identity in the annotations: the hook must have them too,
