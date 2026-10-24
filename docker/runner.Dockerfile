@@ -23,7 +23,7 @@ RUN mkdir -p apps/api/src apps/orchestrator/src \
 # arm64 under QEMU. So arm64 is cross-compiled against bookworm's glibc. The runtime stage below
 # runs the result. BuildKit sets `BUILDPLATFORM`. The legacy builder (no buildx) does not, and
 # falls back to an amd64 build host.
-FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.91-slim-bookworm AS rtk
+FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.98-slim-bookworm AS rtk
 ARG TARGETARCH
 COPY packages/runner/src/choregos_runner/backends/versions.lock /tmp/versions.lock
 WORKDIR /src
