@@ -512,8 +512,9 @@ jobs:
         with: { version: v0.20.7 }
       - name: kyverno CLI
         run: |
-          curl -sSLo kyverno.tar.gz https://github.com/kyverno/kyverno/releases/download/v1.15.2/kyverno-cli_v1.15.2_linux_x86_64.tar.gz
-          echo "c90520ba24fb8b8df003ec22d6d2621e4a3d3c7497665fdcf84e9eab4ff1dfe0  kyverno.tar.gz" | sha256sum -c
+          # 1.19.1, as everywhere else: 1.15's SigstoreBundle path refuses a key signature (S41-25b).
+          curl -sSfLo kyverno.tar.gz https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz
+          echo "b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  kyverno.tar.gz" | sha256sum -c
           tar xzf kyverno.tar.gz kyverno && sudo mv kyverno /usr/local/bin/kyverno
       - uses: azure/setup-helm@v5
         with: { version: v3.22.0 }

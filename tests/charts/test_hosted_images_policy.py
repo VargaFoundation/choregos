@@ -154,6 +154,22 @@ def test_the_policy_pins_every_container_list_and_verifies_the_signer() -> None:
     assert entry == {"keys": {"secret": {"name": "acme-cosign", "namespace": "tenant-a"}}}
 
 
+@pytest.mark.parametrize(
+    ("overrides", "kind"),
+    [((), "SigstoreBundle"), (("global.images.hostedCosignFormat=legacy",), "Cosign")],
+)
+def test_kyverno_reads_the_signature_format_the_operator_names(overrides: tuple[str, ...], kind: str) -> None:
+    # S41-25b: the default `Cosign` type finds no signature in a cosign 3 bundle, `SigstoreBundle`
+    # finds no `.sig`; a cluster test admits and refuses both ways (test_hosted_images_admission).
+    (verify,) = _policy(*ENFORCED, *overrides)["spec"]["rules"][1]["verifyImages"]
+    assert verify["type"] == kind
+
+
+def test_an_unknown_signature_format_does_not_render() -> None:
+    rendered = _render(*ENFORCED, "global.images.hostedCosignFormat=v2", show=POLICY)
+    assert rendered.returncode != 0 and "bundle or legacy" in rendered.stderr
+
+
 def _grant(*overrides: str) -> dict[str, dict[str, Any]]:
     return {
         d["kind"]: d
@@ -277,9 +293,12 @@ def _run(*argv: str, cwd: pathlib.Path | None = None) -> str:
     not REGISTRY or shutil.which("cosign") is None or shutil.which("crane") is None,
     reason="no registry (CHOREGOS_COSIGN_REAL_REGISTRY), or no cosign or crane on the path",
 )
-def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize("signature_format", ["bundle", "legacy"])
+def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(
+    tmp_path: pathlib.Path, signature_format: str
+) -> None:
     _run("cosign", "generate-key-pair", cwd=tmp_path)
-    name, pinned = f"{REGISTRY}/s41-14/policy", {}
+    name, pinned = f"{REGISTRY}/s41-14/policy-{signature_format}", {}
     for tag in ("signed", "unsigned"):
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w") as archive:
@@ -292,8 +311,8 @@ def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(tmp_path: pathlib.
         pinned[tag] = f"{name}@{_run('crane', 'digest', '--insecure', f'{name}:{tag}')}"
     _run(
         "cosign", "sign", "--yes", "--key", str(tmp_path / "cosign.key"), "--tlog-upload=false",
-        "--use-signing-config=false", "--new-bundle-format=false", "--allow-http-registry",
-        "--allow-insecure-registry", pinned["signed"],
+        "--use-signing-config=false", f"--new-bundle-format={signature_format == 'bundle'}".lower(),
+        "--allow-http-registry", "--allow-insecure-registry", pinned["signed"],
     )  # fmt: skip
     policy = _policy(
         f"global.images.hostedRegistries={{{REGISTRY}/s41-14}}",
@@ -301,6 +320,7 @@ def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(tmp_path: pathlib.
         "global.images.hostedCosignKeySecret=acme-cosign",
         "global.images.hostedCosignTlog=false",
         "global.images.hostedCosignPolicy=true",
+        f"global.images.hostedCosignFormat={signature_format}",
     )
     (entry,) = policy["spec"]["rules"][1]["verifyImages"][0]["attestors"][0]["entries"]
     assert entry["keys"].pop("secret") == {"name": "acme-cosign", "namespace": "tenant-a"}
