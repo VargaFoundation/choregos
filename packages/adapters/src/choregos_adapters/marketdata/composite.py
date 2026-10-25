@@ -16,6 +16,10 @@ answers is compared with it on the closes of their common dates:
 where a day diverges when |a - b| / |a| > `tolerance` (default 2 %). The comparison is about the
 raw `close`: it reports a split one source missed or a bad print, it does not choose a winner —
 the caller decides what to do with a divergence. `fallbacks` lists the sources that failed.
+
+A source without the full history (`full_history` false: Alpha Vantage's free key in `compact`)
+is never the primary, wherever it sits in `sources`: half a series would pass for the whole one.
+It still cross-checks the primary on the days both have, and `common_days` says how many (S38-21).
 """
 
 from __future__ import annotations
@@ -70,6 +74,7 @@ class CompositeProvider(MarketDataProvider):
         verification: dict[str, Any] | None = None
         vide: dict[str, Any] | None = None
         echecs: list[dict[str, str]] = []
+        partielle: tuple[str, dict[str, Any]] | None = None
         inconnus = 0
         for nom, source in self._sources:
             try:
@@ -82,17 +87,30 @@ class CompositeProvider(MarketDataProvider):
                 vide = vide or reponse
                 echecs.append({"source": nom, "error": "empty"})
                 continue
+            if primaire is None and not source.full_history:
+                # Recent days only: kept to check the primary once one answers, never the bars.
+                partielle = partielle or (nom, reponse)
+                continue
             if primaire is None:
                 primaire = reponse
                 if not self._cross_check:
                     break
-                continue
+                if partielle is None:
+                    continue
+                verificateur, autre = partielle
+            else:
+                verificateur, autre = nom, reponse
             verification = {
-                "source": nom,
-                **compare_closes(primaire["bars"], reponse["bars"], self._tolerance),
+                "source": verificateur,
+                **compare_closes(primaire["bars"], autre["bars"], self._tolerance),
             }
             break
         if primaire is None:
+            if partielle is not None and vide is None:
+                # Not an unknown symbol: a source knows it, but only its recent days.
+                raise MarketDataError(
+                    f"composite: only {partielle[0]} answered, and it has the recent days only"
+                )
             if vide is not None:
                 return {**vide, "cross_check": None, "fallbacks": echecs}
             detail = "; ".join(f"{e['source']}: {e['error']}" for e in echecs)

@@ -2,12 +2,15 @@
 
 # Use Alpha Vantage for daily market data
 
-For a project owner. Procedure `connector.marketdata.alphavantage`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For a project owner. Procedure `connector.marketdata.alphavantage`, version 2, reviewed 2026-10-25 against the vendor's own pages.
 
 ## Before you start
 
 - A free Alpha Vantage API key. The free tier allows about **25 requests a day** and gives **unadjusted**
   daily bars: a backtest over many tickers will exhaust it. A paid plan raises the limit.
+- The free key also refuses a range of more than about 100 trading days (`outputsize=full` is a premium
+  feature). With `outputsize: compact` it always answers the last 100 trading days: enough to cross-check
+  another source in a composite, never enough to be the source of a multi-year series.
 
 ## At the vendor
 
@@ -37,6 +40,7 @@ Press **Test**, then call `get_instrument` for a known ticker.
 | Field | What to put in it |
 | :-- | :-- |
 | `api_key` | your Alpha Vantage API key, typed once |
+| `outputsize` | auto, or compact for a free key: always the last 100 trading days, a cross-check only |
 | `timeout_s` | request timeout in seconds |
 
 ## Network egress

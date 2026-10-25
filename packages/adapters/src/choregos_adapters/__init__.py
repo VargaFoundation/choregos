@@ -508,7 +508,16 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("marketdata", "alphavantage"): ConnectorTypeSpec(
         "Alpha Vantage (free key: about 25 requests a day, unadjusted daily bars)",
         ("marketdata",),
-        _objet({"timeout_s": {"type": "number", "default": 20}}),
+        _objet(
+            {
+                "timeout_s": {"type": "number", "default": 20},
+                "outputsize": {
+                    "enum": ["auto", "compact"],
+                    "default": "auto",
+                    "description": "`compact`: always the last 100 trading days (free key); cross-check only",
+                },
+            }
+        ),
         ("api_key",),
         operations=_OPERATIONS_MARKETDATA,
     ),
@@ -893,6 +902,8 @@ def _register_marketdata() -> None:
         options: dict[str, Any] = {"timeout_s": float(cfg.get("timeout_s", 20))}
         if type_name == "stooq" and cfg.get("suffix_map"):
             options["suffix_map"] = dict(cfg["suffix_map"])
+        if type_name == "alphavantage" and cfg.get("outputsize"):
+            options["outputsize"] = str(cfg["outputsize"])
         if type_name != "yahoo":
             options["api_key"] = str(cle or cfg.get("api_key", ""))
         return PROVIDERS[type_name](**options)

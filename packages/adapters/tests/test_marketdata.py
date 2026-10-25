@@ -262,6 +262,20 @@ async def test_alphavantage_parse_and_url() -> None:
     assert KEY not in json.dumps(reponse)
 
 
+async def test_alphavantage_compact_asks_for_the_recent_days_whatever_the_range() -> None:
+    """A free key refuses `full` (a premium feature): in `compact`, a multi-year range still gets the
+    last 100 trading days, and the provider says it lacks the full history (S38-21)."""
+    transport, vues = fixed(body=ALPHA_DAILY)
+    compact = AlphaVantageProvider(transport=transport, api_key=KEY, outputsize="compact")
+    reponse = await compact.get_bars("AAPL", "2019-01-02", "2024-01-31")
+    assert vues[0].url.params["outputsize"] == "compact"
+    assert [b["date"] for b in reponse["bars"]] == ["2024-01-02", "2024-01-04"]
+    assert compact.full_history is False
+    assert AlphaVantageProvider(api_key=KEY).full_history is True
+    with pytest.raises(MarketDataError):
+        AlphaVantageProvider(api_key=KEY, outputsize="full")
+
+
 def test_alphavantage_requires_its_key() -> None:
     with pytest.raises(MarketDataError, match="api_key"):
         AlphaVantageProvider()
@@ -452,6 +466,29 @@ async def test_composite_cross_check_uses_the_next_source_that_answers() -> None
     assert [e["source"] for e in reponse["fallbacks"]] == ["b"]
 
 
+async def test_composite_never_takes_a_recent_days_source_as_the_primary() -> None:
+    """Listed first, a source with the recent days only does not give the bars: the next full source
+    does, and the partial one cross-checks it on the days both have (S38-21)."""
+    longue = [bar("2019-01-02", 50.0), bar("2024-01-02", 100.0), bar("2024-01-03", 101.0)]
+    recente = provider_with([bar("2024-01-02", 100.0), bar("2024-01-03", 101.0)], "av")
+    recente.full_history = False
+    reponse = await CompositeProvider([("av", recente), ("yahoo", provider_with(longue, "yahoo"))]).get_bars(
+        "X", "2019-01-02", "2024-01-03"
+    )
+    assert reponse["provider"] == "yahoo" and reponse["bars"] == longue
+    assert reponse["cross_check"]["source"] == "av" and reponse["cross_check"]["common_days"] == 2
+
+    apres = await CompositeProvider([("yahoo", provider_with(longue, "yahoo")), ("av", recente)]).get_bars(
+        "X", "2019-01-02", "2024-01-03"
+    )
+    assert apres["provider"] == "yahoo" and apres["cross_check"]["common_days"] == 2
+
+    seule = CompositeProvider([("av", recente), ("yahoo", provider_with(RateLimited("y"), "yahoo"))])
+    with pytest.raises(MarketDataError) as capture:
+        await seule.get_bars("X", "2019-01-02", "2024-01-03")
+    assert not isinstance(capture.value, UnknownSymbol), "the symbol exists, its history is missing"
+
+
 async def test_composite_all_failed_all_empty_and_unknown() -> None:
     inconnus = CompositeProvider(
         [("a", provider_with(UnknownSymbol("a"), "a")), ("b", provider_with(UnknownSymbol("b"), "b"))]
@@ -496,6 +533,16 @@ def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
         {"sources": ["stooq", "alphavantage"], "alphavantage_api_key": KEY, "stooq_api_key": KEY},
     )
     assert [nom for nom, _ in composite._sources] == ["stooq", "alphavantage"]
+    compact = build(
+        "marketdata",
+        "composite",
+        {
+            "sources": ["yahoo", "alphavantage"],
+            "source_configs": {"alphavantage": {"outputsize": "compact"}},
+            "alphavantage_api_key": KEY,
+        },
+    )
+    assert [s.full_history for _, s in compact._sources] == [True, False], "source_configs reach the provider"
     assert KEY not in repr(composite)
     from choregos_adapters.errors import ConfigurationError
 

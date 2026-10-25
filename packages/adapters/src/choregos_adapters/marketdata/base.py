@@ -150,6 +150,9 @@ class MarketDataProvider:
 
     #: The provider's name in the answers (`provider`).
     name = "marketdata"
+    #: False when the provider serves only recent days whatever the range asked: a composite then
+    #: uses it to cross-check, never as the source of the bars (S38-21).
+    full_history = True
 
     def __init__(
         self,
