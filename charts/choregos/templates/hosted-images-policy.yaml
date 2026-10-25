@@ -3,7 +3,8 @@ A hosted agent's image, at admission (S41-14, ADR 0080 §8). Publication pins th
 asks cosign; this policy is the cluster's own check, for every pod, including one that never went
 through publication. In the release's namespace (where `agent_sandbox` runs pods), `proj-*` and
 `choregos-*`, an image under `global.images.hostedRegistries` runs only pinned by `@sha256:` and,
-under `hostedCosign: enforce`, signed by the operator's key or keyless identity.
+under `hostedCosign: enforce`, signed by the operator's key or keyless identity, in the signature
+format `hostedCosignFormat` names (`bundle`, cosign 3's default, or `legacy`).
 
 Init containers are covered on purpose: a native sidecar is an init container
 (`restartPolicy: Always`), and a rule that reads `containers` alone lets it through (#770).
@@ -20,6 +21,10 @@ Kyverno's `verifyImages` checks every container list of the pod; the digest rule
 {{- fail "global.images.hostedCosignPolicy with hostedCosign=enforce needs a signer: hostedCosignKeySecret, or hostedCosignIdentity and hostedCosignIssuer" }}
 {{- end }}
 {{- $tlog := ne (toString $i.hostedCosignTlog) "false" }}
+{{- $format := $i.hostedCosignFormat | default "bundle" }}
+{{- if not (has $format (list "bundle" "legacy")) }}
+{{- fail (printf "global.images.hostedCosignFormat is bundle or legacy, not %q" $format) }}
+{{- end }}
 {{- $refs := list }}
 {{- range $i.hostedRegistries }}
 {{- $refs = append $refs (printf "%s/*" (trimSuffix "/" .)) }}
@@ -65,7 +70,11 @@ spec:
               kinds: [Pod]
               namespaces: {{ toJson $namespaces }}
       verifyImages:
-        - imageReferences: {{ toJson $refs }}
+        # Kyverno reads one signature format per entry (S41-25b): `SigstoreBundle` reads cosign 3's
+        # bundle (an OCI referrer, or its fallback tag) and not the legacy `.sig`; the default
+        # `Cosign` type reads the `.sig` and finds no signature in a bundle.
+        - type: {{ ternary "SigstoreBundle" "Cosign" (eq $format "bundle") }}
+          imageReferences: {{ toJson $refs }}
           attestors:
             - entries:
                 {{- if $i.hostedCosignKeySecret }}

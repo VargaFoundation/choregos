@@ -64,6 +64,12 @@ jobs:
               - 'packages/contracts/**'
             docker:
               - 'docker/**'
+              # The scan lives in this workflow: changing it must run it (S40-16e).
+              - '.github/workflows/ci.yml'
+              # The lockfiles the Dockerfiles copy: a dependency bump changes the image (#857).
+              - 'uv.lock'
+              - 'apps/web/pnpm-lock.yaml'
+              - 'packages/runner/src/choregos_runner/backends/versions.lock'
             # What `docker compose up` at the root is made of (S28-04). The platform's code is
             # proven by the other jobs; this job proves the install, and runs on `main` and in
             # the merge queue whatever changed, so that nothing merges past a broken compose.
@@ -362,6 +368,9 @@ jobs:
           target: ${{ matrix.target }}
           platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.ref == 'refs/heads/main' }}
+          # Off main nothing is pushed, so the image is loaded into the runner's Docker (a single
+          # platform, linux/amd64) for the Trivy step below to scan under the same tag (S40-16e).
+          load: ${{ github.ref != 'refs/heads/main' }}
           tags: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
           build-args: REVISION=${{ github.sha }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
@@ -371,6 +380,7 @@ jobs:
           provenance: ${{ github.ref == 'refs/heads/main' && 'mode=max' || 'false' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Runs on pull requests too: a CRITICAL must turn the PR red, not main after the merge.
       - name: Trivy scan (no CRITICAL tolerated)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -378,7 +388,6 @@ jobs:
           exit-code: "1"
           severity: CRITICAL
           ignore-unfixed: true
-        if: github.ref == 'refs/heads/main'
       - uses: sigstore/cosign-installer@v3
         if: github.ref == 'refs/heads/main'
       - name: keyless signature
@@ -503,8 +512,9 @@ jobs:
         with: { version: v0.20.7 }
       - name: kyverno CLI
         run: |
-          curl -sSLo kyverno.tar.gz https://github.com/kyverno/kyverno/releases/download/v1.15.2/kyverno-cli_v1.15.2_linux_x86_64.tar.gz
-          echo "c90520ba24fb8b8df003ec22d6d2621e4a3d3c7497665fdcf84e9eab4ff1dfe0  kyverno.tar.gz" | sha256sum -c
+          # 1.19.1, as everywhere else: 1.15's SigstoreBundle path refuses a key signature (S41-25b).
+          curl -sSfLo kyverno.tar.gz https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz
+          echo "b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  kyverno.tar.gz" | sha256sum -c
           tar xzf kyverno.tar.gz kyverno && sudo mv kyverno /usr/local/bin/kyverno
       - uses: azure/setup-helm@v5
         with: { version: v3.22.0 }
