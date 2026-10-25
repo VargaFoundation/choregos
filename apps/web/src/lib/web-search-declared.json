@@ -1,0 +1,5 @@
+{
+  "brave": { "query_retention_days": null, "query_reuse": null, "region": null, "terms_ref": null },
+  "tavily": { "query_retention_days": null, "query_reuse": null, "region": null, "terms_ref": null },
+  "firecrawl": { "query_retention_days": null, "query_reuse": null, "region": null, "terms_ref": null }
+}
