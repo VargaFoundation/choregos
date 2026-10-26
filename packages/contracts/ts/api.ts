@@ -2617,6 +2617,47 @@ export type PolicyCeilingPut = {
   ceiling: PolicyCeiling | null;
 };
 
+export type OutboundProxy = {
+  enabled: boolean;
+  /** `host:port`, no scheme, no credentials */
+  endpoint: string;
+  /** the protocol spoken to the proxy; https targets go through CONNECT */
+  scheme: "http" | "https";
+  /** provider options (country, sticky session) are encoded here as the provider documents them; Choregos does not build them */
+  username: string;
+  password_set: boolean;
+  applies_to: Array<"web_fetch" | "web_search" | "knowledge_web" | "search_engines">;
+};
+
+export type OutboundProxyState = {
+  proxy: OutboundProxy | null;
+  updated_by: string | null;
+  updated_at: string | null;
+};
+
+export type OutboundProxyPut = {
+  enabled: boolean;
+  /** `host:port`, no scheme, no credentials */
+  endpoint: string;
+  scheme: "http" | "https";
+  username: string;
+  /** sealed, never returned; absent keeps the stored one, required on the first write */
+  password?: string;
+  applies_to?: Array<"web_fetch" | "web_search" | "knowledge_web" | "search_engines">;
+};
+
+export type OutboundProxyTest = {
+  ok: boolean;
+  exit_ip: string | null;
+  /** ISO 3166-1 alpha-2 as the echo endpoint reports it */
+  country: string | null;
+  /** names the proxy; never the password */
+  error: string | null;
+  elapsed_ms: number;
+  /** the echo endpoint that was fetched */
+  target: string;
+};
+
 export type PolicyPut = {
   yaml: string;
   activate?: boolean;
@@ -3729,6 +3770,7 @@ export interface Operations {
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
+  deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
@@ -3788,6 +3830,7 @@ export interface Operations {
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
+  getOutboundProxy: { method: "GET"; path: "/orgs/{org}/outbound-proxy"; body: never; response: OutboundProxyState };
   getPlatformIdentity: { method: "GET"; path: "/platform/identity"; body: never; response: PlatformIdentity };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
@@ -4030,6 +4073,7 @@ export interface Operations {
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
+  putOutboundProxy: { method: "PUT"; path: "/orgs/{org}/outbound-proxy"; body: OutboundProxyPut; response: OutboundProxyState };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
   putPolicyCeiling: { method: "PUT"; path: "/orgs/{org}/policy-ceiling"; body: PolicyCeilingPut; response: PolicyCeilingState };
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
@@ -4076,6 +4120,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   testConnector: { method: "POST"; path: "/projects/{id}/connectors/{kind}/test"; body: never; response: ConnectorTestResult };
+  testOutboundProxy: { method: "POST"; path: "/orgs/{org}/outbound-proxy/test"; body: never; response: OutboundProxyTest };
   theme: { method: "GET"; path: "/theme"; body: never; response: Theme };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
   transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };

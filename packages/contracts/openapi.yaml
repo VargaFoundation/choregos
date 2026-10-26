@@ -1766,6 +1766,52 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyCeilingState" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/outbound-proxy:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getOutboundProxy
+      description: >-
+        The organisation's outbound proxy for its web search and web reading traffic (ADR 0087), or `proxy: null`
+        when none is set. The password is never returned, only `password_set`. `org_admin`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OutboundProxyState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [admin]
+      operationId: putOutboundProxy
+      description: >-
+        Sets the organisation's one outbound proxy (`org_admin`, audited as `outbound_proxy.update`, the password
+        never in the audit row). `password` is sealed (ADR 0058) and never returned; absent, the stored one is kept;
+        required on the first write (422 otherwise). 409 when the deployment has no secrets key.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OutboundProxyPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OutboundProxyState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [admin]
+      operationId: deleteOutboundProxy
+      description: Removes the setting and its sealed password (`org_admin`, audited as `outbound_proxy.delete`). Idempotent.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/outbound-proxy/test:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [admin]
+      operationId: testOutboundProxy
+      description: >-
+        Fetches `https://ipinfo.io/json` through the stored proxy and reports the exit address and country (ADR 0087
+        section 4). A proxy that fails is a 200 with `ok: false` and `error`, not an HTTP error. `org_admin`, audited
+        as `outbound_proxy.test`. 404 when no proxy is set.
+      responses:
+        "200": { description: The result of the test, content: { application/json: { schema: { $ref: "#/components/schemas/OutboundProxyTest" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/network-activity:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -6184,6 +6230,56 @@ components:
       required: [ceiling]
       properties:
         ceiling: { oneOf: [{ $ref: "#/components/schemas/PolicyCeiling" }, { type: "null" }] }
+    OutboundProxy:
+      type: object
+      additionalProperties: false
+      required: [enabled, endpoint, scheme, username, password_set, applies_to]
+      properties:
+        enabled: { type: boolean }
+        endpoint: { type: string, pattern: "^[A-Za-z0-9.-]{1,253}:[0-9]{1,5}$", description: "`host:port`, no scheme, no credentials" }
+        scheme: { type: string, enum: [http, https], description: "the protocol spoken to the proxy; https targets go through CONNECT" }
+        username: { type: string, maxLength: 512, description: "provider options (country, sticky session) are encoded here as the provider documents them; Choregos does not build them" }
+        password_set: { type: boolean }
+        applies_to:
+          type: array
+          uniqueItems: true
+          minItems: 1
+          items: { type: string, enum: [web_fetch, web_search, knowledge_web, search_engines] }
+    OutboundProxyState:
+      type: object
+      additionalProperties: false
+      required: [proxy, updated_by, updated_at]
+      properties:
+        proxy: { oneOf: [{ $ref: "#/components/schemas/OutboundProxy" }, { type: "null" }] }
+        updated_by: { type: [string, "null"] }
+        updated_at: { type: [string, "null"] }
+    OutboundProxyPut:
+      type: object
+      additionalProperties: false
+      required: [enabled, endpoint, scheme, username]
+      properties:
+        enabled: { type: boolean }
+        endpoint: { type: string, pattern: "^[A-Za-z0-9.-]{1,253}:[0-9]{1,5}$", description: "`host:port`, no scheme, no credentials" }
+        scheme: { type: string, enum: [http, https] }
+        username: { type: string, maxLength: 512 }
+        password: { type: string, minLength: 1, maxLength: 1024, writeOnly: true, description: "sealed, never returned; absent keeps the stored one, required on the first write" }
+        applies_to:
+          type: array
+          uniqueItems: true
+          minItems: 1
+          items: { type: string, enum: [web_fetch, web_search, knowledge_web, search_engines] }
+          default: [web_fetch, web_search, knowledge_web, search_engines]
+    OutboundProxyTest:
+      type: object
+      additionalProperties: false
+      required: [ok, exit_ip, country, error, elapsed_ms, target]
+      properties:
+        ok: { type: boolean }
+        exit_ip: { type: [string, "null"] }
+        country: { type: [string, "null"], description: "ISO 3166-1 alpha-2 as the echo endpoint reports it" }
+        error: { type: [string, "null"], description: "names the proxy; never the password" }
+        elapsed_ms: { type: integer, minimum: 0 }
+        target: { type: string, description: "the echo endpoint that was fetched" }
     PolicyPut:
       type: object
       required: [yaml]
