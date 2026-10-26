@@ -13,6 +13,7 @@ import { isMultiOrg, membershipGroups } from "@/lib/memberships";
 import { OrganisationCard } from "@/components/admin/organisation-card";
 import { NetworkActivityCard } from "@/components/admin/network-activity";
 import { NetworkCeilingCard } from "@/components/admin/network-ceiling";
+import { OutboundProxyCard } from "@/components/admin/outbound-proxy";
 import { PolicyCeilingCard } from "@/components/admin/policy-ceiling";
 import { GesteConfirme } from "@/components/geste-confirme";
 
@@ -145,6 +146,7 @@ export default function AdminPage() {
         </Card>
         <PolicyCeilingCard org={org} canEdit={orgAdmin} />
         <NetworkCeilingCard org={org} canEdit={orgAdmin} />
+        <OutboundProxyCard org={org} canEdit={orgAdmin} />
         {orgAdmin && <NetworkActivityCard org={org} />}
       </div>
     </div>
