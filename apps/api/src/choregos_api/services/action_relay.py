@@ -27,7 +27,6 @@ logger = get_logger("choregos.actions.relay")
 
 #: An approval younger than this is left to the start that follows its own commit.
 GRACE = timedelta(seconds=30)
-INTERVAL_S = 30.0
 BATCH = 100
 
 
@@ -67,8 +66,12 @@ async def start_approved_actions(*, grace: timedelta = GRACE, batch: int = BATCH
     return started
 
 
-async def relay_loop(interval_s: float = INTERVAL_S) -> None:
+async def relay_loop(interval_s: float | None = None) -> None:
     """Background task of the API: a failed pass does not stop the API, the next one tries again."""
+    from ..config import get_settings
+
+    if interval_s is None:
+        interval_s = get_settings().action_relay_interval_s
     while True:
         try:
             await start_approved_actions()
