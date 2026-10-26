@@ -73,3 +73,39 @@ def test_only_the_job_s_pods_reach_tempo_s_query_port() -> None:
     assert platform is not None
     opened = {p["port"] for r in platform["spec"]["egress"] for p in r.get("ports", [])}
     assert 3100 not in opened, "the platform's other pods do not read traces"
+
+
+def _namespace_of(rule: dict[str, Any]) -> str:
+    (to,) = rule["to"]
+    return str(to["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"])
+
+
+def test_the_policies_open_tracing_where_the_endpoints_live() -> None:
+    """S40-20e: a platform whose Tempo is not in `monitoring` (the Diametral dev cluster: `tempo`)."""
+    docs = _docs(
+        "global.tracing.otlpEndpoint=http://tempo.tempo.svc.cluster.local:4318",
+        "global.tracing.tempoUrl=http://tempo.tempo.svc.cluster.local:3200",
+    )
+    drift = _named(docs, "NetworkPolicy", "choregos-trace-drift-tempo")
+    platform = _named(docs, "NetworkPolicy", "choregos-allow-platform")
+    assert drift is not None and platform is not None
+    (rule,) = drift["spec"]["egress"]
+    assert _namespace_of(rule) == "tempo" and rule["ports"] == [{"protocol": "TCP", "port": 3200}]
+    (otlp,) = [
+        r for r in platform["spec"]["egress"] if {"protocol": "TCP", "port": 4318} in r.get("ports", [])
+    ]
+    assert _namespace_of(otlp) == "tempo"
+
+
+def test_a_host_without_a_namespace_keeps_the_bootstrap_s() -> None:
+    docs = _docs(
+        "global.tracing.otlpEndpoint=http://collector:4318", "global.tracing.tempoUrl=http://tempo:3200"
+    )
+    drift = _named(docs, "NetworkPolicy", "choregos-trace-drift-tempo")
+    platform = _named(docs, "NetworkPolicy", "choregos-allow-platform")
+    assert drift is not None and platform is not None
+    assert _namespace_of(drift["spec"]["egress"][0]) == "monitoring"
+    (otlp,) = [
+        r for r in platform["spec"]["egress"] if {"protocol": "TCP", "port": 4318} in r.get("ports", [])
+    ]
+    assert _namespace_of(otlp) == "monitoring"

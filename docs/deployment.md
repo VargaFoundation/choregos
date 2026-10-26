@@ -847,7 +847,7 @@ Off by default. A process sends spans only when the standard `OTEL_EXPORTER_OTLP
 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) is set, over OTLP/HTTP, batched; the other `OTEL_*` variables
 of the SDK apply. `global.tracing.otlpEndpoint` sets it on the API, each worker, the migration Job
 and the embedded gateway (S40-20b); `choregos-allow-platform` already lets them reach port 4318 in
-`monitoring`. The collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`) listens
+the collector's namespace. The collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`) listens
 at `http://otel-collector.monitoring.svc:4318`, sends every span to Tempo and derives the span
 metrics of the `Choregos — Traces` dashboard. An install that set the variable through
 `global.extraEnv` still renders, as long as `global.tracing.otlpEndpoint` is empty.
@@ -859,8 +859,17 @@ global:
     tempoUrl: http://tempo.monitoring.svc:3200   # the nightly ledger-vs-trace job (S40-20c)
 ```
 
+The network policies open port 4318 and Tempo's query port in the namespace each address names
+(`<service>.<namespace>.svc…`), `monitoring` when the host names none (S40-20e). A platform that
+already runs Tempo needs no collector of its own: Tempo receives OTLP itself. The Diametral dev
+tenant points both values at `tempo.tempo.svc.cluster.local` (ports 4318 and 3200); its chart network
+policies are off and the tenant's own policies open those two ports to the API, the workers, the
+gateway and the drift job only, never to the agent pods (#946). Without the collector there are no
+`spanmetrics`, so the `Choregos — Traces` dashboard's rate and latency panels stay empty there; the
+traces themselves are read in Grafana's Tempo explorer.
+
 `global.tracing.tempoUrl` renders the CronJob `choregos-trace-drift` (`api.traceDrift.schedule`,
-03:17 by default) and a network policy that opens that port in `monitoring` to its pods only. Each
+03:17 by default) and a network policy that opens that port to its pods only. Each
 night it reads the runs whose spend was collected in the last 24 hours (`api.traceDrift.hours`),
 leaving out the last 30 minutes (`settleMinutes`, spans arrive late), and compares each run's model
 tokens in the ledger with the usage on the gateway's spans of its trace (input and output, within
