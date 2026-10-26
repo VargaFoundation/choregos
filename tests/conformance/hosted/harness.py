@@ -90,25 +90,39 @@ IMAGE = "registry.example/conformance/hosted@sha256:" + "0" * 64
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port: int = probe.getsockname()[1]
-        return port
+#: Below every OS's ephemeral range (Linux 32768+, Windows 49152+): the kernel never hands these
+#: ports to an outbound connection, and Docker Desktop on Windows can publish them.
+PORT_RANGE = (10000, 29999)
+_HANDED_OUT: set[int] = set()
 
 
-def published_port() -> int:
-    """A port Docker Desktop can publish: on Windows it refuses the ephemeral ranges the OS keeps
-    for itself (`bind: … forbidden by its access permissions`), where `free_port` likes to land."""
-    for _ in range(50):
-        port = random.randint(10000, 29999)
+def _unused_port() -> int:
+    """A free port this process never handed out before (finding #930).
+
+    Binding port 0 and closing the probe let the kernel give the same number to the next probe or
+    to any outbound connection before the agent bound it: the Node reference lost its port in CI."""
+    for _ in range(200):
+        port = random.randint(*PORT_RANGE)
+        if port in _HANDED_OUT:
+            continue
         with socket.socket() as probe:
             try:
                 probe.bind(("127.0.0.1", port))
             except OSError:
                 continue
+        _HANDED_OUT.add(port)
         return port
-    raise RuntimeError("no free port in 10000-29999")
+    raise RuntimeError(f"no free port in {PORT_RANGE[0]}-{PORT_RANGE[1]}")
+
+
+def free_port() -> int:
+    return _unused_port()
+
+
+def published_port() -> int:
+    """A port Docker Desktop can publish: on Windows it refuses the ephemeral ranges the OS keeps
+    for itself (`bind: … forbidden by its access permissions`). Same draw as `free_port`."""
+    return _unused_port()
 
 
 @contextmanager
