@@ -1,0 +1,10 @@
+{
+ "body": "{\"data\":{\"r0\":{\"nameWithOwner\":\"zapier/zapier-mcp\",\"stargazerCount\":438,\"isArchived\":false,\"licenseInfo\":{\"spdxId\":\"MIT\"}},\"r1\":{\"nameWithOwner\":\"zilliztech/mcp-server-milvus\",\"stargazerCount\":244,\"isArchived\":false,\"licenseInfo\":{\"spdxId\":\"Apache-2.0\"}}}}",
+ "headers": {
+  "content-type": "application/json; charset=utf-8"
+ },
+ "method": "POST",
+ "request_body": "{\"query\":\"query {\\n  r0: repository(owner: \\\"zapier\\\", name: \\\"zapier-mcp\\\") { nameWithOwner stargazerCount isArchived licenseInfo { spdxId } }\\n  r1: repository(owner: \\\"zilliztech\\\", name: \\\"mcp-server-milvus\\\") { nameWithOwner stargazerCount isArchived licenseInfo { spdxId } }\\n}\"}",
+ "status": 200,
+ "url": "https://api.github.com/graphql"
+}

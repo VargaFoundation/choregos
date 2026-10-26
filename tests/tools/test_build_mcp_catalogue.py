@@ -286,3 +286,13 @@ def test_the_console_demo_data_is_the_shipped_catalogue_as_the_api_shows_it() ->
     assert {e["state"] for e in mock["entries"]} == {"available"} and {
         e["egress"] for e in mock["entries"]
     } == {"unknown"}
+
+
+def test_no_firecrawl_server_is_offered() -> None:
+    """Firecrawl is self-hosted only (ADR 0086). Its MCP server reaches Firecrawl's cloud unless
+    `FIRECRAWL_API_URL` says otherwise, and an entry cannot require that setting yet (#953): the
+    seed has no firecrawl line, and `exclusions.yaml` drops one that comes back."""
+    assert not [line for line in SEED if "firecrawl" in str(line).lower()]
+    back = _line(id="firecrawl", title="Firecrawl", registry="io.github.firecrawl/firecrawl-mcp-server")
+    assert gen.excluded_name(back, EXCLUSIONS["names"]) is not None
+    assert "firecrawl" not in mcp_catalogue.CATALOGUE_PATH.read_text(encoding="utf-8").lower()
