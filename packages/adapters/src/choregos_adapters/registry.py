@@ -102,6 +102,9 @@ class ConnectorTypeSpec:
     #: The `(host, port)` pairs an instance configured so calls (S39-22, ADR 0066). `None`: the
     #: hosts of the URL-shaped configuration fields, falling back to the schema's defaults.
     egress: Callable[[dict[str, Any]], list[tuple[str, int]]] | None = None
+    #: A check the configuration must pass to be saved (S40-01k): raises an `AdapterError` naming the
+    #: refusal. The adapter repeats it when built, so a row written behind the API fails closed too.
+    check_config: Callable[[dict[str, Any]], None] | None = None
 
 
 _REGISTRY: dict[tuple[str, str], Factory] = {}
@@ -351,6 +354,13 @@ class AdapterSet:
             gateway=get("gateway", default_gateway_type()),
             notify=get("notify", TYPES_PAR_DEFAUT["notify"]),
         )
+
+
+def validate_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
+    """Run the type's own configuration check, if it declares one; raises an `AdapterError`."""
+    spec = _SPECS.get((kind, type_name))
+    if spec is not None and spec.check_config is not None:
+        spec.check_config(config)
 
 
 def egress_hosts(kind: str, type_name: str, config: dict[str, Any]) -> list[tuple[str, int]]:

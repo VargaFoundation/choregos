@@ -46,7 +46,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
 | [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-16 |
 | [Search the web through Brave Search API](connector.web_search.brave.md) | an organisation administrator | `web_search/brave` | 2026-10-20 |
-| [Search the web through Firecrawl](connector.web_search.firecrawl.md) | an organisation administrator | `web_search/firecrawl` | 2026-10-20 |
+| [Search the web through a self-hosted Firecrawl](connector.web_search.firecrawl.md) | an organisation administrator | `web_search/firecrawl` | 2026-10-23 |
 | [Search the web through Tavily](connector.web_search.tavily.md) | an organisation administrator | `web_search/tavily` | 2026-10-20 |
 | [Read nginx configuration from the GitOps repository](connector.web_server.nginx.md) | an organisation administrator | `web_server/nginx` | 2026-10-16 |
 

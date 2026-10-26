@@ -82,10 +82,65 @@ async def test_firecrawl_never_scrapes_and_runs_self_hosted_without_a_key() -> N
     sent = json.loads(seen[0].content)
     assert "scrapeOptions" not in sent, "the provider does not fetch pages for us"
     assert sent["tbs"] == "qdr:m"
-    assert "Authorization" not in seen[0].headers
+    assert "Authorization" not in seen[0].headers, "a self-hosted instance may run without a key"
 
-    with pytest.raises(SearchError, match="no api_key"):
-        await FirecrawlSearch(transport=_wire(200, body, [])).search("q")
+
+@pytest.mark.parametrize(
+    "cloud",
+    [
+        "https://api.firecrawl.dev",
+        "https://firecrawl.dev/",
+        "https://API.Firecrawl.Dev./v1",
+        "https://eu.api.firecrawl.dev:443",
+        "http://user:pw@api.firecrawl.dev",
+    ],
+)
+def test_firecrawl_refuses_the_cloud_in_the_adapter(cloud: str) -> None:
+    """S40-01k, defence in depth: even a row written behind the API's check never reaches the cloud."""
+    with pytest.raises(SearchError, match=r"cloud.*self-hosted"):
+        FirecrawlSearch(base_url=cloud)
+
+
+@pytest.mark.parametrize("near", ["http://firecrawl.dev.internal:3002", "https://notfirecrawl.dev"])
+def test_firecrawl_refuses_only_the_cloud_domain_not_lookalikes(near: str) -> None:
+    FirecrawlSearch(base_url=near)
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "firecrawl.internal", "ftp://firecrawl.internal"])
+def test_firecrawl_without_a_usable_base_url_is_refused_not_defaulted(bad: str) -> None:
+    with pytest.raises(SearchError, match="base_url"):
+        FirecrawlSearch(base_url=bad)
+
+
+def test_a_stored_connector_without_base_url_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Connectors saved when the cloud was the default carry no `base_url`: built through the registry
+    they raise an explicit error, before any client exists, so nothing can be sent."""
+    from choregos_adapters import build
+
+    monkeypatch.setattr("choregos_adapters.registry.fakes_enabled", lambda: False)  # the real type
+
+    with pytest.raises(SearchError, match="self-hosted"):
+        build("web_search", "firecrawl", {"api_key": "k", "timeout_s": 5})
+
+
+def test_the_connector_type_requires_base_url_and_declares_the_self_hosted_host_as_egress() -> None:
+    from choregos_adapters import egress_hosts, spec_of, validate_config
+
+    spec = spec_of("web_search", "firecrawl")
+    assert spec is not None
+    assert spec.config_schema["required"] == ["base_url"]
+    assert "default" not in spec.config_schema["properties"]["base_url"], "no cloud default"
+    assert egress_hosts("web_search", "firecrawl", {"base_url": "http://firecrawl.internal:3002"}) == [
+        ("firecrawl.internal", 3002)
+    ]
+    assert egress_hosts("web_search", "firecrawl", {"base_url": "https://fc.corp.example/"}) == [
+        ("fc.corp.example", 443)
+    ]
+    assert egress_hosts("web_search", "firecrawl", {}) == [], "never the cloud's host by default"
+    validate_config("web_search", "firecrawl", {"base_url": "http://firecrawl.internal:3002"})
+    for bad in ({}, {"base_url": "https://api.firecrawl.dev"}):
+        with pytest.raises(SearchError):
+            validate_config("web_search", "firecrawl", bad)
 
 
 async def test_a_429_carries_its_wait_and_no_retry_is_made() -> None:

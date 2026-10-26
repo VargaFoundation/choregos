@@ -2795,34 +2795,34 @@
   },
   {
     "id": "connector.web_search.firecrawl",
-    "title": "Search the web through Firecrawl",
-    "version": 1,
+    "title": "Search the web through a self-hosted Firecrawl",
+    "version": 2,
     "audience": "org_admin",
     "applies_to": {
       "connector": "web_search/firecrawl"
     },
     "link": null,
-    "reviewed": "2026-10-20",
+    "reviewed": "2026-10-23",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- Firecrawl's cloud and its key, or a self-hosted instance (a key is then optional). Choregos never\n  asks Firecrawl to scrape: reading a result goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
+        "markdown": "- A **self-hosted Firecrawl instance** you run, reachable from the Choregos API. Choregos never uses\n  Firecrawl's cloud (`*.firecrawl.dev`): it is refused when you save the connector and again when the\n  platform builds it. Choregos does not deploy the instance for you.\n- Choregos never asks Firecrawl to scrape: reading a result goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
       },
       {
         "key": "at",
         "title": "At the vendor",
-        "markdown": "On the cloud, create a key in the Firecrawl dashboard. Self-hosted: note the instance's address."
+        "markdown": "Nothing to create at Firecrawl. On your instance, note its address (for example\n`http://firecrawl.internal:3002`) and, if you turned authentication on, the key it expects."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "The key only searches. It stays in the API: no runner ever sees it."
+        "markdown": "The key, if any, only searches. It stays in the API: no runner ever sees it. The API reaches the\ninstance's host and port, and only that: add it to the organisation's egress allowlist and keep it\nout of the network ceiling's deny list."
       },
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Connectors, **Web search**, type **Firecrawl**. `api_key` in the password field (sealed, shown once).\n2. Choregos does **not** know what Firecrawl keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill `data_handling` from\n   your contract, for example `{\"query_retention_days\": 0, \"query_reuse\": false, \"terms_ref\": \"contract\n   ref, section\"}`. A declaration can only be stricter, and `terms_ref` is required.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
+        "markdown": "1. Connectors, **Web search**, type **Firecrawl**. Set `base_url` to your instance. If it has a key,\n   type it in `api_key` (sealed, shown once).\n2. Choregos does **not** know what your instance keeps of a query, nor what the engines behind it do:\n   a self-hosted Firecrawl still sends the query to the search engines it uses (SearXNG, or whatever\n   its upstream is), so \"local\" does not mean the query never leaves. Under a ceiling that caps\n   retention or forbids reuse, the tool stays off until you fill `data_handling` from your own terms,\n   for example `{\"query_retention_days\": 0, \"query_reuse\": false, \"terms_ref\": \"runbook, section\"}`. A\n   declaration can only be stricter, and `terms_ref` is required.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
       },
       {
         "key": "test",
@@ -2832,22 +2832,26 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- The tool is not offered: the ceiling is closed, the backend is not in its `backends`, or the declared\n  data handling does not meet its bounds (an unknown value fails every bound that reads it).\n- `query_redacted`: the query held what looks like a secret; nothing was sent.\n- `rate_limited`: `requests_per_minute`, or Firecrawl's own quota, is reached; the answer says when to retry.\n- `network_policy`: the organisation's network ceiling refuses `api.firecrawl.dev`."
+        "markdown": "- The save is refused with \"base_url is required\" or \"Firecrawl's cloud\": point `base_url` at your own\n  instance. A connector saved before this decision has no `base_url`: its searches fail with the same\n  message until you edit it.\n- The tool is not offered: the ceiling is closed, the backend is not in its `backends`, or the declared\n  data handling does not meet its bounds (an unknown value fails every bound that reads it).\n- `query_redacted`: the query held what looks like a secret; nothing was sent.\n- `rate_limited`: `requests_per_minute`, or your instance's own limit, is reached; the answer says when\n  to retry.\n- `network_policy`: the organisation's network ceiling refuses your instance's host."
       }
     ],
     "values": {},
     "egress": [
-      "api.firecrawl.dev"
+      "your self-hosted Firecrawl's host"
     ],
     "fields": {
-      "base_url": "Firecrawl's cloud, or the address of your self-hosted instance",
-      "api_key": "your Firecrawl API key, typed once (optional when self-hosted)",
-      "price_usd_per_query": "what one query costs under your plan, written to the ledger",
+      "base_url": "the address of your self-hosted Firecrawl instance, required; Firecrawl's cloud (firecrawl.dev) is refused",
+      "api_key": "the key your instance expects, typed once (optional: a self-hosted instance may run without one)",
+      "price_usd_per_query": "what one query costs you, written to the ledger",
       "requests_per_minute": "the organisation's queries per minute to this backend; beyond, the agent gets a 429",
       "data_handling": "what your contract grants (retention, reuse, region) with its reference in terms_ref",
       "timeout_s": "request timeout in seconds"
     },
     "vendor_docs": [
+      {
+        "title": "Firecrawl: self-hosting",
+        "url": "https://docs.firecrawl.dev/contributing/self-host"
+      },
       {
         "title": "Firecrawl: search endpoint",
         "url": "https://docs.firecrawl.dev/features/search"
