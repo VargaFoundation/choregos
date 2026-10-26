@@ -42,7 +42,7 @@ pytestmark = [pytest.mark.hosted_docker, pytest.mark.asyncio]
 AGENT = Path(__file__).parent / "fixtures" / "ws_agent.py"
 IMAGE = "s41-23-ws-agent"
 #: The version `uv.lock` pins; `test_the_container_runs_the_pinned_websockets` keeps them equal.
-WEBSOCKETS = "17.1"
+WEBSOCKETS = "17.3"
 DOCKERFILE = f"""FROM python:3.12-slim-bookworm
 RUN pip install --no-cache-dir websockets=={WEBSOCKETS}
 RUN useradd --uid 1000 --create-home agent
