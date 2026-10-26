@@ -22,8 +22,8 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect a LiteLLM gateway](connector.gateway.litellm.md) | the person who operates the platform | `gateway/litellm` | 2026-10-16 |
 | [Connect an OpenAI-compatible gateway](connector.gateway.openai-compatible.md) | the person who operates the platform | `gateway/openai-compatible` | 2026-10-16 |
 | [Connect Microsoft Entra ID for joiners and leavers](connector.identity.entra.md) | an organisation administrator | `identity/entra` | 2026-10-16 |
-| [Use Alpha Vantage for daily market data](connector.marketdata.alphavantage.md) | a project owner | `marketdata/alphavantage` | 2026-10-16 |
-| [Combine several market data sources](connector.marketdata.composite.md) | a project owner | `marketdata/composite` | 2026-10-16 |
+| [Use Alpha Vantage for daily market data](connector.marketdata.alphavantage.md) | a project owner | `marketdata/alphavantage` | 2026-10-25 |
+| [Combine several market data sources](connector.marketdata.composite.md) | a project owner | `marketdata/composite` | 2026-10-25 |
 | [Use Stooq for daily market data](connector.marketdata.stooq.md) | a project owner | `marketdata/stooq` | 2026-10-16 |
 | [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
 | [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-10-16 |

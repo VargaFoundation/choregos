@@ -1388,18 +1388,18 @@
   {
     "id": "connector.marketdata.alphavantage",
     "title": "Use Alpha Vantage for daily market data",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "marketdata/alphavantage"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-25",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A free Alpha Vantage API key. The free tier allows about **25 requests a day** and gives **unadjusted**\n  daily bars: a backtest over many tickers will exhaust it. A paid plan raises the limit."
+        "markdown": "- A free Alpha Vantage API key. The free tier allows about **25 requests a day** and gives **unadjusted**\n  daily bars: a backtest over many tickers will exhaust it. A paid plan raises the limit.\n- The free key also refuses a range of more than about 100 trading days (`outputsize=full` is a premium\n  feature). With `outputsize: compact` it always answers the last 100 trading days: enough to cross-check\n  another source in a composite, never enough to be the source of a multi-year series."
       },
       {
         "key": "at",
@@ -1433,7 +1433,8 @@
     ],
     "fields": {
       "api_key": "your Alpha Vantage API key, typed once",
-      "timeout_s": "request timeout in seconds"
+      "timeout_s": "request timeout in seconds",
+      "outputsize": "auto, or compact for a free key: always the last 100 trading days, a cross-check only"
     },
     "vendor_docs": [
       {
@@ -1446,13 +1447,13 @@
   {
     "id": "connector.marketdata.composite",
     "title": "Combine several market data sources",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "marketdata/composite"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-25",
     "sections": [
       {
         "key": "before",
@@ -1482,7 +1483,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- A disagreement reported between sources: one is unadjusted (Alpha Vantage free), or a corporate action\n  happened; check the dates before trusting either.\n- Everything falls back to the last source: the first ones fail; see their procedures.\n- A rate limit: the free tiers are small; order the sources so the limited one is last."
+        "markdown": "- A disagreement reported between sources: one is unadjusted (Alpha Vantage free), or a corporate action\n  happened; check the dates before trusting either.\n- Everything falls back to the last source: the first ones fail; see their procedures.\n- A rate limit: the free tiers are small; order the sources so the limited one is last.\n- `cross_check` stays empty with a free Alpha Vantage key and a range of years: the key refuses the full\n  series. Set `source_configs: {\"alphavantage\": {\"outputsize\": \"compact\"}}`: it then checks the last 100\n  trading days, and `common_days` says how many were compared. A source in `compact` never gives the bars."
       }
     ],
     "values": {},

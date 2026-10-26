@@ -9,6 +9,11 @@ answer is reported as a rate limit, not hidden. Quota messages arrive as HTTP 20
 `Information` field; they are mapped to `RateLimited`. `test()` does not call the API: it would
 burn one of the 25.
 
+`outputsize: compact` (S38-21) always asks for the last 100 trading days, whatever the range: the
+free key's way to serve a multi-year request at all. Such a provider does not have the full history
+(`full_history` is false), so a composite takes it as a cross-check of the recent days only, never
+as the source of the bars.
+
 `get_instrument` uses `SYMBOL_SEARCH` (also one request of the quota).
 """
 
@@ -37,10 +42,14 @@ _TYPES = {"equity": "stock", "etf": "etf"}
 class AlphaVantageProvider(MarketDataProvider):
     name = "alphavantage"
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, outputsize: str = "auto", **kwargs: Any) -> None:
         super().__init__(**kwargs)
         if not self._api_key:
             raise MarketDataError("alphavantage: the secret `api_key` is required")
+        if outputsize not in ("auto", "compact"):
+            raise MarketDataError("alphavantage: `outputsize` is `auto` or `compact`")
+        self._compact = outputsize == "compact"
+        self.full_history = not self._compact
 
     async def _query(self, params: dict[str, Any]) -> dict[str, Any]:
         reponse = await self.fetch(URL, {**params, "apikey": self._api_key})
@@ -62,7 +71,7 @@ class AlphaVantageProvider(MarketDataProvider):
     async def get_bars(self, symbol: str, start: str, end: str) -> dict[str, Any]:
         debut, fin = validate_range(start, end)
         symbole = validate_symbol(symbol)
-        recent = (date.today() - debut).days <= COMPACT_DAYS
+        recent = self._compact or (date.today() - debut).days <= COMPACT_DAYS
         corps = await self._query(
             {
                 "function": "TIME_SERIES_DAILY",
