@@ -864,9 +864,28 @@ The network policies open port 4318 and Tempo's query port in the namespace each
 already runs Tempo needs no collector of its own: Tempo receives OTLP itself. The Diametral dev
 tenant points both values at `tempo.tempo.svc.cluster.local` (ports 4318 and 3200); its chart network
 policies are off and the tenant's own policies open those two ports to the API, the workers, the
-gateway and the drift job only, never to the agent pods (#946). Without the collector there are no
-`spanmetrics`, so the `Choregos — Traces` dashboard's rate and latency panels stay empty there; the
-traces themselves are read in Grafana's Tempo explorer.
+gateway and the drift job only, never to the agent pods (#946): `choregos-egress-traces-otlp` and
+`choregos-egress-traces-query`, applied on dev on 2026-10-26.
+
+Without the collector, the `Choregos — Traces` dashboard reads Tempo's own span metrics (S40-20f):
+each panel has two targets, the collector's (`traces_span_metrics_*`, latency in milliseconds,
+`service_name`) and Tempo's metrics generator's (`traces_spanmetrics_*`, latency in seconds,
+`service`), and an install has data in one of the two. Tempo must run the `span-metrics` processor
+with the collector's dimensions, or the panels that break down by model, stage or tool draw nothing:
+
+```yaml
+# Tempo's configuration (grafana/tempo chart: `tempo.metricsGenerator.processor`)
+metrics_generator:
+  processor:
+    span_metrics:
+      dimensions: [gen_ai.operation.name, gen_ai.request.model, gen_ai.provider.name, project, stage, error.type]
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]
+```
+
+On the Diametral dev tenant, Tempo is DiametralGroup/infra's `platform/tempo` (infra#1355).
 
 `global.tracing.tempoUrl` renders the CronJob `choregos-trace-drift` (`api.traceDrift.schedule`,
 03:17 by default) and a network policy that opens that port to its pods only. Each
