@@ -1,6 +1,6 @@
 [project]
 name = "choregos-agent-example-plain"
-version = "0.20.3"
+version = "0.20.4"
 description = "Example: a ticket triage agent in plain Python (choregos-agent-sdk)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
