@@ -233,7 +233,8 @@ The card lists the opted-in workflows of the projects the token's person may rea
   **input artefact** of the work item, named after `file.name` (`attachment-<n>` when it has none):
   a step that lists that name in its transition's `inputs` finds it in `.choregos/inputs/`. The
   project bounds them with `a2a.max_file_bytes` in its configuration, **10 MiB by default** (50 MiB
-  at most), for each file and for all the files of one message together. A file sent by `uri` is
+  at most), for each file and for all the files of one message together; it is set in the project's
+  **Settings › A2A**, in MiB. A file sent by `uri` is
   refused: the door fetches nothing on a caller's behalf. The interpreter starts once the files are
   stored, and a store that fails creates nothing.
 - `tasks/get` reads the work item: `working`, `input-required` while a person must decide (with the
@@ -263,7 +264,8 @@ The card lists the opted-in workflows of the projects the token's person may rea
   in `message/send` is refused: its answer has no place for the secret.
 
 The organisation's card and endpoint are also on the console's **Integrations** page, which creates
-an `a2a` token for the person (30 days, shown once).
+an `a2a` token for the person (30 days, shown once) and lists each project's file limit, with a link
+to the setting.
 
 The card needs the token too, since its skills depend on who asks. Calls are audited (`a2a.call`),
 each stored file too (`workitem.input_file`, with its name, size and digest); they are rate-limited
