@@ -74,6 +74,16 @@ def _warn_no_policy(host: str, port: int) -> None:
     )
 
 
-def guarded(transport: httpx.AsyncBaseTransport | None = None) -> GuardedTransport:
-    """Wrap `transport` (the tests' `MockTransport`, or the real one when `None`)."""
-    return GuardedTransport(transport)
+def guarded(
+    transport: httpx.AsyncBaseTransport | None = None, *, proxy_kind: str | None = None
+) -> GuardedTransport:
+    """Wrap `transport` (the tests' `MockTransport`, or the real one when `None`).
+
+    `proxy_kind` names the kind of traffic (ADR 0087) whose organisation proxy, when one applies in
+    the current context, carries each request instead of `transport`. The guard still checks the
+    TARGET first: the proxy never widens what the organisation allows."""
+    if proxy_kind is None:
+        return GuardedTransport(transport)
+    from .proxy import ProxyRoutingTransport
+
+    return GuardedTransport(ProxyRoutingTransport(proxy_kind, transport))

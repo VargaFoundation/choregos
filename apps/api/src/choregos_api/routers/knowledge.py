@@ -21,6 +21,7 @@ from weakref import WeakKeyDictionary
 
 import httpx
 from choregos_adapters.registry import fakes_enabled
+from choregos_core.outbound_proxy import OutboundProxyError
 from fastapi import APIRouter, Path, Query, Request, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,6 +78,7 @@ from ..schemas.knowledge import (
     ProjectKnowledgeBaseCreate,
 )
 from ..services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
+from ..services.outbound_proxy import proxy_scope
 from ..services.platform_network import check_platform_host
 from ..temporal import get_temporal, knowledge_distill_id, knowledge_sync_id
 
@@ -1084,8 +1086,14 @@ async def _reachable_start(
         return
     exclude = config.get("exclude") or []
     assert isinstance(exclude, list)
-    async with egress_scope(session, organisation, "api", "knowledge-source:web"):
-        await _check_web_start(str(config["url"]), exclude)
+    try:
+        async with (
+            egress_scope(session, organisation, "api", "knowledge-source:web"),
+            proxy_scope(session, organisation.id, ("knowledge_web",)),
+        ):
+            await _check_web_start(str(config["url"]), exclude)
+    except OutboundProxyError as unusable:
+        raise unprocessable(str(unusable)) from unusable
 
 
 async def _check_web_start(url: str, exclude: list[str]) -> None:

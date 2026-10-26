@@ -200,6 +200,7 @@ from .mesures import (
     MemoryDto,
     MemoryReimport,
 )
+from .outbound_proxy import OutboundProxy, OutboundProxyPut, OutboundProxyState, OutboundProxyTest
 from .plateforme import (
     AgentBackendInfo,
     AgentBackendUpdate,
@@ -451,6 +452,10 @@ __all__ = [
     "OrgCreate",
     "OrgDto",
     "OrgUpdate",
+    "OutboundProxy",
+    "OutboundProxyPut",
+    "OutboundProxyState",
+    "OutboundProxyTest",
     "PageMeta",
     "PlatformIdentity",
     "PlatformIdentityRow",
