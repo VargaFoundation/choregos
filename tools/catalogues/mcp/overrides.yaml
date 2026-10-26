@@ -129,7 +129,6 @@ vendors:
   brave-search: { domains: [brave.com], orgs: [brave] }
   exa: { domains: [exa.ai], orgs: [exa-labs] }
   tavily: { domains: [tavily.com], orgs: [tavily-ai] }
-  firecrawl: { domains: [firecrawl.dev], orgs: [firecrawl] }
   apify: { domains: [apify.com], orgs: [apify] }
   brightdata: { domains: [brightdata.com], orgs: [brightdata] }
   kagi: { domains: [kagi.com], orgs: [kagisearch] }
