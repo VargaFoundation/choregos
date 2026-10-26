@@ -1,6 +1,6 @@
 [project]
 name = "choregos-agent-example-pydantic-ai"
-version = "0.20.3"
+version = "0.20.4"
 description = "Example: the ticket triager on Pydantic AI and the choregos-agent-sdk"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
