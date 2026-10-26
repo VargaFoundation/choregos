@@ -119,10 +119,38 @@ class GooseBackend(Backend):
 # none of it is needed; measured on the dev tenant (2026-10-23), a run made 8 calls to
 # models.opencode.ai:443, each refused by the per-run egress proxy (ADR 0070) and listed under
 # Admin > Network activity. Set in the launch plan, so it holds with or without a gateway key.
+#
+# S40-25b: the same runs also asked `registry.npmjs.org` for `@opencode-ai/plugin`. Measured on the
+# pinned 1.18.31 with a logging registry and no network: for every config directory (the global
+# one, and `<workspace>/.opencode` once it exists) opencode starts a background install of that
+# package unless the directory is read-only or already holds `node_modules` with the package
+# recorded in its lock. (`@ai-sdk/openai-compatible`, the provider's `npm` value, is bundled in
+# the binary: no request, no `packages/` cache, nothing to pre-install.) Two things follow:
+#   - `OPENCODE_CONFIG_HOME` is an XDG config root the runner image bakes with that package
+#     installed (`docker/runner.Dockerfile`), because `$HOME` is the mounted workspace volume;
+#   - the workspace gets a stub `.opencode` that already looks installed (`OPENCODE_STUB_FILES`).
+# `OPENCODE_DISABLE_DEFAULT_PLUGINS` skips opencode's built-in npm plugins (copilot/codex auth);
+# on 1.18.31 they asked for nothing, so the flag is belt and braces for a bump.
+OPENCODE_CONFIG_HOME = "/opt/choregos/xdg-config"
+
 OPENCODE_OFFLINE_ENV: dict[str, str] = {
     "OPENCODE_DISABLE_MODELS_FETCH": "1",
     "OPENCODE_DISABLE_AUTOUPDATE": "1",
     "OPENCODE_DISABLE_LSP_DOWNLOAD": "1",
+    "OPENCODE_DISABLE_DEFAULT_PLUGINS": "1",
+    "XDG_CONFIG_HOME": OPENCODE_CONFIG_HOME,
+}
+
+# opencode's own check (`Npm.install`): `node_modules` exists, and every dependency named in
+# `package.json` plus the one it wants (`@opencode-ai/plugin`) is a root dependency of
+# `package-lock.json`. Nothing is imported from it, so the directory only has to exist.
+OPENCODE_STUB_FILES: dict[str, str] = {
+    ".opencode/package.json": "{}\n",
+    ".opencode/package-lock.json": json.dumps(
+        {"lockfileVersion": 3, "packages": {"": {"dependencies": {"@opencode-ai/plugin": "*"}}}}
+    )
+    + "\n",
+    ".opencode/node_modules/.keep": "",
 }
 
 
@@ -164,6 +192,7 @@ class OpenCodeBackend(Backend):
             env={**OPENCODE_OFFLINE_ENV, **stage_input.agent.launch.env},
             files={
                 "opencode.json": json.dumps(config, indent=2, ensure_ascii=False),
+                **OPENCODE_STUB_FILES,
                 **stage_input.agent.launch.files,
             },
             mcp_servers=self.mcp_servers(stage_input),

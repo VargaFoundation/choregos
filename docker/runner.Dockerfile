@@ -126,6 +126,21 @@ RUN set -eux; \
     # input that still names it (`agent.launch.command`) starts the adapter that replaced it.
     ln -s "$(command -v claude-agent-acp)" /usr/local/bin/claude-code-acp
 
+# opencode installs `@opencode-ai/plugin` from npm into each of its config directories at start, and
+# the per-run egress proxy refuses `registry.npmjs.org` (S40-25b). It skips the install when the
+# directory already holds `node_modules` with the package. `$HOME` is the mounted workspace volume,
+# so the global directory lives under an XDG root of the image (`OPENCODE_CONFIG_HOME` in
+# `backends/others.py`, set by the launch plan), owned by the runner's user because opencode also
+# writes there. The provider package (`@ai-sdk/openai-compatible`) is bundled in the binary.
+RUN set -eux; \
+    version() { grep "^$1=" /etc/choregos/versions.lock | cut -d= -f2; }; \
+    mkdir -p /opt/choregos/xdg-config/opencode; \
+    cd /opt/choregos/xdg-config/opencode; \
+    npm install --ignore-scripts --no-audit --no-fund --save-exact \
+      "@opencode-ai/plugin@$(version opencode-plugin)"; \
+    test -f node_modules/@opencode-ai/plugin/package.json; \
+    chown -R 1000:1000 /opt/choregos
+
 # OpenHands n'est plus installé (docs/adr/0011-openhands-removed.md). Il n'exposait aucun
 # agent ACP en ligne de commande, et il pesait le plus lourd de l'image : son arbre Python
 # portait quatre des quatorze CRITICAL trouvés par Trivy (`litellm`, `fastmcp`, `anyio`,
