@@ -346,7 +346,7 @@ async def test_a_responses_answer_is_masked_its_reasoning_too_its_encrypted_cont
 
 
 @pytest.mark.asyncio
-async def test_a_chat_answer_s_reasoning_and_thinking_are_masked_the_signature_left() -> None:
+async def test_a_chat_answer_s_reasoning_and_thinking_are_masked_the_masked_block_unsigned() -> None:
     answer = _chat_answer()
     message = answer.choices[0].message
     message.reasoning_content = _REASONING
@@ -354,9 +354,9 @@ async def test_a_chat_answer_s_reasoning_and_thinking_are_masked_the_signature_l
     message.refusal = f"I will not print {_GH}"
     masked = (await _answer(answer, _MARKED)).choices[0].message
     assert masked.reasoning_content == _MASKED_REASONING
-    assert masked.thinking_blocks == [
-        {"type": "thinking", "thinking": _MASKED_REASONING, "signature": _OPAQUE}
-    ]
+    assert masked.thinking_blocks == [{"type": "thinking", "thinking": _MASKED_REASONING}], (
+        "S40-21d: a masked thinking block is no longer the one the provider signed"
+    )
     assert masked.refusal == f"I will not print {REDACTED}", "a field with no rule of its own is read too"
 
 
@@ -369,7 +369,7 @@ async def test_an_anthropic_answer_s_thinking_is_masked_what_is_signed_or_encryp
     ]
     answer["content"][3]["input"]["signature"] = _GH
     thinking, redacted, text, tool = (await _answer(answer, _MARKED))["content"]
-    assert thinking == {"type": "thinking", "thinking": _MASKED_REASONING, "signature": _OPAQUE}
+    assert thinking == {"type": "thinking", "thinking": _MASKED_REASONING}, "unsigned once masked (S40-21d)"
     assert redacted == {"type": "redacted_thinking", "data": _OPAQUE}
     assert text["text"] == _MASKED_ANSWER
     assert tool["input"] == {"path": "k.txt", "content": REDACTED, "signature": REDACTED}, (
@@ -401,12 +401,12 @@ async def test_a_streamed_chat_reasoning_is_masked_though_each_secret_straddles_
     assert "".join(getattr(d, "reasoning_content", None) or "" for d in deltas) == _MASKED_REASONING
     blocks = [block for d in deltas for block in getattr(d, "thinking_blocks", None) or []]
     assert "".join(block["thinking"] for block in blocks) == _MASKED_REASONING
-    assert blocks[-1]["signature"] == _OPAQUE
+    assert "signature" not in blocks[-1], "the signature of a masked thinking block is dropped (S40-21d)"
     assert _chat_text(chunks)[0] == _MASKED_ANSWER
 
 
 @pytest.mark.asyncio
-async def test_a_streamed_anthropic_thinking_is_masked_its_signature_left() -> None:
+async def test_a_streamed_anthropic_thinking_is_masked_its_signature_dropped() -> None:
     def delta(kind: str, field: str, text: str) -> bytes:
         return _sse({"type": "content_block_delta", "index": 0, "delta": {"type": kind, field: text}})
 
@@ -418,10 +418,53 @@ async def test_a_streamed_anthropic_thinking_is_masked_its_signature_left() -> N
     ]
     chunks = await _streamed(events, _MARKED)
     assert len(chunks) == len(events)
-    sent = [json.loads(chunk.split(b"\ndata: ")[1]) for chunk in chunks]
+    sent = [json.loads(chunk.split(b"\ndata: ")[1]) for chunk in chunks if chunk]
     thinking = "".join(event["delta"].get("thinking", "") for event in sent if "delta" in event)
     assert thinking == _MASKED_REASONING
-    assert chunks[-2] == events[-2], "the signature goes out byte for byte"
+    assert chunks[-2] == b"", "S40-21d: the signature of a masked thinking block never goes out"
+    assert b"signature" not in b"".join(chunks)
+
+
+@pytest.mark.asyncio
+async def test_a_thinking_block_with_nothing_to_mask_keeps_its_signature() -> None:
+    """S40-21d drops a signature only where the text it signs was changed."""
+    clean = "I read the file and found nothing secret.\n"
+    answer = {"type": "message", "content": [{"type": "thinking", "thinking": clean, "signature": _OPAQUE}]}
+    assert (await _answer(answer, _MARKED))["content"][0]["signature"] == _OPAQUE
+
+    def delta(kind: str, field: str, text: str) -> bytes:
+        return _sse({"type": "content_block_delta", "index": 0, "delta": {"type": kind, field: text}})
+
+    events = [delta("thinking_delta", "thinking", piece) for piece in _pieces(clean, 5)]
+    events += [
+        delta("signature_delta", "signature", _OPAQUE),
+        _sse({"type": "content_block_stop", "index": 0}),
+    ]
+    out = await _streamed(events, _MARKED)
+    assert out[-2] == events[-2], "the signature goes out byte for byte"
+    sent = [json.loads(chunk.split(b"\ndata: ")[1]) for chunk in out]
+    assert "".join(event["delta"].get("thinking", "") for event in sent if "delta" in event) == clean
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_refusal_and_legacy_function_call_are_masked_across_chunks() -> None:
+    """S40-21d: fields S40-21c left to the per-chunk pass, where a cut secret went through whole."""
+    refusal = f"I will not print {_GH} or {_AWS}\n"
+
+    def chunk(finish: str | None = None, **delta: Any) -> SimpleNamespace:
+        choice = SimpleNamespace(index=0, delta=SimpleNamespace(**delta), finish_reason=finish)
+        return SimpleNamespace(choices=[choice])
+
+    chunks = [chunk(refusal=piece) for piece in _pieces(refusal, 5)]
+    chunks += [
+        chunk(function_call=SimpleNamespace(name=None, arguments=piece)) for piece in _pieces(_ARGUMENTS, 4)
+    ]
+    chunks.append(chunk(finish="function_call"))
+    out = await _streamed(chunks, _MARKED)
+    deltas = [c.choices[0].delta for c in out]
+    assert "".join(getattr(d, "refusal", None) or "" for d in deltas) == mask(refusal)[0]
+    legacy = "".join(d.function_call.arguments for d in deltas if getattr(d, "function_call", None))
+    assert json.loads(legacy) == {"path": "k.txt", "content": REDACTED}
 
 
 def _responses_stream() -> list[SimpleNamespace]:

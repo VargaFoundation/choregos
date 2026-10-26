@@ -65,10 +65,17 @@ and nothing enforced it: a leftover of the OpenHands executor removed by [ADR 00
    (`reasoning_content`, thinking blocks, a reasoning summary); each chunk is also masked whole on
    its way out, for the fields no channel holds. What the provider signs or encrypts is left as is
    (a thinking block's `signature`, a reasoning item's `encrypted_content`, a redacted thinking
-   block), by the block's type, never by key name. A thinking block whose text was masked no longer
-   matches its signature: the provider refuses the next request that carries it back — a visible
-   failure where the secret would not have been. An error in the guard is LiteLLM's error for the
-   answer, which is withheld: proven in a live gateway whose guard fails on purpose.
+   block), by the block's type, never by key name. A thinking block whose text was masked is no
+   longer the block the provider signed: since S40-21d it goes out **without its signature**
+   (removed from the block, or its `signature_delta` event dropped from a stream), never with one
+   that no longer matches. The guard does not pretend the block is the provider's: sent back as is,
+   the provider refuses it for the missing signature — a visible failure where the secret would not
+   have been, and one a client can avoid by not sending back an unsigned thinking block. A block it
+   did not change keeps its signature, byte for byte. Dropping the whole block was rejected: the
+   record would lose the masked reasoning for the same refusal. S40-21d also holds the two chat
+   fields S40-21c left to the per-chunk pass: a choice's `refusal` and a legacy `function_call`'s
+   arguments. An error in the guard is LiteLLM's error for the answer, which is withheld: proven in
+   a live gateway whose guard fails on purpose.
 6. **A gateway without the guard is refused, not trusted (S40-21b).** The capability `llm_guard` is
    declared by the LiteLLM gateway only. When the policy sets `sandbox.llm_security_analyzer` and the
    gateway does not declare it (`direct`, `openai-compatible`), the stage is refused as a
@@ -94,7 +101,8 @@ and nothing enforced it: a leftover of the OpenHands executor removed by [ADR 00
   must keep `async_pre_call_hook`, `async_post_call_success_hook`,
   `async_post_call_streaming_iterator_hook` and file-relative loading, which only a live gateway
   proves: `tests/live/test_llm_guard_live.py` runs the chart's image and config against a fake
-  provider (opt-in, `CHOREGOS_LIVE_LLM_GUARD=1`), and the CI's `llm-guard` job runs it whenever the
+  provider (opt-in, `CHOREGOS_LIVE_LLM_GUARD=1`) — an OpenAI-shaped one, and since S40-21d a native
+  Anthropic model whose thinking comes signed — and the CI's `llm-guard` job runs it whenever the
   guard, the gateway's chart or the test changes, and on `main`.
 
 ## Alternatives rejected
