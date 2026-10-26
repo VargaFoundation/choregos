@@ -57,6 +57,8 @@ def checked_base_url(raw: object) -> str:
 
 class FirecrawlSearch(SearchBackend):
     name: ClassVar[str] = "firecrawl"
+    #: Self-hosted by the organisation: its address is theirs (often in the cluster), not a public endpoint.
+    PROXIED: ClassVar[bool] = False
 
     def __init__(self, *, base_url: str, **kwargs: Any) -> None:
         checked = checked_base_url(base_url)  # before the parent opens a client

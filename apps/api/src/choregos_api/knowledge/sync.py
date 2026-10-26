@@ -21,6 +21,7 @@ from choregos_adapters.documents.base import Changes, DocumentSource, ItemUnread
 from choregos_adapters.registry import build, fakes_enabled
 from choregos_core import utcnow
 from choregos_core.egress import pop_scope, push_scope
+from choregos_core.outbound_proxy import pop_proxies, push_proxies
 from choregos_core.redaction import redact
 from sqlalchemy import delete, func, select
 
@@ -216,6 +217,20 @@ async def _enter_egress_scope(session: Any, org: str, family: str, source: Knowl
     return push_scope(policy, family, f"knowledge-source:{source.name}")
 
 
+async def _enter_proxy_scope(session: Any, org: str) -> Any:
+    """The organisation's outbound proxy for its web crawl (ADR 0087): a crawl that must go through it
+    goes through it or fails, with the proxy named. `None` when none applies."""
+    from ..services.outbound_proxy import outbound_proxy_for
+
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        return None
+    proxy = await outbound_proxy_for(session, organisation.id, "knowledge_web")
+    return push_proxies({"knowledge_web": proxy}) if proxy is not None else None
+
+
 async def sync_source(
     org: str, source_id: str, *, adapter: DocumentSource | None = None, family: str = "workers"
 ) -> dict[str, Any]:
@@ -225,6 +240,7 @@ async def sync_source(
     organisation's egress rules and the deployment's ceiling are read for."""
     settings = get_settings()
     scope_token: Any = None
+    proxy_token: Any = None
     cap = settings.knowledge_max_upload_mib * 1024 * 1024
     async with session_scope(orgs=[org]) as session:
         source = await session.get(KnowledgeSource, source_id)
@@ -240,6 +256,7 @@ async def sync_source(
             if source is None or base is None:
                 return {"status": "gone"}
             scope_token = await _enter_egress_scope(session, org, family, source)
+            proxy_token = await _enter_proxy_scope(session, org)
             adapter = adapter or await open_source(session, source)
             changes = await adapter.changes(source.cursor)
             known = {
@@ -287,6 +304,8 @@ async def sync_source(
         )
         raise
     finally:
+        if proxy_token is not None:
+            pop_proxies(proxy_token)
         if scope_token is not None:
             pop_scope(scope_token)
         close = getattr(adapter, "close", None)

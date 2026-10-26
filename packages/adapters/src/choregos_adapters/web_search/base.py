@@ -18,6 +18,7 @@ import httpx
 from choregos_core.web_search import DataHandling
 
 from ..errors import AdapterError
+from ..http.proxy import OutboundProxyHttpError, ProxyRoutingTransport
 
 USER_AGENT = "choregos-web-search/1.0 (+https://github.com/varga-foundation/choregos)"
 #: The most results one call returns, whatever is asked.
@@ -60,6 +61,9 @@ class SearchBackend:
     name: ClassVar[str] = "search"
     #: What the backend does with a query, reviewed against its published terms. Unknown is `None`.
     DECLARED: ClassVar[DataHandling] = DataHandling()
+    #: Whether the organisation's outbound proxy (ADR 0087) carries this backend's calls. A backend the
+    #: organisation hosts itself (Firecrawl) is not a provider's endpoint a residential exit can reach.
+    PROXIED: ClassVar[bool] = True
 
     def __init__(
         self,
@@ -69,6 +73,10 @@ class SearchBackend:
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._api_key = api_key
+        if self.PROXIED:
+            # Reads the calling organisation's proxy for `web_search` on each request (the API enters
+            # it); with none in context, the call goes direct through `transport`.
+            transport = ProxyRoutingTransport("web_search", transport)
         self._client = httpx.AsyncClient(
             timeout=timeout_s, transport=transport, headers={"User-Agent": USER_AGENT}
         )
@@ -117,6 +125,9 @@ class SearchBackend:
         no retry: a search is cheap to ask again and a retry storm burns a quota."""
         try:
             response = await self._client.request(method, url, **kwargs)
+        except OutboundProxyHttpError as via_proxy:
+            # Names the proxy (endpoint, never a credential): the call is not retried without it.
+            raise SearchError(f"{self.name}: {via_proxy}") from None
         except httpx.HTTPError as down:
             # The class only: an httpx message can carry the URL.
             raise SearchError(f"{self.name}: network error ({type(down).__name__})") from down
