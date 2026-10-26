@@ -1861,6 +1861,17 @@ wall: see [security](security.md).
   (egress proxy, runner, tool broker, platform), the decision, the reason, the counts and the projects;
   **Refused only** is on by default, the period is the last 24 hours or 7 days.
 
+**Outbound proxy.** [ADR 0087](adr/0087-an-organisation-has-one-outbound-proxy.md): **Administration → Outbound
+proxy** (`org_admin` only) sets the organisation's one proxy for its web search and web reading. Fields: the
+switch **Enabled**, the **Endpoint** (`host:port`, no scheme, no credentials), the **Scheme** spoken to the proxy,
+the **Username** (a provider's options such as a country or a sticky session go there, as the provider documents
+them, for example `user-...-country-fr-session-...`), the **Password** (write-only: it is never shown, **set** says
+one is stored, an empty field keeps it, and it is required the first time) and **Applies to** (`web_fetch`,
+`web_search`, `knowledge_web`, `search_engines`; the last has no effect yet, S40-26d). **Save** is disabled while
+the endpoint is not `host:port` or no kind is chosen. **Test the proxy** fetches a fixed echo page through the
+*stored* proxy and shows the exit IP, the country and the time, or the error; **Remove** asks first and deletes
+the sealed password. The API's refusals (409 without a secrets key, 422) are shown as returned.
+
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
 it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `unreachable`) for the last
