@@ -76,7 +76,14 @@ def prepare() -> None:
                 "name": "marketdata",
                 "kind": "marketdata",
                 "type": "composite",
-                "config": {"sources": ["yahoo", "alphavantage"], "cross_check": True, "tolerance": 0.02},
+                # A free Alpha Vantage key refuses a multi-year series: in `compact` it checks the last
+                # 100 trading days of Yahoo's (S38-21).
+                "config": {
+                    "sources": ["yahoo", "alphavantage"],
+                    "source_configs": {"alphavantage": {"outputsize": "compact"}},
+                    "cross_check": True,
+                    "tolerance": 0.02,
+                },
                 "secret_refs": {"alphavantage_api_key": "env:CONNECTOR_ALPHAVANTAGE_API_KEY"},
             }
             read(http.post(f"/orgs/{ORG}/connectors", json=body), 201)

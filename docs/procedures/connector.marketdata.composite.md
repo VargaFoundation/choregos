@@ -2,7 +2,7 @@
 
 # Combine several market data sources
 
-For a project owner. Procedure `connector.marketdata.composite`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For a project owner. Procedure `connector.marketdata.composite`, version 2, reviewed 2026-10-25 against the vendor's own pages.
 
 ## Before you start
 
@@ -35,6 +35,9 @@ Press **Test**, then call `get_bars` and compare with a source you trust.
   happened; check the dates before trusting either.
 - Everything falls back to the last source: the first ones fail; see their procedures.
 - A rate limit: the free tiers are small; order the sources so the limited one is last.
+- `cross_check` stays empty with a free Alpha Vantage key and a range of years: the key refuses the full
+  series. Set `source_configs: {"alphavantage": {"outputsize": "compact"}}`: it then checks the last 100
+  trading days, and `common_days` says how many were compared. A source in `compact` never gives the bars.
 
 ## Fields
 

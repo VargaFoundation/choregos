@@ -3,8 +3,8 @@ id: connector.marketdata.composite
 title: Combine several market data sources
 applies_to: {connector: marketdata/composite}
 audience: project_owner
-version: 1
-reviewed: 2026-10-16
+version: 2
+reviewed: 2026-10-25
 egress: ["the hosts of the sources it combines"]
 fields:
   sources: "the providers, in the order they are tried: stooq, yahoo, alphavantage"
@@ -46,3 +46,6 @@ Press **Test**, then call `get_bars` and compare with a source you trust.
   happened; check the dates before trusting either.
 - Everything falls back to the last source: the first ones fail; see their procedures.
 - A rate limit: the free tiers are small; order the sources so the limited one is last.
+- `cross_check` stays empty with a free Alpha Vantage key and a range of years: the key refuses the full
+  series. Set `source_configs: {"alphavantage": {"outputsize": "compact"}}`: it then checks the last 100
+  trading days, and `common_days` says how many were compared. A source in `compact` never gives the bars.

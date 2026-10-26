@@ -3,20 +3,24 @@ id: connector.marketdata.alphavantage
 title: Use Alpha Vantage for daily market data
 applies_to: {connector: marketdata/alphavantage}
 audience: project_owner
-version: 1
-reviewed: 2026-10-16
+version: 2
+reviewed: 2026-10-25
 vendor_docs:
   - {title: "Alpha Vantage: get a free API key", url: "https://www.alphavantage.co/support/#api-key"}
 egress: [www.alphavantage.co]
 fields:
   api_key: "your Alpha Vantage API key, typed once"
   timeout_s: "request timeout in seconds"
+  outputsize: "auto, or compact for a free key: always the last 100 trading days, a cross-check only"
 ---
 
 ## Before you start
 
 - A free Alpha Vantage API key. The free tier allows about **25 requests a day** and gives **unadjusted**
   daily bars: a backtest over many tickers will exhaust it. A paid plan raises the limit.
+- The free key also refuses a range of more than about 100 trading days (`outputsize=full` is a premium
+  feature). With `outputsize: compact` it always answers the last 100 trading days: enough to cross-check
+  another source in a composite, never enough to be the source of a multi-year series.
 
 ## At the vendor
 
