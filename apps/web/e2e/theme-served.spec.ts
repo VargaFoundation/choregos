@@ -54,6 +54,9 @@ test("a dark override never leaks into the light mode, and the reverse", async (
 test("the person's own choice still wins over the theme's default mode", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("radio", { name: "Dark" }).check({ force: true });
+  // The choice is applied (and stored) before the reload, or the reload can race it (S41-27).
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await page.evaluate(() => localStorage.getItem("choregos.theme"))).toBe("dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
