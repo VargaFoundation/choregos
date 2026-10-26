@@ -144,6 +144,9 @@ import type {
   ModelMatrix,
   PolicyDef,
   PolicyCeilingState,
+  OutboundProxyPut,
+  OutboundProxyState,
+  OutboundProxyTest,
   NetworkActivity,
   ProjectNetwork,
   ProjectDto,
@@ -814,6 +817,14 @@ export const api = {
   policyCeiling: (org: string) => request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`),
   putPolicyCeiling: (org: string, ceiling: Record<string, unknown> | null) =>
     request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`, { method: "PUT", body: JSON.stringify({ ceiling }) }),
+
+  /** The organisation's one outbound proxy (ADR 0087): the password is write-only, only `password_set` comes back. */
+  outboundProxy: (org: string) => request<OutboundProxyState>(`/orgs/${org}/outbound-proxy`),
+  putOutboundProxy: (org: string, body: OutboundProxyPut) =>
+    request<OutboundProxyState>(`/orgs/${org}/outbound-proxy`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteOutboundProxy: (org: string) => request<void>(`/orgs/${org}/outbound-proxy`, { method: "DELETE" }),
+  /** Fetches the fixed echo endpoint through the stored proxy; a failing proxy is a 200 with `ok: false`. */
+  testOutboundProxy: (org: string) => request<OutboundProxyTest>(`/orgs/${org}/outbound-proxy/test`, { method: "POST" }),
 
   /** What a project's runs really get (ADR 0070): its policy under the organisation's ceiling, and what was clamped. */
   projectNetwork: (id: string) => request<ProjectNetwork>(`/projects/${qualify(id)}/network`),

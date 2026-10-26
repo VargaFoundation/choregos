@@ -82,6 +82,7 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
+import type { OutboundProxyPut, OutboundProxyState } from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
@@ -2512,6 +2513,46 @@ let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string;
   ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
 };
 
+/** The organisation's outbound proxy (ADR 0087), kept for the time of the page; the password is never stored here, as in the API. */
+let mockOutboundProxy: OutboundProxyState = { proxy: null, updated_by: null, updated_at: null };
+let mockProxyPassword = false;
+
+/** The four outbound-proxy routes, as the API answers them (S40-26b implements the real ones). */
+function outboundProxyApi(method: string, bare: string, body: unknown): unknown {
+  if (!/^\/orgs\/[^/]+\/outbound-proxy(\/test)?$/.test(bare)) return undefined;
+  if (bare.endsWith("/test")) {
+    if (!mockOutboundProxy.proxy) throw new ApiError(404, { title: "Not Found", detail: "no outbound proxy is set" });
+    const { endpoint, username } = mockOutboundProxy.proxy;
+    if (username.includes("fail"))
+      return { ok: false, exit_ip: null, country: null, error: `proxy ${endpoint} answered 407 Proxy Authentication Required`, elapsed_ms: 212, target: "https://ipinfo.io/json" };
+    return { ok: true, exit_ip: "203.0.113.42", country: /country-([a-z]{2})/i.exec(username)?.[1]?.toUpperCase() ?? "FR", error: null, elapsed_ms: 640, target: "https://ipinfo.io/json" };
+  }
+  if (method === "PUT") {
+    const put = body as OutboundProxyPut;
+    if (put.password === undefined && !mockProxyPassword)
+      throw new ApiError(422, { title: "Unprocessable Entity", detail: "a password is required the first time" });
+    if (put.password !== undefined) mockProxyPassword = true;
+    mockOutboundProxy = {
+      proxy: {
+        enabled: put.enabled,
+        endpoint: put.endpoint,
+        scheme: put.scheme,
+        username: put.username,
+        password_set: mockProxyPassword,
+        applies_to: put.applies_to ?? ["web_fetch", "web_search", "knowledge_web", "search_engines"],
+      },
+      updated_by: me.email,
+      updated_at: new Date().toISOString(),
+    };
+  }
+  if (method === "DELETE") {
+    mockOutboundProxy = { proxy: null, updated_by: null, updated_at: null };
+    mockProxyPassword = false;
+    return undefined;
+  }
+  return structuredClone(mockOutboundProxy);
+}
+
 /** The demo organisation, kept for the time of the page: the Organisation card on /admin renames it (S40-24). */
 const mockOrg: { slug: string; name: string; role: string; currency: string } = {
   slug: "acme",
@@ -2611,6 +2652,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     Object.assign(mockOrg, Object.fromEntries(Object.entries(update).filter(([, v]) => v !== undefined)));
     return structuredClone(mockOrg) as T;
   }
+  if (/^\/orgs\/[^/]+\/outbound-proxy/.test(bare)) return outboundProxyApi(method, bare, body) as T;
   if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
     if (method === "PUT") {
       mockCeiling = { ceiling: (body as { ceiling: Record<string, unknown> | null }).ceiling, updated_by: me.email, updated_at: new Date().toISOString() };
