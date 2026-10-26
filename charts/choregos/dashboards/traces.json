@@ -1,7 +1,7 @@
 {
   "title": "Choregos — Traces",
   "uid": "choregos-traces",
-  "description": "Rate, errors and duration per stage, model and tool, from the collector's span metrics (ADR 0018).",
+  "description": "Rate, errors and duration per stage, model and tool, from span metrics (ADR 0018): each panel reads the collector's (`traces_span_metrics_*`) and Tempo's metrics generator's (`traces_spanmetrics_*`); an install has one of the two.",
   "tags": [
     "choregos"
   ],
@@ -12,6 +12,12 @@
       "targets": [
         {
           "expr": "sum(rate(traces_span_metrics_calls_total{gen_ai_operation_name=\"invoke_workflow\"}[5m])) by (stage, status_code) * 60",
+          "legendFormat": "{{stage}} {{status_code}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "sum(rate(traces_spanmetrics_calls_total{gen_ai_operation_name=\"invoke_workflow\"}[5m])) by (stage, status_code) * 60",
           "legendFormat": "{{stage}} {{status_code}}"
         }
       ],
@@ -28,6 +34,12 @@
       "targets": [
         {
           "expr": "sum(rate(traces_span_metrics_calls_total{gen_ai_operation_name=\"invoke_workflow\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (stage) / sum(rate(traces_span_metrics_calls_total{gen_ai_operation_name=\"invoke_workflow\"}[5m])) by (stage)",
+          "legendFormat": "{{stage}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "sum(rate(traces_spanmetrics_calls_total{gen_ai_operation_name=\"invoke_workflow\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (stage) / sum(rate(traces_spanmetrics_calls_total{gen_ai_operation_name=\"invoke_workflow\"}[5m])) by (stage)",
           "legendFormat": "{{stage}}"
         }
       ],
@@ -44,6 +56,12 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{gen_ai_operation_name=\"invoke_workflow\"}[5m])) by (le, stage))",
+          "legendFormat": "{{stage}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "(histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{gen_ai_operation_name=\"invoke_workflow\"}[5m])) by (le, stage))) * 1000",
           "legendFormat": "{{stage}}"
         }
       ],
@@ -60,6 +78,12 @@
       "targets": [
         {
           "expr": "sum(rate(traces_span_metrics_calls_total{service_name=\"choregos-gateway\"}[5m])) by (gen_ai_request_model, gen_ai_provider_name, stage) * 60",
+          "legendFormat": "{{gen_ai_request_model}} ({{gen_ai_provider_name}}) {{stage}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"choregos-gateway\"}[5m])) by (gen_ai_request_model, gen_ai_provider_name, stage) * 60",
           "legendFormat": "{{gen_ai_request_model}} ({{gen_ai_provider_name}}) {{stage}}"
         }
       ],
@@ -76,6 +100,12 @@
       "targets": [
         {
           "expr": "sum(rate(traces_span_metrics_calls_total{service_name=\"choregos-gateway\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (gen_ai_request_model, error_type) * 60",
+          "legendFormat": "{{gen_ai_request_model}} {{error_type}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"choregos-gateway\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (gen_ai_request_model, error_type) * 60",
           "legendFormat": "{{gen_ai_request_model}} {{error_type}}"
         }
       ],
@@ -92,6 +122,12 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"choregos-gateway\"}[5m])) by (le, gen_ai_request_model))",
+          "legendFormat": "{{gen_ai_request_model}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "(histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{service=\"choregos-gateway\"}[5m])) by (le, gen_ai_request_model))) * 1000",
           "legendFormat": "{{gen_ai_request_model}}"
         }
       ],
@@ -108,6 +144,12 @@
       "targets": [
         {
           "expr": "sum(rate(traces_span_metrics_calls_total{gen_ai_operation_name=\"execute_tool\"}[5m])) by (span_name, status_code) * 60",
+          "legendFormat": "{{span_name}} {{status_code}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "sum(rate(traces_spanmetrics_calls_total{gen_ai_operation_name=\"execute_tool\"}[5m])) by (span_name, status_code) * 60",
           "legendFormat": "{{span_name}} {{status_code}}"
         }
       ],
@@ -124,6 +166,12 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{gen_ai_operation_name=\"execute_tool\"}[5m])) by (le, span_name))",
+          "legendFormat": "{{span_name}}",
+          "refId": "collector"
+        },
+        {
+          "refId": "tempo",
+          "expr": "(histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{gen_ai_operation_name=\"execute_tool\"}[5m])) by (le, span_name))) * 1000",
           "legendFormat": "{{span_name}}"
         }
       ],
