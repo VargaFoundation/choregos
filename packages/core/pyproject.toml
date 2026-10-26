@@ -13,7 +13,7 @@ dependencies = [
     "jinja2>=3.1",
     # GenAI traces (ADR 0018): `choregos_core.telemetry` is the one module that knows the span and
     # attribute names; exact pins because the semantic conventions it targets are still incubating.
-    "opentelemetry-sdk==1.45.0",
+    "opentelemetry-sdk==1.45.1",
     "opentelemetry-exporter-otlp-proto-http==1.45.0",
 ]
 

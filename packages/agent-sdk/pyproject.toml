@@ -17,7 +17,7 @@ dependencies = [
   # The MCP client the tools go through.
   "mcp>=1.20",
   # The OpenAI-compatible client of `ctx.llm` (the gateway speaks that API).
-  "openai==3.22.1",
+  "openai==3.37.0",
   "choregos-contracts==0.20.4",
 ]
 
