@@ -1146,3 +1146,21 @@ With `openai-compatible` (Portkey, Kong AI Gateway, Envoy AI Gateway, OpenRouter
 the budget is enforced by Choregos only (the reservation, turns and minutes): there is no cap at
 the source and no measured cost. Configure two secrets, `api_key` (discovery) and `run_key` (what
 runs receive, the same for every run: scope it at the gateway with its own rate limit).
+
+A LiteLLM you run yourself (`global.gateway.embedded: false`, type `litellm`) is the platform's
+`litellm` gateway: the API mints marked keys for it and expects the secret guard on the path. Load
+it as the embedded one does: put `charts/choregos/charts/litellm/files/choregos_guardrail.py` next
+to LiteLLM's `config.yaml` (same release, byte for byte) and declare it in that config:
+
+```yaml
+guardrails:
+  - guardrail_name: choregos-secrets
+    litellm_params:
+      guardrail: choregos_guardrail.ChoregosGuardrail
+      mode: [pre_call, post_call]
+      default_on: true
+```
+
+Without it, a key the platform marked `choregos_llm_guard: redact` reaches the provider unmasked,
+and nothing fails to say so. `GET /guardrails/list` with the master key shows `choregos-secrets`
+when the guard is loaded. LiteLLM reads its config only at start: restart it after the change.
