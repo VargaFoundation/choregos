@@ -253,6 +253,19 @@ right — in the parent chart only.
 {{- end -}}
 {{- end -}}
 
+{{- /* The namespace a tracing address points into (`<service>.<namespace>.svc[...]`), so the
+network policies open the collector and Tempo where they actually run (S40-20e: on the Diametral
+dev cluster Tempo lives in `tempo`). A host that names no namespace keeps `monitoring`, the
+bootstrap's (`infra/bootstrap/otel-collector.yaml`, `tempo.yaml`). */ -}}
+{{- define "choregos.tracingNamespace" -}}
+{{- $labels := splitList "." ((urlParse (. | default "http://x")).hostname | default "") -}}
+{{- if and (ge (len $labels) 2) (index $labels 1) -}}
+{{ index $labels 1 }}
+{{- else -}}
+monitoring
+{{- end -}}
+{{- end -}}
+
 {{- define "choregos.gatewayUrl" -}}
 {{- if .Values.global.gateway.embedded -}}
 http://{{ .Release.Name }}-litellm:4000
