@@ -66,14 +66,15 @@ global:
   # `OTEL_EXPORTER_OTLP_ENDPOINT` to the API, each worker, the migration Job and the embedded
   # gateway, whose callback puts each model call in its run's trace. Empty: tracing off, nothing
   # is exported. The bootstrap collector (`infra/bootstrap/otel-collector.yaml`) listens on
-  # `http://otel-collector.monitoring.svc:4318`; `choregos-allow-platform` already lets the
-  # platform's pods reach port 4318 in `monitoring`. The agent pods are not given it: their only
-  # way out is the run's egress proxy.
+  # `http://otel-collector.monitoring.svc:4318`; `choregos-allow-platform` lets the platform's pods
+  # reach port 4318 in the namespace the address names (`<service>.<namespace>.svc`, `monitoring`
+  # when it names none; S40-20e). A Tempo that receives OTLP itself will do. The agent pods are not
+  # given it: their only way out is the run's egress proxy.
   tracing:
     otlpEndpoint: ""
     # Tempo's query address (the bootstrap Tempo: `http://tempo.monitoring.svc:3200`). Set, it renders
-    # the nightly ledger-vs-trace CronJob (`api.traceDrift`, ADR 0018 point 3) and opens that port
-    # in `monitoring` to the job's pods only. Empty: no job.
+    # the nightly ledger-vs-trace CronJob (`api.traceDrift`, ADR 0018 point 3) and opens that port,
+    # in the namespace the address names, to the job's pods only. Empty: no job.
     tempoUrl: ""
   # Platform canary (S7-08). Disabled by default: it requires Argo Rollouts in the
   # cluster, and a chart that assumes an absent operator is a chart that does not install.

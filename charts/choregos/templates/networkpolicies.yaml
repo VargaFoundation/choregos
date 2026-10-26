@@ -36,7 +36,8 @@ spec:
       ports: [{ protocol: TCP, port: 4000 }]
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-memory } } }]
       ports: [{ protocol: TCP, port: 8432 }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+    # The trace collector, in the namespace `global.tracing.otlpEndpoint` names (S40-20e).
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ include "choregos.tracingNamespace" (.Values.global.tracing | default dict).otlpEndpoint }} } } }]
       ports: [{ protocol: TCP, port: 4318 }]
     {{- if include "choregos.buildkitdDeployed" . }}
     # The builder, for the orchestrator's build activity (S41-13); its own policy admits nobody else.
@@ -143,7 +144,7 @@ spec:
       app.kubernetes.io/name: choregos-trace-drift
   policyTypes: ["Egress"]
   egress:
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ include "choregos.tracingNamespace" . }} } } }]
       ports: [{ protocol: TCP, port: {{ int $tempoPort }} }]
 {{- end }}
 {{- end }}
