@@ -1931,6 +1931,16 @@ showed 8 refused calls to that host here. The runner therefore sets `OPENCODE_DI
 `OPENCODE_DISABLE_AUTOUPDATE` and `OPENCODE_DISABLE_LSP_DOWNLOAD` to `1` for it (an agent's own `launch.env`
 can still override them); the agent only uses the `choregos` provider of its `opencode.json`.
 
+It would also ask `registry.npmjs.org` for `@opencode-ai/plugin`, once for each config directory it reads (its
+global one and the workspace's `.opencode`). The provider package of `opencode.json`
+(`@ai-sdk/openai-compatible`) needs no install: it is bundled in the binary. So the runner image carries
+`@opencode-ai/plugin` already installed under `/opt/choregos/xdg-config/opencode` (the version is the
+`opencode-plugin` line of `versions.lock`, equal to `opencode`), the launch plan points `XDG_CONFIG_HOME` at it,
+writes a stub `.opencode/package.json`, `package-lock.json` and `node_modules/.keep` that opencode takes for an
+installed directory (a project's own files are never overwritten), and sets `OPENCODE_DISABLE_DEFAULT_PLUGINS=1`.
+A run therefore makes no npm call. A project that declares its own opencode plugins still installs them, and
+needs the registry in its `network` section.
+
 **Calls the platform makes for an agent obey the same ceiling.** An MCP connector, a knowledge source
 (web or git) and a git skill source are fetched by the API, which sees the whole request, so the
 organisation's `network` section applies to them twice:
