@@ -227,3 +227,21 @@ range of several years asks Alpha Vantage for `outputsize=full`, which the free 
 premium feature for the TIME_SERIES_DAILY endpoint"); the adapter reports it as `RateLimited`, the
 composite records it as a fallback and keeps Yahoo alone. A multi-year cross-check needs a premium
 key, or a second free source that serves full history.
+
+## 2026-10-26 — `RESEARCH-10`, 0.20.4: two sources cross-checked
+
+0.20.4 carries S38-21: Alpha Vantage in `outputsize: compact` asks for the last 100 trading days
+(the free key refuses `full`), and a source without the full history only checks the primary. The
+dev connector `marketdata` (org `diametral`) got `source_configs: {"alphavantage": {"outputsize":
+"compact"}}`. `RESEARCH-10` was opened with `RESEARCH-7`'s fields.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | snapshot (job) | 20 symbols, 39,180 rows from Yahoo, `missing=0`; **`cross_checked=20`**: each symbol checked against Alpha Vantage on 95 common days, `max_rel_diff` 6.5e-05, `diverging=0` |
+| 2 | profile, backtest (jobs) | 80 trials, best out-of-sample DSR 0.427, `relevant_count=2` |
+| 3 | fan-out, memos (real model) | `RESEARCH-10.1` (GLD), `.2` (IEF), both memos written |
+| 4 | decision | waiting for the owner (not signed by the agent) |
+
+Cost of the run: $0.408, eight minutes. The check covers the last 95 trading days of the range, not
+its seven years: that needs a premium key or another free source with full history. The 20 symbols
+use 20 of the free key's 25 requests a day.
