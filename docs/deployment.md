@@ -871,9 +871,11 @@ whose trace has no gateway usage is counted as `missing` and not recorded, since
 sampled or dropped. The job prints its counts as one JSON line and fails only when Tempo answers
 with an error. Run it by hand with `python -m choregos_api.trace_drift --hours 72`.
 
-The agent pods are not given the endpoint: their only way out is the run's egress proxy. To trace
-the runner's `invoke_agent` span anyway, set `choregos-orchestrator.runner.env` and open the
-collector in the runner's network policy yourself; this path has not been tried.
+The agent pods are not given the endpoint, and `choregos-runner-egress` does not open the
+collector to them (#946): they run the agent's code, which could otherwise forge the gateway's
+spans, and so a false drift, or carry data out past the run's egress proxy. The runner's
+`invoke_agent` span is therefore not exported. Relaying it through the API, which would stamp the
+run's ids itself, is not decided; do not open the collector in the runner's policy to get it.
 
 The gateway's spans: the embedded LiteLLM loads `choregos_llm_spans` (`litellm_settings.callbacks`),
 and each model call made with a run's key becomes `chat <model>` (or `embeddings`,

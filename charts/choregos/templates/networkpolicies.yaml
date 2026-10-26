@@ -74,8 +74,8 @@ spec:
       ports: [{ protocol: TCP, port: 4000 }]
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-memory } } }]
       ports: [{ protocol: TCP, port: 8432 }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
-      ports: [{ protocol: TCP, port: 4318 }]
+    # Never the trace collector (#946): agent code could forge the gateway's spans, and so a drift,
+    # or carry data out past the egress proxy. The runner's own span is not exported.
     {{- if $e.enabled }}
     # The way out: the per-run egress proxy, and nothing else.
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-egress } } }]
