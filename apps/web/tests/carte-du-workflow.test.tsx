@@ -55,6 +55,17 @@ describe("la carte à plat, rendue (S21-07)", () => {
     expect(screen.getByTestId("transition-t-dev")).toHaveTextContent("By dev · 2 gates");
   });
 
+  it("the visible text names each state and arrow, and the rest describes it (S41-26)", () => {
+    rendre();
+    // axe `label-content-name-mismatch`: a voice user says what the button shows.
+    for (const bouton of screen.getAllByRole("button")) expect(bouton).not.toHaveAttribute("aria-label");
+    expect(screen.getByTestId("etat-spec")).toHaveAccessibleName(/^Human · owner.*Spec to approve\s*spec$/);
+    expect(screen.getByTestId("etat-done")).toHaveAccessibleDescription("Terminal state");
+    expect(screen.getByTestId("etat-spec")).not.toHaveAccessibleDescription(/./);
+    expect(screen.getByTestId("transition-t-dev")).toHaveAccessibleName(/^By dev · 2 gates/);
+    expect(screen.getByTestId("transition-t-dev")).toHaveAccessibleDescription("Transition t-dev: Implementing to Done");
+  });
+
   it("les flèches du clavier déplacent le focus, et l'état sous le curseur est annoncé", () => {
     rendre();
     act(() => screen.getByTestId("etat-inbox").focus());

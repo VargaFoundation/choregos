@@ -63,9 +63,11 @@ describe("la carte animée du parcours (S22-02)", () => {
     expect(statut("t-release")).toBe("a_venir");
     expect(statut("t-address-review")).toBe("fait");
     const testeur = screen.getByTestId("etape-t-test");
-    expect(testeur).toHaveAccessibleName(/Tester, agent, runs the checks — done — passed in round 3 — ✓ 420 tests pass — 3 attempts/);
+    expect(testeur).toHaveAccessibleName(/^Tester\s*runs the checks\s*Passed in round 3\s*✓ 420 tests pass$/);
+    expect(testeur).toHaveAccessibleDescription("agent — done — 3 attempts");
     expect(screen.getByTestId("tour-t-review")).toHaveTextContent("Approved in round 2");
-    expect(screen.getByTestId("etape-t-approve-spec")).toHaveAccessibleName(/Product owners, person/);
+    expect(screen.getByTestId("etape-t-approve-spec")).toHaveAccessibleName(/^Product owners/);
+    expect(screen.getByTestId("etape-t-approve-spec")).toHaveAccessibleDescription(/^person —/);
     // Les arcs pris le disent : une fois, sans plus.
     const svg = screen.getByTestId("parcours").querySelector("svg")!;
     expect(svg.querySelector('[data-arc="implemented->planned"]')).toHaveAttribute("data-fois", "1");
