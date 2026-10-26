@@ -77,10 +77,16 @@ export function recallLabel(recall: number | null | undefined): string {
   return recall === null || recall === undefined ? "not measured" : `${Math.round(recall * 100)} %`;
 }
 
+/** The documents a sync converted with part of their content left out, one sentence each. */
+export function truncationsOf(summary: Record<string, unknown> | null | undefined): string[] {
+  const reasons = summary?.truncated_reasons;
+  return Array.isArray(reasons) ? reasons.map(String) : [];
+}
+
 /** What a sync did, in words: `2 added · 1 deleted`; nothing to say → `no change`. */
 export function syncSummary(summary: Record<string, unknown> | null | undefined): string {
   if (!summary) return "never synced";
-  const parts = ["added", "updated", "deleted", "skipped"]
+  const parts = ["added", "updated", "deleted", "skipped", "truncated"]
     .filter((k) => Number(summary[k] ?? 0) > 0)
     .map((k) => `${Number(summary[k])} ${k}`);
   return parts.length ? parts.join(" · ") : "no change";

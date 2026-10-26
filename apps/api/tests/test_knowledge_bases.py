@@ -73,6 +73,21 @@ async def test_a_spreadsheet_gives_one_table_per_sheet(client: AsyncClient, admi
     assert "## Owners" in markdown and "| netops | Ada |" in markdown
 
 
+async def test_a_spreadsheet_cut_at_its_row_cap_says_so_in_the_document(
+    client: AsyncClient, admin: str
+) -> None:
+    """S42-09e: the document list carries what the agents' markdown says; a reconversion starts clean."""
+    await _base(client)
+    rows: list[list[object]] = [["id"]] + [[i] for i in range(2100)]
+    document = await _converted(client, "big.xlsx", fx.xlsx({"Big": rows, "Small": [["a"], [1]]}))
+    expected = ['Sheet "Big": 101 more rows not shown (the first 2000 are kept)']
+    assert document["status"] == "ready" and document["warnings"] == expected
+    listed = (await client.get(f"{BASE}/architecture")).json()["documents"]
+    assert [d["warnings"] for d in listed] == [expected]
+    small = await _converted(client, "small.xlsx", fx.xlsx({"Small": [["a"], [1]]}))
+    assert small["warnings"] == []
+
+
 @pytest.mark.parametrize(
     ("name", "data", "expected", "title"),
     [

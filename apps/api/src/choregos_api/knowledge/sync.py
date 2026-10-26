@@ -132,13 +132,43 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
 
 
 def _summary() -> dict[str, Any]:
-    return {"added": 0, "updated": 0, "deleted": 0, "unchanged": 0, "skipped": 0, "skipped_reasons": []}
+    return {
+        "added": 0,
+        "updated": 0,
+        "deleted": 0,
+        "unchanged": 0,
+        "skipped": 0,
+        "skipped_reasons": [],
+        "truncated": 0,
+        "truncated_reasons": [],
+    }
 
 
 def _skip(summary: dict[str, Any], item: SourceItem, reason: str) -> None:
     summary["skipped"] += 1
     if len(summary["skipped_reasons"]) < 20:
         summary["skipped_reasons"].append(f"{item.name}: {reason}")
+
+
+async def _note_truncations(org: str, document_ids: list[str], summary: dict[str, Any]) -> None:
+    """Says in the summary which converted documents were cut (S42-09e), like `skipped_reasons`."""
+    if not document_ids:
+        return
+    async with session_scope(orgs=[org]) as session:
+        rows = (
+            await session.execute(
+                select(KnowledgeDocument.filename, KnowledgeDocument.warnings)
+                .where(KnowledgeDocument.id.in_(document_ids))
+                .order_by(KnowledgeDocument.filename)
+            )
+        ).all()
+    for filename, warnings in rows:
+        if not warnings:
+            continue
+        summary["truncated"] += 1
+        for warning in warnings:
+            if len(summary["truncated_reasons"]) < 20:
+                summary["truncated_reasons"].append(f"{filename}: {warning}")
 
 
 async def _apply_item(
@@ -294,6 +324,7 @@ async def sync_source(
             source.cursor = changes.cursor if changes.cursor is not None else source.cursor
         for document_id in to_convert:
             await convert_document(org, document_id)
+        await _note_truncations(org, to_convert, summary)
     except Exception as exc:
         async with session_scope(orgs=[org]) as session:
             failed = await session.get(KnowledgeSource, source_id)
@@ -324,6 +355,6 @@ async def sync_source(
         "knowledge.source.synced",
         org=org,
         source=source_id,
-        **{k: v for k, v in summary.items() if k != "skipped_reasons"},
+        **{k: v for k, v in summary.items() if not k.endswith("_reasons")},
     )
     return {"status": "synced", **summary}

@@ -1399,6 +1399,8 @@ class KnowledgeDocument(Base, PkMixin, TimestampMixin):
     markdown: Mapped[str | None] = mapped_column(Text, nullable=True, deferred=True)
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: what a `ready` conversion left out, one sentence each (S42-09e): a spreadsheet cut at its row cap
+    warnings: Mapped[list[str]] = mapped_column(Json, default=list, server_default="[]")
     converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     #: the connector source it was synced from (S33-04); none for an upload
