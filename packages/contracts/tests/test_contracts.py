@@ -569,3 +569,14 @@ def test_a_project_a2a_block_bounds_file_parts_the_same_in_the_schema_and_the_mo
         assert list(validator.iter_errors(base | {"a2a": bad})), bad
         with pytest.raises(ValueError):
             ProjectConfig.model_validate(base | {"a2a": bad})
+
+
+def test_a_knowledge_document_and_a_sync_summary_say_what_was_cut() -> None:
+    """S42-09e: a spreadsheet read up to its row cap says so, per document and in the sync summary."""
+    schemas = contracts.load_openapi()["components"]["schemas"]
+    document = schemas["KnowledgeDocument"]["properties"]
+    assert document["warnings"]["type"] == "array" and document["warnings"]["items"] == {"type": "string"}
+    assert "warnings" not in schemas["KnowledgeDocument"]["required"]
+    summary = schemas["KnowledgeSource"]["properties"]["last_summary"]["properties"]
+    assert summary["truncated"]["type"] == "integer"
+    assert summary["truncated_reasons"]["items"] == {"type": "string"}

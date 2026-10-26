@@ -2273,6 +2273,8 @@ export type KnowledgeDocument = {
   source: string;
   status: "pending" | "converting" | "ready" | "failed";
   error?: string | null;
+  /** what the conversion left out of a ready document, one sentence each (a spreadsheet read up to its row cap: `Sheet "Q3": 1200 more rows not shown`); empty when nothing was cut */
+  warnings?: Array<string>;
   created_by?: string | null;
   created_at?: string | null;
   converted_at?: string | null;
@@ -2434,6 +2436,10 @@ export type KnowledgeSource = {
     unchanged?: number;
     skipped?: number;
     skipped_reasons?: Array<string>;
+    /** documents converted by this sync with part of their content left out */
+    truncated?: number;
+    /** `<file>: <warning>`, at most 20 */
+    truncated_reasons?: Array<string>;
   } | null;
   document_count?: number;
 };

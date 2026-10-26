@@ -5886,6 +5886,10 @@ components:
         source: { type: string, description: "`upload`" }
         status: { type: string, enum: [pending, converting, ready, failed] }
         error: { type: [string, "null"] }
+        warnings:
+          type: array
+          items: { type: string }
+          description: "what the conversion left out of a ready document, one sentence each (a spreadsheet read up to its row cap: `Sheet \"Q3\": 1200 more rows not shown`); empty when nothing was cut"
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
         converted_at: { type: [string, "null"], format: date-time }
@@ -6031,6 +6035,8 @@ components:
             unchanged: { type: integer }
             skipped: { type: integer }
             skipped_reasons: { type: array, items: { type: string } }
+            truncated: { type: integer, description: documents converted by this sync with part of their content left out }
+            truncated_reasons: { type: array, items: { type: string }, description: "`<file>: <warning>`, at most 20" }
         document_count: { type: integer }
     KnowledgeEvalCase:
       type: object
