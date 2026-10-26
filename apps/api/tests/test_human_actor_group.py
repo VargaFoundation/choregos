@@ -183,3 +183,68 @@ async def test_a_group_nobody_carries_is_warned_about_at_validation(
     assert "actor.group_empty" in codes
     stateless = (await client.post("/api/v1/workflows/validate", json={"yaml": blank})).json()
     assert "actor.group_empty" in [w["code"] for w in stateless["warnings"]]
+
+
+# ── organisation-namespaced groups (S40-27) ──
+
+
+async def test_a_group_namespaced_for_the_organisation_counts_as_its_bare_name(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.human_groups import groups_known_in
+    from sqlalchemy import select
+
+    path = f"/api/v1/projects/{project['id']}/workflows/validate"
+    await _member(client, "other@varga.dev", "developer", [f"choregos:other-org:{GROUP}"])
+    other = (await client.post(path, json={"yaml": WORKFLOW})).json()
+    assert [w["code"] for w in other["warnings"]] == ["actor.group_unknown"], "another org's group"
+
+    await _member(client, "cap@varga.dev", "developer", [f"choregos:varga:{GROUP}"])
+    ours = (await client.post(path, json={"yaml": WORKFLOW})).json()
+    assert ours["warnings"] == []
+    async with session_scope() as session:
+        org_id = (
+            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+        ).scalar_one()
+        assert GROUP in await groups_known_in(session, org_id)
+
+
+async def test_a_namespaced_group_answers_the_step_only_for_its_own_organisation(
+    client: AsyncClient, project: dict[str, Any], app: Any
+) -> None:
+    item_id = await _waiting_ticket(client, project["id"])
+    await _member(client, "foreign@varga.dev", "developer", [f"choregos:other:{GROUP}"])
+    refused = await _decide(app, "foreign@varga.dev", item_id)
+    assert refused.status_code == 403, refused.text
+    await _member(client, "cap@varga.dev", "developer", [f"choregos:varga:{GROUP}"])
+    answered = await _decide(app, "cap@varga.dev", item_id)
+    assert answered.status_code == 202, answered.text
+
+
+def test_groups_for_org_keeps_bare_names_and_unwraps_only_its_own_prefix() -> None:
+    from choregos_api.services.human_groups import groups_for_org
+
+    got = groups_for_org(
+        ["architects", "choregos:varga:pm", "choregos:other:ops", "choregos:varga:"], "varga"
+    )
+    assert {"architects", "pm"} <= got and "ops" not in got and "" not in got
+
+
+def test_knowledge_group_scope_and_grants_read_namespaced_groups_for_their_org() -> None:
+    from types import SimpleNamespace
+
+    from choregos_api.knowledge import access
+    from choregos_api.rbac import Principal, Role
+
+    base = SimpleNamespace(scope="groups", groups=["architects"], restricted=False)
+    grant = SimpleNamespace(subject_type="group", subject="architects", role="viewer")
+
+    def person(group: str) -> Principal:
+        return Principal(user_id="u", email="u@x.dev", org_roles={"varga": Role.DEVELOPER}, groups=[group])
+
+    assert access._reaches(person("choregos:varga:architects"), "varga", base)
+    assert not access._reaches(person("choregos:other:architects"), "varga", base)
+    assert access._holds(person("choregos:varga:architects"), "varga", grant)
+    assert not access._holds(person("choregos:other:architects"), "varga", grant)

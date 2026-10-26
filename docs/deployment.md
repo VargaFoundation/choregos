@@ -772,6 +772,11 @@ Roles come from **groups**, and a group names its organisation:
 | `choregos:<org>:developers` | `developer` |
 | `choregos:<org>:viewers` | `viewer` |
 
+The same claim carries an organisation's **human groups** (ADR 0052): a workflow's
+`group: architects` is matched by a member carrying `architects` or `choregos:<org>:architects`
+(the one mapper prefix `choregos:<org>:` serves roles and human groups). A group namespaced for
+another organisation never counts. The groups are stored as sent.
+
 Unprefixed groups (`developers`, `org-admins`) apply only when `global.oidc.defaultOrg`
 names the organisation they belong to; otherwise they are ignored. Before 2026-09-24 a
 group granted its role on **every** organisation of the instance.

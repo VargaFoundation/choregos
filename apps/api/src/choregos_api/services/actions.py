@@ -28,6 +28,7 @@ from ..errors import ApiError, conflict, forbidden, unprocessable
 from ..fraicheur import age_de_l_authentification, exiger_une_authentification_fraiche
 from ..schemas.actions import ActionCreate, ActionDto, ActionEffectDto, ApprovalSpec
 from .evenements import persist_event
+from .human_groups import groups_for_org
 
 #: Du moins au plus : un approbateur doit avoir au moins le rang demandé.
 RANGS = {"viewer": 0, "developer": 1, "release_captain": 2, "project_owner": 3, "org_admin": 4}
@@ -340,7 +341,7 @@ async def decider(
     # A group named by the rule (ADR 0052) is a second condition, not an alternative: a project owner
     # outside `netops-approvers` does not approve a firewall rule. The groups are the identity
     # provider's, as of the decider's last sign-in through it.
-    mes_groupes = {str(g) for g in principal.groups}
+    mes_groupes = groups_for_org(principal.groups, org_slug)
     if not any(not a.get("group") or str(a["group"]) in mes_groupes for a in assez_haut):
         groupes = sorted({str(a["group"]) for a in assez_haut if a.get("group")})
         raise forbidden(
