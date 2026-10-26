@@ -2895,6 +2895,8 @@ export type Org = {
   role?: Role | null;
   /** the currency the console shows spend in (S29-03); an organisation setting */
   currency?: "EUR" | "USD";
+  /** the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address. */
+  aliases?: Array<string>;
 };
 
 export type OrgCreate = {
@@ -4154,6 +4156,7 @@ export interface Operations {
   relaunchKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/relaunch"; body: KnowledgeDistillRequest; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
   releaseAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases"; body: AgentReleaseCreate; response: AgentRelease };
+  releaseOrgAlias: { method: "DELETE"; path: "/orgs/{org}/aliases/{alias}"; body: never; response: void };
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   requestOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/requests"; body: EgressRequestCreate; response: EgressRule };
