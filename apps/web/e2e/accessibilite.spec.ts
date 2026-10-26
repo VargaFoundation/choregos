@@ -147,7 +147,8 @@ test("graphe de workflow : parcours au clavier et description de l'état", async
   await expect(carte.getByTestId("etat-done")).toBeFocused();
   await page.keyboard.press("Home");
   await expect(carte.getByTestId("etat-inbox")).toBeFocused();
-  await expect(carte.getByTestId("etat-inbox")).toHaveAttribute("aria-label", "To triage, agent");
+  await expect(carte.getByTestId("etat-inbox")).toHaveAccessibleName(/To triage/);
+  await expect(carte.getByTestId("etat-inbox")).not.toHaveAttribute("aria-label");
 
   // Entrée sur un état ouvre son panneau : la carte se modifie au clavier aussi (S16-12).
   await page.keyboard.press("Enter");

@@ -13,7 +13,9 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     const carte = screen.getByTestId("carte-en-serpentin");
     expect(carte.querySelectorAll("[data-etape]")).toHaveLength(18); // sixteen steps and two detours
     expect(screen.queryByRole("toolbar", { name: "Replay the journey" })).not.toBeInTheDocument();
-    expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer, agent, writes the change — produces branch — 0 attempts$/);
+    // The visible text names the box, in its order (axe `label-content-name-mismatch`); the rest describes it.
+    expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer\s*writes the change\s*→ branch$/);
+    expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleDescription("agent — 0 attempts");
     const forme = (id: string) => carte.querySelector(`[data-etape="${id}"] .parcours-forme`)!.getAttribute("stroke");
     // Prune l'agent, bleu la personne, ardoise la plateforme, vert le train (S24-04) — les couleurs
     // de la carte en liste, pour que les deux vues d'un workflow disent la même chose.
@@ -33,7 +35,7 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     expect(screen.getByTestId("sorties-t-specify")).toHaveTextContent("→ spec_markdown, allowed_paths");
     expect(screen.getByTestId("sorties-t-implement")).toHaveTextContent(/^→ branch$/);
     expect(screen.queryByTestId("sorties-t-approve-spec")).not.toBeInTheDocument();
-    expect(screen.getByTestId("etape-t-specify")).toHaveAccessibleName(/produces spec_markdown, allowed_paths/);
+    expect(screen.getByTestId("etape-t-specify")).toHaveAccessibleName(/→ spec_markdown, allowed_paths$/);
   });
 
   it("a highlight puts data-flow on the boxes it names", () => {
@@ -59,8 +61,8 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
       edges: [e("t-a", "a", "b"), e("t-b", "b", "c"), e("t-c", "c", "d")],
     };
     render(<CarteEnSerpentin graph={brut} process={[]} initial="a" />);
-    expect(screen.getByTestId("etape-t-a")).toHaveAccessibleName(/, agent,/);
-    expect(screen.getByTestId("etape-t-b")).toHaveAccessibleName(/, person,/);
-    expect(screen.getByTestId("etape-t-c")).toHaveAccessibleName(/Release train/);
+    expect(screen.getByTestId("etape-t-a")).toHaveAccessibleDescription(/^agent —/);
+    expect(screen.getByTestId("etape-t-b")).toHaveAccessibleDescription(/^person —/);
+    expect(screen.getByTestId("etape-t-c")).toHaveAccessibleDescription(/^release train —/);
   });
 });
