@@ -1485,7 +1485,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /projects/{id}/costs.csv:
@@ -1498,7 +1498,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
@@ -1532,7 +1532,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /orgs/{org}/costs.csv:
@@ -1545,7 +1545,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /orgs/{org}/egress:
@@ -2859,6 +2859,43 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDistillRequest" } } }
       responses:
         "202": { description: Distilling, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/distill/stop:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: stopKnowledgeDistillation
+      description: >-
+        Stops the distillation that is running on the base (S42-10d). The model calls already made stay stored by digest
+        and booked in the cost ledger, nothing is published, and `distillation` becomes `status: stopped` with
+        `code: cancelled`, `stopped_by`, the parts done and the spend so far. A relaunch reuses the stored parts.
+        Same rights as `distill`. 409 when no distillation is running (`distill_not_running`).
+      responses:
+        "202": { description: Stop requested; the base carries the stopped record, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/distill/relaunch:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: relaunchKnowledgeDistillation
+      description: >-
+        Starts again the last distillation of the base, whatever its outcome (failed, stopped or finished) (S42-10d).
+        Without a body it keeps the last run's `exclude` and `max_usd`; a body replaces them. Parts already stored for
+        the same digest are not called again, so only what changed or never finished is paid for. Same rights as
+        `distill`. 409 when one is running, when there is no previous distillation (`distill_nothing_to_relaunch`),
+        or when the estimate exceeds `max_usd` (`distill_over_budget`).
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDistillRequest" } } }
+      responses:
+        "202": { description: Distilling again, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/knowledge/{slug}/distill/estimate:
@@ -5932,6 +5969,26 @@ components:
       properties:
         exclude: { type: array, maxItems: 20, items: { type: string, maxLength: 200 }, default: [], description: "filename globs of documents left out (`*.xlsx`, `archive/*`)" }
         max_usd: { type: [number, "null"], minimum: 0, description: "stop and publish nothing when the spend would pass this; null keeps the platform's budget" }
+    KnowledgeDistillRun:
+      type: object
+      description: >-
+        One distillation run, as kept in `distillation.history` (S42-10d): how it ended and what it cost. The last five
+        runs before the current one, newest first.
+      required: [status]
+      properties:
+        status: { type: string, enum: [running, pending_review, approved, rejected, failed, stopped], description: "how the run ended (`running` only for a run whose end was never recorded)" }
+        code: { type: [string, "null"], description: "why it failed or was stopped: `too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`" }
+        error: { type: [string, "null"] }
+        requested_by: { type: [string, "null"], description: who started it }
+        stopped_by: { type: [string, "null"], description: who stopped it, when stopped }
+        started_at: { type: [string, "null"], format: date-time }
+        at: { type: [string, "null"], format: date-time, description: when it ended }
+        phase: { type: [string, "null"], enum: [plan, map, reduce, publish, null] }
+        parts_done: { type: integer }
+        parts_total: { type: integer }
+        spent_usd: { type: number, description: "what the run's model calls cost; parts reused from an earlier run cost nothing" }
+        skill: { type: [string, "null"] }
+        version: { type: [integer, "null"] }
     KnowledgeDistillEstimate:
       type: object
       required: [characters, tokens_estimate, documents, parts, calls, model, priced_by, within_budget, biggest]
@@ -5992,7 +6049,12 @@ components:
         grants: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeGrant" }, description: returned by the reading of one base, to a caller who may share it }
         distillation:
           type: [object, "null"]
-          description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one)"
+          properties:
+            history: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/KnowledgeDistillRun" }, description: "the runs before this one, newest first (S42-10d)" }
+            stopped_by: { type: [string, "null"], description: "who stopped the run, when `status` is `stopped`" }
+            exclude: { type: array, items: { type: string }, description: "the globs the run left out, kept for a relaunch" }
+            max_usd: { type: [number, "null"], description: "the cap the run was started with, kept for a relaunch" }
+          description: "the last distillation: `status` (running, pending_review, failed, stopped), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one); `history` holds the runs before it, `stopped_by` who stopped it, `exclude` and `max_usd` what a relaunch reuses"
         eval_result:
           type: [object, "null"]
           description: the last run of the eval set
