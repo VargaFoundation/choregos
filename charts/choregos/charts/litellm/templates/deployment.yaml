@@ -72,8 +72,8 @@ spec:
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       # The Kyverno `non-root` rule has been strict since 2026-09-25: the pod context is
       # required. The image runs as uid 1000 (verified: `python -c "import litellm"` under
-      # `--user 1000`). v1.105.3 was run under this context on the dev cluster (2026-10-23,
-      # throwaway namespace, S40-16g): Prisma migrations applied, ready, the guard loaded.
+      # `--user 1000`). v1.105.3 (S40-16g) then v1.105.5 (S40-16i) were run under this context on
+      # the dev cluster, in throwaway namespaces: Prisma migrations applied, ready, the guard loaded.
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
