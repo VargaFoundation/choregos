@@ -746,16 +746,6 @@
   auth: bearer
   registry: io.github.tavily-ai/tavily-mcp
   repo: tavily-ai/tavily-mcp
-- id: firecrawl
-  title: "Firecrawl"
-  publisher: "Firecrawl"
-  description: "Scrape, crawl and extract structured data from web pages with Firecrawl."
-  categories: [search, browser]
-  auth: bearer
-  registry: io.github.firecrawl/firecrawl-mcp-server
-  repo: firecrawl/firecrawl-mcp-server
-  transport: stdio
-  package: npm:firecrawl-mcp
 - id: apify
   title: "Apify"
   publisher: "Apify"
