@@ -2382,6 +2382,20 @@ export type KnowledgeBase = {
   grants?: Array<KnowledgeGrant> | null;
   /** the last distillation: `status` (running, pending_review, failed, stopped), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one); `history` holds the runs before it, `stopped_by` who stopped it, `exclude` and `max_usd` what a relaunch reuses */
   distillation?: {
+    status?: "running" | "pending_review" | "approved" | "rejected" | "failed" | "stopped";
+    code?: string | null;
+    error?: string | null;
+    at?: string | null;
+    requested_by?: string | null;
+    started_at?: string | null;
+    phase?: "plan" | "map" | "reduce" | "publish" | null;
+    parts_done?: number;
+    parts_total?: number;
+    spent_usd?: number;
+    skill?: string | null;
+    version?: number | null;
+    principles?: number | null;
+    dropped?: Array<string>;
     /** the runs before this one, newest first (S42-10d) */
     history?: Array<KnowledgeDistillRun>;
     /** who stopped the run, when `status` is `stopped` */

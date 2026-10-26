@@ -6050,6 +6050,20 @@ components:
         distillation:
           type: [object, "null"]
           properties:
+            status: { type: string, enum: [running, pending_review, approved, rejected, failed, stopped] }
+            code: { type: [string, "null"] }
+            error: { type: [string, "null"] }
+            at: { type: [string, "null"], format: date-time }
+            requested_by: { type: [string, "null"] }
+            started_at: { type: [string, "null"], format: date-time }
+            phase: { type: [string, "null"], enum: [plan, map, reduce, publish, null] }
+            parts_done: { type: integer }
+            parts_total: { type: integer }
+            spent_usd: { type: number }
+            skill: { type: [string, "null"] }
+            version: { type: [integer, "null"] }
+            principles: { type: [integer, "null"] }
+            dropped: { type: array, items: { type: string } }
             history: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/KnowledgeDistillRun" }, description: "the runs before this one, newest first (S42-10d)" }
             stopped_by: { type: [string, "null"], description: "who stopped the run, when `status` is `stopped`" }
             exclude: { type: array, items: { type: string }, description: "the globs the run left out, kept for a relaunch" }
