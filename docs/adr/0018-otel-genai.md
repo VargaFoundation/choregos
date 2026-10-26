@@ -93,8 +93,9 @@ client spans natively through its OTel callback.
   ships a byte-identical copy (`charts/choregos/charts/litellm/files/choregos_llm_spans.py`, a test
   keeps them equal) loaded through `litellm_settings.callbacks`.
 - **One value turns tracing on**: `global.tracing.otlpEndpoint` becomes `OTEL_EXPORTER_OTLP_ENDPOINT`
-  on the API, each worker, the migration Job and the embedded gateway. The agent pods do not get it:
-  their only way out is the run's egress proxy.
+  on the API, each worker, the migration Job and the embedded gateway. The agent pods do not get it,
+  and since S40-20d their network policy does not open the collector either (#946): their only way
+  out is the run's egress proxy, so the runner's `invoke_agent` span is not exported.
 - **The collector**: the bootstrap values were `mode: daemonset` alone, which the chart refuses to
   render (`image.repository` must be set) and which exported nowhere. It is now a Deployment of the
   contrib image behind `otel-collector.monitoring.svc` (OTLP on 4317/4318), sending every span to
@@ -118,6 +119,9 @@ client spans natively through its OTel callback.
   never touched. A run whose trace has no gateway usage is `missing`, counted and not recorded: a
   trace can be sampled, dropped or late. A remote agent's `external` line is not compared.
 - Only spans whose resource `service.name` is `choregos-gateway` count. That name is a claim, not
-  an identity: any process that reaches the collector can write it, the runner pods included, whose
-  network policy opens port 4318 in `monitoring` (#946). A forged span can raise a false drift; it
-  cannot change the ledger.
+  an identity: any process that reaches the collector can write it. Until S40-20d the runner pods
+  could, their network policy opening port 4318 in `monitoring` (#946); it is closed, and a chart
+  test refuses any runner policy that opens the collector. The platform's own pods can still write
+  that name. A forged span can raise a false drift; it cannot change the ledger.
+- **Not decided**: relaying the runner's `invoke_agent` span through the API (the API stamping the
+  run's ids and refusing usage attributes) instead of exporting it from agent code.

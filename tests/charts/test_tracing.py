@@ -162,9 +162,31 @@ def _produced_labels() -> set[str]:
     }
 
 
-def _exprs() -> list[str]:
+#: The labels Tempo's metrics generator puts on every span metric (S40-20f). The `tempo` targets may
+#: read these and the collector's dimensions, which the generator must be given as its
+#: `span_metrics.dimensions` (`docs/deployment.md`, Traces): without them, the panels draw nothing.
+TEMPO_INTRINSICS = {"service", "span_name", "span_kind", "status_code", "le"}
+
+
+def _targets(ref: str) -> list[str]:
     dashboard = json.loads(DASHBOARD.read_text(encoding="utf-8"))
-    return [target["expr"] for panel in dashboard["panels"] for target in panel["targets"]]
+    return [
+        target["expr"]
+        for panel in dashboard["panels"]
+        for target in panel["targets"]
+        if target["refId"] == ref
+    ]
+
+
+def _exprs() -> list[str]:
+    return _targets("collector")
+
+
+def _labels(expr: str) -> set[str]:
+    labels = set(re.findall(r"(\w+)\s*=~?\s*\"", expr))
+    for group in re.findall(r"by \(([^)]*)\)", expr):
+        labels |= {label.strip() for label in group.split(",")}
+    return labels
 
 
 def test_every_traces_panel_reads_a_label_the_collector_produces() -> None:
@@ -177,16 +199,40 @@ def test_every_traces_panel_reads_a_label_the_collector_produces() -> None:
     for expr in exprs:
         used_metrics = set(re.findall(r"\b(traces_\w+)", expr))
         assert used_metrics and used_metrics <= metrics, expr
-        labels = set(re.findall(r"(\w+)\s*=~?\s*\"", expr))
-        for group in re.findall(r"by \(([^)]*)\)", expr):
-            labels |= {label.strip() for label in group.split(",")}
-        assert labels <= produced, f"{sorted(labels - produced)} in {expr}"
+        assert _labels(expr) <= produced, f"{sorted(_labels(expr) - produced)} in {expr}"
+
+
+def test_every_traces_panel_also_reads_tempos_metrics_generator() -> None:
+    """S40-20f: an install without the collector (Tempo's own span metrics, as on dev) draws too.
+
+    Each panel has a `tempo` twin of its `collector` target: Tempo's names (`traces_spanmetrics_*`,
+    latency in seconds, `service` for `service_name`), the same dimensions, the same legend."""
+    dashboard = json.loads(DASHBOARD.read_text(encoding="utf-8"))
+    dimensions = {
+        re.sub(r"[^a-zA-Z0-9_]", "_", d["name"])
+        for d in _collector()["config"]["connectors"]["spanmetrics"]["dimensions"]
+    }
+    for panel in dashboard["panels"]:
+        targets = {target["refId"]: target for target in panel["targets"]}
+        assert set(targets) == {"collector", "tempo"}, panel["title"]
+        collector, tempo = targets["collector"], targets["tempo"]
+        assert tempo["legendFormat"] == collector["legendFormat"], panel["title"]
+        used = set(re.findall(r"\b(traces_\w+)", tempo["expr"]))
+        assert used and used <= {"traces_spanmetrics_calls_total", "traces_spanmetrics_latency_bucket"}, tempo
+        assert _labels(tempo["expr"]) <= TEMPO_INTRINSICS | dimensions, tempo["expr"]
+        expected = _labels(collector["expr"]) - {"service_name"} | (
+            {"service"} if "service_name" in _labels(collector["expr"]) else set()
+        )
+        assert _labels(tempo["expr"]) == expected, panel["title"]
+        if "latency_bucket" in tempo["expr"]:
+            assert tempo["expr"].endswith("* 1000"), "Tempo's latency is in seconds, the panels in ms"
 
 
 def test_the_gateway_panels_name_the_gateways_service() -> None:
     from choregos_core import llm_spans
 
     assert any(f'service_name="{llm_spans.SERVICE_NAME}"' in expr for expr in _exprs())
+    assert any(f'service="{llm_spans.SERVICE_NAME}"' in expr for expr in _targets("tempo"))
 
 
 LIVE = ROOT / "tests" / "live" / "otel"

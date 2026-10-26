@@ -192,7 +192,13 @@ def test_a_runs_model_calls_land_in_its_trace_and_in_the_span_metrics(
 
     text = _eventually(scraped, timeout_s=120, what="the gateway's span metrics")
     dashboard = json.loads(DASHBOARD.read_text(encoding="utf-8"))
-    exprs = [target["expr"] for panel in dashboard["panels"] for target in panel["targets"]]
+    # The collector's targets: each panel's `tempo` twin reads Tempo's own span metrics (S40-20f).
+    exprs = [
+        target["expr"]
+        for panel in dashboard["panels"]
+        for target in panel["targets"]
+        if target["refId"] == "collector"
+    ]
     for metric in {name for expr in exprs for name in re.findall(r"\b(traces_\w+)", expr)}:
         written = _series(text, metric)
         assert written, f"{metric}: the dashboard reads it, the collector does not write it"

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { LEGENDE } from "@/components/ui";
 import { toSentenceCase } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -58,6 +58,8 @@ export function CarteDuWorkflow({
   const [survol, setSurvol] = useState<string | null>(null);
   const [toutes, setToutes] = useState(false);
   const conteneur = useRef<HTMLDivElement>(null);
+  // The visible text names each state and arrow (axe `label-content-name-mismatch`); the rest is a hidden description.
+  const idDescriptions = useId();
   const autour = survol ?? focus;
   // Les cibles des issues de l'état survolé s'éclairent dans la colonne d'à côté.
   const eclaires = new Set(
@@ -110,7 +112,7 @@ export function CarteDuWorkflow({
           data-testid={`etat-${id}`}
           data-etat={id}
           className="block w-full text-left focus-visible:outline-2"
-          aria-label={`${noeud.display}, ${LIBELLE_DU_GENRE[genre]}${noeud.terminal ? ", terminal" : ""}`}
+          aria-describedby={noeud.terminal ? `${idDescriptions}-etat-${id}` : undefined}
           onFocus={() => setFocus(id)}
           onKeyDown={auClavier}
           onBlur={() => setFocus(null)}
@@ -132,6 +134,11 @@ export function CarteDuWorkflow({
             {noeud.display}
           </span>
           <span className="block font-mono text-xs text-ink-muted">{id}</span>
+          {noeud.terminal && (
+            <span id={`${idDescriptions}-etat-${id}`} hidden>
+              Terminal state
+            </span>
+          )}
         </button>
         {(etape?.outputs?.length || garanties.length || principale?.timeout_hours || rejet) && (
           <ul className="mt-1.5 space-y-0.5 text-xs text-ink-muted">
@@ -194,9 +201,12 @@ export function CarteDuWorkflow({
         type="button"
         data-testid={`transition-${principale.id}`}
         className="group mx-auto flex flex-col items-center py-1 text-xs text-ink-muted hover:text-ink"
-        aria-label={`Transition ${principale.id}: ${nom(de)} to ${nom(vers)}${qui ? `, ${qui}` : ""}`}
+        aria-describedby={`${idDescriptions}-transition-${principale.id}`}
         onClick={() => principale.id && onSelect?.("edge", principale.id)}
       >
+        <span id={`${idDescriptions}-transition-${principale.id}`} hidden>
+          Transition {principale.id}: {nom(de)} to {nom(vers)}
+        </span>
         <span aria-hidden className="h-3 w-px bg-line-strong group-hover:bg-ink" />
         <span className="px-1.5 font-mono text-[11px]">{toSentenceCase([qui, garanties, effet].filter(Boolean).join(" · ")) || principale.id}</span>
         <span aria-hidden className="leading-none">

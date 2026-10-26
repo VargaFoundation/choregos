@@ -847,7 +847,7 @@ Off by default. A process sends spans only when the standard `OTEL_EXPORTER_OTLP
 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) is set, over OTLP/HTTP, batched; the other `OTEL_*` variables
 of the SDK apply. `global.tracing.otlpEndpoint` sets it on the API, each worker, the migration Job
 and the embedded gateway (S40-20b); `choregos-allow-platform` already lets them reach port 4318 in
-`monitoring`. The collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`) listens
+the collector's namespace. The collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`) listens
 at `http://otel-collector.monitoring.svc:4318`, sends every span to Tempo and derives the span
 metrics of the `Choregos — Traces` dashboard. An install that set the variable through
 `global.extraEnv` still renders, as long as `global.tracing.otlpEndpoint` is empty.
@@ -859,8 +859,36 @@ global:
     tempoUrl: http://tempo.monitoring.svc:3200   # the nightly ledger-vs-trace job (S40-20c)
 ```
 
+The network policies open port 4318 and Tempo's query port in the namespace each address names
+(`<service>.<namespace>.svc…`), `monitoring` when the host names none (S40-20e). A platform that
+already runs Tempo needs no collector of its own: Tempo receives OTLP itself. The Diametral dev
+tenant points both values at `tempo.tempo.svc.cluster.local` (ports 4318 and 3200); its chart network
+policies are off and the tenant's own policies open those two ports to the API, the workers, the
+gateway and the drift job only, never to the agent pods (#946): `choregos-egress-traces-otlp` and
+`choregos-egress-traces-query`, applied on dev on 2026-10-26.
+
+Without the collector, the `Choregos — Traces` dashboard reads Tempo's own span metrics (S40-20f):
+each panel has two targets, the collector's (`traces_span_metrics_*`, latency in milliseconds,
+`service_name`) and Tempo's metrics generator's (`traces_spanmetrics_*`, latency in seconds,
+`service`), and an install has data in one of the two. Tempo must run the `span-metrics` processor
+with the collector's dimensions, or the panels that break down by model, stage or tool draw nothing:
+
+```yaml
+# Tempo's configuration (grafana/tempo chart: `tempo.metricsGenerator.processor`)
+metrics_generator:
+  processor:
+    span_metrics:
+      dimensions: [gen_ai.operation.name, gen_ai.request.model, gen_ai.provider.name, project, stage, error.type]
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]
+```
+
+On the Diametral dev tenant, Tempo is DiametralGroup/infra's `platform/tempo` (infra#1355).
+
 `global.tracing.tempoUrl` renders the CronJob `choregos-trace-drift` (`api.traceDrift.schedule`,
-03:17 by default) and a network policy that opens that port in `monitoring` to its pods only. Each
+03:17 by default) and a network policy that opens that port to its pods only. Each
 night it reads the runs whose spend was collected in the last 24 hours (`api.traceDrift.hours`),
 leaving out the last 30 minutes (`settleMinutes`, spans arrive late), and compares each run's model
 tokens in the ledger with the usage on the gateway's spans of its trace (input and output, within
@@ -871,9 +899,11 @@ whose trace has no gateway usage is counted as `missing` and not recorded, since
 sampled or dropped. The job prints its counts as one JSON line and fails only when Tempo answers
 with an error. Run it by hand with `python -m choregos_api.trace_drift --hours 72`.
 
-The agent pods are not given the endpoint: their only way out is the run's egress proxy. To trace
-the runner's `invoke_agent` span anyway, set `choregos-orchestrator.runner.env` and open the
-collector in the runner's network policy yourself; this path has not been tried.
+The agent pods are not given the endpoint, and `choregos-runner-egress` does not open the
+collector to them (#946): they run the agent's code, which could otherwise forge the gateway's
+spans, and so a false drift, or carry data out past the run's egress proxy. The runner's
+`invoke_agent` span is therefore not exported. Relaying it through the API, which would stamp the
+run's ids itself, is not decided; do not open the collector in the runner's policy to get it.
 
 The gateway's spans: the embedded LiteLLM loads `choregos_llm_spans` (`litellm_settings.callbacks`),
 and each model call made with a run's key becomes `chat <model>` (or `embeddings`,
@@ -1135,3 +1165,21 @@ With `openai-compatible` (Portkey, Kong AI Gateway, Envoy AI Gateway, OpenRouter
 the budget is enforced by Choregos only (the reservation, turns and minutes): there is no cap at
 the source and no measured cost. Configure two secrets, `api_key` (discovery) and `run_key` (what
 runs receive, the same for every run: scope it at the gateway with its own rate limit).
+
+A LiteLLM you run yourself (`global.gateway.embedded: false`, type `litellm`) is the platform's
+`litellm` gateway: the API mints marked keys for it and expects the secret guard on the path. Load
+it as the embedded one does: put `charts/choregos/charts/litellm/files/choregos_guardrail.py` next
+to LiteLLM's `config.yaml` (same release, byte for byte) and declare it in that config:
+
+```yaml
+guardrails:
+  - guardrail_name: choregos-secrets
+    litellm_params:
+      guardrail: choregos_guardrail.ChoregosGuardrail
+      mode: [pre_call, post_call]
+      default_on: true
+```
+
+Without it, a key the platform marked `choregos_llm_guard: redact` reaches the provider unmasked,
+and nothing fails to say so. `GET /guardrails/list` with the master key shows `choregos-secrets`
+when the guard is loaded. LiteLLM reads its config only at start: restart it after the change.

@@ -726,16 +726,16 @@ function BoutonDEtape({
     platform: "platform",
     train: "release train",
   }[etape.genre];
-  const etiquette = [
-    `${etape.libelle}, ${genre}, ${etape.action}`,
-    sorties ? `produces ${sorties.slice(2)}` : null,
+  // The visible text names the button, so a voice user can say it (axe `label-content-name-mismatch`);
+  // what the box only shows by its colour, or not at all, goes in a hidden description.
+  const description = [
+    genre,
     statique ? null : LIBELLE_DU_STATUT[etat.statut],
-    tour,
-    detail,
     `${etat.tentatives.length} attempt${etat.tentatives.length === 1 ? "" : "s"}`,
   ]
     .filter(Boolean)
     .join(" — ");
+  const idDescription = useId();
   return (
     <button
       type="button"
@@ -743,7 +743,7 @@ function BoutonDEtape({
       data-statut={etat.statut}
       data-donnee
       data-flow={flux}
-      aria-label={etiquette}
+      aria-describedby={idDescription}
       aria-pressed={choisie}
       title={etape.phrase?.replaceAll("`", "") ?? undefined}
       onClick={onChoisir}
@@ -755,6 +755,9 @@ function BoutonDEtape({
       style={{ left: point.x - (largeur - 8) / 2, top: point.y - RAYON - 4, width: largeur - 8 }}
     >
       <span aria-hidden className="block" style={{ height: 2 * RAYON + 8 }} />
+      <span id={idDescription} hidden>
+        {description}
+      </span>
       <span className="mx-auto line-clamp-2 block w-fit max-w-full break-words bg-surface px-1 text-[13px] leading-4 font-semibold text-ink group-hover:underline">
         {etape.libelle}
       </span>
