@@ -423,6 +423,13 @@ two owners for one table is how the next core migration breaks. A declared direc
 exist stops the command: a plugin whose schema silently did not run gives a platform that starts
 and fails at the first request touching its tables. `apps/api/tests/test_migrer.py` proves all of
 it with a plugin installed for real.
+
+The Job connects as the API's own role, never the database's administrator, so a migration runs
+under the same forced row-level security as a request. A step that writes rows (`UPDATE`,
+`DELETE`, `INSERT … SELECT`, a backfill), in `upgrade` or in `downgrade`, first runs
+`SELECT set_config('app.current_orgs', '*', true)` on PostgreSQL; without it, it sees zero rows and
+says nothing. `apps/api/tests/test_migration_data_steps.py` reads every core migration for that,
+and `test_migrations_postgres.py` runs data steps as that role over seeded rows.
 ## Refusing a run from a plugin
 
 The core caps spending per run and concurrency per executor. A rule that depends on something

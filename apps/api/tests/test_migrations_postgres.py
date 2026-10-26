@@ -252,13 +252,13 @@ SEED: tuple[tuple[str, dict[str, Any]], ...] = (
 )
 
 
-async def _seed() -> None:
+async def _seed(rows: tuple[tuple[str, dict[str, Any]], ...] = SEED) -> None:
     """As the superuser: the rows are the test's, not a request's, and RLS does not apply."""
     import asyncpg
 
     connection = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
     try:
-        for table, row in SEED:
+        for table, row in rows:
             places = ", ".join(f"${i}" for i in range(1, len(row) + 1))
             await connection.execute(
                 f"INSERT INTO {table} ({', '.join(row)}) VALUES ({places})", *row.values()
@@ -276,6 +276,9 @@ KEPT = (
     "SELECT slug, scope FROM knowledge_bases WHERE id = 'kb1'",
     "SELECT text FROM knowledge_chunks WHERE id = 'k1' AND search_tsv @@ to_tsquery('simple', 'ledger')",
 )
+
+#: The chunk's vector, read the same way at every step (S40-22e): the window must not touch it.
+EMBEDDING = "SELECT embedding_vec::text FROM knowledge_chunks WHERE id = 'k1' AND embedding_vec IS NOT NULL"
 
 
 async def _fetch(*queries: str) -> list[list[tuple[Any, ...]]]:
@@ -315,7 +318,13 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
     try:
         await asyncio.to_thread(command.upgrade, config, WINDOW[0][0])
         await _seed()
-        kept = await _fetch(*KEPT)
+        vector = "embedding_vec" in await _columns("knowledge_chunks")
+        if vector:  # S40-22e: only where the image carries pgvector, as `_postgres_only_missing` says
+            await _administrer(
+                PG_URL, "UPDATE knowledge_chunks SET embedding_vec = '[0.25,0.5,1]' WHERE id = 'k1'"
+            )
+        queries = (*KEPT, EMBEDDING) if vector else KEPT
+        kept = await _fetch(*queries)
         assert all(kept), "every seeded row reads back, the chunk found by its generated `search_tsv`"
 
         for revision, drops in WINDOW:
@@ -326,12 +335,12 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
             await asyncio.to_thread(command.downgrade, config, str(script.down_revision))
             for what in drops:
                 assert await _dropped(what), f"{what} outlived the downgrade of {revision}"
-            assert await _fetch(*KEPT) == kept, (
+            assert await _fetch(*queries) == kept, (
                 f"the downgrade of {revision} lost or changed a row it did not create"
             )
 
         await asyncio.to_thread(command.upgrade, config, "heads")
-        assert await _fetch(*KEPT) == kept, "the upgrade back to the heads lost or changed a row"
+        assert await _fetch(*queries) == kept, "the upgrade back to the heads lost or changed a row"
         assert not await _compare(), "the schema after the round trip over data is not the models' schema"
         chain, cap, restricted, created = await _fetch(
             "SELECT w.initiated_by, r.initiated_by, r.inputs_from"
@@ -349,3 +358,166 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
         await db_session.dispose_engine()
         await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
         reset_settings_cache()
+
+
+# ───────────────────────────── as the migration job (S40-22e) ─────────────────────────────
+#
+# The chart's Job migrates as the API's own role (`tests/charts/test_hook_de_migration.py`), under
+# forced RLS: a data step sees only the organisations the session opened. Every test here migrates
+# as that role, over rows seeded by the superuser, and reads the result back as the superuser.
+
+
+async def _migrate_as_the_job(monkeypatch: pytest.MonkeyPatch) -> Any:
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.db import session as db_session
+    from choregos_api.migrer import configuration
+
+    await _preparer_postgres()
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
+    reset_settings_cache()
+    await db_session.dispose_engine()
+    return configuration()
+
+
+async def _clean() -> None:
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.db import session as db_session
+
+    await db_session.dispose_engine()
+    await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+    reset_settings_cache()
+
+
+async def test_the_migration_role_is_held_by_rls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """What the tests below rely on: the role the Job uses sees no row of an organisation it did
+    not open, and every row once it opens them all, as the data steps do."""
+    import asyncpg
+
+    config = await _migrate_as_the_job(monkeypatch)
+    try:
+        await asyncio.to_thread(command.upgrade, config, "heads")
+        await _seed(SEED[:3])
+        connection = await asyncpg.connect(_url_app(PG_URL).replace("postgresql+asyncpg://", "postgresql://"))
+        try:
+            role = await connection.fetchrow(
+                "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+            )
+            unseen = await connection.fetchval("SELECT count(*) FROM projects")
+            async with connection.transaction():
+                await connection.execute("SELECT set_config('app.current_orgs', '*', true)")
+                opened = await connection.fetchval("SELECT count(*) FROM projects")
+        finally:
+            await connection.close()
+        assert tuple(role) == (False, False), "the migration role neither is a superuser nor bypasses RLS"
+        assert (unseen, opened) == (0, 1)
+    finally:
+        await _clean()
+
+
+#: An older data migration (2026-10-05): two active versions of one workflow are folded into the
+#: newest, which the project names as its default and its unpinned work items pin.
+PINNED_BEFORE = "f6b8d0e2a4c6"
+PINNED = "a7c9e1f3b5d8"
+PINNED_SEED: tuple[tuple[str, dict[str, Any]], ...] = (
+    SEED[0],
+    (
+        "projects",
+        {"id": "p1", "org_id": "o1", "slug": "billing-api", "name": "Billing", "config": "{}"}
+        | {"status": "active", "provision_state": "{}"},
+    ),
+    *(
+        (
+            "workflow_defs",
+            {"id": f"wf{version}", "project_id": "p1", "name": "default", "version": version}
+            | {
+                "source": "yaml",
+                "yaml": "",
+                "json": "{}",
+                "checksum": f"sha256:{version}",
+                "is_active": True,
+            },
+        )
+        for version in (1, 2)
+    ),
+    (
+        "work_items",
+        {
+            "id": "w1",
+            "project_id": "p1",
+            "tracker_key": "BIL-1",
+            "title": "Add credit notes",
+            "state": "build",
+        }
+        | {"paused": False, "allowed_paths": "[]", "totals": "{}", "documents": "[]"},
+    ),
+)
+
+
+async def test_an_older_data_migration_rewrites_rows_under_rls(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = await _migrate_as_the_job(monkeypatch)
+    try:
+        await asyncio.to_thread(command.upgrade, config, PINNED_BEFORE)
+        await _seed(PINNED_SEED)
+        await asyncio.to_thread(command.upgrade, config, PINNED)
+        active, default, pinned = await _fetch(
+            "SELECT id FROM workflow_defs WHERE is_active ORDER BY id",
+            "SELECT default_workflow FROM projects WHERE id = 'p1'",
+            "SELECT workflow_def_id FROM work_items WHERE id = 'w1'",
+        )
+        assert active == [("wf2",)], "the older active version is retired, as a request would see it"
+        assert default == [("default",)] and pinned == [("wf2",)], "the rows were rewritten, not skipped"
+    finally:
+        await _clean()
+
+
+#: The release channels' downgrade (2026-10-17) deletes the pins a channel carries before the
+#: version becomes required again.
+CHANNELS = "c1e3a5b7d9f2"
+CHANNELS_SEED: tuple[tuple[str, dict[str, Any]], ...] = (
+    *PINNED_SEED[:2],
+    *(
+        (
+            "agents",
+            {"id": agent, "org_id": "o1", "slug": agent, "kind": "internal", "display_name": agent}
+            | {"status": "active"},
+        )
+        for agent in ("builder", "reviewer")
+    ),
+    (
+        "agent_versions",
+        {
+            "id": "av1",
+            "agent_id": "builder",
+            "org_id": "o1",
+            "version": 1,
+            "spec": "{}",
+            "checksum": "sha256:1",
+        },
+    ),
+    *(
+        (
+            "project_agents",
+            {"id": pin, "project_id": "p1", "org_id": "o1", "agent_id": agent, "overrides": "{}"} | ref,
+        )
+        for pin, agent, ref in (
+            ("pa-version", "builder", {"version": 1}),
+            ("pa-channel", "reviewer", {"channel": "stable"}),
+        )
+    ),
+)
+
+
+async def test_a_downgrade_deletes_rows_under_rls(monkeypatch: pytest.MonkeyPatch) -> None:
+    from alembic.script import ScriptDirectory
+
+    config = await _migrate_as_the_job(monkeypatch)
+    try:
+        await asyncio.to_thread(command.upgrade, config, CHANNELS)
+        await _seed(CHANNELS_SEED)
+        script = ScriptDirectory.from_config(config).get_revision(CHANNELS)
+        assert script is not None
+        await asyncio.to_thread(command.downgrade, config, str(script.down_revision))
+        [pins] = await _fetch("SELECT id, version FROM project_agents ORDER BY id")
+        assert pins == [("pa-version", 1)], "the channel pin is deleted, the version pin kept"
+    finally:
+        await _clean()
