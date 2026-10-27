@@ -11,7 +11,7 @@ import { connectorTarget, sourceTarget } from "@/lib/procedures";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { RefreshFields } from "@/components/knowledge-refresh";
-import { draftOf, nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary, type RefreshDraft } from "@/lib/knowledge";
+import { draftOf, nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary, truncationsOf, type RefreshDraft } from "@/lib/knowledge";
 import type { KnowledgeSource } from "@/lib/types";
 
 type Kind = "sharepoint" | "confluence" | "web" | "git";
@@ -91,6 +91,13 @@ export function KnowledgeSources({
                   {syncSummary(source.last_summary)} · {source.document_count ?? 0} document(s) · {refreshLabel(source)} · {nextSyncLabel(source)}
                 </span>
                 {source.last_error && <span className="w-full text-xs text-danger">{source.last_error}</span>}
+                {truncationsOf(source.last_summary).length > 0 && (
+                  <ul className="w-full text-xs text-warn" data-testid={`source-truncations-${source.id}`}>
+                    {truncationsOf(source.last_summary).map((reason) => (
+                      <li key={reason}>Cut: {reason}</li>
+                    ))}
+                  </ul>
+                )}
                 {canEdit && (
                 <span className="ml-auto space-x-2 text-xs">
                   <button type="button" className="underline" onClick={() => void act(() => api.syncKnowledgeSource(org, slug, source.id))}>

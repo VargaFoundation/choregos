@@ -1343,7 +1343,7 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     eval_result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     #: the last distillation into a principles skill (S33-05): status, skill, version, dropped, error
     distillation: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
-    #: the project this base was created from (S39-14): its owners curate it, never widen it
+    #: the project this base was created from (S39-14): its owners curate it and widen its reach
     owner_project: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: people read it only through a grant (or as an administrator or owning-project owner); runs
     #: that the base is attached to are still served (S42-11, ADR 0081)
@@ -1399,6 +1399,8 @@ class KnowledgeDocument(Base, PkMixin, TimestampMixin):
     markdown: Mapped[str | None] = mapped_column(Text, nullable=True, deferred=True)
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: what a `ready` conversion left out, one sentence each (S42-09e): a spreadsheet cut at its row cap
+    warnings: Mapped[list[str]] = mapped_column(Json, default=list, server_default="[]")
     converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     #: the connector source it was synced from (S33-04); none for an upload

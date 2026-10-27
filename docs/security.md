@@ -115,17 +115,17 @@ provisioning render. A project whose own list is empty gets exactly what its org
 
 A knowledge base is what agents read as reference: whoever feeds it steers them, so curating is
 a permission, not a convenience ([ADR 0051](adr/0051-knowledge-bases.md)). An organisation
-administrator (`agent:manage`) curates every base and alone decides its **reach** (`scope`,
-`projects`, `groups`). A base created from a project (`POST /projects/{id}/knowledge`) is owned by
+administrator (`agent:manage`) curates every base and decides its **reach** (`scope`,
+`projects`, `groups`), as do the owners of the base's owning project (ADR 0081, amended). A base created from a project (`POST /projects/{id}/knowledge`) is owned by
 it (`owner_project`): its owners (`project:write` on that project) upload, sync, distil, rename and
-archive it, but cannot widen it to the organisation, to other projects or to groups, so a project
-never decides what *other* projects' runs read. An administrator who widens it makes it the
-organisation's: the owner stops curating. Another project's owners, and developers, read at most.
+archive it, and may widen it to the organisation, to other projects or to groups (it is their
+project's base, as a GitHub repository admin sets its visibility; every change is journalled). An
+administrator who widens it makes it the organisation's: the owner stops curating. Another project's owners, and developers, read at most.
 
 Since S42-11 ([ADR 0081](adr/0081-knowledge-base-rights.md)) people can also hold a **role on one base**
 (`viewer`, `editor`, `owner`) by a grant to a user, a group or a project, and a base can be `restricted`:
-people then read it only through a grant, while its runs are still served. Only an administrator widens
-or restricts a base. A grant never crosses organisations. A source read with a service account (Confluence)
+people then read it only through a grant, while its runs are still served. Only an administrator or the owners of its project widen
+or restrict a base. A grant never crosses organisations. A source read with a service account (Confluence)
 mirrors everything that account sees, so restricting the base and granting roles is the confidentiality
 boundary, not the source's own permissions.
 

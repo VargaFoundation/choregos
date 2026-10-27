@@ -199,7 +199,7 @@ def test_a_workbook_openpyxl_cannot_read_falls_back_to_markitdown(monkeypatch) -
     def refuse(*_args: object, **_kwargs: object) -> str:
         raise ValueError("unreadable")
 
-    monkeypatch.setattr(xlsx, "xlsx_to_markdown", refuse)
+    monkeypatch.setattr(xlsx, "xlsx_to_markdown_with_warnings", refuse)
     markdown, _ = convert.to_markdown(fx.xlsx({"Sheet1": [["a", "b"], [1, 2]]}), ".xlsx")
     assert "## Sheet1" in markdown and "| a | b |" in markdown.replace("  ", " ")
 
@@ -228,3 +228,26 @@ async def test_the_row_cap_reaches_the_child_process_by_argv() -> None:
         fx.xlsx({"Many": rows}), ".xlsx", timeout_s=60, max_bytes=1024 * 1024, rows_per_sheet=10
     )
     assert "… 41 more rows not shown" in answer["markdown"]
+
+
+def test_a_cut_sheet_is_named_in_the_warnings_and_a_short_one_is_not() -> None:
+    """S42-09e: the people who read the document's page are told what the agents are told."""
+    from choregos_api.knowledge.convert import convert
+
+    rows: list[list[object]] = [["id"]] + [[i] for i in range(30)]
+    book = fx.xlsx({"Big": rows, "Small": [["a"], [1]]})
+    markdown, _, warnings = convert(book, ".xlsx", 10)
+    assert warnings == ['Sheet "Big": 21 more rows not shown (the first 10 are kept)']
+    assert "… 21 more rows not shown" in markdown
+    assert convert(book, ".xlsx", 100)[2] == []
+    assert convert(b"# Notes\n", ".md")[2] == []
+
+
+async def test_the_child_process_hands_its_warnings_to_the_parent() -> None:
+    from choregos_api.knowledge.conversion import run_converter
+
+    rows: list[list[object]] = [["id"]] + [[i] for i in range(50)]
+    answer = await run_converter(
+        fx.xlsx({"Many": rows}), ".xlsx", timeout_s=60, max_bytes=1024 * 1024, rows_per_sheet=10
+    )
+    assert answer["warnings"] == ['Sheet "Many": 41 more rows not shown (the first 10 are kept)']

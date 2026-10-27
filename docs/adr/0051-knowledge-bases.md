@@ -234,7 +234,9 @@ API's event loop. Since S39-26:
     converted whole. The converter now reads the workbook with openpyxl (read-only, cached values):
     one `## <sheet>` per sheet (hidden ones marked), empty cells empty, numbers as their cell format
     shows them (percent, thousands, decimals, dates), at most `knowledge_xlsx_rows_per_sheet` rows
-    (2000) per sheet and then `… N more rows not shown`. The cap reaches the child by argv (its
+    (2000) per sheet and then `… N more rows not shown`; the same fact reaches people as
+    `knowledge_documents.warnings` (S42-09e: one sentence per cut sheet, shown by the console, and a
+    source's `last_summary.truncated` / `truncated_reasons`). The cap reaches the child by argv (its
     environment stays bare); a workbook openpyxl cannot read falls back to MarkItDown. Documents
     converted before keep their old text until converted again (`POST …/documents/{id}/convert`), which
     also shrinks the corpus. Speaker notes and table or chart text of a deck survive MarkItDown 0.1.8

@@ -38,6 +38,7 @@ describe("what a source says", () => {
     expect(syncSummary({ added: 2, deleted: 1, unchanged: 9 })).toBe("2 added · 1 deleted");
     expect(syncSummary({ unchanged: 3 })).toBe("no change");
     expect(syncSummary(null)).toBe("never synced");
+    expect(syncSummary({ added: 1, truncated: 2 })).toBe("1 added · 2 truncated");
     const fields = { site: "b!drive", folder: "Policies", url: "https://git.test/r.git", ref: "", paths: "docs/*.md, *.md" };
     expect(sourceConfig("sharepoint", fields)).toEqual({ drive_id: "b!drive", folder: "Policies" });
     expect(sourceConfig("web", { ...fields, exclude: "/es/*, /pt/*" })).toEqual({
@@ -57,6 +58,13 @@ describe("what a source says", () => {
 describe("the sources of a base (S33-04)", () => {
   beforeEach(() => {
     vi.mocked(api.orgConnectors).mockResolvedValue([]);
+  });
+
+  it("names the documents a sync converted with rows cut (S42-09e)", () => {
+    const cut = { ...source, last_summary: { added: 1, truncated: 1, truncated_reasons: ['book.xlsx: Sheet "Q3": 5 more rows not shown (the first 2000 are kept)'] } };
+    view([cut]);
+    expect(screen.getByTestId("source-truncations-src-1")).toHaveTextContent("book.xlsx: Sheet \"Q3\": 5 more rows not shown");
+    expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("1 added · 1 truncated");
   });
 
   it("shows when each last synced, what it did and why it failed; syncs on demand", async () => {

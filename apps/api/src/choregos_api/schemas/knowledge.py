@@ -107,6 +107,8 @@ class KnowledgeDocumentDto(Dto):
     source: str
     status: DocumentStatus
     error: str | None = None
+    #: what a ready conversion left out (S42-09e): a spreadsheet cut at its row cap, sheet by sheet
+    warnings: list[str] = Field(default_factory=list)
     created_by: str | None = None
     created_at: datetime | None = None
     converted_at: datetime | None = None
@@ -143,7 +145,7 @@ class KnowledgeBaseDto(Dto):
     sources: list[KnowledgeSourceDto] | None = None
     #: the last distillation into a principles skill (S33-05)
     distillation: dict[str, Any] | None = None
-    #: the project this base was created from (S39-14): its owners curate it, never widen it
+    #: the project this base was created from (S39-14): its owners curate it and widen its reach
     owner_project: str | None = None
     #: people read it only through a grant; runs it is attached to are still served (S42-11)
     restricted: bool = False

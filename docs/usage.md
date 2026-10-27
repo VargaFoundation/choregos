@@ -1547,14 +1547,16 @@ gives its text without headings, and a scanned PDF fails (no OCR). A workbook gi
 table per sheet (hidden sheets marked), with empty cells empty, numbers as the sheet shows them
 (percentages, thousands, dates), the cached value of each formula, and at most
 `CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
-shown`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
+shown`) and a document cut that way carries `warnings` (one sentence per cut sheet), shown in
+the console's document list and page, and counted in a source's last sync (`truncated`,
+`truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
 before this reading keep their old text until converted again: `POST …/documents/{id}/convert`
 (which also shrinks the corpus). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
 `groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage` (an organisation administrator), or, for a base created from a project
 (`POST /projects/{id}/knowledge`, `owner_project`), `project:write` on that project: its owners feed,
-sync, distil and archive it, and only an administrator widens its scope. In the
+sync, distil and archive it, and they, like an administrator, may widen or narrow its reach. In the
 console there are two ways in. **From a project**: its sidebar's **Knowledge** section lists what its
 runs are served (the project's own bases, then the organisation-wide ones, read-only from there;
 a group's base is never served to a run, so it is not listed), and **New knowledge base** creates one
@@ -1693,7 +1695,7 @@ Reach (`scope`) decides which runs are served a base; **grants** decide which pe
 | read | yes | yes | yes | yes |
 | upload, add a source, sync, distil, rename | yes | yes | yes | no |
 | share (edit grants), archive | yes | yes | no | no |
-| widen scope, projects, groups, `restricted` | admin only | no | no | no |
+| widen scope, projects, groups, `restricted` | yes (a base with no owning project: admin only) | no | no | no |
 
 ```bash
 curl -X PUT $API/orgs/acme/knowledge/architecture/grants -H 'Content-Type: application/json' \
