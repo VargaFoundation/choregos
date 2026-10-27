@@ -2,8 +2,8 @@
 
 A plugin packages agents and what they need, in one format the platform understands
 ([ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md)). This page covers writing one and checking it
-locally with the CLI. Sources, signatures and installing are later stories (S43-03 to S43-05), not this
-page's subject.
+locally with the CLI, then how a deployment declares the sources it fetches plugins from and how it
+trusts them. Installing is a later story (S43-04).
 
 "Plugin" here means this package. A Python wheel loaded through the `choregos.plugins` entry point is an
 **extension**.
@@ -91,3 +91,72 @@ same bytes every time. An index (`plugin-index.schema.json`) records, for each v
 branch or a tag is not accepted in place of a commit.
 
 The full reference of the commands is in [the CLI reference](cli.md#choregos-plugin).
+
+## Sources and trust
+
+A deployment declares where plugins come from in the file `CHOREGOS_PLUGINS_CONFIG` names (the chart
+writes it, S43-05):
+
+```yaml
+sources:
+  - name: varga
+    index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable   # or https://…/index.yaml
+    trust:                      # a keyless signer, regular expressions matched whole…
+      identity: https://github.com/VargaFoundation/choregos-agents/.*
+      issuer: https://token.actions.githubusercontent.com
+      # key: /etc/choregos/plugins/varga.pub   # …or a public key cosign reads
+      # tlog: false             # only for a key whose signatures never reached Rekor
+    egress: [registry.acme.example]   # hosts beyond the index's own
+defaultPlugins:
+  - {source: varga, name: servicenow, version: "^0.1"}
+offline: /opt/choregos/plugins  # CHOREGOS_PLUGINS_OFFLINE wins over it
+```
+
+Every source has a trust policy; there is no unsigned source. `GET /orgs/{org}/plugin-sources` lists
+the sources, the offline directory as the source `offline`, each with what its index offers and
+whether this core is inside each version's `core` range. A source whose index cannot be read is listed
+with the reason.
+
+### What a fetch checks
+
+A fetch (`choregos_api.services.plugin_sources.fetch_plugin`, which install and upgrade call) refuses
+at the first failed check, naming it:
+
+| check | refuses |
+|---|---|
+| `version` / `not_found` | a plugin the index does not offer, or no version inside the requested range |
+| `core` | every matching version requires another core (the index's `core`, then the manifest's) |
+| `signature` | an OCI release whose manifest carries no signature by the source's identity and issuer (or key); an `oci://` index that is not signed so; a git release from an unsigned `https://` index |
+| `git_ref` | a git release that is not pinned to a 40-hex commit (the index schema refuses it too) |
+| `digest` | fetched files whose canonical-tar digest differs from the index's |
+| `lock` | an offline plugin that differs from `plugins.lock`, or is not in it |
+| `content` | a file the loader refuses, or a manifest whose name or version is not the index's |
+| `fetch` | a host that did not answer, or that the egress policy refuses |
+
+- **OCI.** A plugin is an artifact with one layer of type `application/vnd.choregos.plugin.v1.tar+gzip`
+  (the `pack` output); an `oci://` index is an artifact with one layer of type
+  `application/vnd.choregos.plugin-index.v1+yaml`. Cosign verifies the manifest digest, as for hosted
+  images (ADR 0080 §8); the layer's bytes are checked against the manifest, then the content digest
+  against the index. Publish with `oras push <ref> plugin.tar.gz:application/vnd.choregos.plugin.v1.tar+gzip`
+  then `cosign sign <ref>@<digest>`.
+- **Git.** A git commit carries no cosign signature, so a git release is trusted through its index: it
+  is fetched only from an `oci://` index that verified. Only `github.com` and `gitlab.com` are fetched
+  (the skill import's tarball fetcher).
+- **Offline.** Plugins as directories or `.tar.gz` directly in the directory, trusted by their presence
+  in the image. With a `plugins.lock` (`plugins: {name: {version, digest}}`), each must be in it with
+  that digest, when the index is read and again when the plugin is fetched.
+
+### Egress
+
+Sources are the operator's, not an organisation's, so their fetches are not checked against an
+organisation's allowlist. They go through the guarded transport (ADR 0066) under a policy that opens the
+index's host, the hosts `egress` lists, the blob storage of `ghcr.io` and Docker Hub, and GitHub or
+GitLab for a git release, all still bounded by the deployment's ceiling (`CHOREGOS_EGRESS_CEILING`) and
+mode. An index that names an artifact on another host reaches it only when that host is in `egress`.
+
+### The supply-chain gate
+
+Once fetched, `assess_plugin` applies the rest of ADR 0050's gate: a plugin that brings a server needs
+a second person's approval (an install answers 202 until it is given), and each of its skills is
+assessed like an imported skill (a high-risk one is installed waiting for review).
+
