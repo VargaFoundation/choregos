@@ -62,6 +62,10 @@ external resource.
   organisation's), and the mirror holds about 1 GB on the replica's `/tmp`.
 - Publishing is slower: SkillSpector takes 3 to 10 s per version.
 - The mirror covers PyPI and npm only, which is what SkillSpector's dependency check reads.
+- The image's Trivy scan gets one exception (`trivy-secret.yaml`): the Anthropic SDK under
+  `/opt/skillspector` documents `{"type": "service_account"}`, which the `gcp-service-account`
+  rule reads as a key. The exception names that directory only; a real key anywhere else still
+  fails the build.
 
 ## Alternatives rejected
 
