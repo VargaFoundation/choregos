@@ -50,6 +50,19 @@ COPY tests/fixtures/repos tests/fixtures/repos
 # workers run: it stays out of the image.
 RUN uv sync --frozen --no-dev --all-packages --no-install-package choregos-agent-sdk
 
+# SkillSpector, the skill gate's second scanner (ADR 0095), in an environment of its own: its
+# dependencies (LangGraph, YARA…) are not the platform's, and the API runs it as a child process,
+# offline, through `choregos_api/scanners/skillspector_offline.py`. Pinned to the commit of v2.13.1;
+# a bump re-runs `apps/api/tests/test_skill_scanner.py` against the new release.
+FROM python:3.12-slim-bookworm AS skillspector
+ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+ARG SKILLSPECTOR_COMMIT=f3b25697d76256998ca9d42c198d256258d4c035
+RUN uv venv /opt/skillspector --python /usr/local/bin/python3.12 \
+ && VIRTUAL_ENV=/opt/skillspector uv pip install \
+    "skillspector @ https://github.com/NVIDIA/SkillSpector/archive/${SKILLSPECTOR_COMMIT}.tar.gz" \
+ && /opt/skillspector/bin/skillspector --version
+
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
 FROM python:3.12-slim-bookworm AS commun
 # `PIP_PYTHON` : l'image de l'édition entreprise est construite FROM celle-ci et y ajoute sa roue
@@ -93,6 +106,9 @@ FROM commun AS api
 # §8). The same release as the `hosted-cosign` CI job, pinned by digest.
 COPY --from=ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 \
   /ko-app/cosign /usr/local/bin/cosign
+# SkillSpector (ADR 0095): the gate runs it on every version a person publishes.
+COPY --from=skillspector /opt/skillspector /opt/skillspector
+ENV CHOREGOS_SKILL_SCANNER=skillspector
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"

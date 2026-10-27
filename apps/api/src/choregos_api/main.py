@@ -73,6 +73,7 @@ from .routers import (
     workitems,
 )
 from .services.action_relay import relay_loop
+from .services.skill_scanner import mirror_loop
 
 API_PREFIX = "/api/v1"
 logger = get_logger("choregos.api")
@@ -107,12 +108,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     action_relay = asyncio.create_task(relay_loop())
     # A2A push notifications (ADR 0078 §5): read from the persisted events, at least once.
     a2a_push = asyncio.create_task(push_loop())
+    # The skill scanner's local OSV mirror (ADR 0095), rebuilt in each replica.
+    osv_mirror = asyncio.create_task(mirror_loop(settings))
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relais is not None:
         await relais.arreter()
-    for task in (rafraichissement, action_relay, a2a_push):
+    for task in (rafraichissement, action_relay, a2a_push, osv_mirror):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task

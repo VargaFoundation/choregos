@@ -201,16 +201,22 @@ async def publish_version(  # noqa: PLR0913 - the old `_publier`, moved, plus on
     from ..audit import record
     from ..db.models import Skill, SkillVersion
     from ..errors import unprocessable
-    from . import skill_gate
+    from . import skill_gate, skill_scanner
 
     try:
         tete = valider(fichiers, slug)
     except SkillRefusee as refus:
         raise unprocessable(str(refus)) from refus
+    # The second scanner (ADR 0095) reads a version a person brings, before any row is touched;
+    # what the platform ships is reviewed with its release.
+    scanner = None if review_as_platform else skill_scanner.get_scanner()
+    scan = await scanner.scan(dict(fichiers), list(executables or [])) if scanner else None
     skill = (
         await session.execute(select(Skill).where(Skill.org_id == organisation.id, Skill.slug == tete.name))
     ).scalar_one_or_none()
     assessment = skill_gate.assess(fichiers, executables=executables or [], repo_licences=repo_licences)
+    if scan is not None:
+        assessment = skill_scanner.with_scan(assessment, scan)
     columns = skill_gate.columns(assessment)
     if review_as_platform:
         if assessment.risk == "high":
