@@ -87,8 +87,9 @@ _SECTIONS: list[dict[str, Any]] = []
 
 # What the core's section manifests support, so a plugin detects a feature without parsing versions
 # (S42-02). `block_permission`: a block may carry its own `permission`. `asset_upload` (S42-13): a form
-# property of `format: "asset"` uploads its file to its `x-upload` path.
-SECTION_FEATURES: frozenset[str] = frozenset({"block_permission", "asset_upload"})
+# property of `format: "asset"` uploads its file to its `x-upload` path. `section_icon` (S42-15): a
+# section may name its navigation icon from the schema's closed `icon` vocabulary.
+SECTION_FEATURES: frozenset[str] = frozenset({"block_permission", "asset_upload", "section_icon"})
 
 
 def declarer_une_section_d_administration(manifeste: dict[str, Any]) -> None:

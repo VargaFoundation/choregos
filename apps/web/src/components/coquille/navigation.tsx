@@ -3,7 +3,17 @@
 
 import {
   ArrowLeft,
+  Bell,
   BookOpen,
+  Building2,
+  Database,
+  Fingerprint,
+  Gauge,
+  KeyRound,
+  Lock,
+  LogIn,
+  Palette,
+  ShieldCheck,
   Bot,
   Brain,
   Cpu,
@@ -37,6 +47,7 @@ import { hasReleaseTrain } from "@/lib/release-train";
 import { cn } from "@/lib/cn";
 import type { BreadcrumbStep } from "@/components/ui";
 import { useSession } from "@/lib/session";
+import type { AdminSection } from "@/lib/types";
 
 // Skills have their own entry (review of 7 Oct: "there is no direct link in the menu"). The
 // `/integrations` page is where a person connects their AI assistant to Choregos through the MCP
@@ -169,8 +180,39 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
   ];
 }
 
+/**
+ * The icon a plugin's section names (`icon` in `ui-manifest.schema.json`, S42-15): a closed vocabulary
+ * the console draws itself, so a plugin never ships an asset. An absent or unknown name is the
+ * generic settings icon.
+ */
+export const SECTION_ICONS: Record<NonNullable<AdminSection["icon"]>, LucideIcon> = {
+  building: Building2,
+  shield: ShieldCheck,
+  gauge: Gauge,
+  fingerprint: Fingerprint,
+  "log-in": LogIn,
+  palette: Palette,
+  users: Users,
+  key: KeyRound,
+  lock: Lock,
+  plug: Plug,
+  globe: Globe,
+  server: Server,
+  database: Database,
+  wallet: Wallet,
+  scroll: ScrollText,
+  bell: Bell,
+  settings: Settings,
+};
+
+export function sectionIcon(name: string | undefined): LucideIcon {
+  return (name && SECTION_ICONS[name as keyof typeof SECTION_ICONS]) || Settings;
+}
+
 /** The administration's sections: the core's screens, then one per section a plugin declares (ADR 0032). */
-export function adminGroups(pluginSections: { id: string; title: string }[] = []): NavGroup[] {
+export function adminGroups(
+  pluginSections: { id: string; title: string; icon?: AdminSection["icon"] }[] = [],
+): NavGroup[] {
   const page = (href: string, label: string, icon: LucideIcon): NavEntry => ({
     href,
     label,
@@ -190,7 +232,7 @@ export function adminGroups(pluginSections: { id: string; title: string }[] = []
         page("/admin/audit", "Audit", ScrollText),
         page("/admin/platform", "Platform", Server),
         page("/admin/edition", "Edition", BadgeCheck),
-        ...pluginSections.map((s) => page(`/admin/x/${s.id}`, s.title, Settings)),
+        ...pluginSections.map((s) => page(`/admin/x/${s.id}`, s.title, sectionIcon(s.icon))),
       ],
     },
   ];
