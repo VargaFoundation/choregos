@@ -3,7 +3,14 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { BarreLaterale } from "@/components/coquille/barre-laterale";
 import { SECTION_ICONS, sectionIcon } from "@/components/coquille/navigation";
-import schema from "../../../packages/contracts/schemas/ui-manifest.schema.json";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+// Read at run time, not imported: the web image's build context holds only `packages/contracts/ts`,
+// and `next build` type-checks the tests, so a static import of the schema broke the image.
+const schema = JSON.parse(
+  readFileSync(path.resolve(__dirname, "../../../packages/contracts/schemas/ui-manifest.schema.json"), "utf8"),
+) as { properties: { icon: { enum: string[] } } };
 
 /**
  * S42-15: a plugin's administration section names its icon from the manifest's closed vocabulary.

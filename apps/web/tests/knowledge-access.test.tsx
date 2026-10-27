@@ -148,18 +148,18 @@ describe("the access card (S42-11)", () => {
     expect(await screen.findByTestId("knowledge-grants")).toHaveTextContent("waiting for sign-in");
   });
 
-  it("only an administrator restricts the base; a project owner reads why not", async () => {
+  it("whoever the server lets widen restricts the base (administrator or owning project's owner)", async () => {
     vi.mocked(api.updateKnowledgeBase).mockResolvedValue({ ...base, restricted: true });
     await show(base);
     fireEvent.click(await screen.findByRole("checkbox", { name: /Restricted/ }));
     await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", { restricted: true }));
   });
 
-  it("a project owner cannot widen: no restriction switch, and the owning project is named", async () => {
+  it("an editor of the owning project cannot widen: no restriction switch, and the owning project is named", async () => {
     await show({ ...base, owner_project: "billing-api", can: { ...ALL, widen: false } });
     const card = await screen.findByTestId("knowledge-access");
     expect(within(card).queryByRole("checkbox")).toBeNull();
-    expect(card).toHaveTextContent("Only an organisation administrator changes who a base is served to");
+    expect(card).toHaveTextContent("Only an organisation administrator, or an owner of the project that owns this base");
     expect(card).toHaveTextContent("owned by project billing-api");
   });
 

@@ -18,7 +18,7 @@ function initial(base: KnowledgeBase): KnowledgeGrant[] {
 /**
  * Who may do what with one knowledge base (S42-11, ADR 0081). The reach says which runs are served
  * it; the grants below give people a role on it. Every button follows the server's `can`: an
- * administrator widens the reach and restricts the base, whoever may share edits the grants.
+ * administrator or an owner of the owning project widens the reach and restricts the base, whoever may share edits the grants.
  */
 export function KnowledgeAccess({ org, base, onChange }: { org: string; base: KnowledgeBase; onChange: () => void }) {
   const can = permissionsOf(base);
@@ -94,7 +94,7 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
             Restricted: people read it only through a grant
           </label>
         ) : (
-          <p className="text-ink-muted">Only an organisation administrator changes who a base is served to, or restricts it.</p>
+          <p className="text-ink-muted">Only an organisation administrator, or an owner of the project that owns this base, changes who it is served to or restricts it.</p>
         )}
         {can.share ? (
           <div className="space-y-3">

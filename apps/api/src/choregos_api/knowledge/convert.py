@@ -22,20 +22,31 @@ import sys
 _BLANKS = re.compile(r"\n{3,}")
 
 
-def to_markdown(data: bytes, extension: str, rows_per_sheet: int | None = None) -> tuple[str, str | None]:
-    """The markdown of a document and the title its format declares, if any."""
+def convert(
+    data: bytes, extension: str, rows_per_sheet: int | None = None
+) -> tuple[str, str | None, list[str]]:
+    """The markdown of a document, the title its format declares, and what it left out (S42-09e)."""
     if extension == ".xlsx":
-        from .xlsx import DEFAULT_ROWS_PER_SHEET, xlsx_to_markdown
+        from .xlsx import DEFAULT_ROWS_PER_SHEET, xlsx_to_markdown_with_warnings
 
         # A workbook openpyxl cannot read falls back to MarkItDown.
         with contextlib.suppress(Exception):
-            return xlsx_to_markdown(data, rows_per_sheet or DEFAULT_ROWS_PER_SHEET), None
+            markdown, warnings = xlsx_to_markdown_with_warnings(
+                data, rows_per_sheet or DEFAULT_ROWS_PER_SHEET
+            )
+            return markdown, None, warnings
     from markitdown import MarkItDown, StreamInfo
 
     converter = MarkItDown(enable_plugins=False)
     result = converter.convert_stream(io.BytesIO(data), stream_info=StreamInfo(extension=extension))
     markdown = _BLANKS.sub("\n\n", result.markdown or "").strip() + "\n"
-    return markdown, (result.title or None)
+    return markdown, (result.title or None), []
+
+
+def to_markdown(data: bytes, extension: str, rows_per_sheet: int | None = None) -> tuple[str, str | None]:
+    """The markdown of a document and the title its format declares, if any."""
+    markdown, title, _ = convert(data, extension, rows_per_sheet)
+    return markdown, title
 
 
 def main(argv: list[str]) -> int:
@@ -44,11 +55,11 @@ def main(argv: list[str]) -> int:
         return 2
     data = sys.stdin.buffer.read()
     try:
-        markdown, title = to_markdown(data, argv[1], int(argv[2]) if len(argv) == 3 else None)
+        markdown, title, warnings = convert(data, argv[1], int(argv[2]) if len(argv) == 3 else None)
     except Exception as exc:  # the converter's own failure, said to the parent
         sys.stderr.write(f"{type(exc).__name__}: {exc}"[:2000])
         return 1
-    sys.stdout.write(json.dumps({"markdown": markdown, "title": title}))
+    sys.stdout.write(json.dumps({"markdown": markdown, "title": title, "warnings": warnings}))
     return 0
 
 

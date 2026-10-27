@@ -1,7 +1,7 @@
 """A project owns the knowledge bases created from it (S39-14, ADR 0051 amendment).
 
-Its owners (`project:write` on it) create, feed, sync and distil them; they never widen their scope,
-which stays the organisation administrator's. A base nobody can read does not exist for them (404).
+Its owners (`project:write` on it) create, feed, sync and distil them, and may widen or narrow its
+reach (ADR 0081, amended); an editor may not. A base nobody can read does not exist for them (404).
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ async def test_a_developer_cannot(
         assert refused.status_code == 403, refused.text
 
 
-async def test_the_owner_curates_but_cannot_widen(
+async def test_the_owner_curates_and_may_widen(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
     async with _as(client, "owner@varga.dev") as owner:
@@ -130,15 +130,47 @@ async def test_the_owner_curates_but_cannot_widen(
         assert renamed.status_code == 200 and renamed.json()["owner_project"] == "billing-api"
         distilled = await owner.post(f"{ORG}/runbooks/distill")
         assert distilled.status_code != 403, distilled.text
+        assert renamed.json()["can"]["widen"] is True
         for widening in ({"scope": "org"}, {"projects": ["billing-api", "checkout-web"]}, {"groups": ["rh"]}):
-            refused = await owner.patch(f"{ORG}/runbooks", json=widening)
+            done = await owner.patch(f"{ORG}/runbooks", json=widening)
+            assert done.status_code == 200, (widening, done.text)
+        restricted = await owner.patch(f"{ORG}/runbooks", json={"restricted": True})
+        assert restricted.status_code == 200 and restricted.json()["restricted"] is True
+        narrowed = await owner.patch(
+            f"{ORG}/runbooks", json={"scope": "projects", "projects": ["billing-api"]}
+        )
+        assert narrowed.status_code == 200, narrowed.text
+        assert narrowed.json()["owner_project"] == "billing-api", "the owner keeps a base it widened"
+        again = await owner.post(f"{ORG}/runbooks/documents", files={"file": ("more.md", b"# More\n")})
+        assert again.status_code == 202, again.text
+
+
+async def test_a_developer_cannot_widen(
+    client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
+) -> None:
+    async with _as(client, "owner@varga.dev") as owner:
+        await _owned_base(owner, project)
+    async with _as(client, "dev@varga.dev") as dev:
+        for widening in (
+            {"scope": "org"},
+            {"projects": ["billing-api", "checkout-web"]},
+            {"restricted": True},
+        ):
+            refused = await dev.patch(f"{ORG}/runbooks", json=widening)
             assert refused.status_code == 403, (widening, refused.text)
+
+
+async def test_an_administrator_widening_still_ends_the_projects_ownership(
+    client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
+) -> None:
+    async with _as(client, "owner@varga.dev") as owner:
+        await _owned_base(owner, project)
     widened = await client.patch(f"{ORG}/runbooks", json={"scope": "org"})
     assert widened.status_code == 200, widened.text
     assert widened.json()["owner_project"] is None, "an org base is no project's to curate"
     async with _as(client, "owner@varga.dev") as owner:
         again = await owner.post(f"{ORG}/runbooks/documents", files={"file": ("more.md", b"# More\n")})
-        assert again.status_code == 403, "once widened, the owner reads it and no longer curates it"
+        assert again.status_code == 403, "once the administrator widened it, the owner no longer curates it"
 
 
 async def test_another_projects_owner_cannot_curate(
