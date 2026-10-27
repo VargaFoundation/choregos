@@ -200,7 +200,14 @@ from .mesures import (
     MemoryDto,
     MemoryReimport,
 )
-from .outbound_proxy import OutboundProxy, OutboundProxyPut, OutboundProxyState, OutboundProxyTest
+from .outbound_proxy import (
+    OutboundProxy,
+    OutboundProxyPut,
+    OutboundProxyState,
+    OutboundProxyTest,
+    RelayOutboundProxy,
+    RelayProxyCredentials,
+)
 from .plateforme import (
     AgentBackendInfo,
     AgentBackendUpdate,
@@ -491,6 +498,8 @@ __all__ = [
     "ReadinessFix",
     "ReadinessItem",
     "ReadinessSummary",
+    "RelayOutboundProxy",
+    "RelayProxyCredentials",
     "ReleaseDto",
     "ReleaseItemDto",
     "ReleasePage",
