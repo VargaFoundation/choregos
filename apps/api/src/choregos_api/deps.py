@@ -18,6 +18,7 @@ from starlette.requests import HTTPConnection
 
 from .config import Settings, get_settings
 from .db.models import ApiToken, Membership, Organization, Project, User
+from .db.org_aliases import current_slug
 from .db.session import (
     TOUT,
     en_portee_de_plateforme,
@@ -294,6 +295,9 @@ async def resolve_project(session: AsyncSession, identifier: str) -> tuple[Proje
     separateur = "/" if "/" in identifier else ":" if ":" in identifier else ""
     if separateur:
         org_slug, slug = identifier.split(separateur, 1)
+        # A former slug of the organisation resolves to it: an MCP address or a qualified id copied
+        # before a rename keeps working, and the caller gets the CURRENT slug (ADR 0090).
+        org_slug = await current_slug(session, org_slug)
         project = (
             await session.execute(
                 select(Project)

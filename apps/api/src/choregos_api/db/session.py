@@ -124,6 +124,21 @@ async def limiter_aux_organisations(session: AsyncSession, orgs: list[str] | str
     await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": valeur})
 
 
+async def limit_to_remembered_organisations(session: AsyncSession, orgs: list[str]) -> None:
+    """Like `limiter_aux_organisations`, for slugs that were written down EARLIER (a workflow's payload,
+    a signed state, a deployment value): a slug that has since been renamed is replaced by the
+    organisation's current slug, because RLS compares current slugs (ADR 0090). The aliases are read under
+    the platform scope and the narrow scope is set right after, in the same transaction."""
+    from .org_aliases import current_slugs
+
+    if get_settings().is_sqlite or not orgs:
+        await limiter_aux_organisations(session, orgs)
+        return
+    await limiter_aux_organisations(session, TOUT)
+    resolved = await current_slugs(session, orgs)
+    await limiter_aux_organisations(session, sorted(set(resolved.values())))
+
+
 async def nommer_l_utilisateur(session: AsyncSession, user_id: str | None) -> None:
     """Pose `app.current_user` pour la RLS de `users` et `api_tokens` : l'appelant se lit toujours,
     même sans appartenance. Transaction-locale, comme la portée."""
@@ -166,7 +181,12 @@ async def session_scope(
     async with get_sessionmaker()() as session:
         portee = orgs if orgs is not None else ([org_slug] if org_slug else None)
         if portee is not None:
-            await limiter_aux_organisations(session, portee)
+            if isinstance(portee, list):
+                # `orgs=[…]` comes from a payload, a state or a deployment value as often as from a
+                # request: an alias is replaced by the current slug (ADR 0090).
+                await limit_to_remembered_organisations(session, portee)
+            else:
+                await limiter_aux_organisations(session, portee)
         try:
             yield session
             await session.commit()

@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Organization, RemoteCredential
+from ..db.org_aliases import current_slug
 from ..deps import Config, Db, Me
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
@@ -359,6 +360,7 @@ async def remote_credential_callback(
     ):
         raise forbidden("invalid or expired authorisation state: start the connection again")
     org, name = str(expected.get("o") or ""), str(expected.get("c") or "")
+    org = await current_slug(session, org)  # the handshake may span a rename (ADR 0090)
     _manage(principal, org)
     organisation = await _organisation(session, org)
     row = await _credential(session, organisation, name)
