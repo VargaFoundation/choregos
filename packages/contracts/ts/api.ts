@@ -2105,7 +2105,7 @@ export type SkillVersion = {
 
 /** What the gate found in a version (ADR 0050). */
 export type SkillFinding = {
-  /** script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open */
+  /** script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open; from the second scanner (ADR 0095): skillspector:<rule> (e.g. skillspector:SC4), scanner_failed, scanner_incomplete, osv_mirror_missing */
   code: string;
   severity: "info" | "warning" | "critical";
   detail: string;
