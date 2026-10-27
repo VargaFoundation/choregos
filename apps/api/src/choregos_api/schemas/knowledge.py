@@ -143,7 +143,7 @@ class KnowledgeBaseDto(Dto):
     sources: list[KnowledgeSourceDto] | None = None
     #: the last distillation into a principles skill (S33-05)
     distillation: dict[str, Any] | None = None
-    #: the project this base was created from (S39-14): its owners curate it, never widen it
+    #: the project this base was created from (S39-14): its owners curate it and widen its reach
     owner_project: str | None = None
     #: people read it only through a grant; runs it is attached to are still served (S42-11)
     restricted: bool = False
