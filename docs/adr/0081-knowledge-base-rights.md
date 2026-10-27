@@ -1,5 +1,8 @@
 # 0081 — Knowledge base rights: reach serves runs, grants give people roles
 
+> **Amended (S42-11d, 2026-10-26)**: the owners of the base's project (`project_owner` on `owner_project`)
+> may widen, narrow and restrict it too, as well as organisation administrators. See "Amended" at the end.
+
 - **Status**: accepted, 2026-10-21 (defaults D11-1 to D11-5 below are to be confirmed by the owner)
 - **Concerns**: `knowledge/access.py` (`decide`), `routers/knowledge.py`, `services/agent_drafts.py`,
   the routes `GET`/`PUT /orgs/{org}/knowledge/{slug}/grants`, the table `knowledge_grants`, the column
@@ -34,14 +37,14 @@
 | distil | yes | yes | yes | yes (D11-1) | no |
 | share (edit grants) | yes | yes | yes | no | no |
 | archive | yes | yes | yes | no | no |
-| widen (scope, projects, groups, `restricted`) | yes | no | no | no | no |
+| widen (scope, projects, groups, `restricted`) | yes | yes (amended) | no | no | no |
 
 4. **Grants** name a user (by member id, or by e-mail: D11-4), a group (IdP group of the person) or a
    project (its explicit members; an organisation-wide role is not membership). An e-mail naming a member is
    stored as that member's id; otherwise it is kept lower-cased and reads `pending` until the person is a
    member of the organisation. A grant never crosses organisations: only members count.
-5. **Widening stays the administrator's** (D11-2): a project owner never decides what other projects read.
-   Widening scope still clears `owner_project`; changing `restricted` alone does not.
+5. ~~Widening stays the administrator's (D11-2)~~ (amended below). Widening scope by an administrator
+   still clears `owner_project`; changing `restricted` alone does not.
 6. `PUT .../grants` replaces the list (at most 200), is idempotent, and journals `knowledge.grant.set` with
    added, removed and changed subjects only when something changed. `GET` is answered to callers who can
    share; other readers get `403`.
@@ -57,3 +60,23 @@
 - Not decided here: rights on memories ([ADR 0075](0075-an-agent-reads-several-memories.md)) are a later
   candidate for the same function.
 - The migration adds `knowledge_bases.restricted` and `knowledge_grants` under forced row-level security.
+
+## Amended
+
+**S42-11d (2026-10-26) — the owners of the base's project may widen it.** The product owner decided
+that a project's owners may change the reach of the base their project owns ("it is their project, as
+on GitHub": a repository admin can change its visibility). Supersedes decision 5 and default D11-2.
+
+- `widen` (change `scope`, `projects`, `groups` or `restricted`, in either direction) is allowed to an
+  organisation administrator and to a principal with `project:write` on `owner_project`, that is the
+  `project_owner` role of that project: the same test as `can_curate`. Members with a lesser role
+  (`developer`, `release_captain`, `viewer`), `editor` and `owner` grants, and owners of another
+  project still get `403`. A base with no `owner_project` stays the administrator's to widen.
+- A widening by the owning project's owner leaves `owner_project` set: they keep the base they
+  widened and can narrow it back. A widening by an administrator still clears it (the base becomes
+  the organisation's). The asymmetry is deliberate: otherwise an owner who widens would lose the
+  base in the same call.
+- Risk accepted: a project owner can now serve their base's content to every project's runs of the
+  organisation. Every change is journalled (`knowledge.update`, with the changed fields).
+- No contract change: the `can.widen` flag already exists; only its value changes. The console shows
+  its restriction switch whenever `can.widen` is true.

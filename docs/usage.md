@@ -1531,7 +1531,7 @@ before this reading keep their old text until converted again: `POST …/documen
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
 `groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage` (an organisation administrator), or, for a base created from a project
 (`POST /projects/{id}/knowledge`, `owner_project`), `project:write` on that project: its owners feed,
-sync, distil and archive it, and only an administrator widens its scope. In the
+sync, distil and archive it, and they, like an administrator, may widen or narrow its reach. In the
 console there are two ways in. **From a project**: its sidebar's **Knowledge** section lists what its
 runs are served (the project's own bases, then the organisation-wide ones, read-only from there;
 a group's base is never served to a run, so it is not listed), and **New knowledge base** creates one
@@ -1670,7 +1670,7 @@ Reach (`scope`) decides which runs are served a base; **grants** decide which pe
 | read | yes | yes | yes | yes |
 | upload, add a source, sync, distil, rename | yes | yes | yes | no |
 | share (edit grants), archive | yes | yes | no | no |
-| widen scope, projects, groups, `restricted` | admin only | no | no | no |
+| widen scope, projects, groups, `restricted` | yes (a base with no owning project: admin only) | no | no | no |
 
 ```bash
 curl -X PUT $API/orgs/acme/knowledge/architecture/grants -H 'Content-Type: application/json' \
