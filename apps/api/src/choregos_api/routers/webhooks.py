@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from ..config import get_settings
-from ..db.models import Connector, OrgConnector, Project, WebhookDelivery, WorkItem
+from ..db.models import Connector, Organization, OrgConnector, Project, WebhookDelivery, WorkItem
 from ..deps import DbPlateforme
 from ..errors import not_found, unauthorized
 from ..logging import get_logger
@@ -450,16 +450,23 @@ async def gitlab_webhook(
 # ───────────────────────────── A plugin's tracker server (S43-07) ─────────────────────────────
 
 PluginName = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
+OrgSlug = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")]
 #: Headers a delivery never forwards to the server: the caller's own credentials and transport.
 _NOT_FORWARDED = frozenset({"authorization", "cookie", "host", "content-length", "connection"})
 
 
-async def _tracker_servers(session: Any, plugin: str, server: str) -> list[OrgConnector]:
-    """Every organisation's running connector of `plugin`'s server `server`, when it is a tracker with
-    a webhook: the URL names no organisation, the delivery's secret tells which one it is."""
+async def _tracker_servers(session: Any, org: str, plugin: str, server: str) -> list[OrgConnector]:
+    """The organisation's running connector of `plugin`'s server `server`, when it is a tracker with a
+    webhook. The URL names the organisation: a delivery is never shown to another organisation's server."""
     from ..services.plugin_servers import DEPLOYED
 
-    rows = (await session.execute(select(OrgConnector).where(OrgConnector.name == server))).scalars()
+    rows = (
+        await session.execute(
+            select(OrgConnector)
+            .join(Organization, Organization.id == OrgConnector.org_id)
+            .where(Organization.slug == org, OrgConnector.name == server)
+        )
+    ).scalars()
     found = []
     for row in rows:
         declared = row.plugin_server or {}
@@ -505,13 +512,13 @@ async def _project_of_item(session: Any, projects: list[Project], key: str) -> P
 
 
 @router.post(
-    "/plugins/{plugin}/{server}",
+    "/plugins/{org}/{plugin}/{server}",
     response_model=WebhookAck,
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="pluginWebhook",
 )
 async def plugin_webhook(
-    plugin: PluginName, server: PluginName, request: Request, session: DbPlateforme
+    org: OrgSlug, plugin: PluginName, server: PluginName, request: Request, session: DbPlateforme
 ) -> WebhookAck:
     """A delivery for a plugin server that is a tracker (plan S43 Decision 3).
 
@@ -519,16 +526,17 @@ async def plugin_webhook(
     bearer token — the only door of the server the platform authenticates (ADR 0094 §6) — and the
     server says whether the delivery is its own (its secret) and which items changed. Each event is
     de-duplicated on the server's `delivery_id`, then its item is RE-READ with `tracker_fetch_item`:
-    nothing of the payload but the key is trusted. 404: no running tracker server of that name; 401:
-    none of them recognises the delivery."""
+    nothing of the payload but the key is trusted. The URL names the organisation, so only that
+    organisation's server sees the delivery. 404: the organisation runs no tracker server of that
+    name; 401: the server does not recognise the delivery."""
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
 
     from ..services.plugin_tracker import pin_plugin_tracker
 
-    candidates = await _tracker_servers(session, plugin, server)
+    candidates = await _tracker_servers(session, org, plugin, server)
     if not candidates:
-        raise not_found("Plugin tracker server", f"{plugin}/{server}")
+        raise not_found("Plugin tracker server", f"{org}/{plugin}/{server}")
     body = await request.body()
     headers = {k: v for k, v in request.headers.items() if k.lower() not in _NOT_FORWARDED}
     for connector in candidates:

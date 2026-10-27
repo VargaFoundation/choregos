@@ -113,7 +113,7 @@ def test_a_plugin_webhook_resolves_to_the_plugin_server_route() -> None:
         '"webhook_url:github"', '"plugin_webhook_url:servicenow/servicenow"'
     )
     proc = core.parse(text, origin="plugin:servicenow")
-    route = "https://api.example.test/api/v1/webhooks/plugins/servicenow/servicenow"
+    route = f"https://api.example.test/api/v1/webhooks/plugins/{_ctx().org}/servicenow/servicenow"
     assert route in core.render(proc, _ctx())[0].markdown
     assert core.values_of(proc, _ctx())["plugin_webhook_url:servicenow/servicenow"] == route
     assert core.plugin_webhooks_in(proc) == [("servicenow", "servicenow")]

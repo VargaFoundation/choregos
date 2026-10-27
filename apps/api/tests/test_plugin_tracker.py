@@ -31,7 +31,7 @@ ORG = "/api/v1/orgs/varga"
 DESK = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "desk"
 SECOND = "second-admin@varga.dev"
 SECRET = "desk-secret"
-HOOK = "/api/v1/webhooks/plugins/desk/desk"
+HOOK = "/api/v1/webhooks/plugins/varga/desk/desk"
 
 
 @pytest.fixture
@@ -204,7 +204,11 @@ async def test_an_unknown_plugin_or_server_is_404(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
     await _ready(client, kube)
-    for url in ("/api/v1/webhooks/plugins/nope/desk", "/api/v1/webhooks/plugins/desk/nope"):
+    for url in (
+        "/api/v1/webhooks/plugins/varga/nope/desk",
+        "/api/v1/webhooks/plugins/varga/desk/nope",
+        "/api/v1/webhooks/plugins/other/desk/desk",  # another organisation's URL never reaches varga's server
+    ):
         assert (await client.post(url, content=b"{}")).status_code == 404, url
 
 

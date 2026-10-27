@@ -200,9 +200,9 @@ def test_the_plugin_operations_and_their_routes() -> None:
         ("/orgs/{org}/plugins/{name}", "delete"): "uninstallPlugin",
         ("/orgs/{org}/plugin-approvals", "get"): "listPluginApprovals",
         ("/orgs/{org}/plugin-approvals/{approval_id}/approve", "post"): "approvePluginInstall",
-        ("/webhooks/plugins/{plugin}/{server}", "post"): "pluginWebhook",
+        ("/webhooks/plugins/{org}/{plugin}/{server}", "post"): "pluginWebhook",
     }
-    assert SPEC["paths"]["/webhooks/plugins/{plugin}/{server}"]["post"]["security"] == []
+    assert SPEC["paths"]["/webhooks/plugins/{org}/{plugin}/{server}"]["post"]["security"] == []
     install = SPEC["paths"]["/orgs/{org}/plugins/install"]["post"]["responses"]
     assert {"201", "202", "422"} <= set(install)
 

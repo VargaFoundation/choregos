@@ -37,7 +37,7 @@ type, shown when one is added.
    failure table in the same place.
 3. **Placeholders are filled by the deployment.** `{{api_url}}`, `{{public_url}}`, `{{org}}`,
    `{{webhook_url:<source>}}` (the routes of `routers/webhooks.py`), `{{plugin_webhook_url:<plugin>/<server>}}`
-   (`/api/v1/webhooks/plugins/<plugin>/<server>`, ADR 0093; a plugin's procedure may name only its own
+   (`/api/v1/webhooks/plugins/<org>/<plugin>/<server>`, ADR 0093; a plugin's procedure may name only its own
    servers that declare a webhook) and `{{oauth_callback:remote}}`. An
    unknown placeholder is a validation error, never an empty string. `values` lists the ones the console
    shows as copy boxes.

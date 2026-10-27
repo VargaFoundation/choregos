@@ -6,7 +6,7 @@
 - **Concerns**: `packages/contracts/schemas/plugin.schema.json`, `plugin-server.schema.json`,
   `plugin-index.schema.json`; the routes `GET /orgs/{org}/plugins`, `GET /orgs/{org}/plugin-sources`,
   `POST /orgs/{org}/plugins/install`, `POST /orgs/{org}/plugins/{name}/upgrade`,
-  `DELETE /orgs/{org}/plugins/{name}`, `POST /webhooks/plugins/{plugin}/{server}`; `choregos_core.plugins`,
+  `DELETE /orgs/{org}/plugins/{name}`, `POST /webhooks/plugins/{org}/{plugin}/{server}`; `choregos_core.plugins`,
   the CLI `choregos plugin`, the chart's `plugins` values; amends
   [ADR 0040](0040-a-built-in-agent-catalogue.md) (the catalogue becomes plugins),
   [ADR 0065](0065-catalogues-of-mcp-servers-and-skills.md) and

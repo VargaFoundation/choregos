@@ -4174,7 +4174,7 @@ export interface Operations {
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
-  pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{plugin}/{server}"; body: {
+  pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
   postAgentSessionSocketFrames: { method: "POST"; path: "/internal/agent-sessions/{id}/socket/out"; body: AgentSessionSocketOut; response: AgentSessionSocketRecorded };

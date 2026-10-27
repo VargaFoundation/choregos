@@ -74,7 +74,7 @@ contents:
 - **Procedures** go through the same parser as the core's (ADR 0067): front matter, fixed sections,
   links listed in `vendor_docs`, no secret-shaped string. A procedure gives the address of its server's
   webhook with `{{plugin_webhook_url:<plugin>/<server>}}`, filled with
-  `<api>/api/v1/webhooks/plugins/<plugin>/<server>`; it may name only a server of its own plugin that
+  `<api>/api/v1/webhooks/plugins/<org>/<plugin>/<server>`; it may name only a server of its own plugin that
   declares a `webhook`.
 - **Servers** match `plugin-server.schema.json`:
   - the image is pinned by `@sha256:`;
@@ -315,12 +315,12 @@ approval).
   the same and accepts `plugin` and `server` only: where the server answers and its token are read from
   the organisation's connector each time the adapter is built, never typed nor stored on the project.
 - **Webhooks.** A procedure gives `{{plugin_webhook_url:<plugin>/<server>}}`; the system posts its
-  deliveries there. `POST /webhooks/plugins/{plugin}/{server}` forwards the headers (without
+  deliveries there. `POST /webhooks/plugins/{org}/{plugin}/{server}` forwards the headers (without
   `Authorization`, `Cookie`) and the body to the server's `tracker_parse_event` over `/mcp` — the
   server's only door the platform authenticates (ADR 0094 §6), so a server's own `webhook.path` is not
-  called by the core. The URL names no organisation: each organisation running that server is asked in
-  turn, and the one whose secret matches owns the delivery (401 if none, 404 if no organisation runs
-  that server as a tracker with a webhook). Each event is de-duplicated on its `delivery_id`, then its
+  called by the core. The URL names the organisation, so a delivery reaches only that organisation's
+  server (401 if the server does not recognise it, 404 if the organisation does not run that server as a
+  tracker with a webhook). Each event is de-duplicated on its `delivery_id`, then its
   item is **re-read** with `tracker_fetch_item`: nothing of the delivery but the key is trusted. The
   event goes to the organisation's project that holds the item, or its only project on that tracker.
 - **Polling.** `list_candidates` is the profile's `tracker_list_candidates`, read by the tracker

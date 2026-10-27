@@ -221,7 +221,7 @@ class PluginTracker:
 
     def parse_webhook(self, headers: Mapping[str, str], body: bytes) -> list[InboundEvent]:
         """A plugin tracker's deliveries are verified by its server (`parse_event`, async), at
-        `POST /webhooks/plugins/{plugin}/{server}`: nothing is parsed here."""
+        `POST /webhooks/plugins/{org}/{plugin}/{server}`: nothing is parsed here."""
         return []
 
     def verify_webhook(self, headers: Mapping[str, str], body: bytes) -> bool:

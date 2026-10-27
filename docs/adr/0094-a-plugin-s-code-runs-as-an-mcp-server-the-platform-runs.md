@@ -126,10 +126,10 @@ platform fills.
   posts (ServiceNow's `POST /events`), which the server's NetworkPolicy keeps closed to anything but the
   API anyway. One transport, one token, one place where answers are checked. `webhook` stays the
   declaration that a server takes deliveries (the procedure's URL placeholder, the 404 of the route).
-- **The URL names no organisation**: every organisation running the server is asked in turn and the one
-  whose secret verifies the delivery owns it. The cost grows with the number of organisations running
-  that server; an organisation segment in the URL would end it, at the price of a contract change of a
-  route already in procedures.
+- **The URL names the organisation** (`/webhooks/plugins/{org}/{plugin}/{server}`): a delivery is shown
+  only to that organisation's server. Asking every organisation's server in turn until one's secret
+  matched would show one organisation's deliveries to the others' servers and cost more with every
+  organisation; the procedure's placeholder already knows the organisation, so nothing is typed twice.
 - **Tracker calls are platform calls, audited, not governed actions**, like the platform's writes to
   Jira or GitHub: the workflow decided them (and puts a person before the stage that closes); each write
   is an audit entry `tracker.plugin.<tool>` in its own transaction. The declared policy still governs

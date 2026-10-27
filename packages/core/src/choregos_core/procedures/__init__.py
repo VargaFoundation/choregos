@@ -261,7 +261,7 @@ def resolve_placeholder(name: str, argument: str | None, ctx: Context) -> str:
     if name == "webhook_url":
         return f"{api}/api/v1/webhooks/{argument}"
     if name == "plugin_webhook_url":
-        return f"{api}/api/v1/webhooks/plugins/{argument}"
+        return f"{api}/api/v1/webhooks/plugins/{ctx.org}/{argument}"
     return f"{api}/api/v1/remote-credentials/oauth/callback"  # oauth_callback:remote
 
 

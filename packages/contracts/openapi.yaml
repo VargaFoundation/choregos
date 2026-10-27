@@ -3222,8 +3222,9 @@ paths:
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
-  /webhooks/plugins/{plugin}/{server}:
+  /webhooks/plugins/{org}/{plugin}/{server}:
     parameters:
+      - { $ref: "#/components/parameters/Org" }
       - { name: plugin, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
       - { name: server, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
     post:
@@ -3235,9 +3236,9 @@ paths:
         forwards the body and headers to the server's `tracker_parse_event` tool over its authenticated `/mcp` (the
         tracker profile, `plugin-tracker-profile.schema.json`); the server verifies the delivery and returns normalised
         events, which the core de-duplicates on their `delivery_id` and acts on only after re-reading each item with
-        `tracker_fetch_item`. The URL names no organisation: each organisation's running server is asked, and the one
-        whose secret matches owns the delivery. 401 when no server recognises the delivery, 404 when no organisation
-        runs that plugin's server as a tracker with a webhook.
+        `tracker_fetch_item`. The URL names the organisation, so a delivery reaches only that organisation's server.
+        401 when the server does not recognise the delivery, 404 when the organisation runs no such plugin server as a
+        tracker with a webhook.
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses:
         "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
