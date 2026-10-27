@@ -76,7 +76,7 @@ every block kind gains an optional `permission`, same vocabulary as the section'
   organisations in scope) and lists the section only if at least one block remains.
 - Start-up refuses an unknown block permission, like a section's.
 - Nested `row_actions` are not filtered: they belong to their table.
-- `choregos_api.greffons.SECTION_FEATURES` (`frozenset({"block_permission", "asset_upload"})`) lets a plugin detect
+- `choregos_api.greffons.SECTION_FEATURES` (`frozenset({"block_permission", "asset_upload", "section_icon"})`) lets a plugin detect
   the feature without parsing versions. Hiding is a courtesy: the routes a block calls still enforce
   their own permission.
 - Not decided here: resetting a form to inherited values; plugins use `action` (DELETE) and `table`
@@ -99,3 +99,19 @@ organisation route accepted a file. A string property of a form's schema may now
   courtesy. `SECTION_FEATURES` gains `"asset_upload"`: a plugin offers `format: "asset"` only when it
   is present, and keeps a plain string otherwise.
 - Not decided here: where an edition stores the files and how it vets them (SVG in particular).
+
+## Addendum (S42-15): a section names its navigation icon
+
+The console drew every plugin section with the same settings icon, so the enterprise edition's six
+entries (Organisations, Platform administrators, Limits, Identity, Instance sign-in, Appearance)
+looked alike. A section may now carry an optional `icon` (`ui-manifest.schema.json`).
+
+- The value is a name from a closed vocabulary (`building`, `shield`, `gauge`, `fingerprint`,
+  `log-in`, `palette`, `users`, `key`, `lock`, `plug`, `globe`, `server`, `database`, `wallet`,
+  `scroll`, `bell`, `settings`). The console maps each name to one of its own icons: a plugin never
+  ships an image or a URL, in keeping with this ADR (no plugin asset or code in the console).
+- A name outside the vocabulary stops start-up, like any invalid manifest. An absent `icon`, or a
+  name an older console does not know, is drawn as the settings icon.
+- A new icon is a new name in the schema and the console's map, decided here; a test keeps the two
+  equal. `SECTION_FEATURES` gains `"section_icon"`: a plugin declares `icon` only when it is present,
+  since an older core refuses the property.

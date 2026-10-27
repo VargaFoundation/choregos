@@ -129,6 +129,7 @@ async def test_l_administrateur_voit_les_sections_le_developpeur_non(
             "aucune route",
             id="methode-non-servie",
         ),
+        pytest.param(lambda m: m.update(icon="rocket"), "invalide", id="icon-outside-the-vocabulary"),
     ],
 )
 def test_une_section_qui_ne_tient_pas_arrete_le_demarrage(alteration: Any, motif: str) -> None:
@@ -262,3 +263,33 @@ def test_the_core_announces_asset_upload_and_a_section_lists_its_upload_paths() 
     plain = copy.deepcopy(SCIM)
     plain["blocks"][0]["schema"]["properties"]["badge"].pop("format")
     assert ("POST", "/orgs/{org}/scim/badge") not in chemins_d_une_section(plain)
+
+
+def test_the_core_announces_section_icon_and_accepts_the_vocabulary_only() -> None:
+    """S42-15: a section names its navigation icon from the schema's closed vocabulary."""
+    from choregos_api.greffons import SECTION_FEATURES
+    from jsonschema import Draft202012Validator
+
+    assert "section_icon" in SECTION_FEATURES
+    schema = contracts.load_schema("ui-manifest.schema.json")
+    validator = Draft202012Validator(schema)
+    for icon in schema["properties"]["icon"]["enum"]:
+        assert not list(validator.iter_errors({**SCIM, "icon": icon})), icon
+    assert list(validator.iter_errors({**SCIM, "icon": "https://example.com/logo.svg"}))
+
+
+@pytest.fixture
+def plugin_with_icon() -> Iterator[Any]:
+    from choregos_api import greffons
+
+    greffons.declarer_un_routeur(_routeur_scim())
+    greffons.declarer_une_section_d_administration({**SCIM, "icon": "fingerprint"})
+    yield greffons
+    greffons.reinitialiser()
+
+
+async def test_a_section_s_icon_is_served_as_declared(
+    plugin_with_icon: Any, client: AsyncClient, admin: str
+) -> None:
+    sections = (await client.get("/api/v1/ui/admin-sections")).json()
+    assert [(s["id"], s.get("icon")) for s in sections] == [("scim", "fingerprint")]
