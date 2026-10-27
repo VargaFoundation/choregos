@@ -40,3 +40,24 @@ async def test_a_plugin_row_and_its_files_are_invisible_to_another_organisation(
         ]
     async with session_scope(orgs="*") as session:
         assert len((await session.execute(select(OrgPlugin))).scalars().all()) == 2
+
+
+async def test_a_waiting_plugin_approval_is_invisible_to_another_organisation(pg_app: Any) -> None:
+    from choregos_api.db.models import Organization, OrgPluginApproval
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        for slug in ("a", "b"):
+            org = Organization(slug=slug, name=slug.upper())
+            session.add(org)
+            await session.flush()
+            session.add(
+                OrgPluginApproval(org_id=org.id, action="install", source="offline", name=f"p-{slug}",
+                                  version="1.0.0", digest=f"sha256:{slug * 64}", reason="a server",
+                                  status="pending")
+            )  # fmt: skip
+
+    async with session_scope() as session:  # no scope: nothing
+        assert (await session.execute(select(OrgPluginApproval))).scalars().all() == []
+    async with session_scope(orgs=["b"]) as session:
+        assert [p.name for p in (await session.execute(select(OrgPluginApproval))).scalars()] == ["p-b"]

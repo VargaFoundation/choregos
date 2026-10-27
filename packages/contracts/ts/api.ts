@@ -2743,6 +2743,43 @@ export type PluginInstallPending = {
   reason: string;
 };
 
+/** An install or upgrade of a plugin that brings a server, waiting for (or given) a second approval. */
+export type PluginApproval = {
+  id: string;
+  action: "install" | "upgrade";
+  source: string;
+  name: string;
+  /** the exact version that was checked */
+  version: string;
+  digest: string;
+  reason: string;
+  /** asked by the start-up reconcile for a plugin of `plugins.defaultPlugins` */
+  default: boolean;
+  /** null when the platform asked (a default plugin) */
+  requested_by: string | null;
+  status: "pending" | "approved";
+  decided_by: string | null;
+  created_at: string;
+  decided_at: string | null;
+};
+
+export type PluginApprovalList = {
+  items: Array<PluginApproval>;
+};
+
+export type PluginKept = {
+  agents: Array<string>;
+  skills: Array<string>;
+};
+
+export type PluginUninstallResult = {
+  name: string;
+  version: string;
+  removed: PluginKept;
+  /** what the organisation changed, a project pins, or a kept agent still carries: now the organisation's own */
+  kept: PluginKept;
+};
+
 export type PluginUpgrade = {
   /** an exact version or a range; absent, the newest admissible */
   version?: string;
@@ -3812,6 +3849,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   approveOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/approve"; body: EgressDecision; response: EgressRule };
+  approvePluginInstall: { method: "POST"; path: "/orgs/{org}/plugin-approvals/{approval_id}/approve"; body: never; response: PluginApproval };
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
@@ -4111,6 +4149,7 @@ export interface Operations {
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
+  listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
   listPluginSources: { method: "GET"; path: "/orgs/{org}/plugin-sources"; body: never; response: PluginSources };
   listPlugins: { method: "GET"; path: "/orgs/{org}/plugins"; body: never; response: PluginList };
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
@@ -4228,7 +4267,7 @@ export interface Operations {
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
   transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
-  uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: void };
+  uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };

@@ -156,7 +156,7 @@ def test_an_index_release_is_oci_or_git_pinned_to_a_commit() -> None:
     assert _errors("plugin-index", doc)
 
 
-def test_the_six_operations_and_their_routes() -> None:
+def test_the_plugin_operations_and_their_routes() -> None:
     ops = {
         (path, verb): op["operationId"]
         for path, item in SPEC["paths"].items()
@@ -170,6 +170,8 @@ def test_the_six_operations_and_their_routes() -> None:
         ("/orgs/{org}/plugins/install", "post"): "installPlugin",
         ("/orgs/{org}/plugins/{name}/upgrade", "post"): "upgradePlugin",
         ("/orgs/{org}/plugins/{name}", "delete"): "uninstallPlugin",
+        ("/orgs/{org}/plugin-approvals", "get"): "listPluginApprovals",
+        ("/orgs/{org}/plugin-approvals/{approval_id}/approve", "post"): "approvePluginInstall",
         ("/webhooks/plugins/{plugin}/{server}", "post"): "pluginWebhook",
     }
     assert SPEC["paths"]["/webhooks/plugins/{plugin}/{server}"]["post"]["security"] == []
@@ -191,6 +193,10 @@ def test_the_six_operations_and_their_routes() -> None:
         "PluginInstallPending",
         "PluginUpgrade",
         "PluginUpgradeResult",
+        "PluginApproval",
+        "PluginApprovalList",
+        "PluginKept",
+        "PluginUninstallResult",
     ],
 )
 def test_the_api_schemas_are_closed(name: str) -> None:

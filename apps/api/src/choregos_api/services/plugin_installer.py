@@ -226,6 +226,10 @@ async def installed(session: AsyncSession, org_id: str) -> list[OrgPlugin]:
     return await _rows(session, org_id)
 
 
+async def installed_row(session: AsyncSession, org_id: str, name: str) -> OrgPlugin | None:
+    return await _row(session, org_id, name)
+
+
 async def installed_one(session: AsyncSession, org_id: str, name: str) -> OrgPlugin:
     row = await _row(session, org_id, name)
     if row is None:
@@ -476,6 +480,21 @@ async def _write(
     return contents, details
 
 
+class _Same:
+    """`installed_by` not given: the principal's."""
+
+
+_SAME = _Same()
+
+
+async def check(
+    session: AsyncSession, org_id: str, plugin: Plugin, settings: Settings, *, replacing: OrgPlugin | None
+) -> None:
+    """Every check an install (or an upgrade of `replacing`) runs against this organisation, nothing
+    written: what a request waiting for a second approval must already pass."""
+    await _prepare(session, org_id, plugin, settings, replacing=replacing)
+
+
 async def install(
     session: AsyncSession,
     org_id: str,
@@ -485,9 +504,11 @@ async def install(
     principal: Principal | None,
     *,
     default: bool = False,
+    installed_by: str | _Same | None = _SAME,
 ) -> tuple[OrgPlugin, bool]:
     """Installs `plugin`; `(row, False)` without writing anything when the same content is already
-    installed (the start-up reconcile replays it), 409 when another version is."""
+    installed (the start-up reconcile replays it), 409 when another version is. `installed_by` is the
+    principal's email unless given (an approved request records its requester; `None`, the platform)."""
     row = await _row(session, org_id, plugin.name)
     if row is not None:
         if row.digest == plugin.digest:
@@ -509,7 +530,11 @@ async def install(
         details=details,
         status=status,
         is_default=default,
-        installed_by=principal.email if principal is not None else None,
+        installed_by=(
+            (principal.email if principal is not None else None)
+            if isinstance(installed_by, _Same)
+            else installed_by
+        ),
         installed_at=utcnow(),
     )
     session.add(row)
@@ -759,9 +784,11 @@ __all__ = [
     "INSTALLED",
     "PREFIX",
     "SERVERS_PENDING",
+    "check",
     "install",
     "installed",
     "installed_one",
+    "installed_row",
     "org_id_of",
     "plugin_procedures",
     "plugin_template",

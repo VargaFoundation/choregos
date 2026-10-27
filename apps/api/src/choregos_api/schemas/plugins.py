@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -54,3 +55,45 @@ class PluginUpgradeResult(Dto):
     plugin: InstalledPlugin
     previous_version: str
     offered: list[str]
+
+
+class PluginInstallPending(Dto):
+    """The 202 of an install or upgrade that waits for a second administrator (ADR 0050)."""
+
+    status: Literal["pending_approval"] = "pending_approval"
+    approval_id: str
+    reason: str
+
+
+class PluginApprovalDto(Dto):
+    id: str
+    action: Literal["install", "upgrade"]
+    source: str
+    name: str
+    version: str
+    digest: str
+    reason: str
+    default: bool
+    requested_by: str | None
+    status: Literal["pending", "approved"]
+    decided_by: str | None
+    created_at: datetime
+    decided_at: datetime | None
+
+
+class PluginApprovalList(Dto):
+    items: list[PluginApprovalDto]
+
+
+class PluginKept(Dto):
+    agents: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+
+
+class PluginUninstallResult(Dto):
+    """What an uninstall removed and what it kept as the organisation's own (ADR 0040, ADR 0093)."""
+
+    name: str
+    version: str
+    removed: PluginKept
+    kept: PluginKept

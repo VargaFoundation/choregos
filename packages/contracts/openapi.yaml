@@ -2635,13 +2635,47 @@ paths:
       operationId: uninstallPlugin
       description: >-
         Uninstalls a plugin: what it brought and nobody changed is retired, what an organisation changed or a project
-        pins is kept and loses its plugin provenance, and its servers stop. 409 when another installed plugin requires
-        it. Audited as `plugin.uninstall`.
+        pins is kept and loses its plugin provenance, and its servers stop. The answer lists what was removed and what
+        was kept as the organisation's own (contract-change S43-05: was a 204 without a body, so the person
+        uninstalling did not learn what stayed). Requests still waiting for a second approval of this plugin are
+        dropped. 409 when another installed plugin requires it. Audited as `plugin.uninstall`.
       responses:
-        "204": { description: Uninstalled }
+        "200": { description: Uninstalled, content: { application/json: { schema: { $ref: "#/components/schemas/PluginUninstallResult" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/plugin-approvals:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listPluginApprovals
+      description: >-
+        The plugin installs and upgrades that waited, or still wait, for a second approval (ADR 0050, ADR 0093 §4):
+        a plugin that brings a server, at the exact version and content digest that was checked. A default plugin
+        the start-up reconcile could not install on its own is here with `default: true` and no `requested_by`.
+        Newest first, at most 200. Any member of the organisation (contract-change S43-05).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PluginApprovalList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/plugin-approvals/{approval_id}/approve:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: approval_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: approvePluginInstall
+      description: >-
+        A second administrator approves a waiting install or upgrade: the plugin is obtained again at the recorded
+        version, through every check of the gate, and installed only if its content digest is the one that was
+        checked (409 otherwise). The administrator who asked cannot approve (403); a request of the platform (a
+        default plugin) is approved by any administrator. Rights per ADR 0074; audited as `plugin.approve`
+        (contract-change S43-05).
+      responses:
+        "200": { description: Approved and installed, content: { application/json: { schema: { $ref: "#/components/schemas/PluginApproval" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/skill-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -6481,6 +6515,47 @@ components:
         status: { const: pending_approval }
         approval_id: { type: string }
         reason: { type: string, description: "why a second person must approve, e.g. the plugin brings a server" }
+    PluginApproval:
+      type: object
+      additionalProperties: false
+      description: "An install or upgrade of a plugin that brings a server, waiting for (or given) a second approval."
+      required: [id, action, source, name, version, digest, reason, default, requested_by, status, decided_by, created_at, decided_at]
+      properties:
+        id: { type: string }
+        action: { type: string, enum: [install, upgrade] }
+        source: { type: string }
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string, description: "the exact version that was checked" }
+        digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        reason: { type: string }
+        default: { type: boolean, description: "asked by the start-up reconcile for a plugin of `plugins.defaultPlugins`" }
+        requested_by: { type: [string, "null"], description: "null when the platform asked (a default plugin)" }
+        status: { type: string, enum: [pending, approved] }
+        decided_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: [string, "null"], format: date-time }
+    PluginApprovalList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PluginApproval" } }
+    PluginKept:
+      type: object
+      additionalProperties: false
+      required: [agents, skills]
+      properties:
+        agents: { type: array, items: { type: string } }
+        skills: { type: array, items: { type: string } }
+    PluginUninstallResult:
+      type: object
+      additionalProperties: false
+      required: [name, version, removed, kept]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string }
+        removed: { $ref: "#/components/schemas/PluginKept" }
+        kept: { $ref: "#/components/schemas/PluginKept", description: "what the organisation changed, a project pins, or a kept agent still carries: now the organisation's own" }
     PluginUpgrade:
       type: object
       additionalProperties: false

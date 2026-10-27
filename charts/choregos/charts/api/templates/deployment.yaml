@@ -97,6 +97,13 @@ spec:
             - name: CHOREGOS_PROCEDURES_EXTRA
               value: /etc/choregos/procedures
             {{- end }}
+            {{- with (.Values.global.plugins | default dict) }}
+            {{- if or .sources .defaultPlugins .offline }}
+            # Plugin sources, default plugins, offline directory (ADR 0093): the ConfigMap `choregos-plugins`.
+            - name: CHOREGOS_PLUGINS_CONFIG
+              value: /etc/choregos/plugins/plugins.yaml
+            {{- end }}
+            {{- end }}
             {{- with .Values.global.agents }}
             {{- if .defaultBackend }}
             # The backend and the profiles a new project inherits (#245).
@@ -287,6 +294,11 @@ spec:
             {{- with .Values.proceduresExtra }}
             - { name: procedures-extra, mountPath: /etc/choregos/procedures, readOnly: true }
             {{- end }}
+            {{- with (.Values.global.plugins | default dict) }}
+            {{- if or .sources .defaultPlugins .offline }}
+            - { name: plugins-config, mountPath: /etc/choregos/plugins, readOnly: true }
+            {{- end }}
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -315,9 +327,15 @@ spec:
         - name: procedures-extra
           configMap: { name: {{ . }} }
         {{- end }}
+        {{- with (.Values.global.plugins | default dict) }}
+        {{- if or .sources .defaultPlugins .offline }}
+        - name: plugins-config
+          configMap: { name: choregos-plugins }
+        {{- end }}
+        {{- end }}
         {{- /* Volumes the chart owns: a name of `extraVolumes` that collides with one of them would
              give an invalid pod, or worse, silently replace a mount. */}}
-        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" "procedures-extra" "cosign" }}
+        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" "procedures-extra" "cosign" "plugins-config" }}
         {{- range (.Values.extraVolumes | default list) }}
         {{- if has .name $owned }}
         {{- fail (printf "extraVolumes: %q is a volume of the chart; pick another name" .name) }}

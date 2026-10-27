@@ -96,6 +96,11 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     await record(
         session, principal, "org.create", org_id=org.id, target_type="org", target_id=org.id, slug=body.slug
     )
+    # The deployment's default plugins (ADR 0093 §5): a new organisation gets them as the others did at
+    # start-up; one that brings a server waits for an administrator's approval.
+    from ..services.plugin_defaults import reconcile_org
+
+    await reconcile_org(session, org.id)
     return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN, currency=moneta(org))
 
 

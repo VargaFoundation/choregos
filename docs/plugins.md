@@ -96,14 +96,26 @@ An organisation administrator installs, upgrades and uninstalls (ADR 0074); ever
 
 ```
 GET    /api/v1/orgs/{org}/plugins
-POST   /api/v1/orgs/{org}/plugins/install        {"source": "offline", "name": "hello", "version": "1.0.0"}
+POST   /api/v1/orgs/{org}/plugins/install        {"source": "varga", "name": "hello", "version": "^1"}
 POST   /api/v1/orgs/{org}/plugins/{name}/upgrade {"version": "1.1.0"}   # absent: the newest
 DELETE /api/v1/orgs/{org}/plugins/{name}
+GET    /api/v1/orgs/{org}/plugin-approvals
+POST   /api/v1/orgs/{org}/plugin-approvals/{id}/approve
 ```
 
-Until the sources of S43-03 are wired in, the one source is `offline`: the directory named by
-`CHOREGOS_PLUGINS_OFFLINE`, holding plugin directories (`<name>/` or `<name>/<version>/`), installed at
-an exact version.
+`source` is one the deployment declares ([Sources and trust](#sources-and-trust)), or `offline`; the
+version is exact or a range, and the newest version inside it that this core admits is installed. Every
+install and upgrade fetches through `fetch_plugin`, so every check of the table below applies; a refusal
+is a 422 naming the check (`signature`, `digest`, `lock`…), a plugin or version the source does not
+offer a 404.
+
+**A plugin that brings a server waits for a second administrator** (ADR 0050). Its install or upgrade
+is checked in full, nothing is written, and the answer is `202 {"status": "pending_approval",
+"approval_id", "reason"}`. Asking again answers the same request. Another administrator of the
+organisation approves it with `POST …/plugin-approvals/{id}/approve` (the one who asked gets a 403);
+the plugin is then fetched again at the recorded version and installed only if its content digest is
+the one that was checked (a 409 otherwise: ask again). The install is recorded as the requester's.
+`GET …/plugin-approvals` lists the requests, waiting and approved, to every member.
 
 **Before anything is written**, each agent passes the full `AgentCreate` model, its instructions must
 render and its network must be one the organisation allows; each skill passes the skill library's
@@ -135,15 +147,26 @@ organisation changed since (a version the plugin did not write) is **offered** t
 
 **Uninstalling** deletes what the plugin installed and nobody changed or pins. What an organisation
 changed, what a project pins and a skill a kept agent still carries stay, as the organisation's own
-(scope `org`); the `plugin.uninstall` audit entry lists them under `kept`. A plugin another installed
-plugin requires cannot be uninstalled (409).
+(scope `org`). The answer lists what was removed and what was kept
+(`{"name", "version", "removed": {"agents", "skills"}, "kept": {"agents", "skills"}}`), as does the
+`plugin.uninstall` audit entry; a request still waiting to upgrade it is dropped. A plugin another
+installed plugin requires cannot be uninstalled (409).
+
+## Default plugins
+
+A deployment lists plugins every organisation gets (`defaultPlugins`, the chart's
+`global.plugins.defaultPlugins`, see [deployment](deployment.md#plugins)). The API installs them at
+start-up in every organisation and in each organisation created later, idempotently, through the same
+checks; they are listed with `default: true` and `installed_by: null`. One that brings a server is not
+installed by the platform: it waits in `GET …/plugin-approvals` (`default: true`, no `requested_by`)
+until an administrator of the organisation approves it.
 
 The full reference of the commands is in [the CLI reference](cli.md#choregos-plugin).
 
 ## Sources and trust
 
 A deployment declares where plugins come from in the file `CHOREGOS_PLUGINS_CONFIG` names (the chart
-writes it, S43-05):
+writes it from its `global.plugins` values, [deployment](deployment.md#plugins)):
 
 ```yaml
 sources:
@@ -157,7 +180,7 @@ sources:
     egress: [registry.acme.example]   # hosts beyond the index's own
 defaultPlugins:
   - {source: varga, name: servicenow, version: "^0.1"}
-offline: /opt/choregos/plugins  # CHOREGOS_PLUGINS_OFFLINE wins over it
+offline: /opt/choregos/plugins  # or CHOREGOS_PLUGINS_OFFLINE; both, and different: the API does not start
 ```
 
 Every source has a trust policy; there is no unsigned source. `GET /orgs/{org}/plugin-sources` lists
@@ -205,6 +228,8 @@ mode. An index that names an artifact on another host reaches it only when that 
 ### The supply-chain gate
 
 Once fetched, `assess_plugin` applies the rest of ADR 0050's gate: a plugin that brings a server needs
-a second person's approval (an install answers 202 until it is given), and each of its skills is
-assessed like an imported skill (a high-risk one is installed waiting for review).
+a second administrator's approval (an install or upgrade answers 202 until it is given, see
+[Installing into an organisation](#installing-into-an-organisation)), and each of its skills is
+assessed like an imported skill. The installer does not apply that assessment yet: a plugin's
+skills are installed approved, as the platform's own (a high-risk one is not held for review).
 

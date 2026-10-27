@@ -100,3 +100,16 @@ its sources and their trust, the installer, and a way to run a plugin's server w
 - The word "plugin" changes meaning in the documentation: what was called a plugin (a Python
   wheel loaded through `choregos.plugins`) is an extension.
 - Not decided here: how plugin servers run (ADR 0094), the console's catalogue pages (S43-08).
+
+## Precisions (S43-05, 2026-10-27)
+
+- **The second approval** is a request kept in `org_plugin_approvals` at the exact version and content
+  digest that was checked; `GET /orgs/{org}/plugin-approvals` lists them and
+  `POST /orgs/{org}/plugin-approvals/{id}/approve` gives it. The requester cannot approve; the plugin is
+  fetched again and installed only if the digest is unchanged. A default plugin is requested by the
+  platform (no requester): any administrator of the organisation approves it, and the platform never
+  does.
+- **Uninstall answers 200** with what was removed and what was kept, instead of a 204 without a body.
+- **The reconcile** never upgrades: an organisation that has a default plugin, at any version, is left
+  alone. It runs on every replica, one organisation at a time under an advisory lock, and when an
+  organisation is created.

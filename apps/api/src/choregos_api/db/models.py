@@ -1549,6 +1549,33 @@ class OrgPluginFile(Base, PkMixin, TimestampMixin):
     content: Mapped[bytes] = mapped_column(LargeBinary)
 
 
+class OrgPluginApproval(Base, PkMixin, TimestampMixin):
+    """A plugin install or upgrade waiting for a second person (ADR 0093 §4, ADR 0050, S43-05).
+
+    A plugin that brings a server is not installed on one administrator's word: the request is kept
+    here, at the exact version and content digest that was checked, and nothing is written until an
+    administrator other than `requested_by` approves it. `requested_by` is `None` when the start-up
+    reconcile asked for a default plugin (`is_default`): any administrator of the organisation may then
+    approve. `status`: `pending`, then `approved`.
+    """
+
+    __tablename__ = "org_plugin_approvals"
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    #: `install` or `upgrade`
+    action: Mapped[str] = mapped_column(String(16))
+    source: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(64))
+    version: Mapped[str] = mapped_column(String(128))
+    digest: Mapped[str] = mapped_column(String(80))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    requested_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    decided_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 ALL_TABLES = [
     Organization,
     User,
@@ -1586,6 +1613,7 @@ ALL_TABLES = [
     KnowledgeSource,
     OrgPlugin,
     OrgPluginFile,
+    OrgPluginApproval,
 ]
 
 

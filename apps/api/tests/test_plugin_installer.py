@@ -37,11 +37,15 @@ def _edit(path: Path, change: Any) -> None:
     path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
 
 
-def _version(root: Path, version: str, instructions: str | None = None) -> Path:
-    """A copy of `hello` at `version`; new instructions bump the agent's catalogue version."""
+def _version(root: Path, version: str, instructions: str | None = None, *, server: bool = True) -> Path:
+    """A copy of `hello` at `version`; new instructions bump the agent's catalogue version. Without its
+    server, the plugin installs on one administrator's word (no second approval)."""
     target = root / "hello" / version
     shutil.copytree(HELLO, target)
     _edit(target / "plugin.yaml", lambda d: d["metadata"].update(version=version))
+    if not server:
+        shutil.rmtree(target / "servers")
+        _edit(target / "plugin.yaml", lambda d: d["contents"].pop("servers"))
     if instructions is not None:
 
         def change(doc: dict[str, Any]) -> None:
@@ -65,10 +69,29 @@ def offline(tmp_path: Path) -> Iterator[Path]:
         first / "templates" / "hello-flow" / "manifest.yaml",
         lambda d: d["defaults"].update(workflow="workflow.yaml"),
     )
-    _version(root, "1.1.0", "Greet the author of the work item by name, warmly, in one sentence.")
+    _version(
+        root, "1.1.0", "Greet the author of the work item by name, warmly, in one sentence.", server=False
+    )
     use_plugin_supply(OfflineDirectory(root))
     yield root
     use_plugin_supply(None)
+
+
+SECOND = "second-admin@varga.dev"
+
+
+async def _install(client: AsyncClient, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """`hello` brings a server: the administrator asks (202), a second administrator approves, and the
+    plugin is installed. Returns the installed plugin as listed; the client is the first admin again."""
+    asked = await client.post(f"{ORG}/plugins/install", json=body or INSTALL)
+    assert asked.status_code == 202, asked.text
+    await add_member(client, SECOND, "org_admin")
+    await as_user(client, SECOND)
+    approved = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
+    assert approved.status_code == 200, approved.text
+    await as_user(client, "admin@varga.dev")
+    listed = (await client.get(f"{ORG}/plugins")).json()["items"]
+    return dict(next(p for p in listed if p["name"] == (body or INSTALL)["name"]))
 
 
 def _contract(name: str) -> Draft202012Validator:
@@ -149,9 +172,7 @@ async def test_install_brings_agents_skills_templates_evals_procedures_and_recor
     from choregos_api.db.models import Agent, OrgPlugin
     from choregos_api.db.session import session_scope
 
-    response = await client.post(f"{ORG}/plugins/install", json=INSTALL)
-    assert response.status_code == 201, response.text
-    body = response.json()
+    body = await _install(client)
     assert not list(_contract("InstalledPlugin").iter_errors(body))
     assert body["contents"] == {
         "agents": ["greeter"],
@@ -161,6 +182,7 @@ async def test_install_brings_agents_skills_templates_evals_procedures_and_recor
         "procedures": ["connector.mcp.hello"],
         "servers": ["hello"],
     }
+    # The one who asked installed it; the second administrator approved it.
     assert body["installed_by"] == "admin@varga.dev" and body["latest"] == "1.1.0"
     assert body["digest"].startswith("sha256:") and body["default"] is False
     assert await _versions("greeter") == [(1, "plugin:hello/greeter@1")]
@@ -182,7 +204,7 @@ async def test_install_twice_changes_nothing(client: AsyncClient, admin: str, of
     from choregos_api.services import plugin_installer
     from choregos_api.services.plugin_supply import OfflineDirectory
 
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     before = await _counts()
     again = await client.post(f"{ORG}/plugins/install", json=INSTALL)
     assert again.status_code == 409 and "already installed" in again.text
@@ -231,11 +253,10 @@ async def test_an_agent_of_the_organisation_with_the_same_name_wins(
         f"{ORG}/agents", json={"slug": "greeter", "display_name": "Ours", "spec": {"instructions": "Ours."}}
     )
     assert own.status_code == 201, own.text
-    installed = await client.post(f"{ORG}/plugins/install", json=INSTALL)
-    assert installed.status_code == 201, installed.text
-    assert installed.json()["contents"]["agents"] == []
+    installed = await _install(client)
+    assert installed["contents"]["agents"] == []
     assert [by for _, by in await _versions("greeter")] == ["admin@varga.dev"]
-    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 204
+    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 200
     assert [by for _, by in await _versions("greeter")] == ["admin@varga.dev"], "never the plugin's to remove"
 
 
@@ -252,7 +273,7 @@ async def test_a_missing_plugin_or_version_is_a_404(client: AsyncClient, admin: 
 async def test_an_upgrade_publishes_the_next_version_of_an_agent_nobody_changed(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     upgraded = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.1.0"})
     assert upgraded.status_code == 200, upgraded.text
     body = upgraded.json()
@@ -269,7 +290,7 @@ async def test_an_upgrade_publishes_the_next_version_of_an_agent_nobody_changed(
 async def test_an_upgrade_offers_and_never_overwrites_an_agent_the_organisation_changed(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     await _hand_version("greeter")
     upgraded = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.1.0"})
     assert upgraded.status_code == 200, upgraded.text
@@ -282,7 +303,7 @@ async def test_an_upgrade_does_not_move_a_project_pin(client: AsyncClient, admin
     from choregos_api.db.session import session_scope
 
     project = await make_project(client, "billing")
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     async with session_scope() as session:
         agent = (await session.execute(select(Agent).where(Agent.slug == "greeter"))).scalar_one()
         session.add(ProjectAgent(project_id=project["id"], org_id=agent.org_id, agent_id=agent.id, version=1))
@@ -296,8 +317,8 @@ async def test_an_upgrade_does_not_move_a_project_pin(client: AsyncClient, admin
 
 async def test_uninstall_removes_what_nobody_changed(client: AsyncClient, admin: str, offline: Path) -> None:
     before = await _counts()
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
-    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 204
+    await _install(client)
+    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 200
     after = await _counts()
     for table in ("agents", "agent_versions", "skills", "skill_versions", "org_plugins", "org_plugin_files"):
         assert after[table] == before[table], table
@@ -311,9 +332,9 @@ async def test_uninstall_keeps_a_diverged_agent_and_says_so(
     from choregos_api.db.models import Agent, AuditLog, Skill
     from choregos_api.db.session import session_scope
 
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     await _hand_version("greeter")
-    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 204
+    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 200
     async with session_scope() as session:
         agent = (await session.execute(select(Agent).where(Agent.slug == "greeter"))).scalar_one()
         assert agent.scope == "org", "kept, it is the organisation's now"
@@ -332,11 +353,11 @@ async def test_uninstall_keeps_an_agent_a_project_pins(
     from choregos_api.db.session import session_scope
 
     project = await make_project(client, "billing")
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     async with session_scope() as session:
         agent = (await session.execute(select(Agent).where(Agent.slug == "greeter"))).scalar_one()
         session.add(ProjectAgent(project_id=project["id"], org_id=agent.org_id, agent_id=agent.id, version=1))
-    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 204
+    assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 200
     assert await _versions("greeter") == [(1, "plugin:hello/greeter@1")]
 
 
@@ -349,7 +370,7 @@ async def test_a_project_is_born_from_a_plugin_template_with_its_files(
     from choregos_api.db.models import WorkflowDef
     from choregos_api.db.session import session_scope
 
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     created = await client.post(
         f"{ORG}/projects",
         json={
@@ -382,7 +403,7 @@ async def test_a_project_is_born_from_a_plugin_template_with_its_files(
 async def test_procedures_of_a_plugin_are_served_to_the_organisation_only(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     listed = {p["id"]: p for p in (await client.get("/api/v1/procedures")).json()}
     assert "connector.mcp.hello" in listed
     one = await client.get("/api/v1/procedures/connector.mcp.hello")
@@ -413,7 +434,7 @@ async def test_only_the_administrator_installs_and_members_read(
     assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 403
     assert (await client.get(f"{ORG}/plugins")).status_code == 200
     await as_user(client, "admin@varga.dev")
-    assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 201
+    await _install(client)
     await project_only(client, "dev@varga.dev")
     assert (await client.post(f"{ORG}/plugins/hello/upgrade")).status_code == 403
     assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 403
