@@ -1749,6 +1749,16 @@ parts is refused with its biggest documents. Each call is kept by the digest of 
 costs nothing, and distilling again after one document changed pays for that document's part only. A
 distillation that shows `running` with no progress for 30 minutes no longer blocks a new one.
 
+A distillation is a job (S42-10d, ADR 0092). **Stop** (`POST …/distill/stop`) marks the run `stopped`
+at once, names who stopped it and cancels its workflow: the call in flight finishes and is booked,
+nothing more is called, nothing is published. **Relaunch** (`POST …/distill/relaunch`) starts the last
+run again, whatever its outcome, with its own exclusions and cap unless a body replaces them; the parts
+already read are reused, so a relaunch after a failed merge pays for the merge only. The page shows the
+run in progress (phase, parts, spend, who started it) and the five runs before it. Every model call is
+booked in the cost ledger with kind `distill`, on the base's owning project, or on the organisation when
+the base has none: **Spend** shows it under "Knowledge distillations", and `kind=distill` filters the
+reports. The merge is streamed, so a long answer is no read timeout.
+
 ## 4. Write the policy
 
 ```yaml

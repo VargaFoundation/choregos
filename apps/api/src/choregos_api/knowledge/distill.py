@@ -43,7 +43,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import undefer
 
 from ..config import Settings, get_settings
-from ..db.models import KnowledgeBase, KnowledgeDistillationPart, KnowledgeDocument, Skill, SkillVersion
+from ..db.models import (
+    CostLedger,
+    KnowledgeBase,
+    KnowledgeDistillationPart,
+    KnowledgeDocument,
+    Project,
+    Skill,
+    SkillVersion,
+)
 from ..db.session import session_scope
 from ..logging import get_logger
 from ..services.model_catalogue import Price, price_of
@@ -95,6 +103,80 @@ def is_running(distillation: dict[str, Any] | None, *, now: datetime | None = No
     if started.tzinfo is None:
         started = started.replace(tzinfo=utcnow().tzinfo)
     return (now or utcnow()) - started < STALE_AFTER
+
+
+#: Runs kept in `distillation.history` (S42-10d): a window on the last outcomes, not an audit trail.
+HISTORY_SIZE = 5
+#: What a history entry keeps of a record (`KnowledgeDistillRun` in the contract).
+RUN_KEYS = (
+    "status",
+    "code",
+    "error",
+    "requested_by",
+    "stopped_by",
+    "started_at",
+    "at",
+    "phase",
+    "parts_done",
+    "parts_total",
+    "spent_usd",
+    "skill",
+    "version",
+)
+#: What every record of a run carries to the next one: the window, and what a relaunch reuses.
+CARRIED = ("history", "exclude", "max_usd")
+#: The agent a distillation's cost lines are attributed to in the cost ledger.
+COST_AGENT = AGENT
+
+
+def carried(before: dict[str, Any] | None) -> dict[str, Any]:
+    return {key: before[key] for key in CARRIED if before and key in before}
+
+
+def new_run(
+    before: dict[str, Any] | None,
+    requested_by: str,
+    started_at: str,
+    exclude: list[str],
+    max_usd: float | None,
+) -> dict[str, Any]:
+    """The record of a run that starts now: the previous record joins `history` (newest first, five
+    kept), and the run's own `exclude` and `max_usd` are kept for a relaunch."""
+    history = list((before or {}).get("history") or [])
+    if before:
+        history.insert(0, {key: before[key] for key in RUN_KEYS if key in before})
+    return {
+        "status": "running",
+        "requested_by": requested_by,
+        "started_at": started_at,
+        "phase": "plan",
+        "parts_done": 0,
+        "parts_total": 0,
+        "spent_usd": 0.0,
+        "exclude": list(exclude),
+        "max_usd": max_usd,
+        "history": history[:HISTORY_SIZE],
+    }
+
+
+def stopped_record(before: dict[str, Any], stopped_by: str) -> dict[str, Any]:
+    """What a run that a person stopped leaves: where it was, what it spent, who stopped it."""
+    return {
+        **before,
+        "status": "stopped",
+        "code": "cancelled",
+        "error": f"stopped by {stopped_by}; nothing was published",
+        "stopped_by": stopped_by,
+        "at": utcnow().isoformat(),
+    }
+
+
+async def _refuse_if_stopped(org: str, base_id: str) -> None:
+    """A stopped run makes no further model call (a retry or the in-process run would otherwise go on)."""
+    async with session_scope(orgs=[org]) as session:
+        base = await session.get(KnowledgeBase, base_id)
+        if base is not None and (base.distillation or {}).get("status") == "stopped":
+            raise DistillationError("the distillation was stopped", "cancelled")
 
 
 class DistillationError(RuntimeError):
@@ -191,12 +273,28 @@ class FakeDistiller:
 class GatewayDistiller:
     """Chat completions on the LiteLLM gateway, answering JSON."""
 
-    def __init__(self, base_url: str, key: str, model: str, *, timeout: float = 300.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        key: str,
+        model: str,
+        *,
+        timeout: float = 300.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.base_url, self.key, self.model, self.timeout = base_url.rstrip("/"), key, model, timeout
+        self.transport = transport
 
     async def _ask(self, system: str, user: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
+        """One completion, **streamed**: `timeout` is the silence tolerated between two chunks, not the
+        length of the whole generation. A merge answers up to 60 principles, minutes of generation: a
+        plain request timed out at its `ReadTimeout` after the parts had been paid for (S42-10e)."""
+        content = ""
+        used: dict[str, Any] = {}
+        async with (
+            httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client,
+            client.stream(
+                "POST",
                 f"{self.base_url}/v1/chat/completions",
                 headers={"Authorization": f"Bearer {self.key}"},
                 json={
@@ -206,18 +304,34 @@ class GatewayDistiller:
                         {"role": "user", "content": user},
                     ],
                     "response_format": {"type": "json_object"},
+                    "stream": True,
+                    "stream_options": {"include_usage": True},
                     "metadata": {"choregos_agent": AGENT},
                 },
-            )
-        if response.status_code >= 400:
-            raise DistillationError(f"the gateway answered {response.status_code}: {response.text[:300]}")
-        body = response.json()
-        content = body["choices"][0]["message"]["content"]
+            ) as response,
+        ):
+            if response.status_code >= 400:
+                text = (await response.aread()).decode("utf-8", "replace")
+                raise DistillationError(f"the gateway answered {response.status_code}: {text[:300]}")
+            if "text/event-stream" in response.headers.get("content-type", ""):
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:") or line[5:].strip() in ("", "[DONE]"):
+                        continue
+                    try:
+                        chunk = json.loads(line[5:])
+                    except json.JSONDecodeError:
+                        continue
+                    for choice in chunk.get("choices") or []:
+                        content += (choice.get("delta") or {}).get("content") or ""
+                    used = chunk.get("usage") or used
+            else:  # a gateway that ignored `stream`: one JSON body
+                body = json.loads(await response.aread())
+                content = body["choices"][0]["message"]["content"]
+                used = body.get("usage") or {}
         try:
             answer = dict(json.loads(content))
         except (json.JSONDecodeError, TypeError) as exc:
             raise DistillationError("the distiller did not answer one JSON object") from exc
-        used = body.get("usage") or {}
         answer["usage"] = {
             "input_tokens": int(used.get("prompt_tokens") or len(system + user) // CHARS_PER_TOKEN),
             "output_tokens": int(used.get("completion_tokens") or len(content) // CHARS_PER_TOKEN),
@@ -687,15 +801,54 @@ async def _stored(org: str, base_id: str, digest: str) -> KnowledgeDistillationP
         ).scalar_one_or_none()
 
 
-async def _store(org: str, base_id: str, **values: Any) -> None:
+async def _store(org: str, base_id: str, usage: dict[str, int] | None = None, **values: Any) -> None:
+    """Keeps a model call by its digest and books what it cost, in one transaction: a replay that
+    finds the part stored books nothing, and one that races it books nothing either (ADR 0092)."""
     try:
         async with session_scope(orgs=[org]) as session:
             base = await session.get(KnowledgeBase, base_id)
             if base is None:
                 return
             session.add(KnowledgeDistillationPart(org_id=base.org_id, knowledge_base_id=base_id, **values))
+            if usage is not None:  # a merge that made no call (one part) books nothing
+                await _book(session, base, str(values["model"]), usage, float(values.get("cost_usd") or 0.0))
     except IntegrityError:  # a replay stored the same call a moment ago: the first answer stands
         logger.info("knowledge.distill.part_already_stored", base=base_id, digest=values.get("digest"))
+
+
+async def _book(session: Any, base: KnowledgeBase, model: str, usage: dict[str, int], cost: float) -> None:
+    """One `distill` line in the cost ledger: the base's owning project when it names one of the
+    organisation's, otherwise the organisation (ADR 0092)."""
+    from ..services.couts import record_cost
+
+    project_id = None
+    if base.owner_project:
+        project_id = (
+            await session.execute(
+                select(Project.id).where(Project.org_id == base.org_id, Project.slug == base.owner_project)
+            )
+        ).scalar_one_or_none()
+    await record_cost(
+        session,
+        project_id=project_id,
+        org_id=base.org_id,
+        work_item_id=None,
+        run_id=None,
+        provider=model.split("/", maxsplit=1)[0] if "/" in model else "",
+        model=model,
+        backend="distill",
+        stage_role=None,
+        size=None,
+        tokens_in=int(usage.get("input_tokens") or 0),
+        tokens_out=int(usage.get("output_tokens") or 0),
+        tokens_cached=0,
+        cost_usd=cost,
+        fx_rate=get_settings().fx_usd_eur,
+        kind="distill",
+    )
+    # who spent it: the distiller, reading this base
+    entry = next(e for e in reversed(list(session.new)) if isinstance(e, CostLedger))
+    entry.agent_slug = COST_AGENT
 
 
 def _cost(price: Price, answer: dict[str, Any]) -> float:
@@ -727,12 +880,14 @@ async def step_part(
             raise DistillationError(
                 "the knowledge base changed while it was being distilled: distil it again", "gateway"
             )
+        await _refuse_if_stopped(org, base_id)
         answer = await loaded.distiller.principles(loaded.instructions, [*part.sources])
         principles, dropped = checked(answer, [*part.sources])
         cost = _cost(loaded.price, answer)
         await _store(
             org,
             base_id,
+            answer.get("usage") or {},
             digest=digest,
             model=loaded.distiller.model,
             part_index=index,
@@ -761,9 +916,10 @@ async def _merge_tree(
     corpus: list[Source],
     price: Price,
     part_chars: int,
-) -> tuple[list[dict[str, Any]], str, float, list[str]]:
+) -> tuple[list[dict[str, Any]], str, float, list[str], dict[str, int]]:
     """Merge calls until one list remains: groups of candidates that fit a prompt, then their results."""
     cost, dropped, description = 0.0, [], ""
+    usage = {"input_tokens": 0, "output_tokens": 0}
     for level in range(MAX_MERGE_LEVELS + 1):
         groups: list[list[dict[str, Any]]] = [[]]
         size = 0
@@ -779,6 +935,8 @@ async def _merge_tree(
         for group in groups:
             answer = await distiller.merge(group)
             cost += _cost(price, answer)
+            for key in usage:
+                usage[key] += int((answer.get("usage") or {}).get(key) or 0)
             cited = {s["document"] for c in group for s in c.get("sources") or []}
             # Never invent a source: a merged principle may cite only what its candidates cited.
             allowed = [s for s in corpus if s.filename in cited]
@@ -787,7 +945,7 @@ async def _merge_tree(
             dropped += lost
             description = str(answer.get("description") or description)
         if len(groups) == 1:
-            return merged, description, cost, dropped
+            return merged, description, cost, dropped, usage
         candidates = merged
     raise AssertionError("unreachable: the last level has a single group")
 
@@ -820,10 +978,12 @@ async def step_reduce(
     candidates = _candidates(answers)
     dropped = [d for a in answers for d in a.get("dropped") or []]
     kept_corpus = [s for s in loaded.corpus if not is_excluded(s.filename, exclude)]
+    usage: dict[str, int] = {}
     if len(answers) == 1:
         merged, description, cost = candidates, str(answers[0].get("description") or ""), 0.0
     else:
-        merged, description, cost, lost = await _merge_tree(
+        await _refuse_if_stopped(org, base_id)
+        merged, description, cost, lost, usage = await _merge_tree(
             loaded.distiller,
             candidates,
             kept_corpus,
@@ -840,6 +1000,7 @@ async def step_reduce(
     await _store(
         org,
         base_id,
+        usage if len(answers) > 1 else None,
         digest=digest,
         model=loaded.distiller.model,
         part_index=MERGE_INDEX,
@@ -870,6 +1031,7 @@ async def step_publish(
     from ..services.skill_gate import columns as gate_columns
     from ..services.skills import empreinte, valider
 
+    await _refuse_if_stopped(org, base_id)
     loaded = await _load(org, base_id, distiller)
     if loaded is None:
         return {"status": "gone"}
@@ -920,8 +1082,10 @@ async def step_publish(
             )
             session.add(version)
             await session.flush()
-        started = (base.distillation or {}).get("started_at")
+        before = base.distillation or {}
+        started = before.get("started_at")
         outcome = {
+            **carried(before),
             "status": "pending_review"
             if version.review_status == "pending_review"
             else version.review_status,
@@ -956,15 +1120,29 @@ async def step_fail(
         if base is None:
             return {"status": "gone"}
         before = base.distillation or {}
-        outcome: dict[str, Any] = {
-            "status": "failed",
-            "code": code,
-            "error": error,
-            "at": utcnow().isoformat(),
-            "requested_by": requested_by,
-            **{k: before[k] for k in ("started_at", "phase", "parts_done", "parts_total") if k in before},
-            "spent_usd": round(spent_usd, 4),
-        }
+        if code == "cancelled":
+            if before.get("status") != "stopped":
+                return before  # a late answer of a run that was stopped and relaunched: not this run's
+            # A person stopped it: the API already wrote who and when; keep that, and what was spent.
+            outcome = {
+                **before,
+                "status": "stopped",
+                "code": "cancelled",
+                "error": before.get("error") or error,
+                "at": before.get("at") or utcnow().isoformat(),
+                "spent_usd": round(max(spent_usd, float(before.get("spent_usd") or 0.0)), 4),
+            }
+        else:
+            outcome = {
+                "status": "failed",
+                "code": code,
+                "error": error,
+                "at": utcnow().isoformat(),
+                "requested_by": requested_by,
+                **carried(before),
+                **{k: before[k] for k in ("started_at", "phase", "parts_done", "parts_total") if k in before},
+                "spent_usd": round(spent_usd, 4),
+            }
         base.distillation = outcome
     logger.info("knowledge.distill.failed", org=org, base=base_id, code=code)
     return outcome

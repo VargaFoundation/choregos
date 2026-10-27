@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Card, ErrorNote, buttonClasses } from "@/components/ui";
 import { api } from "@/lib/api";
+import { distillationProgress, runLabel } from "@/lib/knowledge";
 import type { KnowledgeDistillEstimate } from "@/lib/types";
 
 /** What the person confirms is the estimate plus this margin: a run that costs more is stopped. */
@@ -33,10 +34,13 @@ export function KnowledgeDistill({
   org,
   slug,
   onStarted,
+  distillation,
 }: {
   org: string;
   slug: string;
   onStarted: () => Promise<unknown>;
+  /** The base's `distillation` record: what is running now, and the runs before it. */
+  distillation?: Record<string, unknown> | null;
 }) {
   const [estimate, setEstimate] = useState<KnowledgeDistillEstimate | null>(null);
   const [excluded, setExcluded] = useState<string[]>([]);
@@ -76,6 +80,23 @@ export function KnowledgeDistill({
     }
   }
 
+  /** Stop the running distillation, or relaunch the last one with the settings it had (parts already read are reused). */
+  async function act(call: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await call();
+      await onStarted();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Refused");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const status = distillation?.status ? String(distillation.status) : null;
+  const history = Array.isArray(distillation?.history) ? (distillation.history as Record<string, unknown>[]) : [];
+
   function toggle(filename: string) {
     void ask(excluded.includes(filename) ? excluded.filter((e) => e !== filename) : [...excluded, filename]);
   }
@@ -85,7 +106,43 @@ export function KnowledgeDistill({
       <button type="button" className="ml-2 underline" disabled={busy} onClick={() => void ask([])}>
         Distill
       </button>
+      {status === "running" && (
+        <button
+          type="button"
+          className="ml-2 underline"
+          disabled={busy}
+          onClick={() => void act(() => api.stopKnowledgeDistillation(org, slug))}
+        >
+          Stop
+        </button>
+      )}
+      {status && status !== "running" && status !== "approved" && (
+        <button
+          type="button"
+          className="ml-2 underline"
+          disabled={busy}
+          onClick={() => void act(() => api.relaunchKnowledgeDistillation(org, slug))}
+        >
+          Relaunch
+        </button>
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
+      {distillation && status && (
+        <Card title="Distillation run">
+          <p className="text-sm" data-testid="run-now">
+            {status === "running" ? distillationProgress(distillation) : status}
+            {distillation.requested_by ? ` \u00b7 started by ${String(distillation.requested_by)}` : ""}
+            {distillation.stopped_by ? ` \u00b7 stopped by ${String(distillation.stopped_by)}` : ""}
+          </p>
+          {history.length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs text-ink-muted" data-testid="run-history">
+              {history.map((run, n) => (
+                <li key={`${String(run.started_at ?? n)}-${n}`}>{runLabel(run)}</li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
       {estimate && (
         <Card title="Distillation estimate">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">

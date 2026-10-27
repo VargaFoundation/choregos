@@ -383,16 +383,23 @@ class CostLedger(Base, PkMixin):
     __tablename__ = "cost_ledger"
     __table_args__ = (Index("ix_cost_ledger_project_ts", "project_id", "ts"),)
 
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    #: The project that spent it. NULL for an organisation-level line (S42-10e, ADR 0092: a
+    #: distillation of a base with no owning project): then `org_id` is set.
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    org_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     work_item_id: Mapped[str | None] = mapped_column(
         ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True, index=True
     )
     run_id: Mapped[str | None] = mapped_column(
         ForeignKey("runs.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    # `model` ou `tool` : la même ligne porte ce qu'a coûté un appel de modèle et ce qu'a
-    # coûté un appel d'outil du catalogue. Sans cette colonne, les agrégats par modèle
-    # compteraient les outils comme des modèles.
+    # `model`, `tool` or `distill` (S42-10e): one ledger carries what a model call, a catalogue tool
+    # call and a knowledge distillation cost. Without this column, the per-model totals would count
+    # tools as models.
     kind: Mapped[str] = mapped_column(String(16), default="model", index=True)
     provider: Mapped[str] = mapped_column(String(64), default="")
     model: Mapped[str] = mapped_column(String(200), default="")
