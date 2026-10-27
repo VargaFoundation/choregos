@@ -816,6 +816,8 @@ export type UiManifest = {
   id: string;
   title: string;
   description?: string;
+  /** optional: the section's icon in the administration's navigation, from a closed vocabulary the console draws itself (no plugin asset is loaded). Absent: the generic settings icon. */
+  icon?: "building" | "shield" | "gauge" | "fingerprint" | "log-in" | "palette" | "users" | "key" | "lock" | "plug" | "globe" | "server" | "database" | "wallet" | "scroll" | "bell" | "settings";
   scope: "platform" | "organisation";
   /** a core permission, e.g. member:manage; platform:admin for the platform scope */
   permission: string;

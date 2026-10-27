@@ -2054,6 +2054,9 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   last OIDC sign-in stated it. The organisation names one per write operation with
   `PATCH /orgs/{org}/connectors/{name}/operations/{op}` `{"approver_group": "netops-approvers"}`,
   and the actions an agent proposes through it carry that rule (ADR 0052).
+  A human group (a workflow actor's `group`, an approver rule's `group`, a knowledge base's group
+  scope or grant) may arrive from the identity provider bare (`architects`) or as
+  `choregos:<org>:<group>`; the second counts only in `<org>` (S40-27).
 - **Running**: the approval starts `ActionWorkflow` (`action-<id>`) once it is committed, and
   answers at once. If Temporal was unreachable at that moment, the action stays `approved` and every
   API replica starts it again within about a minute; a workflow started for an action that is not

@@ -10,6 +10,10 @@
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,62}$" },
     "title": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
+    "icon": {
+      "description": "optional: the section's icon in the administration's navigation, from a closed vocabulary the console draws itself (no plugin asset is loaded). Absent: the generic settings icon.",
+      "enum": ["building", "shield", "gauge", "fingerprint", "log-in", "palette", "users", "key", "lock", "plug", "globe", "server", "database", "wallet", "scroll", "bell", "settings"]
+    },
     "scope": { "enum": ["platform", "organisation"] },
     "permission": { "type": "string", "description": "a core permission, e.g. member:manage; platform:admin for the platform scope" },
     "blocks": {

@@ -16,15 +16,34 @@ nothing travels in the request row and no workflow code changes.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from choregos_contracts import HumanActor, Role
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Membership, User, WorkItem
+from ..db.models import Membership, Organization, User, WorkItem
 from ..rbac import Principal
 from .definitions import workflow_du_ticket, workflow_model
+
+
+def groups_for_org(groups: Iterable[Any] | None, org_slug: str) -> set[str]:
+    """The groups a person carries **for one organisation** (S40-27).
+
+    The identity provider may send a group bare (`architects`) or namespaced for an organisation
+    (`choregos:diametral:architects`, the same prefix that carries the role). For `org_slug` both count,
+    as the bare name; a group namespaced for **another** organisation does not, so two organisations of
+    one instance never confuse their `architects`. `User.groups` stays as sent.
+    """
+    prefix = f"choregos:{org_slug}:"
+    carried: set[str] = set()
+    for raw in groups or []:
+        group = str(raw)
+        carried.add(group)
+        if group.startswith(prefix) and len(group) > len(prefix):
+            carried.add(group[len(prefix) :])
+    return carried
 
 
 async def group_of_the_step(session: AsyncSession, item: WorkItem, transition_id: str | None) -> str | None:
@@ -42,7 +61,7 @@ async def group_of_the_step(session: AsyncSession, item: WorkItem, transition_id
 
 def decider_group_verdict(principal: Principal, org_slug: str, group: str | None) -> str:
     """`ok`, `override` (an organisation administrator outside the group) or `refused`."""
-    if group is None or group in {str(g) for g in principal.groups}:
+    if group is None or group in groups_for_org(principal.groups, org_slug):
         return "ok"
     if principal.org_roles.get(org_slug) == Role.ORG_ADMIN:
         return "override"
@@ -50,7 +69,12 @@ def decider_group_verdict(principal: Principal, org_slug: str, group: str | None
 
 
 async def groups_known_in(session: AsyncSession, org_id: str) -> set[str]:
-    """The groups the identity provider has sent for the organisation's members at their sign-ins."""
+    """The groups the identity provider has sent for the organisation's members at their sign-ins, as
+    the organisation names them (a `choregos:<slug>:<group>` of this organisation counts as `<group>`;
+    the slug is read now, it can change)."""
+    org_slug = (
+        await session.execute(select(Organization.slug).where(Organization.id == org_id))
+    ).scalar_one_or_none()
     rows = (
         await session.execute(
             select(User.groups)
@@ -58,7 +82,10 @@ async def groups_known_in(session: AsyncSession, org_id: str) -> set[str]:
             .where(Membership.org_id == org_id)
         )
     ).scalars()
-    return {str(g) for groups in rows for g in (groups or [])}
+    known: set[str] = set()
+    for groups in rows:
+        known |= groups_for_org(groups, org_slug) if org_slug else {str(g) for g in groups or []}
+    return known
 
 
 def unknown_group_warnings(workflow: Any, known: set[str]) -> list[dict[str, Any]]:

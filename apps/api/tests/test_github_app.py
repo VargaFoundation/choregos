@@ -247,3 +247,43 @@ async def test_owner_lookup_ignores_case(login_: str, client: AsyncClient, admin
     async with session_scope(orgs="*") as session:
         found = await claimed_installation_for(session, org_id, "ACME")
         assert found is not None and found.id == 9
+
+
+async def _installations() -> list[Any]:
+    from choregos_api.db.models import GitHubInstallation
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        return list((await session.execute(select(GitHubInstallation))).scalars().all())
+
+
+async def test_a_browser_without_a_session_is_sent_to_sign_in_and_back(
+    client: AsyncClient, org: str, github: Any
+) -> None:
+    """S42-16: GitHub sends a browser here; without a console session it answered a JSON 401 page."""
+    github.add_installation(7, "varga-inc")
+    query = {"code": "839a3c", "installation_id": 7, "setup_action": "install"}
+    back = await client.get("/api/v1/github/setup", params=query, follow_redirects=False)
+    assert back.status_code == 302, back.text
+    target = urlsplit(back.headers["location"])
+    assert target.path == "/api/v1/auth/login"
+    returned = urlsplit(parse_qs(target.query)["redirect_to"][0])
+    assert returned.path == "/api/v1/github/setup"
+    assert parse_qs(returned.query) == {k: [str(v)] for k, v in query.items()}, "the same query comes back"
+    assert await _installations() == [], "nothing is claimed before anyone signed in"
+
+
+async def test_an_installation_started_on_github_claims_nothing_and_goes_to_the_console(
+    client: AsyncClient, admin: str, github: Any
+) -> None:
+    """S42-16: no `state` means the console did not start it; GitHub's id alone proves nothing (ADR 0073)."""
+    github.add_installation(7, "varga-inc")
+    back = await client.get(
+        "/api/v1/github/setup",
+        params={"installation_id": 7, "setup_action": "install", "code": "839a3c"},
+        follow_redirects=False,
+    )
+    assert back.status_code == 302, back.text
+    assert back.headers["location"] == "/?github=installed"
+    assert await _installations() == []
