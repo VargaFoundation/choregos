@@ -242,6 +242,153 @@ export type PluginServer = {
   };
 };
 
+export type PluginTrackerProfileKey = string;
+
+export type PluginTrackerProfileComment = {
+  id?: string | null;
+  author?: string | null;
+  body: string;
+  ts?: string | null;
+  marker?: string | null;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerFetchItemInput = {
+  key: PluginTrackerProfileKey;
+};
+
+/** The core's `WorkItemData`; keys it does not know are ignored. Every text is third-party data. */
+export type PluginTrackerProfileTrackerFetchItemOutput = {
+  key: PluginTrackerProfileKey;
+  title: string;
+  body?: string | null;
+  url?: string | null;
+  state?: string | null;
+  labels?: Array<string>;
+  item_type?: string | null;
+  assignees?: Array<string>;
+  author?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  closed_at?: string | null;
+  fields?: {
+    [key: string]: unknown;
+  };
+  comments?: Array<PluginTrackerProfileComment>;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerCreateItemInput = {
+  title: string;
+  body: string;
+  labels?: Array<string>;
+  assignees?: Array<string>;
+  fields?: {
+    [key: string]: unknown;
+  };
+  /** platform argument: an idempotency key stable for one action */
+  action_key: string;
+};
+
+/** A replay of the same `action_key` answers the existing key with `created: false`. */
+export type PluginTrackerProfileTrackerCreateItemOutput = {
+  key: PluginTrackerProfileKey;
+  created: boolean;
+  [key: string]: unknown;
+};
+
+/** The core's `TrackerStateMapping`, plus `key`. */
+export type PluginTrackerProfileTrackerSetStateInput = {
+  key: PluginTrackerProfileKey;
+  status: string | null;
+  label: string | null;
+  remove_labels: Array<string>;
+};
+
+export type PluginTrackerProfileTrackerSetStateOutput = {
+  key: PluginTrackerProfileKey;
+  changed: boolean;
+  state?: string | null;
+  ignored?: Array<string>;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerCommentInput = {
+  key: PluginTrackerProfileKey;
+  markdown: string;
+  /** platform argument: an idempotency key stable for one action */
+  action_key: string;
+};
+
+/** `id` is stable across replays of the same `action_key`. */
+export type PluginTrackerProfileTrackerCommentOutput = {
+  key: PluginTrackerProfileKey;
+  id: string;
+  written: boolean;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerUpsertStatusInput = {
+  key: PluginTrackerProfileKey;
+  markdown: string;
+  marker: string;
+};
+
+export type PluginTrackerProfileTrackerUpsertStatusOutput = {
+  key: PluginTrackerProfileKey;
+  written: boolean;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerCloseInput = {
+  key: PluginTrackerProfileKey;
+  close_notes?: string | null;
+  close_code?: string | null;
+};
+
+/** Idempotent: an item already closed answers `closed: false`. */
+export type PluginTrackerProfileTrackerCloseOutput = {
+  key: PluginTrackerProfileKey;
+  closed: boolean;
+  state?: string | null;
+  [key: string]: unknown;
+};
+
+/** Server-specific filters may be added (ServiceNow: `tables`). */
+export type PluginTrackerProfileTrackerListCandidatesInput = {
+  limit?: number;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerListCandidatesOutput = {
+  keys: Array<PluginTrackerProfileKey>;
+  reason?: string;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerParseEventInput = {
+  headers: {
+    [key: string]: string;
+  };
+  /** the raw request body, decoded as UTF-8 */
+  body: string;
+};
+
+/** Only the kind, the key and the delivery id are read: the core re-reads every item with `tracker_fetch_item`. */
+export type PluginTrackerProfileTrackerParseEventOutput = {
+  verified: boolean;
+  events: Array<{
+    kind: "tracker.item.created" | "tracker.item.updated" | "tracker.item.commented" | "tracker.item.closed";
+    item_key: PluginTrackerProfileKey;
+    delivery_id: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+};
+
+/** The tracker profile (plan S43 Decision 3, S43-07): one call of a plugin server that declares `implements: [tracker]`, its tool, the arguments the core sends and the JSON object (MCP `structuredContent`) the server answers. A server serves all eight tools and declares each in `operations` with the access below; the core's `tracker/plugin` adapter checks every answer against `$defs/<tool>_output`. Reads: `tracker_fetch_item`, `tracker_list_candidates`, `tracker_parse_event`; every other tool is a write. */
+export type PluginTrackerProfile = unknown & unknown & unknown & unknown & unknown & unknown & unknown & unknown;
+
 /** lower-case letters, digits and dashes */
 export type PluginName = string;
 
@@ -1198,6 +1345,7 @@ export type ChoregosContract =
   | PluginEvals
   | PluginIndex
   | PluginServer
+  | PluginTrackerProfile
   | Plugin
   | Policy
   | Project

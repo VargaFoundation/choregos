@@ -1,0 +1,36 @@
+{
+  "tool": "tracker_fetch_item",
+  "input": {
+    "key": "INC0010006"
+  },
+  "output": {
+    "key": "INC0010006",
+    "title": "VPN disconnects every 10 minutes",
+    "body": "The VPN drops after about ten minutes.",
+    "url": "https://dev12345.service-now.com/nav_to.do?uri=incident.do",
+    "state": "In Progress",
+    "labels": [],
+    "item_type": "incident",
+    "assignees": [
+      "Beth Anglin"
+    ],
+    "author": "Abel Tuter",
+    "created_at": "2026-10-25T08:00:00Z",
+    "updated_at": "2026-10-25T08:00:00Z",
+    "closed_at": null,
+    "fields": {
+      "table": "incident",
+      "state_value": "2"
+    },
+    "comments": [
+      {
+        "id": "j1",
+        "author": "beth.anglin",
+        "body": "Looking.",
+        "ts": "2026-10-26T08:00:00Z",
+        "marker": null,
+        "visibility": "internal"
+      }
+    ]
+  }
+}

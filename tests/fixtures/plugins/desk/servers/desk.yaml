@@ -1,0 +1,22 @@
+name: desk
+image: ghcr.io/vargafoundation/choregos-agents/desk-mcp@sha256:4a1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
+port: 8080
+protocol: mcp-http
+implements: [tracker]
+webhook: {path: /events}
+config_schema:
+  type: object
+  required: [instance_url]
+  properties:
+    instance_url: { type: string, format: uri }
+secret_fields: [webhook_secret]
+egress: {from_fields: [instance_url]}
+operations:
+  - {name: tracker_fetch_item, access: read}
+  - {name: tracker_list_candidates, access: read}
+  - {name: tracker_parse_event, access: read}
+  - {name: tracker_create_item, access: write, platform_arguments: [action_key]}
+  - {name: tracker_set_state, access: write}
+  - {name: tracker_comment, access: write, platform_arguments: [action_key]}
+  - {name: tracker_upsert_status, access: write}
+  - {name: tracker_close, access: write, human_approval: true}

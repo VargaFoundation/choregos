@@ -1,0 +1,14 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: desk-flow
+  version: 1.0.0
+  display: Desk flow
+  description: A project whose work items live in the desk server.
+requires:
+  connectors:
+    tracker: plugin:desk/desk
+defaults:
+  workflow: template:default-simple@1
+inputs: []
+steps: []

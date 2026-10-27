@@ -22,7 +22,8 @@ rather than the first:
   plugin:<plugin>/<server>`) names this plugin and a server of it that `implements: [tracker]`;
 - each server file against `plugin-server.schema.json`, plus what a schema cannot say (unique
   operation names, a compensation that names an operation of the same server, egress fields that the
-  configuration schema declares).
+  configuration schema declares, and — for a server that `implements: [tracker]` — every tool of the
+  tracker profile declared with its access, `TRACKER_PROFILE`).
 
 The plugin's identity is its **content digest**: the sha256 of its canonical tar (its declared files
 only, entries sorted by path, mode 0644, modification time 0, owner and group 0). `pack` writes that tar
@@ -57,6 +58,19 @@ ROOT_FILES = ("README.md", "LICENSE")
 PLUGIN_TRACKER = "plugin:"
 #: Bounds on what a plugin may hold, unpacked: generous for agents, skills and templates, small
 #: enough that an archive cannot fill a disk.
+#: The tracker profile (plan S43 Decision 3, `plugin-tracker-profile.schema.json`): the tools a server
+#: that `implements: [tracker]` serves, and the access each must be declared with. A write declared as a
+#: read would be allowed to every agent without approval, so the access is part of the profile.
+TRACKER_PROFILE: dict[str, str] = {
+    "tracker_fetch_item": "read",
+    "tracker_create_item": "write",
+    "tracker_set_state": "write",
+    "tracker_comment": "write",
+    "tracker_upsert_status": "write",
+    "tracker_close": "write",
+    "tracker_list_candidates": "read",
+    "tracker_parse_event": "read",
+}
 MAX_FILES = 2000
 MAX_BYTES = 50 * 1024 * 1024
 AGENT_SLUG = r"^[a-z][a-z0-9-]{1,62}$"
@@ -177,6 +191,17 @@ def _check_server(path: Path, ref: str, problems: list[str]) -> dict[str, Any] |
             problems.append(
                 f"{ref}: `{op['name']}` is compensated by `{undo}`, which the server does not declare"
             )
+    if "tracker" in (doc.get("implements") or []):
+        access = {str(op["name"]): str(op["access"]) for op in doc["operations"]}
+        for tool, expected in TRACKER_PROFILE.items():
+            if tool not in access:
+                problems.append(
+                    f"{ref}: implements `tracker` but does not declare `{tool}` (the tracker profile)"
+                )
+            elif access[tool] != expected:
+                problems.append(
+                    f"{ref}: `{tool}` is a {expected} of the tracker profile, declared `{access[tool]}`"
+                )
     declared = set((doc.get("config_schema") or {}).get("properties") or {})
     for name in (doc.get("egress") or {}).get("from_fields") or []:
         if name not in declared:
@@ -561,6 +586,8 @@ __all__ = [
     "MANIFEST",
     "MAX_BYTES",
     "MAX_FILES",
+    "PLUGIN_TRACKER",
+    "TRACKER_PROFILE",
     "Plugin",
     "PluginError",
     "build_index",

@@ -3231,10 +3231,13 @@ paths:
       security: []
       operationId: pluginWebhook
       description: >-
-        A delivery for a plugin server that declares `webhook` (ADR 0093). The core forwards the body and headers to the
-        server's `webhook.path`; the server verifies the delivery and returns normalised events, which the core
-        de-duplicates and acts on only after re-reading each item. 401 when the server refuses the delivery, 404 when no
-        installed plugin has that server or it declares no webhook.
+        A delivery for a plugin server that declares `webhook` and `implements: [tracker]` (ADR 0093, S43-07). The core
+        forwards the body and headers to the server's `tracker_parse_event` tool over its authenticated `/mcp` (the
+        tracker profile, `plugin-tracker-profile.schema.json`); the server verifies the delivery and returns normalised
+        events, which the core de-duplicates on their `delivery_id` and acts on only after re-reading each item with
+        `tracker_fetch_item`. The URL names no organisation: each organisation's running server is asked, and the one
+        whose secret matches owns the delivery. 401 when no server recognises the delivery, 404 when no organisation
+        runs that plugin's server as a tracker with a webhook.
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses:
         "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }

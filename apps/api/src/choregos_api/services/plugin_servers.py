@@ -86,6 +86,28 @@ def use_plugin_transport(transport: httpx.AsyncBaseTransport | None) -> None:
         _OVERRIDES["transport"] = transport
 
 
+def transport() -> httpx.AsyncBaseTransport | None:
+    """The transport of the platform's calls to a server: a test's, else under `CHOREGOS_FAKES` the
+    in-memory server of the tracker profile (`FakePluginTrackerServer`, one per process), else the
+    network."""
+    if "transport" in _OVERRIDES:
+        found: httpx.AsyncBaseTransport = _OVERRIDES["transport"]
+        return found
+    if not fakes_enabled():
+        return None
+    fake: httpx.AsyncBaseTransport = fake_tracker_server().transport()
+    return fake
+
+
+def fake_tracker_server() -> Any:
+    """The process's `FakePluginTrackerServer` (fakes only): what a fake plugin tracker answers."""
+    if "fake_tracker" not in _OVERRIDES:
+        from choregos_adapters.fakes.plugin_tracker import FakePluginTrackerServer
+
+        _OVERRIDES["fake_tracker"] = FakePluginTrackerServer()
+    return _OVERRIDES["fake_tracker"]
+
+
 def runtime(settings: Settings | None = None) -> PluginServerRuntime | None:
     """Where servers run: the Kubernetes API of `plugin_servers_namespace`; in memory under
     `CHOREGOS_FAKES`; `None` when the deployment runs none (`plugin_servers: off`)."""
@@ -152,6 +174,9 @@ def declaration(plugin: Plugin, doc: dict[str, Any], org_id: str, settings: Sett
         "secret_fields": list(doc.get("secret_fields") or []),
         "egress": doc.get("egress") or {},
         "operations": _operations(doc),
+        # What the server is besides its operations (S43-07): a tracker, and its webhook.
+        "implements": list(doc.get("implements") or []),
+        "webhook": doc.get("webhook"),
         "object": name,
         "url": service_url(settings, name, int(doc["port"]), paths["mcp"]),
     }
@@ -482,8 +507,8 @@ async def reconcile(session: AsyncSession, instance: OrgConnector, settings: Set
 # -- the broker's client -----------------------------------------------------------------------------------
 
 
-async def plugin_client(session: AsyncSession, instance: OrgConnector) -> PluginServerClient | None:
-    """The client of a plugin's server, with its bearer token; `None` for any other connector."""
+async def server_endpoint(session: AsyncSession, instance: OrgConnector) -> tuple[str, str] | None:
+    """`(url, bearer token)` of a plugin's server; `None` for any other connector."""
     server = instance.plugin_server
     if server is None:
         return None
@@ -495,9 +520,15 @@ async def plugin_client(session: AsyncSession, instance: OrgConnector) -> Plugin
         {},
         {SERVER_TOKEN_FIELD: (instance.secret_refs or {})[SERVER_TOKEN_FIELD]},
     )
-    return PluginServerClient(
-        str(server["url"]), token=str(resolved[SERVER_TOKEN_FIELD]), transport=_OVERRIDES.get("transport")
-    )
+    return str(server["url"]), str(resolved[SERVER_TOKEN_FIELD])
+
+
+async def plugin_client(session: AsyncSession, instance: OrgConnector) -> PluginServerClient | None:
+    """The client of a plugin's server, with its bearer token; `None` for any other connector."""
+    endpoint = await server_endpoint(session, instance)
+    if endpoint is None:
+        return None
+    return PluginServerClient(endpoint[0], token=endpoint[1], transport=transport())
 
 
 async def connector_client(session: AsyncSession, instance: OrgConnector) -> Any:
@@ -528,13 +559,16 @@ __all__ = [
     "declaration",
     "deprovision",
     "egress_of",
+    "fake_tracker_server",
     "floor_policy",
     "object_name",
     "plugin_client",
     "provision",
     "reconcile",
     "runtime",
+    "server_endpoint",
     "spec_of_connector",
+    "transport",
     "use_plugin_runtime",
     "use_plugin_transport",
 ]

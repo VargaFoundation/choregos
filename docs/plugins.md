@@ -68,8 +68,8 @@ contents:
 - **Skills** are directories that hold a `SKILL.md`.
 - **Templates** have a `manifest.yaml` that matches `template.schema.json`. A template whose project
   tracker is a server of the plugin says `requires.connectors.tracker: plugin:<plugin>/<server>`; the
-  server must be one of the same plugin and declare `implements: [tracker]`. (The adapter that makes such
-  a server a project's tracker is S43-07: until then a project cannot be created from such a template.)
+  server must be one of the same plugin and declare `implements: [tracker]` (see
+  [The tracker profile](#the-tracker-profile)).
 - **Evals** match `plugin-evals.schema.json` and name an agent of the plugin (see [Evals](#evals)).
 - **Procedures** go through the same parser as the core's (ADR 0067): front matter, fixed sections,
   links listed in `vendor_docs`, no secret-shaped string. A procedure gives the address of its server's
@@ -84,7 +84,9 @@ contents:
   - `platform_arguments` (`action_key`, `work_item_key`) are arguments the platform fills, never the
     agent;
   - operation names are unique;
-  - an egress `from_fields` entry is a field of `config_schema`.
+  - an egress `from_fields` entry is a field of `config_schema`;
+  - a server that `implements: [tracker]` declares every tool of the
+    [tracker profile](#the-tracker-profile), each with the profile's access.
 
   An operation's `human_approval` is a floor: an organisation may raise it, never lower it. A tool the
   server serves but does not list is refused.
@@ -265,6 +267,67 @@ A server's image is pinned by digest (the contract), comes from a registry prefi
 refuses a plugin that brings a server. In the cluster, the Kyverno policy
 `choregos-plugin-server-images` (`infra/policies/plugin-servers.yaml`) refuses a pod of the plugins
 namespace whose image is not pinned or not from the allowed prefix.
+
+## The tracker profile
+
+A server that declares `implements: [tracker]` can be a project's tracker (plan S43 Decision 3, S43-07):
+the core's `tracker/plugin` adapter maps `TrackerAdapter` onto eight tools the server serves. Their
+arguments and answers are normative: `packages/contracts/schemas/plugin-tracker-profile.schema.json`
+(`$defs/<tool>_input`, `$defs/<tool>_output`); the adapter checks every answer against it and refuses
+one that does not match. Each answer is a JSON object (MCP `structuredContent`, or a text part holding
+it); a refusal is an MCP error (`isError: true`) whose text starts with `refused:`. The first server
+written against it is ServiceNow's (`choregos-agents`, `plugins/servicenow/server/TRACKER_PROFILE.md`).
+
+| `TrackerAdapter` | Tool | Declared access |
+|:--|:--|:--|
+| `fetch_item(key)` | `tracker_fetch_item {key}` → the core's `WorkItemData` | `read` |
+| `create_item(data)` | `tracker_create_item {title, body, labels, assignees, fields, action_key}` → `{key, created}` | `write` |
+| `set_state(key, mapping)` | `tracker_set_state {key, status, label, remove_labels}` → `{key, changed, state?, ignored?}` | `write` |
+| `comment(key, markdown)` | `tracker_comment {key, markdown, action_key}` → `{key, id, written}` | `write` |
+| `upsert_status_comment(key, markdown, marker)` | `tracker_upsert_status {key, markdown, marker}` → `{key, written}` | `write` |
+| `close_item(key)` | `tracker_close {key, close_notes, close_code}` → `{key, closed, state?}` | `write` |
+| `list_candidates(project)` | `tracker_list_candidates {limit}` → `{keys, reason?}` | `read` |
+| webhook | `tracker_parse_event {headers, body}` → `{verified, events: [{kind, item_key, delivery_id}]}` | `read` |
+
+`link` and `set_fields` are not in the profile: the adapter skips them (a field write is an agent's
+governed operation of the server). The loader refuses a tracker server that does not declare one of the
+eight tools in `operations`, or declares a write as a `read` (that would allow it to every agent without
+approval).
+
+- **Idempotent writes.** `action_key` is derived by the platform from the call (`platform:<hash>` of
+  the tool, the key and the text): a Temporal retry replays the same key and the server answers the
+  first write (`created: false`, `written: false`). The same comment twice on an item is written once.
+  `tracker_upsert_status` adds a note only when the latest one with that `marker` differs (journals that
+  cannot be edited); Choregos's markers (`<!-- choregos:status -->`) reach the server as their name
+  (`choregos:status`).
+- **Platform calls, audited, not governed.** The adapter calls the server through the platform's client
+  of it (the Service URL the platform wrote, the server's bearer token, no redirect), not through an
+  agent's tool selection nor a governed action — as the platform's writes to Jira or GitHub. The workflow
+  already decided each write (a mirrored state, a status comment, a delivered item closed after its
+  review stage); an approval per write would put a person in front of every transition. Each write is
+  an audit entry `tracker.plugin.<tool>` of the organisation (written in its own transaction: the write
+  happened in the server's system whatever happens next). An agent calling the same tool goes through
+  the broker under the declared policy, like any operation.
+- **A project's tracker.** A template that says `requires.connectors.tracker: plugin:<plugin>/<server>`
+  gives a project born from it the tracker connector `{type: plugin, config: {plugin, server}}`; the
+  creation is a 422 while the plugin is not installed in the organisation or the server is not
+  `deployed` (configure it first). `PUT /projects/{id}/connectors/tracker` with `type: plugin` checks
+  the same and accepts `plugin` and `server` only: where the server answers and its token are read from
+  the organisation's connector each time the adapter is built, never typed nor stored on the project.
+- **Webhooks.** A procedure gives `{{plugin_webhook_url:<plugin>/<server>}}`; the system posts its
+  deliveries there. `POST /webhooks/plugins/{plugin}/{server}` forwards the headers (without
+  `Authorization`, `Cookie`) and the body to the server's `tracker_parse_event` over `/mcp` — the
+  server's only door the platform authenticates (ADR 0094 §6), so a server's own `webhook.path` is not
+  called by the core. The URL names no organisation: each organisation running that server is asked in
+  turn, and the one whose secret matches owns the delivery (401 if none, 404 if no organisation runs
+  that server as a tracker with a webhook). Each event is de-duplicated on its `delivery_id`, then its
+  item is **re-read** with `tracker_fetch_item`: nothing of the delivery but the key is trusted. The
+  event goes to the organisation's project that holds the item, or its only project on that tracker.
+- **Polling.** `list_candidates` is the profile's `tracker_list_candidates`, read by the tracker
+  reconciliation like any external tracker's, for systems that send no events.
+- **Fakes.** Under `CHOREGOS_FAKES=1` a plugin tracker is built as itself and talks to
+  `FakePluginTrackerServer` (`choregos_adapters.fakes.plugin_tracker`), an in-memory server of the
+  profile with the same replay rules.
 
 ## Default plugins
 

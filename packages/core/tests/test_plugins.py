@@ -13,10 +13,19 @@ from typing import Any
 import pytest
 import yaml
 from choregos_contracts import load_schema
-from choregos_core.plugins import PluginError, build_index, digest, load_directory, opened, pack
+from choregos_core.plugins import (
+    TRACKER_PROFILE,
+    PluginError,
+    build_index,
+    digest,
+    load_directory,
+    opened,
+    pack,
+)
 from jsonschema import Draft202012Validator
 
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
+DESK = HELLO.parent / "desk"
 
 
 @pytest.fixture
@@ -259,10 +268,40 @@ def _tracker(plugin: Path, value: str) -> None:
     )
 
 
+def _profile(doc: dict[str, Any]) -> None:
+    doc.update(implements=["tracker"])
+    doc["operations"] += [{"name": tool, "access": access} for tool, access in TRACKER_PROFILE.items()]
+
+
 def test_a_template_takes_its_tracker_from_a_server_of_the_plugin(plugin: Path) -> None:
-    _edit(plugin / "servers" / "hello.yaml", lambda d: d.update(implements=["tracker"]))
+    _edit(plugin / "servers" / "hello.yaml", _profile)
     _tracker(plugin, "plugin:hello/hello")
     assert load_directory(plugin).servers["hello"]["implements"] == ["tracker"]
+
+
+def test_the_tracker_fixture_serves_the_whole_profile() -> None:
+    assert load_directory(DESK).servers["desk"]["implements"] == ["tracker"]
+
+
+@pytest.mark.parametrize("tool", sorted(TRACKER_PROFILE))
+def test_a_tracker_server_missing_a_profile_tool_is_refused(plugin: Path, tool: str) -> None:
+    def without(doc: dict[str, Any]) -> None:
+        _profile(doc)
+        doc["operations"] = [op for op in doc["operations"] if op["name"] != tool]
+
+    _edit(plugin / "servers" / "hello.yaml", without)
+    assert f"implements `tracker` but does not declare `{tool}`" in _problems(plugin)
+
+
+def test_a_tracker_write_declared_as_a_read_is_refused(plugin: Path) -> None:
+    def lowered(doc: dict[str, Any]) -> None:
+        _profile(doc)
+        for op in doc["operations"]:
+            if op["name"] == "tracker_close":
+                op["access"] = "read"
+
+    _edit(plugin / "servers" / "hello.yaml", lowered)
+    assert "`tracker_close` is a write of the tracker profile, declared `read`" in _problems(plugin)
 
 
 @pytest.mark.parametrize(

@@ -112,3 +112,27 @@ platform fills.
 - **A server's config sent with each broker call**: see Consequences.
 - **A connector type per plugin registered at run time**: the registry is per process and per image; the
   declaration on the connector row reaches every replica.
+
+## The tracker half (S43-07, the plan's Decision 3)
+
+- **The tracker profile is a contract** (contract change): `plugin-tracker-profile.schema.json` gives
+  the input and output of the eight tools a server that `implements: [tracker]` serves; the loader
+  refuses such a server that does not declare one of them in `operations`, or declares a write as a
+  read (it would then be allowed to every agent without approval). The core's `tracker/plugin`
+  adapter checks every answer against the schema.
+- **A delivery goes to `tracker_parse_event`, not to the server's `webhook.path`.** The plan said the
+  core forwards it to `webhook.path`. The platform authenticates exactly one door of a server, `/mcp`
+  with its bearer token (§6); `webhook.path` is the door the server opens for its system's direct
+  posts (ServiceNow's `POST /events`), which the server's NetworkPolicy keeps closed to anything but the
+  API anyway. One transport, one token, one place where answers are checked. `webhook` stays the
+  declaration that a server takes deliveries (the procedure's URL placeholder, the 404 of the route).
+- **The URL names no organisation**: every organisation running the server is asked in turn and the one
+  whose secret verifies the delivery owns it. The cost grows with the number of organisations running
+  that server; an organisation segment in the URL would end it, at the price of a contract change of a
+  route already in procedures.
+- **Tracker calls are platform calls, audited, not governed actions**, like the platform's writes to
+  Jira or GitHub: the workflow decided them (and puts a person before the stage that closes); each write
+  is an audit entry `tracker.plugin.<tool>` in its own transaction. The declared policy still governs
+  an agent calling the same tool through the broker.
+- **Under `CHOREGOS_FAKES` the plugin tracker is built as itself** (`registry.BUILT_UNDER_FAKES`) and
+  talks to the in-memory `FakePluginTrackerServer`, so the profile mapping is what the fakes exercise.

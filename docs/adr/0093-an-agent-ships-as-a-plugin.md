@@ -132,4 +132,5 @@ Found by the first real plugin (`servicenow`, choregos-agents PR #2):
   only for a server of its own plugin that declares a `webhook`.
 - **A template's tracker may be a plugin's server**: `requires.connectors.tracker:
   plugin:<plugin>/<server>` (`template.schema.json`), checked at validation against a server of the same
-  plugin that declares `implements: [tracker]`. The adapter that runs it is S43-07.
+  plugin that declares `implements: [tracker]`. The adapter that runs it is S43-07 (ADR 0094, "The
+  tracker half").
