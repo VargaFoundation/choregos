@@ -188,6 +188,7 @@ def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -
         source=document.source,
         status=document.status,
         error=document.error,
+        warnings=list(document.warnings or []),
         created_by=document.created_by,
         created_at=document.created_at,
         converted_at=document.converted_at,

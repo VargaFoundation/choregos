@@ -98,6 +98,29 @@ async def test_a_document_deleted_at_the_source_leaves_the_index(
     assert state["last_summary"]["deleted"] == 1
 
 
+async def test_a_sync_names_the_spreadsheets_it_cut(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S42-09e: `last_summary` says how many documents were cut and which sheets, like `skipped_reasons`."""
+    from choregos_adapters.fakes.documents import fake_source
+
+    source = await _sharepoint(client, monkeypatch, mode="files")
+    site = fake_source(source["id"])
+    rows: list[list[object]] = [["id"]] + [[i] for i in range(2100)]
+    site.put("item-big", "big.xlsx", fx.xlsx({"Big": rows}))
+    site.put("item-notes", "notes.md", b"# Notes\n\nshort\n")
+    done = await _sync(source["id"])
+    assert (done["added"], done["truncated"]) == (2, 1), done
+    assert done["truncated_reasons"] == [
+        'big.xlsx: Sheet "Big": 101 more rows not shown (the first 2000 are kept)'
+    ]
+    (state,) = (await client.get(f"{BASE}/framework")).json()["sources"]
+    assert state["last_summary"]["truncated"] == 1
+    assert state["last_summary"]["truncated_reasons"] == done["truncated_reasons"]
+    documents = (await client.get(f"{BASE}/framework")).json()["documents"]
+    assert {d["filename"]: len(d["warnings"]) for d in documents} == {"big.xlsx": 1, "notes.md": 0}
+
+
 async def test_a_sync_replayed_changes_nothing_twice(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

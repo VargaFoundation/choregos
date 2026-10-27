@@ -1524,7 +1524,9 @@ gives its text without headings, and a scanned PDF fails (no OCR). A workbook gi
 table per sheet (hidden sheets marked), with empty cells empty, numbers as the sheet shows them
 (percentages, thousands, dates), the cached value of each formula, and at most
 `CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
-shown`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
+shown`) and a document cut that way carries `warnings` (one sentence per cut sheet), shown in
+the console's document list and page, and counted in a source's last sync (`truncated`,
+`truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
 before this reading keep their old text until converted again: `POST …/documents/{id}/convert`
 (which also shrinks the corpus). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file

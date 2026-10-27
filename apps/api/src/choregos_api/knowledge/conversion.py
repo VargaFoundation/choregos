@@ -115,7 +115,8 @@ def _checked_answer(stdout: bytes, max_bytes: int) -> dict[str, Any]:
         )
     if not markdown.strip():
         raise ConversionError("the document holds no text (a scanned PDF needs OCR, not supported)")
-    return {"markdown": markdown, "title": result.get("title")}
+    warnings = [str(w)[:300] for w in (result.get("warnings") or [])][:50]
+    return {"markdown": markdown, "title": result.get("title"), "warnings": warnings}
 
 
 async def convert_document(org: str, document_id: str) -> str:
@@ -128,7 +129,7 @@ async def convert_document(org: str, document_id: str) -> str:
         claimed = await session.execute(
             update(KnowledgeDocument)
             .where(KnowledgeDocument.id == document_id, KnowledgeDocument.status == PENDING)
-            .values(status=CONVERTING, error=None, updated_at=utcnow())
+            .values(status=CONVERTING, error=None, warnings=[], updated_at=utcnow())
         )
         if claimed.rowcount != 1:  # type: ignore[attr-defined]
             return ""
@@ -156,6 +157,7 @@ async def convert_document(org: str, document_id: str) -> str:
                 "markdown": result["markdown"],
                 "title": await asyncio.to_thread(title_of, result["markdown"], result.get("title"), filename),
                 "error": None,
+                "warnings": result.get("warnings") or [],
                 "converted_at": utcnow(),
             },
         )

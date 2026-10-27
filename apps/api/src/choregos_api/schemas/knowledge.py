@@ -107,6 +107,8 @@ class KnowledgeDocumentDto(Dto):
     source: str
     status: DocumentStatus
     error: str | None = None
+    #: what a ready conversion left out (S42-09e): a spreadsheet cut at its row cap, sheet by sheet
+    warnings: list[str] = Field(default_factory=list)
     created_by: str | None = None
     created_at: datetime | None = None
     converted_at: datetime | None = None
