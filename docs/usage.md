@@ -1470,7 +1470,8 @@ is needed): `{"name": "asks when the ticket is empty", "live": true, "expect_sta
 its `max_cost_usd` (0.25 $ by default, 0.50 $ at most) and the evaluation at most the policy's `max_eval_usd`
 (2 $ by default): above it, `409`. A case passes when its run succeeded, its result has the expected status
 and its summary holds what it must. `GET` the same path for the score, read from the runs as they stand
-(`running`, `passed`, `failed`). Without a model to call it says `not_run` — never `passed`. Set
+(`running`, `passed`, `failed`); a case stays `running` until the trial's spend is booked, so its
+`cost_usd` is the real one. Without a model to call it says `not_run` — never `passed`. Set
 `"stable": {"min_live_score": 0.9}` (and/or `"candidate": {...}`) in the release policy and a release needs
 the newest finished evaluation of that revision to reach it (`live_eval` check; a rollback skips it). In the
 console, the Revisions and Testing cards offer **Run live evaluation** with a project and the most it may
