@@ -48,3 +48,16 @@ class OutboundProxyTest(Dto):
     error: str | None = None
     elapsed_ms: int
     target: str
+
+
+class RelayProxyCredentials(Dto):
+    """The one answer with the password in clear: only the relay route returns it (ADR 0091 §7)."""
+
+    endpoint: Annotated[str, Field(pattern=ENDPOINT_PATTERN)]
+    scheme: Literal["http", "https"]
+    username: Annotated[str, Field(max_length=512)]
+    password: Annotated[str, Field(max_length=1024)] = Field(repr=False)
+
+
+class RelayOutboundProxy(Dto):
+    proxy: RelayProxyCredentials | None

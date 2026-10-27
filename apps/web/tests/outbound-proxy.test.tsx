@@ -102,10 +102,10 @@ describe("the organisation's outbound proxy (ADR 0087)", () => {
     expect(save()).toBeDisabled();
   });
 
-  it("labels search_engines as having no effect yet", async () => {
+  it("says search_engines needs the deployment's relay", async () => {
     wrap(<OutboundProxyCard org="acme" canEdit />);
     await screen.findByDisplayValue("gate.example.com:7000");
-    expect(screen.getByText(/no effect yet/)).toBeInTheDocument();
+    expect(screen.getByText(/only where the deployment runs the relay/)).toBeInTheDocument();
   });
 
   it("says where the provider's options go", async () => {

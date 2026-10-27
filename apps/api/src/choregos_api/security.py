@@ -136,6 +136,49 @@ def verify_run_token(token: str, settings: Settings | None = None) -> RunClaims:
     )
 
 
+# ───────────────────────────── relay tokens ─────────────────────────────
+
+#: Not the run token's audience: neither token is accepted for the other's routes (ADR 0091 §3).
+RELAY_TOKEN_AUDIENCE = "choregos-relay"
+RELAY_TOKEN_MAX_DAYS = 400
+
+
+def mint_relay_token(org_slug: str, *, days: int, settings: Settings | None = None) -> str:
+    """The outbound-proxy relay's credential for ONE organisation: ES256 with the run-token key,
+    `aud=choregos-relay`, `sub` = the organisation's slug, always expiring (ADR 0091 §3)."""
+    if not org_slug:
+        raise ValueError("a relay token names one organisation")
+    if not 1 <= days <= RELAY_TOKEN_MAX_DAYS:
+        raise ValueError(f"a relay token lives between 1 and {RELAY_TOKEN_MAX_DAYS} days")
+    settings = settings or get_settings()
+    private_key, _ = run_token_keys(settings)
+    now = int(time.time())
+    payload = {
+        "iss": settings.run_token_issuer,
+        "aud": RELAY_TOKEN_AUDIENCE,
+        "sub": org_slug,
+        "iat": now,
+        "exp": now + days * 86400,
+    }
+    return jwt.encode(payload, private_key, algorithm=RUN_TOKEN_ALGORITHM)
+
+
+def verify_relay_token(token: str, settings: Settings | None = None) -> str:
+    """The organisation a relay token is for. Raises `jwt.PyJWTError` when it is invalid, expired,
+    has no `exp`, or is for another audience (a run token is refused here)."""
+    settings = settings or get_settings()
+    _, public_key = run_token_keys(settings)
+    payload: dict[str, Any] = jwt.decode(
+        token,
+        public_key,
+        algorithms=[RUN_TOKEN_ALGORITHM],
+        audience=RELAY_TOKEN_AUDIENCE,
+        issuer=settings.run_token_issuer,
+        options={"require": ["exp", "sub", "aud", "iss"]},
+    )
+    return str(payload["sub"])
+
+
 # ───────────────────────────── jetons d'API ─────────────────────────────
 
 
