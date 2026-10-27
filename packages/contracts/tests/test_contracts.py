@@ -580,3 +580,31 @@ def test_a_knowledge_document_and_a_sync_summary_say_what_was_cut() -> None:
     summary = schemas["KnowledgeSource"]["properties"]["last_summary"]["properties"]
     assert summary["truncated"]["type"] == "integer"
     assert summary["truncated_reasons"]["items"] == {"type": "string"}
+
+
+def test_the_distillation_job_is_in_the_contract() -> None:
+    """S42-10d: a distillation can be stopped and relaunched, keeps its last runs, and its spend is a
+    cost kind of its own."""
+    spec = contracts.load_openapi()
+    paths = spec["paths"]
+    stop = paths["/orgs/{org}/knowledge/{slug}/distill/stop"]["post"]
+    relaunch = paths["/orgs/{org}/knowledge/{slug}/distill/relaunch"]["post"]
+    assert stop["operationId"] == "stopKnowledgeDistillation"
+    assert relaunch["operationId"] == "relaunchKnowledgeDistillation"
+    assert relaunch["requestBody"]["required"] is False
+    assert "409" in stop["responses"] and "409" in relaunch["responses"]
+    run = spec["components"]["schemas"]["KnowledgeDistillRun"]
+    assert {"status", "code", "requested_by", "stopped_by", "spent_usd", "parts_done"} <= set(
+        run["properties"]
+    )
+    distillation = spec["components"]["schemas"]["KnowledgeBase"]["properties"]["distillation"]
+    assert {"history", "stopped_by", "exclude", "max_usd"} <= set(distillation["properties"])
+    assert distillation["properties"]["history"]["maxItems"] == 5
+    for route in (
+        "/projects/{id}/costs",
+        "/projects/{id}/costs.csv",
+        "/orgs/{org}/costs",
+        "/orgs/{org}/costs.csv",
+    ):
+        kind = next(p for p in paths[route]["get"]["parameters"] if p.get("name") == "kind")
+        assert kind["schema"]["enum"] == ["model", "tool", "distill"], route
