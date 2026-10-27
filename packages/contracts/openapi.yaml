@@ -341,16 +341,20 @@ paths:
         `installation_id`, `setup_action`, our `state` and, when the App requests user authorization,
         `code`. The API checks the state (signature, expiry, the session's user), upserts the
         installation, claims it for the organisation in the state (ADR 0073), and redirects to the
-        state's `return_to`. Not a JSON endpoint.
+        state's `return_to`. Not a JSON endpoint. A browser without a console session is redirected
+        to sign in (`/auth/login?redirect_to=` this URL, same query) instead of a 401 (S42-16). Without
+        `state` the installation was started on github.com: nothing is claimed, and the browser goes
+        to the console (`/?github=installed`), where the next sync discovers it.
       security:
         - session: []
+        - {}
       parameters:
         - { name: installation_id, in: query, required: true, schema: { type: integer } }
         - { name: setup_action, in: query, schema: { type: string, enum: [install, update, request] } }
-        - { name: state, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, description: "absent when the installation was started on github.com rather than from the console", schema: { type: string } }
         - { name: code, in: query, description: "OAuth code, present when the App requests user authorization during installation", schema: { type: string } }
       responses:
-        "302": { description: "Redirect to the state's `return_to` (the claim's outcome is carried in the `github` query parameter)" }
+        "302": { description: "Redirect to the state's `return_to` (the claim's outcome is carried in the `github` query parameter), to sign-in without a session, or to the console without a state" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }

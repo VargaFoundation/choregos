@@ -145,6 +145,11 @@ decide whether other companies can use it and whether a console install finds it
 | Where can this GitHub App be installed? | **Any account** if companies other than the App's owner use the deployment (a private App installs only on its owner's account) |
 | Request user authorization (OAuth) during installation | **Tick it before a second organisation exists**, generate a client secret, and give `github-app-client-id` / `github-app-client-secret` to the API |
 
+The Setup URL is a browser page. A browser that comes back without a console session is sent to sign
+in and then back to it, and an installation started on github.com rather than from the console lands on
+the console without being claimed: on an instance with one organisation the next sync claims it, with
+several the organisation installs it again from the console.
+
 Nobody types an installation id ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
 the console lists what the App sees, *Install on GitHub* sends the person to github.com and back through
 the Setup URL, and the installation is **claimed** by the organisation that started the flow. On an

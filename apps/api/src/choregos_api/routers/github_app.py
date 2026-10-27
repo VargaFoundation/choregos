@@ -13,15 +13,15 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from choregos_adapters.errors import UpstreamError
 from choregos_adapters.github import GitHubAppPort
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Header, Path, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import GitHubInstallation, Organization
-from ..deps import Db, Me
-from ..errors import conflict, forbidden, not_found, upstream
+from ..deps import Config, Db, Me, current_principal
+from ..errors import ApiError, conflict, forbidden, not_found, upstream
 from ..rbac import Permission, Principal
 from ..schemas import (
     GitHubAppStatus,
@@ -204,16 +204,44 @@ def _with_outcome(return_to: str, outcome: str) -> str:
     return urlunsplit(("", "", parts.path, urlencode(query), parts.fragment))
 
 
+async def _principal_or_none(
+    request: Request,
+    session: Db,
+    settings: Config,
+    authorization: Annotated[str | None, Header()] = None,
+) -> Principal | None:
+    """The caller, or None when no session or token says who they are (any other refusal stands)."""
+    try:
+        return await current_principal(request, session, settings, authorization)
+    except ApiError as exc:
+        if exc.status_code == 401:
+            return None
+        raise
+
+
 @router.get("/github/setup", operation_id="githubAppSetup", status_code=302, response_class=RedirectResponse)
 async def github_app_setup(
-    principal: Me,
+    request: Request,
+    principal: Annotated[Principal | None, Depends(_principal_or_none)],
     session: Db,
     installation_id: Annotated[int, Query()],
-    state: Annotated[str, Query()],
+    state: Annotated[str | None, Query()] = None,
     setup_action: Annotated[str | None, Query()] = None,
     code: Annotated[str | None, Query()] = None,
 ) -> RedirectResponse:
-    """The App's Setup URL: GitHub sends the browser back here after an install or an update."""
+    """The App's Setup URL: GitHub sends the browser back here after an install or an update.
+
+    A browser, not an API client (S42-16): without a console session it is sent to sign in and back
+    here with the same query, instead of a JSON 401 page; GitHub's OAuth `code` lives ten minutes.
+    Without our `state` the installation was started on github.com, not from the console: nothing
+    says which organisation started it (ADR 0073), so nothing is claimed and the browser goes to the
+    console, where the next sync discovers the installation.
+    """
+    if principal is None:
+        back = f"/api/v1/github/setup?{request.url.query}"
+        return RedirectResponse(f"/api/v1/auth/login?{urlencode({'redirect_to': back})}", status_code=302)
+    if state is None:
+        return RedirectResponse(_with_outcome("/", "installed"), status_code=302)
     claims = svc.verify_state(state)
     if claims.get("user") != principal.email:
         raise forbidden("this installation was started by another person")
