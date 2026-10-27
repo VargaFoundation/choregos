@@ -26,6 +26,7 @@ from enum import StrEnum
 from typing import Any
 
 from ..rbac import Permission, Principal
+from ..services.human_groups import groups_for_org
 
 VIEWER, EDITOR, OWNER = "viewer", "editor", "owner"
 ROLES = (VIEWER, EDITOR, OWNER)
@@ -81,7 +82,7 @@ def _reaches(principal: Principal, org: str, base: Any) -> bool:
         return any(principal.can(Permission.PROJECT_READ, org, project) for project in base.projects or [])
     if base.scope == "groups":
         return principal.can(Permission.PROJECT_READ, org) and bool(
-            set(principal.groups) & set(base.groups or [])
+            groups_for_org(principal.groups, org) & set(base.groups or [])
         )
     return False
 
@@ -91,7 +92,7 @@ def _holds(principal: Principal, org: str, grant: Any) -> bool:
     if kind == "user":
         return subject == principal.user_id or subject.lower() == principal.email.lower()
     if kind == "group":
-        return subject in principal.groups
+        return subject in groups_for_org(principal.groups, org)
     if kind == "project":
         # A member of the project, not an organisation-wide role that merely reads every project.
         return f"{org}/{subject}" in principal.project_roles
