@@ -132,10 +132,11 @@ ALL = {"read": True, "upload": True, "source": True, "sync": True, "distill": Tr
 EDITS = {"read": True, "upload": True, "source": True, "sync": True, "distill": True, "share": False}
 READS = {"read": True, "upload": False, "source": False, "sync": False, "distill": False, "share": False}
 NONE = dict.fromkeys(ALL, False)
-#: caller -> (what they may do). `widen` is the administrator's alone; `archive` needs the owner role.
+#: caller -> (what they may do). `widen` is the administrator's and the owning project's owner's;
+#: `archive` needs the owner role.
 EXPECTED: dict[str, dict[str, bool]] = {
     "admin": {**ALL, "widen": True, "archive": True},
-    "project owner": {**ALL, "widen": False, "archive": True},
+    "project owner": {**ALL, "widen": True, "archive": True},
     "project developer": {**READS, "widen": False, "archive": False},
     "project viewer": {**READS, "widen": False, "archive": False},
     "user editor grant": {**EDITS, "widen": False, "archive": False},
@@ -373,8 +374,8 @@ async def test_widening_still_clears_owner_project_and_restricting_does_not(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
     await _admin_base(client, two_projects)
-    async with _as(client, _email("project owner"), **PEOPLE["project owner"]) as owner:
-        assert (await owner.patch(f"{ORG}/fiches", json={"restricted": True})).status_code == 403
+    async with _as(client, _email("project developer"), **PEOPLE["project developer"]) as dev:
+        assert (await dev.patch(f"{ORG}/fiches", json={"restricted": True})).status_code == 403
     await login(client, "admin@varga.dev")
     restricted = await client.patch(f"{ORG}/fiches", json={"restricted": True})
     assert restricted.status_code == 200 and restricted.json()["owner_project"] == "billing-api"

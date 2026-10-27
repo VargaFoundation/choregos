@@ -2273,6 +2273,8 @@ export type KnowledgeDocument = {
   source: string;
   status: "pending" | "converting" | "ready" | "failed";
   error?: string | null;
+  /** what the conversion left out of a ready document, one sentence each (a spreadsheet read up to its row cap: `Sheet "Q3": 1200 more rows not shown`); empty when nothing was cut */
+  warnings?: Array<string>;
   created_by?: string | null;
   created_at?: string | null;
   converted_at?: string | null;
@@ -2434,6 +2436,10 @@ export type KnowledgeSource = {
     unchanged?: number;
     skipped?: number;
     skipped_reasons?: Array<string>;
+    /** documents converted by this sync with part of their content left out */
+    truncated?: number;
+    /** `<file>: <warning>`, at most 20 */
+    truncated_reasons?: Array<string>;
   } | null;
   document_count?: number;
 };
@@ -2656,6 +2662,18 @@ export type OutboundProxyTest = {
   elapsed_ms: number;
   /** the echo endpoint that was fetched */
   target: string;
+};
+
+export type RelayOutboundProxy = {
+  proxy: RelayProxyCredentials | null;
+};
+
+/** The one schema that carries the proxy's password in clear; only the relay route returns it. */
+export type RelayProxyCredentials = {
+  endpoint: string;
+  scheme: "http" | "https";
+  username: string;
+  password: string;
 };
 
 export type PolicyPut = {
@@ -3858,6 +3876,7 @@ export interface Operations {
   }>;
 } };
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
+  getRelayOutboundProxy: { method: "GET"; path: "/internal/orgs/{org}/outbound-proxy/{kind}"; body: never; response: RelayOutboundProxy };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {

@@ -4,8 +4,8 @@
 A knowledge base is a curated corpus a human chose; its documents are uploaded here, answered 202
 `pending`, and converted to markdown in the background (`knowledge.conversion`), never inside the
 request. Curating is the organisation administrator's (`agent:manage`), or the owners' of the project that
-owns the base (`project:write`, S39-14); widening a base's scope stays the administrator's. Reading
-follows the base's scope (`knowledge.access`).
+owns the base (`project:write`, S39-14), who may also widen or narrow its reach (ADR 0081, amended).
+Reading follows the base's scope (`knowledge.access`).
 """
 
 from __future__ import annotations
@@ -188,6 +188,7 @@ def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -
         source=document.source,
         status=document.status,
         error=document.error,
+        warnings=list(document.warnings or []),
         created_by=document.created_by,
         created_at=document.created_at,
         converted_at=document.converted_at,
@@ -395,7 +396,7 @@ async def create_project_knowledge_base(
     ctx: ProjectCtx, body: ProjectKnowledgeBaseCreate, session: Db
 ) -> KnowledgeBaseDto:
     """A base owned by this project (S39-14): served to its runs only, curated by its owners
-    (`project:write`). Its reach is the organisation administrator's to widen."""
+    (`project:write`). Its owners, like the administrator, may widen its reach."""
     ctx.require(Permission.PROJECT_WRITE)
     organisation = await _organisation(session, ctx.org_slug)
     if (
@@ -451,8 +452,8 @@ async def update_knowledge_base(
     base = await _base(session, principal, org, slug)
     changes = body.model_dump(exclude_unset=True)
     widens = any(field in changes for field in ("scope", "projects", "groups"))
-    # Who reads and who is served a base is the organisation's call, not its owning project's or its
-    # owners' (D11-2): `restricted` is part of the reach.
+    # Who reads and who is served a base is for the administrator and the owners of its project to
+    # decide, nobody else (ADR 0081, amended): `restricted` is part of the reach.
     if widens or changes.get("restricted") is not None:
         _require(principal, org, base, KnowledgeAction.WIDEN)
     archives = changes.get("status") is not None
@@ -477,8 +478,9 @@ async def update_knowledge_base(
     base.scope = scope
     base.projects = sorted(set(projects)) if scope == "projects" else []
     base.groups = sorted(set(groups)) if scope == "groups" else []
-    if widens:
-        # An administrator re-scoped it: it is no longer the owning project's to curate.
+    if widens and can_manage(principal, org):
+        # An administrator re-scoped it: it is no longer the owning project's to curate. When the
+        # owning project's own owner does it, the base stays theirs (they may narrow it back).
         base.owner_project = None
     await session.flush()
     await record(
