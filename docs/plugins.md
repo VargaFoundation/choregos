@@ -23,6 +23,12 @@ hello/
 
 A complete example lives in `tests/fixtures/plugins/hello/`.
 
+**A plugin is what its manifest declares**: `plugin.yaml`, a `README.md` and a `LICENSE` at its root when
+present, and exactly the paths `contents` names — each file, every file under a skill or template
+directory, every file a procedure pattern matches. Anything else in the directory (a server's source, its
+`.venv`, build output) is not read, not validated, not digested and not packed, so a server's code can
+live beside its plugin without shipping in it.
+
 ```yaml
 apiVersion: choregos/v1
 kind: Plugin
@@ -50,19 +56,26 @@ contents:
 
 `choregos plugin validate` reports every problem it finds, each with its file:
 
-- **Paths stay inside the plugin.** A path cannot be absolute or hold a `.` or `..` segment, and the
-  tree cannot hold a symbolic link, even one pointing inside it. These are the template rules, shared
-  in `choregos_core.paths`.
+- **Paths stay inside the plugin.** A path cannot be absolute or hold a `.` or `..` segment, and no
+  declared path, nor anything under a declared directory, may be or pass through a symbolic link, even
+  one pointing inside the plugin. These are the template rules, shared in `choregos_core.paths`. A link
+  elsewhere in the directory is ignored with the rest of what is not declared.
 - **The manifest** matches `plugin.schema.json`. A kind other than `Plugin`, a version that is not
   semver, or an unknown key is refused.
 - **Agents** have the shape of a built-in catalogue entry (ADR 0040): `catalogue.version`, `role` and
   `summary`; `agent.slug`, `display_name` and `spec`. The full `AgentCreate` validation runs when the
   plugin is installed.
 - **Skills** are directories that hold a `SKILL.md`.
-- **Templates** have a `manifest.yaml` that matches `template.schema.json`.
-- **Evals** name an agent of the plugin.
+- **Templates** have a `manifest.yaml` that matches `template.schema.json`. A template whose project
+  tracker is a server of the plugin says `requires.connectors.tracker: plugin:<plugin>/<server>`; the
+  server must be one of the same plugin and declare `implements: [tracker]`. (The adapter that makes such
+  a server a project's tracker is S43-07: until then a project cannot be created from such a template.)
+- **Evals** match `plugin-evals.schema.json` and name an agent of the plugin (see [Evals](#evals)).
 - **Procedures** go through the same parser as the core's (ADR 0067): front matter, fixed sections,
-  links listed in `vendor_docs`, no secret-shaped string.
+  links listed in `vendor_docs`, no secret-shaped string. A procedure gives the address of its server's
+  webhook with `{{plugin_webhook_url:<plugin>/<server>}}`, filled with
+  `<api>/api/v1/webhooks/plugins/<plugin>/<server>`; it may name only a server of its own plugin that
+  declares a `webhook`.
 - **Servers** match `plugin-server.schema.json`:
   - the image is pinned by `@sha256:`;
   - every operation states its `access` (`read` or `write`);
@@ -72,6 +85,32 @@ contents:
 
   An operation's `human_approval` is a floor: an organisation may raise it, never lower it. A tool the
   server serves but does not list is refused.
+
+### Evals
+
+An eval file (`plugin-evals.schema.json`) has the shape of the core catalogue's own cases
+(`choregos_core/catalogue_d_agents/eval_cases/`), plus the API's `AgentEvalCase` list:
+
+```yaml
+agent: greeter                     # an agent of this plugin
+description: The greeting names the author.
+must_contain: [greet the author]   # level 1: in the rendered instructions, case-insensitive
+must_not_contain: [without approval]
+min_score: 1.0                     # optional, the share of must_contain to find
+cases:                             # optional, AgentEvalCase
+  - name: names-the-author
+    input: {title: Say hello, body: Greet Ada.}
+    must_contain: [Greet the author]   # case-sensitive, on the instructions rendered on `input`
+  - name: live-greeting
+    live: true                     # a capped trial on a real model (S40-02d)
+    expect_status: done
+    max_cost_usd: 0.25
+    must_contain: [Hello]
+```
+
+An unknown key is refused, and a suite holds `must_contain`, `cases` or both. The installer plays level 1
+and every case that is not `live`; a failure refuses the plugin. A `live` case is validated, not run at
+install.
 
 ## Pack and index
 
@@ -83,8 +122,8 @@ choregos plugin index plugins/ -o index.yaml --git-url https://github.com/acme/a
     --git-commit <40-hex sha> --git-path plugins
 ```
 
-The **content digest** (`sha256:…`) identifies a plugin. It is the sha256 of a canonical tar of the
-directory: entries sorted by path, regular files only, mode 0644, time 0, owner and group 0. The same
+The **content digest** (`sha256:…`) identifies a plugin. It is the sha256 of a canonical tar of its
+declared files (nothing else is in the archive): entries sorted by path, regular files only, mode 0644, time 0, owner and group 0. The same
 files always give the same digest, whatever their times or permissions on disk, and `pack` writes the
 same bytes every time. An index (`plugin-index.schema.json`) records, for each version, its digest, its
 `core` range, and where to fetch it: an OCI reference, or a git repository pinned to a commit. A
@@ -109,10 +148,13 @@ install and upgrade fetches through `fetch_plugin`, so every check of the table 
 is a 422 naming the check (`signature`, `digest`, `lock`…), a plugin or version the source does not
 offer a 404.
 
-**A plugin that brings a server waits for a second administrator** (ADR 0050). Its install or upgrade
+**A plugin that brings a server, or a skill the gate rates high risk, waits for a second
+administrator** (ADR 0050). Its install or upgrade
 is checked in full, nothing is written, and the answer is `202 {"status": "pending_approval",
 "approval_id", "reason"}`. Asking again answers the same request. Another administrator of the
-organisation approves it with `POST …/plugin-approvals/{id}/approve` (the one who asked gets a 403);
+organisation approves it with `POST …/plugin-approvals/{id}/approve` (the one who asked gets a 403); the
+`reason` lists every cause: each server, and each high-risk skill with the findings that rate it so
+(`script`, `executable`, `outbound_url`, `mcp_reference`, or any critical one);
 the plugin is then fetched again at the recorded version and installed only if its content digest is
 the one that was checked (a 409 otherwise: ask again). The install is recorded as the requester's.
 `GET …/plugin-approvals` lists the requests, waiting and approved, to every member.
@@ -227,9 +269,10 @@ mode. An index that names an artifact on another host reaches it only when that 
 
 ### The supply-chain gate
 
-Once fetched, `assess_plugin` applies the rest of ADR 0050's gate: a plugin that brings a server needs
-a second administrator's approval (an install or upgrade answers 202 until it is given, see
-[Installing into an organisation](#installing-into-an-organisation)), and each of its skills is
-assessed like an imported skill. The installer does not apply that assessment yet: a plugin's
-skills are installed approved, as the platform's own (a high-risk one is not held for review).
+Once fetched, `assess_plugin` applies the rest of ADR 0050's gate. Each of its skills is assessed like
+an imported skill, and a plugin that brings a server or a `high` skill needs a second administrator's
+approval (an install or upgrade answers 202 until it is given, see
+[Installing into an organisation](#installing-into-an-organisation)). That approval is the skill's
+review: once given, the plugin's skills are installed approved, a high-risk one included, with their
+assessment recorded.
 

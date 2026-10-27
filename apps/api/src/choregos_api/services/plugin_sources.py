@@ -80,7 +80,7 @@ from choregos_core.plugins.versions import admits, core_version
 
 from ..config import get_settings
 from ..logging import get_logger
-from .skill_gate import Assessment, assess
+from .skill_gate import Assessment, assess, raises_to_high
 
 log = get_logger(__name__)
 
@@ -376,7 +376,7 @@ class PluginGate:
 
     #: why a second person must approve; empty when one approval is enough
     reasons: tuple[str, ...] = ()
-    #: each skill's assessment, by its path in the plugin; a `high` one is installed `pending_review`
+    #: each skill's assessment, by its path in the plugin; a `high` one needs the second approval
     skills: dict[str, Assessment] = field(default_factory=dict)
 
     @property
@@ -385,10 +385,12 @@ class PluginGate:
 
 
 def assess_plugin(plugin: Plugin) -> PluginGate:
-    reasons = tuple(
+    """A second administrator approves a plugin that brings a server, or a skill the gate rates `high`
+    (ADR 0050: what a single administrator may not let in alone). Every reason is listed."""
+    reasons = [
         f"it brings the server `{name}` ({server.get('image', '')})"
         for name, server in sorted(plugin.servers.items())
-    )
+    ]
     skills: dict[str, Assessment] = {}
     for ref in plugin.manifest["contents"].get("skills", []):
         directory = plugin.root / ref
@@ -397,8 +399,11 @@ def assess_plugin(plugin: Plugin) -> PluginGate:
             for p in sorted(directory.rglob("*"))
             if p.is_file()
         }
-        skills[ref] = assess(files)
-    return PluginGate(reasons, skills)
+        skills[ref] = assessment = assess(files)
+        if assessment.risk == "high":
+            why = sorted({f.code for f in assessment.findings if raises_to_high(f)})
+            reasons.append(f"its skill `{ref}` is high risk ({', '.join(why)})")
+    return PluginGate(tuple(reasons), skills)
 
 
 # ───────────────────────────── fetching ─────────────────────────────
@@ -463,7 +468,7 @@ async def _fetch_offline(config: PluginsConfig, release: Release, work: Path) ->
         root = work / "plugin"
         root.mkdir()
         await asyncio.to_thread(_extract, release.path, root)
-    check_lock(lock, release.name, release.version, await asyncio.to_thread(digest, root))
+    check_lock(lock, release.name, release.version, await asyncio.to_thread(_content_digest, root))
     return root, "the deployment's offline directory" + (" (checked against plugins.lock)" if lock else "")
 
 
@@ -478,8 +483,16 @@ def _extract(archive: Path, root: Path) -> None:
         ) from exc
 
 
+def _content_digest(root: Path) -> str:
+    """The digest of what the manifest declares; a manifest that cannot say it refuses the content."""
+    try:
+        return digest(root)
+    except PluginError as exc:
+        raise SourceError("content", str(exc)) from exc
+
+
 def _validated(root: Path, release: Release, core: str) -> Plugin:
-    found = digest(root)
+    found = _content_digest(root)
     if found != release.digest:
         raise SourceError(
             "digest", f"`{release.name}` {release.version} is {found}; the index says {release.digest}"

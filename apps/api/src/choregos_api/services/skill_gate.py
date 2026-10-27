@@ -257,6 +257,14 @@ def _licence_findings(licence: str | None) -> list[Finding]:
     return []
 
 
+#: The findings that rate a version `high`, whatever their severity; a critical one always does.
+HIGH_CODES = frozenset({"script", "executable", "outbound_url", "mcp_reference"})
+
+
+def raises_to_high(finding: Finding) -> bool:
+    return finding.code in HIGH_CODES or finding.severity == "critical"
+
+
 def assess(
     files: dict[str, str],
     *,
@@ -272,8 +280,7 @@ def assess(
     for chemin in sorted(set(executables)):
         trouves.append(Finding("executable", "warning", "a file with an executable bit", chemin))
     risque: Risk = "medium" if set(files) - {"SKILL.md"} else "low"
-    hauts = {"script", "executable", "outbound_url", "mcp_reference"}
-    if any(f.code in hauts or f.severity == "critical" for f in trouves):
+    if any(raises_to_high(f) for f in trouves):
         risque = "high"
     licence = detect_licence(files, repo_licences)
     trouves.extend(_licence_findings(licence))
@@ -300,6 +307,7 @@ def platform_columns(files: dict[str, str]) -> dict[str, Any]:
 
 
 __all__ = [
+    "HIGH_CODES",
     "OPEN_LICENCES",
     "PLATFORM",
     "RANK",
@@ -308,4 +316,5 @@ __all__ = [
     "assess",
     "columns",
     "platform_columns",
+    "raises_to_high",
 ]

@@ -113,3 +113,23 @@ its sources and their trust, the installer, and a way to run a plugin's server w
 - **The reconcile** never upgrades: an organisation that has a default plugin, at any version, is left
   alone. It runs on every replica, one organisation at a time under an advisory lock, and when an
   organisation is created.
+
+## Precisions (S43-05b, 2026-10-27)
+
+Found by the first real plugin (`servicenow`, choregos-agents PR #2):
+
+- **A plugin is what its manifest declares.** `validate`, the content digest and `pack` cover
+  `plugin.yaml`, a root `README.md` and `LICENSE` when present, and exactly the paths of `contents`
+  (globs expanded); anything else in the directory — a server's source, a `.venv` — is ignored. The
+  symbolic-link rule of §1 applies to declared paths and what is under a declared directory. The digest
+  stays reproducible, and a git release yields the same digest as the packed archive.
+- **A high-risk skill needs the second approval** (ADR 0050), like a server; the request's `reason`
+  lists every cause. Approved, the skill is installed approved: the second approval is its review.
+- **Evals have a format**, `plugin-evals.schema.json`: level 1 is the core catalogue's case shape, and
+  `cases` the API's `AgentEvalCase`. The installer plays level 1 and the deterministic cases; a `live`
+  case is validated, not run at install.
+- **A procedure names its plugin's webhook** with `{{plugin_webhook_url:<plugin>/<server>}}` (ADR 0067),
+  only for a server of its own plugin that declares a `webhook`.
+- **A template's tracker may be a plugin's server**: `requires.connectors.tracker:
+  plugin:<plugin>/<server>` (`template.schema.json`), checked at validation against a server of the same
+  plugin that declares `implements: [tracker]`. The adapter that runs it is S43-07.

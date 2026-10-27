@@ -28,6 +28,16 @@
         "connectors": {
           "type": "object",
           "additionalProperties": { "type": "string" },
+          "properties": {
+            "tracker": {
+              "type": "string",
+              "description": "the tracker's type, e.g. github-issues; or `plugin:<plugin>/<server>`, the server of a plugin that declares `implements: [tracker]` (ADR 0093, S43-05b; checked when the plugin is validated, run by S43-07)",
+              "anyOf": [
+                { "pattern": "^plugin:[a-z0-9][a-z0-9-]{0,62}/[a-z0-9][a-z0-9-]{0,62}$" },
+                { "not": { "pattern": "^plugin:" } }
+              ]
+            }
+          },
           "description": "kind → expected type, e.g. tracker: github-issues"
         },
         "cluster_capabilities": { "type": "array", "items": { "type": "string" } },

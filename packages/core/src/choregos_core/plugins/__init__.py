@@ -1,23 +1,31 @@
 # SPDX-License-Identifier: Apache-2.0
 """Plugins (ADR 0093): read a plugin directory or archive, validate everything it ships, digest it.
 
-A plugin is a directory with `plugin.yaml` at its root (`plugin.schema.json`). Loading it checks,
-and reports every problem found rather than the first:
+A plugin is a directory with `plugin.yaml` at its root (`plugin.schema.json`). **A plugin is what its
+manifest declares**: `plugin.yaml`, a `README.md` and a `LICENSE` at the root when present, and exactly
+the paths of `contents` (a file, every file of a skill or template directory, every file a procedure
+pattern matches). Anything else in the directory — a server's source, a `.venv`, build output — is
+neither read, validated, digested nor packed (S43-05b). Loading checks, and reports every problem found
+rather than the first:
 
-- no symbolic link anywhere in the tree, no path that leaves it (the template rules, `choregos_core.paths`);
 - the manifest against `plugin.schema.json`;
+- no symbolic link on a declared path or under a declared directory, no path that leaves the plugin
+  (the template rules, `choregos_core.paths`);
 - each agent file in the catalogue entry shape (`catalogue:` + `agent:`, ADR 0040). Only its structure
   is checked here: the full `AgentCreate` model lives in the API, which the installer (S43-04) applies;
 - each skill directory holds a `SKILL.md`;
 - each template's `manifest.yaml` against `template.schema.json`;
-- each eval suite names an agent of the plugin;
-- each procedure through the ADR 0067 parser (`choregos_core.procedures.parse`);
+- each eval suite against `plugin-evals.schema.json`, naming an agent of the plugin;
+- each procedure through the ADR 0067 parser (`choregos_core.procedures.parse`), and each
+  `{{plugin_webhook_url:<plugin>/<server>}}` it holds names this plugin and a server of it with a webhook;
+- each template that takes its tracker from a plugin (`requires.connectors.tracker:
+  plugin:<plugin>/<server>`) names this plugin and a server of it that `implements: [tracker]`;
 - each server file against `plugin-server.schema.json`, plus what a schema cannot say (unique
   operation names, a compensation that names an operation of the same server, egress fields that the
   configuration schema declares).
 
-The plugin's identity is its **content digest**: the sha256 of its canonical tar (entries sorted by
-path, regular files only, mode 0644, modification time 0, owner and group 0). `pack` writes that tar
+The plugin's identity is its **content digest**: the sha256 of its canonical tar (its declared files
+only, entries sorted by path, mode 0644, modification time 0, owner and group 0). `pack` writes that tar
 gzip-compressed, itself reproducible (gzip header time 0, no file name).
 """
 
@@ -40,9 +48,13 @@ from choregos_contracts import load_schema
 from jsonschema import Draft202012Validator
 
 from ..errors import ChoregosError
-from ..paths import PathOutsideError, inside, symlinks_under
+from ..paths import PathOutsideError, files_under, inside, symlinks_under
 
 MANIFEST = "plugin.yaml"
+#: Files at the root that ship with a plugin when present, though `contents` does not name them.
+ROOT_FILES = ("README.md", "LICENSE")
+#: `requires.connectors.tracker: plugin:<plugin>/<server>` in a template: a plugin's server is the tracker.
+PLUGIN_TRACKER = "plugin:"
 #: Bounds on what a plugin may hold, unpacked: generous for agents, skills and templates, small
 #: enough that an archive cannot fill a disk.
 MAX_FILES = 2000
@@ -68,6 +80,8 @@ class Plugin:
     agents: dict[str, dict[str, Any]] = field(default_factory=dict)
     servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     procedures: tuple[str, ...] = ()
+    #: the declared files, relative POSIX paths, sorted: what the digest covers and `pack` writes
+    files: tuple[str, ...] = ()
 
     @property
     def name(self) -> str:
@@ -175,21 +189,38 @@ def _check_eval(path: Path, ref: str, agents: set[str], problems: list[str]) -> 
         problems.append(f"{ref}: eval file missing")
         return
     doc = _yaml(path, ref, problems)
-    if not isinstance(doc, dict) or not isinstance(doc.get("agent"), str):
-        problems.append(f"{ref}: an eval suite is a mapping that names its `agent`")
+    found = _schema_problems(ref, "plugin-evals.schema.json", doc)
+    if found:
+        problems.extend(found)
         return
+    assert isinstance(doc, dict)
     if doc["agent"] not in agents:
         problems.append(f"{ref}: evaluates `{doc['agent']}`, which the plugin does not ship")
+    names = [str(case["name"]) for case in doc.get("cases") or []]
+    for duplicate in sorted({n for n in names if names.count(n) > 1}):
+        problems.append(f"{ref}: case `{duplicate}` is declared twice")
 
 
-def _check_procedure(path: Path, ref: str, plugin: str, problems: list[str]) -> str | None:
-    from ..procedures import ProcedureError, parse
+def _check_procedure(
+    path: Path, ref: str, plugin: str, servers: dict[str, dict[str, Any]], problems: list[str]
+) -> str | None:
+    from ..procedures import ProcedureError, parse, plugin_webhooks_in
 
     try:
-        return parse(path.read_text(encoding="utf-8"), ref, origin=f"plugin:{plugin}").id
+        proc = parse(path.read_text(encoding="utf-8"), ref, origin=f"plugin:{plugin}")
     except (ProcedureError, UnicodeDecodeError) as exc:
         problems.append(str(exc) if isinstance(exc, ProcedureError) else f"{ref}: not UTF-8 text")
         return None
+    for owner, server in plugin_webhooks_in(proc):
+        if owner != plugin:
+            problems.append(
+                f"{ref}: `plugin_webhook_url:{owner}/{server}` names another plugin than `{plugin}`"
+            )
+        elif "webhook" not in servers.get(server, {}):
+            problems.append(
+                f"{ref}: `plugin_webhook_url:{owner}/{server}` names no server of `{plugin}` with a webhook"
+            )
+    return proc.id
 
 
 def _procedure_files(root: Path, pattern: str, problems: list[str]) -> list[tuple[str, Path]]:
@@ -208,17 +239,89 @@ def _procedure_files(root: Path, pattern: str, problems: list[str]) -> list[tupl
     return out
 
 
-# -- loading ------------------------------------------------------------------------------------------
+# -- what a plugin is made of ---------------------------------------------------------------------------
 
 
-def _tree_problems(root: Path) -> list[str]:
-    problems = [f"{link}: symbolic link refused" for link in symlinks_under(root)]
-    files = [p for p in root.rglob("*") if p.is_file() and not p.is_symlink()]
+def _link_on(root: Path, ref: str) -> str | None:
+    """The first prefix of `ref` that is a symbolic link (a link to a directory included), else None."""
+    current = root
+    for part in PurePosixPath(ref).parts:
+        current = current / part
+        if current.is_symlink():
+            return current.relative_to(root).as_posix()
+    return None
+
+
+def _declared_refs(root: Path, contents: dict[str, list[str]]) -> list[str]:
+    refs = [MANIFEST, *(n for n in ROOT_FILES if (root / n).is_symlink() or (root / n).is_file())]
+    for kind in ("agents", "evals", "servers", "skills", "templates"):
+        refs.extend(contents.get(kind, []))
+    for pattern in contents.get("procedures", []):
+        if "*" in pattern:
+            refs.extend(sorted(p.relative_to(root).as_posix() for p in root.glob(pattern)))
+        else:
+            refs.append(pattern)
+    return list(dict.fromkeys(refs))
+
+
+def _declared(root: Path, contents: dict[str, list[str]]) -> tuple[dict[str, Path], list[str]]:
+    """The files the manifest declares, relative POSIX path → path, and why some are refused.
+
+    A declared path that is missing is not a problem here: the content checks say so in their own
+    words. A link on a declared path, or under a declared directory, is refused: nothing is read
+    through it. Nothing else in the directory is looked at."""
+    problems: list[str] = []
+    directories = {*contents.get("skills", []), *contents.get("templates", [])}
+    files: dict[str, Path] = {}
+    for ref in _declared_refs(root, contents):
+        link = _link_on(root, ref)
+        if link is not None:
+            problems.append(f"{link}: symbolic link refused")
+            continue
+        path = _target(root, ref, problems)
+        if path is None:
+            continue
+        if path.is_file():
+            files[ref] = path
+        elif path.is_dir() and ref in directories:
+            links = symlinks_under(path)
+            problems.extend(f"{ref}/{name}: symbolic link refused" for name in links)
+            if not links:
+                files.update({f"{ref}/{name}": inner for name, inner in files_under(path).items()})
     if len(files) > MAX_FILES:
         problems.append(f"more than {MAX_FILES} files")
-    if sum(p.stat().st_size for p in files) > MAX_BYTES:
+    elif sum(p.stat().st_size for p in files.values()) > MAX_BYTES:
         problems.append(f"more than {MAX_BYTES} bytes")
-    return problems
+    return dict(sorted(files.items())), problems
+
+
+def _manifest(root: Path) -> dict[str, Any]:
+    """`plugin.yaml`, read and valid against its schema; `PluginError` otherwise."""
+    if (root / MANIFEST).is_symlink():
+        raise PluginError([f"{MANIFEST}: symbolic link refused"])
+    if not (root / MANIFEST).is_file():
+        raise PluginError([f"{MANIFEST}: missing at the root of {root.name}"])
+    problems: list[str] = []
+    manifest = _yaml(root / MANIFEST, MANIFEST, problems)
+    problems.extend(_schema_problems(MANIFEST, "plugin.schema.json", manifest))
+    if problems:
+        raise PluginError(problems)
+    assert isinstance(manifest, dict)
+    return manifest
+
+
+def plugin_files(root: Path) -> dict[str, Path]:
+    """The files that make the plugin at `root` (relative POSIX path → path, sorted): its manifest, a
+    root `README.md` and `LICENSE`, and what `contents` declares. `PluginError` on an invalid manifest
+    or a link on a declared path."""
+    root = root.resolve()
+    files, problems = _declared(root, _manifest(root)["contents"])
+    if problems:
+        raise PluginError(problems)
+    return files
+
+
+# -- loading ------------------------------------------------------------------------------------------
 
 
 def _agents(root: Path, refs: list[str], problems: list[str]) -> dict[str, dict[str, Any]]:
@@ -234,7 +337,19 @@ def _agents(root: Path, refs: list[str], problems: list[str]) -> dict[str, dict[
     return agents
 
 
-def _skills_and_templates(root: Path, contents: dict[str, list[str]], problems: list[str]) -> None:
+def _plugin_tracker(manifest: Any) -> str | None:
+    connectors = ((manifest or {}).get("requires") or {}).get("connectors") or {}
+    tracker = connectors.get("tracker") if isinstance(connectors, dict) else None
+    return tracker if isinstance(tracker, str) and tracker.startswith(PLUGIN_TRACKER) else None
+
+
+def _skills_and_templates(
+    root: Path,
+    contents: dict[str, list[str]],
+    plugin: str,
+    servers: dict[str, dict[str, Any]],
+    problems: list[str],
+) -> None:
     for ref in contents.get("skills", []):
         path = _target(root, ref, problems)
         if path is not None and not (path / "SKILL.md").is_file():
@@ -248,17 +363,32 @@ def _skills_and_templates(root: Path, contents: dict[str, list[str]], problems: 
             continue
         where = f"{ref}/manifest.yaml"
         manifest = _yaml(path / "manifest.yaml", where, problems)
-        problems.extend(_schema_problems(where, "template.schema.json", manifest))
+        found = _schema_problems(where, "template.schema.json", manifest)
+        problems.extend(found)
+        tracker = None if found else _plugin_tracker(manifest)
+        if tracker is not None:
+            owner, _, server = tracker.removeprefix(PLUGIN_TRACKER).partition("/")
+            if owner != plugin:
+                problems.append(f"{where}: the tracker `{tracker}` is another plugin's than `{plugin}`")
+            elif server not in servers:
+                problems.append(f"{where}: the tracker `{tracker}` names no server of `{plugin}`")
+            elif "tracker" not in (servers[server].get("implements") or []):
+                problems.append(
+                    f"{where}: the tracker `{tracker}` is a server that does not declare "
+                    "`implements: [tracker]`"
+                )
 
 
-def _procedures(root: Path, patterns: list[str], plugin: str, problems: list[str]) -> list[str]:
+def _procedures(
+    root: Path, patterns: list[str], plugin: str, servers: dict[str, dict[str, Any]], problems: list[str]
+) -> list[str]:
     found: list[str] = []
     for pattern in patterns:
         for ref, path in _procedure_files(root, pattern, problems):
             if not path.is_file():
                 problems.append(f"{ref}: procedure file missing")
                 continue
-            proc_id = _check_procedure(path, ref, plugin, problems)
+            proc_id = _check_procedure(path, ref, plugin, servers, problems)
             if proc_id is not None:
                 found.append(proc_id)
     return found
@@ -277,51 +407,38 @@ def _servers(root: Path, refs: list[str], problems: list[str]) -> dict[str, dict
 
 
 def load_directory(root: Path) -> Plugin:
-    """Validate a plugin directory; `PluginError` lists every problem found."""
+    """Validate a plugin directory; `PluginError` lists every problem found. Only what the manifest
+    declares is read."""
     root = root.resolve()
-    if not (root / MANIFEST).is_file():
-        raise PluginError([f"{MANIFEST}: missing at the root of {root.name}"])
-    problems = _tree_problems(root)
-    if problems:  # nothing is read from a tree that holds a link
-        raise PluginError(problems)
-    manifest = _yaml(root / MANIFEST, MANIFEST, problems)
-    problems.extend(_schema_problems(MANIFEST, "plugin.schema.json", manifest))
-    if problems:
-        raise PluginError(problems)
-    assert isinstance(manifest, dict)
+    manifest = _manifest(root)
     contents: dict[str, list[str]] = manifest["contents"]
+    files, problems = _declared(root, contents)
+    if problems:  # nothing is read through a link
+        raise PluginError(problems)
     name = str(manifest["metadata"]["name"])
 
     agents = _agents(root, contents.get("agents", []), problems)
-    _skills_and_templates(root, contents, problems)
+    servers = _servers(root, contents.get("servers", []), problems)
+    _skills_and_templates(root, contents, name, servers, problems)
     for ref in contents.get("evals", []):
         path = _target(root, ref, problems)
         if path is not None:
             _check_eval(path, ref, set(agents), problems)
-    procedures = _procedures(root, contents.get("procedures", []), name, problems)
-    servers = _servers(root, contents.get("servers", []), problems)
+    procedures = _procedures(root, contents.get("procedures", []), name, servers, problems)
 
     if problems:
         raise PluginError(problems)
-    return Plugin(root, manifest, digest(root), agents, servers, tuple(procedures))
+    return Plugin(root, manifest, _digest(files), agents, servers, tuple(procedures), tuple(files))
 
 
 # -- canonical tar, digest, pack ------------------------------------------------------------------------
 
 
-def _members(root: Path) -> Iterator[tuple[str, bytes]]:
-    for path in sorted(root.rglob("*"), key=lambda p: p.relative_to(root).as_posix()):
-        if path.is_symlink():
-            raise PluginError([f"{path.relative_to(root).as_posix()}: symbolic link refused"])
-        if path.is_file():
-            yield path.relative_to(root).as_posix(), path.read_bytes()
-
-
-def canonical_tar(root: Path) -> bytes:
-    """The plugin's files as an uncompressed tar that depends on their paths and bytes only."""
+def _tar(files: dict[str, Path]) -> bytes:
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w", format=tarfile.PAX_FORMAT) as tar:
-        for name, data in _members(root):
+        for name, path in sorted(files.items()):
+            data = path.read_bytes()
             info = tarfile.TarInfo(name)
             info.size, info.mode, info.mtime = len(data), 0o644, 0
             info.uid = info.gid = 0
@@ -330,16 +447,28 @@ def canonical_tar(root: Path) -> bytes:
     return buffer.getvalue()
 
 
+def _digest(files: dict[str, Path]) -> str:
+    return "sha256:" + hashlib.sha256(_tar(files)).hexdigest()
+
+
+def canonical_tar(root: Path) -> bytes:
+    """The plugin's declared files (`plugin_files`) as an uncompressed tar that depends on their paths
+    and bytes only."""
+    return _tar(plugin_files(root))
+
+
 def digest(root: Path) -> str:
     """`sha256:<hex>` of the canonical tar."""
-    return "sha256:" + hashlib.sha256(canonical_tar(root)).hexdigest()
+    return _digest(plugin_files(root))
 
 
 def pack(root: Path, output: Path) -> Plugin:
-    """Validate, then write the canonical tar gzip-compressed and reproducibly; returns the plugin."""
+    """Validate, then write the canonical tar gzip-compressed and reproducibly; returns the plugin.
+    Only the declared files are written."""
     plugin = load_directory(root)
+    files = {name: plugin.root / name for name in plugin.files}
     with output.open("wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz:
-        gz.write(canonical_tar(plugin.root))
+        gz.write(_tar(files))
     return plugin
 
 
@@ -440,4 +569,5 @@ __all__ = [
     "load_directory",
     "opened",
     "pack",
+    "plugin_files",
 ]

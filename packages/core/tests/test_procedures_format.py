@@ -108,6 +108,17 @@ def test_a_good_procedure_parses_and_fills_its_placeholders() -> None:
     }
 
 
+def test_a_plugin_webhook_resolves_to_the_plugin_server_route() -> None:
+    text = GOOD.replace("{{webhook_url:github}}", "{{plugin_webhook_url:servicenow/servicenow}}").replace(
+        '"webhook_url:github"', '"plugin_webhook_url:servicenow/servicenow"'
+    )
+    proc = core.parse(text, origin="plugin:servicenow")
+    route = "https://api.example.test/api/v1/webhooks/plugins/servicenow/servicenow"
+    assert route in core.render(proc, _ctx())[0].markdown
+    assert core.values_of(proc, _ctx())["plugin_webhook_url:servicenow/servicenow"] == route
+    assert core.plugin_webhooks_in(proc) == [("servicenow", "servicenow")]
+
+
 def test_the_oauth_callback_is_the_remote_credentials_route() -> None:
     assert (
         core.resolve_placeholder("oauth_callback", "remote", _ctx())
@@ -129,6 +140,18 @@ def test_the_oauth_callback_is_the_remote_credentials_route() -> None:
         ),
         (lambda t: t.replace("{{webhook_url:github}}", "{{nope}}"), "unknown placeholder"),
         (lambda t: t.replace("{{webhook_url:github}}", "{{webhook_url:svn}}"), "unknown placeholder"),
+        (
+            lambda t: t.replace("{{webhook_url:github}}", "{{webhook_url:servicenow/x}}"),
+            "unknown placeholder",
+        ),
+        (
+            lambda t: t.replace("{{webhook_url:github}}", "{{plugin_webhook_url:servicenow}}"),
+            "unknown placeholder",
+        ),
+        (
+            lambda t: t.replace("{{webhook_url:github}}", "{{plugin_webhook_url:a/b/c}}"),
+            "unknown placeholder",
+        ),
         (
             lambda t: t.replace("https://example.com/docs).", "https://evil.example/x)."),
             "not an https URL listed",
