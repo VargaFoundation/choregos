@@ -1,0 +1,13 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: hello-flow
+  version: 1.0.0
+  display: Hello flow
+  description: A project whose work items are greeted.
+requires:
+  connectors: {}
+defaults:
+  workflow: template:default-simple@1
+inputs: []
+steps: []

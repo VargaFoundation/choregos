@@ -1,0 +1,4 @@
+agent: greeter
+description: The greeting names the author.
+must_contain:
+- greet the author

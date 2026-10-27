@@ -1,0 +1,16 @@
+name: hello
+image: ghcr.io/vargafoundation/choregos-agents/hello-mcp@sha256:3f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
+port: 8080
+protocol: mcp-http
+config_schema:
+  type: object
+  properties:
+    base_url: { type: string, format: uri }
+    greeting: { type: string }
+secret_fields: [token]
+egress: {from_fields: [base_url]}
+operations:
+  - {name: say_hello, access: read, description: Returns a greeting.}
+  - {name: post_greeting, access: write, human_approval: true, compensation: delete_greeting}
+  - {name: delete_greeting, access: write, human_approval: true}
+webhook: {path: /events}

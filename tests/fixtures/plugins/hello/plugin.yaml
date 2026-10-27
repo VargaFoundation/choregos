@@ -1,0 +1,20 @@
+apiVersion: choregos/v1
+kind: Plugin
+metadata:
+  name: hello
+  version: 1.0.0
+  publisher: Varga Foundation
+  license: Apache-2.0
+  description: A test plugin that ships one of everything a plugin may ship.
+  homepage: https://github.com/VargaFoundation/choregos
+  core: ">=0.20.0"
+requires:
+  plugins: []
+  connectors: {}
+contents:
+  agents: [agents/greeter.yaml]
+  skills: [skills/greeting]
+  templates: [templates/hello-flow]
+  evals: [evals/greeter.yaml]
+  procedures: ["procedures/*.md"]
+  servers: [servers/hello.yaml]
