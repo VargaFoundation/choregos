@@ -5,6 +5,9 @@ RUN corepack enable
 WORKDIR /app
 COPY apps/web/package.json apps/web/pnpm-lock.yaml* apps/web/pnpm-workspace.yaml ./apps/web/
 COPY packages/contracts/ts ./packages/contracts/ts
+# `pnpm build` type-checks `tests/`, which reads the manifest schema's closed vocabularies
+# (S42-15); `tests/paquets/test_web_image_build_context.py` keeps this list complete.
+COPY packages/contracts/schemas ./packages/contracts/schemas
 WORKDIR /app/apps/web
 RUN pnpm install --frozen-lockfile || pnpm install
 COPY apps/web ./
