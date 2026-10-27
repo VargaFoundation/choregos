@@ -2,8 +2,8 @@
 
 A plugin packages agents and what they need, in one format the platform understands
 ([ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md)). This page covers writing one and checking it
-locally with the CLI. Sources, signatures and installing are later stories (S43-03 to S43-05), not this
-page's subject.
+locally with the CLI, and what installing one into an organisation does. Sources and signatures (S43-03)
+and the plugins a deployment installs by default (S43-05) are later stories.
 
 "Plugin" here means this package. A Python wheel loaded through the `choregos.plugins` entry point is an
 **extension**.
@@ -89,5 +89,53 @@ files always give the same digest, whatever their times or permissions on disk, 
 same bytes every time. An index (`plugin-index.schema.json`) records, for each version, its digest, its
 `core` range, and where to fetch it: an OCI reference, or a git repository pinned to a commit. A
 branch or a tag is not accepted in place of a commit.
+
+## Installing into an organisation
+
+An organisation administrator installs, upgrades and uninstalls (ADR 0074); every member lists:
+
+```
+GET    /api/v1/orgs/{org}/plugins
+POST   /api/v1/orgs/{org}/plugins/install        {"source": "offline", "name": "hello", "version": "1.0.0"}
+POST   /api/v1/orgs/{org}/plugins/{name}/upgrade {"version": "1.1.0"}   # absent: the newest
+DELETE /api/v1/orgs/{org}/plugins/{name}
+```
+
+Until the sources of S43-03 are wired in, the one source is `offline`: the directory named by
+`CHOREGOS_PLUGINS_OFFLINE`, holding plugin directories (`<name>/` or `<name>/<version>/`), installed at
+an exact version.
+
+**Before anything is written**, each agent passes the full `AgentCreate` model, its instructions must
+render and its network must be one the organisation allows; each skill passes the skill library's
+validator; each eval suite is played on its agent's instructions and must pass; a procedure id the
+platform or another plugin already has is a conflict; a plugin named in `requires.plugins` must be
+installed. Any refusal leaves the organisation unchanged.
+
+**What it installs:**
+
+| Item | Where it goes | Its name in the organisation |
+| :-- | :-- | :-- |
+| agents | the agent registry, version 1, scope `platform`, author `plugin:<plugin>/<slug>@<catalogue version>` | its slug |
+| skills | the skill library, version 1, author `plugin:<plugin>/<skill>@<plugin version>` | its name |
+| templates | kept with their files | `plugin:<plugin>/<template>`, usable as a project's `template_ref` |
+| evals | kept; played at every install and upgrade | `<agent>/<file>` |
+| procedures | kept; `GET /procedures` lists them for the organisation's members | their id |
+| servers | recorded, not run (S43-06): the plugin's status is `servers_pending` | their name |
+
+An agent or skill the organisation already has under that name, and that the plugin did not install,
+wins: the plugin leaves it alone.
+
+The files are kept in the database (`org_plugin_files`), keyed by the plugin's content digest and under
+the organisation's row-level security, so a private plugin's text is not readable from another
+organisation and an install that fails writes no file. The object store would offer neither.
+
+**Upgrading** publishes the next version of an agent or skill only when its text changed. One the
+organisation changed since (a version the plugin did not write) is **offered** the update in the answer
+(`offered`) and never overwritten. Project pins do not move.
+
+**Uninstalling** deletes what the plugin installed and nobody changed or pins. What an organisation
+changed, what a project pins and a skill a kept agent still carries stay, as the organisation's own
+(scope `org`); the `plugin.uninstall` audit entry lists them under `kept`. A plugin another installed
+plugin requires cannot be uninstalled (409).
 
 The full reference of the commands is in [the CLI reference](cli.md#choregos-plugin).

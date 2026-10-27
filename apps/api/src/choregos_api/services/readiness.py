@@ -829,7 +829,7 @@ def runtime_fact(connectors: dict[str, ConnectorFact], policy: Any) -> RuntimeFa
 
 
 async def template_workflow_facts(
-    session: AsyncSession, template_ref: str | None, rows: list[Any]
+    session: AsyncSession, template_ref: str | None, rows: list[Any], org_id: str | None = None
 ) -> tuple[TemplateWorkflowFact, ...]:
     """The project's active `source: template` workflows that its template still ships, both sides
     checksummed now. Nothing (an empty tuple) when there is no template, when it cannot be read any
@@ -838,7 +838,7 @@ async def template_workflow_facts(
         return ()
     try:
         shipped: dict[str, tuple[str, str]] = {}
-        for ref, source in shipped_workflows(*await manifeste_du_gabarit(session, template_ref)):
+        for ref, source in shipped_workflows(*await manifeste_du_gabarit(session, template_ref, org_id)):
             parsed, _ = parse_workflow(source, strict=False)
             shipped[parsed.metadata.name] = (ref, checksum(parsed))
     except (ApiError, WorkflowInvalid, OSError, yaml.YAMLError):
@@ -922,7 +922,9 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         object_store=await probe_object_store() if file_outputs else None,
         runtime=runtime_fact(connectors, policy),
         template=project.template_ref or None,
-        template_workflows=await template_workflow_facts(session, project.template_ref, list(workflow_rows)),
+        template_workflows=await template_workflow_facts(
+            session, project.template_ref, list(workflow_rows), project.org_id
+        ),
         slug=project.slug,
         status=project.status,
         provision_failure=(f"{failed.get('name')}: {failed.get('message')}" if failed else None),

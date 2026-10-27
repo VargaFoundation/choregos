@@ -53,14 +53,21 @@ class Livraison:
 
 
 async def manifeste_du_gabarit(
-    session: AsyncSession, template_ref: str | None
+    session: AsyncSession, template_ref: str | None, org_id: str | None = None
 ) -> tuple[dict[str, Any], Path | None]:
     """Le manifeste de `nom[@version]`, et le dossier du gabarit quand il est sur disque.
 
     Un gabarit publié en base n'a pas de dossier : il ne peut livrer que des workflows du cœur.
+    `plugin:<plugin>/<template>` names a template an installed plugin of `org_id` brought: it carries its
+    files (ADR 0093, S43-04).
     """
     if not template_ref:
         return {}, None
+    if template_ref.startswith("plugin:"):
+        from .plugin_installer import plugin_template
+
+        manifest, folder = await plugin_template(session, org_id, template_ref)
+        return manifest, folder
     nom, _, version = template_ref.partition("@")
     requete = select(Template).where(Template.name == nom)
     if version:

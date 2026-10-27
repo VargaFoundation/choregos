@@ -251,6 +251,9 @@ class Settings(BaseSettings):
     #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the
     #: setup procedures that ship with the platform (ADR 0067). Empty: none.
     procedures_extra: str = ""
+    #: A directory of plugin directories (ADR 0093) the installer reads as the source `offline` until the
+    #: sources of S43-03 and the chart's `plugins.offline` (S43-05) take over. Empty: no plugin to install.
+    plugins_offline: str = ""
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
 
