@@ -2025,7 +2025,7 @@ export const projectKnowledgeBase: KnowledgeBase = {
   created_by: "lea@varga.dev",
   created_at: iso(60 * 24 * 2),
   restricted: false,
-  can: { edit: true, distill: true, share: true, archive: true, widen: false },
+  can: { edit: true, distill: true, share: true, archive: true, widen: true },
   my_role: "owner",
   grants: [],
   documents: [],

@@ -5,7 +5,8 @@ info:
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
-    The `/internal/*` routes are reserved for runners and authenticated by a run JWT (ES256).
+    The `/internal/runs/*` routes are reserved for runners and authenticated by a run JWT (ES256); the
+    `/internal/orgs/*` routes are reserved for the outbound-proxy relay and authenticated by a relay JWT (ADR 0091).
     Errors: RFC 9457 (`application/problem+json`). Cursor pagination (`cursor`, `limit`).
   license: { name: Apache-2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
 servers:
@@ -1484,7 +1485,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /projects/{id}/costs.csv:
@@ -1497,7 +1498,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
@@ -1531,7 +1532,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /orgs/{org}/costs.csv:
@@ -1544,7 +1545,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /orgs/{org}/egress:
@@ -2977,6 +2978,43 @@ paths:
         "202": { description: Distilling, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/distill/stop:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: stopKnowledgeDistillation
+      description: >-
+        Stops the distillation that is running on the base (S42-10d). The model calls already made stay stored by digest
+        and booked in the cost ledger, nothing is published, and `distillation` becomes `status: stopped` with
+        `code: cancelled`, `stopped_by`, the parts done and the spend so far. A relaunch reuses the stored parts.
+        Same rights as `distill`. 409 when no distillation is running (`distill_not_running`).
+      responses:
+        "202": { description: Stop requested; the base carries the stopped record, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/distill/relaunch:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: relaunchKnowledgeDistillation
+      description: >-
+        Starts again the last distillation of the base, whatever its outcome (failed, stopped or finished) (S42-10d).
+        Without a body it keeps the last run's `exclude` and `max_usd`; a body replaces them. Parts already stored for
+        the same digest are not called again, so only what changed or never finished is paid for. Same rights as
+        `distill`. 409 when one is running, when there is no previous distillation (`distill_nothing_to_relaunch`),
+        or when the estimate exceeds `max_usd` (`distill_over_budget`).
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDistillRequest" } } }
+      responses:
+        "202": { description: Distilling again, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/knowledge/{slug}/distill/estimate:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3649,6 +3687,34 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/orgs/{org}/outbound-proxy/{kind}:
+    parameters:
+      - $ref: "#/components/parameters/Org"
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [web_fetch, web_search, knowledge_web, search_engines] } }
+    get:
+      tags: [internal]
+      security: [{ relayToken: [] }]
+      operationId: getRelayOutboundProxy
+      summary: The outbound proxy a kind of the organisation's traffic must go through, for the relay.
+      description: |
+        Asked by the in-cluster outbound-proxy relay (ADR 0091, S40-26d), never by a person or a run. The
+        relay's credential is a JWT for ONE organisation (`sub` = its slug, `aud` = `choregos-relay`): a run
+        token, a user session or an API token is refused, and a relay token for another organisation is a 403.
+        `proxy: null` means no proxy applies (none set, disabled, or `kind` outside `applies_to`): the relay
+        goes direct. Otherwise `proxy` carries the password in clear: the one place it leaves the sealed
+        store, which is why the route is this narrow. The answer is `Cache-Control: no-store` and is not
+        audited (the relay asks at most once per kind and half a minute). 503 when a proxy applies but
+        cannot be built (the password is lost, the deployment has no secrets key): the relay then refuses
+        the traffic, it never goes direct.
+      responses:
+        "200":
+          description: The proxy to use, or `null`
+          content: { application/json: { schema: { $ref: "#/components/schemas/RelayOutboundProxy" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "503": { description: "A proxy applies but cannot be built", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/inputs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3852,6 +3918,7 @@ components:
     session: { type: apiKey, in: cookie, name: choregos_session }
     bearer: { type: http, scheme: bearer, bearerFormat: choregos-api-token }
     runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Run JWT signed with ES256, aud=internal" }
+    relayToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Relay JWT signed with ES256, aud=choregos-relay, sub=the organisation's slug, expiring (ADR 0091)" }
   parameters:
     Id: { name: id, in: path, required: true, schema: { type: string } }
     Org: { name: org, in: path, required: true, schema: { type: string } }
@@ -5866,7 +5933,7 @@ components:
       description: What the gate found in a version (ADR 0050).
       required: [code, severity, detail]
       properties:
-        code: { type: string, description: "script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open" }
+        code: { type: string, description: "script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open; from the second scanner (ADR 0095): skillspector:<rule> (e.g. skillspector:SC4), scanner_failed, scanner_incomplete, osv_mirror_missing" }
         severity: { type: string, enum: [info, warning, critical] }
         detail: { type: string }
         file: { type: [string, "null"] }
@@ -6026,6 +6093,10 @@ components:
         source: { type: string, description: "`upload`" }
         status: { type: string, enum: [pending, converting, ready, failed] }
         error: { type: [string, "null"] }
+        warnings:
+          type: array
+          items: { type: string }
+          description: "what the conversion left out of a ready document, one sentence each (a spreadsheet read up to its row cap: `Sheet \"Q3\": 1200 more rows not shown`); empty when nothing was cut"
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
         converted_at: { type: [string, "null"], format: date-time }
@@ -6038,6 +6109,26 @@ components:
       properties:
         exclude: { type: array, maxItems: 20, items: { type: string, maxLength: 200 }, default: [], description: "filename globs of documents left out (`*.xlsx`, `archive/*`)" }
         max_usd: { type: [number, "null"], minimum: 0, description: "stop and publish nothing when the spend would pass this; null keeps the platform's budget" }
+    KnowledgeDistillRun:
+      type: object
+      description: >-
+        One distillation run, as kept in `distillation.history` (S42-10d): how it ended and what it cost. The last five
+        runs before the current one, newest first.
+      required: [status]
+      properties:
+        status: { type: string, enum: [running, pending_review, approved, rejected, failed, stopped], description: "how the run ended (`running` only for a run whose end was never recorded)" }
+        code: { type: [string, "null"], description: "why it failed or was stopped: `too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`" }
+        error: { type: [string, "null"] }
+        requested_by: { type: [string, "null"], description: who started it }
+        stopped_by: { type: [string, "null"], description: who stopped it, when stopped }
+        started_at: { type: [string, "null"], format: date-time }
+        at: { type: [string, "null"], format: date-time, description: when it ended }
+        phase: { type: [string, "null"], enum: [plan, map, reduce, publish, null] }
+        parts_done: { type: integer }
+        parts_total: { type: integer }
+        spent_usd: { type: number, description: "what the run's model calls cost; parts reused from an earlier run cost nothing" }
+        skill: { type: [string, "null"] }
+        version: { type: [integer, "null"] }
     KnowledgeDistillEstimate:
       type: object
       required: [characters, tokens_estimate, documents, parts, calls, model, priced_by, within_budget, biggest]
@@ -6098,7 +6189,26 @@ components:
         grants: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeGrant" }, description: returned by the reading of one base, to a caller who may share it }
         distillation:
           type: [object, "null"]
-          description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one)"
+          properties:
+            status: { type: string, enum: [running, pending_review, approved, rejected, failed, stopped] }
+            code: { type: [string, "null"] }
+            error: { type: [string, "null"] }
+            at: { type: [string, "null"], format: date-time }
+            requested_by: { type: [string, "null"] }
+            started_at: { type: [string, "null"], format: date-time }
+            phase: { type: [string, "null"], enum: [plan, map, reduce, publish, null] }
+            parts_done: { type: integer }
+            parts_total: { type: integer }
+            spent_usd: { type: number }
+            skill: { type: [string, "null"] }
+            version: { type: [integer, "null"] }
+            principles: { type: [integer, "null"] }
+            dropped: { type: array, items: { type: string } }
+            history: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/KnowledgeDistillRun" }, description: "the runs before this one, newest first (S42-10d)" }
+            stopped_by: { type: [string, "null"], description: "who stopped the run, when `status` is `stopped`" }
+            exclude: { type: array, items: { type: string }, description: "the globs the run left out, kept for a relaunch" }
+            max_usd: { type: [number, "null"], description: "the cap the run was started with, kept for a relaunch" }
+          description: "the last distillation: `status` (running, pending_review, failed, stopped), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one); `history` holds the runs before it, `stopped_by` who stopped it, `exclude` and `max_usd` what a relaunch reuses"
         eval_result:
           type: [object, "null"]
           description: the last run of the eval set
@@ -6171,6 +6281,8 @@ components:
             unchanged: { type: integer }
             skipped: { type: integer }
             skipped_reasons: { type: array, items: { type: string } }
+            truncated: { type: integer, description: documents converted by this sync with part of their content left out }
+            truncated_reasons: { type: array, items: { type: string }, description: "`<file>: <warning>`, at most 20" }
         document_count: { type: integer }
     KnowledgeEvalCase:
       type: object
@@ -6573,6 +6685,25 @@ components:
         plugin: { $ref: "#/components/schemas/InstalledPlugin" }
         previous_version: { type: string }
         offered: { type: array, items: { type: string }, description: "agent slugs the organisation changed: offered the update, not overwritten (ADR 0040)" }
+    RelayOutboundProxy:
+      type: object
+      additionalProperties: false
+      required: [proxy]
+      properties:
+        proxy:
+          oneOf:
+            - $ref: "#/components/schemas/RelayProxyCredentials"
+            - { type: "null" }
+    RelayProxyCredentials:
+      type: object
+      additionalProperties: false
+      description: The one schema that carries the proxy's password in clear; only the relay route returns it.
+      required: [endpoint, scheme, username, password]
+      properties:
+        endpoint: { type: string, pattern: "^[A-Za-z0-9.-]{1,253}:[0-9]{1,5}$" }
+        scheme: { type: string, enum: [http, https] }
+        username: { type: string, maxLength: 512 }
+        password: { type: string, maxLength: 1024 }
     PolicyPut:
       type: object
       required: [yaml]

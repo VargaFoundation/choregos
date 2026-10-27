@@ -7,7 +7,7 @@ table of an organisation. A new table, no row written: nothing to scope. The dow
 with it the requests still waiting.
 
 Revision ID: b8d0f2a4c6e7
-Revises: a7c9e1b3d5f6
+Revises: d4f6a8c0e2b1
 Create Date: 2026-10-27 18:00:00+00:00
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b8d0f2a4c6e7"
-down_revision: str | None = "a7c9e1b3d5f6"
+down_revision: str | None = "d4f6a8c0e2b1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

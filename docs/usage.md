@@ -95,11 +95,34 @@ The hosts opened for `runners` join every run's network as implied hosts, under 
 An `org_admin` can route the organisation's `web_fetch`, `web_search` and knowledge web crawl through one
 proxy (typically a rotating-residential provider): `PUT /orgs/{org}/outbound-proxy` with `endpoint`
 (`host:port`), `scheme` (`http` or `https`), `username`, `password`, `enabled` and `applies_to` (any of
-`web_fetch`, `web_search`, `knowledge_web`; `search_engines` is stored but has no effect yet, S40-26d).
+`web_fetch`, `web_search`, `knowledge_web`, `search_engines`; the last, and a self-hosted Firecrawl's own
+fetching, reach the proxy only through the relay below).
 The password is sealed ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)), write-only
 (omit it on a later `PUT` to keep it; 409 when the deployment has no secrets key) and never in an answer or
 an audit row. `POST /orgs/{org}/outbound-proxy/test` fetches `https://ipinfo.io/json` through the stored
 proxy (even when disabled) and returns the exit IP and country; a failing proxy is a 200 with `ok: false`.
+
+*The relay, for SearXNG and Firecrawl* ([ADR 0091](adr/0091-the-search-engines-reach-the-proxy-through-a-relay.md)).
+A self-hosted SearXNG and Firecrawl cannot read the organisation's setting, and the API does not proxy its
+calls to an in-cluster Firecrawl. A deployment that wants their traffic through the proxy runs the relay,
+`python -m choregos_api.relay` (the API image, its own Deployment, one per organisation), and points them at it:
+
+- environment: `CHOREGOS_RELAY_ORG` (the organisation's slug), `CHOREGOS_RELAY_API_URL` (e.g.
+  `http://choregos-api:8000/api/v1`), `CHOREGOS_RELAY_API_TOKEN` (printed by
+  `python -m choregos_api.relay mint --org <slug> --days N`, run where `CHOREGOS_RUN_TOKEN_PRIVATE_KEY` is set;
+  it expires, at most 400 days), `CHOREGOS_RELAY_CLIENT_TOKEN` (16 characters or more, shared with the clients),
+  `CHOREGOS_RELAY_LISTEN` (`0.0.0.0:3128` by default); it refuses to start without them;
+- SearXNG: `outgoing.proxies: {all://: ["http://search_engines:<client token>@<relay>:3128"]}`;
+- Firecrawl: `PROXY_SERVER=http://<relay>:3128`, `PROXY_USERNAME=web_search`, `PROXY_PASSWORD=<client token>`;
+- network policy: only SearXNG and Firecrawl reach the relay; the relay reaches the API, the proxy's host and
+  port, and, for when no proxy applies, the engines' hosts.
+
+The username a client gives picks the kind (`search_engines` or `web_search`); any other username or a wrong
+token is a 407. For each connection the relay asks `GET /internal/orgs/{org}/outbound-proxy/{kind}` (answers
+reused 30 s): with a proxy, it sends `CONNECT <name>:<port>` to it with the organisation's credentials, and a
+proxy that is unreachable, answers 407 or refuses is a 502 naming its endpoint, never a direct connection;
+without one, it connects directly, but refuses a name that resolves to a private, loopback or link-local address;
+when the API cannot be asked, it is a 502 and nothing is sent. The client's token never leaves the relay.
 `DELETE` removes the setting and the password.
 - **Fail closed.** A call the proxy cannot carry (unreachable, 407, password lost) is refused with an
   error naming the proxy; it is never sent again directly.
@@ -1524,14 +1547,16 @@ gives its text without headings, and a scanned PDF fails (no OCR). A workbook gi
 table per sheet (hidden sheets marked), with empty cells empty, numbers as the sheet shows them
 (percentages, thousands, dates), the cached value of each formula, and at most
 `CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
-shown`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
+shown`) and a document cut that way carries `warnings` (one sentence per cut sheet), shown in
+the console's document list and page, and counted in a source's last sync (`truncated`,
+`truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
 before this reading keep their old text until converted again: `POST …/documents/{id}/convert`
 (which also shrinks the corpus). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
 `groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage` (an organisation administrator), or, for a base created from a project
 (`POST /projects/{id}/knowledge`, `owner_project`), `project:write` on that project: its owners feed,
-sync, distil and archive it, and only an administrator widens its scope. In the
+sync, distil and archive it, and they, like an administrator, may widen or narrow its reach. In the
 console there are two ways in. **From a project**: its sidebar's **Knowledge** section lists what its
 runs are served (the project's own bases, then the organisation-wide ones, read-only from there;
 a group's base is never served to a run, so it is not listed), and **New knowledge base** creates one
@@ -1670,7 +1695,7 @@ Reach (`scope`) decides which runs are served a base; **grants** decide which pe
 | read | yes | yes | yes | yes |
 | upload, add a source, sync, distil, rename | yes | yes | yes | no |
 | share (edit grants), archive | yes | yes | no | no |
-| widen scope, projects, groups, `restricted` | admin only | no | no | no |
+| widen scope, projects, groups, `restricted` | yes (a base with no owning project: admin only) | no | no | no |
 
 ```bash
 curl -X PUT $API/orgs/acme/knowledge/architecture/grants -H 'Content-Type: application/json' \
@@ -1723,6 +1748,16 @@ says so and publishes nothing. A base needing more than `CHOREGOS_KNOWLEDGE_DIST
 parts is refused with its biggest documents. Each call is kept by the digest of what it read: a retry
 costs nothing, and distilling again after one document changed pays for that document's part only. A
 distillation that shows `running` with no progress for 30 minutes no longer blocks a new one.
+
+A distillation is a job (S42-10d, ADR 0092). **Stop** (`POST …/distill/stop`) marks the run `stopped`
+at once, names who stopped it and cancels its workflow: the call in flight finishes and is booked,
+nothing more is called, nothing is published. **Relaunch** (`POST …/distill/relaunch`) starts the last
+run again, whatever its outcome, with its own exclusions and cap unless a body replaces them; the parts
+already read are reused, so a relaunch after a failed merge pays for the merge only. The page shows the
+run in progress (phase, parts, spend, who started it) and the five runs before it. Every model call is
+booked in the cost ledger with kind `distill`, on the base's owning project, or on the organisation when
+the base has none: **Spend** shows it under "Knowledge distillations", and `kind=distill` filters the
+reports. The merge is streamed, so a long answer is no read timeout.
 
 ## 4. Write the policy
 
@@ -1868,7 +1903,7 @@ switch **Enabled**, the **Endpoint** (`host:port`, no scheme, no credentials), t
 the **Username** (a provider's options such as a country or a sticky session go there, as the provider documents
 them, for example `user-...-country-fr-session-...`), the **Password** (write-only: it is never shown, **set** says
 one is stored, an empty field keeps it, and it is required the first time) and **Applies to** (`web_fetch`,
-`web_search`, `knowledge_web`, `search_engines`; the last has no effect yet, S40-26d). **Save** is disabled while
+`web_search`, `knowledge_web`, `search_engines`; the last applies only where the deployment runs the relay). **Save** is disabled while
 the endpoint is not `host:port` or no kind is chosen. **Test the proxy** fetches a fixed echo page through the
 *stored* proxy and shows the exit IP, the country and the time, or the error; **Remove** asks first and deletes
 the sealed password. The API's refusals (409 without a secrets key, 422) are shown as returned.

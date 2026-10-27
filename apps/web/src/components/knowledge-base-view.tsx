@@ -129,7 +129,7 @@ export function KnowledgeBaseView({
           </Link>
         ) : null}
         {can.distill ? (
-          <KnowledgeDistill org={org} slug={slug} onStarted={refresh} />
+          <KnowledgeDistill org={org} slug={slug} onStarted={refresh} distillation={base.data.distillation} />
         ) : (
           <button type="button" className="ml-2 text-ink-subtle underline" disabled title={why}>
             Distill
@@ -169,6 +169,13 @@ export function KnowledgeBaseView({
                         )}
                       </p>
                       {doc.error && <p className="text-xs text-danger">{doc.error}</p>}
+                      {(doc.warnings ?? []).length > 0 && (
+                        <ul className="text-xs text-warn" data-testid={`document-warnings-${doc.id}`}>
+                          {(doc.warnings ?? []).map((warning) => (
+                            <li key={warning}>Cut: {warning}</li>
+                          ))}
+                        </ul>
+                      )}
                     </td>
                     <td>
                       <Badge tone={TONE[doc.status] ?? "neutral"}>{doc.status}</Badge>
@@ -240,9 +247,16 @@ export function KnowledgeBaseView({
           ) : !document.data ? (
             <p className="text-sm text-ink-muted">reading…</p>
           ) : document.data.markdown ? (
-            <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap font-mono text-xs" data-testid="knowledge-markdown">
-              {document.data.markdown}
-            </pre>
+            <>
+              {(document.data.warnings ?? []).map((warning) => (
+                <p key={warning} className="mb-2 text-xs text-warn" data-testid="knowledge-document-warning">
+                  Cut: {warning}
+                </p>
+              ))}
+              <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap font-mono text-xs" data-testid="knowledge-markdown">
+                {document.data.markdown}
+              </pre>
+            </>
           ) : (
             <p className="text-sm text-ink-muted">not converted ({document.data.status})</p>
           )}

@@ -99,10 +99,19 @@ def _table(rows: list[list[str]]) -> str:
 
 def xlsx_to_markdown(data: bytes, rows_per_sheet: int = DEFAULT_ROWS_PER_SHEET) -> str:
     """The markdown of a workbook; raises whatever openpyxl raises on a file it cannot read."""
+    return xlsx_to_markdown_with_warnings(data, rows_per_sheet)[0]
+
+
+def xlsx_to_markdown_with_warnings(
+    data: bytes, rows_per_sheet: int = DEFAULT_ROWS_PER_SHEET
+) -> tuple[str, list[str]]:
+    """The markdown of a workbook and one sentence per sheet cut at the row cap (S42-09e), for the
+    people who look at the document: the markdown already says it to the agents."""
     from openpyxl import load_workbook
 
     book = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     parts: list[str] = []
+    warnings: list[str] = []
     try:
         for sheet in book.worksheets:
             hidden = getattr(sheet, "sheet_state", "visible") != "visible"
@@ -121,6 +130,9 @@ def xlsx_to_markdown(data: bytes, rows_per_sheet: int = DEFAULT_ROWS_PER_SHEET) 
             parts.append(table if table else "(empty)")
             if more:
                 parts.append(f"… {more} more rows not shown")
+                warnings.append(
+                    f'Sheet "{sheet.title}": {more} more rows not shown (the first {rows_per_sheet} are kept)'
+                )
     finally:
         book.close()
-    return "\n\n".join(parts) + "\n"
+    return "\n\n".join(parts) + "\n", warnings

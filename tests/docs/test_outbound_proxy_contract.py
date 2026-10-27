@@ -33,7 +33,7 @@ def test_the_four_operations_and_their_routes() -> None:
     ops = {
         (path, verb): op["operationId"]
         for path, item in SPEC["paths"].items()
-        if "outbound-proxy" in path
+        if "outbound-proxy" in path and path.startswith("/orgs/")
         for verb, op in item.items()
         if verb in {"get", "put", "delete", "post"}
     }

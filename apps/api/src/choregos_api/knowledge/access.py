@@ -42,7 +42,8 @@ class KnowledgeAction(StrEnum):
     #: change the grants
     SHARE = "share"
     ARCHIVE = "archive"
-    #: change scope, projects, groups or `restricted` (D11-2: organisation administrators only)
+    #: change scope, projects, groups or `restricted` (D11-2, amended S42-11b: organisation
+    #: administrators and the owners of the owning project)
     WIDEN = "widen"
 
 
@@ -135,7 +136,7 @@ _REASONS = {
     KnowledgeAction.ARCHIVE: "archiving this knowledge base needs the owner role on it, or org_admin, "
     "or project_owner of its project",
     KnowledgeAction.WIDEN: "changing who reads this knowledge base or whose runs are served it "
-    "needs the org_admin role",
+    "needs org_admin, or project_owner of its project",
     KnowledgeAction.READ: "this knowledge base is not visible to you",
 }
 
@@ -148,7 +149,7 @@ def decide(
     if action is KnowledgeAction.READ:
         allowed = visible_to(principal, org, base, grants)
     elif action is KnowledgeAction.WIDEN:
-        allowed = can_manage(principal, org)
+        allowed = can_curate(principal, org, base)
     else:
         role = role_of(principal, org, base, grants)
         allowed = role is not None and _RANK[role] >= _RANK[_NEEDS[action]]

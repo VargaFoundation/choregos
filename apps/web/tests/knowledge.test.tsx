@@ -104,6 +104,18 @@ describe("the knowledge page (S33-01)", () => {
     expect(await screen.findByTestId("knowledge-markdown")).toHaveTextContent("# Network zoning principles");
   });
 
+  it("says which sheets of a ready document were cut, in the list and where it is read (S42-09e)", async () => {
+    const cut = { ...base.documents![0]!, warnings: ['Sheet "Q3": 1200 more rows not shown (the first 2000 are kept)'] };
+    vi.mocked(api.knowledgeBase).mockResolvedValue({ ...base, documents: [cut] });
+    vi.mocked(api.knowledgeDocument).mockResolvedValue({ ...cut, markdown: "## Q3\n" });
+    await act(async () => {
+      wrap(<KnowledgeBasePage params={Promise.resolve({ slug: "architecture" })} />);
+    });
+    expect(await screen.findByTestId(`document-warnings-${cut.id}`)).toHaveTextContent('Cut: Sheet "Q3": 1200 more rows not shown');
+    fireEvent.click(screen.getByRole("button", { name: cut.title }));
+    expect(await screen.findByTestId("knowledge-document-warning")).toHaveTextContent("1200 more rows not shown");
+  });
+
   it("uploads each chosen file", async () => {
     vi.mocked(api.knowledgeBase).mockResolvedValue({ ...base, documents: [] });
     vi.mocked(api.uploadKnowledgeDocument).mockResolvedValue({ ...base.documents![0]!, status: "pending" });

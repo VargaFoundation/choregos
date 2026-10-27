@@ -4,8 +4,8 @@
 A knowledge base is a curated corpus a human chose; its documents are uploaded here, answered 202
 `pending`, and converted to markdown in the background (`knowledge.conversion`), never inside the
 request. Curating is the organisation administrator's (`agent:manage`), or the owners' of the project that
-owns the base (`project:write`, S39-14); widening a base's scope stays the administrator's. Reading
-follows the base's scope (`knowledge.access`).
+owns the base (`project:write`, S39-14), who may also widen or narrow its reach (ADR 0081, amended).
+Reading follows the base's scope (`knowledge.access`).
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import re
 from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
-from typing import Annotated
+from typing import Annotated, Any
 from weakref import WeakKeyDictionary
 
 import httpx
@@ -57,6 +57,7 @@ from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
 from ..knowledge.sync import CONNECTED_KINDS, OPTIONALLY_CONNECTED, SOURCE_CONNECTOR_TYPES
+from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
@@ -81,6 +82,8 @@ from ..services.egress import egress_scope, ensure_or_409, knowledge_source_targ
 from ..services.outbound_proxy import proxy_scope
 from ..services.platform_network import check_platform_host
 from ..temporal import get_temporal, knowledge_distill_id, knowledge_sync_id
+
+log = get_logger("choregos.knowledge.router")
 
 router = APIRouter(tags=["knowledge"])
 
@@ -188,6 +191,7 @@ def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -
         source=document.source,
         status=document.status,
         error=document.error,
+        warnings=list(document.warnings or []),
         created_by=document.created_by,
         created_at=document.created_at,
         converted_at=document.converted_at,
@@ -395,7 +399,7 @@ async def create_project_knowledge_base(
     ctx: ProjectCtx, body: ProjectKnowledgeBaseCreate, session: Db
 ) -> KnowledgeBaseDto:
     """A base owned by this project (S39-14): served to its runs only, curated by its owners
-    (`project:write`). Its reach is the organisation administrator's to widen."""
+    (`project:write`). Its owners, like the administrator, may widen its reach."""
     ctx.require(Permission.PROJECT_WRITE)
     organisation = await _organisation(session, ctx.org_slug)
     if (
@@ -451,8 +455,8 @@ async def update_knowledge_base(
     base = await _base(session, principal, org, slug)
     changes = body.model_dump(exclude_unset=True)
     widens = any(field in changes for field in ("scope", "projects", "groups"))
-    # Who reads and who is served a base is the organisation's call, not its owning project's or its
-    # owners' (D11-2): `restricted` is part of the reach.
+    # Who reads and who is served a base is for the administrator and the owners of its project to
+    # decide, nobody else (ADR 0081, amended): `restricted` is part of the reach.
     if widens or changes.get("restricted") is not None:
         _require(principal, org, base, KnowledgeAction.WIDEN)
     archives = changes.get("status") is not None
@@ -477,8 +481,9 @@ async def update_knowledge_base(
     base.scope = scope
     base.projects = sorted(set(projects)) if scope == "projects" else []
     base.groups = sorted(set(groups)) if scope == "groups" else []
-    if widens:
-        # An administrator re-scoped it: it is no longer the owning project's to curate.
+    if widens and can_manage(principal, org):
+        # An administrator re-scoped it: it is no longer the owning project's to curate. When the
+        # owning project's own owner does it, the base stays theirs (they may narrow it back).
         base.owner_project = None
     await session.flush()
     await record(
@@ -1431,23 +1436,21 @@ async def estimate_knowledge_distillation(
     return KnowledgeDistillEstimate(**estimate.values)
 
 
-@router.post(
-    "/orgs/{org}/knowledge/{slug}/distill",
-    response_model=KnowledgeBaseDto,
-    status_code=status.HTTP_202_ACCEPTED,
-    operation_id="distillKnowledgeBase",
-)
-async def distill_knowledge_base(
-    org: str, slug: Slug, session: Db, principal: Me, body: KnowledgeDistillRequest | None = None
+async def _start_distillation(
+    session: Any,
+    principal: Any,
+    org: str,
+    slug: str,
+    base: Any,
+    exclude: list[str],
+    max_usd: float | None,
+    *,
+    audit: str,
 ) -> KnowledgeBaseDto:
-    """The `knowledge-distiller` compiles the base into a principles skill, in the background; the
-    version waits for a person's approval (`pending_review`). `agent:manage`."""
-    from ..knowledge.distill import estimate_for, estimated_total, is_running
+    """Starts a run on `base`: the estimate against the cap, the new record (the previous one joins
+    its `history`), the audit line, and the workflow after the commit."""
+    from ..knowledge.distill import estimate_for, estimated_total, is_running, new_run
 
-    base = await _base(session, principal, org, slug)
-    _require(principal, org, base, KnowledgeAction.DISTILL)
-    exclude = list(body.exclude) if body else []
-    max_usd = body.max_usd if body else None
     if is_running(base.distillation):
         raise conflict(f"knowledge base `{slug}` is already being distilled")
     if max_usd is not None:
@@ -1460,20 +1463,12 @@ async def distill_knowledge_base(
                 extra={"code": "distill_over_budget"},
             )
     started_at = refresh.utcnow().isoformat()
-    base.distillation = {
-        "status": "running",
-        "requested_by": principal.email,
-        "started_at": started_at,
-        "phase": "plan",
-        "parts_done": 0,
-        "parts_total": 0,
-        "spent_usd": 0.0,
-    }
+    base.distillation = new_run(base.distillation, principal.email, started_at, exclude, max_usd)
     await session.flush()
     await record(
         session,
         principal,
-        "knowledge.distill",
+        audit,
         org_id=base.org_id,
         target_type="knowledge_base",
         target_id=base.id,
@@ -1490,4 +1485,97 @@ async def distill_knowledge_base(
             "max_usd": max_usd,
         },
     )
+    return dto
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/distill",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="distillKnowledgeBase",
+)
+async def distill_knowledge_base(
+    org: str, slug: Slug, session: Db, principal: Me, body: KnowledgeDistillRequest | None = None
+) -> KnowledgeBaseDto:
+    """The `knowledge-distiller` compiles the base into a principles skill, in the background; the
+    version waits for a person's approval (`pending_review`). `agent:manage`."""
+    base = await _base(session, principal, org, slug)
+    _require(principal, org, base, KnowledgeAction.DISTILL)
+    return await _start_distillation(
+        session,
+        principal,
+        org,
+        slug,
+        base,
+        list(body.exclude) if body else [],
+        body.max_usd if body else None,
+        audit="knowledge.distill",
+    )
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/distill/relaunch",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="relaunchKnowledgeDistillation",
+)
+async def relaunch_knowledge_distillation(
+    org: str, slug: Slug, session: Db, principal: Me, body: KnowledgeDistillRequest | None = None
+) -> KnowledgeBaseDto:
+    """Starts the last distillation again, whatever its outcome (S42-10d, ADR 0092). Without a body it
+    keeps the last run's `exclude` and `max_usd`. The parts already stored are not called again."""
+    base = await _base(session, principal, org, slug)
+    _require(principal, org, base, KnowledgeAction.DISTILL)
+    last = base.distillation
+    if not last:
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            "Conflict",
+            f"knowledge base `{slug}` has no distillation to relaunch",
+            extra={"code": "distill_nothing_to_relaunch"},
+        )
+    exclude = list(body.exclude) if body else list(last.get("exclude") or [])
+    max_usd = body.max_usd if body else last.get("max_usd")
+    return await _start_distillation(
+        session, principal, org, slug, base, exclude, max_usd, audit="knowledge.distill.relaunch"
+    )
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/distill/stop",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="stopKnowledgeDistillation",
+)
+async def stop_knowledge_distillation(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+    """Stops the distillation that is running (S42-10d, ADR 0092): the record says `stopped` at once,
+    the workflow is cancelled after the commit. What was spent stays booked; nothing is published."""
+    from ..knowledge.distill import is_running, stopped_record
+
+    base = await _base(session, principal, org, slug)
+    _require(principal, org, base, KnowledgeAction.DISTILL)
+    before = base.distillation
+    if not before or not is_running(before):
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            "Conflict",
+            f"knowledge base `{slug}` is not being distilled",
+            extra={"code": "distill_not_running"},
+        )
+    base.distillation = stopped_record(before, principal.email)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "knowledge.distill.stop",
+        org_id=base.org_id,
+        target_type="knowledge_base",
+        target_id=base.id,
+    )
+    dto = await _dto(session, principal, org, base)
+    await session.commit()
+    try:
+        await get_temporal().cancel(knowledge_distill_id(base.id, str(before.get("started_at") or "")))
+    except Exception as error:  # the record says stopped; the run's next call refuses on it anyway
+        log.warning("knowledge.distill.cancel_failed", base=base.id, error=str(error)[:300])
     return dto

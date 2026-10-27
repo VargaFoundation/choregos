@@ -121,6 +121,7 @@ function Spend() {
         {!projet && <BreakdownCard scope={scope} currency={currency} title="Projects" group="project" filtre={filtre} />}
         <BreakdownCard scope={scope} currency={currency} title="By model" group="model" filtre={{ ...filtre, kind: "model" }} />
         <BreakdownCard scope={scope} currency={currency} title="By tool" group="model" filtre={{ ...filtre, kind: "tool" }} />
+        <BreakdownCard scope={scope} currency={currency} title="Knowledge distillations" group="model" filtre={{ ...filtre, kind: "distill" }} />
       </div>
     </div>
   );
