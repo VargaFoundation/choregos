@@ -2,32 +2,45 @@
 """An organisation's outbound proxy for its web search and web reading (S40-26b, ADR 0087).
 
 `org_admin` only, on all four routes. The password is sealed (ADR 0058), write-only and never in an
-answer or an audit row; the proxy host is NOT added to the egress allowlist (ADR 0087 §3)."""
+answer or an audit row; the proxy host is NOT added to the egress allowlist (ADR 0087 §3).
+
+One more route, for the in-cluster relay only (S40-26d, ADR 0091): `GET /internal/orgs/{org}/outbound-proxy/
+{kind}`, authenticated by a relay JWT for that one organisation. It is the one answer with the password in
+clear."""
 
 from __future__ import annotations
 
+from typing import Annotated
+
+import jwt
 from choregos_contracts import Role
 from choregos_core import utcnow
 from choregos_core.outbound_proxy import OutboundProxyError
 from choregos_core.redaction import remember_secret
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Depends, Header, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Organization
-from ..deps import Db, Me
-from ..errors import forbidden, not_found, unprocessable
+from ..deps import Db, DbPlateforme, Me
+from ..errors import ApiError, forbidden, not_found, unauthorized, unprocessable
+from ..logging import get_logger
 from ..rbac import Principal
 from ..schemas.outbound_proxy import (
     OutboundProxyPut,
     OutboundProxyState,
     OutboundProxyTest,
+    ProxyKind,
+    RelayOutboundProxy,
+    RelayProxyCredentials,
 )
+from ..security import verify_relay_token
 from ..services import outbound_proxy as service
 from ..services.connector_secrets import put_values, require_store
 
 router = APIRouter(tags=["admin"])
+log = get_logger(__name__)
 
 _SECRET_PREFIX, _, _SECRET_FIELD = service.SECRET_NAME.rpartition("/")
 
@@ -165,3 +178,53 @@ async def test_outbound_proxy(org: str, session: Db, principal: Me) -> OutboundP
         ok=result.ok,
     )
     return result
+
+
+def relay_org(org: str, authorization: Annotated[str | None, Header()] = None) -> str:
+    """The relay's credential (ADR 0091 §3): a relay JWT for THIS organisation. A run token, an API token
+    or a session is refused: they are for other audiences."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise unauthorized("missing relay token")
+    try:
+        org_of_token = verify_relay_token(authorization.split(" ", 1)[1].strip())
+    except jwt.PyJWTError as exc:
+        raise forbidden(f"invalid relay token: {exc}") from exc
+    if org_of_token != org:
+        raise forbidden("this relay token belongs to another organisation")
+    return org_of_token
+
+
+@router.get(
+    "/internal/orgs/{org}/outbound-proxy/{kind}",
+    response_model=RelayOutboundProxy,
+    operation_id="getRelayOutboundProxy",
+    tags=["internal"],
+)
+async def get_relay_outbound_proxy(
+    kind: ProxyKind,
+    response: Response,
+    session: DbPlateforme,
+    org: Annotated[str, Depends(relay_org)],
+) -> RelayOutboundProxy:
+    """The proxy `kind` of the organisation's traffic goes through, or `proxy: null` (direct). 503 when
+    one applies and cannot be built: the relay then refuses, it never goes direct. Not audited, logged
+    without the password (ADR 0091 §7)."""
+    response.headers["Cache-Control"] = "no-store"
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        raise not_found("Organisation", org)
+    try:
+        proxy = await service.outbound_proxy_for(session, organisation.id, kind)
+    except OutboundProxyError as lost:
+        log.warning("relay_proxy_unavailable", org=org, kind=kind)
+        raise ApiError(status.HTTP_503_SERVICE_UNAVAILABLE, "Outbound proxy unavailable", str(lost)) from lost
+    log.info("relay_proxy_resolved", org=org, kind=kind, proxied=proxy is not None)
+    if proxy is None:
+        return RelayOutboundProxy(proxy=None)
+    return RelayOutboundProxy(
+        proxy=RelayProxyCredentials(
+            endpoint=proxy.endpoint, scheme=proxy.scheme, username=proxy.username, password=proxy.password
+        )
+    )

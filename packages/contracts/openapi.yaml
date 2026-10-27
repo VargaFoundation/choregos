@@ -5756,7 +5756,7 @@ components:
       description: What the gate found in a version (ADR 0050).
       required: [code, severity, detail]
       properties:
-        code: { type: string, description: "script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open" }
+        code: { type: string, description: "script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open; from the second scanner (ADR 0095): skillspector:<rule> (e.g. skillspector:SC4), scanner_failed, scanner_incomplete, osv_mirror_missing" }
         severity: { type: string, enum: [info, warning, critical] }
         detail: { type: string }
         file: { type: [string, "null"] }
