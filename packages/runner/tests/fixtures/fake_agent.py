@@ -115,6 +115,27 @@ def _call_model(call: dict[str, Any]) -> None:
         sys.stderr.write(f"model call {url}: {exc}\n")
 
 
+def _unasked(actions: list[dict[str, Any]]) -> None:
+    """`unasked`: what a shell command would do without asking any permission (ADR 0094) — write a
+    file anywhere, connect to a TCP port. The outcomes go to `$HOME/unasked.json`, in order."""
+    if not actions:
+        return
+    import socket
+
+    outcomes: list[str] = []
+    for action in actions:
+        try:
+            if "write" in action:
+                Path(action["write"]).write_text("unasked\n", encoding="utf-8")
+            else:
+                with socket.create_connection(("127.0.0.1", int(action["connect"])), timeout=5):
+                    pass
+            outcomes.append("ok")
+        except OSError as exc:
+            outcomes.append(type(exc).__name__)
+    (Path(os.environ["HOME"]) / "unasked.json").write_text(json.dumps(outcomes), encoding="utf-8")
+
+
 def _say(session_id: str, notes: list[str]) -> None:
     for note in notes:
         send(
@@ -207,6 +228,7 @@ def main() -> int:
                     _write(target, write)
 
             outgoing_id = _report_tool_calls(session_id, plan.get("tool_calls", []), outgoing_id)
+            _unasked(plan.get("unasked", []))
 
             for command in plan.get("commands", []):
                 outgoing_id += 1
