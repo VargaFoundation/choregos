@@ -176,6 +176,11 @@ class Settings(BaseSettings):
     #: Whether cosign checks the transparency log (Rekor). `false` only for a key whose signatures
     #: were never uploaded, an air-gapped registry.
     hosted_cosign_tlog: bool = True
+    #: The plugin sources, default plugins and offline directory (ADR 0093, S43-03): a path to a YAML
+    #: file (`sources`, `defaultPlugins`, `offline`) the chart writes. Empty: no source but the offline one.
+    plugins_config: str = ""
+    #: The offline plugin directory baked into the image; wins over the file's `offline`.
+    plugins_offline: str = ""
     #: The base image of each zip runtime, `ref@sha256:…`, over the shipped ones (ADR 0080 §9):
     #: `{"python_3_13": "registry.internal/python:3.13-slim@sha256:…"}`.
     hosted_base_images: dict[str, str] = Field(default_factory=dict)
@@ -251,9 +256,6 @@ class Settings(BaseSettings):
     #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the
     #: setup procedures that ship with the platform (ADR 0067). Empty: none.
     procedures_extra: str = ""
-    #: A directory of plugin directories (ADR 0093) the installer reads as the source `offline` until the
-    #: sources of S43-03 and the chart's `plugins.offline` (S43-05) take over. Empty: no plugin to install.
-    plugins_offline: str = ""
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
 
