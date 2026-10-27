@@ -12,7 +12,9 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_contracts import load_schema
 from choregos_core.plugins import PluginError, build_index, digest, load_directory, opened, pack
+from jsonschema import Draft202012Validator
 
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
 
@@ -67,15 +69,64 @@ def test_a_path_leaving_the_plugin_is_refused(plugin: Path, ref: str) -> None:
     assert "plugin.yaml:contents/agents/0" in _problems(plugin)
 
 
-def test_a_symbolic_link_is_refused_even_inside_the_plugin(plugin: Path) -> None:
+def test_a_declared_symbolic_link_is_refused_even_inside_the_plugin(plugin: Path) -> None:
     (plugin / "agents" / "alias.yaml").symlink_to(plugin / "agents" / "greeter.yaml")
+    _edit(plugin / "plugin.yaml", lambda d: d["contents"]["agents"].append("agents/alias.yaml"))
     assert "agents/alias.yaml: symbolic link refused" in _problems(plugin)
 
 
-def test_a_symbolic_link_to_a_directory_is_refused(plugin: Path, tmp_path: Path) -> None:
+def test_a_declared_symbolic_link_to_a_directory_is_refused(plugin: Path, tmp_path: Path) -> None:
     (tmp_path / "elsewhere").mkdir()
     (plugin / "skills" / "linked").symlink_to(tmp_path / "elsewhere")
+    _edit(plugin / "plugin.yaml", lambda d: d["contents"]["skills"].append("skills/linked"))
     assert "skills/linked: symbolic link refused" in _problems(plugin)
+
+
+def test_a_link_inside_a_declared_directory_is_refused(plugin: Path) -> None:
+    (plugin / "skills" / "greeting" / "extra.md").symlink_to("/etc/hostname")
+    assert "skills/greeting/extra.md: symbolic link refused" in _problems(plugin)
+
+
+def test_a_declared_path_escaping_through_a_link_is_refused(plugin: Path, tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    shutil.copy(plugin / "agents" / "greeter.yaml", outside / "greeter.yaml")
+    shutil.rmtree(plugin / "agents")
+    (plugin / "agents").symlink_to(outside)
+    assert "agents: symbolic link refused" in _problems(plugin)
+
+
+def test_a_linked_readme_is_refused(plugin: Path) -> None:
+    (plugin / "README.md").symlink_to("/etc/hostname")
+    assert "README.md: symbolic link refused" in _problems(plugin)
+
+
+def _junk(plugin: Path) -> None:
+    """What a server's author leaves beside the plugin: its source, a virtualenv with links."""
+    venv = plugin / "server" / ".venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "python").symlink_to("/usr/bin/python3")
+    (venv / "dangling").symlink_to(plugin / "nowhere")
+    (plugin / "server" / "app.py").write_text("print('the server source')\n")
+    (plugin / "notes.yaml").write_text(": not yaml [\n")
+
+
+def test_what_the_manifest_does_not_declare_is_neither_validated_nor_digested(plugin: Path) -> None:
+    before = load_directory(plugin)
+    _junk(plugin)
+    after = load_directory(plugin)
+    assert after.digest == before.digest == digest(plugin)
+    assert not any(name.startswith("server/") or name == "notes.yaml" for name in after.files)
+
+
+def test_the_declared_files_are_the_manifest_root_files_and_contents(plugin: Path) -> None:
+    (plugin / "README.md").write_text("# hello\n")
+    (plugin / "LICENSE").write_text("Apache-2.0\n")
+    files = load_directory(plugin).files
+    assert files == tuple(sorted(files))
+    assert {"plugin.yaml", "README.md", "LICENSE", "agents/greeter.yaml", "evals/greeter.yaml"} <= set(files)
+    assert {"skills/greeting/SKILL.md", "templates/hello-flow/manifest.yaml"} <= set(files)
+    assert {"procedures/connector.mcp.hello.md", "servers/hello.yaml"} <= set(files)
 
 
 def test_a_server_image_without_a_digest_is_refused(plugin: Path) -> None:
@@ -131,6 +182,105 @@ def test_an_eval_names_an_agent_of_the_plugin(plugin: Path) -> None:
     assert "evaluates `architect`" in _problems(plugin)
 
 
+CORE_CASES = (
+    Path(__file__).resolve().parents[1] / "src" / "choregos_core" / "catalogue_d_agents" / "eval_cases"
+)
+
+
+@pytest.mark.parametrize("case", sorted(CORE_CASES.glob("*.yaml")), ids=lambda p: p.stem)
+def test_the_eval_format_is_the_core_catalogues(case: Path) -> None:
+    validator = Draft202012Validator(load_schema("plugin-evals.schema.json"))
+    assert not [e.message for e in validator.iter_errors(yaml.safe_load(case.read_text()))]
+
+
+def test_an_eval_suite_with_level_one_and_cases_loads(plugin: Path) -> None:
+    def cases(doc: dict[str, Any]) -> None:
+        doc["cases"] = [
+            {"name": "greets", "input": {"title": "Hi", "body": "Greet."}, "must_contain": ["author"]},
+            {"name": "live", "live": True, "expect_status": "done", "max_cost_usd": 0.25},
+        ]
+
+    _edit(plugin / "evals" / "greeter.yaml", cases)
+    assert load_directory(plugin).agents
+
+
+@pytest.mark.parametrize(
+    ("change", "needle"),
+    [
+        (lambda d: d.update(must_contian=["typo"]), "Additional properties are not allowed ('must_contian'"),
+        (lambda d: d.update(must_contain="greet the author"), "evals/greeter.yaml:must_contain"),
+        (lambda d: d.update(cases=[{"input": {"title": "x"}}]), "'name' is a required property"),
+        (
+            lambda d: d.update(cases=[{"name": "x", "max_cost_usd": 2}]),
+            "evals/greeter.yaml:cases/0/max_cost_usd",
+        ),
+        (lambda d: d.update(cases=[{"name": "x", "inputs": {}}]), "Additional properties are not allowed"),
+        (lambda d: d.update(cases=[{"name": "x"}, {"name": "x"}]), "case `x` is declared twice"),
+        (lambda d: d.pop("must_contain"), "is not valid under any of the given schemas"),
+    ],
+)
+def test_an_eval_suite_is_checked_against_its_schema(plugin: Path, change: Any, needle: str) -> None:
+    _edit(plugin / "evals" / "greeter.yaml", change)
+    assert needle in _problems(plugin)
+
+
+def _procedure_says(plugin: Path, text: str) -> None:
+    path = plugin / "procedures" / "connector.mcp.hello.md"
+    path.write_text(path.read_text().replace("## Test it\n", f"## Test it\n\nWebhook: {text}\n"))
+
+
+def test_a_procedure_names_its_own_server_webhook(plugin: Path) -> None:
+    _procedure_says(plugin, "{{plugin_webhook_url:hello/hello}}")
+    assert load_directory(plugin).procedures == ("connector.mcp.hello",)
+
+
+@pytest.mark.parametrize(
+    ("text", "needle"),
+    [
+        ("{{plugin_webhook_url:servicenow/servicenow}}", "names another plugin than `hello`"),
+        ("{{plugin_webhook_url:hello/other}}", "names no server of `hello` with a webhook"),
+    ],
+)
+def test_a_procedure_webhook_of_another_server_is_refused(plugin: Path, text: str, needle: str) -> None:
+    _procedure_says(plugin, text)
+    assert needle in _problems(plugin)
+
+
+def test_a_procedure_webhook_of_a_server_without_one_is_refused(plugin: Path) -> None:
+    _procedure_says(plugin, "{{plugin_webhook_url:hello/hello}}")
+    _edit(plugin / "servers" / "hello.yaml", lambda d: d.pop("webhook"))
+    assert "names no server of `hello` with a webhook" in _problems(plugin)
+
+
+def _tracker(plugin: Path, value: str) -> None:
+    _edit(
+        plugin / "templates" / "hello-flow" / "manifest.yaml",
+        lambda d: d["requires"].update(connectors={"tracker": value}),
+    )
+
+
+def test_a_template_takes_its_tracker_from_a_server_of_the_plugin(plugin: Path) -> None:
+    _edit(plugin / "servers" / "hello.yaml", lambda d: d.update(implements=["tracker"]))
+    _tracker(plugin, "plugin:hello/hello")
+    assert load_directory(plugin).servers["hello"]["implements"] == ["tracker"]
+
+
+@pytest.mark.parametrize(
+    ("value", "needle"),
+    [
+        ("plugin:hello/hello", "does not declare `implements: [tracker]`"),
+        ("plugin:hello/other", "names no server of `hello`"),
+        ("plugin:servicenow/servicenow", "is another plugin's than `hello`"),
+        ("plugin:Hello", "requires/connectors/tracker"),
+    ],
+)
+def test_a_plugin_tracker_that_is_not_a_tracker_server_of_the_plugin_is_refused(
+    plugin: Path, value: str, needle: str
+) -> None:
+    _tracker(plugin, value)
+    assert needle in _problems(plugin)
+
+
 def test_a_procedure_is_parsed_with_the_adr_0067_rules(plugin: Path) -> None:
     path = plugin / "procedures" / "connector.mcp.hello.md"
     path.write_text(path.read_text().replace("audience: org_admin", "audience: anyone"))
@@ -177,6 +327,22 @@ def test_a_packed_plugin_loads_with_the_same_digest(plugin: Path, tmp_path: Path
         members = tar.getmembers()
     assert [m.name for m in members] == sorted(m.name for m in members)
     assert {(m.mtime, m.uid, m.gid, m.mode) for m in members} == {(0, 0, 0, 0o644)}
+
+
+def test_pack_writes_only_the_declared_files(plugin: Path, tmp_path: Path) -> None:
+    clean = pack(plugin, tmp_path / "clean.tar.gz")
+    (plugin / "README.md").write_text("# hello\n")
+    _junk(plugin)
+    archive = tmp_path / "hello.tar.gz"
+    packed = pack(plugin, archive)
+    with tarfile.open(archive) as tar:
+        names = tar.getnames()
+    assert names == list(packed.files)
+    assert "README.md" in names
+    assert not [n for n in names if n.startswith("server/") or n == "notes.yaml"]
+    (plugin / "README.md").unlink()
+    assert pack(plugin, tmp_path / "again.tar.gz").digest == clean.digest
+    assert (tmp_path / "again.tar.gz").read_bytes() == (tmp_path / "clean.tar.gz").read_bytes()
 
 
 def _archive(path: Path, member: tarfile.TarInfo, data: bytes = b"") -> None:

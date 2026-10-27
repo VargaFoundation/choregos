@@ -26,7 +26,8 @@ def _refuse(exc: PluginError) -> None:
 def validate(
     path: Annotated[Path, typer.Argument(exists=True, help="A plugin directory or a packed .tar.gz.")],
 ) -> None:
-    """Check a plugin and everything it ships; print its name, version and content digest."""
+    """Check a plugin and everything it ships; print its name, version and content digest. Only what
+    plugin.yaml declares is read: a server's source or a .venv beside it is ignored."""
     try:
         with opened(path) as plugin:
             console.print(
@@ -43,8 +44,9 @@ def pack_(
     directory: Annotated[Path, typer.Argument(exists=True, file_okay=False, help="The plugin directory.")],
     output: Annotated[Path, typer.Option("-o", "--output", help="The archive to write (.tar.gz).")],
 ) -> None:
-    """Validate, then write a reproducible archive: sorted entries, time 0, owner 0. The same files
-    always give the same bytes, and the printed digest is the one an index records."""
+    """Validate, then write a reproducible archive of the declared files only (plugin.yaml, README.md
+    and LICENSE when present, and what `contents` names): sorted entries, time 0, owner 0. The same
+    files always give the same bytes, and the printed digest is the one an index records."""
     try:
         plugin = pack(directory, output)
     except PluginError as exc:

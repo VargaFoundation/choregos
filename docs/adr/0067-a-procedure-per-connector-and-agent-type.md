@@ -36,7 +36,9 @@ type, shown when one is added.
    shape is what lets a test hold fifty files to the same standard, and a person always finds the
    failure table in the same place.
 3. **Placeholders are filled by the deployment.** `{{api_url}}`, `{{public_url}}`, `{{org}}`,
-   `{{webhook_url:<source>}}` (the routes of `routers/webhooks.py`) and `{{oauth_callback:remote}}`. An
+   `{{webhook_url:<source>}}` (the routes of `routers/webhooks.py`), `{{plugin_webhook_url:<plugin>/<server>}}`
+   (`/api/v1/webhooks/plugins/<plugin>/<server>`, ADR 0093; a plugin's procedure may name only its own
+   servers that declare a webhook) and `{{oauth_callback:remote}}`. An
    unknown placeholder is a validation error, never an empty string. `values` lists the ones the console
    shows as copy boxes.
 4. **Served by the API**: `GET /procedures` (the index; `?for=connector:documents/sharepoint`, `source:web`,

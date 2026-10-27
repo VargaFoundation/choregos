@@ -344,9 +344,10 @@ Options:
 ```text
 Usage: choregos plugin pack [OPTIONS] {directory}
 
-  Validate, then write a reproducible archive: sorted entries, time 0, owner
-  0. The same files always give the same bytes, and the printed digest is the
-  one an index records.
+  Validate, then write a reproducible archive of the declared files only
+  (plugin.yaml, README.md and LICENSE when present, and what `contents`
+  names): sorted entries, time 0, owner 0. The same files always give the same
+  bytes, and the printed digest is the one an index records.
 
 Arguments:
   directory  The plugin directory.  [required]
@@ -362,7 +363,8 @@ Options:
 Usage: choregos plugin validate [OPTIONS] {path}
 
   Check a plugin and everything it ships; print its name, version and content
-  digest.
+  digest. Only what plugin.yaml declares is read: a server's source or a .venv
+  beside it is ignored.
 
 Arguments:
   path  A plugin directory or a packed .tar.gz.  [required]

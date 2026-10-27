@@ -246,6 +246,40 @@ async def test_a_plugin_whose_own_eval_fails_is_refused(
     assert await _counts() == before
 
 
+ALONE = {"source": "offline", "name": "hello", "version": "1.1.0"}  # no server: one administrator
+
+
+async def test_a_deterministic_eval_case_is_played_and_a_live_one_is_not(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    suite = offline / "hello" / "1.1.0" / "evals" / "greeter.yaml"
+    live = {"name": "live", "live": True, "input": {"title": "Hi"}, "must_contain": ["only a model says"]}
+    failing = {"name": "names-the-author", "input": {"title": "Hi"}, "must_contain": ["never in the text"]}
+    _edit(suite, lambda d: d.update(cases=[live, failing]))
+    before = await _counts()
+    refused = await client.post(f"{ORG}/plugins/install", json=ALONE)
+    assert refused.status_code == 422, refused.text
+    assert "names-the-author" in refused.text and "live" not in refused.json()["errors"][0]["loc"]
+    assert await _counts() == before
+
+    failing["must_contain"] = ["Greet the author"]
+    _edit(suite, lambda d: d.update(cases=[live, failing]))
+    installed = await client.post(f"{ORG}/plugins/install", json=ALONE)
+    assert installed.status_code == 201, installed.text
+
+
+async def test_a_high_risk_skill_makes_a_plugin_wait_for_a_second_administrator(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    skill = offline / "hello" / "1.1.0" / "skills" / "greeting"
+    (skill / "greet.sh").write_text("#!/bin/sh\necho hello\n", encoding="utf-8")
+    before = await _counts()
+    asked = await client.post(f"{ORG}/plugins/install", json=ALONE)
+    assert asked.status_code == 202, asked.text
+    assert "skill `skills/greeting` is high risk (script)" in asked.json()["reason"]
+    assert await _counts() == {**before, "audit_log": (await _counts())["audit_log"]}
+
+
 async def test_an_agent_of_the_organisation_with_the_same_name_wins(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:

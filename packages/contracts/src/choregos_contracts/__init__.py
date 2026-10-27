@@ -175,6 +175,7 @@ SCHEMA_FILES = (
     "plugin.schema.json",
     "plugin-server.schema.json",
     "plugin-index.schema.json",
+    "plugin-evals.schema.json",
 )
 
 

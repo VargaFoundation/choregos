@@ -6,9 +6,9 @@ The plugin arrives already loaded and validated by `choregos_core.plugins` (S43-
 
 - validates everything once more against THIS organisation before writing anything: every agent through
   the full `AgentCreate` model, its instructions rendered, its network checked (`check_agent_network`);
-  every skill through the skill library's validator; every eval suite played on its agent's
-  instructions; procedure ids that no other procedure of the deployment or plugin of the organisation
-  holds; the plugins it requires installed;
+  every skill through the skill library's validator; every eval suite (`plugin-evals.schema.json`)
+  played on its agent, level 1 and its deterministic `cases`; procedure ids that no other procedure of
+  the deployment or plugin of the organisation holds; the plugins it requires installed;
 - installs skills then agents through the path the catalogue and templates share
   (`installer_skills_et_agents`): version 1 when absent, never rewritten when present. Provenance is
   `plugin:<plugin>/<slug>@<catalogue version>` for an agent and `plugin:<plugin>/<skill>@<plugin version>`
@@ -61,9 +61,10 @@ from ..db.models import (
 )
 from ..errors import conflict, not_found, unprocessable
 from ..rbac import SYSTEM, Principal
-from ..schemas.agents import MAX_TAGS, AgentCreate
+from ..schemas.agents import MAX_TAGS, AgentCreate, AgentEvalCase
 from ..schemas.plugins import InstalledPlugin, PluginContents
 from . import plugin_servers
+from .agent_evals import evaluate as evaluate_cases
 from .agent_releases import after_publish
 from .agents import empreinte, erreurs_d_une_version
 from .catalogue_d_agents import DIVERGE
@@ -178,18 +179,39 @@ async def _prepare(
 
 
 def _evals(prepared: _Prepared, refs: list[str]) -> None:
-    """Each eval suite played on its agent's instructions: a plugin whose own evals fail is refused."""
+    """Each eval suite (`plugin-evals.schema.json`, checked by the loader) played on its agent: level 1
+    on the rendered instructions, then every deterministic case of `cases` on its sample input, as the
+    API's publish gate plays them (`agent_evals`). A `live` case needs a model: it is not run here. A
+    plugin whose own evals fail is refused."""
     root = prepared.plugin.root
     for ref in refs:
         path = inside(root, ref)
-        case = yaml.safe_load(_text(path, ref))
-        result = evaluate(case, agent=prepared.agents[str(case["agent"])])
+        suite = yaml.safe_load(_text(path, ref))
+        slug = str(suite["agent"])
+        result = evaluate(suite, agent=prepared.agents[slug])
         if not result.passed:
             raise unprocessable(
                 f"`{ref}`: the eval suite of `{result.agent}` fails on the plugin's own instructions",
                 [{"loc": [ref], "msg": f"missing {result.missing}, forbidden {result.forbidden}"}],
             )
-        prepared.evals.append(f"{case['agent']}/{Path(ref).stem}")
+        try:
+            cases = [AgentEvalCase.model_validate(case) for case in suite.get("cases") or []]
+        except ValidationError as error:
+            raise unprocessable(f"`{ref}`: an eval case is not valid", _agent_errors(error)) from error
+        failing = [r for r in evaluate_cases(prepared.specs[slug].spec, cases) if not r.passed]
+        if failing:
+            raise unprocessable(
+                f"`{ref}`: {len(failing)} case(s) of the eval suite of `{slug}` fail on the plugin's own "
+                "instructions",
+                [
+                    {
+                        "loc": [ref, "cases", r.name],
+                        "msg": r.error or f"missing {r.missing}, forbidden {r.forbidden}",
+                    }
+                    for r in failing
+                ],
+            )
+        prepared.evals.append(f"{slug}/{Path(ref).stem}")
         prepared.files[ref] = path.read_bytes()
 
 

@@ -60,7 +60,9 @@ QUALIFIER_KEYS = ("card_host", "preset")
 #: The webhook routes of the API (`routers/webhooks.py`).
 WEBHOOK_SOURCES = ("github", "jira", "gitlab", "argocd", "tekton", "alertmanager")
 #: `{{name}}` or `{{name:argument}}`: the only forms a body may use, and the only names.
-PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)(?::([a-z_]+))?\s*\}\}")
+PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)(?::([a-z0-9_/-]+))?\s*\}\}")
+#: `{{plugin_webhook_url:<plugin>/<server>}}`: the webhook route of a plugin's server (ADR 0093, S43-05b).
+PLUGIN_SERVER = re.compile(r"^([a-z0-9][a-z0-9-]{0,62})/([a-z0-9][a-z0-9-]{0,62})$")
 PLAIN_PLACEHOLDERS = frozenset({"api_url", "public_url", "org"})
 PARAMETRISED_PLACEHOLDERS = {
     "webhook_url": frozenset(WEBHOOK_SOURCES),
@@ -237,6 +239,8 @@ def _check_placeholder(name: str, argument: str | None) -> None:
         return
     if name in PARAMETRISED_PLACEHOLDERS and argument in PARAMETRISED_PLACEHOLDERS[name]:
         return
+    if name == "plugin_webhook_url" and argument is not None and PLUGIN_SERVER.match(argument):
+        return
     shown = name if argument is None else f"{name}:{argument}"
     raise ValueError(f"unknown placeholder {{{{{shown}}}}}")
 
@@ -256,7 +260,22 @@ def resolve_placeholder(name: str, argument: str | None, ctx: Context) -> str:
         return ctx.org
     if name == "webhook_url":
         return f"{api}/api/v1/webhooks/{argument}"
+    if name == "plugin_webhook_url":
+        return f"{api}/api/v1/webhooks/plugins/{argument}"
     return f"{api}/api/v1/remote-credentials/oauth/callback"  # oauth_callback:remote
+
+
+def plugin_webhooks_in(proc: Procedure) -> list[tuple[str, str]]:
+    """The `(plugin, server)` pairs a procedure's `{{plugin_webhook_url:…}}` placeholders and copy boxes
+    name: a plugin's loader checks they are its own servers, with a webhook."""
+    arguments = [
+        a for s in proc.sections for n, a in placeholders_in(s.markdown) if n == "plugin_webhook_url"
+    ]
+    arguments += [
+        v.partition(":")[2] for v in proc.front.values if v.partition(":")[0] == "plugin_webhook_url"
+    ]
+    found = [PLUGIN_SERVER.match(a or "") for a in arguments]
+    return sorted({(m.group(1), m.group(2)) for m in found if m is not None})
 
 
 def fill(text: str, ctx: Context) -> str:
