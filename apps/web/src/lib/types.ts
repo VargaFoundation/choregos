@@ -218,6 +218,7 @@ export type {
   KnowledgeBaseCreate,
   KnowledgeDistillEstimate,
   KnowledgeDistillRequest,
+  KnowledgeDistillRun,
   ProjectKnowledgeBaseCreate,
   KnowledgeBasePatch,
   KnowledgeDocument,

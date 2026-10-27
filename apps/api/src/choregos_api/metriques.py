@@ -249,19 +249,21 @@ async def rafraichir() -> Instantane:
         couts = await session.execute(
             select(
                 CostLedger.project_id, CostLedger.stage_role, CostLedger.model, func.sum(CostLedger.cost_usd)
-            ).group_by(CostLedger.project_id, CostLedger.stage_role, CostLedger.model)
+            )
+            .where(CostLedger.project_id.is_not(None))  # an organisation-level line has no project label
+            .group_by(CostLedger.project_id, CostLedger.stage_role, CostLedger.model)
         )
         nouveau.cost = {
-            (slug.get(pid, "?"), str(stage or ""), str(modele or "")): float(total or 0.0)
+            (slug.get(str(pid), "?"), str(stage or ""), str(modele or "")): float(total or 0.0)
             for pid, stage, modele, total in couts.all()
         }
         minuit = maintenant.replace(hour=0, minute=0, second=0, microsecond=0)
         jour = await session.execute(
             select(CostLedger.project_id, func.sum(CostLedger.cost_usd))
-            .where(CostLedger.ts >= minuit)
+            .where(CostLedger.ts >= minuit, CostLedger.project_id.is_not(None))
             .group_by(CostLedger.project_id)
         )
-        nouveau.daily_cost = {slug.get(pid, "?"): float(total or 0.0) for pid, total in jour.all()}
+        nouveau.daily_cost = {slug.get(str(pid), "?"): float(total or 0.0) for pid, total in jour.all()}
         for pid, projet in projets.items():
             politique = await effective_policy(session, pid)
             budget = politique.budgets.daily_project_usd
@@ -294,7 +296,7 @@ async def rafraichir() -> Instantane:
             )
             .group_by(Run.project_id)
         )
-        nouveau.denials = {slug.get(pid, "?"): float(n) for pid, n in refus.all()}
+        nouveau.denials = {slug.get(str(pid), "?"): float(n) for pid, n in refus.all()}
 
         attente = await session.execute(
             select(func.count()).select_from(MemoryFact).where(MemoryFact.status == "pending")
@@ -307,7 +309,7 @@ async def rafraichir() -> Instantane:
         )
         for pid, pack in packs.all():
             if pack is not None and not (pack.get("facts") or pack.get("items") or pack.get("snippets")):
-                vides[slug.get(pid, "?")] += 1
+                vides[slug.get(str(pid), "?")] += 1
         nouveau.context_pack_empty = {k: float(v) for k, v in vides.items()}
 
     nouveau.train_frozen, nouveau.train_status = await _trains(list(slug.values()))

@@ -96,7 +96,7 @@ async def test_the_merge_dedupes_unions_the_sources_and_never_cites_outside_the_
         },
         {"title": "U", "statement": "Record it.", "sources": [{"document": "b.md", "section": "z"}]},
     ]
-    merged, _, _, _ = await _merge_tree(Rogue(), candidates, corpus, Price(None, None, "none"), 100_000)
+    merged, _, _, _, _ = await _merge_tree(Rogue(), candidates, corpus, Price(None, None, "none"), 100_000)
     assert [p["statement"] for p in merged] == ["Review every change.", "Record it."]
     assert merged[0]["sources"] == [
         {"document": "a.md", "section": "x"},

@@ -72,7 +72,7 @@ async def dimensions_of(session: AsyncSession, run_id: str | None) -> dict[str, 
 async def record_cost(  # noqa: PLR0913 — une ligne du registre, champ par champ, en mots-clés
     session: AsyncSession,
     *,
-    project_id: str,
+    project_id: str | None,
     work_item_id: str | None,
     run_id: str | None,
     provider: str,
@@ -86,11 +86,15 @@ async def record_cost(  # noqa: PLR0913 — une ligne du registre, champ par cha
     cost_usd: float,
     fx_rate: float,
     kind: str = "model",
+    org_id: str | None = None,
 ) -> CostLedger:
+    if project_id is None and org_id is None:
+        raise ValueError("a cost line belongs to a project or, failing one, to an organisation")
     entry = CostLedger(
         kind=kind,
         **await dimensions_of(session, run_id),
         project_id=project_id,
+        org_id=None if project_id else org_id,  # a line has a project or, failing one, an organisation
         work_item_id=work_item_id,
         run_id=run_id,
         provider=provider,
