@@ -5,7 +5,8 @@ info:
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
-    The `/internal/*` routes are reserved for runners and authenticated by a run JWT (ES256).
+    The `/internal/runs/*` routes are reserved for runners and authenticated by a run JWT (ES256); the
+    `/internal/orgs/*` routes are reserved for the outbound-proxy relay and authenticated by a relay JWT (ADR 0091).
     Errors: RFC 9457 (`application/problem+json`). Cursor pagination (`cursor`, `limit`).
   license: { name: Apache-2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
 servers:
@@ -3510,6 +3511,34 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/orgs/{org}/outbound-proxy/{kind}:
+    parameters:
+      - $ref: "#/components/parameters/Org"
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [web_fetch, web_search, knowledge_web, search_engines] } }
+    get:
+      tags: [internal]
+      security: [{ relayToken: [] }]
+      operationId: getRelayOutboundProxy
+      summary: The outbound proxy a kind of the organisation's traffic must go through, for the relay.
+      description: |
+        Asked by the in-cluster outbound-proxy relay (ADR 0091, S40-26d), never by a person or a run. The
+        relay's credential is a JWT for ONE organisation (`sub` = its slug, `aud` = `choregos-relay`): a run
+        token, a user session or an API token is refused, and a relay token for another organisation is a 403.
+        `proxy: null` means no proxy applies (none set, disabled, or `kind` outside `applies_to`): the relay
+        goes direct. Otherwise `proxy` carries the password in clear: the one place it leaves the sealed
+        store, which is why the route is this narrow. The answer is `Cache-Control: no-store` and is not
+        audited (the relay asks at most once per kind and half a minute). 503 when a proxy applies but
+        cannot be built (the password is lost, the deployment has no secrets key): the relay then refuses
+        the traffic, it never goes direct.
+      responses:
+        "200":
+          description: The proxy to use, or `null`
+          content: { application/json: { schema: { $ref: "#/components/schemas/RelayOutboundProxy" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "503": { description: "A proxy applies but cannot be built", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/inputs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3713,6 +3742,7 @@ components:
     session: { type: apiKey, in: cookie, name: choregos_session }
     bearer: { type: http, scheme: bearer, bearerFormat: choregos-api-token }
     runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Run JWT signed with ES256, aud=internal" }
+    relayToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Relay JWT signed with ES256, aud=choregos-relay, sub=the organisation's slug, expiring (ADR 0091)" }
   parameters:
     Id: { name: id, in: path, required: true, schema: { type: string } }
     Org: { name: org, in: path, required: true, schema: { type: string } }
@@ -6290,6 +6320,25 @@ components:
         error: { type: [string, "null"], description: "names the proxy; never the password" }
         elapsed_ms: { type: integer, minimum: 0 }
         target: { type: string, description: "the echo endpoint that was fetched" }
+    RelayOutboundProxy:
+      type: object
+      additionalProperties: false
+      required: [proxy]
+      properties:
+        proxy:
+          oneOf:
+            - $ref: "#/components/schemas/RelayProxyCredentials"
+            - { type: "null" }
+    RelayProxyCredentials:
+      type: object
+      additionalProperties: false
+      description: The one schema that carries the proxy's password in clear; only the relay route returns it.
+      required: [endpoint, scheme, username, password]
+      properties:
+        endpoint: { type: string, pattern: "^[A-Za-z0-9.-]{1,253}:[0-9]{1,5}$" }
+        scheme: { type: string, enum: [http, https] }
+        username: { type: string, maxLength: 512 }
+        password: { type: string, maxLength: 1024 }
     PolicyPut:
       type: object
       required: [yaml]

@@ -66,7 +66,8 @@ stays as it is.
    cannot learn an organisation's setting. Decided in principle, S40-26d: an in-cluster relay that
    SearXNG's `outgoing.proxies` points at, which applies the organisation's proxy and fails closed. Its
    internal route is a later contract change; until then `search_engines` in `applies_to` is stored but has
-   no effect, and the console says so.
+   no effect, and the console says so. The relay's shape, its route and its credential are
+   [ADR 0091](0091-the-search-engines-reach-the-proxy-through-a-relay.md).
 8. **Out of scope**: agent runs' egress (ADR 0070); several proxies, per-project or per-country proxies;
    rotation and health monitoring (the provider's gateway rotates).
 
