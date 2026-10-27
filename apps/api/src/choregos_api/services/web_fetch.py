@@ -41,14 +41,17 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 from choregos_adapters.documents.web import is_private_address
+from choregos_adapters.http.proxy import FixedProxyTransport
 from choregos_core import utcnow
 from choregos_core.network import allowed
+from choregos_core.outbound_proxy import OutboundProxyError, ProxyConfig
 from choregos_core.redaction import redact
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import CostLedger, Project, Run
 from .network import run_network
+from .outbound_proxy import outbound_proxy_for
 from .platform_network import calls_to_host, journal, user_agent
 
 TOOL_NAME = "web_fetch"
@@ -113,9 +116,20 @@ class WebResponse:
 
 class WebClient(Protocol):
     async def request(
-        self, method: str, url: str, *, headers: dict[str, str], address: str, max_bytes: int
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        address: str,
+        max_bytes: int,
+        proxy: ProxyConfig | None = None,
     ) -> WebResponse:
-        """One request, connected to `address` (already checked), the body read up to `max_bytes`."""
+        """One request, connected to `address` (already checked), the body read up to `max_bytes`.
+
+        With a `proxy` (ADR 0087) the request goes through it by the host NAME (`CONNECT name:port`),
+        so the proxy resolves; `address` was only the local check. A proxy that cannot carry it raises
+        `OutboundProxyHttpError` (an `httpx.HTTPError`): never a direct retry."""
         ...
 
 
@@ -138,19 +152,30 @@ class HttpWebClient:
         self.transport = transport
 
     async def request(
-        self, method: str, url: str, *, headers: dict[str, str], address: str, max_bytes: int
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        address: str,
+        max_bytes: int,
+        proxy: ProxyConfig | None = None,
     ) -> WebResponse:
         parts = urlsplit(url)
         host = parts.hostname or ""
-        literal = f"[{address}]" if ":" in address else address
-        port = f":{parts.port}" if parts.port else ""
-        pinned = parts._replace(netloc=f"{literal}{port}").geturl()
-        sent = {**headers, "Host": host + port}
+        if proxy is not None:
+            # By name: the proxy resolves and TLS verifies the name (ADR 0087 §4).
+            target, sent, extensions = url, dict(headers), {}
+            transport: httpx.AsyncBaseTransport | None = FixedProxyTransport(proxy)
+        else:
+            literal = f"[{address}]" if ":" in address else address
+            port = f":{parts.port}" if parts.port else ""
+            target = parts._replace(netloc=f"{literal}{port}").geturl()
+            sent = {**headers, "Host": host + port}
+            extensions, transport = {"sni_hostname": host}, self.transport
         async with (
-            httpx.AsyncClient(
-                timeout=self.timeout_s, follow_redirects=False, transport=self.transport
-            ) as client,
-            client.stream(method, pinned, headers=sent, extensions={"sni_hostname": host}) as response,
+            httpx.AsyncClient(timeout=self.timeout_s, follow_redirects=False, transport=transport) as client,
+            client.stream(method, target, headers=sent, extensions=extensions) as response,
         ):
             body = bytearray()
             truncated = False
@@ -175,6 +200,8 @@ class FakeWebClient:
         self.pages: dict[str, tuple[int, dict[str, str], bytes]] = {}
         #: (method, url, headers, address), in order
         self.requests: list[tuple[str, str, dict[str, str], str]] = []
+        #: the proxy of each request, in order (`None`: direct)
+        self.proxies: list[ProxyConfig | None] = []
 
     def add(
         self,
@@ -193,9 +220,17 @@ class FakeWebClient:
         )
 
     async def request(
-        self, method: str, url: str, *, headers: dict[str, str], address: str, max_bytes: int
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        address: str,
+        max_bytes: int,
+        proxy: ProxyConfig | None = None,
     ) -> WebResponse:
         self.requests.append((method, url, dict(headers), address))
+        self.proxies.append(proxy)
         status, answer_headers, data = self.pages.get(
             url, (404, {"content-type": "text/plain"}, b"not found")
         )
@@ -366,6 +401,8 @@ class Context:
     run: Run
     project: Project
     client: WebClient
+    #: the organisation's proxy for `web_fetch` when it applies (ADR 0087); `None`: direct
+    proxy: ProxyConfig | None
     resolver: Resolver
     agent: str
     allow: list[str]
@@ -468,12 +505,17 @@ async def _robots(ctx: Context, scheme: str, host: str, address: str) -> Robots:
     entry: Robots
     try:
         response = await ctx.client.request(
-            "GET", f"{origin}/robots.txt", headers=headers, address=address, max_bytes=512 * 1024
+            "GET",
+            f"{origin}/robots.txt",
+            headers=headers,
+            address=address,
+            max_bytes=512 * 1024,
+            proxy=ctx.proxy,
         )
     except (httpx.HTTPError, OSError) as bad:
         entry = Robots(
             None,
-            f"robots.txt of {host} could not be read ({type(bad).__name__}): nothing is read until it can",
+            f"robots.txt of {host} could not be read ({_why(bad)}): nothing is read until it can",
             _now() + 60,
         )
     else:
@@ -498,6 +540,12 @@ async def _robots(ctx: Context, scheme: str, host: str, address: str) -> Robots:
             entry = Robots(parser, None, _now() + ROBOTS_TTL_S)
     _ROBOTS[origin] = entry
     return entry
+
+
+def _why(bad: Exception) -> str:
+    """What failed, for a message the agent reads: the proxy is named (never its password), any
+    other failure by its class only."""
+    return str(bad) if isinstance(bad, OutboundProxyError) else type(bad).__name__
 
 
 async def _politeness(ctx: Context, host: str, crawl_delay: float | None) -> None:
@@ -566,11 +614,18 @@ async def fetch(
     """Reads one page. Returns (status code, result, provider) — the provider (`web:<host>`) is what the
     ledger and the per-host rate count, the host of the page asked for."""
     network = await run_network(session, run)
+    try:
+        proxy = await outbound_proxy_for(session, project.org_id, TOOL_NAME)
+    except OutboundProxyError as unusable:
+        # Fail closed (ADR 0087 §2): a proxy that applies and cannot be built is no direct call.
+        host_asked = urlsplit(str(arguments.get("url", ""))).hostname or "-"
+        return 502, Refused(502, "proxy_unavailable", str(unusable)).body(), f"web:{host_asked}"
     ctx = Context(
         session=session,
         run=run,
         project=project,
         client=get_web_client(fakes),
+        proxy=proxy,
         resolver=get_resolver(),
         agent=await user_agent(session, project.org_id),
         allow=[*network.allow, *network.implied],
@@ -610,10 +665,12 @@ async def fetch(
             }
             try:
                 response = await ctx.client.request(
-                    method, url, headers=headers, address=address, max_bytes=cap
+                    method, url, headers=headers, address=address, max_bytes=cap, proxy=ctx.proxy
                 )
             except (httpx.HTTPError, OSError) as bad:
                 await _refuse_journal(ctx, host, "unreachable", type(bad).__name__)
+                if isinstance(bad, OutboundProxyError):
+                    raise Refused(502, "proxy_error", f"`{host}` was not read: {bad}") from bad
                 raise Refused(
                     502, "unreachable", f"`{host}` could not be reached: {type(bad).__name__}"
                 ) from bad

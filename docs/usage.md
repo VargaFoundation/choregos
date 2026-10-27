@@ -91,6 +91,27 @@ a host the ceiling denies, or that lies outside its allowed set, is refused befo
 asked for (422 at the add, 403 at the call, in every egress mode), and cannot be opened at all.
 The hosts opened for `runners` join every run's network as implied hosts, under the same deny lists.
 
+**An outbound proxy for web reading and search** ([ADR 0087](adr/0087-an-organisation-has-one-outbound-proxy.md)).
+An `org_admin` can route the organisation's `web_fetch`, `web_search` and knowledge web crawl through one
+proxy (typically a rotating-residential provider): `PUT /orgs/{org}/outbound-proxy` with `endpoint`
+(`host:port`), `scheme` (`http` or `https`), `username`, `password`, `enabled` and `applies_to` (any of
+`web_fetch`, `web_search`, `knowledge_web`; `search_engines` is stored but has no effect yet, S40-26d).
+The password is sealed ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)), write-only
+(omit it on a later `PUT` to keep it; 409 when the deployment has no secrets key) and never in an answer or
+an audit row. `POST /orgs/{org}/outbound-proxy/test` fetches `https://ipinfo.io/json` through the stored
+proxy (even when disabled) and returns the exit IP and country; a failing proxy is a 200 with `ok: false`.
+`DELETE` removes the setting and the password.
+- **Fail closed.** A call the proxy cannot carry (unreachable, 407, password lost) is refused with an
+  error naming the proxy; it is never sent again directly.
+- **The target is still checked** (allowlist, ceiling, private-address refusal) before the proxy sees it.
+  `web_fetch` sends `CONNECT <name>:443`, so the proxy resolves the name itself: the platform cannot pin that
+  resolution (residual risk, ADR 0087 §4).
+- **Reachability.** The proxy host is NOT added to the egress allowlist; the API pods' network policy must
+  allow its address and port, or every call fails with the proxy named.
+- **Decodo** (and similar): the username carries the options, for example `user-<name>-country-fr` or
+  `user-<name>-session-<id>`; use the endpoint and port of the gateway chosen in the provider's dashboard.
+- A self-hosted Firecrawl is not routed through the proxy (it is usually in-cluster).
+
 **Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
@@ -1449,7 +1470,8 @@ is needed): `{"name": "asks when the ticket is empty", "live": true, "expect_sta
 its `max_cost_usd` (0.25 $ by default, 0.50 $ at most) and the evaluation at most the policy's `max_eval_usd`
 (2 $ by default): above it, `409`. A case passes when its run succeeded, its result has the expected status
 and its summary holds what it must. `GET` the same path for the score, read from the runs as they stand
-(`running`, `passed`, `failed`). Without a model to call it says `not_run` — never `passed`. Set
+(`running`, `passed`, `failed`); a case stays `running` until the trial's spend is booked, so its
+`cost_usd` is the real one. Without a model to call it says `not_run` — never `passed`. Set
 `"stable": {"min_live_score": 0.9}` (and/or `"candidate": {...}`) in the release policy and a release needs
 the newest finished evaluation of that revision to reach it (`live_eval` check; a rollback skips it). In the
 console, the Revisions and Testing cards offer **Run live evaluation** with a project and the most it may

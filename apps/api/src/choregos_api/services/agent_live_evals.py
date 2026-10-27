@@ -10,6 +10,7 @@ has the status the case expects, and its summary contains every `must_contain` a
 
 from __future__ import annotations
 
+from datetime import UTC, timedelta
 from typing import Any
 
 from choregos_core import utcnow
@@ -29,6 +30,20 @@ MAX_LIVE_CASES = 10
 #: What one case may spend unless it says less (the trial's own default and cap, S32-03).
 CASE_DEFAULT_USD = 0.25
 FINISHED = ("succeeded", "failed", "timed_out", "cancelled")
+#: The runner posts its result (the run turns `succeeded`) BEFORE the trial workflow reads the spend back
+#: from the gateway (`collect_spend` sets `cost_usd` and `spend_collected`), seconds to minutes later. A
+#: case is only judged once its spend is booked, or this long after the run ended (a workflow that died).
+SPEND_GRACE = timedelta(minutes=15)
+
+
+def spend_settled(run: Run) -> bool:
+    """Is the run's cost on the row? Read before this, `cost_usd` is the column default, not a measure."""
+    if run.spend_collected:
+        return True
+    if run.ended_at is None:
+        return False
+    ended = run.ended_at if run.ended_at.tzinfo else run.ended_at.replace(tzinfo=UTC)
+    return utcnow() - ended > SPEND_GRACE
 
 
 def live_cases(spec: AgentSpec) -> list[AgentEvalCase]:
@@ -164,7 +179,7 @@ async def read(
             out.append(
                 AgentEvaluationCase(**base, status="not_run", reason="no model to call: no gateway key")
             )
-        elif run is None or run.status not in FINISHED or case is None:
+        elif run is None or run.status not in FINISHED or case is None or not spend_settled(run):
             out.append(AgentEvaluationCase(**base, status="running"))
         else:
             ok, why = judge(case, run.status, run.result)

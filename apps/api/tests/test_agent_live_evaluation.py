@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from choregos_core import utcnow
 from httpx import AsyncClient
 
 from .agent_scopes_kit import ADMIN, ORG, as_user
@@ -51,8 +52,11 @@ async def evaluate(client: AsyncClient, project: str, version: int = 1) -> Any:
     )
 
 
-async def write_runs(work_items: list[str], outcomes: list[tuple[str, str, str]]) -> None:
-    """The trial runs: `(run status, result status, summary)` for each trial work item, in order."""
+async def write_runs(
+    work_items: list[str], outcomes: list[tuple[str, str, str]], *, collected: bool = True
+) -> None:
+    """The trial runs: `(run status, result status, summary)` for each trial work item, in order.
+    `collected` is whether `collect_spend` has booked the run's cost (it runs after the result is posted)."""
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
@@ -67,7 +71,9 @@ async def write_runs(work_items: list[str], outcomes: list[tuple[str, str, str]]
                     project_id=item.project_id,
                     stage_role="implement",
                     status=status,
-                    cost_usd=0.1,
+                    cost_usd=0.1 if collected else 0.0,
+                    spend_collected=collected,
+                    ended_at=utcnow(),
                     result={"status": result_status, "summary": summary},
                 )
             )
@@ -260,3 +266,45 @@ async def test_trying_the_agent_is_the_right_an_evaluation_needs(
     assert refused.status_code == 403
     await as_user(client, ADMIN)
     assert (await evaluate(client, "nobody")).status_code in {403, 404}
+
+
+async def test_a_case_is_not_judged_before_the_trial_spend_is_booked(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """Red without `spend_settled`: the runner's result turns the run `succeeded` while `cost_usd` is still
+    the 0.0 default; the evaluation closed with that zero (the dev finding, S40-02e)."""
+    await agent_with(client, [live("only", ["ok"], cost=0.1)])
+    started = (await evaluate(client, project["slug"])).json()
+    await write_runs(items_of(started), [("succeeded", "done", "ok fine")], collected=False)
+    (mid,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    assert mid["status"] == "running" and mid["score"] is None
+    assert mid["cases"][0]["status"] == "running" and mid["cases"][0].get("cost_usd") in (None, 0.0)
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:  # collect_spend books the cost
+        run = await session.get(Run, mid["cases"][0]["run_id"])
+        assert run is not None
+        run.cost_usd, run.spend_collected = 0.07, True
+    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    assert done["status"] == "passed" and done["cases"][0]["cost_usd"] == pytest.approx(0.07)
+
+
+async def test_a_run_whose_spend_never_came_is_judged_after_the_grace(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """A trial workflow that died after the result must not leave the evaluation running forever."""
+    from datetime import timedelta
+
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+
+    await agent_with(client, [live("only", ["ok"], cost=0.1)])
+    started = (await evaluate(client, project["slug"])).json()
+    await write_runs(items_of(started), [("succeeded", "done", "ok fine")], collected=False)
+    async with session_scope() as session:
+        run = await session.get(Run, started["cases"][0]["run_id"])
+        assert run is not None
+        run.ended_at = utcnow() - timedelta(minutes=30)
+    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    assert done["status"] == "passed"

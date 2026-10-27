@@ -135,7 +135,7 @@ class WebCrawlSource:
         self._sleep = sleep
         self._http = httpx.AsyncClient(
             timeout=20.0,
-            transport=guarded(transport),
+            transport=guarded(transport, proxy_kind="knowledge_web"),
             follow_redirects=False,
             headers={"User-Agent": user_agent},
         )

@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 
 from choregos_core import utcnow
 from choregos_core.network import allowed
+from choregos_core.outbound_proxy import OutboundProxyError
 from choregos_core.redaction import redact
 from choregos_core.web_search import DataHandling, shortfalls, stricter
 from sqlalchemy import func, select
@@ -38,6 +39,7 @@ from ..db.models import CostLedger, Organization, OrgConnector, Project, Run
 from .catalogue_rights import connector_enabled_for
 from .definitions import ceiling_of, effective_policy
 from .network import run_network
+from .outbound_proxy import proxy_scope
 from .platform_network import ceiling_network, decide, journal
 
 TOOL_NAME = "web_search"
@@ -233,7 +235,10 @@ async def search(
             session, connector.org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
         client = build(connector.kind, connector.type, config)
-        async with egress_scope_for_org(session, connector.org_id, "api", f"web_search:{connector.name}"):
+        async with (
+            egress_scope_for_org(session, connector.org_id, "api", f"web_search:{connector.name}"),
+            proxy_scope(session, connector.org_id, (TOOL_NAME,)),
+        ):
             found = await client.search(
                 query,
                 max_results=int(arguments.get("max_results") or 5),
@@ -249,6 +254,9 @@ async def search(
         return (*_refusal(502, "upstream", redact(str(failed))), backend)
     except SecretIntrouvable as missing:
         return (*_refusal(502, "upstream", redact(f"{connector.name}: {missing}")), backend)
+    except OutboundProxyError as unusable:
+        # Fail closed (ADR 0087 §2): the proxy applies and cannot be built, so nothing is sent.
+        return (*_refusal(502, "proxy_unavailable", redact(str(unusable))), backend)
     network = await run_network(session, run)
     reach = [*network.allow, *network.implied]
     results = []
