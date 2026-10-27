@@ -3,23 +3,74 @@
   "image": "ghcr.io/vargafoundation/choregos-agents/servicenow-mcp@sha256:0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
   "port": 8080,
   "protocol": "mcp-http",
+  "paths": {
+    "mcp": "/mcp",
+    "health": "/healthz"
+  },
   "config_schema": {
     "type": "object",
-    "required": ["base_url", "client_id"],
+    "required": [
+      "base_url",
+      "client_id"
+    ],
     "properties": {
-      "base_url": { "type": "string", "format": "uri" },
-      "client_id": { "type": "string" }
+      "base_url": {
+        "type": "string",
+        "format": "uri"
+      },
+      "client_id": {
+        "type": "string"
+      }
     }
   },
-  "secret_fields": ["client_secret", "webhook_secret"],
-  "egress": { "from_fields": ["base_url"] },
-  "operations": [
-    { "name": "search_records", "access": "read" },
-    { "name": "add_work_note", "access": "write" },
-    { "name": "add_comment", "access": "write", "human_approval": true },
-    { "name": "resolve_incident", "access": "write", "human_approval": true, "compensation": "reopen_incident" },
-    { "name": "reopen_incident", "access": "write", "human_approval": true }
+  "secret_fields": [
+    "client_secret",
+    "webhook_secret"
   ],
-  "implements": ["tracker"],
-  "webhook": { "path": "/events" }
+  "egress": {
+    "from_fields": [
+      "base_url"
+    ]
+  },
+  "operations": [
+    {
+      "name": "search_records",
+      "access": "read"
+    },
+    {
+      "name": "add_work_note",
+      "access": "write",
+      "platform_arguments": [
+        "action_key"
+      ]
+    },
+    {
+      "name": "add_comment",
+      "access": "write",
+      "human_approval": true
+    },
+    {
+      "name": "resolve_incident",
+      "access": "write",
+      "human_approval": true,
+      "compensation": {
+        "operation": "reopen_incident",
+        "arguments": {
+          "sys_id": "{{ result.sys_id }}",
+          "state": "{{ result.previous_state }}"
+        }
+      }
+    },
+    {
+      "name": "reopen_incident",
+      "access": "write",
+      "human_approval": true
+    }
+  ],
+  "implements": [
+    "tracker"
+  ],
+  "webhook": {
+    "path": "/events"
+  }
 }

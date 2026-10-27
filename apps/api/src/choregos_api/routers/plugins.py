@@ -171,12 +171,14 @@ async def upgrade_plugin(
     response_model=PluginUninstallResult,
     operation_id="uninstallPlugin",
 )
-async def uninstall_plugin(org: str, name: Name, session: Db, principal: Me) -> PluginUninstallResult:
+async def uninstall_plugin(
+    org: str, name: Name, session: Db, principal: Me, settings: Config
+) -> PluginUninstallResult:
     _may_install(principal, org)
     org_id = await installer.org_id_of(session, org)
     row = await installer.installed_one(session, org_id, name)
     version = row.version
-    outcome = await installer.uninstall(session, org_id, row, principal)
+    outcome = await installer.uninstall(session, org_id, row, principal, settings)
     await approvals.forget(session, org_id, name)
     return PluginUninstallResult(
         name=name,

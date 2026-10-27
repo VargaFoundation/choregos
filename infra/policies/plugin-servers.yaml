@@ -1,0 +1,42 @@
+# Plugin servers (ADR 0094): in the namespace the API runs them in, a pod runs only an image pinned
+# by digest and under the registries the operator allows for plugin servers. The API checks the same
+# rule before it creates anything (`CHOREGOS_PLUGIN_SERVERS_REGISTRIES`); this one holds when the
+# API, or anyone with rights in the namespace, writes a Deployment behind it.
+# The allowlist below is the foundation's plugin images: an operator who trusts another source adds
+# its prefix here AND in `global.plugins.servers.registries`. Rename the namespace with
+# `global.plugins.servers.namespace.name`.
+# Ephemeral containers stay out, as in `choregos-image-tags`: an operator debugging a server picks a
+# throwaway tool image during an incident.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-plugin-server-images
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: digest-and-allowed-registry
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: ["choregos-plugins"]
+      validate:
+        message: >-
+          a plugin server's image is pinned by digest (`@sha256:`) and comes from an allowed registry
+          (ghcr.io/vargafoundation/choregos-agents/)
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^ghcr\\.io/vargafoundation/choregos-agents/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$', '{{ element.image }}') }}"
+                    operator: Equals
+                    value: false
+          - list: "request.object.spec.initContainers || `[]`"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^ghcr\\.io/vargafoundation/choregos-agents/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$', '{{ element.image }}') }}"
+                    operator: Equals
+                    value: false

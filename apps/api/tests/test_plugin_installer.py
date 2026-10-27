@@ -190,8 +190,8 @@ async def test_install_brings_agents_skills_templates_evals_procedures_and_recor
         agent = (await session.execute(select(Agent).where(Agent.slug == "greeter"))).scalar_one()
         assert agent.scope == "platform"
         row = (await session.execute(select(OrgPlugin))).scalar_one()
-        # The server is recorded, not run (S43-06): the install says it is pending.
-        assert row.status == "servers_pending" and set(row.details["servers"]) == {"hello"}
+        # The server runs with the plugin (S43-06, ADR 0094): `test_plugin_servers.py` proves how.
+        assert row.status == "installed" and set(row.details["servers"]) == {"hello"}
     listed = (await client.get(f"{ORG}/plugins")).json()
     assert not list(_contract("PluginList").iter_errors(listed))
     assert [p["name"] for p in listed["items"]] == ["hello"]

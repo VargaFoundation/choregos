@@ -104,6 +104,28 @@ spec:
               value: /etc/choregos/plugins/plugins.yaml
             {{- end }}
             {{- end }}
+            {{- $servers := ((.Values.global.plugins | default dict).servers | default dict) }}
+            {{- if $servers.enabled }}
+            # Plugin servers (ADR 0094): run by the API in their namespace, through its Role there.
+            - name: CHOREGOS_PLUGIN_SERVERS
+              value: kubernetes
+            - name: CHOREGOS_PLUGIN_SERVERS_NAMESPACE
+              value: {{ ($servers.namespace | default dict).name | default "choregos-plugins" | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_REGISTRIES
+              value: {{ toJson ($servers.registries | default list) | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_RUNTIME_CLASS
+              value: {{ $servers.runtimeClass | default ((.Values.global.runner | default dict).runtimeClass | default "") | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_EGRESS
+              value: {{ $servers.egress | default "networkpolicy" | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_API_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            {{- with (($servers.resources | default dict).limits | default dict) }}
+            - name: CHOREGOS_PLUGIN_SERVERS_CPU
+              value: {{ .cpu | default "500m" | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_MEMORY
+              value: {{ .memory | default "512Mi" | quote }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.global.agents }}
             {{- if .defaultBackend }}
             # The backend and the profiles a new project inherits (#245).

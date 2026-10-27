@@ -6,3 +6,4 @@ resources:
   - pod-security.yaml
   - quotas-runtime.yaml
   - sandbox-template.yaml
+  - plugin-servers.yaml

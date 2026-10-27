@@ -685,6 +685,36 @@ each pass is the log line `plugin.default.reconciled` (installed, waiting, faile
 deployment's ceiling (`global.egress`); the API's network policy must also let it reach the index and
 registry hosts (`choregos-api.egressHosts` documents them for the catalogues).
 
+### Plugin servers
+
+A plugin's MCP server runs in the cluster, started by the API ([ADR 0094](adr/0094-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md),
+[what a server must do](plugins.md#servers)). Off by default: a plugin that brings one is refused.
+
+```yaml
+global:
+  plugins:
+    servers:
+      enabled: true
+      namespace: { name: choregos-plugins, create: false }   # create: true renders the Namespace too
+      registries: [ghcr.io/vargafoundation/choregos-agents]   # where a server's image may come from
+      runtimeClass: ""          # empty: global.runner.runtimeClass, else the cluster's runtime
+      egress: networkpolicy     # or cilium: a CiliumNetworkPolicy names the exact hosts
+      resources: { limits: { cpu: 500m, memory: 512Mi } }
+```
+
+With `enabled`, the chart renders a Role in that namespace (Deployments, Services, NetworkPolicies,
+Secrets; CiliumNetworkPolicies with `egress: cilium`) bound to the API's ServiceAccount, nothing
+cluster-wide, and opens the platform's egress towards the namespace. The namespace must not be the
+release's. Per organisation and server the API writes a Deployment, a Service, a NetworkPolicy (ingress
+from the API's pods only) and a Secret, named `<server>-<hash of the organisation>` and labelled
+`choregos.dev/plugin`, `choregos.dev/server`, `choregos.dev/org`.
+
+What stays with the operator: the namespace (unless `create`), the registry allowlist in two places —
+`registries` here and the prefix of the Kyverno policy `choregos-plugin-server-images`
+(`infra/policies/plugin-servers.yaml`, the namespace name too if it is not `choregos-plugins`) — and,
+for `cilium`, a cluster that runs Cilium with its DNS proxy. Signatures follow `images.hostedCosign`
+and its signer.
+
 ## Multi-tenant installations
 
 For a tenant that may not create cluster-scoped resources:

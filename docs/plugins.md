@@ -67,6 +67,9 @@ contents:
   - the image is pinned by `@sha256:`;
   - every operation states its `access` (`read` or `write`);
   - a read has no `compensation`, and a compensation names an operation of the same server;
+  - `paths` (`mcp`, `health`; defaults `/mcp` and `/healthz`) name where the server answers;
+  - `platform_arguments` (`action_key`, `work_item_key`) are arguments the platform fills, never the
+    agent;
   - operation names are unique;
   - an egress `from_fields` entry is a field of `config_schema`.
 
@@ -132,7 +135,7 @@ installed. Any refusal leaves the organisation unchanged.
 | templates | kept with their files | `plugin:<plugin>/<template>`, usable as a project's `template_ref` |
 | evals | kept; played at every install and upgrade | `<agent>/<file>` |
 | procedures | kept; `GET /procedures` lists them for the organisation's members | their id |
-| servers | recorded, not run (S43-06): the plugin's status is `servers_pending` | their name |
+| servers | run in the plugins namespace and governed as an organisation `mcp` connector ([Servers](#servers)) | the connector's name is the server's |
 
 An agent or skill the organisation already has under that name, and that the plugin did not install,
 wins: the plugin leaves it alone.
@@ -151,6 +154,75 @@ changed, what a project pins and a skill a kept agent still carries stay, as the
 (`{"name", "version", "removed": {"agents", "skills"}, "kept": {"agents", "skills"}}`), as does the
 `plugin.uninstall` audit entry; a request still waiting to upgrade it is dropped. A plugin another
 installed plugin requires cannot be uninstalled (409).
+
+## Servers
+
+A plugin brings code only as an MCP server image (ADR 0094). Installing the plugin (after the second
+approval) runs each of its servers and governs it:
+
+- **an organisation connector named after the server.** `servers/servicenow.yaml` with
+  `name: servicenow` becomes the `mcp` connector `servicenow`, so an agent names it in `mcp_servers`
+  (`{connector: servicenow, tools: [...]}`) and its tools are **`<server>__<operation>`**
+  (`servicenow__search_records`). An organisation that already has a connector of that name gets a 409
+  when it asks for the install: rename or delete it first. The connector goes with the plugin: the
+  connector route refuses to delete it (409), uninstalling removes it, its operations and its secrets.
+- **one operation per declared operation, at its floor.** A `read` is allowed, a `write` needs an
+  approval (a governed action, ADR 0035); the administrator may change the policy, the groups and the
+  price as for any connector, but an operation marked `human_approval: true` never goes below
+  `approval` — the route refuses it and the broker re-applies the floor whatever a row says. A tool the
+  server serves that `operations` does not list is refused: discovery does not add it, the broker does
+  not offer it, a governed action does not play it. Discovery learns a declared tool's input schema; a
+  later change of that schema closes it, as for any MCP server.
+- **compensation and platform arguments.** `compensation: {operation, arguments}` is attached to the
+  governed action of the write, its `arguments` rendered from the write's own result
+  (`{sys_id: "{{ result.sys_id }}"}`), and played if a later step of the action fails.
+  `platform_arguments: [action_key]` makes the platform fill an idempotency key stable for one action
+  and call (`work_item_key`: the action's work item); whatever the agent wrote under those names is
+  dropped.
+
+### What the server must do
+
+- **Refuse every call without the platform's token.** The platform generates a token per server and
+  organisation, seals it in the organisation's secret store (ADR 0058), gives it to the pod as
+  `CHOREGOS_SERVER_TOKEN`, and presents it as `Authorization: Bearer <token>` on every call to
+  `paths.mcp`. A server that answers without it lets anything in the cluster that reaches it act with
+  its credentials.
+- **Answer MCP over HTTP** (`protocol: mcp-http`) at `paths.mcp`, and `200` at `paths.health`
+  (readiness and liveness probes).
+- **Run as a non-root user with a read-only root filesystem**; `/tmp` is a small writable `emptyDir`.
+  The pod has no ServiceAccount token, drops every capability and runs under the deployment's
+  RuntimeClass (gVisor when it sets one).
+- **Read its configuration from the environment**: each `config_schema` property and each
+  `secret_fields` entry reaches it as the variable named by the property's `x-env`, else its name in
+  upper case (`base_url` → `BASE_URL`). A list of scalars is joined with commas, an object is JSON.
+  `CHOREGOS_*` names are the platform's.
+
+### Configuring a server
+
+The connector's configuration **is** the server's: `PATCH /orgs/{org}/connectors/{server}` with
+`config` (checked against `config_schema`, required fields aside) and `secret_values` for the
+`secret_fields` (sealed, never shown again; `PUT …/secrets/{field}` works too). Every change is applied
+to the server's Secret, and the digest of the configuration on the pod template rolls the Deployment.
+Until the configuration satisfies the whole schema the Deployment has no replica and the connector
+says `unconfigured`; then `deployed`.
+
+### Network
+
+The server's pods admit only the API's pods (`plugins.servers` puts the API's namespace in the policy).
+Their egress is the hosts their configuration names (`egress.from_fields`, or the fixed `egress.hosts`):
+each is checked against the organisation's network bounds when it is typed (a denied host is a 422), and
+the server's NetworkPolicy lets through DNS and public addresses on those hosts' ports (never the
+cluster's, the node's or the metadata endpoint's addresses). Kubernetes cannot name a host: with
+`plugins.servers.egress: cilium` a `CiliumNetworkPolicy` narrows egress to those exact names.
+
+### Images
+
+A server's image is pinned by digest (the contract), comes from a registry prefix the operator lists in
+`plugins.servers.registries`, and carries a trusted signature when `images.hostedCosign` is `enforce`
+(`warn` logs `plugin.server.signature_unverified`). A deployment without `plugins.servers.enabled`
+refuses a plugin that brings a server. In the cluster, the Kyverno policy
+`choregos-plugin-server-images` (`infra/policies/plugin-servers.yaml`) refuses a pod of the plugins
+namespace whose image is not pinned or not from the allowed prefix.
 
 ## Default plugins
 

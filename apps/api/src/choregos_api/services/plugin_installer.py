@@ -16,7 +16,8 @@ The plugin arrives already loaded and validated by `choregos_core.plugins` (S43-
   install, wins and is left untouched (ADR 0040 §4);
 - keeps the files the platform serves again (templates with their files, eval suites, procedures) in
   `org_plugin_files`, under the plugin's content digest and the organisation's RLS;
-- records the plugin's servers without running them (S43-06): the row's status says `servers_pending`.
+- runs the plugin's servers and governs them as organisation connectors (`plugin_servers.py`, ADR 0094):
+  each server is checked with the rest (image rules, a free connector name) and provisioned with it.
 
 An upgrade follows ADR 0040: an agent the organisation changed (a version not written by this plugin)
 is OFFERED the update, never overwritten; the others get the next version only when their text
@@ -46,7 +47,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..config import Settings
+from ..config import Settings, get_settings
 from ..db.base import utcnow
 from ..db.models import (
     Agent,
@@ -62,6 +63,7 @@ from ..errors import conflict, not_found, unprocessable
 from ..rbac import SYSTEM, Principal
 from ..schemas.agents import MAX_TAGS, AgentCreate
 from ..schemas.plugins import InstalledPlugin, PluginContents
+from . import plugin_servers
 from .agent_releases import after_publish
 from .agents import empreinte, erreurs_d_une_version
 from .catalogue_d_agents import DIVERGE
@@ -169,6 +171,9 @@ async def _prepare(
             prepared.files[f"{ref}/{name}"] = path.read_bytes()
 
     await _procedures(session, org_id, prepared, settings, replacing)
+    await plugin_servers.check(
+        session, org_id, plugin, settings, replacing=replacing.name if replacing is not None else None
+    )
     return prepared
 
 
@@ -260,8 +265,10 @@ async def _drop_files(session: AsyncSession, org_id: str, digest: str) -> None:
 
 
 def _servers_and_status(plugin: Plugin) -> tuple[dict[str, Any], str]:
+    """The servers as declared, and the row's status: `installed`, its servers provisioned with it
+    (S43-06). `servers_pending` is what a row installed before S43-06 still says."""
     servers = {name: dict(doc) for name, doc in sorted(plugin.servers.items())}
-    return servers, (SERVERS_PENDING if servers else INSTALLED)
+    return servers, INSTALLED
 
 
 # -- agents and skills -------------------------------------------------------------------------------------
@@ -539,9 +546,10 @@ async def install(
     )
     session.add(row)
     await session.flush()
+    await plugin_servers.provision(session, org_id, plugin, who, settings)
     await record(session, who, "plugin.install", org_id=org_id, target_type="plugin", target_id=plugin.name,
                  version=plugin.version, source=source, digest=plugin.digest, publisher=meta.get("publisher"),
-                 skipped=details["skipped"], servers_pending=contents.servers)  # fmt: skip
+                 skipped=details["skipped"], servers=contents.servers)  # fmt: skip
     return row, True
 
 
@@ -614,6 +622,7 @@ async def upgrade(
 
     await _store_files(session, org_id, plugin.digest, prepared.files)
     await _drop_files(session, org_id, row.digest)
+    await plugin_servers.provision(session, org_id, plugin, principal, settings)
     servers, status = _servers_and_status(plugin)
     contents = PluginContents(
         agents=agents,
@@ -637,12 +646,12 @@ async def upgrade(
     await record(session, principal, "plugin.upgrade", org_id=org_id, target_type="plugin",
                  target_id=row.name, previous_version=previous, version=plugin.version,
                  digest=plugin.digest, offered=offered, kept=kept,
-                 servers_pending=contents.servers)  # fmt: skip
+                 servers=contents.servers)  # fmt: skip
     return previous, offered
 
 
 async def uninstall(
-    session: AsyncSession, org_id: str, row: OrgPlugin, principal: Principal
+    session: AsyncSession, org_id: str, row: OrgPlugin, principal: Principal, settings: Settings | None = None
 ) -> dict[str, Any]:
     """Removes what the plugin installed and nobody changed; returns what was removed and what kept."""
     for other in await _rows(session, org_id):
@@ -662,6 +671,7 @@ async def uninstall(
             name
         )
     await _drop_files(session, org_id, row.digest)
+    await plugin_servers.deprovision(session, org_id, row.name, principal, settings or get_settings())
     await session.delete(row)
     await session.flush()
     outcome = {"removed": removed, "kept": kept, "servers": contents.servers}

@@ -39,7 +39,8 @@ from ..schemas import (
     ProjectOrgConnectorDto,
     SecretValue,
 )
-from ..secret_store import resolved_configuration, secret_states
+from ..secret_store import secret_states
+from ..services import plugin_servers
 from ..services.catalogue_rights import (
     SELECTED_PROJECTS,
     CatalogueAction,
@@ -52,6 +53,7 @@ from ..services.catalogue_rights import (
 from ..services.connecteurs import (
     RANG,
     check_type_config,
+    declared_operation,
     plus_stricte,
     spec_du_type,
     verifier_les_secrets,
@@ -68,7 +70,6 @@ from ..services.platform_network import (
     check_connector_declaration,
     enforce_connector_call,
     refusal_error,
-    with_identity,
 )
 
 router = APIRouter(tags=["connectors"])
@@ -302,16 +303,26 @@ async def update_org_connector(
     _administrer(principal, org)
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
-    spec = spec_du_type(instance.kind, instance.type)
+    server = plugin_servers.spec_of_connector(instance)
+    spec = server or spec_du_type(instance.kind, instance.type)
     prefix = f"connector/{name}"
     config = body.config if body.config is not None else dict(instance.config or {})
-    if body.config is not None:
+    if body.config is not None and server is None:
         check_type_config(instance.kind, instance.type, config)
+    elif body.config is not None:
+        # A plugin's server (ADR 0094): its own schema, and the hosts it would reach within the bounds.
+        problems = plugin_servers.configuration_problems(instance.plugin_server or {}, config, partial=True)
+        if problems:
+            raise unprocessable(
+                f"the configuration of the server `{name}` breaks its schema",
+                [{"loc": ["body", "config"], "msg": p} for p in problems],
+            )
+        await plugin_servers.check_egress(session, instance, config)
     refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
     verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
     store = require_store(values)
     await check_connector_declaration(session, organisation.id, config, name)
-    if body.config is not None:
+    if body.config is not None and server is None:
         await egress_gate_for_connector(
             session, principal, organisation, instance.kind, instance.type, config, name, body.allow_egress
         )
@@ -360,6 +371,8 @@ async def update_org_connector(
     await _audit_secrets(
         session, principal, organisation, instance, "connector.secret.clear", dict.fromkeys(cleared)
     )
+    # A plugin's server reads its configuration from its Secret: the change rolls its pods.
+    await plugin_servers.reconcile(session, instance)
     return await _dto(session, instance, principal)
 
 
@@ -381,7 +394,7 @@ async def set_org_connector_secret(
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
     verifier_les_secrets(
-        spec_du_type(instance.kind, instance.type),
+        plugin_servers.spec_of_connector(instance) or spec_du_type(instance.kind, instance.type),
         instance.type,
         {},
         {},
@@ -398,6 +411,7 @@ async def set_org_connector_secret(
     await _audit_secrets(
         session, principal, organisation, instance, "connector.secret.set", {field: metas[field].version}
     )
+    await plugin_servers.reconcile(session, instance)
     return await _dto(session, instance, principal)
 
 
@@ -426,6 +440,7 @@ async def clear_org_connector_secret(
     instance.status = "unknown"
     await session.flush()
     await _audit_secrets(session, principal, organisation, instance, "connector.secret.clear", {field: None})
+    await plugin_servers.reconcile(session, instance)
     return await _dto(session, instance, principal)
 
 
@@ -436,6 +451,11 @@ async def delete_org_connector(org: str, name: Nom, session: Db, principal: Me) 
     _administrer(principal, org)
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
+    if instance.plugin_server is not None:
+        raise conflict(
+            f"`{name}` is the server of the plugin `{instance.plugin_server.get('plugin')}`: uninstall the "
+            "plugin to remove it"
+        )
     # Its sealed secrets go with it: a value nothing points to is a value nobody can see or remove.
     await drop_replaced_store_values(session, require_store(None), organisation.id, instance.secret_refs, {})
     await session.delete(instance)
@@ -473,9 +493,7 @@ async def update_operation(
     if ligne is None:
         raise not_found("Operation", operation)
     if body.policy == "allowed":
-        from choregos_adapters import operation_spec
-
-        declared = operation_spec(instance.kind, instance.type, operation)
+        declared = declared_operation(instance, operation)
         if declared is not None and declared.human_approval:
             raise unprocessable(
                 f"{name}/{operation} is approved by a person, always (its type declares it): "
@@ -528,7 +546,6 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     qui accepte soudain une quantité n'est plus l'opération qu'on avait ouverte. Un outil que le
     serveur ne propose plus disparaît, avec ce que les projets en resserraient."""
     import httpx
-    from choregos_adapters import build
     from choregos_adapters.mcp import ErreurMcp, empreinte_du_schema
     from choregos_core import utcnow
     from choregos_core.redaction import redact
@@ -542,14 +559,8 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     except PlatformNetworkRefused as refused:
         raise refusal_error(refused) from refused
     try:
-        config = await with_identity(
-            session,
-            instance.org_id,
-            await resolved_configuration(
-                session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
-            ),
-        )
-        lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
+        client: Any = await plugin_servers.connector_client(session, instance)
+        lister = getattr(client, "list_tools", None)
         if lister is None:
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
         async with egress_scope(session, organisation, "api", f"org-connector:{name}"):
@@ -570,9 +581,18 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         ).scalars()
     }
     diff = ConnectorDiscovery()
+    declared = (instance.plugin_server or {}).get("operations")
+    undeclared_tools: list[str] = []
     for outil in outils:
         empreinte = empreinte_du_schema(outil.input_schema)
         acces = "read" if outil.read_only else "write"
+        if declared is not None:
+            # A plugin's server (ADR 0094): its `operations` are the floor. A tool it does not declare
+            # is never added; a declared one keeps its declared access, whatever the server hints.
+            if outil.name not in declared:
+                undeclared_tools.append(outil.name)
+                continue
+            acces = str(declared[outil.name]["access"])
         operation = existantes.pop(outil.name, None)
         if operation is None:
             session.add(
@@ -594,6 +614,13 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         # The declared output schema follows the server on every discovery: it bounds what the agent
         # reads (#755), it does not change what the tool does, so it does not close the operation.
         operation.output_schema = getattr(outil, "output_schema", None)
+        if declared is not None and operation.schema_digest is None:
+            # A declared operation the server lists for the first time: its schema is learnt, not a
+            # drift — the plugin's declaration opened it at its floor (ADR 0094).
+            operation.schema_digest, operation.input_schema = empreinte, outil.input_schema
+            operation.description = operation.description or outil.description or None
+            diff.unchanged += 1
+            continue
         if operation.schema_digest != empreinte or operation.access != acces:
             operation.policy, operation.schema_digest, operation.access = "forbidden", empreinte, acces
             operation.input_schema = outil.input_schema
@@ -602,6 +629,8 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         else:
             diff.unchanged += 1
     for nom, operation in existantes.items():
+        if declared is not None and nom in declared:
+            continue  # declared by the plugin: kept even while the server does not list it
         await session.delete(operation)
         diff.removed.append(nom)
     instance.status, instance.last_check_at, instance.last_error = "ok", utcnow(), None
@@ -614,6 +643,7 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         target_type="org_connector",
         target_id=instance.id,
         **diff.model_dump(),
+        **({"undeclared": undeclared_tools} if undeclared_tools else {}),
     )
     return diff
 

@@ -89,7 +89,10 @@ def test_a_write_operation_without_access_is_refused(plugin: Path) -> None:
 
 
 def test_a_compensation_names_an_operation_of_the_server(plugin: Path) -> None:
-    _edit(plugin / "servers" / "hello.yaml", lambda d: d["operations"][1].update(compensation="undo"))
+    _edit(
+        plugin / "servers" / "hello.yaml",
+        lambda d: d["operations"][1].update(compensation={"operation": "undo"}),
+    )
     assert "compensated by `undo`" in _problems(plugin)
 
 

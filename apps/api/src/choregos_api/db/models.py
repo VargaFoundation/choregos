@@ -636,6 +636,11 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     availability: Mapped[str] = mapped_column(
         String(24), default="all_projects", server_default="all_projects"
     )
+    #: The server a plugin brings, when the connector is one (ADR 0094): its declaration as the
+    #: installer wrote it (image, port, paths, `config_schema`, `secret_fields`, `egress`, the declared
+    #: `operations`, the Service URL). Written by the installer only, never by the connector routes:
+    #: the broker reads its operations as the governance floor. `NULL` for any other connector.
+    plugin_server: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class OrgConnectorProject(Base, PkMixin, TimestampMixin):

@@ -176,26 +176,38 @@ export type PluginServerOperation = {
   description?: string;
   /** a floor: an organisation may raise it, never lower it */
   human_approval?: boolean;
-  /** the operation that undoes this one; a write only */
-  compensation?: string;
+  /** what undoes this write: an operation of the same server, called with `arguments` rendered from the write's own `result` (`{{ result.sys_id }}`), as a connector type declares it (ADR 0035, ADR 0052); a write only */
+  compensation?: {
+    operation: string;
+    arguments?: {
+      [key: string]: string;
+    };
+  };
   /** a JSON Schema of the tool's arguments */
   input_schema?: {
     [key: string]: unknown;
   };
+  /** arguments the PLATFORM fills, never the agent: `action_key` (an idempotency key stable for one governed action and call), `work_item_key` (the work item the action belongs to) */
+  platform_arguments?: Array<"action_key" | "work_item_key">;
 };
 
-/** An MCP server a plugin brings, run and governed by the platform (ADR 0093, plan S43 Decision 2). */
+/** An MCP server a plugin brings, run and governed by the platform (ADR 0093, ADR 0094, plan S43 Decision 2). */
 export type PluginServer = {
   name: string;
   /** pinned by digest; a tag alone is refused */
   image: string;
   port: number;
   protocol: "mcp-http";
+  /** where the server answers; defaults `/mcp` and `/healthz` */
+  paths?: {
+    mcp?: string;
+    health?: string;
+  };
   /** a JSON Schema of what an administrator types */
   config_schema?: {
     [key: string]: unknown;
   };
-  /** sealed (ADR 0058), passed by the broker's call, never to a run */
+  /** sealed (ADR 0058), delivered to the server's pod from a Secret, never to a run; `_server_token` is the platform's own */
   secret_fields?: Array<string>;
   /** where the server may connect: hosts read from configuration fields, or fixed hosts */
   egress?: {

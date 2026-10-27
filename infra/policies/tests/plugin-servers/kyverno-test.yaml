@@ -1,0 +1,40 @@
+# One entry per pod, so a wrong verdict names its pod (ADR 0094, S43-06).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: choregos-plugin-servers
+policies:
+- ../../plugin-servers.yaml
+resources:
+- resources.yaml
+results:
+- policy: choregos-plugin-server-images
+  rule: digest-and-allowed-registry
+  resources:
+  - server-allowed
+  kind: Pod
+  result: pass
+- policy: choregos-plugin-server-images
+  rule: digest-and-allowed-registry
+  resources:
+  - server-tag
+  kind: Pod
+  result: fail
+- policy: choregos-plugin-server-images
+  rule: digest-and-allowed-registry
+  resources:
+  - server-other-registry
+  kind: Pod
+  result: fail
+- policy: choregos-plugin-server-images
+  rule: digest-and-allowed-registry
+  resources:
+  - server-lookalike-prefix
+  kind: Pod
+  result: fail
+- policy: choregos-plugin-server-images
+  rule: digest-and-allowed-registry
+  resources:
+  - server-init-unpinned
+  kind: Pod
+  result: fail

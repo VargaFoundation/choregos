@@ -37,16 +37,15 @@ from ..db.models import (
     ProjectOperationPolicy,
     Run,
 )
-from ..secret_store import resolved_configuration
 from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
-from .connecteurs import human_floor, plus_stricte
+from .connecteurs import declared_operation, human_floor, plus_stricte
 from .platform_network import (
     WHERE,
     PlatformNetworkRefused,
     PlatformRateLimited,
     enforce_connector_call,
-    with_identity,
 )
+from .plugin_servers import connector_client
 
 SEPARATEUR = "__"
 #: L'espace des identifiants d'une écriture appelée par un run : le même appel (run, outil,
@@ -183,7 +182,6 @@ async def _proposer_l_action_de_l_outil(
     action_id: str | None = None,
 ) -> Any:
     """L'action d'un appel d'outil : un effet `connector.call`, au nom de l'agent du run."""
-    from choregos_adapters import operation_spec
     from choregos_contracts import ActionOrigin
 
     from ..rbac import SYSTEM
@@ -200,7 +198,7 @@ async def _proposer_l_action_de_l_outil(
     }
     # What undoes it, as its type declares it (ADR 0052): a firewall rule changed by an action that
     # fails later is put back as it was.
-    declaree = operation_spec(outil.connecteur.kind, outil.connecteur.type, outil.operation.name)
+    declaree = declared_operation(outil.connecteur, outil.operation.name)
     if declaree is not None and declaree.compensation:
         effet["compensate"] = {
             "effect": "connector.call",
@@ -388,7 +386,6 @@ async def _appeler(
     project: Project | None = None,
 ) -> tuple[int, dict[str, Any]]:
     import httpx
-    from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
     from choregos_adapters.mcp import ErreurMcp
     from choregos_core.redaction import redact
@@ -408,14 +405,8 @@ async def _appeler(
     except PlatformRateLimited as limite:
         return 429, {"error": str(limite), "type": "rate_limited"}
     try:
-        config = await with_identity(
-            session,
-            instance.org_id,
-            await resolved_configuration(
-                session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
-            ),
-        )
-        client = build(instance.kind, instance.type, config)
+        # A plugin's server (ADR 0094): its Service, its bearer token; any other: its type's adapter.
+        client: Any = await connector_client(session, instance)
         if hasattr(client, "call_tool"):
             resultat = await client.call_tool(outil.operation.name, arguments)
         else:

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_adapters import POLITIQUES, ConnectorTypeSpec
+from choregos_adapters import POLITIQUES, ConnectorTypeSpec, OperationSpec
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,12 +22,42 @@ def plus_stricte(a: str, b: str | None) -> str:
     return a if b is None or RANG[a] >= RANG[b] else b
 
 
-def human_floor(connector: OrgConnector, operation: str, policy: str) -> str:
-    """An operation its type declares `human_approval` (ADR 0052) is never below `approval`: the
-    organisation cannot open it to the policy, and a row edited behind the API does not either."""
+def declared_operation(connector: OrgConnector, operation: str) -> OperationSpec | None:
+    """What is declared of one operation of this connector: by its plugin's server (ADR 0094), else
+    by its type (ADR 0052); `None` for a discovered MCP tool."""
     from choregos_adapters import operation_spec
 
-    declared = operation_spec(connector.kind, connector.type, operation)
+    server = connector.plugin_server
+    if server is not None:
+        found = (server.get("operations") or {}).get(operation)
+        if not isinstance(found, dict):
+            return None
+        return OperationSpec(
+            operation,
+            str(found.get("access", "write")),
+            str(found.get("description") or ""),
+            found.get("input_schema"),
+            human_approval=bool(found.get("human_approval")),
+            compensation=found.get("compensation"),
+            platform_arguments=tuple(found.get("platform_arguments") or ()),
+        )
+    return operation_spec(connector.kind, connector.type, operation)
+
+
+def undeclared(connector: OrgConnector, operation: str) -> bool:
+    """A tool a plugin's server serves that its `operations` do not declare: refused, whatever a row
+    of `connector_operations` says (ADR 0094). Never true for another connector."""
+    server = connector.plugin_server
+    return server is not None and operation not in (server.get("operations") or {})
+
+
+def human_floor(connector: OrgConnector, operation: str, policy: str) -> str:
+    """An operation its type (or its plugin's server) declares `human_approval` (ADR 0052, ADR 0094)
+    is never below `approval`: the organisation cannot open it to the policy, and a row edited behind
+    the API does not either. An operation a plugin's server does not declare is `forbidden`."""
+    if undeclared(connector, operation):
+        return "forbidden"
+    declared = declared_operation(connector, operation)
     if declared is not None and declared.human_approval:
         return plus_stricte(policy, "approval")
     return policy

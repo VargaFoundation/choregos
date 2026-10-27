@@ -125,8 +125,36 @@ def test_an_operation_without_access_is_refused() -> None:
 
 def test_a_read_operation_has_no_compensation() -> None:
     doc = copy.deepcopy(_example("plugin-server"))
-    doc["operations"][0]["compensation"] = "nothing"
+    doc["operations"][0]["compensation"] = {"operation": "nothing"}
     assert _errors("plugin-server", doc)
+
+
+def test_a_compensation_names_its_operation_and_arguments_rendered_from_the_result() -> None:
+    """ADR 0094: the shape a connector type declares (`OperationSpec.compensation`), so the broker
+    attaches it to the governed action as it does for pfSense."""
+    doc = copy.deepcopy(_example("plugin-server"))
+    resolve = next(o for o in doc["operations"] if o["name"] == "resolve_incident")
+    assert resolve["compensation"]["arguments"]["sys_id"] == "{{ result.sys_id }}"
+    assert not _errors("plugin-server", doc)
+    resolve["compensation"] = "reopen_incident"
+    assert _errors("plugin-server", doc), "a bare name says nothing of the arguments: refused"
+    resolve["compensation"] = {"operation": "reopen_incident", "arguments": {"sys_id": 3}}
+    assert _errors("plugin-server", doc)
+
+
+def test_platform_arguments_are_the_ones_the_platform_fills() -> None:
+    doc = copy.deepcopy(_example("plugin-server"))
+    doc["operations"][1]["platform_arguments"] = ["action_key", "work_item_key"]
+    assert not _errors("plugin-server", doc)
+    doc["operations"][1]["platform_arguments"] = ["tenant_id"]
+    assert _errors("plugin-server", doc)
+
+
+def test_paths_name_where_the_server_answers() -> None:
+    doc = _example("plugin-server") | {"paths": {"mcp": "/rpc", "health": "/ready"}}
+    assert not _errors("plugin-server", doc)
+    assert _errors("plugin-server", doc | {"paths": {"mcp": "rpc"}})
+    assert _errors("plugin-server", doc | {"paths": {"metrics": "/metrics"}})
 
 
 def test_a_server_declares_operations_and_one_kind_of_egress() -> None:
