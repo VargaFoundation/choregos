@@ -1,5 +1,8 @@
 # 0065 — Catalogues of MCP servers and skills: curated, generated from recorded sources, installed through the existing gates, never enabled by default
 
+> **Amended by [ADR 0093](0093-an-agent-ships-as-a-plugin.md)**: a catalogue entry may come from a
+> plugin, whose source and content digest are its recorded source.
+
 - **Status**: accepted, 2026-10-15; amended by [ADR 0074](0074-catalogue-rights.md) (rights, per-project enablement)
 - **Concerns**: `packages/core` (`choregos_core.catalogues`, `mcp_catalogue/`, `skill_catalogue/`),
   `tools/catalogues/`, the routes `GET /orgs/{org}/mcp-catalogue` and

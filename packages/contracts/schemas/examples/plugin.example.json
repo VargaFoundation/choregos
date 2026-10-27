@@ -1,0 +1,26 @@
+{
+  "apiVersion": "choregos/v1",
+  "kind": "Plugin",
+  "metadata": {
+    "name": "servicenow",
+    "version": "0.1.0",
+    "publisher": "Varga Foundation",
+    "license": "Apache-2.0",
+    "description": "Triage ServiceNow incidents under human approval.",
+    "homepage": "https://github.com/VargaFoundation/choregos-agents",
+    "core": ">=0.21.0,<0.23.0"
+  },
+  "requires": {
+    "plugins": [],
+    "connectors": {},
+    "org_connectors": {}
+  },
+  "contents": {
+    "agents": ["agents/itsm-triager.yaml"],
+    "skills": ["skills/servicenow-triage"],
+    "templates": ["templates/itsm-incident-triage"],
+    "evals": ["evals/itsm-triager.yaml"],
+    "procedures": ["procedures/*.md"],
+    "servers": ["servers/servicenow.yaml"]
+  }
+}

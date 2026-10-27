@@ -10,8 +10,22 @@ PREFIX = "/api/v1"
 
 # Contract-first (ADR 0001): operations the contract declares before the API serves them. Each entry
 # names the story that implements it; an entry the API does serve must be removed from here.
-CONTRACT_ONLY: dict[str, str] = {}
-CONTRACT_ONLY_PATHS: set[str] = set()
+CONTRACT_ONLY: dict[str, str] = {
+    "listPlugins": "S43-04",
+    "listPluginSources": "S43-03",
+    "installPlugin": "S43-04",
+    "upgradePlugin": "S43-04",
+    "uninstallPlugin": "S43-04",
+    "pluginWebhook": "S43-07",
+}
+CONTRACT_ONLY_PATHS: set[str] = {
+    "/orgs/{org}/plugins",
+    "/orgs/{org}/plugin-sources",
+    "/orgs/{org}/plugins/install",
+    "/orgs/{org}/plugins/{name}/upgrade",
+    "/orgs/{org}/plugins/{name}",
+    "/webhooks/plugins/{plugin}/{server}",
+}
 
 
 def _app_paths(spec: dict[str, Any]) -> set[str]:

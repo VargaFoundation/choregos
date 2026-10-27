@@ -137,6 +137,141 @@ export type InboundEvent = {
   };
 };
 
+/** one published version: exactly one of `oci` or `git` */
+export type PluginIndexRelease = {
+  /** sha256 of the plugin's canonical tar; checked after every fetch */
+  digest: string;
+  /** the plugin's `metadata.core` range */
+  core: string;
+  description?: string;
+  /** an OCI artifact reference (application/vnd.choregos.plugin.v1.tar+gzip) */
+  oci?: string;
+  git?: {
+    url: string;
+    /** a commit SHA; a branch or a tag is refused */
+    commit: string;
+    /** the plugin's directory in the repository */
+    path?: string;
+  };
+};
+
+/** A plugin source's index, index.yaml: name → versions → where and what (ADR 0093). */
+export type PluginIndex = {
+  apiVersion: "choregos/v1";
+  kind: "PluginIndex";
+  plugins: {
+    [key: string]: {
+      versions: {
+        [key: string]: PluginIndexRelease;
+      };
+    };
+  };
+};
+
+/** a tool the server may serve; a tool not listed is refused */
+export type PluginServerOperation = {
+  name: string;
+  /** required: nothing is assumed read */
+  access: "read" | "write";
+  description?: string;
+  /** a floor: an organisation may raise it, never lower it */
+  human_approval?: boolean;
+  /** the operation that undoes this one; a write only */
+  compensation?: string;
+  /** a JSON Schema of the tool's arguments */
+  input_schema?: {
+    [key: string]: unknown;
+  };
+};
+
+/** An MCP server a plugin brings, run and governed by the platform (ADR 0093, plan S43 Decision 2). */
+export type PluginServer = {
+  name: string;
+  /** pinned by digest; a tag alone is refused */
+  image: string;
+  port: number;
+  protocol: "mcp-http";
+  /** a JSON Schema of what an administrator types */
+  config_schema?: {
+    [key: string]: unknown;
+  };
+  /** sealed (ADR 0058), passed by the broker's call, never to a run */
+  secret_fields?: Array<string>;
+  /** where the server may connect: hosts read from configuration fields, or fixed hosts */
+  egress?: {
+    from_fields?: Array<string>;
+    hosts?: Array<string>;
+  };
+  operations: Array<PluginServerOperation>;
+  implements?: Array<"tracker">;
+  webhook?: {
+    path: string;
+  };
+};
+
+/** lower-case letters, digits and dashes */
+export type PluginName = string;
+
+/** a semantic version (semver.org 2.0.0) */
+export type PluginSemver = string;
+
+/** a version range: `^1`, `~0.1`, `0.1.0`, or comparisons joined by commas (`>=0.21.0,<0.23.0`) */
+export type PluginRange = string;
+
+/** relative to the plugin's directory; no absolute path, no `.` or `..` segment */
+export type PluginPath = string;
+
+/** a path that may hold `*` wildcards */
+export type PluginGlob = string;
+
+/** A plugin's manifest, plugin.yaml at the root of its directory (ADR 0093). */
+export type Plugin = {
+  apiVersion: "choregos/v1";
+  kind: "Plugin";
+  metadata: {
+    /** unique within a source */
+    name: PluginName;
+    /** a published version is immutable */
+    version: PluginSemver;
+    publisher: string;
+    /** an SPDX expression */
+    license: string;
+    description: string;
+    homepage?: string;
+    /** the core versions the plugin was validated against */
+    core: PluginRange;
+  };
+  requires?: {
+    /** other plugins, by name and version range */
+    plugins?: Array<{
+      name: PluginName;
+      version: PluginRange;
+    }>;
+    /** project connectors, kind → expected type, as in a template */
+    connectors?: {
+      [key: string]: string;
+    };
+    /** organisation connectors, name → capability, as in a template */
+    org_connectors?: {
+      [key: string]: string;
+    };
+  };
+  contents: {
+    /** YAML files in the catalogue entry shape (`catalogue:` + `agent:`) */
+    agents?: Array<PluginPath>;
+    /** directories holding a SKILL.md */
+    skills?: Array<PluginPath>;
+    /** template directories (manifest.yaml and their files) */
+    templates?: Array<PluginPath>;
+    /** evaluation suites */
+    evals?: Array<PluginPath>;
+    /** Markdown procedures with the ADR 0067 front matter */
+    procedures?: Array<PluginGlob>;
+    /** plugin server files (plugin-server.schema.json) */
+    servers?: Array<PluginPath>;
+  };
+};
+
 export type PolicyApprovalRule = {
   required: "always" | "never" | "by_size" | "by_risk";
   group?: string;
@@ -1025,6 +1160,9 @@ export type ChoregosContract =
   | Finding
   | HumanDecision
   | InboundEvent
+  | PluginIndex
+  | PluginServer
+  | Plugin
   | Policy
   | Project
   | StageInput

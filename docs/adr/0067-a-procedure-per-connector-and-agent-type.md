@@ -1,5 +1,8 @@
 # 0067 — A procedure per connector type and per external agent type
 
+> **Amended by [ADR 0093](0093-an-agent-ships-as-a-plugin.md)**: a procedure may come with its plugin
+> (`contents.procedures`), validated like a core procedure, and leaves when the plugin is uninstalled.
+
 - **Status**: accepted, 2026-10-16
 - **Concerns**: `choregos_core.procedures` (the files and the loader), the API (`GET /procedures`),
   the contract (`openapi.yaml`), the console (a side panel at every "add" gesture), the chart

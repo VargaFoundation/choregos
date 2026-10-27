@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/plugin.schema.json",
+  "title": "Plugin",
+  "description": "A plugin's manifest, plugin.yaml at the root of its directory (ADR 0093).",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "contents"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "lower-case letters, digits and dashes"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\\+[0-9a-zA-Z-]+(\\.[0-9a-zA-Z-]+)*)?$",
+      "maxLength": 64,
+      "description": "a semantic version (semver.org 2.0.0)"
+    },
+    "range": {
+      "type": "string",
+      "pattern": "^([\\^~]?[0-9]+(\\.[0-9]+){0,2}|(==|!=|>=|<=|~=|>|<) *[0-9]+(\\.[0-9]+){0,2}( *, *(==|!=|>=|<=|~=|>|<) *[0-9]+(\\.[0-9]+){0,2})*)$",
+      "maxLength": 128,
+      "description": "a version range: `^1`, `~0.1`, `0.1.0`, or comparisons joined by commas (`>=0.21.0,<0.23.0`)"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.?(/|$))(?!.*//)[A-Za-z0-9._/-]{1,255}$",
+      "description": "relative to the plugin's directory; no absolute path, no `.` or `..` segment"
+    },
+    "glob": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.?(/|$))(?!.*//)[A-Za-z0-9._/*-]{1,255}$",
+      "description": "a path that may hold `*` wildcards"
+    }
+  },
+  "properties": {
+    "apiVersion": {
+      "const": "choregos/v1"
+    },
+    "kind": {
+      "const": "Plugin"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "publisher",
+        "license",
+        "description",
+        "core"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name",
+          "description": "unique within a source"
+        },
+        "version": {
+          "$ref": "#/$defs/semver",
+          "description": "a published version is immutable"
+        },
+        "publisher": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "an SPDX expression"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "homepage": {
+          "type": "string",
+          "pattern": "^https://",
+          "maxLength": 512
+        },
+        "core": {
+          "$ref": "#/$defs/range",
+          "description": "the core versions the plugin was validated against"
+        }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plugins": {
+          "type": "array",
+          "description": "other plugins, by name and version range",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "version"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "version": {
+                "$ref": "#/$defs/range"
+              }
+            }
+          }
+        },
+        "connectors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "project connectors, kind → expected type, as in a template"
+        },
+        "org_connectors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "organisation connectors, name → capability, as in a template"
+        }
+      }
+    },
+    "contents": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "agents": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "YAML files in the catalogue entry shape (`catalogue:` + `agent:`)",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "directories holding a SKILL.md",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "templates": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "template directories (manifest.yaml and their files)",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "evals": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "evaluation suites",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "procedures": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "Markdown procedures with the ADR 0067 front matter",
+          "items": {
+            "$ref": "#/$defs/glob"
+          }
+        },
+        "servers": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "plugin server files (plugin-server.schema.json)",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        }
+      }
+    }
+  }
+}

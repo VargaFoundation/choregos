@@ -2559,6 +2559,89 @@ paths:
         "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository's host did not answer, or not usefully" }
+  /orgs/{org}/plugins:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listPlugins
+      description: >-
+        The plugins installed in the organisation (ADR 0093): version, source, content digest, what each brought, and
+        the newest version its source offers. Any member of the organisation.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PluginList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/plugin-sources:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listPluginSources
+      description: >-
+        The plugin sources this deployment declares (chart `plugins.sources`, and the offline directory as the source
+        `offline`), each with its trust policy and the plugins and versions its index offers. Sources are set by the
+        operator, not through the API. A source whose index cannot be read is listed with `error`. Any member.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PluginSources" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/plugins/install:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: installPlugin
+      description: >-
+        Installs a plugin from a declared source (ADR 0093). The supply-chain gate (ADR 0050) runs first: the fetched
+        content's digest must equal the index's, the signature must verify against the source's trust policy, and every
+        file is validated; any failure is a 422 naming the check, and nothing is written. `version` is an exact version
+        or a range; the newest matching version whose `core` range admits this core is chosen. A plugin that brings a
+        server needs a second person's approval: the answer is then a 202 and nothing is installed until it is given.
+        Rights per ADR 0074; audited as `plugin.install`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PluginInstall" } } }
+      responses:
+        "201": { description: Installed, content: { application/json: { schema: { $ref: "#/components/schemas/InstalledPlugin" } } } }
+        "202": { description: Waiting for a second approval, content: { application/json: { schema: { $ref: "#/components/schemas/PluginInstallPending" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/plugins/{name}/upgrade:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/PluginName" }
+    post:
+      tags: [agents]
+      operationId: upgradePlugin
+      description: >-
+        Moves an installed plugin to another version of its source, through the same gate as an install. The catalogue
+        rules of ADR 0040 hold: an agent the organisation changed is offered the new version, never overwritten
+        (`offered`), and project pins do not move. Without `version`, the newest admissible one. Audited as
+        `plugin.upgrade`.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/PluginUpgrade" } } }
+      responses:
+        "200": { description: Upgraded, content: { application/json: { schema: { $ref: "#/components/schemas/PluginUpgradeResult" } } } }
+        "202": { description: Waiting for a second approval, content: { application/json: { schema: { $ref: "#/components/schemas/PluginInstallPending" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/plugins/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/PluginName" }
+    delete:
+      tags: [agents]
+      operationId: uninstallPlugin
+      description: >-
+        Uninstalls a plugin: what it brought and nobody changed is retired, what an organisation changed or a project
+        pins is kept and loses its plugin provenance, and its servers stop. 409 when another installed plugin requires
+        it. Audited as `plugin.uninstall`.
+      responses:
+        "204": { description: Uninstalled }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/skill-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -3105,6 +3188,24 @@ paths:
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/plugins/{plugin}/{server}:
+    parameters:
+      - { name: plugin, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: server, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: pluginWebhook
+      description: >-
+        A delivery for a plugin server that declares `webhook` (ADR 0093). The core forwards the body and headers to the
+        server's `webhook.path`; the server verifies the delivery and returns normalised events, which the core
+        de-duplicates and acts on only after re-reading each item. 401 when the server refuses the delivery, 404 when no
+        installed plugin has that server or it declares no webhook.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/runs/{id}/input:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3723,6 +3824,7 @@ components:
       required: true
       description: a capability; the registry says which ones exist (`GET /connectors/types`, ADR 0034)
       schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
+    PluginName: { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
     Cursor: { name: cursor, in: query, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
   responses:
@@ -6284,6 +6386,114 @@ components:
         error: { type: [string, "null"], description: "names the proxy; never the password" }
         elapsed_ms: { type: integer, minimum: 0 }
         target: { type: string, description: "the echo endpoint that was fetched" }
+    PluginContents:
+      type: object
+      additionalProperties: false
+      description: What an installed plugin brought, by the identifier each item has in the organisation.
+      required: [agents, skills, templates, evals, procedures, servers]
+      properties:
+        agents: { type: array, items: { type: string }, description: "agent slugs" }
+        skills: { type: array, items: { type: string } }
+        templates: { type: array, items: { type: string } }
+        evals: { type: array, items: { type: string } }
+        procedures: { type: array, items: { type: string }, description: "procedure ids (ADR 0067)" }
+        servers: { type: array, items: { type: string } }
+    InstalledPlugin:
+      type: object
+      additionalProperties: false
+      required: [name, version, source, digest, publisher, license, description, default, contents, installed_by, installed_at, latest]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string }
+        source: { type: string, description: "the source's name; `offline` for the deployment's offline directory" }
+        digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$", description: "sha256 of the plugin's canonical tar" }
+        publisher: { type: string }
+        license: { type: string }
+        description: { type: string }
+        default: { type: boolean, description: "installed because the deployment lists it in `plugins.defaultPlugins`" }
+        contents: { $ref: "#/components/schemas/PluginContents" }
+        installed_by: { type: [string, "null"], description: "null when the start-up reconcile installed it" }
+        installed_at: { type: string, format: date-time }
+        latest: { type: [string, "null"], description: "the newest version the source offers for this core, when newer than `version`" }
+    PluginList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InstalledPlugin" } }
+    PluginTrust:
+      type: object
+      additionalProperties: false
+      description: "How a source's signatures are verified: a keyless cosign identity and issuer, or a public key; `none` only for the offline directory."
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [keyless, key, none] }
+        issuer: { type: [string, "null"] }
+        identity: { type: [string, "null"] }
+        key_fingerprint: { type: [string, "null"], description: "sha256 of the public key; the key itself is not returned" }
+    PluginSourceEntry:
+      type: object
+      additionalProperties: false
+      required: [name, description, versions]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        description: { type: [string, "null"] }
+        versions:
+          type: array
+          description: "newest first, each with the core range it was validated against"
+          items:
+            type: object
+            additionalProperties: false
+            required: [version, core, admissible]
+            properties:
+              version: { type: string }
+              core: { type: string }
+              admissible: { type: boolean, description: "this core is inside `core`" }
+    PluginSource:
+      type: object
+      additionalProperties: false
+      required: [name, index, trust, plugins, error]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        index: { type: string, description: "`oci://…`, `https://…` or the offline directory's path" }
+        trust: { $ref: "#/components/schemas/PluginTrust" }
+        plugins: { type: array, items: { $ref: "#/components/schemas/PluginSourceEntry" } }
+        error: { type: [string, "null"], description: "why the index could not be read; `plugins` is then empty" }
+    PluginSources:
+      type: object
+      additionalProperties: false
+      required: [sources]
+      properties:
+        sources: { type: array, items: { $ref: "#/components/schemas/PluginSource" } }
+    PluginInstall:
+      type: object
+      additionalProperties: false
+      required: [source, name, version]
+      properties:
+        source: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string, minLength: 1, maxLength: 128, description: "an exact version or a range (`^0.1`, `>=1.2.0,<2`)" }
+    PluginInstallPending:
+      type: object
+      additionalProperties: false
+      required: [status, approval_id, reason]
+      properties:
+        status: { const: pending_approval }
+        approval_id: { type: string }
+        reason: { type: string, description: "why a second person must approve, e.g. the plugin brings a server" }
+    PluginUpgrade:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: string, minLength: 1, maxLength: 128, description: "an exact version or a range; absent, the newest admissible" }
+    PluginUpgradeResult:
+      type: object
+      additionalProperties: false
+      required: [plugin, previous_version, offered]
+      properties:
+        plugin: { $ref: "#/components/schemas/InstalledPlugin" }
+        previous_version: { type: string }
+        offered: { type: array, items: { type: string }, description: "agent slugs the organisation changed: offered the update, not overwritten (ADR 0040)" }
     PolicyPut:
       type: object
       required: [yaml]

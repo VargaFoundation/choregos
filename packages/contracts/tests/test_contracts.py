@@ -71,6 +71,9 @@ def test_all_declared_schemas_exist() -> None:
         ("context-pack.example.json", "context-pack.schema.json"),
         ("event.example.json", "event.schema.json"),
         ("ui-manifest.example.json", "ui-manifest.schema.json"),
+        ("plugin.example.json", "plugin.schema.json"),
+        ("plugin-server.example.json", "plugin-server.schema.json"),
+        ("plugin-index.example.json", "plugin-index.schema.json"),
     ],
 )
 def test_example_matches_json_schema(example: str, schema_name: str) -> None:

@@ -1,5 +1,8 @@
 # 0040 — A built-in agent catalogue: installed on demand, or when a workflow names one
 
+> **Amended by [ADR 0093](0093-an-agent-ships-as-a-plugin.md)**: the catalogue's agents come from
+> installed plugins; the rules below (install on demand, never rewrite, offer updates) apply to them unchanged.
+
 > **Amended by [ADR 0061](0061-agent-ownership-scopes-and-forks.md)**: an agent installed from the
 > catalogue is a common (`platform`) agent, changed by an `org_admin` only; to extend it, fork it.
 

@@ -1,0 +1,28 @@
+{
+  "apiVersion": "choregos/v1",
+  "kind": "PluginIndex",
+  "plugins": {
+    "servicenow": {
+      "versions": {
+        "0.1.0": {
+          "digest": "sha256:9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d5e4f30211203f4e5d6c7b8a9",
+          "core": ">=0.21.0,<0.23.0",
+          "oci": "ghcr.io/vargafoundation/choregos-agents/plugins/servicenow:0.1.0"
+        }
+      }
+    },
+    "hello": {
+      "versions": {
+        "1.0.0": {
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "core": ">=0.21.0",
+          "git": {
+            "url": "https://github.com/VargaFoundation/choregos-agents",
+            "commit": "0123456789abcdef0123456789abcdef01234567",
+            "path": "plugins/hello"
+          }
+        }
+      }
+    }
+  }
+}
