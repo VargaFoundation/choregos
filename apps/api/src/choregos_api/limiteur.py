@@ -25,6 +25,7 @@ their principal bounds them.
 from __future__ import annotations
 
 import ipaddress
+import re
 import time
 from collections import OrderedDict, deque
 from collections.abc import Awaitable, Callable
@@ -44,6 +45,11 @@ MAX_KEY_CHARS = 64
 
 Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 Address = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+#: An address written with brackets, a port or both: `[2001:db8::1]`, `[2001:db8::1]:443`,
+#: `203.0.113.5:54321`. A bare IPv6 address never matches (the host before a port holds no colon),
+#: so its last group is never read as a port.
+_WITH_PORT_OR_BRACKETS = re.compile(r"\[(?P<bracketed>[^\]]*)\](?::[0-9]+)?|(?P<host>[^:\[\]]+):[0-9]+")
 
 
 class Limiteur:
@@ -78,7 +84,15 @@ def _networks(cidrs: tuple[str, ...]) -> tuple[Network, ...]:
 
 
 def _ip(value: str) -> Address | None:
-    """`value` as an IP address, an IPv4-mapped IPv6 address read as its IPv4 one; None otherwise."""
+    """`value` as an IP address, an IPv4-mapped IPv6 address read as its IPv4 one; None otherwise.
+
+    A proxy may write the address with its port or in brackets (`203.0.113.5:54321`,
+    `[2001:db8::1]`, `[2001:db8::1]:443`): those are dropped, so the source port buys no new window
+    and an IPv6 client still falls in its /64.
+    """
+    written = _WITH_PORT_OR_BRACKETS.fullmatch(value)
+    if written is not None:
+        value = written["bracketed"] if written["bracketed"] is not None else written["host"]
     try:
         address = ipaddress.ip_address(value)
     except ValueError:
@@ -104,8 +118,8 @@ def client_address(request: Request, settings: Settings) -> str:
       or the peer when the header is shorter.
     - With neither: the peer, and the header is ignored.
 
-    An IPv6 address is returned as its /64; any other value that is not an IP address is cut to
-    `MAX_KEY_CHARS`.
+    A port or brackets a proxy wrote around an address are dropped. An IPv6 address is returned as
+    its /64; any other value that is not an IP address is cut to `MAX_KEY_CHARS`.
     """
     peer = request.client.host if request.client else "unknown"
     # Several header lines are one list, in order (RFC 9110 5.3): a proxy may add its own line.

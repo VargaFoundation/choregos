@@ -1319,6 +1319,13 @@ only those (`--set-json 'choregos-api.trustedProxyCidrs=["10.42.0.0/16"]'`). On 
 where every pod shares one pod CIDR, the default leaves the runner case open. #1061 tracks trusting
 proxies by identity rather than by range.
 
+**Widen the list** when a load balancer, CDN or WAF in front of the API has public proxy addresses: add
+every address it connects from or writes into `X-Forwarded-For` to `choregos-api.trustedProxyCidrs`
+(Google Cloud load balancers: `35.191.0.0/16`, `130.211.0.0/22` and the forwarding rule's own address,
+which they append after the client's; a CDN: its edge ranges). `--set-json` replaces the whole list, so
+keep the private ranges in it. Otherwise the API takes that proxy's address for the client, and every
+client behind it shares one window.
+
 The console's Next server is a trusted hop: it proxies `/api/v1` to the API, so the browser's address
 must reach the API in `X-Forwarded-For`. **If every console sign-in shares one window** (one user's
 retries throttle everyone), the web hop is not forwarding `X-Forwarded-For`, and the key has become the

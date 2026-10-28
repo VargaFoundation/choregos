@@ -55,6 +55,53 @@ async def test_a_forged_forwarded_for_buys_no_new_window(
         reset_settings_cache()
 
 
+async def test_the_middleware_keys_on_the_trusted_proxy_address(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The middleware reads the trusted-proxy settings: the key is not the bare TCP peer."""
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.main import create_app
+
+    monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "1")
+    # the ASGI test transport's peer is 127.0.0.1: it stands for the trusted proxy
+    monkeypatch.setenv("CHOREGOS_TRUSTED_PROXY_CIDRS", '["127.0.0.0/8"]')
+    monkeypatch.delenv("CHOREGOS_TRUSTED_PROXY_HOPS", raising=False)
+    reset_settings_cache()
+    try:
+        app = create_app()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            codes = []
+            for forwarded in ("203.0.113.1", "203.0.113.2", "198.51.100.9, 203.0.113.1"):
+                headers = {"X-Forwarded-For": forwarded}
+                codes.append((await c.post("/api/v1/webhooks/jira", json={}, headers=headers)).status_code)
+        assert 429 not in codes[:2], f"two clients behind one trusted proxy shared a window: {codes}"
+        assert codes[2] == 429, f"a new left-most entry bought 203.0.113.1 a new window: {codes}"
+    finally:
+        reset_settings_cache()
+
+
+def test_a_forwarded_entry_with_a_port_is_keyed_by_its_address() -> None:
+    """Azure Application Gateway writes `address:port`: the source port buys no new window."""
+    from choregos_api.limiteur import client_address
+
+    trusted = _settings(cidrs=CHART_DEFAULT_RANGES)
+    keys = {client_address(_request("10.0.0.5", f"203.0.113.5:{port}"), trusted) for port in (54321, 54322)}
+    assert keys == {"203.0.113.5"}
+    # a trusted hop written with its port is still recognized as trusted
+    assert client_address(_request("10.0.0.5", "203.0.113.5, 10.0.0.3:8080"), trusted) == "203.0.113.5"
+
+
+def test_a_bracketed_ipv6_entry_is_keyed_by_its_64() -> None:
+    from choregos_api.limiteur import client_address
+
+    trusted = _settings(cidrs=CHART_DEFAULT_RANGES)
+    written = ("[2001:db8:1:2::5]", "[2001:db8:1:2::9]:443", "[2001:db8:1:2::9]:444")
+    keys = {client_address(_request("10.0.0.5", entry), trusted) for entry in written}
+    assert keys == {"2001:db8:1:2::/64"}
+    # a bare IPv6 address keeps its last group: it is not read as a port
+    assert client_address(_request("10.0.0.5", "2001:db8:1:2::1"), trusted) == "2001:db8:1:2::/64"
+
+
 def test_behind_trusted_proxies_the_nearest_untrusted_entry_is_the_client() -> None:
     from choregos_api.limiteur import client_address
 
