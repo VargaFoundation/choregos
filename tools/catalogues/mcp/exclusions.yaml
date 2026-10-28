@@ -29,8 +29,8 @@ names:
   - { pattern: "anti-detect", reason: "anti-detection browsing" }
   - { pattern: "x402", reason: "agent payments" }
   - { pattern: "wallet", reason: "crypto wallet control" }
-  - { pattern: "gateway", reason: "a gateway that re-opens discovery (ADR 0022)" }
-  - { pattern: "aggregator", reason: "an aggregator that re-opens discovery (ADR 0022)" }
+  - { pattern: "gateway", reason: "a gateway product is consumed as the organisation's MCP gateway (ADR 0105), never a catalogue entry" }
+  - { pattern: "aggregator", reason: "an aggregator is a gateway product (ADR 0105), never a catalogue entry" }
   # Firecrawl is self-hosted only (ADR 0086): its MCP server reaches Firecrawl's cloud unless
   # FIRECRAWL_API_URL points it elsewhere, and an entry cannot require that setting yet (#953).
   - { pattern: "firecrawl", reason: "reaches Firecrawl's cloud by default; Firecrawl is self-hosted only (ADR 0086, #953)" }

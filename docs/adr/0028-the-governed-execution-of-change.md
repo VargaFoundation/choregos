@@ -56,7 +56,8 @@ knows how to call third-party tools for an agent without giving it a credential 
      job definitions on a data platform.
 2. **Choregos does not build an identity provider, an MCP gateway, a sandbox runtime or an
    observability product.** It plugs into them: `agent-sandbox` (ADR 0016), OIDC and SPIFFE (ADR
-   0021), OpenTelemetry GenAI (ADR 0018), in-toto, CycloneDX.
+   0021), OpenTelemetry GenAI (ADR 0018), in-toto, CycloneDX (consuming a gateway an organisation
+   already runs: [ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)).
 3. **Data work enters through two seams that already exist, not through a merge:**
    - **the catalogue** (ADR 0014): a data platform's write tools (graal's `create_job`, `run_job`,
      `schedule_job` first) become catalogue entries called by the platform for the agent, which
