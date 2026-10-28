@@ -26,6 +26,7 @@ import {
   LayoutDashboard,
   Globe,
   Plug,
+  Puzzle,
   ScrollText,
   Server,
   Settings,
@@ -62,6 +63,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/memories", label: "Memories", icone: Brain },
   { href: "/catalogue/mcp-servers", label: "MCP servers", icone: ServerCog },
   { href: "/catalogue/connectors", label: "Connector types", icone: Cable },
+  { href: "/catalogue/plugins", label: "Plugins", icone: Puzzle },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "Integrations", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
@@ -75,7 +77,7 @@ export function entreeActive(href: string, pathname: string): boolean {
 /** The entries, grouped: the work, what agents use, the organisation (S40-08). */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
   { titre: "Work", entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/memories", "/catalogue/mcp-servers", "/catalogue/connectors"] },
+  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/memories", "/catalogue/mcp-servers", "/catalogue/connectors", "/catalogue/plugins"] },
   { titre: "Organisation", entrees: ["/integrations", "/costs", "/admin"] },
 ];
 

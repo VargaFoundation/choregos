@@ -145,7 +145,6 @@ async def test_the_catalogue_installs_the_architect_with_its_tags(client: AsyncC
 async def test_an_upgrade_adds_catalogue_tags_and_keeps_the_organisation_s(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_core import catalogue_d_agents
     from choregos_core.catalogue_d_agents import entree, entrees
 
     await as_user(client, ADMIN)
@@ -155,7 +154,10 @@ async def test_an_upgrade_adds_catalogue_tags_and_keeps_the_organisation_s(
     assert old is not None
     new = dataclasses.replace(old, tags=("madr", "new"))
     others = tuple(e for e in entrees() if e.slug != "triager")
-    monkeypatch.setattr(catalogue_d_agents, "entrees", lambda: (*others, new))
+    from choregos_api.services import catalogue_d_agents as service
+
+    view = dataclasses.replace(service.offline_catalogue(), entries=(*others, new))
+    monkeypatch.setattr(service, "offline_catalogue", lambda: view)
     upgraded = await client.post(f"{ORG}/agent-catalogue/triager/install", json={"upgrade": True})
     assert upgraded.status_code == 200, upgraded.text
     body = upgraded.json()
