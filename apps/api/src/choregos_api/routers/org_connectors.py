@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
+from choregos_core.secrets import est_une_reference_du_magasin
 from fastapi import APIRouter, Path, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +25,7 @@ from ..db.models import (
     OrgConnectorProject,
     ProjectOperationPolicy,
 )
-from ..deps import Db, Me, ProjectCtx
+from ..deps import Db, Me, ProjectCtx, is_instance_admin
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
 from ..schemas import (
@@ -211,6 +212,7 @@ async def declare_org_connector(
         type_name,
         config,
         secret_refs,
+        may_reference=not secret_refs or await is_instance_admin(session, principal),
         secret_values=body.secret_values,
         store_prefix=prefix,
     )
@@ -320,7 +322,27 @@ async def update_org_connector(
             )
         await plugin_servers.check_egress(session, instance, config)
     refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
-    verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
+    # The connector keeps the references the body does not replace (a PATCH merges): moving one that
+    # reads the deployment to another host is the operator's too, or the key follows the new URL.
+    operator_refs = [
+        r for f, r in (instance.secret_refs or {}).items() if f not in refs_in and f not in values
+    ]
+    deployment_held = any(not est_une_reference_du_magasin(r) for r in [*refs_in.values(), *operator_refs])
+    may_reference = not deployment_held or await is_instance_admin(session, principal)
+    if body.config is not None and not may_reference:
+        raise unprocessable(
+            "this connector reads a key the deployment holds (`env:`): only a platform administrator "
+            "changes its configuration; type the organisation's own value to edit it yourself"
+        )
+    verifier_les_secrets(
+        spec,
+        instance.type,
+        config,
+        refs_in,
+        may_reference=may_reference,
+        secret_values=values,
+        store_prefix=prefix,
+    )
     store = require_store(values)
     await check_connector_declaration(session, organisation.id, config, name)
     if body.config is not None and server is None:

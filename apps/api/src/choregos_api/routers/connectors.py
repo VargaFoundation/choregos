@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..config import get_settings
 from ..db.models import Connector
-from ..deps import Db, ProjectContext, ProjectCtx
+from ..deps import Db, ProjectContext, ProjectCtx, is_instance_admin
 from ..errors import not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
@@ -154,7 +154,8 @@ async def put_connector(
         body.config,
         body.secret_refs,
         body.secret_ref,
-        may_reference=ctx.principal.can(Permission.TOOLS_GRANT, ctx.org_slug),
+        may_reference=not (body.secret_refs or body.secret_ref)
+        or await is_instance_admin(session, ctx.principal),
         secret_values=body.secret_values,
         store_prefix=prefix,
     )
