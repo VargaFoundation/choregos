@@ -64,6 +64,29 @@ LODASH = {
         }
     ],
 }
+#: Withdrawn: OSV's API no longer returns it (2026-10-28, three such GHSA against api.osv.dev).
+WITHDRAWN = {
+    "id": "GHSA-test-withdrawn",
+    "modified": "2026-01-04T00:00:00Z",
+    "withdrawn": "2026-01-05T00:00:00Z",
+    "affected": [
+        {
+            "package": {"ecosystem": "npm", "name": "lodash"},
+            "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}]}],
+        }
+    ],
+}
+#: An npm ECOSYSTEM range whose bound names two parts, as GHSA-3h52-269p-cp9r does for `next`.
+NEXT = {
+    "id": "GHSA-test-next",
+    "modified": "2026-01-06T00:00:00Z",
+    "affected": [
+        {
+            "package": {"ecosystem": "npm", "name": "next"},
+            "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "13.0"}, {"fixed": "14.2.30"}]}],
+        }
+    ],
+}
 ELSEWHERE = {"id": "GO-test", "affected": [{"package": {"ecosystem": "Go", "name": "x"}}]}
 
 
@@ -80,11 +103,11 @@ def mirror(tmp_path: Path) -> Path:
     count = osv_mirror.build(
         {
             "PyPI": _zip(tmp_path / "pypi.zip", [REQUESTS, TWO_WINDOWS, ELSEWHERE]),
-            "npm": _zip(tmp_path / "npm.zip", [LODASH]),
+            "npm": _zip(tmp_path / "npm.zip", [LODASH, WITHDRAWN, NEXT]),
         },
         target,
     )
-    assert count == 3  # the Go record names no package of these ecosystems
+    assert count == 5  # the Go record names no package of these ecosystems
     return target
 
 
@@ -119,6 +142,10 @@ def _ids(mirror: Path, ecosystem: str, name: str, version: str | None) -> list[s
         ("npm", "lodash", "4.17.21", []),
         ("npm", "lodash", "3.10.1", []),
         ("npm", "lodash", "4.17.21-rc.1", ["GHSA-test-lodash"]),  # a pre-release sorts before its release
+        ("npm", "lodash", "1.0.0", []),  # only the withdrawn advisory would match
+        ("npm", "next", "13.4.0", ["GHSA-test-next"]),  # `13.0` reads as 13.0.0
+        ("npm", "next", "12.3.4", []),
+        ("npm", "next", "14.2.30", []),
         ("Go", "x", "1.0.0", []),  # not mirrored
     ],
 )
@@ -132,6 +159,7 @@ def test_the_mirror_gives_the_whole_record_and_says_when_it_was_built(mirror: Pa
     m = osv_mirror.Mirror(mirror)
     try:
         assert m.vuln("GHSA-test-lodash") == LODASH
+        assert m.vuln("GHSA-test-withdrawn") == WITHDRAWN  # readable by its id, as on OSV
         assert m.vuln("GHSA-none") is None
     finally:
         m.close()
