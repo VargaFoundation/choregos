@@ -1,78 +1,25 @@
-"""A package translated to English stays English, on every line (S34-04).
+"""The tree stays within its French baselines (ADR 0098, replacing the `ENGLISH` and `STILL_FRENCH`
+lists of S34-04).
 
-`tools/check_english.py` reads the lines a pull request adds: it stops new French, but a package
-already translated could take French back through a line moved, restored or merged from an old
-branch. This test reads EVERY line of the translated packages with the same detector. A package
-joins `ENGLISH` in the pull request that translates it; `STILL_FRENCH` can only shrink — an entry
-that matches nothing any more turns the suite red.
+`tools/check_english.py` reads the lines a pull request adds; this test reads EVERY file with the
+same tool and compares each file's count of French prose lines, French declared names and French
+path components with `tools/english_baseline/<area>.tsv`. A count can only go down: a file above
+its baseline, or a new file with French, turns the suite red — a line moved, restored or merged
+from an old branch cannot take French back into a package that was translated. Lowering a baseline
+is `uv run python tools/check_english.py --update-baseline --area <area>`; it refuses a rise.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import pathlib
+import subprocess
 import sys
 from types import ModuleType
 
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-
-#: The translated packages, each with the pull request that translated it.
-ENGLISH = (
-    "packages/ontology/",  # #467
-    "packages/cli/",  # #470
-    "packages/playbooks/",
-    "packages/tools-mcp/",  # #529
-    "tools/",  # #530
-    "charts/",  # #534
-    ".github/",  # S34-04f
-    "dev/",  # S34-04f
-    "demo/",  # S34-04g
-    "tests/cluster/",  # S34-04i
-    "tests/live/",  # S34-04i
-    "tests/licences/",  # S34-04i
-    "tests/ci/",  # S34-04i
-    "tests/dev/",  # S34-04i
-    "tests/integrations/",  # S34-04i
-    "tests/README.md",  # S34-04i
-    "tests/paquets/",  # S34-04j
-    "tests/replay/",  # S34-04j
-    "tests/conformance/backends/",  # S34-04j
-    "tests/conformance/connecteurs/",  # S34-04j
-    "tests/conformance/executeurs/",  # S34-04j
-    "tests/e2e/conftest.py",  # S34-04j
-    "tests/e2e/test_ecriture_gouvernee.py",  # S34-04j
-    "tests/e2e/test_m1_tranche_verticale.py",  # S34-04j
-    "tests/e2e/test_m2_dsl_et_front.py",  # S34-04j
-    "tests/e2e/test_m3_prod_maitrisee.py",  # S34-04j
-    "tests/e2e/test_m4_multibackend_memoire.py",  # S34-04j
-    "tests/e2e/test_m5_durci.py",  # S34-04j
-    "tests/conformance/report.py",  # S34-04j
-    "templates/",  # S34-04k
-    "tests/e2e/test_m6_rh.py",  # S34-04k
-    "tests/conformance/templates/",  # S34-04k
-    "tests/charts/test_annotations_d_ingress.py",  # S34-04l
-    "tests/charts/test_app_github_des_workers.py",  # S34-04l
-    "tests/charts/test_dashboards.py",  # S34-04l
-    "tests/charts/test_defauts_d_agents.py",  # S34-04l
-    "tests/charts/test_edition_annoncee.py",  # S34-04l
-    "tests/charts/test_faux_de_demo.py",  # S34-04l
-    "tests/charts/test_hook_de_migration.py",  # S34-04l
-    "tests/charts/test_image_par_composant.py",  # S34-04l
-    "tests/charts/test_images_privees.py",  # S34-04l
-    "tests/charts/test_porte_mcp_oauth.py",  # S34-04l
-    "tests/charts/test_porte_mcp_routee.py",  # S34-04l
-    "tests/charts/test_saveur_d_observabilite.py",  # S34-04l
-    "tests/charts/test_securite_des_pods.py",  # S34-04l
-    "tests/charts/test_templates_de_workflow_montes.py",  # S34-04l
-    "tests/charts/test_variables_supplementaires.py",  # S34-04l
-)
-
-#: (file, start of the line) — French that stays, each with its reason.
-STILL_FRENCH: set[tuple[str, str]] = set()
-
-_SKIPPED_PARTS = {".venv", "node_modules", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache"}
 
 
 def _load() -> ModuleType:
@@ -87,57 +34,36 @@ def _load() -> ModuleType:
 ce = _load()
 
 
-def _scanned_files(prefix: str) -> list[str]:
-    files = []
-    # A prefix may name one file (`tests/README.md`): `rglob` finds nothing under a file.
-    for path in sorted([ROOT / prefix] if (ROOT / prefix).is_file() else (ROOT / prefix).rglob("*")):
-        relative = path.relative_to(ROOT).as_posix()
-        if path.is_file() and not _SKIPPED_PARTS & set(path.parts) and ce.is_scanned(relative):
-            files.append(relative)
-    return files
+def _in_a_git_checkout() -> bool:
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"], cwd=ROOT, check=True, capture_output=True
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return False
+    return True
 
 
-def _french_in(path: str, content: str) -> list[object]:
-    every_line = set(range(1, len(content.splitlines()) + 1))
-    return list(ce.findings_in(path, content, every_line))
-
-
-def _all_findings() -> list[object]:
-    found = []
-    for prefix in ENGLISH:
-        for path in _scanned_files(prefix):
-            found.extend(_french_in(path, (ROOT / path).read_text(encoding="utf-8")))
-    return found
-
-
-def _allowed(finding: object) -> bool:
-    return any(
-        finding.path == path and finding.text.startswith(start)  # type: ignore[attr-defined]
-        for path, start in STILL_FRENCH
+@pytest.mark.skipif(not _in_a_git_checkout(), reason="not a git checkout: the tree scan reads `git ls-files`")
+def test_the_tree_is_within_its_baselines() -> None:
+    findings = ce.scan_tree()
+    baselines = ce.load_baselines()
+    assert set(baselines) == set(ce.AREAS), "one baseline file per area: " + ", ".join(
+        sorted(set(ce.AREAS) ^ set(baselines))
     )
-
-
-@pytest.mark.parametrize("prefix", ENGLISH)
-def test_every_translated_package_is_read(prefix: str) -> None:
-    """A package the detector does not read would pass vacuously."""
-    assert _scanned_files(prefix), f"{prefix}: no file read — moved, or excluded from the scanner"
-
-
-def test_translated_packages_hold_no_french() -> None:
-    french = [str(f) for f in _all_findings() if not _allowed(f)]
-    assert not french, "French in a package translated to English:\n" + "\n".join(french)
-
-
-def test_still_french_only_shrinks() -> None:
-    found = _all_findings()
-    stale = [
-        entry
-        for entry in STILL_FRENCH
-        if not any(f.path == entry[0] and f.text.startswith(entry[1]) for f in found)  # type: ignore[attr-defined]
-    ]
-    assert not stale, f"no longer French, remove from STILL_FRENCH: {stale}"
+    by_path: dict[str, list[object]] = {}
+    for finding in findings:
+        by_path.setdefault(finding.path, []).append(finding)
+    risen = []
+    for area, counts in ce.counts_by_area(ce.counts_per_file(findings)).items():
+        rises, _ = ce.compare(counts, baselines[area])
+        for change in rises:
+            shown = "\n    ".join(str(f) for f in by_path[change.path][:5])
+            risen.append(f"{area}: {change.path}: {change.found} > {change.baseline}\n    {shown}")
+    assert not risen, "French above its baseline (ADR 0098):\n" + "\n".join(risen)
 
 
 def test_a_french_comment_in_a_translated_package_is_caught() -> None:
     content = '"""The sidecar."""\n\n# le serveur répond avant la fin du run\nx = 1\n'  # lang: fr-ok
-    assert _french_in("packages/tools-mcp/src/choregos_tools_mcp/x.py", content)
+    found = ce.file_findings("packages/tools-mcp/src/choregos_tools_mcp/x.py", content)
+    assert [(f.kind, f.line) for f in found] == [("prose", 3)]

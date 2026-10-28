@@ -28,12 +28,17 @@ setup:  ## Installe les dépendances (Python + web)
 ci: lint typecheck test contracts-check procedures-check charts-lint  ## Everything that blocks a PR
 
 .PHONY: lint
-lint:  ## ruff check + format --check + no French in lines added since origin/main (ADR 0046)
+lint:  ## ruff check + format --check + no French in lines added since origin/main (ADR 0046) + the French ratchet (ADR 0098)
 	$(UV) run ruff check $(PY_PATHS)
 	$(UV) run ruff format --check $(PY_PATHS)
 	$(UV) run python tools/check_english.py
+	$(UV) run python tools/check_english.py --all
 	$(UV) run python -m tools.catalogues.build_mcp_catalogue --check
 	$(UV) run python -m tools.catalogues.build_skill_catalogue --check
+
+.PHONY: english-ratchet
+english-ratchet:  ## Every file at or below its French baseline (ADR 0098)
+	$(UV) run python tools/check_english.py --all
 
 .PHONY: format
 format:  ## Formate le code Python

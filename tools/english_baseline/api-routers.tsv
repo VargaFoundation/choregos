@@ -1,0 +1,23 @@
+# api-routers: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+apps/api/src/choregos_api/routers/__init__.py	1
+apps/api/src/choregos_api/routers/actions.py	9
+apps/api/src/choregos_api/routers/admin.py	26
+apps/api/src/choregos_api/routers/agents.py	61
+apps/api/src/choregos_api/routers/auth.py	89
+apps/api/src/choregos_api/routers/connectors.py	12
+apps/api/src/choregos_api/routers/costs.py	21
+apps/api/src/choregos_api/routers/findings.py	2
+apps/api/src/choregos_api/routers/integrations.py	5
+apps/api/src/choregos_api/routers/internal.py	74
+apps/api/src/choregos_api/routers/memory.py	10
+apps/api/src/choregos_api/routers/models.py	3
+apps/api/src/choregos_api/routers/org_connectors.py	36
+apps/api/src/choregos_api/routers/projects.py	44
+apps/api/src/choregos_api/routers/runs.py	11
+apps/api/src/choregos_api/routers/skills.py	22
+apps/api/src/choregos_api/routers/templates.py	7
+apps/api/src/choregos_api/routers/trains.py	6
+apps/api/src/choregos_api/routers/ui.py	10
+apps/api/src/choregos_api/routers/webhooks.py	37
+apps/api/src/choregos_api/routers/workflows.py	22
+apps/api/src/choregos_api/routers/workitems.py	28
