@@ -37,8 +37,3 @@ export function authLabel(auth: string): string {
 export function hostOf(entry: McpCatalogueEntry): string | null {
   return entry.egress_hosts?.[0] ?? null;
 }
-
-/** A secret reference proposed for an entry: a name only the platform's own variables can carry. */
-export function suggestedReference(entryId: string): string {
-  return `env:CONNECTOR_${entryId.toUpperCase().replaceAll("-", "_")}`;
-}

@@ -238,6 +238,13 @@ ADR 0077 §3) is not implemented (#756).
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
+- **Whose secret decides where it lives** (S39-06e). The platform's own secrets (session key, run-token
+  keys, gateway master key, database password, the KEK itself) come from the deployment's vault through
+  External Secrets. A connector's key belongs to the organisation that configures the connector (a
+  market-data key, a Jira token, an MCP server's token): it is **typed in the console and sealed**
+  (below), never put in the deployment's vault nor in the pods' environment, where every organisation's
+  connector could name it and only an operator could rotate it. `env:` stays for a key the operator
+  owns and manages, or a vault a plugin reads.
 - A connector's `env:NAME` reference is an allowlist, not a free read of the process environment: the
   API and the orchestrator also hold the platform's own secrets (session key, gateway master key,
   database password), so a name must match `CHOREGOS_SECRET_ENV_PATTERN` (default

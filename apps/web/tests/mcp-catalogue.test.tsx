@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import McpCataloguePage from "@/app/catalogue/mcp-servers/page";
 import { categoriesOf, matchesText, NO_FILTERS, stars, withToggle } from "@/lib/catalogue";
-import { filterMcpEntries, suggestedReference, whyNotInstallable } from "@/lib/mcp-catalogue";
+import { filterMcpEntries, whyNotInstallable } from "@/lib/mcp-catalogue";
 import type { McpCatalogue, McpCatalogueEntry } from "@/lib/types";
 import file from "../src/mocks/mcp-catalogue.json";
 
@@ -85,10 +85,9 @@ describe("the MCP catalogue's pure parts", () => {
     expect(whyNotInstallable(byId("github"))).toBeNull();
   });
 
-  it("writes stars and categories, and proposes a reference only the platform's variables can carry", () => {
+  it("writes stars and categories", () => {
     expect(stars(63088)).toBe("63 088");
     expect(categoriesOf(catalogue.entries)).toContain("developer-tools");
-    expect(suggestedReference("brave-search")).toBe("env:CONNECTOR_BRAVE_SEARCH");
   });
 });
 
@@ -133,7 +132,7 @@ describe("the catalogue page", () => {
     expect(within(screen.getByTestId("entry-github")).getByRole("button", { name: "Install" })).toBeEnabled();
   });
 
-  it("the drawer posts the name and the secret by reference, then discovers and lands on the connector", async () => {
+  it("the drawer seals a typed token by default, then discovers and lands on the connector (S39-06e)", async () => {
     install.mockResolvedValue({ name: "gh", kind: "mcp", type: "mcp", operations: [] });
     discover.mockResolvedValue({ added: ["search"], changed: [], removed: [], unchanged: 0 });
     page();
@@ -145,17 +144,17 @@ describe("the catalogue page", () => {
 
     fireEvent.change(within(drawer).getByLabelText("Connector name"), { target: { value: "" } });
     fireEvent.change(within(drawer).getByLabelText("Connector name"), { target: { value: "gh" } });
-    fireEvent.change(within(drawer).getByLabelText("Secret, by reference"), { target: { value: "ghp_not_a_reference" } });
-    expect(within(drawer).getByRole("alert")).toHaveTextContent("A reference is expected");
-    expect(submit).toBeDisabled();
-    fireEvent.change(within(drawer).getByLabelText("Secret, by reference"), { target: { value: "" } });
-    fireEvent.change(within(drawer).getByLabelText("Secret, by reference"), { target: { value: "env:CONNECTOR_GITHUB" } });
+    // The organisation's own token, typed once: a password field, sealed by the platform, no operator.
+    const token = within(drawer).getByLabelText("token value");
+    expect(token).toHaveAttribute("type", "password");
+    fireEvent.change(token, { target: { value: "ghp_typed_once" } });
     fireEvent.click(submit);
 
     await waitFor(() => expect(push).toHaveBeenCalled());
     expect(install).toHaveBeenCalledWith("acme", "github", {
       name: "gh",
-      secret_refs: { token: "env:CONNECTOR_GITHUB" },
+      secret_refs: {},
+      secret_values: { token: "ghp_typed_once" },
       availability: "selected_projects",
     });
     expect(discover).toHaveBeenCalledWith("acme", "gh");
@@ -168,7 +167,7 @@ describe("the catalogue page", () => {
     page();
     fireEvent.click(within(await screen.findByTestId("entry-exa")).getByRole("button", { name: "Install" }));
     const drawer = screen.getByRole("dialog");
-    expect(within(drawer).queryByLabelText("Secret, by reference")).toBeNull();
+    expect(within(drawer).queryByLabelText("token value")).toBeNull();
     expect(drawer).toHaveTextContent("takes no credential");
     fireEvent.click(within(drawer).getByRole("button", { name: "Install" }));
     expect(await within(drawer).findByText(/already exists/)).toBeInTheDocument();
@@ -204,10 +203,32 @@ describe("rights and per-project enablement (ADR 0074)", () => {
     const drawer = screen.getByRole("dialog");
     expect(within(drawer).getByLabelText(/Selected projects/)).toBeChecked();
     fireEvent.click(within(drawer).getByLabelText("Every project"));
-    fireEvent.change(within(drawer).getByLabelText("Secret, by reference"), { target: { value: "env:CONNECTOR_GITHUB" } });
+    fireEvent.change(within(drawer).getByLabelText("token value"), { target: { value: "ghp_typed_once" } });
     fireEvent.click(within(drawer).getByRole("button", { name: "Install" }));
     await waitFor(() => expect(install).toHaveBeenCalled());
     expect(install.mock.calls[0]![2]).toMatchObject({ availability: "all_projects" });
+  });
+
+  it("a reference stays possible for an operator's vault, and a value typed as one is refused", async () => {
+    install.mockReset();
+    install.mockResolvedValue({ name: "github", kind: "mcp", type: "mcp", operations: [] });
+    discover.mockResolvedValue({ added: [], changed: [], removed: [], unchanged: 0 });
+    page();
+    fireEvent.click(within(await screen.findByTestId("entry-github")).getByRole("button", { name: "Install" }));
+    const drawer = screen.getByRole("dialog");
+    const submit = within(drawer).getByRole("button", { name: "Install" });
+    fireEvent.click(within(drawer).getByRole("button", { name: "Use a reference instead" }));
+    fireEvent.change(within(drawer).getByLabelText("token reference"), { target: { value: "ghp_not_a_reference" } });
+    expect(within(drawer).getByRole("alert")).toHaveTextContent("A reference is expected");
+    expect(submit).toBeDisabled();
+    fireEvent.change(within(drawer).getByLabelText("token reference"), { target: { value: "env:CONNECTOR_GITHUB" } });
+    fireEvent.click(submit);
+    await waitFor(() => expect(install).toHaveBeenCalled());
+    expect(install.mock.calls[0]![2]).toEqual({
+      name: "github",
+      secret_refs: { token: "env:CONNECTOR_GITHUB" },
+      availability: "selected_projects",
+    });
   });
 
   it("an installed entry says where it is on, and Projects… toggles a project through the API", async () => {
