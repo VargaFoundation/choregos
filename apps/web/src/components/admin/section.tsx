@@ -2,10 +2,10 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SchemaForm, champsManquants, valeursParDefaut, type JsonSchema } from "@/components/schema-form";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { AdminAction, AdminForm, AdminSecretOnce, AdminSection, AdminTable } from "@/lib/types";
 
@@ -162,8 +162,51 @@ function Cellule({ valeur, format }: { valeur: unknown; format?: string }) {
 }
 
 /**
+ * Where a `reauth` action waits while the browser goes through the IdP: the step-up is a full
+ * navigation, so the React state — what the administrator typed — is gone when the page comes back.
+ * The tab's storage only, and only for a while: an old intent is not replayed.
+ */
+export const PENDING_ACTION_KEY = "choregos.admin.pending-action";
+const PENDING_ACTION_TTL_MS = 15 * 60 * 1000;
+
+type PendingAction = { method: string; path: string; values: Record<string, unknown>; at: number };
+
+function keepPendingAction(method: string, path: string, values: Record<string, unknown>): void {
+  try {
+    const pending: PendingAction = { method, path, values, at: Date.now() };
+    window.sessionStorage.setItem(PENDING_ACTION_KEY, JSON.stringify(pending));
+  } catch {
+    // No storage (private window, blocked site data): the action is simply typed again.
+  }
+}
+
+function dropPendingAction(): void {
+  try {
+    window.sessionStorage.removeItem(PENDING_ACTION_KEY);
+  } catch {
+    // Nothing kept, nothing to drop.
+  }
+}
+
+/** The values of the action interrupted by a step-up, if it is THIS one (same method, same filled path). */
+function pendingActionValues(method: string, path: string): Record<string, unknown> | null {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_ACTION_KEY);
+    if (!raw) return null;
+    const pending = JSON.parse(raw) as PendingAction;
+    if (pending.method !== method || pending.path !== path) return null;
+    if (!(Date.now() - pending.at < PENDING_ACTION_TTL_MS)) return null;
+    return pending.values ?? {};
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Une action : confirmée quand le manifeste le demande, ses paramètres demandés d'abord. Une
- * action `reauth` passe par une session fraîche — `lib/api.ts` suit `step_up_required`.
+ * action `reauth` passe par une session fraîche — `lib/api.ts` suit `step_up_required`. Back from
+ * the IdP, the interrupted action opens again, filled in, and waits for a NEW confirmation: it is
+ * never sent on its own (S42-04b).
  */
 function BoutonDAction({
   action,
@@ -178,21 +221,35 @@ function BoutonDAction({
 }) {
   const client = useQueryClient();
   const params = action.params as JsonSchema | undefined;
-  const [ouvert, setOuvert] = useState(false);
-  const [valeurs, setValeurs] = useState<Record<string, unknown>>({});
-  const [message, setMessage] = useState<string | null>(null);
+  const method = action.method ?? "POST";
+  const path = remplir(action.path, org, cle);
+  const [resumed] = useState(() => (action.reauth ? pendingActionValues(method, path) : null));
+  const [ouvert, setOuvert] = useState(resumed !== null);
+  const [valeurs, setValeurs] = useState<Record<string, unknown>>(resumed ?? {});
+  const [message, setMessage] = useState<string | null>(
+    resumed !== null ? "Your sign-in was refreshed: confirm again to apply it." : null,
+  );
   const aConfirmer = Boolean(action.confirm || params || action.danger);
+
+  useEffect(() => {
+    if (resumed !== null) dropPendingAction();
+  }, [resumed]);
 
   async function agir() {
     setMessage(null);
+    if (action.reauth) keepPendingAction(method, path, params ? valeurs : {});
     try {
-      await api.sectionCall(action.method ?? "POST", remplir(action.path, org, cle), params ? valeurs : undefined);
+      await api.sectionCall(method, path, params ? valeurs : undefined);
+      if (action.reauth) dropPendingAction();
       setOuvert(false);
       setValeurs({});
       setMessage(`${action.label}: done`);
       onDone?.();
       await client.invalidateQueries({ queryKey: ["admin-table", org] });
     } catch (cause) {
+      // A 401 sends the browser to the IdP and back: the action waits for it. Any other refusal
+      // is final, and said here.
+      if (action.reauth && !(cause instanceof ApiError && cause.status === 401)) dropPendingAction();
       setMessage(cause instanceof Error ? cause.message : "refused");
     }
   }
@@ -225,7 +282,13 @@ function BoutonDAction({
         >
           Confirm {action.label}
         </Button>
-        <Button size="sm" onClick={() => setOuvert(false)}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setOuvert(false);
+            setMessage(null);
+          }}
+        >
           Cancel
         </Button>
       </span>
