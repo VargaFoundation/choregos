@@ -57,8 +57,8 @@ describe("the cross-backend review card", () => {
   it("shows the verdict and both arms", async () => {
     vi.mocked(api.crossBackend).mockResolvedValue(REPORT);
     await show(<CrossBackendCard slug="billing-api" />);
-    expect(await screen.findByText("cross review catches more")).toBeInTheDocument();
-    expect(screen.getByText(REPORT.detail!)).toBeInTheDocument();
+    expect(await screen.findByText("Cross review catches more")).toBeInTheDocument();
+    expect(screen.getByText("Another backend finds something in 40% of the reviews, the same one in 20% (+20.0%).")).toBeInTheDocument();
     expect(screen.getByText("required by the policy")).toBeInTheDocument();
     const other = screen.getByRole("group", { name: "Reviewed by another backend" });
     expect(within(other).getByText("40 %")).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("the cross-backend review card", () => {
       detail: "",
     });
     await show(<CrossBackendCard slug="billing-api" />);
-    expect(await screen.findByText("not enough data")).toBeInTheDocument();
+    expect(await screen.findByText("Not enough data")).toBeInTheDocument();
     expect(screen.queryByText("required by the policy")).toBeNull();
     expect(screen.getAllByText("—")).toHaveLength(2);
     expect(screen.getAllByText("No review yet")).toHaveLength(2);
@@ -96,7 +96,7 @@ describe("the cross-backend review card", () => {
   it("sits on the project's overview, after DORA", async () => {
     vi.mocked(api.crossBackend).mockResolvedValue(REPORT);
     await show(<ProjectOverview params={Promise.resolve({ slug: "billing-api" })} />);
-    const card = (await screen.findByText("cross review catches more")).closest("section");
+    const card = (await screen.findByText("Cross review catches more")).closest("section");
     expect(card).not.toBeNull();
     const dora = screen.getByRole("heading", { name: "DORA" }).closest("section");
     expect(dora!.compareDocumentPosition(card!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

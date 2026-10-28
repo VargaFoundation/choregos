@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Card, EtatDeLecture, Label } from "@/components/ui";
 import { api } from "@/lib/api";
-import { percent, shortDate } from "@/lib/format";
+import { percent, shortDate, toSentenceCase } from "@/lib/format";
 import type { CrossBackendArm } from "@/lib/types";
 
 /**
@@ -12,6 +12,7 @@ import type { CrossBackendArm } from "@/lib/types";
  * the same one (S13-03)? The API counts, for each arm, the reviews that found something (a finding
  * filed, or an outcome other than `done`) and gives its verdict once each arm has five reviews. The
  * card says it next to DORA (S47-17), with the policy's `review.cross_backend` when it requires one.
+ * The API words its verdict in lowercase; the card writes it in sentence case (ADR 0048).
  */
 export function CrossBackendCard({ slug }: { slug: string }) {
   const report = useQuery({ queryKey: ["cross-backend", slug], queryFn: () => api.crossBackend(slug) });
@@ -27,8 +28,8 @@ export function CrossBackendCard({ slug }: { slug: string }) {
       ) : (
         <div className="space-y-4" data-testid="cross-backend">
           <div>
-            <p className="text-sm font-semibold text-ink">{data.verdict}</p>
-            {data.detail && <p className="mt-1 text-sm text-ink-muted">{data.detail}</p>}
+            <p className="text-sm font-semibold text-ink">{toSentenceCase(data.verdict)}</p>
+            {data.detail && <p className="mt-1 text-sm text-ink-muted">{toSentenceCase(data.detail)}</p>}
             <p className="mt-1 text-xs text-ink-muted">Since {shortDate(data.since)}</p>
           </div>
           <div className="grid border-t border-line sm:grid-cols-2">
