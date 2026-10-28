@@ -522,7 +522,7 @@ async def callback(
                 email=info["email"],
                 name=info.get("name", ""),
                 sub=info.get("sub"),
-                groups=list(info.get(provider.groups_claim) or []),
+                groups=provider.mapped_groups(info.get(provider.groups_claim)),
                 settings=settings,
             )
         else:

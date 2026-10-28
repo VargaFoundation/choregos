@@ -376,3 +376,32 @@ def test_the_email_domain_is_lowercased() -> None:
     assert email_domain("bob") is None
     assert email_domain("bob@") is None
     assert email_domain(None) is None
+
+
+async def test_a_groups_map_translates_the_provider_groups(client: AsyncClient, directory: Directory) -> None:
+    from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn
+
+    directory.tenants["acme"] = TenantSignIn(
+        org="acme",
+        oidc=OidcProvider(
+            issuer=ACME,
+            client_id="acme-client",
+            groups_map={"5f1c-readers-guid": "viewers"},
+        ),
+    )
+    done, _ = await _acme_sign_in(
+        client,
+        {"sub": "u-9", "email": "bob@acme.example", "groups": ["5f1c-readers-guid", "org-admins"]},
+    )
+    assert done.status_code == 307, done.text
+    # The mapped id grants its role; `org-admins`, which the map does not list, does not count.
+    assert await _memberships(client) == {("acme", "viewer")}
+
+
+def test_the_mapped_groups_ignore_a_claim_that_is_not_a_list() -> None:
+    from choregos_api.tenant_sign_in import OidcProvider
+
+    provider = OidcProvider(issuer=ACME, client_id="c", groups_map={"a": "viewers"})
+    assert provider.mapped_groups("a") == []
+    assert provider.mapped_groups(["a", "b"]) == ["viewers"]
+    assert OidcProvider(issuer=ACME, client_id="c").mapped_groups(["x"]) == ["x"]

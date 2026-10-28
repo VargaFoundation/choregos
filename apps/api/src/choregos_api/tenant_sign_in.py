@@ -37,7 +37,7 @@ the core trusts that mapping, it has no other source for it.
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 #: The resolver an extension declared, if any. A container rather than a module variable, as in
@@ -60,7 +60,9 @@ class OidcProvider:
     The three endpoints are for a provider that publishes no discovery document: set all three or
     none. `require_email_verified` refuses an address the provider marks `email_verified: false`
     (a provider that omits the claim, such as Entra ID, is accepted). `groups_claim` names the
-    userinfo claim that carries the groups.
+    userinfo claim that carries the groups. `groups_map`, when set, translates the provider's group
+    values (an Entra ID group id, say) into the core's group names (`org-admins`, `developers`…);
+    a value it does not list is dropped. The extension checks the names it maps to.
     """
 
     issuer: str
@@ -72,6 +74,14 @@ class OidcProvider:
     userinfo_endpoint: str = ""
     require_email_verified: bool = True
     groups_claim: str = "groups"
+    groups_map: dict[str, str] = field(default_factory=dict)
+
+    def mapped_groups(self, claimed: Any) -> list[str]:
+        """The groups the provider claims, as the core's group names."""
+        groups = [str(g) for g in claimed] if isinstance(claimed, list) else []
+        if not self.groups_map:
+            return groups
+        return [self.groups_map[g] for g in groups if g in self.groups_map]
 
     def __post_init__(self) -> None:
         if not self.issuer.startswith(("https://", "http://")) or not self.client_id:

@@ -31,7 +31,8 @@ may grant is a security property the core must hold whatever the edition does.
    TenantSignIn | None` through `tenant_sign_in.declare_sign_in_resolver`. `None` means the instance's
    provider. A `TenantSignIn` names its organisation and **either** an `OidcProvider` the core drives
    (issuer, client id and secret, scopes, the three endpoints for a provider without discovery,
-   `require_email_verified`, the groups claim) **or** a `start_path`, a route of this API where the
+   `require_email_verified`, the groups claim, and a `groups_map` translating the provider's group values, such as
+   Entra ID group ids, into the core's group names) **or** a `start_path`, a route of this API where the
    extension starts another protocol (SAML). Without a resolver, nothing changes: the community edition
    keeps one provider (ADR 0024).
 2. **Two ways in.** `/auth/login?org=<slug>` (a sign-in link per organisation) and
