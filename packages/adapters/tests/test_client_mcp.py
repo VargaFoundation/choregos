@@ -56,7 +56,7 @@ async def test_la_session_et_le_jeton_du_connecteur_partent_avec_chaque_requete(
 
 async def test_un_refus_ou_une_erreur_du_serveur_est_une_erreur_nommee() -> None:
     serveur = FakeMcpServer(outils=OUTILS[:1], jeton="attendu")
-    with pytest.raises(ErreurMcp, match="refusé"):
+    with pytest.raises(ErreurMcp, match="refused by the server"):
         await ClientMcp("https://f.test/mcp", token="autre", transport=serveur.transport()).list_tools()
     serveur = FakeMcpServer(outils=OUTILS[:1])
     with pytest.raises(ErreurMcp, match="outil inconnu"):
@@ -116,7 +116,7 @@ def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatc
             "username": "a@b.c",
         },
     )
-    assert client._entetes()["Authorization"].startswith("Basic ")
+    assert client._headers()["Authorization"].startswith("Basic ")
 
 
 async def test_a_custom_auth_header_carries_the_raw_key_and_no_authorization() -> None:

@@ -315,9 +315,11 @@ async def test_a_project_grant_gives_its_members_the_role_and_other_projects_not
         ).status_code == 403
 
 
-async def test_restricted_base_hides_from_project_viewers_but_serves_runs(
+async def test_restricted_base_hides_from_project_viewers_and_serves_runs_only_for_its_readers(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
+    from choregos_api.knowledge.serving import KnowledgeRefusedError
+
     from .test_knowledge_files import _pinned, _run
 
     created = await client.post(
@@ -329,6 +331,8 @@ async def test_restricted_base_hides_from_project_viewers_but_serves_runs(
     async with _as(client, "reader@varga.dev", org_role="viewer") as reader:
         assert (await reader.get(f"{ORG}/architecture")).status_code == 404
         assert [b["slug"] for b in (await reader.get(ORG)).json()] == []
+    with pytest.raises(KnowledgeRefusedError, match=r"`reader@varga\.dev` may not read it"):
+        await _pinned(two_projects, "person:reader@varga.dev")
     granted = await client.put(
         f"{ORG}/architecture/grants",
         json={"grants": [{"subject_type": "user", "subject": viewer_id, "role": "viewer"}]},
@@ -337,18 +341,15 @@ async def test_restricted_base_hides_from_project_viewers_but_serves_runs(
     async with _as(client, "reader@varga.dev", org_role="viewer") as reader:
         assert (await reader.get(f"{ORG}/architecture")).status_code == 200
         assert [b["slug"] for b in (await reader.get(ORG)).json()] == ["architecture"]
-    # runs of any project are still served it
-    from choregos_api.knowledge.access import served_to_project
-
-    pinned = await _pinned(two_projects)
+    # a run started by the reader is served it now (ADR 0097)
+    pinned = await _pinned(two_projects, "person:reader@varga.dev")
     assert pinned and pinned[0]["slug"] == "architecture"
-    token = await _run(two_projects, pinned)
+    token = await _run(two_projects, pinned, "person:reader@varga.dev")
     client.cookies.clear()
     served = await client.get(
         "/api/v1/internal/runs/run-kb/knowledge", headers={"Authorization": f"Bearer {token}"}
     )
     assert served.status_code == 200, served.text
-    assert served_to_project(SimpleNamespace(status="active", scope="org", projects=[], restricted=True), "x")
 
 
 async def test_a_grant_never_serves_a_run(client: AsyncClient, two_projects: dict[str, Any]) -> None:
@@ -367,7 +368,8 @@ async def test_a_grant_never_serves_a_run(client: AsyncClient, two_projects: dic
     )
     assert granted.status_code == 200, granted.text
     with pytest.raises(KnowledgeRefusedError):
-        await _pinned(two_projects)  # billing-api: holds a role, is not in the reach
+        # billing-api holds a role and is not in the reach; the initiator is an administrator
+        await _pinned(two_projects, "person:admin@varga.dev")
 
 
 async def test_widening_still_clears_owner_project_and_restricting_does_not(

@@ -21,6 +21,8 @@ os.environ.setdefault("CHOREGOS_EGRESS_MODE", "warn")
 os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", '["ghcr.io/vargafoundation/choregos-agents"]')
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+# The suites build prod and https apps, which refuse a short or default session secret at start.
+os.environ.setdefault("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 32)
 # Une écriture d'un run est une action gouvernée que joue Temporal (#241) ; ici `FakeTemporal` ne la
 # joue pas : le courtier n'attend pas trente secondes une issue qui ne viendra pas.
 os.environ.setdefault("CHOREGOS_COURTIER_ATTENTE_ECRITURE_S", "0.3")

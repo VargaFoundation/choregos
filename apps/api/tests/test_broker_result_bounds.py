@@ -37,7 +37,7 @@ def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
         if tool["name"] == "stock":
             tool["outputSchema"] = STOCK_SCHEMA
     fake = FakeMcpServer(outils=tools, jeton="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", fake)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield fake
 

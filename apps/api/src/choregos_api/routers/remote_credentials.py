@@ -306,8 +306,12 @@ async def authorize_remote_credential(
     )
     nonce = secrets.token_urlsafe(24)
     expiry = int(time.time()) + HANDSHAKE_S
-    state = sign_session({"n": nonce, "o": org, "c": name, "exp": expiry}, settings)
-    cookie = sign_session({"n": nonce, "v": verifier, "exp": expiry}, settings)
+    state = sign_session(
+        {"n": nonce, "o": org, "c": name, "exp": expiry}, settings, purpose="remote-oauth-state"
+    )
+    cookie = sign_session(
+        {"n": nonce, "v": verifier, "exp": expiry}, settings, purpose="remote-oauth-handshake"
+    )
     query: dict[str, str] = {
         "response_type": "code",
         "client_id": str(config["client_id"]),
@@ -349,8 +353,10 @@ async def remote_credential_callback(
     settings: Config,
 ) -> RedirectResponse:
     """The provider's redirect: verify state and cookie, exchange the code, seal the refresh token."""
-    expected = read_session(state, settings)
-    handshake = read_session(request.cookies.get(OAUTH_COOKIE, ""), settings)
+    expected = read_session(state, settings, purpose="remote-oauth-state")
+    handshake = read_session(
+        request.cookies.get(OAUTH_COOKIE, ""), settings, purpose="remote-oauth-handshake"
+    )
     now = time.time()
     if (
         not expected

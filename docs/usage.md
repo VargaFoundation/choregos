@@ -463,6 +463,31 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**The next step can depend on what the agent answered** ([ADR 0106](adr/0106-a-workflow-chooses-its-next-step-from-the-agent-s-answer.md)).
+Ask the agent for the answers you route on, as outputs, and put a `when` on the transitions that
+leave the state it lands in. The first transition whose `when` holds is taken; one without `when` is
+the default:
+
+```yaml
+transitions:
+  - id: t-develop
+    from: todo
+    to: checkpoint
+    by: developer
+    outputs: [done, findings, confidence]   # "develop it, then answer: finished? findings? how sure?"
+  - { id: t-again,  from: checkpoint, to: todo,   by: platform, when: { done: false } }
+  - { id: t-unsure, from: checkpoint, to: unsure, by: platform, when: { confidence: { lt: 0.6 } } }
+  - { id: t-fix,    from: checkpoint, to: fixing, by: platform, when: { findings: { gt: 0 } } }
+  - { id: t-finish, from: checkpoint, to: done,   by: platform }
+```
+
+A condition is a value (`outcome: pr`), a list of values (`outcome: [pr, reply]`), or comparisons
+(`equals`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`); every condition of a `when` must hold. Numbers and
+booleans written as strings (`"0.85"`, `"false"`) compare as numbers and booleans; an output the stage
+did not write never matches, so an agent that says nothing takes the default. The validator refuses a
+`when` that names an output no transition declares (`when.unknown_output`) and a state whose exits all
+have a `when` (`when.no_default`).
+
 Two validation codes were renamed to English (ADR 0046): `workflow.implicit_effect` (formerly
 `workflow.effet_implicite`) and `gate.nothing_to_check` (formerly `gate.sans_matiere`). For one
 release, an issue that carries one of them also carries its former spelling in `deprecated_code`;
@@ -501,7 +526,15 @@ list from `lg` up): **Readiness** (on top), **General**, **Connections**, **Agen
 
 Every section saves on its own through `PATCH /projects/{id}`. The console re-reads the project right before
 writing and sends the whole configuration with only that section's keys changed, so a section never drops
-what another one wrote and `groups` is sent untouched.
+what another one wrote and `groups` is sent untouched. It also sends the `config_revision` it read (an opaque
+digest of the name and the configuration, returned by `GET /projects/{id}`) as `base_revision`: when someone
+else saved in between, the PATCH answers 409 `stale_base` (the problem carries `latest_revision`), writes
+nothing, and the console reads again, merges again and sends once more; a second 409 shows "Someone else
+changed these settings: reload the page". Renaming the organisation also changes the revision, because it
+rewrites `config.org`, so a revision read before a rename answers 409 once. API clients may send
+`base_revision` too; without it the last write wins, as before. `PUT /projects/{id}/models` locks the project
+row the same way, and every `project.update` audit entry lists the top-level configuration keys it changed
+(`changes`, each with `before` and `after`) and whether the name changed (`name_changed`).
 
 - **Connections** is a card per connector: an icon (the product's mark when simple-icons has one, vendored
   as CC0 paths in `components/brand-icon-paths.ts`; a capability icon otherwise, including Slack and the
@@ -1716,7 +1749,11 @@ curl -X PUT $API/orgs/acme/knowledge/architecture/grants -H 'Content-Type: appli
 
 `subject_type` is `user` (a member id, or an e-mail: waiting, `pending`, until that person is a member),
 `group` or `project` (its explicit members). The list is replaced as a whole (at most 200). A
-`restricted` base is read by people only through a grant; its runs are still served.
+`restricted` base is read by people only through a grant, and a run is served it only on behalf of a
+person who reads it: the person who started the work item (a fan-out child acts for its parent's).
+A scheduled or tracker-triggered work item names no person, so its runs stop at stage start with
+`KnowledgeRefused` ([ADR 0097](adr/0097-a-run-reads-a-restricted-base-on-behalf-of-its-initiator.md)).
+A grant revoked while a run is in flight holds at the run's next read.
 
 #### A knowledge base as code
 

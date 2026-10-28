@@ -14,6 +14,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 #: cette chaîne au lieu d'échouer. Helm et l'opérateur Infisical le font tous les deux.
 GABARIT_NON_RESOLU = ("<no value>", "<nil>")
 
+#: The session secret the code ships with. It is published in the repository, so no deployed
+#: instance may sign with it (`security.check_session_secret`).
+DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
+#: The shortest session secret a deployed instance accepts: a 256-bit HMAC key.
+MIN_SESSION_SECRET_BYTES = 32
+
 
 #: Les clients de la page Integrations qu'un client OAuth pré-enregistré peut servir (ADR 0030).
 CLIENTS_OAUTH = frozenset(
@@ -77,7 +83,10 @@ class Settings(BaseSettings):
     #: (`claude-code`, `claude-ai`…), en JSON : `{"claude-code": {"client_id": "…", "callback_port":
     #: 33418}}`. La page en tire la commande exacte ; sans eux, elle ne propose que les jetons.
     mcp_oauth_clients: dict[str, ClientOAuth] = Field(default_factory=dict)
-    session_secret: str = "dev-session-secret-change-me"
+    session_secret: str = DEFAULT_SESSION_SECRET
+    #: A verification-only key during a rotation (`CHOREGOS_SESSION_SECRET_PREVIOUS`): a value signed
+    #: with it still reads, and nothing is signed with it.
+    session_secret_previous: str = ""
     session_cookie: str = "choregos_session"
     session_max_age_s: int = 8 * 3600
     #: Connexion de développement (`/auth/login?as=<email>`) : ÉTEINTE par défaut. Elle
@@ -335,6 +344,15 @@ class Settings(BaseSettings):
         """
         https = any(u.strip().lower().startswith("https://") for u in (self.public_url, self.api_url))
         return self.env in {"staging", "prod"} or https
+
+    @property
+    def deployed(self) -> bool:
+        """Whether this instance is reachable as a deployment.
+
+        True in staging/prod, and whatever `env` says when it is served over https (the config and
+        the chart both default `env` to dev). S47-02 and S47-13 reuse it.
+        """
+        return self.cookies_secure
 
     @model_validator(mode="after")
     def _pas_de_porte_derobee_en_production(self) -> Settings:

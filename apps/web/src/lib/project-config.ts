@@ -3,7 +3,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { ProjectDto } from "@/lib/types";
 
 /** The project's configuration as the API validates it (`ProjectConfig`); `dod` is not in the generated type yet. */
@@ -15,7 +15,9 @@ export type ConfigChange = Partial<ProjectConfigValue> | ((latest: ProjectConfig
 /**
  * The latest configuration with a section's change applied. Every key the change does not name is kept
  * as it is, so a section never drops what another one wrote; a key set to `undefined` is removed.
- * `PATCH /projects/{id}` replaces the whole configuration, which is why the client sends all of it.
+ * `PATCH /projects/{id}` replaces the whole configuration, which is why the client sends all of it, together
+ * with the `config_revision` of the read it merged into: when someone else saved in between, the API answers
+ * 409 `stale_base` and `useProjectConfigPatch` merges the change again into the new configuration.
  */
 export function mergeConfig(latest: ProjectConfigValue, change: ConfigChange): ProjectConfigValue {
   const own = typeof change === "function" ? change(latest) : change;
@@ -24,10 +26,17 @@ export function mergeConfig(latest: ProjectConfigValue, change: ConfigChange): P
   return merged as ProjectConfigValue;
 }
 
+/** The API refused a write made from a configuration that is no longer current (`stale_base`). */
+function isStaleBase(cause: unknown): boolean {
+  return cause instanceof ApiError && cause.status === 409 && cause.problem.code === "stale_base";
+}
+
 /**
  * Saves one section of the project's configuration. It reads the project again right before writing,
- * merges the change into THAT configuration (not the one the page loaded some minutes ago), sends it, and
- * refreshes the project and its readiness.
+ * merges the change into THAT configuration (not the one the page loaded some minutes ago), sends it with
+ * the revision it read, and refreshes the project and its readiness. When the API answers 409 `stale_base`
+ * (someone saved between the read and the write), it reads again, merges again and sends once more; a second
+ * 409 is reported, and nothing is overwritten.
  */
 export function useProjectConfigPatch(slug: string) {
   const queryClient = useQueryClient();
@@ -40,9 +49,21 @@ export function useProjectConfigPatch(slug: string) {
     setError(null);
     setMessage(null);
     try {
-      const latest = await api.project(slug);
-      const config = mergeConfig(latest.config as ProjectConfigValue, change);
-      await api.updateProject(slug, { ...(options.name !== undefined ? { name: options.name } : {}), config });
+      for (let attempt = 0; ; attempt++) {
+        const latest = await api.project(slug);
+        const config = mergeConfig(latest.config as ProjectConfigValue, change);
+        try {
+          await api.updateProject(slug, {
+            ...(options.name !== undefined ? { name: options.name } : {}),
+            config,
+            base_revision: latest.config_revision ?? null,
+          });
+          break;
+        } catch (cause) {
+          if (attempt === 0 && isStaleBase(cause)) continue;
+          throw cause;
+        }
+      }
       setMessage(options.saved ?? "Saved");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["project", slug] }),
@@ -50,7 +71,13 @@ export function useProjectConfigPatch(slug: string) {
       ]);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "refused");
+      setError(
+        isStaleBase(cause)
+          ? "Someone else changed these settings: reload the page"
+          : cause instanceof Error
+            ? cause.message
+            : "refused",
+      );
       return false;
     } finally {
       setPending(false);
