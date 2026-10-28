@@ -998,10 +998,8 @@ export type Template = {
     description?: string;
   };
   requires: {
-    /** kind → expected type, e.g. tracker: github-issues */
+    /** kind → expected type, e.g. tracker: github-issues; the tracker may be `plugin:<plugin>/<server>`, the server of a plugin that declares `implements: [tracker]` (ADR 0093, S43-05b; checked when the plugin is validated, run by S43-07) */
     connectors: {
-      /** the tracker's type, e.g. github-issues; or `plugin:<plugin>/<server>`, the server of a plugin that declares `implements: [tracker]` (ADR 0093, S43-05b; checked when the plugin is validated, run by S43-07) */
-      tracker?: string | string;
       [key: string]: string;
     };
     cluster_capabilities?: Array<string>;
