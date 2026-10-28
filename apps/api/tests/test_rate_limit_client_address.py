@@ -63,13 +63,15 @@ async def test_the_middleware_keys_on_the_trusted_proxy_address(
     from choregos_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "1")
-    # the ASGI test transport's peer is 127.0.0.1: it stands for the trusted proxy
-    monkeypatch.setenv("CHOREGOS_TRUSTED_PROXY_CIDRS", '["127.0.0.0/8"]')
+    # the test transport's TCP peer, named rather than left to httpx's default, is the trusted proxy
+    proxy = ("10.0.0.7", 123)
+    monkeypatch.setenv("CHOREGOS_TRUSTED_PROXY_CIDRS", '["10.0.0.0/8"]')
     monkeypatch.delenv("CHOREGOS_TRUSTED_PROXY_HOPS", raising=False)
     reset_settings_cache()
     try:
         app = create_app()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        transport = ASGITransport(app=app, client=proxy)
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
             codes = []
             for forwarded in ("203.0.113.1", "203.0.113.2", "198.51.100.9, 203.0.113.1"):
                 headers = {"X-Forwarded-For": forwarded}
@@ -100,6 +102,8 @@ def test_a_bracketed_ipv6_entry_is_keyed_by_its_64() -> None:
     assert keys == {"2001:db8:1:2::/64"}
     # a bare IPv6 address keeps its last group: it is not read as a port
     assert client_address(_request("10.0.0.5", "2001:db8:1:2::1"), trusted) == "2001:db8:1:2::/64"
+    # not even when what precedes it parses: 2001:db8::1:2:3:4 lies in another /64
+    assert client_address(_request("10.0.0.5", "2001:db8::1:2:3:4:5"), trusted) == "2001:db8:0:1::/64"
 
 
 def test_behind_trusted_proxies_the_nearest_untrusted_entry_is_the_client() -> None:
