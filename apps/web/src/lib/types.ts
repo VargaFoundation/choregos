@@ -43,6 +43,8 @@ export type {
   EgressVerdict,
   PlatformChange,
   CostReport,
+  CrossBackendArm,
+  CrossBackendReport,
   DiffSummary,
   DoraMetric,
   DoraReport,

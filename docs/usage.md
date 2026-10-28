@@ -1401,6 +1401,13 @@ project's, whichever project the run is in, and the organisation's), choose read
 write on a row demotes the other), move rows up and down, remove them; its summary line says what it holds
 and where the run writes.
 
+**Re-import.** The same **Memory** section offers **Re-import the project memory** to those who may write
+it (an organisation administrator, the project's owner: `memory:write`). After a confirmation it asks the
+project's memory ingestion to read its sources again now rather than at its next cycle
+(`POST /projects/{id}/memory/reimport`, with optional `sources`; without them the API's defaults). The API
+answers 202: the import is scheduled, not done, so the console says when it was scheduled and no counts;
+the facts it finds reach the memory as the ingestion runs.
+
 ### Release an agent: eval, testing, production
 
 Saving a revision and putting it to work are two gestures
@@ -2345,6 +2352,14 @@ ends it is archived with the run (ADR 0054).
 
 When an agent is blocked it does not guess: it asks, the ticket moves to a waiting state, a
 human is notified with an SLA, and the answer resumes the workflow where it stopped.
+
+The project's overview shows, after the DORA card, the **cross-backend review**: does a review by
+another coding-agent backend than the implementer's catch more than a review by the same one? Each arm
+counts its reviews over the last 30 days, those that caught something (a finding filed, or an outcome
+other than `done`), its catch rate and the backends that reviewed; the verdict waits for five reviews
+on each side. A **required by the policy** badge marks a project whose policy sets
+`review.cross_backend`. The same report is `GET /projects/{id}/metrics/cross-backend`;
+`?since=YYYY-MM-DD` moves the start of the window.
 
 A ticket's whole path reads in one call: `GET /work-items/{id}/journey` returns the map of the
 workflow version the ticket is pinned to, every move from state to state with the edge that

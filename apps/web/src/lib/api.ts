@@ -129,6 +129,7 @@ import type {
   EgressRuleCreate,
   EgressVerdict,
   CostReport,
+  CrossBackendReport,
   DoraReport,
   Edition,
   Integrations,
@@ -887,6 +888,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ id: memoryId, action }),
     }),
+  /**
+   * Asks the project's memory ingestion to read its sources again (`memory:write`). The API answers
+   * 202 with no documented body: the import is scheduled, its facts arrive as the ingestion runs.
+   * Without `sources`, the API's defaults (README, docs, ADRs, closed issues).
+   */
+  reimportMemory: (id: string, sources?: string[]) =>
+    request<void>(`/projects/${qualify(id)}/memory/reimport`, {
+      method: "POST",
+      body: JSON.stringify(sources ? { sources } : {}),
+    }),
   /** Named memories (S40-11, ADR 0075): the organisation's, global and project, with who uses each. */
   memories: (org: string, filter: { scope?: "global" | "project"; project?: string } = {}) =>
     request<MemoryStore[]>(`/orgs/${org}/memories${query(compact(filter))}`),
@@ -937,6 +948,9 @@ export const api = {
   orgCostsCsvUrl: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     `${API_BASE}/orgs/${org}/costs.csv${query({ group_by: groupBy, ...compact(filtre) })}`,
   dora: (id: string, env = "prod") => request<DoraReport>(`/projects/${qualify(id)}/metrics/dora${query({ env })}`),
+  /** Reviews by another backend than the implementer's versus by the same one; `since` is YYYY-MM-DD. */
+  crossBackend: (id: string, since?: string) =>
+    request<CrossBackendReport>(`/projects/${qualify(id)}/metrics/cross-backend${query(since ? { since } : undefined)}`),
   /** Lien de téléchargement direct : le navigateur l'ouvre, le CSV arrive avec sa session. */
   /** Qualifié comme toute route de projet : deux organisations peuvent avoir un projet de même nom. */
   costsCsvUrl: (id: string, groupBy = "day", filtre: CostFilter = {}) =>

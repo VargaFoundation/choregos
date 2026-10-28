@@ -54,6 +54,7 @@ import type {
   SkillGitPreview,
   SkillVersion,
   CostReport,
+  CrossBackendReport,
   DoraReport,
   FindingPage,
   MeDto,
@@ -1081,6 +1082,16 @@ export const dora: DoraReport = {
   lead_time: { value: 9.4, unit: "hours (median)", level: "elite", sample: 23 },
   change_failure_rate: { value: 0.087, unit: "share of production releases", level: "high", sample: 23 },
   time_to_restore: { value: 1.6, unit: "hours (median)", level: "high", sample: 2 },
+};
+
+/** The cross-backend review of billing-api (S47-17): enough reviews on each side for a verdict. */
+export const crossBackend: CrossBackendReport = {
+  since: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
+  cross_backend_required: true,
+  same_backend: { reviews: 8, caught: 2, catch_rate: 0.25, backends: ["claude-code"] },
+  other_backend: { reviews: 12, caught: 6, catch_rate: 0.5, backends: ["codex"] },
+  verdict: "cross review catches more",
+  detail: "another backend finds something in 50% of the reviews, the same one in 25% (+25.0%).",
 };
 
 export const workflow: WorkflowDef = {
@@ -3250,6 +3261,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (at >= 0) proposedToGlobal.splice(at, 1);
     return { status: "accepted" } as T;
   }
+  // The re-import is scheduled, as the API's 202 says (S47-17): no body.
+  if (method === "POST" && /^\/projects\/[^/]+\/memory\/reimport$/.test(path.split("?")[0] ?? path)) return undefined as T;
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   if (/^\/orgs\/[^/]+\/models$/.test(route ?? "")) return modelCatalogue as T;
@@ -3432,6 +3445,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/trains\/staging$/, trains.staging],
     [/^\/projects\/[^/]+\/costs$/, costs],
     [/^\/projects\/[^/]+\/metrics\/dora$/, dora],
+    [/^\/projects\/[^/]+\/metrics\/cross-backend$/, crossBackend],
     [/^\/projects\/[^/]+\/workflow$/, workflow],
     [/^\/projects\/[^/]+\/workflows$/, workflowSummaries],
     [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
