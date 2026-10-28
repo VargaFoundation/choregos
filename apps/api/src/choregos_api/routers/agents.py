@@ -1285,8 +1285,9 @@ async def resolve_project_agents(
     explicit `@N`, else the project's pin, else the project's channel, else production (ADR 0071).
     A canary share depends on the work item, so it is reported (`candidate_percent`), not applied.
     Read only, no audit record."""
-    from choregos_core.catalogue_d_agents import entree
+    from ..services.catalogue_d_agents import catalogue_of
 
+    offered = await catalogue_of(session, ctx.project.org_id)
     reponses: list[AgentResolution] = []
     for reference in ref:
         slug = reference.partition("@")[0]
@@ -1304,7 +1305,7 @@ async def resolve_project_agents(
                         ref=reference,
                         slug=slug,
                         status="not_installed",
-                        in_catalogue=entree(slug) is not None,
+                        in_catalogue=offered.entry(slug) is not None,
                         reason=str(erreur),
                     )
                 )
@@ -1684,7 +1685,7 @@ async def list_agent_catalogue(
     _lire(principal, org)
     organisation = await _organisation(session, org)
     rendu = []
-    for proposition in catalogue.catalogue():
+    for proposition in (await catalogue.catalogue_of(session, organisation.id)).entries:
         etat = await catalogue.etat(session, organisation.id, proposition)
         offert, raison = catalogue.offre(proposition, settings)
         rendu.append(
@@ -1727,18 +1728,17 @@ async def install_catalogue_agent(
 ) -> AgentDto:
     """Installe l'agent en version 1 (201) ; déjà installé, `upgrade` publie la version suivante si le
     catalogue a changé (200). Un agent de l'organisation du même nom n'est jamais touché (409)."""
-    from choregos_core.catalogue_d_agents import entree
-
     from ..services import catalogue_d_agents as catalogue
 
     _admin(principal, org)
     organisation = await _organisation(session, org)
-    proposition = entree(slug)
+    view = await catalogue.catalogue_of(session, organisation.id)
+    proposition = view.entry(slug)
     if proposition is None:
         raise not_found("Catalogue agent", slug)
     etat = await catalogue.etat(session, organisation.id, proposition)
     if not etat.installe:
-        await catalogue.installer(session, organisation.id, proposition, principal)
+        await catalogue.installer(session, organisation.id, proposition, principal, view)
         response.status_code = status.HTTP_201_CREATED
     elif not etat.du_catalogue:
         raise conflict(
@@ -1754,7 +1754,7 @@ async def install_catalogue_agent(
             "if that is what you want"
         )
     else:
-        await catalogue.mettre_a_jour(session, organisation.id, proposition, principal)
+        await catalogue.mettre_a_jour(session, organisation.id, proposition, principal, view)
     return await _dto(session, await _agent(session, organisation, slug), principal, org, avec_versions=True)
 
 
@@ -1778,8 +1778,6 @@ async def connect_catalogue_client(
     le cloud de son éditeur, pas de jeton : le client OAuth que l'IdP a enregistré est rattaché."""
     from datetime import timedelta
 
-    from choregos_core.catalogue_d_agents import entree
-
     from ..security import generate_api_token
     from ..services import catalogue_d_agents as catalogue
     from .auth import _token_dto
@@ -1788,13 +1786,13 @@ async def connect_catalogue_client(
     _lire(principal, org)
     if principal.kind != "user":
         raise forbidden("a client is connected by a person, from a session")
-    proposition = entree(slug)
+    organisation = await _organisation(session, org)
+    proposition = (await catalogue.catalogue_of(session, organisation.id)).entry(slug)
     if proposition is None or proposition.genre != "external":
         raise not_found("Catalogue client", slug)
     offert, raison = catalogue.offre(proposition, settings)
     if not offert:
         raise conflict(f"`{slug}` is not offered here: {raison}")
-    organisation = await _organisation(session, org)
     agent = (
         await session.execute(select(Agent).where(Agent.org_id == organisation.id, Agent.slug == slug))
     ).scalar_one_or_none()

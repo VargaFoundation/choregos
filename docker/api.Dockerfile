@@ -93,6 +93,11 @@ RUN cd /tmp && echo "$(cut -d' ' -f1 hubble.sha256sum)  hubble.tar.gz" | sha256s
  && hubble version
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
+# The plugins the platform ships (ADR 0093 §6, S43-09): the built-in agents left the core for
+# `VargaFoundation/choregos-agents`, and their signed archives, pinned by `plugins.lock`, are the
+# offline directory the chart's `global.plugins.offline` names by default and the catalogue reads.
+# Read only: a plugin is never changed in place.
+COPY plugins/offline /opt/choregos/plugins
 # The source revision, read by `GET /edition` for the console's About panel (S42-12). Last, so a
 # new commit invalidates no layer above. Empty when the image is built by hand; the API then says so.
 ARG REVISION=""

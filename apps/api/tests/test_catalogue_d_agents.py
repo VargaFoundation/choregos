@@ -1,8 +1,9 @@
-"""Le catalogue d'agents, côté organisation (ADR 0040, S21-17).
+"""The agent catalogue, seen from an organisation (ADR 0040, S21-17).
 
-Installer n'écrase jamais ; une mise à jour publie la version suivante seulement si le catalogue a
-changé ; un agent de l'organisation du même nom n'est jamais touché ; un workflow ou un gabarit qui
-nomme un agent du catalogue l'installe.
+Installing never overwrites; an upgrade publishes the next version only when the catalogue changed; an
+organisation's own agent of the same name is never touched; a workflow or a template that names a
+catalogue agent installs it. Since S43-09 the catalogue is the offline plugins' (ADR 0093 §6): what it
+installs carries the plugin's provenance, `plugin:<plugin>/<slug>@<version>`.
 """
 
 from __future__ import annotations
@@ -18,6 +19,16 @@ from choregos_core.catalogue_d_agents import entree, entrees
 from httpx import AsyncClient
 
 ORG = "/api/v1/orgs/varga"
+
+
+def _replace_entry(monkeypatch: pytest.MonkeyPatch, nouveau: Any) -> None:
+    """The offline catalogue with `nouveau` in place of the entry of the same slug."""
+    from choregos_api.services import catalogue_d_agents as service
+
+    base = service.offline_catalogue()
+    entries = (*(e for e in base.entries if e.slug != nouveau.slug), nouveau)
+    view = dataclasses.replace(base, entries=entries)
+    monkeypatch.setattr(service, "offline_catalogue", lambda: view)
 
 
 def test_chaque_entree_du_catalogue_est_un_agent_installable() -> None:
@@ -51,9 +62,7 @@ async def test_installer_un_agent_installe_ses_skills_d_abord(client: AsyncClien
     installe = await client.post(f"{ORG}/agent-catalogue/architect/install")
     assert installe.status_code == 201, installe.text
     agent = installe.json()
-    from choregos_core.catalogue_d_agents import entree
-
-    assert agent["versions"][0]["created_by"] == f"catalogue:architect@{entree('architect').version}"  # type: ignore[union-attr]
+    assert agent["versions"][0]["created_by"] == "plugin:software-delivery/architect@2"
     assert agent["versions"][0]["spec"]["skills"] == [{"slug": "madr-4", "version": None}]
     skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
     assert skills["madr-4"]["latest_version"] == 1
@@ -68,8 +77,6 @@ async def test_reinstaller_ne_reecrit_pas_un_agent_existant(client: AsyncClient,
 async def test_une_mise_a_jour_publie_la_version_suivante_seulement_si_elle_change(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_core import catalogue_d_agents
-
     assert (await client.post(f"{ORG}/agent-catalogue/triager/install")).status_code == 201
     pareil = await client.post(f"{ORG}/agent-catalogue/triager/install", json={"upgrade": True})
     assert pareil.status_code == 200 and pareil.json()["latest_version"] == 1, (
@@ -80,8 +87,7 @@ async def test_une_mise_a_jour_publie_la_version_suivante_seulement_si_elle_chan
     assert ancien is not None
     document = {**ancien.document, "spec": {**ancien.document["spec"], "instructions": "Triage it, briefly."}}
     nouveau = dataclasses.replace(ancien, version=2, document=document)
-    autres = tuple(e for e in entrees() if e.slug != "triager")
-    monkeypatch.setattr(catalogue_d_agents, "entrees", lambda: (*autres, nouveau))
+    _replace_entry(monkeypatch, nouveau)
     listee = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "triager")
     assert listee["update_available"] is True
     publie = await client.post(f"{ORG}/agent-catalogue/triager/install", json={"upgrade": True})
@@ -135,7 +141,7 @@ async def test_publier_un_workflow_qui_nomme_un_agent_du_catalogue_l_installe(
     )
     assert publie.status_code == 200, publie.text
     agent = (await client.get(f"{ORG}/agents/developer")).json()
-    assert agent["versions"][0]["created_by"] == "catalogue:developer@1"
+    assert agent["versions"][0]["created_by"] == "plugin:software-delivery/developer@1"
 
 
 @pytest.fixture
@@ -259,19 +265,10 @@ async def test_un_client_qui_appelle_depuis_le_cloud_n_est_pas_propose_sans_oaut
 
 
 def _le_catalogue_passe_a_la_version_deux(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
-    from choregos_core import catalogue_d_agents
-
     ancien = entree(slug)
     assert ancien is not None
     document = {**ancien.document, "spec": {**ancien.document["spec"], "instructions": "Review it, v2."}}
-    nouveau = dataclasses.replace(ancien, version=2, document=document)
-    autres = tuple(e for e in entrees() if e.slug != slug)
-    monkeypatch.setattr(catalogue_d_agents, "entrees", lambda: (*autres, nouveau))
-    monkeypatch.setattr(
-        catalogue_d_agents,
-        "entree",
-        lambda s: nouveau if s == slug else next(e for e in autres if e.slug == s),
-    )
+    _replace_entry(monkeypatch, dataclasses.replace(ancien, version=2, document=document))
 
 
 async def _projet_du_gabarit(client: AsyncClient, gabarits: pathlib.Path) -> None:
@@ -293,7 +290,7 @@ async def test_un_agent_du_catalogue_installe_par_un_gabarit_porte_la_meme_prove
 ) -> None:
     await _projet_du_gabarit(client, gabarits)
     agent = (await client.get(f"{ORG}/agents/reviewer")).json()
-    assert agent["versions"][0]["created_by"] == "catalogue:reviewer@1"
+    assert agent["versions"][0]["created_by"] == "plugin:software-delivery/reviewer@1"
     assert agent["scope"] == "platform"
     listee = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "reviewer")
     assert listee["own_agent"] is False
@@ -342,5 +339,5 @@ def test_a_manifest_names_the_catalogue_provenance_of_the_agents_it_takes_from_i
     assert reviewer is not None
     manifest = {"defaults": {"workflows": ["template:default-simple@1"], "agents": ["catalogue:reviewer"]}}
     assert livraison(manifest, None).agents_du_catalogue == {
-        "reviewer": f"catalogue:reviewer@{reviewer.version}"
+        "reviewer": f"plugin:software-delivery/reviewer@{reviewer.version}"
     }
