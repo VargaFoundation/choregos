@@ -650,6 +650,13 @@ curl -X POST $API/workflows/edit -d '{"yaml": "...", "operations": [
 | `add_transition`, `remove_transition`, `set_transition` | transitions, by `id` |
 | `add_gate`, `remove_gate` | a transition's guarantees |
 | `add_actor`, `remove_actor`, `set_actor` | actors |
+| `set_workflow` | `metadata.description`, `metadata.inputs` (the work item's fields), `metadata.catalogue`, `initial` |
+
+`style: "block"` on a `set_*` writes a nested value (a human `task`, an `action`, a `spawn`, the
+fields) as indented lines, so the diff reads one field per line; a value already written in block style
+is replaced whole, and the inverse puts its exact lines back
+([ADR 0109](adr/0109-the-map-edits-a-whole-workflow.md)). The last state, actor or transition of a
+workflow cannot be removed: add another first.
 
 The answer carries the edited `yaml`, its unified `diff`, the validation and the graph, and the
 `inverse` operations, which give back the original bytes. Nothing is saved: the console saves
@@ -669,6 +676,24 @@ read: if someone published meanwhile, the console says so (`409`) instead of ove
 **add a step**, at the end of the process view and beside the map, adds a transition from any
 state to an existing or a new one without choosing a state first. The draft survives a detour
 through another page of the console (it is kept for the browser tab), and **discard** asks first.
+
+Since [ADR 0109](adr/0109-the-map-edits-a-whole-workflow.md), nothing needs the YAML tab:
+
+- **Actors**, beside the map: add an agent picked from the organisation's agents and the platform's
+  catalogue (one not installed yet is installed when the workflow is published), people of a group with
+  their delay, a job (a command, no model) or the platform; remove one no transition uses.
+- **A transition's other fields**, in its panel: what it reads and writes, where a failure or a
+  person's refusal goes, what the platform does (open or merge a pull request), a release train, a
+  **task a person does** (title, instructions, the fields they fill — declared as the work item's fields in
+  the same gesture — and what they attest), a governed action (its effects as JSON), a fan-out into
+  child work items.
+- **Workflow**, beside the map: its description, the state a request starts in, and the fields a
+  request carries, as rows (a field this editor cannot describe is kept as written).
+- **Drawing a transition**: in the list view, drag a state onto another; the add-transition form opens
+  with both ends filled, and nothing is written until it is confirmed. The "add a step" form does the same
+  from the keyboard.
+- **A workflow born on the map**: **new workflow** offers `blank` (one person, to do → done) beside the
+  platform's workflows, and opens the map; adopting from the catalogue opens it too.
 
 ### What each step shows
 

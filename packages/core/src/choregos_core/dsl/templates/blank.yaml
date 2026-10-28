@@ -1,0 +1,17 @@
+# A blank workflow: one step a person takes. Add states, actors and transitions on the map.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: blank
+  version: 1
+  description: A request, done by a person.
+actors:
+  owner: { type: human, group: product-owners, sla_hours: 24 }
+states:
+  inbox: { display: To do, kind: wait }
+  done: { display: Done, terminal: true }
+transitions:
+  - id: t-done
+    from: inbox
+    to: done
+    by: owner

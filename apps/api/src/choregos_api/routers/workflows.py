@@ -90,6 +90,7 @@ async def validate(body: WorkflowValidateRequest) -> WorkflowValidation:
         warnings=[WorkflowIssue(**issue.to_dict()) for issue in report.warnings],
         graph=to_graph(workflow),
         process=to_process(workflow),
+        document=workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
     )
 
 
@@ -213,6 +214,9 @@ async def list_workflows(ctx: ProjectCtx, session: Db) -> list[WorkflowSummaryDt
         .group_by(WorkflowDef.name)
     )
     ouverts: dict[str, int] = {str(nom): int(n) for nom, n in comptes.tuples()}
+    from ..services.agent_governance import is_admin
+
+    can_share = is_admin(ctx.principal, ctx.org_slug)
     return [
         WorkflowSummaryDto(
             name=row.name,
@@ -222,6 +226,7 @@ async def list_workflows(ctx: ProjectCtx, session: Db) -> list[WorkflowSummaryDt
             open_items=int(ouverts.get(row.name, 0)),
             created_by=row.created_by,
             updated_at=row.created_at,
+            can_share=can_share,
         )
         for row in actifs
     ]

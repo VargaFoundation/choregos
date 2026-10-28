@@ -36,8 +36,9 @@ def _capacites(*textes: str) -> list[str]:
     return [e.capacite for e in exigences(parse_workflow(t)[0] for t in textes)]
 
 
-#: The core workflows that deliver code; `default-request` (ADR 0107) is the one that does not.
-SOFTWARE_TEMPLATES = [name for name in TEMPLATE_NAMES if name != "default-request"]
+#: The core workflows that deliver code; `default-request` (ADR 0107) and the `blank` skeleton (ADR 0109)
+#: do not.
+SOFTWARE_TEMPLATES = [name for name in TEMPLATE_NAMES if name not in {"default-request", "blank"}]
 
 
 @pytest.mark.parametrize("nom", SOFTWARE_TEMPLATES)

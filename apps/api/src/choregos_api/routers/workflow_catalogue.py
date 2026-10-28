@@ -88,7 +88,10 @@ async def adopt_workflow(ctx: ProjectCtx, body: WorkflowAdopt, session: Db) -> W
     )
     missing = sorted(slug for slug, r in resolved.items() if r.resolution == "unresolved")
     if missing:
-        names = ", ".join(f"`{slug}`" for slug in missing)
+        names = ", ".join(
+            f"`{slug}`" + (f" (the plugin {resolved[slug].plugin} ships it)" if resolved[slug].plugin else "")
+            for slug in missing
+        )
         raise unprocessable(
             f"`{entry.name}` names agents this organisation does not have and no catalogue provides: "
             f"{names}. An organisation administrator installs the plugin that ships them first; "

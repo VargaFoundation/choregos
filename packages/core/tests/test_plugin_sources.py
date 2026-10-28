@@ -264,3 +264,15 @@ def test_a_link_in_a_git_tarball_refuses_the_plugin(tmp_path: Path) -> None:
     with pytest.raises(SourceError) as caught:
         extract_git_path(tarball, "hello", tmp_path)
     assert _check(caught) == "content"
+
+
+def test_an_index_says_which_agents_a_release_ships(offline: Path) -> None:
+    """ADR 0108 §2: a catalogue names the plugin of a missing agent without fetching it."""
+    index = parse_index(_index(**{"1.0.0": {**_oci(D1, ">=0.20.0"), "agents": ["greeter", "farewell"]}}))
+    assert index.releases["hello"]["1.0.0"].agents == ("greeter", "farewell")
+    assert parse_index(_index(**{"1.0.0": _oci(D1, ">=0.20.0")})).releases["hello"]["1.0.0"].agents == ()
+    with pytest.raises(SourceError):
+        parse_index(_index(**{"1.0.0": {**_oci(D1, ">=0.20.0"), "agents": ["Not A Slug"]}}))
+    assert offline_index(offline).releases["hello"]["1.0.0"].agents == ("greeter",), (
+        "read from the plugin itself"
+    )

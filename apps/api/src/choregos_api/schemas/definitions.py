@@ -98,6 +98,8 @@ class WorkflowSummaryDto(Dto):
     open_items: int = 0
     created_by: str | None = None
     updated_at: datetime | None = None
+    #: The caller may share it to the organisation's catalogue (ADR 0108 §4): the server decides.
+    can_share: bool = False
 
 
 class RoutingCondition(Dto):
@@ -140,6 +142,9 @@ class WorkflowValidation(Dto):
     graph: dict[str, Any] | None = None
     #: La vue « processus » : chaque transition dite en clair (ADR 0031).
     process: list[dict[str, Any]] = Field(default_factory=list)
+    #: The workflow as JSON, as the engine read it: the map's panels show the draft's actors and
+    #: transitions from it, not the published version's (ADR 0109).
+    document: dict[str, Any] | None = None
 
 
 class WorkflowEditRequest(Dto):

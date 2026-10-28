@@ -82,3 +82,22 @@ So "editable graphically" is true for the shape and false for most of the conten
   model and generate the YAML, the wrong way round for a document that is reviewed and replayed.
 - **Free drag-to-connect with no form.** A transition without its actor, guarantees and failure path is
   either refused by the validator or written with defaults nobody chose.
+
+## Implementation — 2026-10-28 (S49-09 to S49-13)
+
+- `set_*` operations take `style: block` (a nested value as indented lines) and `swap` (the exact lines of
+  a key put back in place: the inverse of replacing a value written in block style, which was refused
+  before); `set_workflow` edits `metadata.description`, `metadata.inputs`, `metadata.catalogue` and
+  `initial`. The round-trip test applies them to every core, template and demo workflow.
+- A validation answer carries `document` (the workflow as the engine read it), so the panels show the
+  draft's actors and transitions, not the published version's.
+- The console: an Actors panel, a Workflow panel, and in a transition's panel a form per field. A human
+  task, the fan-out and the release train have real forms; a governed action's `effects` are entered as
+  JSON (a list of `{effect, with}`), its kind, title and justification as fields.
+- Drawing: in the list view of the map, a state dragged onto another opens the add-transition form;
+  nothing is written before it is confirmed. The serpentine diagram has no drag.
+- `blank`, a fifth core workflow (one person, to do → done), lets a workflow be born on the map; new
+  workflows and adoptions open the map's list view.
+- Removing the last state, actor or transition of a workflow is refused: the empty block would read as
+  `null`, and nothing could be put back.
+

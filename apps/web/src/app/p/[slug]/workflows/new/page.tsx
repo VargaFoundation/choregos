@@ -63,7 +63,8 @@ export default function NewWorkflowPage({
         await client.invalidateQueries({ queryKey: ["readiness", slug] });
       }
       await client.invalidateQueries({ queryKey: ["workflows", slug] });
-      router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}/yaml`);
+      // Born on the map (ADR 0109 §5): the YAML stays one tab away, never the only way.
+      router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}/map?vue=list`);
     } catch (cause) {
       // Créé ailleurs entre-temps : la liste relue le dit, sous le nom, avec le lien vers lui.
       if (cause instanceof ApiError && cause.status === 409) await existants.refetch();

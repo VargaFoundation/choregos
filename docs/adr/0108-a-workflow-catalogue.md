@@ -92,12 +92,12 @@ finding about agents: what cannot be found is not reused.
 - **Installing the missing plugins during adoption.** Installing a plugin is an organisation-wide,
   separately approved gesture (ADR 0093, 0074); hiding it inside a project gesture would bypass that.
 
-## Implementation — 2026-10-28 (S49-04 to S49-08)
+## Implementation — 2026-10-28 (S49-04 to S49-08, S49-05b, S49-07b)
 
 Delivered: the contract, the listing over the four sources, adoption (renaming keeps every other byte),
 sharing by an `org_admin`, the readiness item, the console's catalogue page and the wizard's choice.
-Not yet: naming, for an `unresolved` agent, the plugin of a configured source that ships it (§2, §3) —
-the refusal says that an administrator must install the plugin, not which one, because reading the
-sources' indexes is a network call the listing does not make (S49-05b); and sharing from the console —
-it is an API gesture for now, since the console would have to show the button only to those the server
-says may use it (ADR 0074).
+S49-05b: an `unresolved` agent names the plugin of a configured source that ships it. A plugin index's
+release may list the `agents` it ships (`plugin-index.schema.json`, written by `choregos plugin index`);
+the sources' indexes are read at most once a minute, the offline directory from its plugins, and a source
+that cannot be read says nothing. An index without the field names no plugin. S49-07b: sharing from the
+console, shown only where the project's workflow list says `can_share` (ADR 0074).

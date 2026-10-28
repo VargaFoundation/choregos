@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { GARANTIES_COURANTES, operations } from "@/components/workflows/operations";
+import { TransitionFields } from "@/components/workflows/transition-fields";
 
 type Noeud = { id: string; display: string; terminal?: boolean; kind?: string };
 type Arete = {
@@ -74,10 +75,23 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
  * Une étape de plus : d'un état, vers un état existant ou nouveau, portée par un acteur. L'état et la
  * transition partent ensemble et s'annulent ensemble. Sans `depart`, on choisit d'où l'on part.
  */
-export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; etats: Noeud[]; acteurs: string[] }) {
+export function FormulaireDEtape({
+  depart,
+  etats,
+  acteurs,
+  initialTarget,
+  onDone,
+}: {
+  depart?: string;
+  etats: Noeud[];
+  acteurs: string[];
+  /** The state a drawn arrow points at (ADR 0109 §4). */
+  initialTarget?: string;
+  onDone?: () => void;
+}) {
   const brouillon = useBrouillon();
   const [de, setDe] = useState(depart ?? "");
-  const [vers, setVers] = useState("");
+  const [vers, setVers] = useState(initialTarget ?? "");
   const [nouveau, setNouveau] = useState("");
   const [par, setPar] = useState(acteurs[0] ?? "");
   const origine = depart ?? de;
@@ -94,6 +108,7 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
           if (!ok) return;
           setVers("");
           setNouveau("");
+          onDone?.();
         });
       }}
     >
@@ -149,8 +164,18 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
   );
 }
 
-/** Une transition : qui la porte, ses garanties, son délai ; la retirer. */
-export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs: string[] }) {
+/** Une transition : qui la porte, ses garanties, son délai, every other field (ADR 0109); la retirer. */
+export function PanneauDeTransition({
+  arete,
+  acteurs,
+  states = [],
+  workflows = [],
+}: {
+  arete: Arete;
+  acteurs: string[];
+  states?: string[];
+  workflows?: string[];
+}) {
   const brouillon = useBrouillon();
   const [par, setPar] = useState(arete.actor ?? "");
   const [garantie, setGarantie] = useState("");
@@ -242,6 +267,7 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
             Set
           </Button>
         </form>
+        <TransitionFields id={id} states={states} actors={acteurs} workflows={workflows} />
         <Button size="sm" tone="danger" onClick={() => void brouillon.appliquer(operations.retirerLaTransition(id))}>
           Remove this transition
         </Button>

@@ -434,6 +434,7 @@ def test_an_index_records_each_plugin_with_its_digest(plugin: Path) -> None:
     release = index["plugins"]["hello"]["versions"]["1.0.0"]
     assert release["digest"] == digest(plugin)
     assert release["oci"] == "ghcr.io/acme/plugins/hello:1.0.0"
+    assert release["agents"] == ["greeter"], "the agents it ships, for the workflow catalogue (ADR 0108)"
     git = build_index(
         plugin.parent, git_url="https://github.com/acme/agents", git_commit="a" * 40, git_path="plugins"
     )

@@ -358,6 +358,11 @@ class _Collection:
     def retirer(self, i: int) -> tuple[str, str]:
         """Le texte sans l'élément `i`, et le texte retiré (pour l'inverse)."""
         self._figer(i)
+        if self.taille == 1 and not self.en_flow and self.nom in {"states", "actors", "transitions"}:
+            # Empty, the block would read as `null`: nothing could be put back, and a workflow keeps one.
+            raise EditionRefusee(
+                f"`{self.nom}` keeps at least one item: add another before removing this one"
+            )
         if self.en_flow:
             bornes = self._bornes()
             if len(bornes) == 1:
@@ -454,7 +459,7 @@ def _inserer_lignes(texte: str, porteur: _Collection, place: int, lignes: str) -
 def _modifier_cle(
     texte: str, porteur: _Collection, op: _SetField, place_neuve: int | None = None
 ) -> tuple[str, dict[str, Any]]:
-    """`field` d'un élément : écrite, remplacée, retirée ou réinsérée ; rend de quoi l'annuler.
+    """A field of an item: written, replaced, removed or put back; returns what undoes it.
 
     `place_neuve`: where a key that does not exist yet goes (the end of the carrier by default)."""
     if not isinstance(porteur.noeud, MappingNode):

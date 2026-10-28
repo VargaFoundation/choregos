@@ -139,10 +139,14 @@ async def test_sharing_copies_a_version_and_an_unresolved_agent_refuses_the_adop
 
 
 async def test_only_an_administrator_shares(client: AsyncClient, project: dict[str, Any]) -> None:
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
+    assert all(w["can_share"] for w in listed), "the server says an org_admin may share"
     await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
     await login(client, "po@varga.dev")
     refused = await client.post(BASE, json={"project": "billing-api", "name": "default-simple"})
     assert refused.status_code == 403
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
+    assert not any(w["can_share"] for w in listed), "and a project owner sees no share gesture"
 
 
 def test_renaming_keeps_every_other_byte() -> None:

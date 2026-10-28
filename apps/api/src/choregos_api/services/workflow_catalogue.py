@@ -242,6 +242,16 @@ async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> di
             out[slug] = Resolution("catalogue", display_name=str(found.document.get("display_name") or slug))
         else:
             out[slug] = Resolution("unresolved")
+    missing = {slug for slug, r in out.items() if r.resolution == "unresolved"}
+    if missing:
+        # Which plugin of a configured source ships it (§2): the administrator's gesture, named.
+        from ..config import get_settings
+        from .plugin_supply import plugin_supply
+
+        for slug, shipped in (await plugin_supply(get_settings()).shipping(missing)).items():
+            out[slug] = Resolution(
+                "unresolved", plugin=f"{shipped.name} {shipped.version} ({shipped.source})"
+            )
     return out
 
 

@@ -174,7 +174,7 @@ function AdoptForm({
           client.invalidateQueries({ queryKey }),
         ),
       );
-      router.push(`/p/${slug}/workflows/${encodeURIComponent(name)}`);
+      router.push(`/p/${slug}/workflows/${encodeURIComponent(name)}/map?vue=list`);
     } catch (cause) {
       setError(cause instanceof ApiError || cause instanceof Error ? cause.message : "adoption refused");
       setBusy(false);

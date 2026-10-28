@@ -496,3 +496,20 @@ async def test_a_plugin_s_template_workflows_join_the_workflow_catalogue(
         found = await resolutions(session, org_id, {"greeter", "nobody-here"})
     assert (found["greeter"].resolution, found["greeter"].plugin) == ("plugin", "hello")
     assert found["nobody-here"].resolution == "unresolved"
+
+
+async def test_an_unresolved_agent_names_the_plugin_that_ships_it(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    """ADR 0108 §2-3 (S49-05b): not installed, `greeter` is unresolved, and the plugin is named."""
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.workflow_catalogue import resolutions
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        query = select(Organization.id).where(Organization.slug == "varga")
+        org_id = (await session.execute(query)).scalar_one()
+        found = await resolutions(session, org_id, {"greeter", "nobody-here"})
+    assert (found["greeter"].resolution, found["greeter"].plugin) == ("unresolved", "hello 1.1.0 (offline)")
+    assert (found["nobody-here"].resolution, found["nobody-here"].plugin) == ("unresolved", None)

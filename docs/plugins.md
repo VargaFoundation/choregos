@@ -131,7 +131,10 @@ The **content digest** (`sha256:…`) identifies a plugin. It is the sha256 of a
 declared files (nothing else is in the archive): entries sorted by path, regular files only, mode 0644, time 0, owner and group 0. The same
 files always give the same digest, whatever their times or permissions on disk, and `pack` writes the
 same bytes every time. An index (`plugin-index.schema.json`) records, for each version, its digest, its
-`core` range, and where to fetch it: an OCI reference, or a git repository pinned to a commit. A
+`core` range, where to fetch it — an OCI reference, or a git repository pinned to a commit — and the
+`agents` it ships (written by `choregos plugin index`): the workflow catalogue reads it to name the plugin
+of an agent a workflow needs and the organisation lacks, without fetching any plugin
+([ADR 0108](adr/0108-a-workflow-catalogue.md)). A
 branch or a tag is not accepted in place of a commit.
 
 ## Installing into an organisation

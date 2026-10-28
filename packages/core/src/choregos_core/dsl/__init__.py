@@ -19,7 +19,7 @@ from .validator import ValidationReport, validate_workflow
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 #: Les templates LIVRÉS avec le paquet. Ce n'est plus la liste de ce qui est disponible :
 #: un déploiement peut en apporter d'autres (voir `extra_templates_dirs`).
-TEMPLATE_NAMES = ("default-simple", "full-auto", "advanced", "default-request")
+TEMPLATE_NAMES = ("default-simple", "full-auto", "advanced", "default-request", "blank")
 
 
 def extra_templates_dirs() -> list[Path]:
