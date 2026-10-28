@@ -480,3 +480,34 @@ async def test_with_two_organisations_an_org_admin_writes_no_reference(
     assert own.status_code == 200, "replacing the operator's key by the organisation's own is allowed"
     edited = await client.patch(f"{ORG}/vendor", json={"config": {"url": "https://mine.test/mcp"}})
     assert edited.status_code == 200, edited.text
+
+
+async def test_an_organisation_gateway_with_a_typed_key_is_built_with_it(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The model catalogue reads the organisation's own gateway: its typed `master_key` is a `store:`
+    reference, which the core resolver refuses on purpose. Read through the store (finding #985)."""
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.services import gateway as gateway_module
+    from sqlalchemy import select
+
+    made = await client.post(
+        ORG,
+        json={
+            "name": "own-gateway",
+            "kind": "gateway",
+            "type": "litellm",
+            "config": {"base_url": "https://llm.vendor.test"},
+            "secret_values": {"master_key": VALUE_1},
+        },
+    )
+    assert made.status_code == 201, made.text
+    built: list[dict[str, Any]] = []
+    real_build = gateway_module.build
+    monkeypatch.setattr(gateway_module, "build", lambda k, t, c: built.append(c) or real_build(k, t, c))
+    async with session_scope(orgs="*") as session:
+        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        kind, _ = await gateway_module.org_gateway_and_type(session, org.id)
+    assert kind == "litellm"
+    assert built[0]["master_key"] == VALUE_1
