@@ -104,6 +104,14 @@ def check_runtime_allowed(type_name: str) -> None:
         )
 
 
+def a_field_of(spec: ConnectorTypeSpec, name: str) -> bool:
+    """A secret field of the type, or a slot of one it pools (`api_key.2`, ADR 0089)."""
+    from choregos_adapters.registry import slot_of
+
+    field, n = slot_of(name)
+    return field in spec.secret_fields and (n == 1 or field in spec.pooled_fields)
+
+
 def verifier_les_secrets(
     spec: ConnectorTypeSpec,
     type_name: str,
@@ -122,8 +130,10 @@ def verifier_les_secrets(
     references (`secret_refs`), resolved when the adapter is built, or as VALUES (`secret_values`),
     sealed in the database and replaced by a derived `store:` reference (ADR 0058).
 
-    A reference to the environment names a variable of the platform (S39-06b): only the
-    organisation's administrator writes one (`may_reference`). A `store:` reference is never
+    A reference to the environment names a variable of the deployment, which every organisation's
+    pods share (S39-06b, ADR 0088): only a platform administrator writes one (`may_reference`), even
+    one already on the connector — re-sent with a new host, it would carry the operator's key there.
+    A `store:` reference is never
     user-written: it is accepted only when it is exactly the one this connector's field derives from
     `store_prefix` (the idempotent re-send of a DTO). Otherwise a project owner could point a
     connector at `store:connector/entra-acme/client_secret` and read the organisation's secret
@@ -133,16 +143,21 @@ def verifier_les_secrets(
     en_clair = sorted(set(config) & set(spec.secret_fields))
     if en_clair:
         raise unprocessable(
-            f"secret written in clear: {', '.join(en_clair)}. A secret is written as a reference, in "
-            f"`secret_refs` (`{en_clair[0]}: env:VARIABLE_NAME`), or as a `secret_values` entry that "
-            "the platform seals — never inside `config`"
+            f"secret written in clear: {', '.join(en_clair)}. A secret is typed as a `secret_values` "
+            f"entry that the platform seals, or, for a key the operator holds, referenced in "
+            f"`secret_refs` (`{en_clair[0]}: env:VARIABLE_NAME`) — never inside `config`"
         )
     valeurs = secret_values or {}
-    inconnus = sorted((set(secret_refs) | set(valeurs)) - set(spec.secret_fields))
+    inconnus = sorted(f for f in set(secret_refs) | set(valeurs) if not a_field_of(spec, f))
     if inconnus:
+        pooled = (
+            f"; several keys: {', '.join(f'{p}.2' for p in spec.pooled_fields)} …"
+            if spec.pooled_fields
+            else ""
+        )
         raise unprocessable(
             f"`{type_name}` has no secret field {', '.join(inconnus)} "
-            f"(its own: {', '.join(spec.secret_fields) or 'none'})"
+            f"(its own: {', '.join(spec.secret_fields) or 'none'}{pooled})"
         )
     doubles = sorted(set(secret_refs) & set(valeurs))
     if doubles:
@@ -163,8 +178,8 @@ def verifier_les_secrets(
             )
         if not may_reference:
             raise unprocessable(
-                "only the organisation's administrator writes a secret reference (`env:NAME`): a reference "
-                "reads a variable of the platform's environment; type the value instead"
+                "only a platform administrator writes a secret reference (`env:NAME`): it reads the "
+                "deployment's environment, which every organisation shares; type the value instead"
             )
         try:
             verifier(reference)

@@ -178,6 +178,25 @@ async def test_a_secret_in_clear_or_a_missing_one_is_refused(client: AsyncClient
     assert (await client.get("/api/v1/orgs/varga/connectors")).json() == []
 
 
+async def test_atlassian_rovo_installs_with_a_service_account_key(
+    client: AsyncClient, admin: str, vendor: Any
+) -> None:
+    """Rovo takes an API token since 2026 (Atlassian's API token page, read 2026-10-28): a service
+    account key as Bearer on `/v2/mcp`. The catalogue listed it as OAuth only, so it could not be
+    installed although the `mcp` connector carries exactly that."""
+    entry = _by_id((await client.get(BASE)).json())["atlassian"]
+    assert entry["install"] == "installable" and entry["auth"] == "bearer"
+    installed = await client.post(
+        f"{BASE}/atlassian/install", json={"secret_refs": {"token": "env:CONNECTOR_CATALOGUE_TEST"}}
+    )
+    assert installed.status_code == 201, installed.text
+    assert installed.json()["config"] == {"url": "https://mcp.atlassian.com/v2/mcp"}
+    discovered = await client.post("/api/v1/orgs/varga/connectors/atlassian/discover")
+    assert discovered.status_code == 200, discovered.text
+    for _, headers, _ in vendor.recues:
+        assert headers["authorization"] == "Bearer vendor-key"
+
+
 async def test_a_credential_typed_at_install_is_sealed_and_never_returned(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

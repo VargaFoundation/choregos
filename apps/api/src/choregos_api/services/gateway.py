@@ -56,11 +56,11 @@ async def org_gateway_and_type(session: AsyncSession, org_id: str) -> tuple[str,
         kind = default_gateway_type()
         gateway = build("gateway", kind, {})
     else:
+        kind = connector.type
         from ..secret_store import resolved_configuration
 
-        kind = connector.type
-        # Through the store (S44-04): a key typed in the console is a `store:` reference, which the
-        # core's resolvers alone cannot read — the gateway was built without its key.
+        # Through the store: a key the organisation typed is a `store:` reference, which only the
+        # platform reads, with the organisation's context (ADR 0058; finding #985).
         config = await resolved_configuration(
             session, org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
