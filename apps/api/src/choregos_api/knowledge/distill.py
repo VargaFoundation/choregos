@@ -364,13 +364,16 @@ def get_distiller(settings: Settings | None = None) -> Distiller:
 async def instructions_for(session: Any, org_id: str, base: KnowledgeBase) -> str:
     """The organisation's `knowledge-distiller` (latest version) if installed, else the catalogue's;
     rendered with the base as its work item."""
-    from choregos_core.catalogue_d_agents import entree
     from choregos_core.instructions import rendre_les_instructions
 
     from ..services.agent_releases import production_spec_of
+    from ..services.catalogue_d_agents import catalogue_instructions
 
     source = await production_spec_of(session, org_id, AGENT, active_only=True)
-    text = str((source or {}).get("instructions") or entree(AGENT).document["spec"]["instructions"])  # type: ignore[union-attr]
+    found = (source or {}).get("instructions") or await catalogue_instructions(session, org_id, AGENT)
+    if not found:
+        raise DistillationError(f"no `{AGENT}` agent: install the plugin `authoring`, which ships it")
+    text = str(found)
     return rendre_les_instructions(
         text,
         ticket={

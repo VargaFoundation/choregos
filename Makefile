@@ -71,6 +71,14 @@ catalogues-record:  ## A maintainer, WITH network and GITHUB_TOKEN: re-record th
 	$(UV) run python -m tools.catalogues.build_mcp_catalogue --record
 	$(UV) run python -m tools.catalogues.build_skill_catalogue --record
 
+.PHONY: plugins-lock
+plugins-lock:  ## A maintainer, WITH network: refresh plugins/offline/ and its plugins.lock from the signed source
+	$(UV) run python -m tools.plugins.update_lock
+
+.PHONY: plugins-check
+plugins-check:  ## No network: the archives of plugins/offline/ are what plugins.lock says
+	$(UV) run python -m tools.plugins.update_lock --check
+
 .PHONY: docs-cli
 docs-cli:  ## Régénère docs/cli.md depuis la CLI (à committer)
 	$(UV) run python tools/gen_cli_reference.py

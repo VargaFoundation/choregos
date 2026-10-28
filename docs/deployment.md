@@ -638,23 +638,30 @@ where plugins come from, which ones every organisation gets, and which ones are 
 ```yaml
 global:
   plugins:
-    sources:
+    sources:                      # the chart's default: the platform's own agents
       - name: varga
-        index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable   # or https://…/index.yaml
+        index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest   # or https://…/index.yaml
         trust:                    # a keyless cosign signer (regular expressions, matched whole)…
-          identity: https://github.com/VargaFoundation/choregos-agents/.*
-          issuer: https://token.actions.githubusercontent.com
+          identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+          issuer: https://token\.actions\.githubusercontent\.com
           # key: /etc/choregos/plugins-keys/acme.pub   # …or a public key, mounted with api.extraVolumes
         egress: []                # hosts its fetches may reach beyond the index's own
-    defaultPlugins:
-      - { source: varga, name: servicenow, version: "^0.1" }
+    defaultPlugins:               # the chart's default: the built-in agents (ADR 0093 §6)
+      - { source: varga, name: software-delivery, version: "^1.0", preapproved: true }
+      - { source: varga, name: netops, version: "^1.0", preapproved: true }
+      - { source: varga, name: authoring, version: "^1.0", preapproved: true }
+      - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
     offline: /opt/choregos/plugins   # plugins baked into the image: air-gapped, demo, CI
 ```
 
 The chart renders these values into the ConfigMap `choregos-plugins`, mounted read-only in the API at
-`/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. All three are empty by
-default: nothing is rendered and no plugin is installed. A source without `trust` refuses to render;
-there is no unsigned source.
+`/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. By default they install the
+platform's own agents — `software-delivery`, `netops`, `authoring` and `mcp-clients` of
+[`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents) — from the image's
+offline directory, where the API image ships them pinned by `plugins.lock`: no network is needed at
+start-up. `defaultPlugins: []` installs none (the agent catalogue still offers them, one by one);
+`sources: []`, `defaultPlugins: []` and `offline: ""` render nothing at all. A source without `trust`
+refuses to render; there is no unsigned source.
 
 **At start-up**, the API reads the file before it serves anything. A file it cannot read, an invalid
 source, a default plugin naming an undeclared source, an `offline` directory that does not exist in the
@@ -673,10 +680,25 @@ later, at its creation:
 - every fetch passes the same checks as an administrator's install (index, signature, pinned commit,
   digest, `plugins.lock`, contents, core range). A plugin that fails is logged
   (`plugin.default.failed`) and the others go on;
-- a default plugin that brings an MCP server is **not** installed by the platform: it waits for an
-  administrator's approval, like any plugin with a server. It is logged
-  (`plugin.default.pending_approval`) and listed by `GET /api/v1/orgs/{org}/plugin-approvals` with
-  `default: true`; any administrator of the organisation approves it there.
+- a default plugin the gate sends to a second administrator (one that brings an MCP server, or a
+  high-risk skill) is **not** installed by the platform: it waits for an administrator's approval. It is
+  logged (`plugin.default.pending_approval`) and listed by `GET /api/v1/orgs/{org}/plugin-approvals`
+  with `default: true`; any administrator of the organisation approves it there;
+- **unless the entry says `preapproved: true`**: listing it so is your approval, given through the
+  review of this deployment's values. The plugin is installed and the audit trail records
+  `plugin.default.preapproved` with the gate's reasons and `approved_by: deployment configuration`. The
+  API offers no such flag. The default `software-delivery` needs it: its `madr-4` skill links to
+  adr.github.io and is rated high risk;
+- a default of a declared source is taken from the offline directory when it holds a version inside the
+  requested range (`from_offline` in `plugin.default.installed`), and recorded under its source, which
+  serves later upgrades.
+
+**Upgrading from 0.20.** The built-in agents left the core: the migration `b8d0f2a4c6e1` rewrites
+their provenance (`catalogue:<slug>@<v>` → `plugin:<plugin>/<slug>@<v>`) and records an `org_plugins`
+row (source `varga`) for each plugin an organisation held agents of, so upgrades keep reaching them; an
+agent the organisation changed is still offered updates, never overwritten. A deployment that keeps
+`defaultPlugins: []` and no `varga` source still lists the agents in the catalogue; upgrading those rows
+then needs the `varga` source declared.
 
 What the reconcile installed is listed with `default: true` and `installed_by: null`. The summary of
 each pass is the log line `plugin.default.reconciled` (installed, waiting, failed).

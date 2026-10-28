@@ -342,20 +342,33 @@ global:
   # `choregos-plugins` (`CHOREGOS_PLUGINS_CONFIG`); an unusable configuration stops the API at start-up.
   plugins:
     # Each source: an index (`oci://…` or `https://…/index.yaml`) and a trust policy, a keyless cosign
-    # identity and issuer, or `key:` a public key file mounted in the API (`api.extraVolumes`). Never
-    # unsigned. `egress`: hosts its fetches may reach beyond the index's own.
-    #   - name: varga
-    #     index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable
-    #     trust:
-    #       identity: https://github.com/VargaFoundation/choregos-agents/.*
-    #       issuer: https://token.actions.githubusercontent.com
-    sources: []
-    # Installed in every organisation at start-up and at its creation, idempotently. One that brings a
-    # server waits for an administrator's approval. The source `offline` is the directory below.
-    #   - { source: varga, name: servicenow, version: "^0.1" }
-    defaultPlugins: []
-    # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none.
-    offline: ""
+    # identity and issuer (regular expressions, matched whole), or `key:` a public key file mounted in
+    # the API (`api.extraVolumes`). Never unsigned. `egress`: hosts its fetches may reach beyond the
+    # index's own. `varga` is where the platform's own agents are published (ADR 0093 §6): signed by
+    # the publish workflow of VargaFoundation/choregos-agents on main, and nothing else.
+    sources:
+      - name: varga
+        index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest
+        trust:
+          identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+          issuer: https://token\.actions\.githubusercontent\.com
+    # Installed in every organisation at start-up and at its creation, idempotently. One the gate sends
+    # to a second administrator (a server, a high-risk skill) waits for that approval, unless the entry
+    # says `preapproved: true`: listing it here is then the operator's approval, taken through the
+    # review of this deployment's values, and the audit trail records it as such
+    # (`plugin.default.preapproved`). The API never offers that flag. The source `offline` is the
+    # directory below; a default of another source is taken from it when it holds a version in range
+    # (no network at start-up), and upgraded from its source later.
+    # The built-in agents (S43-09): `software-delivery` brings the MADR 4 skill, which links to
+    # adr.github.io and is rated high risk, hence `preapproved`. Set `defaultPlugins: []` to install none.
+    defaultPlugins:
+      - { source: varga, name: software-delivery, version: "^1.0", preapproved: true }
+      - { source: varga, name: netops, version: "^1.0", preapproved: true }
+      - { source: varga, name: authoring, version: "^1.0", preapproved: true }
+      - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
+    # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none. The API
+    # image ships the built-in agents' plugins there, pinned by its `plugins.lock`.
+    offline: /opt/choregos/plugins
     # Plugin servers (ADR 0096): the MCP servers plugins bring, run by the API as a Deployment, a
     # Service, a NetworkPolicy and a Secret per organisation and server, in their own namespace. Off: a
     # plugin that brings a server is refused. On: the chart grants the API a Role in that namespace only.

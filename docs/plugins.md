@@ -93,8 +93,8 @@ contents:
 
 ### Evals
 
-An eval file (`plugin-evals.schema.json`) has the shape of the core catalogue's own cases
-(`choregos_core/catalogue_d_agents/eval_cases/`), plus the API's `AgentEvalCase` list:
+An eval file (`plugin-evals.schema.json`) has the shape of the catalogue's cases (the core's own until
+S43-09, now the `evals/` of the built-in plugins), plus the API's `AgentEvalCase` list:
 
 ```yaml
 agent: greeter                     # an agent of this plugin
@@ -334,9 +334,46 @@ approval).
 A deployment lists plugins every organisation gets (`defaultPlugins`, the chart's
 `global.plugins.defaultPlugins`, see [deployment](deployment.md#plugins)). The API installs them at
 start-up in every organisation and in each organisation created later, idempotently, through the same
-checks; they are listed with `default: true` and `installed_by: null`. One that brings a server is not
-installed by the platform: it waits in `GET …/plugin-approvals` (`default: true`, no `requested_by`)
-until an administrator of the organisation approves it.
+checks; they are listed with `default: true` and `installed_by: null`. One the gate sends to a second
+administrator (a server, a high-risk skill) is not installed by the platform: it waits in
+`GET …/plugin-approvals` (`default: true`, no `requested_by`) until an administrator of the organisation
+approves it — unless the entry says `preapproved: true`.
+
+- **`preapproved: true`** is the operator's approval, given in the deployment's configuration and so
+  through that configuration's own review. The reconcile installs the plugin and records
+  `plugin.default.preapproved` in the audit trail, with the gate's reasons and `approved_by: deployment
+  configuration`. The API takes no such flag: a person's install always waits for the second
+  administrator, and without the flag a default plugin waits too.
+- **Offline first.** A default of a declared source is taken from the offline directory when it holds a
+  version inside the requested range — no network at start-up, the content digest the source published
+  — and recorded under its declared source, which serves its upgrades.
+
+### The built-in agents
+
+The platform's own agents left the core (ADR 0093 §6, S43-09) for the open-source repository
+[`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents):
+
+| Plugin | What it ships |
+|---|---|
+| `software-delivery` | the 19 delivery agents (triage to the production go/no-go) and the skill `madr-4` |
+| `netops` | `netops`, through the organisation's pfSense, Cilium and nginx connectors |
+| `authoring` | `agent-drafter` (the agent draft of the console) and `knowledge-distiller` |
+| `mcp-clients` | the six MCP clients of the Integrations page (ChatGPT, Claude, Copilot, Cursor) |
+
+They are published, signed, to `ghcr.io/vargafoundation/choregos-agents/<plugin>:<version>` with the
+index `oci://ghcr.io/vargafoundation/choregos-agents/index:latest`. The core ships their archives
+offline in `plugins/offline/`, pinned by `plugins.lock` (`make plugins-lock` refreshes them, with the
+network; `make plugins-check` checks them without), and the API image copies them to
+`/opt/choregos/plugins`. The chart installs all four by default, pre-approved (`madr-4` links to
+adr.github.io and is rated high risk).
+
+The **agent catalogue** (`/orgs/{org}/agent-catalogue`, the console's catalogue page) is a view over
+plugins: the offline directory's, each replaced by the version the organisation installed. Installing an
+entry from it installs that one agent (and its skills) with its plugin's provenance,
+`plugin:<plugin>/<slug>@<version>`, as the plugin itself would; a template's `catalogue:<slug>` and a
+workflow that names an agent resolve through the same view. Organisations that installed catalogue
+agents before S43-09 had their provenance rewritten by a migration, and an `org_plugins` row recorded
+for each plugin they held agents of, so upgrades keep reaching them.
 
 The full reference of the commands is in [the CLI reference](cli.md#choregos-plugin).
 
@@ -348,15 +385,16 @@ writes it from its `global.plugins` values, [deployment](deployment.md#plugins))
 ```yaml
 sources:
   - name: varga
-    index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable   # or https://…/index.yaml
+    index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest   # or https://…/index.yaml
     trust:                      # a keyless signer, regular expressions matched whole…
-      identity: https://github.com/VargaFoundation/choregos-agents/.*
-      issuer: https://token.actions.githubusercontent.com
+      identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+      issuer: https://token\.actions\.githubusercontent\.com
       # key: /etc/choregos/plugins/varga.pub   # …or a public key cosign reads
       # tlog: false             # only for a key whose signatures never reached Rekor
     egress: [registry.acme.example]   # hosts beyond the index's own
 defaultPlugins:
   - {source: varga, name: servicenow, version: "^0.1"}
+  - {source: varga, name: software-delivery, version: "^1.0", preapproved: true}
 offline: /opt/choregos/plugins  # or CHOREGOS_PLUGINS_OFFLINE; both, and different: the API does not start
 ```
 
@@ -391,8 +429,8 @@ at the first failed check, naming it:
   is fetched only from an `oci://` index that verified. Only `github.com` and `gitlab.com` are fetched
   (the skill import's tarball fetcher).
 - **Offline.** Plugins as directories or `.tar.gz` directly in the directory, trusted by their presence
-  in the image. With a `plugins.lock` (`plugins: {name: {version, digest}}`), each must be in it with
-  that digest, when the index is read and again when the plugin is fetched.
+  in the image. With a `plugins.lock` (`plugins: {name: {version, digest}}`, other keys ignored), each
+  must be in it with that digest, when the index is read and again when the plugin is fetched.
 
 ### Egress
 
