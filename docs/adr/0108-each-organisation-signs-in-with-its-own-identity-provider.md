@@ -1,4 +1,4 @@
-# 0107 — Each organisation signs in with its own identity provider
+# 0108 — Each organisation signs in with its own identity provider
 
 - **Status**: accepted, 2026-10-28 (product owner: "the solution must be multi-tenant: a customer must be able
   to come with its own SSO, so every SSO option must be configurable")

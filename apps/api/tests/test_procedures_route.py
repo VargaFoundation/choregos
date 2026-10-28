@@ -60,7 +60,7 @@ async def test_the_detail_gives_this_deployments_webhook_url(client: AsyncClient
         "test",
         "fails",
     ]
-    assert body["origin"] == "shipped" and body["reviewed"] == "2026-10-16"
+    assert body["origin"] == "shipped" and body["reviewed"] == "2026-10-28"
     assert body["vendor_docs"] and all(d["url"].startswith("https://") for d in body["vendor_docs"])
     assert body["fields"]["project_key"]
 

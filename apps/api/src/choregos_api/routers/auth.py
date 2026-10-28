@@ -242,7 +242,7 @@ async def login(
     fraîche, sans quoi l'IdP rendrait la main sans rien demander et `iat` mentirait.
 
     `org` (a sign-in link per organisation) and `login_hint` (the address typed on the sign-in
-    page) choose the tenant's own provider when an extension declared one (ADR 0107); otherwise
+    page) choose the tenant's own provider when an extension declared one (ADR 0108); otherwise
     the instance's. `login_hint` is passed on to the provider, which may prefill its form.
     """
     target = redirection_sure(redirect_to, settings)
@@ -345,7 +345,7 @@ async def _map_groups_to_roles(
     `ecraser=False` (connexion de développement) : un rôle déjà posé — par l'amorçage, par
     un admin — n'est pas rétrogradé. L'IdP, lui, fait foi : ce qu'il dit remplace.
 
-    `only_org`: the groups come from that tenant's own provider (ADR 0107). A bare group applies
+    `only_org`: the groups come from that tenant's own provider (ADR 0108). A bare group applies
     to it, and a role on any other organisation is dropped.
     """
     if ecraser:
@@ -406,7 +406,7 @@ async def _tenant_user(
     groups: list[str],
     settings: Settings,
 ) -> User:
-    """A sign-in vouched for by a tenant's own provider, confined to that tenant (ADR 0107).
+    """A sign-in vouched for by a tenant's own provider, confined to that tenant (ADR 0108).
 
     The address must belong to a domain the resolver gives to this same tenant, or any tenant's
     provider could sign in a member of another one. The subject is namespaced by the tenant: two
@@ -591,7 +591,7 @@ async def terminer_la_connexion(  # noqa: PLR0913 - one sign-in, fact by fact, k
 
     `org`: the identity comes from that tenant's own provider (a SAML IdP declared through
     `tenant_sign_in`). The sign-in is then confined to the tenant exactly as an OIDC one is
-    (ADR 0107): the address domain must be the tenant's, roles land on the tenant only.
+    (ADR 0108): the address domain must be the tenant's, roles land on the tenant only.
     """
     reglages = settings or get_settings()
     if not email:

@@ -181,7 +181,7 @@ Facts carry their organisation and sit under forced row-level security.
 ## A customer's own identity provider
 
 When an edition lets each organisation sign in with its own provider
-([ADR 0107](adr/0107-each-organisation-signs-in-with-its-own-identity-provider.md)), that provider is run
+([ADR 0108](adr/0108-each-organisation-signs-in-with-its-own-identity-provider.md)), that provider is run
 by the customer, not by the operator, so the core does not trust it as it trusts the instance's:
 
 - it signs in only addresses whose domain the edition's resolver gives to the same organisation; a

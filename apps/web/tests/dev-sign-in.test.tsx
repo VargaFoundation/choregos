@@ -55,7 +55,7 @@ describe("development sign-in on the local install", () => {
   });
 });
 
-describe("sign-in with the organisation's own identity provider (ADR 0107)", () => {
+describe("sign-in with the organisation's own identity provider (ADR 0108)", () => {
   function continued(): URL {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });

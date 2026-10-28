@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Each organisation signs in with its own identity provider (ADR 0107).
+"""Each organisation signs in with its own identity provider (ADR 0108).
 
 Two tenants: `acme` brings an OIDC provider, `globex` a SAML one served by an extension's route.
 The resolver is the one an extension would declare; the core must confine whatever it vouches for.

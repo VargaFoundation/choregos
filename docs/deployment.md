@@ -955,7 +955,7 @@ number of bootstrap administrators (never their e-mails). It is the answer of
 (`global.oidc`, `global.mcp.oauth`), and a row marked `default` was not set by the deployment. When
 `oidc.issuer` reads "not configured", the instance still runs on the built-in development issuer.
 
-**An organisation with its own identity provider** ([ADR 0107](adr/0107-each-organisation-signs-in-with-its-own-identity-provider.md)).
+**An organisation with its own identity provider** ([ADR 0108](adr/0108-each-organisation-signs-in-with-its-own-identity-provider.md)).
 The settings above are the instance's provider. A tenant that brings its own (OIDC or SAML) is configured
 in the edition that declares a sign-in resolver, not in the chart; the card's row "Organisations' own
 identity providers" says whether one is declared. Its members sign in from the console's sign-in page by

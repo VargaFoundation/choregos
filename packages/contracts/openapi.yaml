@@ -83,7 +83,7 @@ paths:
       description: >-
         `org` (a sign-in link per organisation) and `login_hint` (the address typed on the sign-in
         page) pick the organisation's own identity provider when an extension declared one
-        (ADR 0107), else the instance's; `login_hint` is passed on to the provider.
+        (ADR 0108), else the instance's; `login_hint` is passed on to the provider.
       parameters:
         - { name: redirect_to, in: query, schema: { type: string } }
         - { name: org, in: query, schema: { type: string, maxLength: 120 } }

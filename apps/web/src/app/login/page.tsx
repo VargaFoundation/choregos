@@ -47,7 +47,7 @@ function Connexion() {
             className="space-y-2 text-sm"
             onSubmit={(event) => {
               event.preventDefault();
-              // The address's domain picks the organisation's own provider, if it has one (ADR 0107).
+              // The address's domain picks the organisation's own provider, if it has one (ADR 0108).
               window.location.assign(api.loginUrl(next, undefined, false, { org, loginHint: workEmail.trim() }));
             }}
           >

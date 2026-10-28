@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Each organisation signs in with its own identity provider (ADR 0107).
+"""Each organisation signs in with its own identity provider (ADR 0108).
 
 The core knows one identity provider, the instance's (`CHOREGOS_OIDC_*`). A tenant that brings its
 own (an OIDC issuer, a SAML IdP) needs three things the core cannot decide alone: where that
