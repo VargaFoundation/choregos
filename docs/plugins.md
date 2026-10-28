@@ -147,6 +147,9 @@ GET    /api/v1/orgs/{org}/plugin-approvals
 POST   /api/v1/orgs/{org}/plugin-approvals/{id}/approve
 ```
 
+In the console: **Catalogue → Plugins** (sources, what they offer, what is installed, the requests waiting
+for a second administrator).
+
 `source` is one the deployment declares ([Sources and trust](#sources-and-trust)), or `offline`; the
 version is exact or a range, and the newest version inside it that this core admits is installed. Every
 install and upgrade fetches through `fetch_plugin`, so every check of the table below applies; a refusal
@@ -248,7 +251,8 @@ The connector's configuration **is** the server's: `PATCH /orgs/{org}/connectors
 `secret_fields` (sealed, never shown again; `PUT …/secrets/{field}` works too). Every change is applied
 to the server's Secret, and the digest of the configuration on the pod template rolls the Deployment.
 Until the configuration satisfies the whole schema the Deployment has no replica and the connector
-says `unconfigured`; then `deployed`.
+says `unconfigured`; then `deployed`. The connector routes answer the server's plugin, version, `config_schema` and
+`secret_fields` under `server` (null for any other connector), so the console draws the server's own form.
 
 ### Network
 
