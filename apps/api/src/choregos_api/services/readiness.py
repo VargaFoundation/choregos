@@ -357,7 +357,7 @@ def _has_repository(f: Facts) -> bool:
 
 
 def _workflow_without_repository(f: Facts) -> ReadinessFix:
-    """The way out for a project with no repository (ADR 0107 §4): publish `default-request` and make it
+    """The way out for a project with no repository (ADR 0110 §4): publish `default-request` and make it
     the default in one gesture; once it is published, the Workflows page, where it is made the default."""
     if "default-request" in f.workflows:
         return ReadinessFix(href=f"/p/{f.slug}/workflows", by="project_owner")

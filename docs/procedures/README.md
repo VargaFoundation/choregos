@@ -28,7 +28,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use Tiingo for daily market data](connector.marketdata.tiingo.md) | a project owner | `marketdata/tiingo` | 2026-10-26 |
 | [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
 | [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-10-16 |
-| [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-16 |
+| [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-28 |
 | [The demo device management (demonstration only)](connector.mdm.demo.md) | anyone | `mdm/demo` | 2026-10-16 |
 | [Connect Ecphoria, the platform's memory](connector.memory.ecphoria.md) | the person who operates the platform | `memory/ecphoria` | 2026-10-16 |
 | [Use the built-in lexical memory](connector.memory.lexical.md) | the person who operates the platform | `memory/lexical` | 2026-10-16 |
@@ -45,7 +45,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-10-19 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
-| [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-16 |
+| [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-28 |
 | [Use a plugin's server as the board](connector.tracker.plugin.md) | a project owner | `tracker/plugin` | 2026-10-28 |
 | [Search the web through Brave Search API](connector.web_search.brave.md) | an organisation administrator | `web_search/brave` | 2026-10-20 |
 | [Search the web through a self-hosted Firecrawl](connector.web_search.firecrawl.md) | an organisation administrator | `web_search/firecrawl` | 2026-10-23 |

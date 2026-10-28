@@ -29,9 +29,11 @@
 - id: atlassian
   title: "Atlassian Rovo"
   publisher: "Atlassian"
-  description: "Jira, Confluence and Compass through Atlassian's hosted Rovo MCP server."
+  description: "Jira and Confluence through Atlassian's hosted Rovo MCP server, with a service account API key (Compass needs OAuth)."
   categories: [project-management, documentation]
-  auth: oauth
+  # Rovo takes an API token since 2026 once an Atlassian admin enables it: a service account key as
+  # Bearer (installable here), or a personal token as Basic (declared by hand, its procedure says how).
+  auth: bearer
   registry: com.atlassian/atlassian-mcp-server
   repo: atlassian/atlassian-mcp-server
 - id: mcp-atlassian

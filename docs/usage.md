@@ -624,7 +624,7 @@ curl         $API/projects/acme:hr/workflows                                    
 
 A project can adopt a workflow instead of writing one ([ADR 0108](adr/0108-a-workflow-catalogue.md)).
 The catalogue lists, for an organisation, the platform's workflows (`core`, including
-`default-request`, which needs no repository — [ADR 0107](adr/0107-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md)),
+`default-request`, which needs no repository — [ADR 0110](adr/0110-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md)),
 every workflow of the deployment's templates (`template:<name>`), those of the templates its installed
 plugins brought (`plugin:<name>`, the external catalogues) and the ones it shared from its projects
 (`org`).

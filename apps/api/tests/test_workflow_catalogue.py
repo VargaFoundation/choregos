@@ -40,7 +40,7 @@ async def test_the_catalogue_lists_core_and_template_workflows_with_what_they_ne
     assert request["needs_repository"] is False
     assert [r["capability"] for r in request["requires"]] == ["tracker", "runtime", "gateway"]
     assert request["groups"] == ["product-owners"]
-    assert request["agents"] == [], "its two agents are core playbooks (ADR 0107), not registry agents"
+    assert request["agents"] == [], "its two agents are core playbooks (ADR 0110), not registry agents"
     delivery = _entry(entries, "template:github-software-delivery", "dev-simple")
     assert ("developer", "catalogue") in {(a["slug"], a["resolution"]) for a in delivery["agents"]}, (
         "not installed yet: the platform's catalogue (its offline plugins) provides it"

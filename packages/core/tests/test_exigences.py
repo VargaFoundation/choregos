@@ -36,7 +36,7 @@ def _capacites(*textes: str) -> list[str]:
     return [e.capacite for e in exigences(parse_workflow(t)[0] for t in textes)]
 
 
-#: The core workflows that deliver code; `default-request` (ADR 0107) and the `blank` skeleton (ADR 0109)
+#: The core workflows that deliver code; `default-request` (ADR 0110) and the `blank` skeleton (ADR 0109)
 #: do not.
 SOFTWARE_TEMPLATES = [name for name in TEMPLATE_NAMES if name not in {"default-request", "blank"}]
 
@@ -51,7 +51,7 @@ def test_un_gabarit_logiciel_exige_depot_et_train_pas_de_ci(nom: str) -> None:
 
 
 def test_the_default_request_workflow_needs_no_repository_ci_or_cd() -> None:
-    """ADR 0107 §2: a step that works in a repository, a production state or a pull request turns it red."""
+    """ADR 0110 §2: a step that works in a repository, a production state or a pull request turns it red."""
     assert _capacites(template_yaml("default-request")) == ["tracker", "runtime", "gateway"]
 
 

@@ -68,7 +68,7 @@ So "editable graphically" is true for the shape and false for most of the conten
 
 ## Consequences
 
-- A person who does not read YAML can build `default-request` (ADR 0107) or an HR workflow from a blank
+- A person who does not read YAML can build `default-request` (ADR 0110) or an HR workflow from a blank
   page, choosing agents from the registry, and what lands in review is a readable YAML diff.
 - The operation set roughly doubles; the round-trip test over every shipped workflow is what keeps the
   text grafts honest as it grows.

@@ -58,7 +58,7 @@ def test_aucun_agent_du_catalogue_ne_fixe_de_runtime_ni_de_modele() -> None:
 def test_chaque_role_du_paquet_a_son_agent_au_catalogue() -> None:
     playbooks = pytest.importorskip("choregos_playbooks")
     roles = {e.role for e in INTERNES}
-    # `brief` and `deliver` (ADR 0107) run as playbooks until their agents ship in a choregos-agents
+    # `brief` and `deliver` (ADR 0110) run as playbooks until their agents ship in a choregos-agents
     # plugin: VargaFoundation/choregos#1091.
     expected = set(playbooks.KNOWN_ROLES) - {"brief", "deliver"}
     assert expected <= roles, expected - roles

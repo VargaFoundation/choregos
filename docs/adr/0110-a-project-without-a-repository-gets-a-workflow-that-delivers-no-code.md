@@ -1,4 +1,4 @@
-# 0107 — A project without a repository gets a workflow that delivers no code
+# 0110 — A project without a repository gets a workflow that delivers no code
 
 - **Status**: accepted, 2026-10-28, by the product owner (the names `default-request` and `assistant`;
   existing projects switch by one gesture, never by a database edit) — implemented by S49-01 to S49-03

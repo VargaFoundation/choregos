@@ -24,7 +24,7 @@ from ..db.models import Template
 from ..errors import unprocessable
 
 WORKFLOW_SANS_GABARIT = "template:default-simple@1"
-#: Without a template and without a repository: a workflow that delivers no code (ADR 0107).
+#: Without a template and without a repository: a workflow that delivers no code (ADR 0110).
 WORKFLOW_WITHOUT_REPOSITORY = "template:default-request@1"
 POLITIQUE_SANS_GABARIT = "preset:solo"
 
@@ -88,7 +88,7 @@ async def manifeste_du_gabarit(
 
 def livraison(manifeste: dict[str, Any], dossier: Path | None, *, has_repository: bool = True) -> Livraison:
     """The sources a manifest ships; without a template, `solo` and `default-simple` — or
-    `default-request` for a project that names no repository (ADR 0107). A template's own workflows
+    `default-request` for a project that names no repository (ADR 0110). A template's own workflows
     always win."""
     defauts = manifeste.get("defaults") or {}
     refs = list(defauts.get("workflows") or ([defauts["workflow"]] if defauts.get("workflow") else []))

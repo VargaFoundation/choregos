@@ -125,7 +125,7 @@ describe("the setup procedure panel (S39-23b)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "How to set this up" }));
     const panel = screen.getByTestId("procedure-panel");
     expect(panel).toHaveTextContent("Rovo MCP Server");
-    expect(panel).toHaveTextContent("https://mcp.atlassian.com/v1/mcp");
+    expect(panel).toHaveTextContent("https://mcp.atlassian.com/v2/mcp");
   });
 
   it("renders nothing when there is no procedure, or when the API cannot be reached", async () => {
@@ -180,6 +180,7 @@ describe("the setup procedure panel (S39-23b)", () => {
 
 describe("what picks a preset", () => {
   it("knows Atlassian's Rovo MCP address and nothing else", () => {
+    expect(presetOfMcpUrl("https://mcp.atlassian.com/v2/mcp")).toBe("atlassian-rovo");
     expect(presetOfMcpUrl("https://mcp.atlassian.com/v1/mcp")).toBe("atlassian-rovo");
     expect(presetOfMcpUrl("https://mcp.example.com/mcp")).toBeUndefined();
     expect(presetOfMcpUrl(undefined)).toBeUndefined();

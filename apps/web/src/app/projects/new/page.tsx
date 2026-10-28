@@ -61,7 +61,7 @@ export default function NewProjectPage() {
   const slugValid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(form.slug);
   const repoValid = form.sansDepot || form.repo.startsWith("http") || /^[\w.-]+\/[\w.-]+$/.test(form.repo);
   const avecTemplate = !form.sansDepot && form.template !== "";
-  // The workflow the platform gives a project without a template (ADR 0107): adopting it again is moot.
+  // The workflow the platform gives a project without a template (ADR 0110): adopting it again is moot.
   const automatique = form.sansDepot ? "core/default-request" : "core/default-simple";
   const offerts = (catalogue.data ?? []).filter((e) => !form.sansDepot || !e.needs_repository);
   const choisi = avecTemplate ? undefined : offerts.find((e) => `${e.source}/${e.name}` === form.workflow);

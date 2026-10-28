@@ -38,7 +38,7 @@ export default function WorkflowCataloguePage({ params }: { params: Promise<{ sl
   const hasRepository = !!project.data?.config?.repo?.url;
   const [query, setQuery] = useState("");
   const [repository, setRepository] = useState<RepositoryFilter | null>(null);
-  // Without a repository, the catalogue opens on what such a project can run (ADR 0107).
+  // Without a repository, the catalogue opens on what such a project can run (ADR 0110).
   const filter: RepositoryFilter = repository ?? (project.data && !hasRepository ? "without" : "any");
   const shown = filterEntries(catalogue.data ?? [], query, filter);
 

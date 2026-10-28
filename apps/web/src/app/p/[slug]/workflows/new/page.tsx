@@ -33,7 +33,7 @@ export default function NewWorkflowPage({
     queryFn: () => api.workflowTemplates(),
   });
   // `?template=default-request&default=1`: the readiness fix of a project whose workflow asks for a
-  // repository it does not have (ADR 0107 §4) — one gesture publishes the other workflow and makes it the default.
+  // repository it does not have (ADR 0110 §4) — one gesture publishes the other workflow and makes it the default.
   const search = useSearchParams();
   const asked = search.get("template") ?? "";
   const [nom, setNom] = useState(asked);

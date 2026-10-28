@@ -35,7 +35,7 @@ finding about agents: what cannot be found is not reused.
    `metadata.version`, with an optional `metadata.catalogue` block (`title`, `summary`, `tags` — e.g.
    `hr`, `software`, `research`) that the validator checks and the runtime ignores. Entries come from
    four **sources**, listed together:
-   - `core` — `choregos_core/dsl/templates/` (`default-simple`, `default-request` of ADR 0107, …);
+   - `core` — `choregos_core/dsl/templates/` (`default-simple`, `default-request` of ADR 0110, …);
    - `template:<name>` — every workflow of the deployment's templates;
    - `plugin:<plugin>` — every workflow of an installed plugin's templates (ADR 0093). **External
      catalogues are plugin sources**: a workflow from outside arrives signed, pinned and through the
@@ -68,7 +68,7 @@ finding about agents: what cannot be found is not reused.
    agent like any other, so an entry that runs in one organisation runs in another once the same agents
    resolve there.
 7. **The wizard offers the catalogue.** Creating a project chooses a template *or* a catalogue workflow;
-   without a choice, ADR 0107 decides.
+   without a choice, ADR 0110 decides.
 
 ## Consequences
 

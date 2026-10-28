@@ -1,4 +1,4 @@
-# The default workflow of a project without a repository (ADR 0107): a brief a person approves, then a
+# The default workflow of a project without a repository (ADR 0110): a brief a person approves, then a
 # deliverable the same people accept. It needs no repository, no CI and no CD — a core test pins its
 # requirements to tracker, runtime and gateway, so a step that would need one turns the suite red.
 apiVersion: choregos/v1

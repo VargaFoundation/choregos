@@ -44,7 +44,7 @@ streams:
   S45: "English everywhere, finished (plan 2026-10-27, ADR 0098)"
   S46: "Consuming an external MCP gateway (plan 2026-10-27, ADR 0097)"
   S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
-  S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0107-0109)"
+  S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0108-0110)"
 
 stories:
 
@@ -3764,7 +3764,7 @@ stories:
     priority: 1
     size: M
     depends_on: []
-    notes: "ADR 0107 §1. Acceptance: each entry installs, renders its instructions with the context block, and its eval turns red when the instructions are emptied; neither mentions allowed_paths."
+    notes: "ADR 0110 §1. Acceptance: each entry installs, renders its instructions with the context block, and its eval turns red when the instructions are emptied; neither mentions allowed_paths."
   - id: S49-02
     title: "feat(core): the `default-request` core workflow, its requirements pinned to tracker, runtime and gateway"
     stream: S49
@@ -3772,7 +3772,7 @@ stories:
     priority: 1
     size: S
     depends_on: [S49-01]
-    notes: "ADR 0107 §1-2. Acceptance: `default-request` is in TEMPLATE_NAMES; a test asserts exigences() == {tracker, runtime, gateway} and turns red when a repository role, a production state or a pull request is added; a replayed history (tests/replay) if the interpreter is touched."
+    notes: "ADR 0110 §1-2. Acceptance: `default-request` is in TEMPLATE_NAMES; a test asserts exigences() == {tracker, runtime, gateway} and turns red when a repository role, a production state or a pull request is added; a replayed history (tests/replay) if the interpreter is touched."
   - id: S49-03
     title: "feat(api): a project without a template receives `default-request` when it names no repository"
     stream: S49
@@ -3780,7 +3780,7 @@ stories:
     priority: 2
     size: S
     depends_on: [S49-02]
-    notes: "ADR 0107 §3-5. Acceptance: livraison() picks default-simple with repo.url and default-request without; a template's defaults still win; readiness of a repository-less project lists no repository, scm or cd item; existing projects untouched, their readiness links to the one-gesture switch (/workflows/new?template=default-request&default=1); D14 updated."
+    notes: "ADR 0110 §3-5. Acceptance: livraison() picks default-simple with repo.url and default-request without; a template's defaults still win; readiness of a repository-less project lists no repository, scm or cd item; existing projects untouched, their readiness links to the one-gesture switch (/workflows/new?template=default-request&default=1); D14 updated."
   - id: S49-04
     title: "contract(schemas): the workflow catalogue DTO, the adopt request and `metadata.catalogue`"
     stream: S49
