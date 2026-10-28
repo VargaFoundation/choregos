@@ -63,7 +63,8 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
      importable.
    - **(b) A name.** A renamed name that anything outside the story's own files imports keeps a
      typed alias in the module that defined it: `Old = New  # lang: fr-ok alias:internal`. Find
-     the importers with `git grep -nw OLD -- apps packages tests`.
+     the importers with `git grep -nw OLD -- apps packages tests`. A name used only inside the
+     story's own files gets no alias: it is renamed everywhere at once.
    - **(c) A name that tests monkeypatch.** A plain `Old = New` does not forward a patch. The
      module calls `choregos_core.compat.alias_names(__name__, {'Old': 'New'})` once, at its end:
      reading, patching and undoing the old name reach the new one, under strict mypy. Never a
@@ -93,7 +94,21 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
    contents of the recorded history files and the four history files whose stem is a recorded
    workflow id; Grafana dashboard uids (no alias exists). Persisted French JSON values are read
    under both names and no row is rewritten. A line that carries one of them says why:
-   `lang: fr-ok` and the reason, in a comment.
+   `lang: fr-ok` and the reason, in a comment. The list, as recorded on 2026-10-27:
+   - recorded error types: `AgentIndisponible`, `InstructionsInvalides`, `SkillAbsente`,
+     `EffetRefuse`, `ActionIntrouvable`, `ActionPasEncoreVisible`;
+   - recorded payload keys: `effets`, `statut`, `etats`, `attendre_une_preuve`, `jusqu_a`,
+     `en_attente`, `preuve`, `conclure`, `cle`, `refus` (the result of
+     `propose_transition_action` included) and `TrainInput.seuil_de_relais`;
+   - persisted keys and values: `events.payload.cle`, `actions.params.ontologie`,
+     `actions.result` `attente`/`preuves`, the effect kinds `ontology.effet`/`ontology.preuve`, the
+     run-event key `demarre`, the audit keys `jeton`/`ecriture`/`avant`/`apres`/`sans_greffon`, the
+     audit value `issue='refus'`, the cost-ledger provider prefix `greffon:` and the extension tool
+     key `ecriture`;
+   - the inputs and algorithms of the agent catalogue digest and of `agent_versions.checksum`.
+
+   Readers accept both spellings first (S45-03); writers switch one tagged release later
+   (S45-39), on the workflow side behind the patch `english-payload-keys`.
 5. **Package stories are file-disjoint**, split by sub-area, each no larger than L. Files that
    another stream owns (the MCP client path) are excluded from every slice. Renames in `apps/api`
    run after the security stories that share its configuration and entry-point files.
