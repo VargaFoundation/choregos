@@ -156,7 +156,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 # 0080 §9). The client of the very image the chart deploys, pinned by digest: a client and a daemon
 # of two releases apart is a combination nobody tested. A bump moves both, and
 # `tests/paquets/test_buildctl_in_the_worker_image.py` refuses one without the other.
-COPY --from=moby/buildkit:v0.33.1-rootless@sha256:f8a833b2de9d68e27f0815e4a737abdfaf8a2e4c615650557df11025101557b4 /usr/bin/buildctl /usr/local/bin/buildctl
+COPY --from=moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89 /usr/bin/buildctl /usr/local/bin/buildctl
 USER 1000
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 
