@@ -435,3 +435,48 @@ async def test_a_project_owner_types_values_but_does_not_write_references(
         url, json={"type": "probe", "config": {}, "secret_refs": typed.json()["secret_refs"]}
     )
     assert again.status_code == 200, "re-sending the derived reference is not writing one"
+
+
+async def _another_organisation() -> None:
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        session.add(Organization(slug="other", name="Other"))
+
+
+async def test_with_two_organisations_an_org_admin_writes_no_reference(
+    client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]]
+) -> None:
+    """An `env:` reference reads the deployment's environment, which every organisation's pods
+    share: once the instance has two organisations, one's administrator could point a connector at
+    the other's `CONNECTOR_*` key (finding #983). Only a platform administrator writes one, or moves
+    a connector that holds one to another host; an organisation types its keys (ADR 0088)."""
+    single = await client.post(ORG, json=_declare(secret_refs={"token": "env:CONNECTOR_VENDOR"}))
+    assert single.status_code == 201, "one organisation: its administrator administers the instance"
+    await _another_organisation()
+
+    created = await client.post(
+        ORG, json=_declare(name="borrower", secret_refs={"token": "env:CONNECTOR_OTHER"})
+    )
+    assert created.status_code == 422 and "platform administrator" in created.text
+    patched = await client.patch(f"{ORG}/vendor", json={"secret_refs": {"token": "env:CONNECTOR_OTHER"}})
+    assert patched.status_code == 422 and "platform administrator" in patched.text
+    url = f"/api/v1/projects/{project['id']}/connectors/tracker"
+    by_project = await client.put(
+        url, json={"type": "probe", "config": {}, "secret_refs": {"api_token": "env:CONNECTOR_OTHER"}}
+    )
+    assert by_project.status_code == 422 and "platform administrator" in by_project.text
+
+    resent = await client.patch(f"{ORG}/vendor", json={"secret_refs": {"token": "env:CONNECTOR_VENDOR"}})
+    assert resent.status_code == 422, "re-sent, the reference would be the one this writer vouches for"
+    moved = await client.patch(f"{ORG}/vendor", json={"config": {"url": "https://mine.test/mcp"}})
+    assert moved.status_code == 422 and "platform administrator" in moved.text
+    assert (await client.get(f"{ORG}/vendor")).json()["config"]["url"] == "https://vendor.test/mcp"
+
+    typed = await client.post(ORG, json=_declare(name="borrower", secret_values={"token": VALUE_1}))
+    assert typed.status_code == 201, typed.text
+    own = await client.patch(f"{ORG}/vendor", json={"secret_values": {"token": VALUE_2}})
+    assert own.status_code == 200, "replacing the operator's key by the organisation's own is allowed"
+    edited = await client.patch(f"{ORG}/vendor", json={"config": {"url": "https://mine.test/mcp"}})
+    assert edited.status_code == 200, edited.text

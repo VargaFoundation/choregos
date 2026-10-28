@@ -185,9 +185,10 @@ connector test with its name — never a silent fallback to a default value.
 `env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
 `^CONNECTOR_[A-Z0-9_]+$`, chart value `global.secrets.envPattern`); the platform's own variables
 (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
-pattern. A name outside it is a `422` at write and a connector in error at use. Only the
-organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
-refused. **Breaking:** a reference written before this rule that is outside the pattern stops
+pattern. A name outside it is a `422` at write and a connector in error at use. Only a platform
+administrator writes a reference (ADR 0088) — on a single-organisation install, that organisation's
+administrator; with several, an organisation's administrator and a project owner type the value, and
+an organisation connector that holds a reference is reconfigured by a platform administrator only. **Breaking:** a reference written before this rule that is outside the pattern stops
 resolving; rename the variable (or widen the pattern) and rewrite the reference.
 
 **Every type has its procedure**, in the app and here. Choosing a type in a form opens a side panel with

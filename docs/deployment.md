@@ -144,7 +144,7 @@ it, `env:` references keep working, the API logs `secrets.key_missing` at start-
 secret answers 409. Keep it in the vault: **losing it loses every sealed value**. To rotate, put the
 new key first, redeploy, then run `choregos admin secrets rewrap` (see
 [the runbook](runbooks/rotation-secrets.md#connector-secrets-key-secrets-keks)) before dropping the
-old key. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
+old key, and drop it only once no database backup older than the rewrap can still be restored. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
 (turn it on once the key exists in the store: a missing remote property fails the whole object).
 
 `global.devSecrets: true` makes the chart generate all of the above itself, the secrets key
