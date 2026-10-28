@@ -34,7 +34,7 @@ choregos projects list
 
 `--template <name>@<version>` on `create` also provisions the project: repository, board,
 GitOps manifests and scaffolding. Without it, the project is created empty and you attach
-its connectors yourself, from the UI (*Settings → connectors*: type and configuration, secrets referenced never typed) or the API (`PUT /projects/{id}/connectors/{kind}`).
+its connectors yourself, from the UI (*Settings → connectors*: type and configuration; a secret is typed once and sealed, or given by reference) or the API (`PUT /projects/{id}/connectors/{kind}`).
 
 A project needs, at minimum: a **tracker** (where humans look), a **workflow** and a
 **policy**. Everything else has a default or can be added later.
@@ -167,8 +167,10 @@ under the error. No screen asks for an installation id.
 Until a project can run, its overview opens on a **getting started** list, which is the project's
 readiness (below): one list, computed by the API, that the settings page, the CLI and the MCP door share.
 
-A secret is never written in `config` — a secret field there is refused (`422`). It is named by
-**reference**, field by field, and resolved when the adapter is built, in the process that uses it:
+A secret is never written in `config` — a secret field there is refused (`422`). A key the
+organisation owns is **typed** (`secret_values`, sealed, above). A key the operator keeps in a vault
+is named by **reference**, field by field, and resolved when the adapter is built, in the process that
+uses it:
 
 ```bash
 curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",

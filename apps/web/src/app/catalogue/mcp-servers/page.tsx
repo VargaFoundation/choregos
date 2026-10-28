@@ -9,14 +9,14 @@ import { CatalogueCard, CatalogueGrid } from "@/components/catalogue/catalogue-g
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { EnablementDrawer } from "@/components/catalogue/enablement-drawer";
 import { InstallDrawer } from "@/components/catalogue/install-drawer";
-import { estUneReference } from "@/components/connecteurs";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
+import { bodyOfDrafts, EMPTY_DRAFT, problemOfDraft, SecretField, type SecretDraft } from "@/components/secret-field";
 import { Alert, Badge, Button, EtatDeLecture, ErrorNote, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/catalogue";
-import { authLabel, filterMcpEntries, hostOf, suggestedReference, whyNotInstallable } from "@/lib/mcp-catalogue";
+import { authLabel, filterMcpEntries, hostOf, whyNotInstallable } from "@/lib/mcp-catalogue";
 import { useSession } from "@/lib/session";
 import type { ConnectorEnablement, McpCatalogueEntry } from "@/lib/types";
 
@@ -193,20 +193,28 @@ function where(item: ConnectorEnablement): string {
   return `on in ${item.enabled_projects.join(", ")}`;
 }
 
-/** The name, the secret by reference, then the install and the first discovery, then the connector's page. */
+/** The install body's secret: a typed value to seal, or a reference; never both, never an empty field. */
+function secretBody(draft: SecretDraft): { secret_refs: Record<string, string>; secret_values?: Record<string, string> } {
+  const { secret_values, secret_refs } = bodyOfDrafts({ token: draft });
+  return Object.keys(secret_values).length ? { secret_refs, secret_values } : { secret_refs };
+}
+
+/** The name, the secret (typed and sealed, or by reference), then the install and the first discovery, then the
+ * connector's page. The token is the organisation's: typed here and sealed by the platform (ADR 0058), never an
+ * operator's errand — a reference stays possible for one who keeps it in a vault (S39-06e). */
 function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueEntry; onDone: () => void }) {
   const router = useRouter();
   const client = useQueryClient();
   const needsSecret = entry.auth !== "none";
   const [name, setName] = useState(entry.id);
-  const [reference, setReference] = useState("");
+  const [secret, setSecret] = useState<SecretDraft>(EMPTY_DRAFT);
   // Available is not enabled (ADR 0065, 0074): the console proposes selected projects.
   const [availability, setAvailability] = useState<"selected_projects" | "all_projects">("selected_projects");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const guard = useEgressGuard();
   const host = hostOf(entry);
-  const unreadable = reference !== "" && !estUneReference(reference);
+  const unreadable = problemOfDraft(secret) !== null;
   async function install() {
     setError(null);
     setBusy(true);
@@ -216,7 +224,7 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
         (allow) =>
           api.installMcpCatalogueEntry(org, entry.id, {
             name,
-            secret_refs: needsSecret && reference ? { token: reference } : {},
+            ...(needsSecret ? secretBody(secret) : { secret_refs: {} }),
             availability,
             ...egressFlag(allow),
           }),
@@ -282,21 +290,7 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
         />
       </label>
       {needsSecret ? (
-        <div className="space-y-1">
-          <label className="block space-y-1">
-            <span className="text-xs text-ink-muted">Secret, by reference</span>
-            <Input
-              className="w-full font-mono"
-              placeholder={suggestedReference(entry.id)}
-              aria-describedby="secret-help"
-              value={reference}
-              onChange={(event) => setReference(event.target.value)}
-            />
-          </label>
-          <p id="secret-help" className="text-xs text-ink-muted">
-            A reference to a secret the platform holds, never the key itself. Your operator creates the secret.
-          </p>
-        </div>
+        <SecretField field="token" draft={secret} onChange={setSecret} />
       ) : (
         <p className="text-xs text-ink-muted">This server takes no credential.</p>
       )}
@@ -321,14 +315,9 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
           Every project
         </label>
       </fieldset>
-      {unreadable && (
-        <p className="text-xs text-danger" role="alert">
-          A reference is expected (env:NAME), not a value
-        </p>
-      )}
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex gap-2">
-        <Button type="submit" tone="accent" disabled={busy || !name || unreadable || (needsSecret && !reference)}>
+        <Button type="submit" tone="accent" disabled={busy || !name || unreadable || (needsSecret && !secret.text)}>
           {busy ? "Installing…" : "Install"}
         </Button>
         <Button onClick={onDone}>Cancel</Button>

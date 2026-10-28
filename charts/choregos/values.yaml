@@ -46,12 +46,6 @@ global:
     # What the API lets a project choose as its `runtime` connector. Empty: only `executor`.
     # Add `k8s_job` for the steps that name their own image.
     allowedExecutors: []
-  # Secrets by reference (ADR 0034). A connector's `env:NAME` reference reads only the variables
-  # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
-  # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are
-  # refused whatever the pattern says. Given to the API and to each worker.
-  secrets:
-    envPattern: ""
   # Additional environment variables, given to the API, to each worker and to the migration Job
   # (through `choregos.commonEnv`). To enable a setting the chart does not know
   # yet — for example a plugin shipped inactive (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — without forking the
@@ -415,6 +409,12 @@ global:
   # and typing a secret answers 409 naming the missing key. Generate one with
   # `python -c "import os,base64;print('k1:'+base64.b64encode(os.urandom(32)).decode())"`.
   secrets:
+    # Secrets by reference (ADR 0034): a connector's `env:NAME` reference reads only the variables
+    # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
+    # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are
+    # refused whatever the pattern says. Given to the API and to each worker. One `secrets:` block:
+    # a second one silently replaced this setting (S39-06e).
+    envPattern: ""
     # The Secret that carries the key; empty: `apiSecretRef` (the key is then one more entry of it).
     keksSecretRef: ""
     # Its entry. Optional in the pod spec: absent, the feature is off, the pod still starts.
