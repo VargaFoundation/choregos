@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import GitHubInstallation, Organization
+from ..db.org_aliases import current_slug
 from ..deps import Config, Db, Me, current_principal
 from ..errors import ApiError, conflict, forbidden, not_found, upstream
 from ..rbac import Permission, Principal
@@ -245,7 +246,8 @@ async def github_app_setup(
     claims = svc.verify_state(state)
     if claims.get("user") != principal.email:
         raise forbidden("this installation was started by another person")
-    organisation = await _authorised(session, principal, str(claims["org"]))
+    # The state was signed before the redirect: a rename in between must not break the install (ADR 0090).
+    organisation = await _authorised(session, principal, await current_slug(session, str(claims["org"])))
     app = svc.get_github_app()
     if app is None:
         raise conflict("this deployment has no GitHub App")

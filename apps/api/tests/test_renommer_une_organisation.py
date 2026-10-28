@@ -31,8 +31,10 @@ async def test_le_slug_change_et_les_projets_suivent(
         "name": "Fondation Varga",
         "role": "org_admin",
         "currency": "EUR",
+        "aliases": ["varga"],
     }
-    assert (await client.get(f"{ORG}/varga/projects")).status_code == 404
+    # The old slug is an alias now (ADR 0090): the old address still resolves.
+    assert (await client.get(f"{ORG}/varga/projects")).status_code == 200
     projets = (await client.get(f"{ORG}/fondation/projects")).json()["items"]
     assert [p["slug"] for p in projets] == ["billing-api"]
     lu = await client.get("/api/v1/projects/fondation:billing-api")
@@ -130,7 +132,13 @@ async def test_un_administrateur_de_plateforme_non_membre_renomme_nom_et_slug(
         assert (await client.get(ORG)).json() == [], "he belongs to no organisation"
         renomme = await client.patch(f"{ORG}/varga", json={"name": "Diametral", "slug": "diametral"})
         assert renomme.status_code == 200, renomme.text
-        assert renomme.json() == {"slug": "diametral", "name": "Diametral", "role": None, "currency": "EUR"}
+        assert renomme.json() == {
+            "slug": "diametral",
+            "name": "Diametral",
+            "role": None,
+            "currency": "EUR",
+            "aliases": ["varga"],
+        }
         await login(client, "admin@varga.dev")
         assert {(o["slug"], o["name"]) for o in (await client.get(ORG)).json()} == {
             ("diametral", "Diametral")

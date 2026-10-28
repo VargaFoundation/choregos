@@ -277,6 +277,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     install_error_handlers(app)
+    from .org_alias_middleware import OrgAliasMiddleware
+
+    # A former slug is replaced before anything routes (ADR 0090); the log keeps the path as it was sent.
+    app.add_middleware(OrgAliasMiddleware)
     from .limiteur import installer as installer_le_limiteur
 
     installer_le_limiteur(app, settings.rate_limit_per_minute)

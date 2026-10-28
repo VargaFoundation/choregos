@@ -608,3 +608,14 @@ def test_the_distillation_job_is_in_the_contract() -> None:
     ):
         kind = next(p for p in paths[route]["get"]["parameters"] if p.get("name") == "kind")
         assert kind["schema"]["enum"] == ["model", "tool", "distill"], route
+
+
+def test_an_organisation_lists_the_slugs_it_had_and_an_alias_can_be_released() -> None:
+    """ADR 0090: a rename keeps the old slug as an alias; the platform administrator can release one."""
+    spec = contracts.load_openapi()
+    org = spec["components"]["schemas"]["Org"]
+    assert org["properties"]["aliases"]["items"] == {"type": "string"}
+    assert "aliases" not in org["required"], "an older server that sends no aliases stays valid"
+    release = spec["paths"]["/orgs/{org}/aliases/{alias}"]["delete"]
+    assert release["operationId"] == "releaseOrgAlias"
+    assert set(release["responses"]) == {"204", "403", "404"}

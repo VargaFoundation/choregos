@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { api, ApiError, DEFAULT_ORG, IS_MOCK, setCurrentOrg } from "./api";
-import { rememberOrgCookie } from "./remembered-org";
+import { pickOrg, rememberOrgCookie } from "./remembered-org";
 import type { MeDto, Org } from "./types";
 
 type Session = {
@@ -45,7 +45,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } catch {
       voulue = null;
     }
-    const choisie = orgs.data.find((o) => o.slug === voulue)?.slug ?? orgs.data[0]?.slug ?? DEFAULT_ORG;
+    const choisie = pickOrg(orgs.data, voulue) ?? DEFAULT_ORG;
     setOrg(choisie);
     setCurrentOrg(choisie);
     rememberOrgCookie(choisie);
