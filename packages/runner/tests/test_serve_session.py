@@ -21,7 +21,7 @@ from choregos_core.hosted import sidecar_env
 from choregos_runner.exits import Exit
 from choregos_runner.serve_session import SessionServer
 
-from .conftest import free_port
+from .conftest import loopback_ports
 
 pytestmark = pytest.mark.asyncio
 
@@ -104,7 +104,7 @@ def _server(
     server.api_transport = api.transport()
     server.hosted_transport = agent.transport()
     server.model_transport = (model or FakeModelServer(key=KEY)).transport()
-    server.loopback_ports = (free_port(), free_port(), free_port())
+    server.loopback_ports = loopback_ports()
     server.readiness_interval = 0.05
     server.poll_s = 0
     hosted = api.stage_input.hosted
