@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Who may read a knowledge base, who may change it, and which runs are served it (ADR 0051, 0081).
+"""Who may read a knowledge base, who may change it, and which runs are served it (ADR 0051, 0081, 0097).
 
 Two separate questions, on purpose:
 
@@ -8,11 +8,12 @@ Two separate questions, on purpose:
   `org`: every member reads it, every project's runs are served it; `projects`: members who can read
   one of the listed projects, runs of those projects only; `groups`: humans of one of the listed IdP
   groups, and a run carries no group, so it is never served a group-scoped base. `restricted`
-  withdraws the human reading: people read it only through a grant, while runs are still served.
+  withdraws the human reading: people read it only through a grant, and a run is served it only on
+  behalf of a person who reads it (its work item's initiator, `on_behalf.py`, ADR 0097).
 - **Roles** (`viewer`, `editor`, `owner`) say what a person may do. They come from a grant to a user, a
   group or a project, or are implicit: an organisation administrator (`agent:manage`) is owner of every
   base, and the owners of the project that owns the base (`owner_project`, S39-14) are its owners. A
-  grant gives people a role; it never serves a run.
+  grant gives people a role; it never serves a run by itself (it lets a run act for its holder).
 
 One function, `decide`, answers "may this caller do this here" with the sentence that says why not
 (the same pattern as ADR 0061 and 0074); the console shows what it says.
@@ -159,7 +160,8 @@ def decide(
 def served_to_project(base: Any, project_slug: str) -> bool:
     """Whether a run of this project may be served this base (and the base is usable at all).
 
-    Neither a grant nor `restricted` is looked at: they decide what people do, not what runs read.
+    Neither a grant nor `restricted` is looked at here; for a restricted base, `on_behalf.OnBehalf`
+    also asks whether the person the run acts for reads it (ADR 0097).
     """
     if base.status != "active":
         return False

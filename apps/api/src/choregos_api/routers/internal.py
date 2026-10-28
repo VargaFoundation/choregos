@@ -557,17 +557,20 @@ async def get_knowledge(id: str, session: Db, claims: RunAuth) -> list[dict[str,
     """The pinned documents of the `files` knowledge bases the run's `StageInput` names (ADR 0051).
 
     Exactly the documents pinned when the run was prepared, and only while the base is still served
-    to the run's project; the runner recomputes the digest before laying them down.
+    to the run's project and, when restricted, readable by the person the run acts for (ADR 0097);
+    the runner recomputes the digest before laying them down.
     """
+    from ..knowledge.on_behalf import OnBehalf
     from ..knowledge.serving import KnowledgeRefusedError, deliver
 
-    run, _, project = await _run_and_item(session, id)
+    run, item, project = await _run_and_item(session, id)
+    on_behalf = OnBehalf(session, project.org_id, project.id, item.initiated_by)
     delivered: list[dict[str, Any]] = []
     for ref in (run.stage_input or {}).get("knowledge", []):
         if ref.get("mode", "files") != "files":
             continue
         try:
-            delivered.append(await deliver(session, project.org_id, project.slug, ref))
+            delivered.append(await deliver(session, project.org_id, project.slug, ref, on_behalf))
         except KnowledgeRefusedError as refusal:
             raise not_found("Knowledge base of the run", str(ref.get("slug"))) from refusal
     return delivered
@@ -582,14 +585,16 @@ async def search_knowledge(
     id: str, body: KnowledgeSearchRequest, session: Db, claims: RunAuth
 ) -> KnowledgeSearchResult:
     """`knowledge_search` of the sidecar (ADR 0051): the `index` bases the run's `StageInput` names,
-    and only while they are served to the run's project. Answers citations."""
+    and only while they are served to the run's project and, when restricted, readable by the person
+    the run acts for (ADR 0097). Answers citations."""
     from dataclasses import asdict
 
     from ..db.models import KnowledgeBase
-    from ..knowledge.access import served_to_project
     from ..knowledge.index import search
+    from ..knowledge.on_behalf import OnBehalf
 
-    run, _, project = await _run_and_item(session, id)
+    run, item, project = await _run_and_item(session, id)
+    on_behalf = OnBehalf(session, project.org_id, project.id, item.initiated_by)
     slugs = [
         str(ref.get("slug"))
         for ref in (run.stage_input or {}).get("knowledge", [])
@@ -604,7 +609,7 @@ async def search_knowledge(
                 )
             )
         ).scalars()
-        if served_to_project(base, project.slug)
+        if await on_behalf.refusal(base, project.slug) is None
     ]
     result = await search(session, bases, body.query, k=body.k)
     return KnowledgeSearchResult.model_validate(

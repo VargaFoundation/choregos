@@ -1,0 +1,10 @@
+# contracts: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+packages/contracts/openapi.yaml	1
+packages/contracts/src/choregos_contracts/__init__.py	6
+packages/contracts/src/choregos_contracts/enums.py	18
+packages/contracts/src/choregos_contracts/events.py	10
+packages/contracts/src/choregos_contracts/policy.py	11
+packages/contracts/src/choregos_contracts/project.py	33
+packages/contracts/src/choregos_contracts/stage.py	37
+packages/contracts/src/choregos_contracts/workflow.py	62
+packages/contracts/tests/test_contracts.py	33

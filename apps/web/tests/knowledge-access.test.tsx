@@ -78,7 +78,7 @@ describe("what the access words say", () => {
   });
 
   it("says who reads a base, and what a role lets one do", () => {
-    expect(accessLabel({ restricted: true, scope: "org", projects: [], groups: [] })).toMatch(/through a grant.*still served/);
+    expect(accessLabel({ restricted: true, scope: "org", projects: [], groups: [] })).toMatch(/through a grant.*only for a person who reads it/);
     expect(accessLabel({ restricted: false, scope: "org", projects: [], groups: [] })).toBe("readable by whole organisation");
     expect(roleHint("editor")).toMatch(/distils/);
     expect(roleHint(null)).toMatch(/reach/);

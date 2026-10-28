@@ -501,7 +501,15 @@ list from `lg` up): **Readiness** (on top), **General**, **Connections**, **Agen
 
 Every section saves on its own through `PATCH /projects/{id}`. The console re-reads the project right before
 writing and sends the whole configuration with only that section's keys changed, so a section never drops
-what another one wrote and `groups` is sent untouched.
+what another one wrote and `groups` is sent untouched. It also sends the `config_revision` it read (an opaque
+digest of the name and the configuration, returned by `GET /projects/{id}`) as `base_revision`: when someone
+else saved in between, the PATCH answers 409 `stale_base` (the problem carries `latest_revision`), writes
+nothing, and the console reads again, merges again and sends once more; a second 409 shows "Someone else
+changed these settings: reload the page". Renaming the organisation also changes the revision, because it
+rewrites `config.org`, so a revision read before a rename answers 409 once. API clients may send
+`base_revision` too; without it the last write wins, as before. `PUT /projects/{id}/models` locks the project
+row the same way, and every `project.update` audit entry lists the top-level configuration keys it changed
+(`changes`, each with `before` and `after`) and whether the name changed (`name_changed`).
 
 - **Connections** is a card per connector: an icon (the product's mark when simple-icons has one, vendored
   as CC0 paths in `components/brand-icon-paths.ts`; a capability icon otherwise, including Slack and the
@@ -1716,7 +1724,11 @@ curl -X PUT $API/orgs/acme/knowledge/architecture/grants -H 'Content-Type: appli
 
 `subject_type` is `user` (a member id, or an e-mail: waiting, `pending`, until that person is a member),
 `group` or `project` (its explicit members). The list is replaced as a whole (at most 200). A
-`restricted` base is read by people only through a grant; its runs are still served.
+`restricted` base is read by people only through a grant, and a run is served it only on behalf of a
+person who reads it: the person who started the work item (a fan-out child acts for its parent's).
+A scheduled or tracker-triggered work item names no person, so its runs stop at stage start with
+`KnowledgeRefused` ([ADR 0097](adr/0097-a-run-reads-a-restricted-base-on-behalf-of-its-initiator.md)).
+A grant revoked while a run is in flight holds at the run's next read.
 
 #### A knowledge base as code
 

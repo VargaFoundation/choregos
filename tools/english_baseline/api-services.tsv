@@ -1,0 +1,24 @@
+# api-services: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+apps/api/src/choregos_api/services/__init__.py	4
+apps/api/src/choregos_api/services/actions.py	66
+apps/api/src/choregos_api/services/agent_governance.py	1
+apps/api/src/choregos_api/services/agent_lifecycle.py	7
+apps/api/src/choregos_api/services/agents.py	31
+apps/api/src/choregos_api/services/catalogue_d_agents.py	32
+apps/api/src/choregos_api/services/connecteurs.py	18
+apps/api/src/choregos_api/services/courtier.py	80
+apps/api/src/choregos_api/services/couts.py	4
+apps/api/src/choregos_api/services/definitions.py	64
+apps/api/src/choregos_api/services/evenements.py	6
+apps/api/src/choregos_api/services/gabarits.py	43
+apps/api/src/choregos_api/services/installation.py	18
+apps/api/src/choregos_api/services/memoire.py	14
+apps/api/src/choregos_api/services/parcours.py	40
+apps/api/src/choregos_api/services/projets.py	3
+apps/api/src/choregos_api/services/recus.py	31
+apps/api/src/choregos_api/services/routage.py	36
+apps/api/src/choregos_api/services/skill_gate.py	3
+apps/api/src/choregos_api/services/skill_review.py	3
+apps/api/src/choregos_api/services/skill_sources.py	14
+apps/api/src/choregos_api/services/skills.py	32
+apps/api/src/choregos_api/services/tickets.py	41
