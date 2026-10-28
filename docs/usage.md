@@ -2049,6 +2049,8 @@ journal says `run.stopped`. When two consecutive attempts of a stage fail the sa
 reason, same first line of summary, numbers aside), the interpreter escalates instead of spending
 its remaining attempts.
 
+**The kernel confines the agent's process** before it starts ([ADR 0094](adr/0094-the-kernel-confines-the-agent-at-launch.md)): it may write only beneath the workspace, `$TMPDIR` (its `$HOME`) and `/dev`, and, when the run has an egress proxy, open TCP connections only to the proxy's port and the platform endpoints it reaches directly — a `curl --noproxy` to a public host is refused by Landlock, not by a guardrail. `CHOREGOS_RUNNER_CONFINEMENT` (in the chart's `runner.env`) sets `off`, `best_effort` (default: what the kernel supports, the rest journaled) or `enforce` (no Landlock, no agent: exit code 90). The run's journal says what applied: `agent.confinement`. Landlock needs kernel 5.13 for files and 6.7 for ports, and does not exist under gVisor.
+
 **Fewer tokens per run** ([ADR 0055](adr/0055-fewer-tokens-per-run.md)) is off unless the policy
 asks, and the deployment can still refuse it (`CHOREGOS_CONTEXT_REDUCTION=off`):
 

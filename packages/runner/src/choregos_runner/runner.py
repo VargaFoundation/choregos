@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import json
 import os
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,7 +33,7 @@ from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
 
-from . import compression
+from . import compression, confine
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome
 from .acp.guard import TurnGuard
@@ -301,6 +302,10 @@ class Runner:
         # runner, counted on the environment it will really receive (the runner's, then its own).
         env.update(agent_git_env({**os.environ, **env}, workspace.path))
 
+        command, refusal = await self._confine(plan, env, workspace, journal)
+        if refusal is not None:
+            return refusal
+
         async def on_update(params: dict[str, Any]) -> None:
             await journal.record("session/update", params)
 
@@ -317,7 +322,7 @@ class Runner:
 
         try:
             async with AcpClient(
-                plan.command,
+                command,
                 cwd=str(workspace.path),
                 env=env,
                 on_update=on_update,
@@ -541,6 +546,33 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _confine(
+        self, plan: Any, env: dict[str, str], workspace: Workspace, journal: EventJournal
+    ) -> tuple[list[str], RunOutcome | None]:
+        """The agent's command, confined by the kernel before it starts (ADR 0094), and what it is
+        held to, journaled. With `enforce` and a kernel that cannot, the agent does not start."""
+        mode = self.settings.confinement
+        agent_env = {**os.environ, **env}
+        endpoints = [
+            self.settings.api_url,
+            self.settings.tools_url,
+            *confine.endpoint_urls(agent_env),
+            *(str(server["url"]) for server in plan.mcp_servers if server.get("url")),
+        ]
+        confinement = confine.Confinement(
+            mode=mode,
+            write_roots=(str(workspace.path), tempfile.gettempdir(), "/dev"),
+            connect_ports=confine.connect_ports(agent_env, endpoints),
+        )
+        report = confine.assess(confinement, confine.landlock_abi())
+        await journal.record("agent.confinement", report.to_event())
+        if report.refused:
+            detail = f"confinement required, kernel lacks {', '.join(report.missing)}"
+            await journal.record("run.failed", {"phase": "confinement", "error": detail})
+            await journal.flush()
+            return [], RunOutcome(Exit.CONFINEMENT_UNAVAILABLE, detail=detail)
+        return confine.wrap(plan.command, confinement), None
 
     async def _record_shell_filter(
         self, stage_input: StageInput, backend: Any, journal: EventJournal
