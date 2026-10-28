@@ -81,6 +81,7 @@ async def run_local(
     attempts: dict[str, int] = {}
     last_outcome: str | None = None
     last_run: str | None = None  # les transitions `system` évaluent leurs gates sur ce run
+    last_outputs: dict[str, Any] | None = None  # what a transition's `when` reads (S48-01)
     approve = approve or (lambda _transition, _state: True)
 
     await tracker_activities.mirror_state(
@@ -92,7 +93,7 @@ async def run_local(
     for _ in range(max_steps):
         if engine.is_terminal(state):
             break
-        transition = engine.select_transition(state, last_outcome)
+        transition = engine.select_transition(state, last_outcome, last_outputs)
         last_outcome = None
         if transition is None:
             trace.stopped_reason = f"no transition from `{state}` (waiting for an external event)"
@@ -106,9 +107,12 @@ async def run_local(
             break
 
         if kind in ("agent", "job"):
-            decision, cost, run_id = await _run_stage(project_id, work_item_id, engine, transition, attempt)
+            decision, cost, run_id, outputs = await _run_stage(
+                project_id, work_item_id, engine, transition, attempt
+            )
             attempts[key] = attempt + 1
             last_run = run_id
+            last_outputs = outputs
             trace.cost_usd += cost
             trace.steps.append(
                 Step(state, key, kind, decision.reason, decision.next_state, cost_usd=cost, run_id=run_id)
@@ -176,7 +180,7 @@ async def run_local(
 
 async def _run_stage(
     project_id: str, work_item_id: str, engine: WorkflowEngine, transition: Any, attempt: int
-) -> tuple[Any, float, str]:
+) -> tuple[Any, float, str, dict[str, Any] | None]:
     request = engine.run_request(transition)
     assert request, "an agent or a job"
     prepared = await stage_activities.prepare_stage(
@@ -222,7 +226,12 @@ async def _run_stage(
                 "payload": {"summary": result.summary},
             }
         )
-    return decision, float(spend.get("cost_usd", 0.0)), run_id
+    return (
+        decision,
+        float(spend.get("cost_usd", 0.0)),
+        run_id,
+        result.outputs.model_dump(mode="json", exclude_none=True) or None,
+    )
 
 
 async def _emit_findings(project_id: str, work_item_id: str, run_id: str, result: StageResult) -> None:
