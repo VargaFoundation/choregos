@@ -14,8 +14,10 @@ The plugin arrives already loaded and validated by `choregos_core.plugins` (S43-
   `plugin:<plugin>/<slug>@<catalogue version>` for an agent and `plugin:<plugin>/<skill>@<plugin version>`
   for a skill. An object of that name the organisation already has, and that the plugin did not
   install, wins and is left untouched (ADR 0040 §4);
-- keeps the files the platform serves again (templates with their files, eval suites, procedures) in
-  `org_plugin_files`, under the plugin's content digest and the organisation's RLS;
+- keeps the files the platform serves again (templates with their files, eval suites, procedures, and
+  since S43-09 its agents and skills, which the organisation's agent catalogue reads) in
+  `org_plugin_files`, under the plugin's content digest and the organisation's RLS; an external client's
+  `catalogue.client` and `catalogue.reach` are kept in the row's `details.clients` too;
 - runs the plugin's servers and governs them as organisation connectors (`plugin_servers.py`, ADR 0096):
   each server is checked with the rest (image rules, a free connector name) and provisioned with it.
 
@@ -143,15 +145,21 @@ async def _prepare(
             raise unprocessable(f"`{plugin.name}` requires the plugin `{name}`, which is not installed")
 
     for ref in contents.get("skills", []):
-        files = {name: _text(path, f"{ref}/{name}") for name, path in _dir_files(root, ref).items()}
+        paths = _dir_files(root, ref)
+        files = {name: _text(path, f"{ref}/{name}") for name, path in paths.items()}
         try:
             head = valider(files)
         except SkillRefusee as refusal:
             raise unprocessable(f"`{ref}`: the skill is refused: {refusal}") from refusal
         prepared.skills[head.name] = files
+        for name, path in paths.items():
+            prepared.files[f"{ref}/{name}"] = path.read_bytes()
+
+    for ref in contents.get("agents", []):
+        prepared.files[ref] = inside(root, ref).read_bytes()
 
     for slug, document in sorted(plugin.agents.items()):
-        entry = entry_of(document)
+        entry = entry_of(document, plugin.name, plugin.version)
         try:
             body = AgentCreate.model_validate(entry.document)
         except ValidationError as error:
@@ -505,8 +513,19 @@ async def _write(
         "procedures": prepared.procedures,
         "servers": servers,
         "skipped": skipped,
+        "clients": _clients(prepared),
     }
     return contents, details
+
+
+def _clients(prepared: _Prepared) -> dict[str, dict[str, str | None]]:
+    """An external client's `catalogue.client` and `catalogue.reach` (ADR 0040): which client the
+    Integrations page offers it as, and whether it calls from its vendor's cloud."""
+    return {
+        slug: {"client": entry.client, "reach": entry.portee}
+        for slug, entry in sorted(prepared.agents.items())
+        if entry.genre == "external"
+    }
 
 
 class _Same:
@@ -662,6 +681,7 @@ async def upgrade(
         "servers": servers,
         "skipped": skipped,
         "kept": kept,
+        "clients": _clients(prepared),
     }
     row.status, row.installed_by, row.installed_at = status, principal.email, utcnow()
     await session.flush()

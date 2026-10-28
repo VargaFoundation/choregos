@@ -4,7 +4,8 @@
     python -m choregos_core.catalogue_d_agents.evals --all
 
 The playbook evals (`choregos_playbooks.evals`) check the rendering of a ROLE; the catalogue's agents
-carry their own instructions, which nothing checked. One case per internal agent, in `eval_cases/`:
+carry their own instructions, which nothing checked. One case per internal agent, in its plugin's
+`evals/` (ADR 0093 §6: the cases moved with the agents to `VargaFoundation/choregos-agents`):
 the instructions rendered as the orchestrator renders them (sandboxed Jinja, the ticket's context
 first, the case's `inputs`) must contain what makes the agent this agent, and none of what it must
 never say. Deterministic: no model, no network. A case turns red when the instructions are emptied
@@ -16,15 +17,10 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-import yaml
-
 from ..instructions import rendre_les_instructions
-from . import DOSSIER, EntreeDuCatalogue, entree
-
-CASES = DOSSIER / "eval_cases"
+from . import EntreeDuCatalogue, EvalCase, catalogue, entree
 
 
 @dataclass
@@ -34,10 +30,6 @@ class AgentEvalResult:
     score: float
     missing: list[str] = field(default_factory=list)
     forbidden: list[str] = field(default_factory=list)
-
-
-def load_case(path: Path) -> dict[str, Any]:
-    return dict(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 def evaluate(case: dict[str, Any], agent: EntreeDuCatalogue | None = None) -> AgentEvalResult:
@@ -59,20 +51,21 @@ def evaluate(case: dict[str, Any], agent: EntreeDuCatalogue | None = None) -> Ag
     return AgentEvalResult(agent.slug, score >= threshold and not forbidden, score, missing, forbidden)
 
 
-def case_paths() -> list[Path]:
-    return sorted(CASES.glob("*.yaml"))
+def cases() -> list[EvalCase]:
+    """Every eval case of the offline directory's plugins, by name."""
+    return sorted(catalogue().evals, key=lambda c: c.name)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evals of the catalogue's agents")
-    parser.add_argument("--all", action="store_true", help="every case of `eval_cases/`")
+    parser.add_argument("--all", action="store_true", help="every case of the offline plugins")
     parser.add_argument("--agent", action="append", default=[], help="only these agents")
     args = parser.parse_args()
-    paths = [p for p in case_paths() if args.all or p.stem in args.agent]
-    if not paths:
+    chosen = [c for c in cases() if args.all or c.name in args.agent or c.case.get("agent") in args.agent]
+    if not chosen:
         print("no agent eval case found", file=sys.stderr)
         return 1
-    results = [evaluate(load_case(path)) for path in paths]
+    results = [evaluate(c.case) for c in chosen]
     for result in results:
         line = f"{'✓' if result.passed else '✗'} {result.agent:<20} score {result.score:.2f}"
         if result.missing:

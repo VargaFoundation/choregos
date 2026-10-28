@@ -1,8 +1,0 @@
-agent: planner
-description: A plan, no code.
-must_contain:
-- implementation plan
-- produce no code
-- each commit leaves the branch green
-- roll back
-- '"plan_markdown"'
