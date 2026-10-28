@@ -1030,7 +1030,18 @@ executable file, an outbound URL, a credential-like string, an MCP reference) â€
 (prompt-injection phrases, hidden or bidirectional Unicode, encoded blobs, `curl â€¦ | sh`) whose
 findings name their file and line, and a licence check (a missing or non-open licence is flagged,
 not refused). A **high-risk version waits for a second person**: until an administrator who did not
-import it approves it, no agent may pin it and no run receives it:
+import it approves it, no agent may pin it and no run receives it.
+
+In the API image, a **second scanner** reads every version a person publishes
+([ADR 0095](adr/0095-skillspector-behind-the-skill-gate-offline.md)): NVIDIA SkillSpector, offline
+(`--no-llm`, every HTTP call answered by a local OSV mirror or refused). It adds a script's AST,
+taint from a secret to a socket, YARA rules, MCP tool poisoning, and dependencies with known
+vulnerabilities (PyPI, npm), as findings `skillspector:<rule>`; a HIGH or CRITICAL one, or its
+`DO_NOT_INSTALL`, makes the version high risk. A scanner that fails holds the version
+(`scanner_failed`); a mirror older than 72 h says the dependency check did not happen
+(`osv_mirror_missing`). `CHOREGOS_SKILL_SCANNER=off` turns it off; `CHOREGOS_OSV_MIRROR_URL` points
+the daily download (OSV's PyPI and npm archives, about 260 MB) at an operator's own copy, or, empty,
+disables it:
 
 ```bash
 curl -X POST $API/orgs/acme/skills/fill-forms/versions/1/approve   # 403 for its importer
