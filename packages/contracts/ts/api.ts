@@ -2202,7 +2202,7 @@ export type KnowledgeBaseCreate = {
   groups?: Array<string>;
   /** `files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search */
   serving_mode?: "files" | "index";
-  /** people read it only through a grant (or as an administrator or owning-project owner); runs that the base is attached to are still served (S42-11, ADR 0081) */
+  /** people read it only through a grant (or as an administrator or owning-project owner); a run attached to it is served it only on behalf of a person who may read it: the person who started its work item, or of a fan-out child its parent's (S42-11, ADR 0081, ADR 0097) */
   restricted?: boolean;
 };
 
@@ -2256,7 +2256,7 @@ export type KnowledgePermissions = {
   /** change the grants */
   share: boolean;
   archive: boolean;
-  /** change scope, projects, groups or restricted (organisation administrator only) */
+  /** change scope, projects, groups or restricted (organisation administrator, or owner of the base's project) */
   widen: boolean;
 };
 
@@ -2371,7 +2371,7 @@ export type KnowledgeBase = {
   sources?: Array<KnowledgeSource> | null;
   /** the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base */
   owner_project?: string | null;
-  /** people read it only through a grant; runs that the base is attached to are still served (S42-11) */
+  /** people read it only through a grant; a run is served it only on behalf of a person who may read it (S42-11, ADR 0097) */
   restricted?: boolean;
   can?: KnowledgePermissions;
   /** the server's sentence when the caller may not edit: shown as is, never guessed from roles */
