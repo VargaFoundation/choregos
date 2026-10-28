@@ -1,0 +1,183 @@
+[
+ {
+  "id": "L1",
+  "kind": "locate",
+  "q": "On a warm-pool run, which code encrypts the run's credentials for the claimed pod and sends them to it? Name the files.",
+  "files": [
+   "packages/adapters/src/choregos_adapters/executor/agent_sandbox.py",
+   "packages/adapters/src/choregos_adapters/sealing.py"
+  ]
+ },
+ {
+  "id": "L2",
+  "kind": "locate",
+  "q": "Inside a pre-created runner pod, which code waits for the run to be handed over and refuses a second, different run? Name the file.",
+  "files": [
+   "packages/runner/src/choregos_runner/assignment.py"
+  ]
+ },
+ {
+  "id": "L3",
+  "kind": "locate",
+  "q": "Which code starts the coding agent process (e.g. Claude Code) and talks to it over stdio? Name the file(s).",
+  "files": [
+   "packages/runner/src/choregos_runner/acp/client.py",
+   "packages/runner/src/choregos_runner/runner.py"
+  ]
+ },
+ {
+  "id": "L4",
+  "kind": "locate",
+  "q": "Where is a third-party skill scanned for injection phrases, hidden Unicode and pipe-to-shell before it is accepted? Name the file.",
+  "files": [
+   "apps/api/src/choregos_api/services/skill_gate.py"
+  ]
+ },
+ {
+  "id": "L5",
+  "kind": "locate",
+  "q": "Where is the lexical check that flags prompt injection in tool answers? Name the file.",
+  "files": [
+   "packages/core/src/choregos_core/injection.py"
+  ]
+ },
+ {
+  "id": "L6",
+  "kind": "locate",
+  "q": "Where is the HTTP CONNECT proxy that decides, per run, which hosts a runner may reach? Name the file.",
+  "files": [
+   "apps/api/src/choregos_api/egress/proxy.py"
+  ]
+ },
+ {
+  "id": "L7",
+  "kind": "locate",
+  "q": "Where is a knowledge base turned into a skill through a map then reduce pass? Name the file.",
+  "files": [
+   "apps/api/src/choregos_api/knowledge/distill.py"
+  ]
+ },
+ {
+  "id": "L8",
+  "kind": "locate",
+  "q": "Which shared module decides whether a host matches an allowlist entry, used by both the proxy and the platform's own clients? Name the file.",
+  "files": [
+   "packages/core/src/choregos_core/network.py"
+  ]
+ },
+ {
+  "id": "W1",
+  "kind": "why",
+  "q": "Why does the platform not use a NetworkPolicy per run or per agent to bound a runner's network? Give the decision record number and the reason.",
+  "adr": [
+   "0070"
+  ],
+  "fact": "warm sandboxes exist before their run is known"
+ },
+ {
+  "id": "W2",
+  "kind": "why",
+  "q": "Which decision record makes the agent-sandbox executor the default runtime of a real deployment, and what does a sandbox pool give that a Job does not?",
+  "adr": [
+   "0072",
+   "0053"
+  ],
+  "fact": "pre-created (warm) sandboxes claimed once, no pod start latency"
+ },
+ {
+  "id": "W3",
+  "kind": "why",
+  "q": "Why must a skill import be pinned to a full commit, and when does a skill version need a second administrator? Give the decision record.",
+  "adr": [
+   "0050"
+  ],
+  "fact": "pinned 40-hex commit for reproducibility/supply chain; high risk tier needs an admin other than the importer"
+ },
+ {
+  "id": "W4",
+  "kind": "why",
+  "q": "Which decision record says everything must be in English, and which earlier record does it supersede?",
+  "adr": [
+   "0046",
+   "0039"
+  ],
+  "fact": "0046 supersedes 0039 sections 2-3"
+ },
+ {
+  "id": "W5",
+  "kind": "why",
+  "q": "Why is a skill distilled from a knowledge base always published as pending review, whatever its risk? Give the decision record.",
+  "adr": [
+   "0082"
+  ],
+  "fact": "a generated skill is reviewed by a human before use"
+ },
+ {
+  "id": "W6",
+  "kind": "why",
+  "q": "Why does every integration have a scriptable fake, and how is the whole platform switched onto fakes? Give the decision record.",
+  "adr": [
+   "0005"
+  ],
+  "fact": "CHOREGOS_FAKES=1"
+ },
+ {
+  "id": "T1",
+  "kind": "trace",
+  "q": "Trace how the egress proxy settings reach the agent process on a warm-pool run: which files, from the orchestrator to the agent subprocess?",
+  "files": [
+   "apps/orchestrator/src/choregos_orchestrator/activities/execution.py",
+   "packages/adapters/src/choregos_adapters/executor/agent_sandbox.py",
+   "packages/runner/src/choregos_runner/egress.py",
+   "packages/runner/src/choregos_runner/runner.py"
+  ]
+ },
+ {
+  "id": "T2",
+  "kind": "trace",
+  "q": "When an agent calls a tool of a brokered MCP connector, which files check, mask and screen the answer before the agent sees it?",
+  "files": [
+   "apps/api/src/choregos_api/services/courtier.py",
+   "packages/core/src/choregos_core/injection.py"
+  ]
+ },
+ {
+  "id": "T3",
+  "kind": "trace",
+  "q": "Follow a skill from its import from a git host to its use in a run: which files fetch it, gate it, review it, and verify it on the runner?",
+  "files": [
+   "apps/api/src/choregos_api/services/skill_sources.py",
+   "apps/api/src/choregos_api/services/skill_gate.py",
+   "apps/api/src/choregos_api/services/skill_review.py",
+   "packages/runner/src/choregos_runner/skills.py"
+  ]
+ },
+ {
+  "id": "T4",
+  "kind": "trace",
+  "q": "How is a hosted prompt or voice agent run next to the runner, and on which executor only? Name the file and the Kubernetes mechanism.",
+  "files": [
+   "packages/adapters/src/choregos_adapters/executor/k8s_job.py"
+  ],
+  "fact": "native sidecar (init container with restartPolicy Always), k8s_job only"
+ },
+ {
+  "id": "T5",
+  "kind": "trace",
+  "q": "How does an agent search a knowledge base during a run? Name the files from the tool the agent calls to the API that answers.",
+  "files": [
+   "packages/tools-mcp/src/choregos_tools_mcp/tools.py",
+   "apps/api/src/choregos_api/routers/internal.py"
+  ]
+ },
+ {
+  "id": "T6",
+  "kind": "trace",
+  "q": "How does the platform pick and pin the container image of an agent written in code? Name the configuration and the files.",
+  "files": [
+   "apps/orchestrator/src/choregos_orchestrator/config.py",
+   "packages/runner/src/choregos_runner/backends/code.py"
+  ],
+  "fact": "CHOREGOS_AGENT_IMAGES with requireDigest"
+ }
+]
