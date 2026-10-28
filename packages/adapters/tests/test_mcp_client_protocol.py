@@ -242,6 +242,29 @@ async def test_static_and_provided_headers_go_with_every_request() -> None:
     assert asked == [False, False, False], "the provider is asked once per request, never to refresh"
 
 
+async def test_a_static_authorization_yields_to_the_token_then_to_the_provider() -> None:
+    """The headers merge in order: the static ones, the connector's token, the provider's. A static
+    `Authorization` (a gateway default, say) never replaces the credential that is the client's own.
+    A token and a provider are exclusive, so the provider is held against the static header."""
+    seen: Seen = []
+    static = {"Authorization": "Bearer static", "X-Server": "github"}
+    await _client(_server(seen), headers=static, token="tok").list_tools()
+    assert _methods(seen) == ["initialize", "notifications/initialized", "tools/list"]
+    for method, headers, _ in seen:
+        assert headers["authorization"] == "Bearer tok", method
+        assert headers["x-server"] == "github", method
+
+    async def provider(refresh: bool) -> dict[str, str]:
+        return {"Authorization": "Bearer p1"}
+
+    provided: Seen = []
+    await _client(_server(provided), headers=static, headers_provider=provider).list_tools()
+    assert _methods(provided) == ["initialize", "notifications/initialized", "tools/list"]
+    for method, headers, _ in provided:
+        assert headers["authorization"] == "Bearer p1", method
+        assert headers["x-server"] == "github", method
+
+
 class _TokenCache:
     """A provider in front of an OAuth token cache: the cached token, until a refresh renews it."""
 
@@ -289,6 +312,64 @@ async def test_a_401_refreshes_the_provider_once_then_fails() -> None:
     assert refused.value.code == 401
     assert cache.refreshes == 1
     assert _methods(refused_requests) == ["initialize", "initialize"]
+
+
+async def test_a_401_without_a_provider_is_not_sent_again() -> None:
+    """A static token has nothing to renew: its 401 is an error at once, not a second `initialize`
+    carrying the credential the server just refused."""
+    seen: Seen = []
+
+    def refuses(request: httpx.Request) -> httpx.Response:
+        _record(seen, request)
+        return httpx.Response(401)
+
+    with pytest.raises(McpError, match="refused by the server") as refused:
+        await _client(refuses, token="t").list_tools()
+    assert refused.value.code == 401
+    assert _methods(seen) == ["initialize"]
+    assert seen[0][1]["authorization"] == "Bearer t"
+
+
+async def test_a_refreshed_reinitialize_is_still_an_initialize() -> None:
+    """A lost session's new `initialize` meets an expired token. The provider renews it, and the
+    `initialize` sent again is still one: no `MCP-Protocol-Version` (the version agreed in the lost
+    session may not be the new replica's), which the strict gateway refuses with a 400."""
+    seen: Seen = []
+    expired = False
+
+    def lost(method: str, session: str | None) -> bool:
+        nonlocal expired
+        if method == "tools/list" and session == "s1":
+            expired = True  # the replica that held `s1` is gone, and the cached token with it
+            return True
+        return False
+
+    gateway = _gateway(seen, lost)
+
+    def expires_old(request: httpx.Request) -> httpx.Response:
+        if expired and request.headers.get("authorization") != "Bearer new":
+            _record(seen, request)
+            return httpx.Response(401)
+        return gateway(request)
+
+    cache = _TokenCache()
+    client = _client(expires_old, headers_provider=cache)
+    tools = await client.list_tools()
+    assert [tool.name for tool in tools] == ["read_order"]
+    assert cache.refreshes == 1
+    assert [(m, h["authorization"], h.get("mcp-session-id")) for m, h, _ in seen] == [
+        ("initialize", "Bearer old", None),
+        ("notifications/initialized", "Bearer old", "s1"),
+        ("tools/list", "Bearer old", "s1"),
+        ("initialize", "Bearer old", None),
+        ("initialize", "Bearer new", None),
+        ("notifications/initialized", "Bearer new", "s2"),
+        ("tools/list", "Bearer new", "s2"),
+    ]
+    for method, headers, _ in seen:
+        if method == "initialize":
+            assert "mcp-protocol-version" not in headers
+    assert client.negotiated_version == "2026-07-28"
 
 
 async def test_token_and_provider_are_exclusive() -> None:
