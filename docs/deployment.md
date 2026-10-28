@@ -1288,9 +1288,9 @@ webhook, not a distributed attack, which belongs to the ingress or a WAF. Each r
 10 000 client keys and evicts the least recently seen beyond that.
 
 **Keyed on the address the nearest trusted proxy saw.** The key is never the left-most
-`X-Forwarded-For` entry, which the client writes: rotating that header buys no new window, and forging
-someone else's address (a provider's webhook address, say) does not spend their budget. An IPv6 client
-is keyed by its /64.
+`X-Forwarded-For` entry, which the client writes: rotating that header buys no new window. A client
+outside the trusted networks cannot spend someone else's budget by forging their address (a provider's
+webhook address, say); a client inside them can (see below). An IPv6 client is keyed by its /64.
 
 | Setting | Chart value | Default | What it does |
 | :-- | :-- | :-- | :-- |
@@ -1301,9 +1301,23 @@ The API refuses to start on a value of `CHOREGOS_TRUSTED_PROXY_CIDRS` that is no
 both settings are set. The chart owns both names: `global.extraEnv` naming either fails at render.
 
 The chart trusts the private ranges because every in-cluster hop (the gateway, the console's Next
-server) has a private address. **Narrow them on-prem** when clients themselves have private addresses:
-a client inside a trusted range can write entries the API will believe. With every hop's address known,
-list only those (`--set-json 'choregos-api.trustedProxyCidrs=["10.42.0.0/16"]'`).
+server) has a private address. The cost is that any other client inside a trusted range that can reach
+the API can write `X-Forwarded-For` entries the API will believe:
+
+- **Runner pods, on any cluster with a private pod network, cloud or on-prem.** They run agent code,
+  their pod address is inside the default ranges, and `choregos-runner-egress` lets them call the API
+  directly. Agent code can send webhook requests that carry a provider's address (GitHub's, say) and
+  spend that provider's budget on every replica the Service reaches. The provider's real deliveries then get `429` until the minute
+  passes, and GitHub does not redeliver on its own. An invalid signature does not help: the limiter
+  counts before the route checks it.
+- **On-prem clients** with private addresses, in the same way.
+
+**Narrow the list** to the networks of the ingress controller (or gateway) pods and the console pods
+where the pod network allows it, i.e. where those pods draw from an IP pool that runners do not use (a
+dedicated node pool's pod range, a CNI IP pool per namespace). With every hop's address known, list
+only those (`--set-json 'choregos-api.trustedProxyCidrs=["10.42.0.0/16"]'`). On a flat pod network,
+where every pod shares one pod CIDR, the default leaves the runner case open. #1061 tracks trusting
+proxies by identity rather than by range.
 
 The console's Next server is a trusted hop: it proxies `/api/v1` to the API, so the browser's address
 must reach the API in `X-Forwarded-For`. **If every console sign-in shares one window** (one user's

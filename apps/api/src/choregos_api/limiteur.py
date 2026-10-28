@@ -6,17 +6,20 @@ A sliding one-minute window in memory, per client address and per replica: with 
 client gets up to N x `CHOREGOS_RATE_LIMIT_PER_MINUTE`. There is no shared store, by decision.
 
 The key is the address the nearest trusted proxy saw (`client_address`), never the left-most
-`X-Forwarded-For` entry, which the client writes: rotating that header buys no new window, and
-forging a third party's address does not spend that party's budget. Which proxies are trusted is
-`CHOREGOS_TRUSTED_PROXY_CIDRS` (or `CHOREGOS_TRUSTED_PROXY_HOPS`); with neither, the TCP peer is
-the client and the header is ignored. An IPv6 client is keyed by its /64, which one subscriber
-usually holds whole. The table holds at most `MAX_KEYS` keys, evicting the least recently seen,
-and no request walks it.
+`X-Forwarded-For` entry, which the client writes: rotating that header buys no new window, and a
+client outside the trusted networks cannot spend a third party's budget by forging its address.
+Which proxies are trusted is `CHOREGOS_TRUSTED_PROXY_CIDRS` (or `CHOREGOS_TRUSTED_PROXY_HOPS`);
+with neither, the TCP peer is the client and the header is ignored. An IPv6 client is keyed by
+its /64, which one subscriber usually holds whole. The table holds at most `MAX_KEYS` keys,
+evicting the least recently seen, and no request walks it.
 
 What it stops: a scan of the sign-in routes or a flood of webhooks from one address. What it does
-not stop: a distributed attack (that belongs to the ingress or a WAF), a client inside a trusted
-network that writes its own entries, and a flood of more than `MAX_KEYS` distinct addresses, which
-evicts older windows. Authenticated routes do not come here: their principal bounds them.
+not stop: a distributed attack (that belongs to the ingress or a WAF), a flood of more than
+`MAX_KEYS` distinct addresses, which evicts older windows, and a client inside a trusted network
+that writes its own entries. With the chart's default private ranges, that last one includes runner
+pods on any cluster with a private pod network: agent code may call the API directly, forge a
+provider's address and spend its webhook budget (#1061). Authenticated routes do not come here:
+their principal bounds them.
 """
 
 from __future__ import annotations
