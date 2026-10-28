@@ -93,6 +93,14 @@ describe("the MCP catalogue's pure parts", () => {
 });
 
 describe("the catalogue page", () => {
+  it("says what it is for: tools agents call, under the connector's key, not how a workflow moves its ticket", async () => {
+    page();
+    const purpose = await screen.findByRole("complementary", { name: /tools your agents call/ });
+    expect(purpose).toHaveTextContent("never hands it to the agent");
+    expect(purpose).toHaveTextContent("A workflow does not move its ticket through MCP");
+    expect(within(purpose).getByRole("link", { name: /connector types/ })).toHaveAttribute("href", "/catalogue/connectors");
+  });
+
   it("lists the entries, each with its badges, and the facets narrow them", async () => {
     page();
     const github = await screen.findByTestId("entry-github");
