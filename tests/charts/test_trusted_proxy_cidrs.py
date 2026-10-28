@@ -45,11 +45,20 @@ def _api_env(*json_sets: str) -> dict[str, dict[str, Any]]:
     return {item["name"]: item for item in api.get("env") or []}
 
 
-def test_the_api_trusts_the_private_ranges_by_default() -> None:
+def test_the_api_trusts_the_private_ranges_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     env = _api_env()
     assert json.loads(env[CIDRS]["value"]) == PRIVATE_RANGES
     assert env["CHOREGOS_TRUSTED_PROXY_HOPS"]["value"] == "0"
     assert json.loads(_api_env("choregos-api.trustedProxyCidrs=[]")[CIDRS]["value"]) == []
+
+    # what the chart writes is what the API settings accept, not merely JSON
+    from choregos_api.config import Settings
+
+    monkeypatch.setenv(CIDRS, env[CIDRS]["value"])
+    monkeypatch.setenv("CHOREGOS_TRUSTED_PROXY_HOPS", env["CHOREGOS_TRUSTED_PROXY_HOPS"]["value"])
+    settings = Settings()
+    assert settings.trusted_proxy_cidrs == PRIVATE_RANGES
+    assert settings.trusted_proxy_hops == 0
 
 
 def test_extra_env_cannot_shadow_the_trusted_proxies() -> None:
