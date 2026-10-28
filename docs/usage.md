@@ -463,6 +463,31 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**The next step can depend on what the agent answered** ([ADR 0106](adr/0106-a-workflow-chooses-its-next-step-from-the-agent-s-answer.md)).
+Ask the agent for the answers you route on, as outputs, and put a `when` on the transitions that
+leave the state it lands in. The first transition whose `when` holds is taken; one without `when` is
+the default:
+
+```yaml
+transitions:
+  - id: t-develop
+    from: todo
+    to: checkpoint
+    by: developer
+    outputs: [done, findings, confidence]   # "develop it, then answer: finished? findings? how sure?"
+  - { id: t-again,  from: checkpoint, to: todo,   by: platform, when: { done: false } }
+  - { id: t-unsure, from: checkpoint, to: unsure, by: platform, when: { confidence: { lt: 0.6 } } }
+  - { id: t-fix,    from: checkpoint, to: fixing, by: platform, when: { findings: { gt: 0 } } }
+  - { id: t-finish, from: checkpoint, to: done,   by: platform }
+```
+
+A condition is a value (`outcome: pr`), a list of values (`outcome: [pr, reply]`), or comparisons
+(`equals`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`); every condition of a `when` must hold. Numbers and
+booleans written as strings (`"0.85"`, `"false"`) compare as numbers and booleans; an output the stage
+did not write never matches, so an agent that says nothing takes the default. The validator refuses a
+`when` that names an output no transition declares (`when.unknown_output`) and a state whose exits all
+have a `when` (`when.no_default`).
+
 Two validation codes were renamed to English (ADR 0046): `workflow.implicit_effect` (formerly
 `workflow.effet_implicite`) and `gate.nothing_to_check` (formerly `gate.sans_matiere`). For one
 release, an issue that carries one of them also carries its former spelling in `deprecated_code`;
