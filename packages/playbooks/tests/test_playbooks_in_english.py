@@ -8,14 +8,15 @@ brings — then reads the invariants, the output contract, the frame of a regist
 an AST sweep covers everything the runner and the tool server say (messages to the agent, the
 guardrails' reasons, a result's summaries), docstrings aside.
 
-The detector is the one of `tests/langue/test_anglais.py`, loaded by its path: under
-`--import-mode=importlib`, a test module does not import another one.
+The detector is `looks_like_shipped_french` of `tools/check_english.py` (ADR 0098), loaded by its
+path: under `--import-mode=importlib`, a test module does not import another one.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import pathlib
+import sys
 from collections.abc import Callable, Iterator
 from types import ModuleType
 from typing import Any
@@ -43,15 +44,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 
 def _guard_module() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("anglais", ROOT / "tests/langue/test_anglais.py")
+    spec = importlib.util.spec_from_file_location("check_english", ROOT / "tools/check_english.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # a dataclass needs its module registered
     spec.loader.exec_module(module)
     return module
 
 
 GUARD = _guard_module()
-looks_like_french: Callable[[str], bool] = GUARD.ressemble_a_du_francais
+looks_like_french: Callable[[str], bool] = GUARD.looks_like_shipped_french
 
 #: A complete, English context: what the playbook adds, not what the user writes.
 CONTEXT = ContextPack(
@@ -198,5 +200,5 @@ def test_the_mcp_tool_descriptions_are_in_english() -> None:
 def test_what_the_runner_and_the_tools_say_is_in_english(root: str) -> None:
     """Messages to the agent, the guardrails' reasons (also read in the access sheet), a result's
     summaries, errors a console shows: every string outside docstrings."""
-    faults = GUARD._francais_d_un_paquet(root)
+    faults = GUARD.french_spoken_strings(root)
     assert not faults, "French in what the package says:\n  " + "\n  ".join(faults)

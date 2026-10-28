@@ -1,0 +1,6 @@
+# api-subsystems: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+apps/api/src/choregos_api/a2a/door.py	1
+apps/api/src/choregos_api/db/__init__.py	1
+apps/api/src/choregos_api/db/base.py	1
+apps/api/src/choregos_api/db/models.py	82
+apps/api/src/choregos_api/db/session.py	26

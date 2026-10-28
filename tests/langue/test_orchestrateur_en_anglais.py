@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import pathlib
+import sys
 
 RACINE = pathlib.Path(__file__).resolve().parents[2]
 ORCHESTRATEUR = RACINE / "apps/orchestrator/src/choregos_orchestrator"
@@ -35,13 +36,13 @@ RESTE_EN_FRANCAIS = {
 
 
 def _detecteur() -> object:
-    spec = importlib.util.spec_from_file_location(
-        "anglais", pathlib.Path(__file__).with_name("test_anglais.py")
-    )
+    """The shipped-text detector of `tools/check_english.py`, loaded by its path (ADR 0098)."""
+    spec = importlib.util.spec_from_file_location("check_english", RACINE / "tools" / "check_english.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # a dataclass needs its module registered
     spec.loader.exec_module(module)
-    return module.ressemble_a_du_francais
+    return module.looks_like_shipped_french
 
 
 def _litteraux_en_francais() -> set[tuple[str, str, int]]:
