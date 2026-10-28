@@ -45,6 +45,7 @@ from .definitions import active_policy, policy_model, workflow_model
 from .gabarits import manifeste_du_gabarit, shipped_workflows
 from .human_groups import groups_known_in, unknown_group_warnings
 from .projets import declares_a_release_train
+from .workflow_catalogue import parse_origin
 
 #: A test older than this is worth running again.
 STALE_TEST = timedelta(days=7)
@@ -162,6 +163,9 @@ class Facts:
     #: empty when there is no template or it cannot be read any more (nothing is judged then)
     template: str | None = None
     template_workflows: tuple[TemplateWorkflowFact, ...] = ()
+    #: the active workflows adopted from the catalogue (ADR 0108): (name, origin, version it offers now,
+    #: None when the entry is gone)
+    adopted: tuple[tuple[str, str, int | None], ...] = ()
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -681,6 +685,57 @@ def item_workflow_template(f: Facts) -> list[ReadinessItem]:
     ]
 
 
+def item_workflow_catalogue(f: Facts) -> list[ReadinessItem]:
+    """An adopted workflow whose catalogue entry has a newer version (ADR 0108 §5): offered, never applied."""
+    if not f.adopted:
+        return []
+    title = "Adopted workflows up to date"
+    fix = ReadinessFix(href=f"/p/{f.slug}/workflows/catalogue", by="project_owner")
+    behind: list[str] = []
+    for name, origin, offered in f.adopted:
+        parts = parse_origin(origin)
+        if parts is None:
+            continue
+        if offered is None:
+            behind.append(f"`{name}` came from `{origin}`, which the catalogue no longer offers")
+        elif offered > parts[2]:
+            behind.append(f"`{name}` is `{origin}`; version {offered} is offered")
+    if not behind:
+        shown = ", ".join(f"`{name}`" for name, _, _ in f.adopted)
+        return [
+            _item(
+                "workflow-catalogue", "general", title, "done", f"{shown} as the catalogue offers them.", fix
+            )
+        ]
+    return [
+        _item(
+            "workflow-catalogue",
+            "general",
+            title,
+            "check",
+            "; ".join(behind) + ". Adopt it again to publish the next version; a work item in progress "
+            "stays on its version.",
+            fix,
+        )
+    ]
+
+
+async def adopted_facts(
+    session: AsyncSession, org_id: str, rows: list[Any]
+) -> tuple[tuple[str, str, int | None], ...]:
+    adopted = [row for row in rows if row.source == "catalogue" and row.origin]
+    if not adopted:
+        return ()
+    from .workflow_catalogue import offered
+
+    current = {(o.source, o.name): o.version for o in await offered(session, org_id)}
+    out: list[tuple[str, str, int | None]] = []
+    for row in adopted:
+        parts = parse_origin(row.origin)
+        out.append((row.name, row.origin, current.get((parts[0], parts[1])) if parts else None))
+    return tuple(sorted(out))
+
+
 ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_provisioned,
     item_workflow,
@@ -697,6 +752,7 @@ ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_object_store,
     item_runtime_class,
     item_workflow_template,
+    item_workflow_catalogue,
     item_tools,
     item_first_work_item,
 )
@@ -963,6 +1019,7 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         template_workflows=await template_workflow_facts(
             session, project.template_ref, list(workflow_rows), project.org_id
         ),
+        adopted=await adopted_facts(session, project.org_id, list(workflow_rows)),
         slug=project.slug,
         status=project.status,
         provision_failure=(f"{failed.get('name')}: {failed.get('message')}" if failed else None),

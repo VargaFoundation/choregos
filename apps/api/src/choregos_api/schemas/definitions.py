@@ -16,6 +16,8 @@ class WorkflowDefDto(Dto):
     name: str
     version: int
     source: str
+    #: For `source: catalogue`, the entry it was adopted from (ADR 0108).
+    origin: str | None = None
     yaml: str
     json_doc: dict[str, Any] | None = Field(default=None, alias="json")
     checksum: str
@@ -25,6 +27,57 @@ class WorkflowDefDto(Dto):
     created_at: datetime | None = None
 
     model_config = ConfigDict(extra="forbid", from_attributes=True, populate_by_name=True)
+
+
+class WorkflowCatalogueRequirementDto(Dto):
+    capability: str
+    reasons: list[str]
+
+
+class WorkflowCatalogueAgentDto(Dto):
+    actor: str
+    slug: str
+    version: int | None = None
+    resolution: Literal["org", "plugin", "remote", "catalogue", "unresolved"]
+    plugin: str | None = None
+    display_name: str | None = None
+
+
+class WorkflowCatalogueEntryDto(Dto):
+    """A workflow the organisation can adopt (ADR 0108)."""
+
+    source: str
+    name: str
+    version: int
+    title: str
+    summary: str
+    tags: list[str]
+    requires: list[WorkflowCatalogueRequirementDto]
+    needs_repository: bool
+    groups: list[str]
+    agents: list[WorkflowCatalogueAgentDto]
+    yaml: str
+    shared_by: str | None = None
+    shared_from: str | None = None
+    shared_at: datetime | None = None
+
+
+class WorkflowAdopt(Dto):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source: str
+    name: str
+    version: int | None = None
+    as_: str | None = Field(default=None, alias="as", pattern=r"^[a-z][a-z0-9-]{0,62}$")
+    make_default: bool = False
+
+
+class WorkflowShare(Dto):
+    model_config = ConfigDict(extra="forbid")
+
+    project: str
+    name: str
+    version: int | None = None
 
 
 class WorkflowPut(Dto):

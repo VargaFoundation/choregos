@@ -21,12 +21,15 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=False, use_enum_values=False)
 
 
+CatalogueTag = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")]
+
+
 class WorkflowCatalogueInfo(Strict):
     """How the workflow catalogue presents a workflow (ADR 0108); the engine ignores it."""
 
     title: str | None = Field(default=None, min_length=1, max_length=80)
     summary: str | None = Field(default=None, max_length=400)
-    tags: list[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")]] = Field(default_factory=list, max_length=12)
+    tags: list[CatalogueTag] = Field(default_factory=list, max_length=12)
 
 
 class WorkflowMetadata(Strict):

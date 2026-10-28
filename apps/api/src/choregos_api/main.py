@@ -71,6 +71,7 @@ from .routers import (
     trains,
     ui,
     webhooks,
+    workflow_catalogue,
     workflows,
     workitems,
 )
@@ -342,6 +343,7 @@ def create_app() -> FastAPI:
         github_app.router,
         actions.router,
         workflows.router,
+        workflow_catalogue.router,
         models.router,
         model_catalogue.router,
         workitems.router,

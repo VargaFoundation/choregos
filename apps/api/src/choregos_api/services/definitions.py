@@ -158,6 +158,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     nom_attendu: str | None = None,
     devient_le_defaut: bool = False,
     creation_seule: bool = False,
+    origin: str | None = None,
 ) -> WorkflowDef:
     """Le SEUL chemin d'écriture d'un workflow (ADR 0031) : l'alias, le PUT par nom, la restauration.
 
@@ -210,6 +211,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         name=nom,
         version=version,
         source=source,
+        origin=origin,
         yaml=source_yaml,
         json_doc=workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
         checksum=checksum(workflow),

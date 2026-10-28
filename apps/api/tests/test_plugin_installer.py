@@ -474,3 +474,25 @@ async def test_only_the_administrator_installs_and_members_read(
     assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 403
     await project_only(client, "stranger@elsewhere.dev")
     assert (await client.get(f"{ORG}/plugins")).status_code == 403
+
+
+async def test_a_plugin_s_template_workflows_join_the_workflow_catalogue(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    """ADR 0108 §1: an installed plugin is an external catalogue; its agents resolve as `plugin`."""
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.workflow_catalogue import resolutions
+    from sqlalchemy import select
+
+    await _install(client)
+    entries = (await client.get(f"{ORG}/workflow-catalogue")).json()
+    (entry,) = [e for e in entries if e["source"] == "plugin:hello"]
+    assert entry["name"] == "hello-simple" and entry["needs_repository"] is True
+    async with session_scope() as session:
+        org_id = (
+            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+        ).scalar_one()
+        found = await resolutions(session, org_id, {"greeter", "nobody-here"})
+    assert (found["greeter"].resolution, found["greeter"].plugin) == ("plugin", "hello")
+    assert found["nobody-here"].resolution == "unresolved"

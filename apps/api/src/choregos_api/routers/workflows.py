@@ -153,12 +153,13 @@ async def edit(body: WorkflowEditRequest) -> WorkflowEditResult:
     )
 
 
-def _dto(row: WorkflowDef, project: Project) -> WorkflowDefDto:
+def workflow_dto(row: WorkflowDef, project: Project) -> WorkflowDefDto:
     return WorkflowDefDto(
         id=row.id,
         name=row.name,
         version=row.version,
         source=row.source,
+        origin=row.origin,
         yaml=row.yaml,
         json_doc=row.json_doc,
         checksum=row.checksum,
@@ -175,7 +176,7 @@ async def get_workflow(ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
     row = await default_workflow(session, ctx.id)
     if row is None:
         row, _ = await ensure_defaults(session, ctx.project)
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 @router.put("/projects/{id}/workflow", response_model=WorkflowDefDto, operation_id="putWorkflow")
@@ -192,7 +193,7 @@ async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> Workf
         base_version=body.base_version,
         devient_le_defaut=True,
     )
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 @router.get("/projects/{id}/workflows", response_model=list[WorkflowSummaryDto], operation_id="listWorkflows")
@@ -235,7 +236,7 @@ async def _actif(session: Any, ctx: Any, name: str) -> WorkflowDef:
 
 @router.get("/projects/{id}/workflows/{name}", response_model=WorkflowDefDto, operation_id="getNamedWorkflow")
 async def get_named_workflow(name: str, ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
-    return _dto(await _actif(session, ctx, name), ctx.project)
+    return workflow_dto(await _actif(session, ctx, name), ctx.project)
 
 
 @router.put("/projects/{id}/workflows/{name}", response_model=WorkflowDefDto, operation_id="putNamedWorkflow")
@@ -253,7 +254,7 @@ async def put_named_workflow(name: str, ctx: ProjectCtx, body: WorkflowPut, sess
         nom_attendu=name,
         creation_seule=body.create_only,
     )
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 def _cibles_du_routage(project: Project) -> set[str]:
@@ -299,7 +300,7 @@ async def list_versions(name: str, ctx: ProjectCtx, session: Db) -> list[Workflo
             .order_by(WorkflowDef.version.desc())
         )
     ).scalars()
-    return [_dto(row, ctx.project) for row in rows]
+    return [workflow_dto(row, ctx.project) for row in rows]
 
 
 @router.post(
@@ -322,7 +323,7 @@ async def restore_version(name: str, version: int, ctx: ProjectCtx, session: Db)
     row = await publier_workflow(
         session, ctx.principal, ctx.project, ancienne.yaml, source=ancienne.source, nom_attendu=name
     )
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 @router.get(

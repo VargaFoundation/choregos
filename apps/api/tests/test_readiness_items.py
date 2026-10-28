@@ -30,6 +30,7 @@ from choregos_api.services.readiness import (
     item_stale_tests,
     item_tools,
     item_workflow,
+    item_workflow_catalogue,
     item_workflow_template,
     runtime_fact,
 )
@@ -452,3 +453,14 @@ def test_a_workflow_equal_to_what_its_template_ships_is_done() -> None:
 def test_no_template_or_no_workflow_it_still_ships_asks_nothing() -> None:
     assert item_workflow_template(facts()) == []
     assert item_workflow_template(facts(template="investment-research")) == []
+
+
+def test_an_adopted_workflow_behind_its_catalogue_entry_is_to_check() -> None:
+    assert item_workflow_catalogue(facts()) == [], "nothing adopted: nothing said"
+    (current,) = item_workflow_catalogue(facts(adopted=(("requests", "core/default-request@1", 1),)))
+    assert current.state == "done"
+    (behind,) = item_workflow_catalogue(facts(adopted=(("requests", "core/default-request@1", 2),)))
+    assert behind.state == "check" and "version 2 is offered" in behind.detail
+    assert behind.fix.href == "/p/dev/workflows/catalogue"
+    (gone,) = item_workflow_catalogue(facts(adopted=(("ghostly", "org/ghostly@1", None),)))
+    assert gone.state == "check" and "no longer offers" in gone.detail
