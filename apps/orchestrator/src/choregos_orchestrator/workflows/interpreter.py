@@ -19,6 +19,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 
+from ..wire_names import both_names, read_key
 from .activity_names import named
 from .planification import executer_activite
 
@@ -172,16 +173,15 @@ START_REFUSAL_ESCALATES = "start-refusal-escalates"
 ALREADY_FIXED_ON_EVIDENCE = "already-fixed-on-evidence"
 #: The non-retryable error types `prepare_stage` raises for a configuration an operator can fix.
 #: Any other failure — a bug, an unreachable database once its retries are spent, an admission rule,
-#: a suspected prompt injection — still fails the interpreter, as before.
+#: a suspected prompt injection — still fails the interpreter, as before. Three of them were born
+#: French: both spellings are read (S45-03), since a history recorded before S45-39 holds the French.
 CONFIGURATION_REFUSALS = frozenset(
     {
         "ModelResolutionError",
-        "AgentIndisponible",  # lang: fr-ok — an error type the activities already raise
-        "InstructionsInvalides",  # lang: fr-ok — an error type the activities already raise
         "SkillPendingReview",
-        "SkillAbsente",  # lang: fr-ok — an error type the activities already raise
         "KnowledgeRefused",
         "BackendDisabled",  # S42-07c: the platform administrator switched the backend off
+        *both_names("AgentUnavailable", "InvalidInstructions", "SkillMissing"),
     }
 )
 
@@ -1201,10 +1201,9 @@ class WorkflowInterpreter:
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )
-        if proposee.get("refus"):
-            refus = GateOutcome(
-                "action_succeeded", False, detail=f"the action cannot be proposed: {proposee['refus']}"
-            )
+        refusal = read_key(proposee, "refusal")
+        if refusal:
+            refus = GateOutcome("action_succeeded", False, detail=f"the action cannot be proposed: {refusal}")
             return engine.after_gates(transition, [refus], self._essais(transition.key))
         action_id, statut = str(proposee["action_id"]), str(proposee["status"])
         self.action_en_cours = action_id

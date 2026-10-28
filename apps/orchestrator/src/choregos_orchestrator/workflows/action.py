@@ -17,6 +17,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
+from ..wire_names import both_names, read_key
 from .activity_names import named
 from .planification import executer_activite
 
@@ -40,7 +41,9 @@ EFFET = RetryPolicy(
     initial_interval=timedelta(seconds=5),
     backoff_coefficient=2.0,
     maximum_interval=timedelta(minutes=5),
-    non_retryable_error_types=["EffetRefuse", "ActionIntrouvable"],
+    # Both spellings (S45-03): the activities raise the French types until S45-39, and a history
+    # recorded before it keeps them.
+    non_retryable_error_types=both_names("EffectRefused", "ActionNotFound"),
 )
 
 
@@ -77,7 +80,7 @@ class ActionWorkflow:
             retry_policy=LECTURE,
         )
         try:
-            for position in range(int(plan["effets"])):
+            for position in range(int(read_key(plan, "effects"))):
                 fait = await executer_activite(
                     named(activites.execute_effect, activites.executer_l_effet),
                     {"action_id": action_id, "position": position},
@@ -86,7 +89,7 @@ class ActionWorkflow:
                 )
                 self.faits.append(position)
                 resultat = fait.get("result") if isinstance(fait, dict) else None
-                attente = resultat.get("attendre_une_preuve") if isinstance(resultat, dict) else None
+                attente = read_key(resultat, "await_evidence") if isinstance(resultat, dict) else None
                 if attente and workflow.patched(PREUVE_ATTENDUE):
                     await self._attendre_la_preuve(action_id, position, dict(attente))
         except (ActivityError, PreuveManquante) as erreur:
@@ -126,7 +129,7 @@ class ActionWorkflow:
         """L'effet est fait ; l'action attend la preuve qu'il a servi, jusqu'à son échéance. Venue et
         favorable, la suite reprend ; contraire ou absente, l'action échoue et ce qui était fait se
         compense, comme pour un refus."""
-        jusqu_a = datetime.fromisoformat(str(attente["jusqu_a"]))
+        jusqu_a = datetime.fromisoformat(str(read_key(attente, "until")))
         self.etat = "awaiting_evidence"
         await executer_activite(
             named(activites.mark_awaiting_evidence, activites.marquer_l_attente),
