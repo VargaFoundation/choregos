@@ -234,3 +234,42 @@ export function bodyOfDrafts(drafts: Record<string, SecretDraft>): {
   }
   return { secret_values, secret_refs };
 }
+
+/** `api_key.3` -> ["api_key", 3]; `api_key` -> ["api_key", 1] (ADR 0089). */
+function slotOf(name: string): [string, number] {
+  const m = /^(.+)\.(\d+)$/.exec(name);
+  return m ? [m[1] ?? name, Number(m[2])] : [name, 1];
+}
+
+/** Secret field names in slot order: `api_key`, `api_key.2` … `api_key.10`, then the next field. */
+export function inSlotOrder(names: string[]): string[] {
+  return [...new Set(names)].sort((a, b) => {
+    const [fa, na] = slotOf(a);
+    const [fb, nb] = slotOf(b);
+    return fa === fb ? na - nb : fa < fb ? -1 : 1;
+  });
+}
+
+/** The first free slot of a pooled field among `taken`, or null when all ten are used (ADR 0089). */
+export function nextSlot(field: string, taken: string[]): string | null {
+  if (!taken.includes(field)) return field;
+  for (let n = 2; n <= 10; n += 1) {
+    if (!taken.includes(`${field}.${n}`)) return `${field}.${n}`;
+  }
+  return null;
+}
+
+/**
+ * "Add a key" under a pooled field (ADR 0089): the connector uses its keys in turn and moves to the
+ * next when one is rate limited or refused. A key is replaced without a gap: add the new one, then
+ * clear the old.
+ */
+export function AddKey({ field, taken, onAdd }: { field: string; taken: string[]; onAdd: (slot: string) => void }) {
+  const slot = nextSlot(field, taken);
+  if (slot === null) return <p className="text-xs text-ink-muted">{field.replaceAll("_", " ")}: ten keys, the most a field holds</p>;
+  return (
+    <Button size="sm" onClick={() => onAdd(slot)} aria-label={`Add a key to ${field.replaceAll("_", " ")}`}>
+      Add a key
+    </Button>
+  );
+}
