@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, query_soon, stage_result
 
 pytestmark = pytest.mark.asyncio
 
@@ -137,11 +137,11 @@ async def _demarrer(env: Any, setup: Fixture, projet_id: str, item_id: str, cle:
 
 async def _jusqu_a(handle: Any, requete: str, predicat: Any, timeout: float = 60.0) -> dict[str, Any]:
     for _ in range(int(timeout * 10)):
-        etat = await handle.query(requete)
+        etat = await query_soon(handle, requete)
         if predicat(etat):
             return dict(etat)
         await asyncio.sleep(0.1)
-    raise AssertionError(f"jamais atteint (dernier : {await handle.query(requete)})")
+    raise AssertionError(f"never reached (last: {await query_soon(handle, requete)})")
 
 
 async def _etat(ticket: Any, etat: str) -> None:

@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, query_soon
 
 pytestmark = pytest.mark.asyncio
 
@@ -100,11 +100,11 @@ async def _demarrer(env: Any, setup: Fixture) -> Any:
 
 async def _attendre(handle: Any, predicat: Any, quoi: str) -> dict[str, Any]:
     for _ in range(600):
-        status = await handle.query("status")
+        status = await query_soon(handle, "status")
         if predicat(status):
             return dict(status)
         await asyncio.sleep(0.1)
-    raise AssertionError(f"{quoi} : jamais vrai (status : {await handle.query('status')})")
+    raise AssertionError(f"{quoi}: never true (status: {await query_soon(handle, 'status')})")
 
 
 async def _evenements(setup: Fixture) -> list[Any]:

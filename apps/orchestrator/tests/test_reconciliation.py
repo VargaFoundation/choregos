@@ -8,7 +8,7 @@ import pytest
 from choregos_orchestrator.activities import tracker as tracker_activities
 from choregos_orchestrator.train_client import clear_fake_signals, fake_starts
 
-from .conftest import Fixture
+from .conftest import Fixture, query_soon
 
 pytestmark = pytest.mark.asyncio
 
@@ -113,7 +113,7 @@ async def test_la_boucle_periodique_rattrape_puis_se_termine(
             task_queue="test",
         )
         for _ in range(100):
-            status = await handle.query("status")
+            status = await query_soon(handle, "status")
             if status["passes"] >= 1:
                 break
         await handle.signal("stop", {})
@@ -218,7 +218,7 @@ async def test_une_passe_qui_echoue_ne_tue_pas_la_boucle(temporal_env: Any) -> N
         )
         statut: dict[str, Any] = {}
         for _ in range(200):
-            statut = await poignee.query("status")
+            statut = await query_soon(poignee, "status")
             if statut["passes"] >= 2:
                 break
             await temporal_env.sleep(1)

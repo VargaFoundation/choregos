@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, query_soon
 
 pytestmark = pytest.mark.asyncio
 
@@ -119,10 +119,10 @@ async def test_un_environnement_auto_sync_degrade_rend_le_ticket_a_un_humain(
         async with worker_factory():
             ticket, train = await _ticket_vers_dev(setup, temporal_env)
             for _ in range(600):
-                if (await ticket.query("status"))["state"] == "needs_human":
+                if (await query_soon(ticket, "status"))["state"] == "needs_human":
                     break
                 await asyncio.sleep(0.1)
-            assert (await ticket.query("status"))["state"] == "needs_human"
+            assert (await query_soon(ticket, "status"))["state"] == "needs_human"
             await train.signal("abort", {"by": "test"})
             await train.result()
             await ticket.cancel()

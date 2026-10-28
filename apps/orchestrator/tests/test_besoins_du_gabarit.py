@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, query_soon, stage_result
 
 pytestmark = pytest.mark.asyncio
 
@@ -30,11 +30,11 @@ async def _documents(setup: Fixture) -> dict[str, Any]:
 
 async def _jusqu_a(setup: Fixture, ticket: Any, predicat: Any) -> dict[str, Any]:
     for _ in range(600):
-        documents, etat = await _documents(setup), await ticket.query("status")
+        documents, etat = await _documents(setup), await query_soon(ticket, "status")
         if predicat(documents, etat["state"]):
             return documents
         await asyncio.sleep(0.1)
-    raise AssertionError(f"jamais atteint : {await _documents(setup)} / {await ticket.query('status')}")
+    raise AssertionError(f"never reached: {await _documents(setup)} / {await query_soon(ticket, 'status')}")
 
 
 async def test_la_raison_d_un_refus_parvient_au_ticket_et_une_approbation_l_efface(

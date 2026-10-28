@@ -13,7 +13,7 @@ from choregos_orchestrator.activities import schedules
 from choregos_orchestrator.activities import tracker as tracker_activities
 from choregos_orchestrator.train_client import clear_fake_signals, fake_starts
 
-from .conftest import Fixture
+from .conftest import Fixture, query_soon
 
 pytestmark = pytest.mark.asyncio
 
@@ -199,7 +199,7 @@ async def test_each_pass_fires_the_schedules_before_it_reconciles(temporal_env: 
         )
         status: dict[str, Any] = {}
         for _ in range(200):
-            status = await handle.query("status")
+            status = await query_soon(handle, "status")
             if status["passes"] >= 2:
                 break
             await temporal_env.sleep(1)

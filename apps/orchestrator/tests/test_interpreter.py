@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture, refine_result, stage_result
+from .conftest import Fixture, query_soon, refine_result, stage_result
 
 pytestmark = pytest.mark.asyncio
 
@@ -289,14 +289,15 @@ async def _query_status(handle: Any) -> Any:
     ("invalid history builder state for action"); until the task is retried, a query hangs. The
     server then answers DEADLINE_EXCEEDED, and our own `rpc_timeout` ends it as CANCELLED
     ("Timeout expired"). That says nothing about the workflow, so the query gets a short deadline
-    and the caller asks again until its own timeout.
+    and the caller asks again until its own timeout. Before that, `query_soon` asks again at once
+    on any transient failure, the worker's deadlock detector included (#873).
     """
     from datetime import timedelta
 
     from temporalio.service import RPCError, RPCStatusCode
 
     try:
-        return await handle.query("status", rpc_timeout=timedelta(seconds=10))
+        return await query_soon(handle, "status", rpc_timeout=timedelta(seconds=10))
     except RPCError as error:
         if error.status not in (RPCStatusCode.DEADLINE_EXCEEDED, RPCStatusCode.CANCELLED):
             raise

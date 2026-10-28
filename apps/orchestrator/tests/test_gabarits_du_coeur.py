@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, query_soon, stage_result
 
 pytestmark = pytest.mark.asyncio
 
@@ -61,10 +61,10 @@ async def _demarrer(env: Any, setup: Fixture) -> Any:
 
 async def _etat(ticket: Any, etat: str, timeout: float = 60.0) -> None:
     for _ in range(int(timeout * 10)):
-        if (await ticket.query("status"))["state"] == etat:
+        if (await query_soon(ticket, "status"))["state"] == etat:
             return
         await asyncio.sleep(0.1)
-    raise AssertionError(f"jamais en `{etat}` : {await ticket.query('status')}")
+    raise AssertionError(f"never in `{etat}`: {await query_soon(ticket, 'status')}")
 
 
 async def _ci(setup: Fixture, ticket: Any, conclusion: str, livraison: str) -> None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
@@ -204,3 +206,59 @@ def refine_result(summary: str = "spec written", **kwargs: Any) -> Any:
         **kwargs.pop("outputs", {}),
     }
     return stage_result(summary, outputs=outputs, **kwargs)
+
+
+#: How long, from its first call, `query_soon` asks a query again after a transient failure.
+QUERY_RETRY_BUDGET = 5.0
+#: The pause between two calls of the same query.
+QUERY_RETRY_PAUSE = 0.1
+
+
+def is_transient_query_failure(error: BaseException) -> bool:
+    """Whether a failed query tells something about the machine running the test, not the workflow.
+
+    - `TMPRL1101`: temporalio's worker gives every workflow activation two seconds of wall clock
+      (its deadlock detector, off only in debug mode), timed on the event loop the test, its fakes
+      and the async activities share. The activation of a `status` query takes under a millisecond
+      of CPU, but a full garbage collection of the test process takes about 0.2 s and holds the
+      GIL, the loop and the activation thread with it; on a saturated runner it, or any other
+      synchronous step, stretches past two seconds, the timer fires before the finished activation
+      is read, and the query fails with "Potential deadlock detected" although the workflow never
+      blocked (#873).
+    - DEADLINE_EXCEEDED, or "query deadline exceeded": the server got no answer in time, for
+      instance while it retries a workflow task it rejected (#492, #496, #728).
+    """
+    from temporalio.client import WorkflowQueryFailedError
+    from temporalio.service import RPCError, RPCStatusCode
+
+    if isinstance(error, WorkflowQueryFailedError):
+        return "TMPRL1101" in error.message
+    if isinstance(error, RPCError):
+        return error.status == RPCStatusCode.DEADLINE_EXCEEDED or "query deadline exceeded" in error.message
+    return False
+
+
+async def query_soon(
+    handle: Any,
+    name: str,
+    *args: Any,
+    budget: float = QUERY_RETRY_BUDGET,
+    pause: float = QUERY_RETRY_PAUSE,
+    **kwargs: Any,
+) -> Any:
+    """`handle.query(name, *args, **kwargs)`, asked again while it fails for a transient reason.
+
+    The test suite's only way to query a workflow it polls. A transient failure
+    (`is_transient_query_failure`) is asked again after `pause`, as long as the next call starts
+    within `budget` seconds of the first one; past that, the last error is raised. Any other error
+    (an unknown query, a workflow that is gone) is raised at once. What the test waits for, and how
+    long, stays with the test: this only keeps one unlucky call from failing it.
+    """
+    deadline = time.monotonic() + budget
+    while True:
+        try:
+            return await handle.query(name, *args, **kwargs)
+        except Exception as error:
+            if not is_transient_query_failure(error) or time.monotonic() + pause > deadline:
+                raise
+        await asyncio.sleep(pause)

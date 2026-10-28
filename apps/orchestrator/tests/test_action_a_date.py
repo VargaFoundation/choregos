@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, query_soon
 
 HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 
@@ -121,11 +121,11 @@ async def _demarrer(env: Any, setup: Fixture) -> Any:
 
 async def _attendre(handle: Any, predicat: Any, quoi: str) -> dict[str, Any]:
     for _ in range(600):
-        status = await handle.query("status")
+        status = await query_soon(handle, "status")
         if predicat(status):
             return dict(status)
         await asyncio.sleep(0.05)
-    raise AssertionError(f"{quoi} : jamais vrai (status : {await handle.query('status')})")
+    raise AssertionError(f"{quoi}: never true (status: {await query_soon(handle, 'status')})")
 
 
 async def _actions(setup: Fixture) -> list[Any]:

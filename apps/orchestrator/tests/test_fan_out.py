@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, query_soon
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 PARENT_ID = "wi-billing-api-varga_billing-api-123"
@@ -163,7 +163,7 @@ async def _waiting(env: Any, workflow_id: str) -> None:
     handle = env.client.get_workflow_handle(workflow_id)
 
     async def probe() -> bool:
-        return bool((await handle.query("status")).get("state") == "proposed")
+        return bool((await query_soon(handle, "status")).get("state") == "proposed")
 
     await _until(f"{workflow_id} waits for its owner", probe)
 
@@ -195,7 +195,7 @@ async def test_the_parent_waits_for_every_child_then_reads_what_they_concluded(
             await temporal_env.client.get_workflow_handle(first.temporal_wf_id).result()
 
             async def one_left() -> bool:
-                status = await parent.query("status")
+                status = await query_soon(parent, "status")
                 return bool(status["waiting_until"] == "1 of 2 child work items not settled")
 
             await _until("the parent re-reads after the first child", one_left)

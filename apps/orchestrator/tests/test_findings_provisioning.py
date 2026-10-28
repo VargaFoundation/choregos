@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, query_soon
 
 pytestmark = pytest.mark.asyncio
 
@@ -35,11 +35,11 @@ async def _add_finding(setup: Fixture, title: str, evidence: str, **kwargs: Any)
 
 async def _wait(handle: Any, predicate: Any, timeout: float = 30.0) -> dict[str, Any]:
     for _ in range(int(timeout * 10)):
-        status = await handle.query("status")
+        status = await query_soon(handle, "status")
         if predicate(status):
             return status
         await asyncio.sleep(0.1)
-    raise AssertionError(f"condition jamais atteinte : {await handle.query('status')}")
+    raise AssertionError(f"condition never reached: {await query_soon(handle, 'status')}")
 
 
 async def test_finding_creates_linked_ticket(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
