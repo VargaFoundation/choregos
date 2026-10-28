@@ -20,7 +20,7 @@ from temporalio import activity
 from temporalio.exceptions import ActivityError, ApplicationError
 
 from ..train_client import signal_release_train
-from ..wire_names import read_key
+from ..wire_names import read_key, require_key
 from .base import db, load_work_item, project_bundle
 from .bilan import close_run_spend
 from .execution import abandon_queued_runs
@@ -205,7 +205,7 @@ async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
         item = await load_work_item(session, payload["work_item_id"])
         # The key and the refusal are read under both spellings (S45-03), in the payload and in the
         # events already persisted; the event still persists `cle`.
-        cle = str(read_key(payload, "key"))
+        cle = str(require_key(payload, "key"))
         types = (str(EventType.WORKITEM_MIGRATED), str(EventType.WORKITEM_MIGRATION_REFUSED))
         consignes = (
             await session.execute(select(Event).where(Event.work_item_id == item.id, Event.type.in_(types)))

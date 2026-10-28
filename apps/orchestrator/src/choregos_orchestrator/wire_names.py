@@ -55,10 +55,20 @@ def read_key(payload: Mapping[str, Any], english: str, default: Any = None) -> A
     return payload.get(former, default)
 
 
+def require_key(payload: Mapping[str, Any], english: str) -> Any:
+    """`read_key` for a key the reader cannot do without: with neither spelling present it raises
+    the `KeyError` of the direct read it replaces (`payload['<former>']`), so that what a workflow
+    or an activity raises on a malformed payload does not change (S45-03)."""
+    former = FORMER_PAYLOAD_KEYS[english]
+    if english in payload:
+        return payload[english]
+    return payload[former]
+
+
 def both_names(*english: str) -> list[str]:
     """Each English error type followed by its former French one, for a set of error types that
     must match what a history recorded before S45-39 as well as what is raised after."""
     return [name for each in english for name in (each, FORMER_ERROR_TYPES[each])]
 
 
-__all__ = ["FORMER_ERROR_TYPES", "FORMER_PAYLOAD_KEYS", "both_names", "read_key"]
+__all__ = ["FORMER_ERROR_TYPES", "FORMER_PAYLOAD_KEYS", "both_names", "read_key", "require_key"]

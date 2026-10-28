@@ -25,7 +25,7 @@ from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from ..wire_names import read_key
+from ..wire_names import read_key, require_key
 from .base import db
 
 logger = get_logger("choregos.actions")
@@ -306,7 +306,7 @@ async def mark_awaiting_evidence(entree: dict[str, Any]) -> dict[str, Any]:
         # The workflow's keys are read under both spellings (S45-03); what is persisted is unchanged.
         if read_key(entree, "waiting"):
             action.status = ActionStatus.AWAITING_EVIDENCE.value
-            until = read_key(entree, "until")
+            until = require_key(entree, "until")
             resultat["attente"] = {"position": entree["position"], "jusqu_a": until}  # lang: fr-ok
         else:
             action.status = ActionStatus.RUNNING.value

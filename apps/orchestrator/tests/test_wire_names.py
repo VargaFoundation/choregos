@@ -32,6 +32,18 @@ def test_read_key_prefers_english_then_former() -> None:
         read_key({"effects": 1}, "effect")  # a typo reads nothing, loudly
 
 
+def test_require_key_raises_like_the_direct_read() -> None:
+    """Where a reader subscripted a former key, a payload with neither spelling still raises the
+    same `KeyError`: what a workflow or an activity raises does not change (S45-03)."""
+    from choregos_orchestrator.wire_names import require_key
+
+    assert require_key({"cle": "k"}, "key") == "k"  # lang: fr-ok
+    assert require_key({"key": "k2", "cle": "k"}, "key") == "k2"  # lang: fr-ok
+    with pytest.raises(KeyError) as missing:
+        require_key({"refusal": "no"}, "key")
+    assert missing.value.args == ("cle",)  # lang: fr-ok - the key the direct read named
+
+
 def _direct_reads(path: pathlib.Path, former: set[str]) -> list[str]:
     """`x.get('<former>')` and `x['<former>']` (read, not stored) in one module."""
     found = []
@@ -132,6 +144,18 @@ async def test_awaiting_evidence_reads_english_and_former_keys(
     assert row.result["preuves"] == [seen]  # lang: fr-ok
 
 
+async def test_awaiting_evidence_without_a_deadline_still_fails(setup: Fixture) -> None:
+    """A payload that says the action waits but gives no deadline, under either spelling, fails the
+    activity as `entree['jusqu_a']` did, and leaves the row as it was."""
+    from choregos_orchestrator.activities.actions import mark_awaiting_evidence
+
+    action_id = await _action(setup)
+    with pytest.raises(KeyError):
+        await mark_awaiting_evidence({"action_id": action_id, "position": 1, "waiting": True})
+    row = await _row(action_id)
+    assert row.status == "running" and "attente" not in (row.result or {})  # lang: fr-ok
+
+
 async def _migration_events(setup: Fixture) -> list[Any]:
     from choregos_api.db.models import Event
     from choregos_api.db.session import session_scope
@@ -179,6 +203,17 @@ async def test_migration_refusal_is_read_under_the_english_key(setup: Fixture) -
         (str(EventType.WORKITEM_MIGRATION_REFUSED), "the state moved since the check")
     ]
     assert events[0].payload["cle"] == "wi-y/run-1/1"  # lang: fr-ok
+
+
+async def test_migration_record_without_a_key_still_fails(setup: Fixture) -> None:
+    """Without its idempotence key under either spelling, `record_migration` fails as
+    `payload['cle']` did: it never persists an event keyed `'None'`."""
+    from choregos_orchestrator.activities.interpretation import record_migration
+
+    payload = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "refusal": "moved"}
+    with pytest.raises(KeyError):
+        await record_migration(payload)
+    assert await _migration_events(setup) == []
 
 
 def test_train_input_decodes_with_and_without_relay_threshold() -> None:

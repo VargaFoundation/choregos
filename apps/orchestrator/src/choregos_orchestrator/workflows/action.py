@@ -17,7 +17,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
-from ..wire_names import both_names, read_key
+from ..wire_names import both_names, read_key, require_key
 from .activity_names import named
 from .planification import executer_activite
 
@@ -80,7 +80,7 @@ class ActionWorkflow:
             retry_policy=LECTURE,
         )
         try:
-            for position in range(int(read_key(plan, "effects"))):
+            for position in range(int(require_key(plan, "effects"))):
                 fait = await executer_activite(
                     named(activites.execute_effect, activites.executer_l_effet),
                     {"action_id": action_id, "position": position},
@@ -129,7 +129,7 @@ class ActionWorkflow:
         """L'effet est fait ; l'action attend la preuve qu'il a servi, jusqu'à son échéance. Venue et
         favorable, la suite reprend ; contraire ou absente, l'action échoue et ce qui était fait se
         compense, comme pour un refus."""
-        jusqu_a = datetime.fromisoformat(str(read_key(attente, "until")))
+        jusqu_a = datetime.fromisoformat(str(require_key(attente, "until")))
         self.etat = "awaiting_evidence"
         await executer_activite(
             named(activites.mark_awaiting_evidence, activites.marquer_l_attente),
