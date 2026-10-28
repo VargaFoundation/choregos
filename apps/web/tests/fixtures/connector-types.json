@@ -132,6 +132,10 @@
   "type": "jira"
  },
  {
+  "kind": "tracker",
+  "type": "plugin"
+ },
+ {
   "kind": "web_search",
   "type": "brave"
  },
