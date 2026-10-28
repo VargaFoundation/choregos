@@ -203,9 +203,9 @@ function pendingActionValues(method: string, path: string): Record<string, unkno
 }
 
 /**
- * Une action : confirmée quand le manifeste le demande, ses paramètres demandés d'abord. Une
- * action `reauth` passe par une session fraîche — `lib/api.ts` suit `step_up_required`. Back from
- * the IdP, the interrupted action opens again, filled in, and waits for a NEW confirmation: it is
+ * An action: confirmed when the manifest asks for it, its parameters asked for first. A `reauth`
+ * action needs a fresh sign-in: `lib/api.ts` follows `step_up_required` through the IdP. Back
+ * from it, the interrupted action opens again, filled in, and waits for a NEW confirmation: it is
  * never sent on its own (S42-04b).
  */
 function BoutonDAction({
