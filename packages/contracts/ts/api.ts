@@ -2294,6 +2294,29 @@ export type KnowledgeDistillRequest = {
   max_usd?: number | null;
 };
 
+/** One distillation run, as kept in `distillation.history` (S42-10d): how it ended and what it cost. The last five runs before the current one, newest first. */
+export type KnowledgeDistillRun = {
+  /** how the run ended (`running` only for a run whose end was never recorded) */
+  status: "running" | "pending_review" | "approved" | "rejected" | "failed" | "stopped";
+  /** why it failed or was stopped: `too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled` */
+  code?: string | null;
+  error?: string | null;
+  /** who started it */
+  requested_by?: string | null;
+  /** who stopped it */
+  stopped_by?: string | null;
+  started_at?: string | null;
+  /** when it ended */
+  at?: string | null;
+  phase?: "plan" | "map" | "reduce" | "publish" | null;
+  parts_done?: number;
+  parts_total?: number;
+  /** what the run's model calls cost; parts reused from an earlier run cost nothing */
+  spent_usd?: number;
+  skill?: string | null;
+  version?: number | null;
+};
+
 export type KnowledgeDistillEstimate = {
   characters: number;
   /** approximate: characters / 4 */
@@ -2357,9 +2380,30 @@ export type KnowledgeBase = {
   my_role?: "viewer" | "editor" | "owner" | null;
   /** returned by the reading of one base */
   grants?: Array<KnowledgeGrant> | null;
-  /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one) */
+  /** the last distillation: `status` (running, pending_review, failed, stopped), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one); `history` holds the runs before it, `stopped_by` who stopped it, `exclude` and `max_usd` what a relaunch reuses */
   distillation?: {
-    [key: string]: unknown;
+    status?: "running" | "pending_review" | "approved" | "rejected" | "failed" | "stopped";
+    code?: string | null;
+    error?: string | null;
+    at?: string | null;
+    requested_by?: string | null;
+    started_at?: string | null;
+    phase?: "plan" | "map" | "reduce" | "publish" | null;
+    parts_done?: number;
+    parts_total?: number;
+    spent_usd?: number;
+    skill?: string | null;
+    version?: number | null;
+    principles?: number | null;
+    dropped?: Array<string>;
+    /** the runs before this one, newest first (S42-10d) */
+    history?: Array<KnowledgeDistillRun>;
+    /** who stopped the run, when `status` is `stopped` */
+    stopped_by?: string | null;
+    /** the globs the run left out, kept for a relaunch */
+    exclude?: Array<string>;
+    /** the cap the run was started with, kept for a relaunch */
+    max_usd?: number | null;
   } | null;
   /** the last run of the eval set */
   eval_result?: {
@@ -4107,6 +4151,7 @@ export interface Operations {
   sources?: Array<string>;
 }; response: void };
   reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
+  relaunchKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/relaunch"; body: KnowledgeDistillRequest; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
   releaseAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases"; body: AgentReleaseCreate; response: AgentRelease };
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
@@ -4131,6 +4176,7 @@ export interface Operations {
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
+  stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };

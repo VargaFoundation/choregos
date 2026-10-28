@@ -12,7 +12,7 @@ from typing import Annotated, Any
 from choregos_contracts import StageRole
 from choregos_core import aware, utcnow
 from fastapi import APIRouter, Query, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from ..db.models import CostLedger, Deployment, Finding, Organization, Project, Release, Run, WorkItem
 from ..deps import Db, Me, ProjectCtx
@@ -142,7 +142,7 @@ async def project_costs(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
-    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
 ) -> CostReport:
     where: list[Any] = [CostLedger.project_id == ctx.id, *_period(since, until, kind)]
     policy = await effective_policy(session, ctx.id)
@@ -163,7 +163,7 @@ async def org_costs(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
-    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
 ) -> CostReport:
     organization = (
         await session.execute(select(Organization).where(Organization.slug == org))
@@ -175,7 +175,12 @@ async def org_costs(
     project_ids = (
         (await session.execute(select(Project.id).where(Project.org_id == organization.id))).scalars().all()
     )
-    where: list[Any] = [CostLedger.project_id.in_(list(project_ids) or [""]), *_period(since, until, kind)]
+    # The organisation's projects' lines, and its own (a distillation of a base with no owning
+    # project, ADR 0092): the lines with no project are only ever visible here.
+    where: list[Any] = [
+        or_(CostLedger.project_id.in_(list(project_ids) or [""]), CostLedger.org_id == organization.id),
+        *_period(since, until, kind),
+    ]
     report = await _report(session, where=where, group_by=group_by)
     report.currency = "USD" if (organization.settings or {}).get("currency") == "USD" else "EUR"
     # The organisation's daily budget: what its projects may spend a day, summed (S29-03).
@@ -197,7 +202,7 @@ async def project_costs_csv(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
-    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
 ) -> Response:
     """Le même rapport, en CSV : de quoi le recoller dans un tableur ou une facturation."""
     report = await project_costs(ctx, session, group_by=group_by, since=since, until=until, kind=kind)
@@ -217,7 +222,7 @@ async def org_costs_csv(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
-    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
 ) -> Response:
     """The organisation's report, in the grouping the screen shows."""
     report = await org_costs(org, session, principal, group_by=group_by, since=since, until=until, kind=kind)

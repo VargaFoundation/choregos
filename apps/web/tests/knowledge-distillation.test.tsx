@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
 import KnowledgeBasePage from "@/app/knowledge/[slug]/page";
 import { api } from "@/lib/api";
-import { distillationLabel, distillationProgress } from "@/lib/knowledge";
+import { distillationLabel, distillationProgress, runLabel } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeDistillEstimate } from "@/lib/types";
 
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
@@ -16,6 +16,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       knowledgeBase: vi.fn(),
       distillKnowledgeBase: vi.fn(),
+      stopKnowledgeDistillation: vi.fn(),
+      relaunchKnowledgeDistillation: vi.fn(),
       estimateKnowledgeDistillation: vi.fn(),
       updateKnowledgeBase: vi.fn(),
     },
@@ -53,8 +55,8 @@ describe("distillation (S33-05)", () => {
     );
   });
 
-  async function open() {
-    vi.mocked(api.knowledgeBase).mockResolvedValue(base);
+  async function open(shown: KnowledgeBase = base) {
+    vi.mocked(api.knowledgeBase).mockResolvedValue(shown);
     vi.mocked(api.distillKnowledgeBase).mockResolvedValue(base);
     await act(async () => {
       render(
@@ -137,6 +139,42 @@ describe("distillation (S33-05)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Distill" }));
     expect(await screen.findByTestId("estimate-refused")).toHaveTextContent("exclude `*.xlsx`");
     expect(screen.getByRole("button", { name: "Start distillation" })).toBeDisabled();
+  });
+
+  const running: KnowledgeBase = {
+    ...base,
+    distillation: {
+      status: "running",
+      phase: "map",
+      parts_done: 3,
+      parts_total: 8,
+      spent_usd: 0.92,
+      requested_by: "admin@varga.dev",
+      history: [{ status: "failed", code: "gateway", parts_done: 7, parts_total: 8, spent_usd: 4.2, requested_by: "admin@varga.dev" }],
+    },
+  };
+
+  it("monitors a running distillation and stops it on request (S42-10d)", async () => {
+    vi.mocked(api.stopKnowledgeDistillation).mockResolvedValue({ ...base, distillation: { status: "stopped", stopped_by: "admin@varga.dev" } });
+    await open(running);
+    expect(screen.getByTestId("run-now")).toHaveTextContent("map 3/8 \u00b7 $0.92 spent \u00b7 started by admin@varga.dev");
+    expect(screen.getByTestId("run-history")).toHaveTextContent("failed (the model gateway failed) \u00b7 7/8 parts \u00b7 $4.20 \u00b7 by admin@varga.dev");
+    expect(screen.queryByRole("button", { name: "Relaunch" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await waitFor(() => expect(api.stopKnowledgeDistillation).toHaveBeenCalledWith("varga", "architecture"));
+  });
+
+  it("relaunches a failed or stopped distillation, and offers no Stop when nothing runs", async () => {
+    vi.mocked(api.relaunchKnowledgeDistillation).mockResolvedValue(running);
+    await open({ ...base, distillation: { status: "stopped", stopped_by: "admin@varga.dev", spent_usd: 1.5 } });
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    expect(screen.getByTestId("knowledge-distillation")).toHaveTextContent("stopped by admin@varga.dev \u00b7 $1.50 spent");
+    fireEvent.click(screen.getByRole("button", { name: "Relaunch" }));
+    await waitFor(() => expect(api.relaunchKnowledgeDistillation).toHaveBeenCalledWith("varga", "architecture"));
+  });
+
+  it("says how a past run ended", () => {
+    expect(runLabel({ status: "pending_review", parts_done: 8, parts_total: 8, spent_usd: 2 })).toBe("pending_review \u00b7 8/8 parts \u00b7 $2.00");
   });
 
   it("switches the serving mode files to index through the existing PATCH (S42-09b)", async () => {

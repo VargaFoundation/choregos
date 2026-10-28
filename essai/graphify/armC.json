@@ -1,0 +1,222 @@
+{
+ "L1": {
+  "top5": [
+   "docs/adr/0053-agent-sandbox-as-built.md",
+   "docs/deployment.md",
+   "tests/charts/test_agent_sandbox.py",
+   "packages/adapters/tests/test_agent_sandbox.py",
+   "docs/adr/0013-agent-task-density.md"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "L2": {
+  "top5": [
+   "tests/cluster/test_agent_sandbox_executor.py",
+   "charts/choregos/values.yaml",
+   "docs/deployment.md",
+   "docs/adr/0080-hosted-prompt-and-voice-agents.md",
+   "charts/choregos/charts/api/templates/migrations-job.yaml"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "L3": {
+  "top5": [
+   "docs/concepts.md",
+   "packages/core/src/choregos_core/skill_catalogue/bundled/prototype/files/UI.md",
+   "docs/adr/0063-agents-written-in-code.md",
+   "packages/runner/src/choregos_runner/prompt.py",
+   "packages/contracts/src/choregos_contracts/stage.py"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "L4": {
+  "top5": [
+   "apps/api/src/choregos_api/services/skill_gate.py",
+   "docs/adr/0050-skill-supply-chain-gate.md",
+   "apps/api/tests/test_skill_gate.py",
+   "packages/core/src/choregos_core/skill_catalogue/bundled/doubt-driven-development/files/SKILL.md",
+   "docs/positioning.md"
+  ],
+  "file_recall@5": 1.0,
+  "adr_recall@5": null
+ },
+ "L5": {
+  "top5": [
+   "packages/core/src/choregos_core/skill_catalogue/bundled/doubt-driven-development/files/SKILL.md",
+   "tests/conformance/backends/test_code_agents.py",
+   "apps/api/src/choregos_api/services/agent_sessions.py",
+   "docs/security.md",
+   "apps/api/src/choregos_api/routers/internal.py"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "L6": {
+  "top5": [
+   "charts/choregos/values.yaml",
+   "docs/adr/0070-network-access-is-bounded-and-enforced-per-run.md",
+   "docs/deployment.md",
+   "docs/security.md",
+   "packages/core/src/choregos_core/hosted.py"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "L7": {
+  "top5": [
+   "docs/adr/0082-distillation-in-passes.md",
+   "apps/api/src/choregos_api/knowledge/distill.py",
+   "apps/orchestrator/src/choregos_orchestrator/workflows/knowledge_distill.py",
+   "docs/adr/0051-knowledge-bases.md",
+   "docs/usage.md"
+  ],
+  "file_recall@5": 1.0,
+  "adr_recall@5": null
+ },
+ "L8": {
+  "top5": [
+   "charts/choregos/values.yaml",
+   "docs/deployment.md",
+   "docs/plan/PLAN-2026-10-16.md",
+   "docs/adr/0079-choregos-and-graal-are-autonomous-products.md",
+   "docs/security.md"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "W1": {
+  "top5": [
+   "docs/adr/0070-network-access-is-bounded-and-enforced-per-run.md",
+   "docs/adr/0053-agent-sandbox-as-built.md",
+   "docs/deployment.md",
+   "docs/adr/README.md",
+   "docs/adr/0025-the-engine-drives-platform-it.md"
+  ],
+  "file_recall@5": null,
+  "adr_recall@5": 1.0
+ },
+ "W2": {
+  "top5": [
+   "docs/adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md",
+   "docs/adr/0013-agent-task-density.md",
+   "docs/adr/0016-agent-sandbox-executor.md",
+   "docs/adr/0053-agent-sandbox-as-built.md",
+   "tests/conformance/executeurs/test_capacites.py"
+  ],
+  "file_recall@5": null,
+  "adr_recall@5": 1.0
+ },
+ "W3": {
+  "top5": [
+   "docs/adr/0050-skill-supply-chain-gate.md",
+   "docs/adr/0051-knowledge-bases.md",
+   "apps/api/src/choregos_api/routers/skill_catalogue.py",
+   "packages/core/src/choregos_core/skill_catalogue/bundled/documentation-and-adrs/files/SKILL.md",
+   "packages/core/src/choregos_core/skill_catalogue/bundled/pr-writer/files/SPEC.md"
+  ],
+  "file_recall@5": null,
+  "adr_recall@5": 1.0
+ },
+ "W4": {
+  "top5": [
+   "docs/adr/0024-two-editions.md",
+   "docs/adr/0046-english-everywhere.md",
+   "CLAUDE.md",
+   "AGENTS.md",
+   "docs/adr/0077-delegated-identity-between-steps.md"
+  ],
+  "file_recall@5": null,
+  "adr_recall@5": 0.5
+ },
+ "W5": {
+  "top5": [
+   "apps/api/tests/test_knowledge_distillation.py",
+   "docs/adr/0082-distillation-in-passes.md",
+   "apps/api/src/choregos_api/knowledge/distill.py",
+   "packages/core/src/choregos_core/catalogue_d_agents/agents/architect.yaml",
+   "docs/usage.md"
+  ],
+  "file_recall@5": null,
+  "adr_recall@5": 1.0
+ },
+ "W6": {
+  "top5": [
+   "docs/adr/0005-adapters-and-fakes.md",
+   "CLAUDE.md",
+   "AGENTS.md",
+   "apps/api/src/choregos_api/local_demo.py",
+   "docs/development.md"
+  ],
+  "file_recall@5": null,
+  "adr_recall@5": 1.0
+ },
+ "T1": {
+  "top5": [
+   "docs/deployment.md",
+   "charts/choregos/values.yaml",
+   "tests/charts/test_agent_sandbox.py",
+   "docs/adr/0013-agent-task-density.md",
+   "tests/cluster/test_agent_sandbox_capabilities.py"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "T2": {
+  "top5": [
+   "docs/usage.md",
+   "docs/security.md",
+   "docs/concepts.md",
+   "docs/positioning.md",
+   "docs/integrations.md"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "T3": {
+  "top5": [
+   "docs/adr/0050-skill-supply-chain-gate.md",
+   "packages/core/src/choregos_core/skill_catalogue/bundled/writing-plans/files/SKILL.md",
+   "docs/usage.md",
+   "docs/concepts.md",
+   "packages/core/src/choregos_core/skill_catalogue/bundled/finishing-a-development-branch/files/SKILL.md"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "T4": {
+  "top5": [
+   "docs/hosted-agents.md",
+   "docs/adr/0080-hosted-prompt-and-voice-agents.md",
+   "docs/deployment.md",
+   "apps/web/src/components/agents/runtime-agent-form.tsx",
+   "charts/choregos/values.yaml"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "T5": {
+  "top5": [
+   "apps/api/tests/test_knowledge_event_loop.py",
+   "docs/usage.md",
+   "docs/adr/0051-knowledge-bases.md",
+   "docs/code-agents.md",
+   "docs/integrations.md"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ },
+ "T6": {
+  "top5": [
+   "docs/adr/0080-hosted-prompt-and-voice-agents.md",
+   "docs/deployment.md",
+   "docs/hosted-agents.md",
+   "apps/api/src/choregos_api/schemas/agents.py",
+   "docs/concepts.md"
+  ],
+  "file_recall@5": 0.0,
+  "adr_recall@5": null
+ }
+}
