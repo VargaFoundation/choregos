@@ -2,7 +2,7 @@
 """The agent's process is confined by the kernel before it starts (ADR 0094).
 
 The runner launches the agent as its child, in the same container, after the run is assigned: the
-warm pool is untouched. Between the two, `python -m choregos_runner.confine` restricts itself with
+warm pool is untouched. Between the two, this module (`wrap`, then `main`) restricts itself with
 Landlock, then `exec`s the agent, which inherits a domain it can never leave:
 
 - **writes** only under the workspace, the temporary directory (the agent's `$HOME` lives there) and
@@ -39,6 +39,10 @@ MODES: tuple[Mode, ...] = ("off", "best_effort", "enforce")
 REFUSED = 126
 #: The line prefix of the wrapper's refusal on stderr, read back by the runner.
 PREFIX = "choregos-confinement:"
+#: How the wrapper starts: `-m choregos_runner.confine` would run this module a second time, after
+#: the package's `__init__` imported it, and Python warns about that on the agent's stderr at every
+#: launch (seen on dev's nodes, 2026-10-28).
+LAUNCH = "import sys; from choregos_runner.confine import main; sys.exit(main(sys.argv[1:]))"
 
 # Linux UAPI (include/uapi/linux/landlock.h); the three syscalls share their numbers on every
 # architecture the runner image is built for (x86_64, aarch64).
@@ -246,7 +250,7 @@ def wrap(command: Sequence[str], confinement: Confinement, python: str = sys.exe
     """The command that confines itself, then becomes `command`."""
     if confinement.mode == "off":
         return list(command)
-    return [python, "-m", "choregos_runner.confine", "--policy", confinement.to_json(), "--", *command]
+    return [python, "-c", LAUNCH, "--policy", confinement.to_json(), "--", *command]
 
 
 def _check(result: int, what: str) -> int:
@@ -303,7 +307,7 @@ def apply(confinement: Confinement, abi: int | None = None) -> Report:
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) < 4 or args[0] != "--policy" or args[2] != "--":
-        print(f"{PREFIX} usage: python -m choregos_runner.confine --policy JSON -- COMMAND…", file=sys.stderr)
+        print(f"{PREFIX} usage: confine --policy JSON -- COMMAND…", file=sys.stderr)
         return 2
     try:
         apply(Confinement.from_json(args[1]))

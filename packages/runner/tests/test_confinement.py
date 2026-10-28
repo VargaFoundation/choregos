@@ -109,6 +109,14 @@ def _confined(confinement: Confinement, code: str) -> subprocess.CompletedProces
     )
 
 
+def test_the_wrapper_adds_nothing_to_the_agents_stderr() -> None:
+    # `python -m choregos_runner.confine` printed a runpy RuntimeWarning at every launch (dev, 2026-10-28).
+    done = _confined(Confinement("best_effort", (tempfile.gettempdir(),)), "print('ok')")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "ok"
+    assert "Warning" not in done.stderr, done.stderr
+
+
 @pytest.fixture
 def outside() -> Iterator[Path]:
     """A directory outside the temporary directory, where a confined process may not write."""
