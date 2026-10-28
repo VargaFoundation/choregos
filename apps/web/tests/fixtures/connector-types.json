@@ -28,6 +28,10 @@
   "type": "sharepoint"
  },
  {
+  "kind": "documents",
+  "type": "web"
+ },
+ {
   "kind": "firewall",
   "type": "pfsense"
  },
