@@ -87,6 +87,7 @@ async def list_connector_types() -> list[ConnectorType]:
             config_schema=spec.config_schema,
             capabilities=list(spec.capabilities),
             secret_fields=list(spec.secret_fields),
+            pooled_fields=list(spec.pooled_fields),
         )
         for kind, type_name, spec in connector_types()
     ]
@@ -125,6 +126,7 @@ async def put_connector(
             "enforces no cap. Use `litellm`."
         )
     from ..services.connecteurs import (
+        a_field_of,
         check_runtime_allowed,
         check_type_config,
         spec_du_type,
@@ -171,7 +173,8 @@ async def put_connector(
     before = dict(row.secret_refs or {})
     # A PUT replaces the references, but a sealed value is kept unless this body overrides its field
     # or the type no longer has it: re-saving the configuration must not wipe a typed secret.
-    kept = {f: r for f, r in before.items() if r.startswith("store:") and f in spec.secret_fields}
+    # A slot of a pooled field (`api_key.2`, ADR 0089) is kept like its field.
+    kept = {f: r for f, r in before.items() if r.startswith("store:") and a_field_of(spec, f)}
     after = refs_with_values({**kept, **body.secret_refs}, prefix, body.secret_values)
     metas = await put_values(
         session, store, ctx.project.org_id, prefix, body.secret_values, ctx.principal.email

@@ -265,7 +265,13 @@ def probe(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
     from choregos_adapters.registry import _REGISTRY, _SPECS
 
     received: list[dict[str, Any]] = []
-    spec = ConnectorTypeSpec("probe", ("tracker",), {"type": "object", "properties": {}}, ("api_token",))
+    spec = ConnectorTypeSpec(
+        "probe",
+        ("tracker",),
+        {"type": "object", "properties": {}},
+        ("api_token",),
+        pooled_fields=("api_token",),
+    )
     register("tracker", "probe", spec)(lambda cfg: received.append(cfg) or object())
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     try:
@@ -511,3 +517,80 @@ async def test_an_organisation_gateway_with_a_typed_key_is_built_with_it(
         kind, _ = await gateway_module.org_gateway_and_type(session, org.id)
     assert kind == "litellm"
     assert built[0]["master_key"] == VALUE_1
+
+
+# ───────────────────────────── several keys for one field (ADR 0089) ─────────────────────────────
+
+
+async def test_a_pooled_field_takes_one_key_per_slot_and_resolves_to_the_list(
+    client: AsyncClient, admin: str
+) -> None:
+    """A slot is written like a field and never read back; the adapter gets the keys in slot order,
+    so a key is replaced without a gap: add the new one in a free slot, then clear the old."""
+    from choregos_api.db.models import Organization, OrgConnector
+    from choregos_api.db.session import session_scope
+    from choregos_api.secret_store import resolved_configuration
+    from sqlalchemy import select
+
+    made = await client.post(
+        ORG,
+        json={
+            "name": "search",
+            "kind": "web_search",
+            "type": "brave",
+            "config": {"key_rotation": "round_robin"},
+            "secret_values": {"api_key": VALUE_1, "api_key.3": VALUE_2},
+        },
+    )
+    assert made.status_code == 201, made.text
+    assert VALUE_1 not in made.text and VALUE_2 not in made.text
+    added = await client.put(f"{ORG}/search/secrets/api_key.2", json={"value": "vendor-key-CCCC-3333"})
+    assert added.status_code == 200, added.text
+    assert [s["field"] for s in added.json()["secrets"]] == ["api_key", "api_key.2", "api_key.3"]
+    cleared = await client.delete(f"{ORG}/search/secrets/api_key")
+    assert cleared.status_code in (200, 204), cleared.text
+
+    async with session_scope(orgs="*") as session:
+        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        row = (await session.execute(select(OrgConnector).where(OrgConnector.name == "search"))).scalar_one()
+        config = await resolved_configuration(
+            session, org.id, row.kind, row.type, row.config, row.secret_refs
+        )
+    assert config["api_key"] == ["vendor-key-CCCC-3333", VALUE_2]
+    assert config["key_rotation"] == "round_robin"
+
+
+async def test_a_slot_of_a_field_its_type_does_not_pool_is_refused(client: AsyncClient, admin: str) -> None:
+    await client.post(ORG, json=_declare(secret_values={"token": VALUE_1}))
+    refused = await client.put(f"{ORG}/vendor/secrets/token.2", json={"value": VALUE_2})
+    assert refused.status_code == 422 and "no secret field token.2" in refused.text
+    out_of_range = await client.put(f"{ORG}/vendor/secrets/token.11", json={"value": VALUE_2})
+    assert out_of_range.status_code == 422
+    rotation = await client.patch(
+        f"{ORG}/vendor", json={"config": {"url": "https://vendor.test/mcp", "key_rotation": "failover"}}
+    )
+    assert rotation.status_code == 422 and "one key per field" in rotation.text
+
+
+async def test_re_saving_a_project_connector_keeps_every_slot(
+    client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]]
+) -> None:
+    """A PUT replaces the references but keeps the sealed values it does not name — every slot of a
+    pooled field too, or re-saving the configuration would drop the extra keys."""
+    url = f"/api/v1/projects/{project['id']}/connectors/tracker"
+    typed = await client.put(
+        url,
+        json={"type": "probe", "config": {}, "secret_values": {"api_token": VALUE_1, "api_token.2": VALUE_2}},
+    )
+    assert typed.status_code == 200, typed.text
+    again = await client.put(url, json={"type": "probe", "config": {}})
+    assert again.status_code == 200, again.text
+    assert [s["field"] for s in again.json()["secrets"]] == ["api_token", "api_token.2"]
+    assert len(await _stored_rows()) == 2
+
+
+async def test_a_type_lists_the_fields_it_pools(client: AsyncClient, admin: str) -> None:
+    types = (await client.get("/api/v1/connectors/types")).json()
+    pooled = {(t["kind"], t["type"]): t.get("pooled_fields") for t in types}
+    assert pooled[("web_search", "brave")] == ["api_key"]
+    assert pooled[("web_search", "firecrawl")] == []

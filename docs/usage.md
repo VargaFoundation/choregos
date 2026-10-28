@@ -146,6 +146,17 @@ operator who prefers a vault can instead give a **reference** (`env:NAME`, or a 
 holds no secrets key, typing a value answers 409 and says so ([deployment](deployment.md#secrets)).
 An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
 
+**Several keys for one field** ([ADR 0089](adr/0089-a-secret-field-holds-several-keys.md)). A type
+that pools a field (the market-data providers and their composite, Brave, Tavily) takes extra keys
+in slots `api_key.2` … `api_key.10`, each typed and cleared like a field (`PUT|DELETE
+…/secrets/api_key.2`). The adapter uses them in turn: `config.key_rotation` is `failover` (the first
+that answers, the default) or `round_robin` (spread the calls). A 429 rests a key for its
+`Retry-After` (60 s without one) and the call moves to the next at once; a 401/403 benches it for
+10 minutes and the error names its position (`key 2 of 3`), never the value; when every key rests,
+the call is a rate limit, never a call without a key. The rest is per process (API, worker). To
+replace a key without a gap: type the new one in a free slot, test, clear the old one. Whether a
+vendor allows several keys is yours to check: the free market-data sources allow one per person.
+
 **GitHub: no installation id.** A GitHub connector asks for a repository, not for an installation
 ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). The Choregos GitHub App is
 installed from the console (*Install on GitHub*, which returns to the settings page); the platform
