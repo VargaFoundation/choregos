@@ -447,10 +447,10 @@ def test_a_block_value_is_written_one_field_per_line_under_the_transition() -> N
             {"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"},
         ],
     )
-    ajout = [ligne for ligne in edition.yaml.splitlines() if ligne not in texte.splitlines()]
-    assert "    task:" in ajout and "  inputs:" in ajout, ajout
-    assert "      title: Hand over the badge" in ajout
-    assert all(len(ligne) < 110 for ligne in ajout)
+    added = [line for line in edition.yaml.splitlines() if line not in texte.splitlines()]
+    assert "    task:" in added and "  inputs:" in added, added
+    assert "      title: Hand over the badge" in added
+    assert all(len(line) < 110 for line in added)
     (accept,) = [t for t in yaml.safe_load(edition.yaml)["transitions"] if t["id"] == "t-accept"]
     assert accept["task"] == TASK
     assert parse_workflow(edition.yaml)[1].valid
@@ -460,16 +460,17 @@ def test_a_block_value_is_written_one_field_per_line_under_the_transition() -> N
 def test_a_value_written_in_block_style_can_be_replaced() -> None:
     """It was refused before ADR 0109: the whole key's lines are replaced, and the inverse puts them back."""
     texte = template_yaml("default-request")
-    avec = editer(
+    with_task = editer(
         texte, [{"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"}]
     ).yaml
-    autre = {**TASK, "title": "Return the laptop"}
+    other = {**TASK, "title": "Return the laptop"}
     edition = editer(
-        avec, [{"op": "set_transition", "id": "t-accept", "field": "task", "value": autre, "style": "block"}]
+        with_task,
+        [{"op": "set_transition", "id": "t-accept", "field": "task", "value": other, "style": "block"}],
     )
     (accept,) = [t for t in yaml.safe_load(edition.yaml)["transitions"] if t["id"] == "t-accept"]
     assert accept["task"]["title"] == "Return the laptop"
-    assert editer(edition.yaml, edition.inverse).yaml == avec
+    assert editer(edition.yaml, edition.inverse).yaml == with_task
 
 
 def test_set_workflow_writes_initial_after_metadata_and_the_fields_in_metadata() -> None:
@@ -481,8 +482,8 @@ def test_set_workflow_writes_initial_after_metadata_and_the_fields_in_metadata()
             {"op": "set_workflow", "field": "description", "value": "Requests of the HR desk."},
         ],
     )
-    lignes = edition.yaml.splitlines()
-    assert lignes[lignes.index("actors:") - 1] == "initial: refining", "right after metadata"
+    lines = edition.yaml.splitlines()
+    assert lines[lines.index("actors:") - 1] == "initial: refining", "right after metadata"
     document = yaml.safe_load(edition.yaml)
     assert document["metadata"]["description"] == "Requests of the HR desk."
     assert _commentaires(edition.yaml) == _commentaires(texte)

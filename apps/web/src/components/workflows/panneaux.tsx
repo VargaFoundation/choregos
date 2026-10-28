@@ -164,7 +164,7 @@ export function FormulaireDEtape({
   );
 }
 
-/** Une transition : qui la porte, ses garanties, son délai, every other field (ADR 0109); la retirer. */
+/** A transition: who moves it, its guarantees, its time limit, every other field (ADR 0109); removing it. */
 export function PanneauDeTransition({
   arete,
   acteurs,

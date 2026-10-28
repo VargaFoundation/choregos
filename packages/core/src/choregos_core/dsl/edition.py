@@ -437,26 +437,26 @@ def _collection(texte: str, parent: Node, nom: str) -> _Collection:
     return _sous_collection(texte, cle, noeud)
 
 
-def _bloc(texte: str, porteur: _Collection, champ: str, valeur: Any) -> str:
-    """`champ: valeur` as indented lines, at the indentation of the carrier's keys."""
-    assert isinstance(porteur.noeud, MappingNode) and porteur.noeud.value
-    colonne = int(porteur.noeud.value[0][0].start_mark.column)
-    rendu = yaml.safe_dump(
-        {champ: valeur}, default_flow_style=False, allow_unicode=True, sort_keys=False, width=100
+def _block(text: str, carrier: _Collection, name: str, value: Any) -> str:
+    """`name: value` as indented lines, at the indentation of the carrier's keys."""
+    assert isinstance(carrier.noeud, MappingNode) and carrier.noeud.value
+    column = int(carrier.noeud.value[0][0].start_mark.column)
+    rendered = yaml.safe_dump(
+        {name: value}, default_flow_style=False, allow_unicode=True, sort_keys=False, width=100
     )
-    return "".join(" " * colonne + ligne for ligne in rendu.splitlines(keepends=True))
+    return "".join(" " * column + line for line in rendered.splitlines(keepends=True))
 
 
-def _inserer_lignes(texte: str, porteur: _Collection, place: int, lignes: str) -> str:
+def _insert_lines(text: str, carrier: _Collection, place: int, lines: str) -> str:
     """Whole lines at `place`, as a removal gives them back — or, at the very end of a file without a
     final line break, preceded by one."""
-    position = porteur._position(place)
-    if position == len(texte) and not texte.endswith("\n"):
-        lignes = "\n" + lignes.rstrip("\n")
-    return _greffer(texte, position, position, lignes)
+    position = carrier._position(place)
+    if position == len(text) and not text.endswith("\n"):
+        lines = "\n" + lines.rstrip("\n")
+    return _greffer(text, position, position, lines)
 
 
-def _modifier_cle(
+def _set_key(
     texte: str, porteur: _Collection, op: _SetField, place_neuve: int | None = None
 ) -> tuple[str, dict[str, Any]]:
     """A field of an item: written, replaced, removed or put back; returns what undoes it.
@@ -470,7 +470,7 @@ def _modifier_cle(
             raise EditionRefusee(f"`{op.field}` does not exist")
         place = _index_de_cle(porteur.noeud, op.field)
         sans, retire = porteur.retirer(place)
-        reste = _collection_apres(sans, porteur)
+        reste = _read_again(sans, porteur)
         return reste.inserer_brut(place, op.text), {
             "field": op.field,
             "text": retire,
@@ -502,16 +502,16 @@ def _modifier_cle(
         # Replace the key's whole lines: its value is, or becomes, a block.
         place = _index_de_cle(porteur.noeud, op.field)
         sans, retire = porteur.retirer(place)
-        reste = _collection_apres(sans, porteur)
+        reste = _read_again(sans, porteur)
         if en_bloc:
-            nouveau_texte = _inserer_lignes(sans, reste, place, _bloc(sans, reste, op.field, op.value))
+            edited = _insert_lines(sans, reste, place, _block(sans, reste, op.field, op.value))
         else:
             nouveau = op.raw if op.raw is not None else _rendre(op.value)
-            nouveau_texte = reste.inserer(place, f"{op.field}: {nouveau}")
-        return nouveau_texte, {"field": op.field, "text": retire, "index": place, "swap": True}
+            edited = reste.inserer(place, f"{op.field}: {nouveau}")
+        return edited, {"field": op.field, "text": retire, "index": place, "swap": True}
     place = porteur.taille if place_neuve is None else place_neuve
     if trouve is None and en_bloc:
-        return _inserer_lignes(texte, porteur, place, _bloc(texte, porteur, op.field, op.value)), {
+        return _insert_lines(texte, porteur, place, _block(texte, porteur, op.field, op.value)), {
             "field": op.field,
             "unset": True,
         }
@@ -523,9 +523,9 @@ def _modifier_cle(
     return _greffer(texte, debut, fin, nouveau), {"field": op.field, "raw": texte[debut:fin]}
 
 
-def _collection_apres(texte: str, porteur: _Collection) -> _Collection:
-    """The same carrier, read again in `texte` after an edit: its nodes moved."""
-    return porteur.relire(texte)
+def _read_again(text: str, carrier: _Collection) -> _Collection:
+    """The same carrier, read again in `text` after an edit: its nodes moved."""
+    return carrier.relire(text)
 
 
 # ───────────────────────────── états ─────────────────────────────
@@ -605,18 +605,18 @@ def _rename_state(texte: str, op: RenameState) -> tuple[str, Any, list[str]]:
     return texte, RenameState(**{"from": op.to, "to": op.from_}), _a_effet(op.to)
 
 
-def _porteur_d_etat(texte: str, nom: str) -> _Collection:
+def _state_carrier(texte: str, nom: str) -> _Collection:
     _, etats = _etats(texte)
     trouve = _cle(etats.noeud, nom)
     if trouve is None:
         raise EditionRefusee(f"the state `{nom}` does not exist")
     porteur = _sous_collection(texte, trouve[0], trouve[1])
-    porteur.retrouver = lambda t: _porteur_d_etat(t, nom)
+    porteur.retrouver = lambda t: _state_carrier(t, nom)
     return porteur
 
 
 def _set_state(texte: str, op: SetState) -> tuple[str, Any, list[str]]:
-    nouveau, inverse = _modifier_cle(texte, _porteur_d_etat(texte, op.name), op)
+    nouveau, inverse = _set_key(texte, _state_carrier(texte, op.name), op)
     return nouveau, SetState(name=op.name, **inverse), []
 
 
@@ -666,17 +666,17 @@ def _remove_transition(texte: str, op: RemoveTransition) -> tuple[str, Any, list
     return sans, AddTransition(text=retire, index=place), []
 
 
-def _porteur_de_transition(texte: str, ident: str) -> _Collection:
+def _transition_carrier(texte: str, ident: str) -> _Collection:
     _, _, element = _transition(texte, ident)
     porteur = _element_de_sequence(texte, f"transition {ident}", element)
-    porteur.retrouver = lambda t: _porteur_de_transition(t, ident)
+    porteur.retrouver = lambda t: _transition_carrier(t, ident)
     return porteur
 
 
 def _set_transition(texte: str, op: SetTransition) -> tuple[str, Any, list[str]]:
     if op.field == "id":
         raise EditionRefusee("a transition's `id` cannot be changed: remove it, then add it again")
-    nouveau, inverse = _modifier_cle(texte, _porteur_de_transition(texte, op.id), op)
+    nouveau, inverse = _set_key(texte, _transition_carrier(texte, op.id), op)
     return nouveau, SetTransition(id=op.id, **inverse), []
 
 
@@ -697,7 +697,7 @@ def _add_gate(texte: str, op: AddGate) -> tuple[str, Any, list[str]]:
         if op.gate is None:
             raise EditionRefusee("`gate` missing")
         porteur = _element_de_sequence(texte, f"transition {op.transition}", element)
-        nouveau, inverse = _modifier_cle(
+        nouveau, inverse = _set_key(
             texte, porteur, SetTransition(id=op.transition, field="gates", value=[op.gate])
         )
         return nouveau, SetTransition(id=op.transition, **inverse), []
@@ -780,25 +780,25 @@ def _remove_actor(texte: str, op: RemoveActor) -> tuple[str, Any, list[str]]:
     return sans, AddActor(name=op.name, text=retire, index=place), []
 
 
-def _porteur_d_acteur(texte: str, nom: str) -> _Collection:
+def _actor_carrier(texte: str, nom: str) -> _Collection:
     _, acteurs = _acteurs(texte)
     trouve = _cle(acteurs.noeud, nom)
     if trouve is None:
         raise EditionRefusee(f"the actor `{nom}` does not exist")
     porteur = _sous_collection(texte, trouve[0], trouve[1])
-    porteur.retrouver = lambda t: _porteur_d_acteur(t, nom)
+    porteur.retrouver = lambda t: _actor_carrier(t, nom)
     return porteur
 
 
 def _set_actor(texte: str, op: SetActor) -> tuple[str, Any, list[str]]:
-    nouveau, inverse = _modifier_cle(texte, _porteur_d_acteur(texte, op.name), op)
+    nouveau, inverse = _set_key(texte, _actor_carrier(texte, op.name), op)
     return nouveau, SetActor(name=op.name, **inverse), []
 
 
 # ───────────────────────────── the workflow itself ─────────────────────────────
 
 #: What `set_workflow` edits, and where: under `metadata`, or at the top of the document.
-CHAMPS_DU_WORKFLOW = {
+WORKFLOW_FIELDS = {
     "description": "metadata",
     "inputs": "metadata",
     "catalogue": "metadata",
@@ -806,32 +806,32 @@ CHAMPS_DU_WORKFLOW = {
 }
 
 
-def _porteur_metadata(texte: str) -> _Collection:
+def _metadata_carrier(texte: str) -> _Collection:
     porteur = _collection(texte, _composer(texte), "metadata")
-    porteur.retrouver = _porteur_metadata
+    porteur.retrouver = _metadata_carrier
     return porteur
 
 
-def _porteur_racine(texte: str) -> _Collection:
+def _root_carrier(texte: str) -> _Collection:
     racine = _composer(texte)
-    return _Collection(texte, "the workflow", racine, 0, retrouver=_porteur_racine)
+    return _Collection(texte, "the workflow", racine, 0, retrouver=_root_carrier)
 
 
 def _set_workflow(texte: str, op: SetWorkflow) -> tuple[str, Any, list[str]]:
-    ou = CHAMPS_DU_WORKFLOW.get(op.field)
+    ou = WORKFLOW_FIELDS.get(op.field)
     if ou is None:
         raise EditionRefusee(
             f"`{op.field}` is not a field of the workflow this operation edits "
-            f"({', '.join(sorted(CHAMPS_DU_WORKFLOW))}); the name is the route's, "
+            f"({', '.join(sorted(WORKFLOW_FIELDS))}); the name is the route's, "
             "the version the publication's"
         )
     if ou == "metadata":
-        nouveau, inverse = _modifier_cle(texte, _porteur_metadata(texte), op)
+        nouveau, inverse = _set_key(texte, _metadata_carrier(texte), op)
     else:
-        racine = _porteur_racine(texte)
+        racine = _root_carrier(texte)
         # A new `initial:` goes right after `metadata`, where a reader looks for it.
         apres = _index_de_cle(racine.noeud, "metadata") + 1 if _cle(racine.noeud, "metadata") else None
-        nouveau, inverse = _modifier_cle(texte, racine, op, place_neuve=apres)
+        nouveau, inverse = _set_key(texte, racine, op, place_neuve=apres)
     return nouveau, SetWorkflow(**inverse), []
 
 
