@@ -17,7 +17,7 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from .config import Settings, get_settings
+from .config import DEFAULT_SESSION_SECRET, MIN_SESSION_SECRET_BYTES, Settings, get_settings
 
 RUN_TOKEN_ALGORITHM = "ES256"
 
@@ -194,21 +194,86 @@ def hash_api_token(raw: str) -> str:
 
 # ───────────────────────────── sessions ─────────────────────────────
 
+#: What a value signed with the session secret is for. The tag covers it, so a value signed for one
+#: purpose (an OIDC state) never reads as another (a session cookie).
+SESSION_PURPOSE = "session"
+#: Length of the tag the previous release put on a session cookie: 128 bits, hex, with no purpose.
+LEGACY_TAG_LENGTH = 32
+#: Cookies signed before this release carry a 128-bit tag without a purpose. They are accepted for
+#: `session` only, for one release, so that the upgrade does not sign everyone out. Removal is
+#: tracked in https://github.com/VargaFoundation/choregos/issues/1040.
+ACCEPT_LEGACY_SESSION_TAGS = True
 
-def sign_session(payload: dict[str, Any], settings: Settings | None = None) -> str:
+
+def check_session_secret(settings: Settings) -> None:
+    """Refuse to start on a session secret that cannot sign safely.
+
+    Called by the API at start only. The orchestrator, the migrations Job and the trace-drift job
+    build `Settings` without the secret and never sign sessions, so this is not a `Settings`
+    validator: it would crash every one of them.
+    """
+    secret = settings.session_secret
+    if not secret.strip():
+        raise RuntimeError("CHOREGOS_SESSION_SECRET is empty: an empty HMAC key lets anyone forge a session")
+    if settings.deployed and (
+        secret == DEFAULT_SESSION_SECRET or len(secret.encode()) < MIN_SESSION_SECRET_BYTES
+    ):
+        raise RuntimeError(
+            "CHOREGOS_SESSION_SECRET is the published default or shorter than "
+            f"{MIN_SESSION_SECRET_BYTES} bytes on a deployed instance (staging/prod, or served over "
+            "https): anyone can forge a session. Set a random value, for example "
+            "`openssl rand -base64 48`"
+        )
+    previous = settings.session_secret_previous
+    if settings.deployed and previous and len(previous.encode()) < MIN_SESSION_SECRET_BYTES:
+        raise RuntimeError(
+            f"CHOREGOS_SESSION_SECRET_PREVIOUS is shorter than {MIN_SESSION_SECRET_BYTES} bytes on a "
+            "deployed instance: a verification key that short still lets anyone forge a session while "
+            "it is kept. Unset it (the sessions it signed then end), or check the old value was copied whole"
+        )
+
+
+def _tag(key: str, purpose: str, body: str) -> str:
+    """The full HMAC-SHA256 tag (64 hex characters) of `body`, bound to `purpose`."""
+    message = f"choregos:{purpose}" + chr(0) + body
+    return hmac.new(key.encode(), message.encode(), hashlib.sha256).hexdigest()
+
+
+def _legacy_tag(key: str, body: str) -> str:
+    """The tag the previous release wrote: 128 bits, no purpose."""
+    return hmac.new(key.encode(), body.encode(), hashlib.sha256).hexdigest()[:LEGACY_TAG_LENGTH]
+
+
+def _same(left: str, right: str) -> bool:
+    """Constant-time comparison; as bytes, because `compare_digest` refuses a non-ASCII `str`."""
+    return hmac.compare_digest(left.encode(errors="replace"), right.encode(errors="replace"))
+
+
+def sign_session(
+    payload: dict[str, Any], settings: Settings | None = None, *, purpose: str = SESSION_PURPOSE
+) -> str:
     settings = settings or get_settings()
     body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
-    signature = hmac.new(settings.session_secret.encode(), body.encode(), hashlib.sha256).hexdigest()[:32]
-    return f"{body}.{signature}"
+    return f"{body}.{_tag(settings.session_secret, purpose, body)}"
 
 
-def read_session(cookie: str, settings: Settings | None = None) -> dict[str, Any] | None:
+def read_session(
+    cookie: str, settings: Settings | None = None, *, purpose: str = SESSION_PURPOSE
+) -> dict[str, Any] | None:
+    """The payload of a value signed for `purpose` with the current or the previous key, if unexpired."""
     settings = settings or get_settings()
     if not cookie or "." not in cookie:
         return None
     body, signature = cookie.rsplit(".", 1)
-    expected = hmac.new(settings.session_secret.encode(), body.encode(), hashlib.sha256).hexdigest()[:32]
-    if not hmac.compare_digest(signature, expected):
+    keys = [settings.session_secret]
+    # Never an empty key: an empty HMAC key is one anyone can sign with.
+    if settings.session_secret_previous:
+        keys.append(settings.session_secret_previous)
+    legacy = purpose == SESSION_PURPOSE and ACCEPT_LEGACY_SESSION_TAGS and len(signature) == LEGACY_TAG_LENGTH
+    if not any(
+        _same(signature, _tag(key, purpose, body)) or (legacy and _same(signature, _legacy_tag(key, body)))
+        for key in keys
+    ):
         return None
     padded = body + "=" * (-len(body) % 4)
     try:

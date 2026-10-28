@@ -159,11 +159,11 @@ def _handshake(settings: Settings, redirect: str, *, reauth: bool = False) -> tu
     nonce = secrets.token_urlsafe(24)
     verifier, challenge = _pkce()
     expiry = int(time.time()) + OIDC_HANDSHAKE_S
-    state = sign_session({"n": nonce, "r": redirect, "exp": expiry}, settings)
+    state = sign_session({"n": nonce, "r": redirect, "exp": expiry}, settings, purpose="oidc-state")
     poignee: dict[str, Any] = {"n": nonce, "v": verifier, "exp": expiry}
     if reauth:
         poignee["a"] = 1
-    cookie = sign_session(poignee, settings)
+    cookie = sign_session(poignee, settings, purpose="oidc-handshake")
     return state, cookie, challenge
 
 
@@ -340,8 +340,8 @@ async def callback(
     settings: Config,
 ) -> RedirectResponse:
     """Vérifie `state` et le nonce, échange le code (PKCE), ouvre la session, pose le cookie signé."""
-    attendu = read_session(state, settings)
-    poignee = read_session(request.cookies.get(OIDC_COOKIE, ""), settings)
+    attendu = read_session(state, settings, purpose="oidc-state")
+    poignee = read_session(request.cookies.get(OIDC_COOKIE, ""), settings, purpose="oidc-handshake")
     if not attendu or not poignee or attendu.get("n") != poignee.get("n"):
         raise unauthorized("invalid or expired sign-in state: start the sign-in again")
     target = redirection_sure(str(attendu.get("r") or ""), settings)
