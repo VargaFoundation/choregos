@@ -44,7 +44,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-10-19 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
-| [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-16 |
+| [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-28 |
 | [Use a plugin's server as the board](connector.tracker.plugin.md) | a project owner | `tracker/plugin` | 2026-10-28 |
 | [Search the web through Brave Search API](connector.web_search.brave.md) | an organisation administrator | `web_search/brave` | 2026-10-20 |
 | [Search the web through a self-hosted Firecrawl](connector.web_search.firecrawl.md) | an organisation administrator | `web_search/firecrawl` | 2026-10-23 |
