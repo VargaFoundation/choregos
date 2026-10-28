@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+from typing import Any
+
 from choregos_core import (
     utcnow,
 )
@@ -25,6 +29,13 @@ from ..schemas import (
 from .definitions import active_policy, active_workflow
 
 
+def config_revision(name: str, config: dict[str, Any] | None) -> str:
+    """An opaque digest of a project's name and configuration: what `PATCH /projects/{id}` takes back as
+    `base_revision` to refuse a write made from a stale read (S47-06)."""
+    document = json.dumps({"name": name, "config": config or {}}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(document.encode()).hexdigest()[:32]
+
+
 async def project_dto(session: AsyncSession, project: Project, org_slug: str | None = None) -> ProjectDto:
     if org_slug is None:
         org = await session.get(Organization, project.org_id)
@@ -39,6 +50,7 @@ async def project_dto(session: AsyncSession, project: Project, org_slug: str | N
         template_ref=project.template_ref,
         status=project.status,
         config=project.config,
+        config_revision=config_revision(project.name, project.config),
         workflow_name=workflow.name if workflow else None,
         policy_name=policy.name if policy else None,
         has_release_train=await declares_a_release_train(session, project.id),

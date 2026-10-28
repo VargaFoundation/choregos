@@ -74,6 +74,7 @@ from .routers import (
     workflows,
     workitems,
 )
+from .security import check_session_secret
 from .services.action_relay import relay_loop
 from .services.plugin_defaults import check_configuration, reconcile_in_background
 from .services.skill_scanner import mirror_loop
@@ -264,6 +265,9 @@ def create_app() -> FastAPI:
     # eux-mêmes. Un greffon déclaré qui ne charge pas arrête le démarrage, exprès.
     charger_les_greffons()
     _verifier_l_edition(settings)
+    # The API signs the sessions, so it alone refuses a session secret that cannot sign safely: the
+    # orchestrator and the migrations Job build the same Settings without it (see `check_session_secret`).
+    check_session_secret(settings)
     # The plugin sources and default plugins (ADR 0093): an unreadable configuration stops the API here,
     # naming the setting, rather than answering 500 at the first install.
     check_configuration(settings)

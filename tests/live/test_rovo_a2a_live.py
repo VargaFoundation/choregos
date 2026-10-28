@@ -20,11 +20,11 @@ import os
 import pytest
 from choregos_adapters.a2a import A2aClient, fetch_card, text_part
 
+from .conftest import require
+
 pytestmark = [pytest.mark.live, pytest.mark.asyncio]
 
 CARD = "https://a2a.atlassian.com/.well-known/agent.json"
-TOKEN = os.environ.get("CHOREGOS_LIVE_ROVO_ACCESS_TOKEN", "")
-needs_token = pytest.mark.skipif(not TOKEN, reason="CHOREGOS_LIVE_ROVO_ACCESS_TOKEN absent: no live Rovo")
 
 
 async def test_the_live_card_still_parses() -> None:
@@ -33,11 +33,11 @@ async def test_the_live_card_still_parses() -> None:
     assert card.auth_types == ("oauth2_authorization_code",) and card.dcr_url
 
 
-@needs_token
 async def test_a_message_reaches_a_final_state() -> None:
+    token = require("CHOREGOS_LIVE_ROVO_ACCESS_TOKEN")["CHOREGOS_LIVE_ROVO_ACCESS_TOKEN"]
     card = await fetch_card(CARD)
     prompt = os.environ.get("CHOREGOS_LIVE_ROVO_PROMPT", "List the 3 most recent Jira issues I can see.")
-    async with A2aClient(card.url, TOKEN, card.protocol_version) as client:
+    async with A2aClient(card.url, token, card.protocol_version) as client:
         task = await client.send(client.message([text_part(prompt)]))
         for _ in range(60):
             if task.terminal or task.interrupted:

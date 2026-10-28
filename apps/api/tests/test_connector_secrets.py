@@ -42,7 +42,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(outils=[dict(t) for t in TOOLS], jeton=VALUE_1)
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", server)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     yield server
 
 

@@ -124,7 +124,7 @@ async def test_verifier_tient_ou_refuse_et_un_serveur_mcp_rend_ce_qu_il_a_struct
     from choregos_api.effets import ContexteEffet, EffetRefuse, effet, politique_de_l_effet
 
     assert politique_de_l_effet("check") == "allowed", "a check touches nothing outside"
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur_mcp(FakeFournisseur()))
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", serveur_mcp(FakeFournisseur()))
     async with session_scope() as session:
         projet = await session.get(Project, project["id"])
         assert projet is not None

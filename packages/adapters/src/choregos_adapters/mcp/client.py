@@ -1,18 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Un client MCP, écrit à la main comme le serveur (ADR 0017) : la plateforme joint un serveur
-MCP déclaré par l'organisation — `initialize`, `tools/list`, `tools/call` — en Streamable HTTP.
+"""An MCP client, written by hand like the server (ADR 0017): the platform reaches an MCP server
+that the organisation declared (`initialize`, `tools/list`, `tools/call`) over Streamable HTTP.
 
-Ce qu'il fait, et pourquoi :
-- `initialize` d'abord, puis `notifications/initialized` ; l'en-tête `Mcp-Session-Id` rendu par
-  le serveur part ensuite avec chaque requête, `MCP-Protocol-Version` aussi ;
-- une réponse arrive en JSON ou en flux SSE (`text/event-stream`) : on y lit le message qui
-  porte l'identifiant de la requête, et rien d'autre ;
-- `tools/list` suit `nextCursor` jusqu'au bout — un serveur pagine, et un outil de la page 2
-  qu'on ne verrait pas ne serait jamais revu ;
-- le jeton est CELUI DU CONNECTEUR, résolu par la plateforme : celui d'un run ne sort jamais.
+What it does, and why:
+- `initialize` first, then `notifications/initialized`; the `Mcp-Session-Id` header the server
+  returns then goes with every request, and so does `MCP-Protocol-Version`;
+- an answer arrives as JSON or as an SSE stream (`text/event-stream`): the client reads the message
+  that carries the request's id, and nothing else;
+- `tools/list` follows `nextCursor` to the end: a server pages, and a tool on page 2 that the
+  client did not see would never be seen again;
+- the token is THE CONNECTOR'S, resolved by the platform: a run's token never leaves.
 
-Ce qu'il ne fait pas : les notifications du serveur, les requêtes du serveur vers le client
-(échantillonnage, élicitation), la reprise d'un flux interrompu.
+What it does not do: server notifications, server-to-client requests (sampling, elicitation),
+resuming an interrupted stream.
 """
 
 from __future__ import annotations
@@ -28,12 +28,12 @@ from choregos_core.mcp import VERSIONS
 
 from ..http.egress import guarded
 
-#: Au-delà, un serveur qui pagine sans fin est une erreur, pas une liste.
-PAGES_MAX = 50
+#: Beyond this, a server that pages without end is an error, not a list.
+MAX_PAGES = 50
 
 
-class ErreurMcp(RuntimeError):  # noqa: N818 - une réponse du serveur, nommée telle quelle
-    """Le serveur a répondu une erreur JSON-RPC, ou rien de lisible."""
+class McpError(RuntimeError):
+    """The server answered a JSON-RPC error, or nothing readable."""
 
     def __init__(self, message: str, code: int | None = None) -> None:
         super().__init__(message)
@@ -41,42 +41,42 @@ class ErreurMcp(RuntimeError):  # noqa: N818 - une réponse du serveur, nommée 
 
 
 @dataclass(frozen=True)
-class OutilMcp:
+class McpTool:
     name: str
     description: str = ""
     input_schema: dict[str, Any] = field(default_factory=dict)
-    #: `annotations.readOnlyHint` : un outil qui se déclare en lecture seule. Sans déclaration,
-    #: il est tenu pour une écriture — le défaut prudent (ADR 0034).
+    #: `annotations.readOnlyHint`: a tool that declares itself read-only. Without a declaration,
+    #: it is taken for a write, the prudent default (ADR 0034).
     read_only: bool = False
     #: `outputSchema`: what the tool promises its `structuredContent` looks like; the broker holds
     #: the server to it (#755). Not part of the schema digest: it does not change what the tool does.
     output_schema: dict[str, Any] | None = None
 
 
-def empreinte_du_schema(schema: dict[str, Any]) -> str:
-    """L'empreinte canonique d'un schéma d'entrée : une dérive, même d'un caractère, la change."""
-    canonique = json.dumps(schema or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return "sha256:" + hashlib.sha256(canonique.encode("utf-8")).hexdigest()
+def schema_digest(schema: dict[str, Any]) -> str:
+    """The canonical digest of an input schema: a drift, even of one character, changes it."""
+    canonical = json.dumps(schema or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _lire_sse(texte: str, identifiant: int) -> dict[str, Any] | None:
-    """Le message JSON-RPC qui répond à `identifiant` dans un flux SSE ; les autres sont ignorés."""
-    donnees: list[str] = []
-    for ligne in [*texte.splitlines(), ""]:
-        if ligne.startswith("data:"):
-            donnees.append(ligne[5:].lstrip())
-        elif ligne == "" and donnees:
+def _read_sse(text: str, request_id: int) -> dict[str, Any] | None:
+    """The JSON-RPC message that answers `request_id` in an SSE stream; the others are ignored."""
+    data: list[str] = []
+    for line in [*text.splitlines(), ""]:
+        if line.startswith("data:"):
+            data.append(line[5:].lstrip())
+        elif line == "" and data:
             try:
-                message = json.loads("\n".join(donnees))
+                message = json.loads("\n".join(data))
             except ValueError:
                 message = None
-            donnees = []
-            if isinstance(message, dict) and message.get("id") == identifiant:
+            data = []
+            if isinstance(message, dict) and message.get("id") == request_id:
                 return message
     return None
 
 
-class ClientMcp:
+class McpClient:
     def __init__(
         self,
         url: str,
@@ -108,60 +108,63 @@ class ClientMcp:
         self._transport = transport
         self._session: str | None = None
         self._version: str = VERSIONS[0]
-        self._suivant = 0
-        self.serveur: dict[str, Any] = {}
+        self._next_id = 0
+        self.server: dict[str, Any] = {}
 
-    def _entetes(self) -> dict[str, str]:
-        entetes = {
+    @property
+    def serveur(self) -> dict[str, Any]:  # lang: fr-ok alias:internal
+        # former name, kept for importers (ADR 0046)
+        return self.server
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
             "MCP-Protocol-Version": self._version,
         }
         if self._user_agent:
-            entetes["User-Agent"] = self._user_agent
+            headers["User-Agent"] = self._user_agent
         if self._token and self._auth_scheme == "basic":
             pair = base64.b64encode(f"{self._username}:{self._token}".encode()).decode("ascii")
-            entetes["Authorization"] = f"Basic {pair}"
+            headers["Authorization"] = f"Basic {pair}"
         elif self._token and self._auth_header.lower() == "authorization":
-            entetes["Authorization"] = f"Bearer {self._token}"
+            headers["Authorization"] = f"Bearer {self._token}"
         elif self._token:
-            entetes[self._auth_header] = self._token
+            headers[self._auth_header] = self._token
         if self._session:
-            entetes["Mcp-Session-Id"] = self._session
-        return entetes
+            headers["Mcp-Session-Id"] = self._session
+        return headers
 
-    async def _envoyer(
-        self, http: httpx.AsyncClient, methode: str, params: dict[str, Any] | None = None
-    ) -> Any:
-        self._suivant += 1
-        identifiant = self._suivant
-        corps: dict[str, Any] = {"jsonrpc": "2.0", "id": identifiant, "method": methode}
+    async def _send(self, http: httpx.AsyncClient, method: str, params: dict[str, Any] | None = None) -> Any:
+        self._next_id += 1
+        request_id = self._next_id
+        body: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id, "method": method}
         if params is not None:
-            corps["params"] = params
-        reponse = await http.post(self.url, json=corps, headers=self._entetes())
-        if reponse.status_code in {401, 403}:
-            raise ErreurMcp(f"{methode} : refusé par le serveur ({reponse.status_code})", reponse.status_code)
-        if reponse.status_code >= 400:
-            raise ErreurMcp(f"{methode} : HTTP {reponse.status_code}", reponse.status_code)
-        session = reponse.headers.get("mcp-session-id")
+            body["params"] = params
+        response = await http.post(self.url, json=body, headers=self._headers())
+        if response.status_code in {401, 403}:
+            raise McpError(f"{method}: refused by the server ({response.status_code})", response.status_code)
+        if response.status_code >= 400:
+            raise McpError(f"{method}: HTTP {response.status_code}", response.status_code)
+        session = response.headers.get("mcp-session-id")
         if session:
             self._session = session
-        if reponse.headers.get("content-type", "").startswith("text/event-stream"):
-            message = _lire_sse(reponse.text, identifiant)
+        if response.headers.get("content-type", "").startswith("text/event-stream"):
+            message = _read_sse(response.text, request_id)
         else:
             try:
-                message = reponse.json()
+                message = response.json()
             except ValueError:
                 message = None
         if not isinstance(message, dict):
-            raise ErreurMcp(f"{methode} : réponse illisible")
+            raise McpError(f"{method}: unreadable answer")
         if "error" in message:
-            erreur = message["error"] or {}
-            raise ErreurMcp(f"{methode} : {erreur.get('message', 'erreur')}", erreur.get("code"))
+            error = message["error"] or {}
+            raise McpError(f"{method}: {error.get('message', 'error')}", error.get("code"))
         return message.get("result")
 
-    async def _ouvrir(self, http: httpx.AsyncClient) -> None:
-        resultat = await self._envoyer(
+    async def _open(self, http: httpx.AsyncClient) -> None:
+        result = await self._send(
             http,
             "initialize",
             {
@@ -170,49 +173,56 @@ class ClientMcp:
                 "clientInfo": {"name": "choregos", "version": "1"},
             },
         )
-        self.serveur = dict(resultat or {})
-        version = self.serveur.get("protocolVersion")
+        self.server = dict(result or {})
+        version = self.server.get("protocolVersion")
         if isinstance(version, str):
             self._version = version
         await http.post(
             self.url,
             json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-            headers=self._entetes(),
+            headers=self._headers(),
         )
 
     def _http(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=self._timeout, transport=guarded(self._transport))
 
-    async def list_tools(self) -> list[OutilMcp]:
+    async def list_tools(self) -> list[McpTool]:
         async with self._http() as http:
-            await self._ouvrir(http)
-            outils: list[OutilMcp] = []
-            curseur: str | None = None
-            for _ in range(PAGES_MAX):
-                resultat = await self._envoyer(http, "tools/list", {"cursor": curseur} if curseur else {})
-                for brut in (resultat or {}).get("tools", []):
-                    annotations = brut.get("annotations") or {}
-                    output = brut.get("outputSchema")
-                    outils.append(
-                        OutilMcp(
-                            name=str(brut["name"]),
-                            description=str(brut.get("description") or ""),
-                            input_schema=dict(brut.get("inputSchema") or {}),
+            await self._open(http)
+            tools: list[McpTool] = []
+            cursor: str | None = None
+            for _ in range(MAX_PAGES):
+                result = await self._send(http, "tools/list", {"cursor": cursor} if cursor else {})
+                for raw in (result or {}).get("tools", []):
+                    annotations = raw.get("annotations") or {}
+                    output = raw.get("outputSchema")
+                    tools.append(
+                        McpTool(
+                            name=str(raw["name"]),
+                            description=str(raw.get("description") or ""),
+                            input_schema=dict(raw.get("inputSchema") or {}),
                             read_only=annotations.get("readOnlyHint") is True,
                             output_schema=dict(output) if isinstance(output, dict) else None,
                         )
                     )
-                curseur = (resultat or {}).get("nextCursor")
-                if not curseur:
-                    return outils
-            raise ErreurMcp(f"tools/list : plus de {PAGES_MAX} pages — le serveur pagine sans fin")
+                cursor = (result or {}).get("nextCursor")
+                if not cursor:
+                    return tools
+            raise McpError(f"tools/list: more than {MAX_PAGES} pages: the server pages without end")
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         async with self._http() as http:
-            await self._ouvrir(http)
-            resultat = await self._envoyer(http, "tools/call", {"name": name, "arguments": arguments})
-            return dict(resultat or {})
+            await self._open(http)
+            result = await self._send(http, "tools/call", {"name": name, "arguments": arguments})
+            return dict(result or {})
 
     async def test(self) -> dict[str, Any]:
-        outils = await self.list_tools()
-        return {"ok": True, "server": self.serveur.get("serverInfo"), "tools": len(outils)}
+        tools = await self.list_tools()
+        return {"ok": True, "server": self.server.get("serverInfo"), "tools": len(tools)}
+
+
+# Former names of this module, kept for the importers that other stories switch (ADR 0046, ADR 0098 §3).
+ClientMcp = McpClient  # lang: fr-ok alias:internal
+ErreurMcp = McpError  # lang: fr-ok alias:internal
+OutilMcp = McpTool  # lang: fr-ok alias:internal
+empreinte_du_schema = schema_digest  # lang: fr-ok alias:internal

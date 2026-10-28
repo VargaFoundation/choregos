@@ -55,3 +55,9 @@ egressHosts: []
 # `mcpCatalogueExtra`: the name of a ConfigMap whose `catalogue.yaml` lists the operator's own MCP
 # servers (`entries: [...]`, same fields as the shipped catalogue), merged after it. Empty: none.
 mcpCatalogueExtra: ""
+# What the API's ExternalSecret (`global.externalSecrets.enabled`) lists beyond the structural keys.
+# `sessionSecretPrevious: true` adds `session-secret-previous` (the verification-only key of a session
+# secret rotation, `CHOREGOS_SESSION_SECRET_PREVIOUS`). Set it only when the vault holds the property:
+# a missing property fails the whole ExternalSecret sync.
+externalSecrets:
+  sessionSecretPrevious: false

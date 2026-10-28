@@ -234,3 +234,19 @@ def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return int(s.getsockname()[1])
+
+
+def loopback_ports() -> tuple[int, int, int]:
+    """Three distinct loopback ports nobody listens on, for a runner's model, MCP and CONNECT
+    proxies. Asked one at a time, the kernel may hand the same just-closed port back twice, and the
+    loopback then fails with 'address in use' before the step starts: every socket stays open until
+    all three are drawn."""
+    sockets = [socket.socket() for _ in range(3)]
+    try:
+        for s in sockets:
+            s.bind(("127.0.0.1", 0))
+        model, mcp, connect = (int(s.getsockname()[1]) for s in sockets)
+        return model, mcp, connect
+    finally:
+        for s in sockets:
+            s.close()

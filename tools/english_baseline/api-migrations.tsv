@@ -1,0 +1,24 @@
+# api-migrations: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+apps/api/src/choregos_api/migrations/env.py	2
+apps/api/src/choregos_api/migrations/versions/20260918_2057_schema_initial.py	2
+apps/api/src/choregos_api/migrations/versions/20260922_2331_rattrapage_schema.py	8
+apps/api/src/choregos_api/migrations/versions/20260922_2335_runs_id_lisible_128_caracteres.py	9
+apps/api/src/choregos_api/migrations/versions/20260924_0852_le_registre_de_couts_distingue_un_appel_.py	9
+apps/api/src/choregos_api/migrations/versions/20260924_1830_un_ticket_mort_se_voit.py	7
+apps/api/src/choregos_api/migrations/versions/20260924_1930_la_rls_ne_laisse_plus_passer_l_oubli.py	11
+apps/api/src/choregos_api/migrations/versions/20260926_1500_l_audit_appartient_a_une_organisation.py	21
+apps/api/src/choregos_api/migrations/versions/20260928_1800_la_rls_couvre_ce_qui_se_rattache_a_un_projet.py	17
+apps/api/src/choregos_api/migrations/versions/20260929_1500_l_identite_sous_rls.py	17
+apps/api/src/choregos_api/migrations/versions/20261005_1700_les_jetons_ont_une_portee.py	8
+apps/api/src/choregos_api/migrations/versions/20261005_1800_un_ticket_epingle_sa_definition.py	15
+apps/api/src/choregos_api/migrations/versions/20261005_1830_plusieurs_workflows_par_projet.py	4
+apps/api/src/choregos_api/migrations/versions/20261005_1900_des_champs_de_ticket.py	2
+apps/api/src/choregos_api/migrations/versions/20261005_2000_le_registre_d_agents.py	4
+apps/api/src/choregos_api/migrations/versions/20261005_2030_la_bibliotheque_de_skills.py	3
+apps/api/src/choregos_api/migrations/versions/20261005_2100_un_run_nomme_son_agent.py	2
+apps/api/src/choregos_api/migrations/versions/20261005_2130_les_agents_externes.py	3
+apps/api/src/choregos_api/migrations/versions/20261005_2200_les_secrets_d_un_connecteur.py	4
+apps/api/src/choregos_api/migrations/versions/20261005_2230_operations_par_politique.py	7
+apps/api/src/choregos_api/migrations/versions/20261005_2300_le_schema_d_une_operation.py	3
+apps/api/src/choregos_api/migrations/versions/20261005_2330_les_actions_gouvernees.py	4
+apps/api/src/choregos_api/migrations/versions/20261010_1800_les_recus_de_passage.py	3

@@ -1,0 +1,23 @@
+# api-root: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+apps/api/src/choregos_api/__init__.py	4
+apps/api/src/choregos_api/adaptateurs.py	20
+apps/api/src/choregos_api/amorcage.py	10
+apps/api/src/choregos_api/audit.py	7
+apps/api/src/choregos_api/catalogue.py	42
+apps/api/src/choregos_api/config.py	81
+apps/api/src/choregos_api/deps.py	68
+apps/api/src/choregos_api/edition.py	65
+apps/api/src/choregos_api/effets.py	50
+apps/api/src/choregos_api/errors.py	2
+apps/api/src/choregos_api/events.py	32
+apps/api/src/choregos_api/fraicheur.py	10
+apps/api/src/choregos_api/greffons.py	125
+apps/api/src/choregos_api/limiteur.py	15
+apps/api/src/choregos_api/logging.py	2
+apps/api/src/choregos_api/main.py	71
+apps/api/src/choregos_api/metriques.py	67
+apps/api/src/choregos_api/migrer.py	29
+apps/api/src/choregos_api/outils.py	12
+apps/api/src/choregos_api/rbac.py	13
+apps/api/src/choregos_api/security.py	19
+apps/api/src/choregos_api/temporal.py	22

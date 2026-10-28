@@ -52,7 +52,7 @@ def main(argv: list[str]) -> None:
     import uvicorn
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    choregos_adapters.FAUX_MCP = FakeMcpServer(outils=[dict(t) for t in TOOLS])
+    choregos_adapters.FAKE_MCP = FakeMcpServer(outils=[dict(t) for t in TOOLS])
     uvicorn.run("choregos_api.main:app", host="127.0.0.1", port=port, log_level="warning")
 
 

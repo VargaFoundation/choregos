@@ -248,7 +248,7 @@ async def test_une_action_approuvee_atteint_le_serveur_avec_la_cle_du_connecteur
     serveur = FakeMcpServer(
         outils=[{"name": "commander_poste", "inputSchema": {"type": "object"}}], jeton="cle-fournisseur"
     )
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", serveur)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     async with session_scope() as session:
         projet = await session.get(Project, setup.project_id)

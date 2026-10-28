@@ -746,6 +746,10 @@ jobs:
         run: >-
           uv run --no-project --python 3.12 tools/check_english.py
           --range '${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}'
+      # ADR 0098: the whole tree, three passes (prose lines, declared names, paths), every file at or
+      # below its baseline in tools/english_baseline/. Standard library only, like the step above.
+      - name: full-repo French ratchet
+        run: uv run --no-project --python 3.12 tools/check_english.py --all
 
   hosted-images:
     # Every hosted example, built and run for real (S41-23): the Dockerfile ones with `docker build`,
