@@ -24,10 +24,15 @@ from __future__ import annotations
 
 import ast
 import functools
+import json
+import os
 import pathlib
 import re
 import subprocess
+import sys
+import tempfile
 from collections.abc import Iterable
+from typing import Any
 
 import yaml
 
@@ -93,6 +98,9 @@ FORBIDDEN_MODULES = frozenset(
         "choregos_api.services.plugin_servers",
         "choregos_api.services.plugin_tracker",
         "choregos_adapters.plugin_servers",
+        # The routers that hold the broker's routes: a door that imported one would hold the broker too.
+        "choregos_api.routers.internal",
+        "choregos_api.routers.agent_session_pods",
     }
 )
 
@@ -168,8 +176,44 @@ BROKER_ROUTES = frozenset(
     }
 )
 
+#: The routes that address one connector (`/connectors/{...}`), as the live application serves them, the
+#: API prefix removed. They configure a connector, its secrets and its operations; none of them calls it. A
+#: new one is a decision: one that forwards to the connector (`/connectors/{name}/mcp`, `.../call`) is a
+#: passthrough, so a new route here needs ADR 0105 amended first.
+CONNECTOR_ROUTES = frozenset(
+    {
+        "PUT /projects/{id}/connectors/{kind}",
+        "PUT /projects/{id}/connectors/{kind}/secrets/{field}",
+        "DELETE /projects/{id}/connectors/{kind}/secrets/{field}",
+        "POST /projects/{id}/connectors/{kind}/test",
+        "GET /orgs/{org}/connectors/{name}",
+        "PATCH /orgs/{org}/connectors/{name}",
+        "DELETE /orgs/{org}/connectors/{name}",
+        "PUT /orgs/{org}/connectors/{name}/secrets/{field}",
+        "DELETE /orgs/{org}/connectors/{name}/secrets/{field}",
+        "PATCH /orgs/{org}/connectors/{name}/operations/{operation}",
+        "POST /orgs/{org}/connectors/{name}/discover",
+    }
+)
+
+#: The internal routes (what a run's pod calls) that take a parameter naming a connector, a tool, an input
+#: or a server, as the live application serves them: the broker's two calls, a run's inputs and outputs, and
+#: the relay reading an organisation's outbound proxy for a kind of traffic (ADR 0091). A new one needs
+#: ADR 0105 amended first: a per-connector or per-server internal route is a gateway.
+INTERNAL_NAMED_ROUTES = frozenset(
+    {
+        *(route for route in BROKER_ROUTES if route.startswith("POST ")),
+        "GET /internal/runs/{id}/inputs/{name}",
+        "PUT /internal/runs/{id}/outputs/{name}",
+        "GET /internal/orgs/{org}/outbound-proxy/{kind}",
+    }
+)
+
 #: A path parameter that would pick a third-party server, or an upstream, from the URL.
 UPSTREAM_PARAMETERS = frozenset({"server", "upstream", "mcp_server", "virtual_server", "backend"})
+
+#: The parameters of an internal route that name what it reaches: `INTERNAL_NAMED_ROUTES` freezes them.
+NAMING_PARAMETERS = UPSTREAM_PARAMETERS | {"connector", "connector_name", "name", "kind", "tool"}
 
 #: A path segment that names what a gateway offers.
 GATEWAY_SEGMENTS = re.compile(
@@ -181,15 +225,30 @@ GATEWAY_NAME = re.compile(r"mcp[ _-]?gateway", re.IGNORECASE)
 NO_GATEWAY_TREES = ("apps/orchestrator/src", "packages/runner/src")
 
 API_SOURCE = "apps/api/src/choregos_api"
+#: The prefix the application mounts its routers under; the live routes are compared without it.
+API_PREFIX = "/api/v1"
 SOURCE_ROOTS = (*sorted(ROOT.glob("packages/*/src")), *sorted(ROOT.glob("apps/*/src")))
 HTTP_VERBS = frozenset({"get", "post", "put", "patch", "delete", "head", "options", "api_route", "websocket"})
-#: A route added by a call rather than a decorator: `add_api_route` (FastAPI's GET when it lists no methods)
-#: and `mount` (a whole sub-application under a path, read as `MOUNT /path`).
-ROUTE_CALLS = frozenset({"add_api_route", "mount"})
+#: A route added by a call rather than a decorator: `add_api_route` and Starlette's `add_route` (FastAPI's
+#: GET when it lists no methods), the websocket ones, and `mount` (a whole sub-application under a path, read
+#: as `MOUNT /path`). The owner may be any expression: `app.router.mount(...)` is a mount too.
+ROUTE_CALLS = frozenset(
+    {"add_api_route", "add_route", "add_websocket_route", "add_api_websocket_route", "mount"}
+)
+WEBSOCKET_CALLS = frozenset({"add_websocket_route", "add_api_websocket_route"})
 #: A mount hands every path beneath it to another application, whatever that application is.
 MOUNT = "MOUNT"
 MCP_CLIENTS = frozenset({"ClientMcp", "McpClient", "PluginServerClient"})
-LISTENERS = frozenset({"start_server", "start_unix_server"})
+#: `asyncio.start_server` and the event loop's `create_server`, TCP or Unix.
+LISTENERS = frozenset({"start_server", "start_unix_server", "create_server", "create_unix_server"})
+#: An import the AST does not see as one: a door must not make any.
+DYNAMIC_IMPORTS = frozenset({"import_module", "__import__"})
+#: ADR 0096: the one class outside the client's own module that extends the MCP client at runtime.
+RUNTIME_MCP_CLIENTS = frozenset({"choregos_adapters.plugin_servers.PluginServerClient"})
+#: The packages the runtime check imports module by module, and the modules that already fail to import on
+#: main (none): a module that cannot be imported cannot be checked, so a new failure is a failure here.
+RUNTIME_PACKAGES = ("choregos_api", "choregos_adapters")
+KNOWN_IMPORT_FAILURES: frozenset[str] = frozenset()
 PATH_PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)(?::([a-z]+))?\}")
 
 
@@ -307,6 +366,48 @@ def forbidden_imports(
     return list(dict.fromkeys(found))
 
 
+def forbidden_attributes(
+    source: str, module: str, is_package: bool = False, *, forbidden: Iterable[str] = FORBIDDEN_MODULES
+) -> list[str]:
+    """The forbidden modules `source` reaches by attribute from a package it imports.
+
+    `from .. import services as s` then `s.broker.call(...)` imports no forbidden module, and reaches one
+    whenever something else has imported it. Each imported name is followed through its attributes.
+    """
+    forbidden = frozenset(forbidden)
+    tree = ast.parse(source)
+    bound: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    bound[alias.asname] = alias.name
+                else:
+                    top = alias.name.split(".")[0]
+                    bound[top] = top
+        elif isinstance(node, ast.ImportFrom):
+            resolved = _resolve(module, is_package, node.level, node.module)
+            if resolved is not None:
+                for alias in node.names:
+                    if alias.name != "*":
+                        bound[alias.asname or alias.name] = f"{resolved}.{alias.name}"
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute):
+            continue
+        chain: list[str] = []
+        current: ast.expr = node
+        while isinstance(current, ast.Attribute):
+            chain.insert(0, current.attr)
+            current = current.value
+        if isinstance(current, ast.Name) and current.id in bound:
+            name = ".".join([bound[current.id], *chain])
+            if _is_forbidden(name, forbidden):
+                reached = [module for module in forbidden if _is_forbidden(name, [module])]
+                found.append(max(reached, key=len))
+    return list(dict.fromkeys(found))
+
+
 def _module_of(path: pathlib.Path) -> tuple[str, bool]:
     """(dotted name, is it an `__init__.py`) of a file under a package's or an application's `src`."""
     for root in SOURCE_ROOTS:
@@ -359,11 +460,13 @@ def test_the_mcp_and_a2a_doors_never_reach_an_organisation_connector() -> None:
     reached: dict[str, list[str]] = {}
     for path in files:
         module, is_package = _module_of(path)
-        found = forbidden_imports(
-            path.read_text("utf-8"), module, is_package, forbidden=FORBIDDEN_MODULES | PLUGIN_SERVER_SURFACE
-        )
+        source = path.read_text("utf-8")
+        forbidden = FORBIDDEN_MODULES | PLUGIN_SERVER_SURFACE
+        found = forbidden_imports(source, module, is_package, forbidden=forbidden)
+        found += forbidden_attributes(source, module, is_package, forbidden=forbidden)
+        found += [f"a dynamic import, line {line}" for line in dynamic_imports(source)]
         if found:
-            reached[path.relative_to(ROOT).as_posix()] = found
+            reached[path.relative_to(ROOT).as_posix()] = list(dict.fromkeys(found))
     assert not reached, (
         f"a door imports what reaches an organisation's connectors: {reached}. The MCP and A2A doors serve "
         "Choregos's own tools and workflows; forwarding a call to another MCP server is what a gateway does, "
@@ -426,6 +529,22 @@ def _verbs(call: ast.Call, default: str) -> str:
     return default
 
 
+def _call_routes(tree: ast.AST, prefixes: dict[str, str]) -> list[str]:
+    """The routes `tree` adds by a call (`ROUTE_CALLS`), on any owner: `app.router.mount(...)` too."""
+    routes: list[str] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        owner, attr = node.func.value, node.func.attr
+        path = _route_path(node) if attr in ROUTE_CALLS else None
+        if path is None:
+            continue
+        verbs = MOUNT if attr == "mount" else _verbs(node, "WEBSOCKET" if attr in WEBSOCKET_CALLS else "GET")
+        prefix = prefixes.get(owner.id, "") if isinstance(owner, ast.Name) else ""
+        routes.append(f"{verbs} {prefix}{path}")
+    return routes
+
+
 def routes_of(source: str) -> list[str]:
     """`VERB /path` of every FastAPI route in `source`, the router's own prefix joined.
 
@@ -461,17 +580,7 @@ def routes_of(source: str) -> list[str]:
             attr = decorator.func.attr
             verbs = _verbs(decorator, "GET" if attr == "api_route" else attr.upper())
             routes.append(f"{verbs} {prefixes.get(router.id, '')}{path}")
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
-            continue
-        owner = node.func.value
-        if node.func.attr not in ROUTE_CALLS or not isinstance(owner, ast.Name):
-            continue
-        path = _route_path(node)
-        if path is None:
-            continue
-        verbs = MOUNT if node.func.attr == "mount" else _verbs(node, "GET")
-        routes.append(f"{verbs} {prefixes.get(owner.id, '')}{path}")
+    routes += _call_routes(tree, prefixes)
     return routes
 
 
@@ -510,22 +619,57 @@ def gateway_traits(route: str) -> list[str]:
     return traits
 
 
+def aliases(tree: ast.AST, names: frozenset[str]) -> frozenset[str]:
+    """`names` and every local name `tree` binds to one of them.
+
+    `from asyncio import start_server as listen` binds `listen`; `listen = asyncio.start_server` and
+    `Upstream = McpClient` too, and an alias of an alias, so a renamed import cannot hide a call or a base.
+    """
+    known = set(names)
+    while True:
+        found = set(known)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                found |= {alias.asname for alias in node.names if alias.name in known and alias.asname}
+            elif isinstance(node, ast.Assign | ast.AnnAssign) and isinstance(
+                node.value, ast.Name | ast.Attribute
+            ):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if _name_of(node.value) in known:
+                    found |= {target.id for target in targets if isinstance(target, ast.Name)}
+        if found == known:
+            return frozenset(known)
+        known = found
+
+
 def mcp_client_subclasses(source: str) -> list[str]:
-    """The classes of `source` that extend an MCP client."""
+    """The classes of `source` that extend an MCP client, under its own name or an alias."""
+    tree = ast.parse(source)
+    clients = aliases(tree, MCP_CLIENTS)
     return [
         node.name
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.ClassDef) and any(_name_of(base) in MCP_CLIENTS for base in node.bases)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and any(_name_of(base) in clients for base in node.bases)
+    ]
+
+
+def _calls(source: str, names: frozenset[str]) -> list[int]:
+    """The lines of `source` that call one of `names`, under its own name or an alias."""
+    tree = ast.parse(source)
+    called = aliases(tree, names)
+    return [
+        node.lineno for node in ast.walk(tree) if isinstance(node, ast.Call) and _name_of(node.func) in called
     ]
 
 
 def listeners(source: str) -> list[int]:
     """The lines of `source` that open a raw TCP or Unix listener."""
-    return [
-        node.lineno
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call) and _name_of(node.func) in LISTENERS
-    ]
+    return _calls(source, LISTENERS)
+
+
+def dynamic_imports(source: str) -> list[int]:
+    """The lines of `source` that import a module by a name computed at runtime."""
+    return _calls(source, DYNAMIC_IMPORTS)
 
 
 @functools.cache
@@ -579,6 +723,9 @@ def create_app():
     app.add_api_route(f"{API_PREFIX}/edition", edition)
     router.add_api_route(f"/{settings.upstream_prefix}/{{rest:path}}", forward)
     app.add_api_route(PATH, forward)
+    app.router.mount("/mcp-servers", proxy)
+    app.add_route("/servers/{server}/mcp", forward, methods=["POST"])
+    app.add_websocket_route("/ws/{upstream}", forward)
 """
     routes = routes_of(source)
     assert routes == [
@@ -598,11 +745,15 @@ def create_app():
         # An f-string path: an interpolated name is a parameter of that name, `{{`/`}}` a literal brace pair.
         "GET {API_PREFIX}/edition",
         "GET /gw/{upstream_prefix}/{rest:path}",
-        # `app.add_api_route(PATH, ...)`: a variable path is not read.
+        # `app.add_api_route(PATH, ...)`: a variable path is not read (the live routes are, below).
+        # Any owner: `app.router.mount`; Starlette's `add_route` and the websocket routes.
+        "MOUNT /mcp-servers",
+        "POST /servers/{server}/mcp",
+        "WEBSOCKET /ws/{upstream}",
     ]
     flagged = [route for route in routes if gateway_traits(route)]
     # Every mount is flagged, `/static` too: a mount hands every sub-path to another application.
-    assert flagged == [*routes[:5], routes[8], routes[10], routes[11], routes[13]]
+    assert flagged == [*routes[:5], routes[8], routes[10], routes[11], routes[13], *routes[14:]]
     assert gateway_traits("MOUNT /static") == ["a mount hands every sub-path to another application"]
     # The platform's own plugin webhook is the one route of the API that names a server.
     assert gateway_traits(PLUGIN_WEBHOOK) == ["`{server}` picks an upstream"]
@@ -640,6 +791,37 @@ def test_the_client_and_listener_checks_see_what_they_guard() -> None:
     assert listeners("server = await asyncio.start_server(handler, host, port)") == [1]
     assert listeners("await start_unix_server(handler, path)") == [1]
     assert listeners("uvicorn.run(app)\nserver.start()") == []
+    # The event loop's listeners, and an aliased import or assignment.
+    assert listeners("server = await loop.create_server(protocol, host, port)") == [1]
+    assert listeners("await asyncio.get_running_loop().create_unix_server(protocol, path)") == [1]
+    assert listeners("from asyncio import start_server as listen\nawait listen(handler, host, port)") == [2]
+    assert listeners("listen = asyncio.start_server\nopen_ = listen\nawait open_(handler)") == [3]
+    assert mcp_client_subclasses("from choregos_adapters.mcp import McpClient as Up\nclass R(Up): ...") == [
+        "R"
+    ]
+    assert mcp_client_subclasses("Base = mcp.ClientMcp\nclass R(Base): ...") == ["R"]
+    # A door's imports by a computed name.
+    assert dynamic_imports("import importlib\nm = importlib.import_module('x')") == [2]
+    assert dynamic_imports("from importlib import import_module as load\nload('x')") == [2]
+    assert dynamic_imports("m = __import__('choregos_api.services.broker', fromlist=['call'])") == [1]
+    assert dynamic_imports("import importlib.metadata\nimportlib.metadata.version('x')") == []
+
+
+def test_the_attribute_check_follows_an_imported_package() -> None:
+    door = "choregos_api.mcp.outils"
+    reach = "from .. import services as s\ns.broker.call()"
+    assert forbidden_attributes(reach, door) == ["choregos_api.services.broker"]
+    assert forbidden_attributes("import choregos_api\nchoregos_api.services.courtier.x", door) == [
+        "choregos_api.services.courtier"
+    ]
+    assert forbidden_attributes("import choregos_adapters as a\na.mcp.McpClient('u')", door) == [
+        "choregos_adapters.mcp"
+    ]
+    assert forbidden_attributes("from .. import routers\nrouters.internal.router", door) == [
+        "choregos_api.routers.internal"
+    ]
+    assert forbidden_attributes("from .. import services as s\ns.parcours(x)", door) == []
+    assert forbidden_attributes("import choregos_adapters\nchoregos_adapters.mcpx", door) == []
 
 
 def test_no_route_selects_a_third_party_mcp_server() -> None:
@@ -733,6 +915,173 @@ def test_the_whitelist_names_existing_modules() -> None:
         if not exists:
             stale.append(entry)
     assert not stale, f"ALLOWED_PLATFORM_MCP names what no longer exists: {stale}. Rename the entry too."
+
+
+# --- what runs: the doors' import closure, the live routes, the client's subclasses -----------------
+#
+# The checks above read the source, and the source can be written so they do not see it: a path in a
+# variable, a prefix given at `include_router`, a re-export through a module the doors already import, an
+# aliased base class. What runs cannot be written around, so the same rules are applied to it too: one
+# subprocess (so that neither the environment nor the imports leak into the other tests) imports the doors
+# alone and lists what they pulled in, builds the application and lists its routes, then imports every module
+# and lists the MCP client's subclasses.
+
+_PROBE = """
+import importlib, json, os, pkgutil, sys
+
+doors, packages, out = json.loads(sys.argv[1]), json.loads(sys.argv[2]), sys.argv[3]
+for door in doors:
+    importlib.import_module(door)
+closure = sorted(sys.modules)
+
+from fastapi.routing import iter_route_contexts
+from starlette.routing import Mount, WebSocketRoute
+from choregos_api.main import create_app
+
+routes = []
+for context in iter_route_contexts(create_app().router.routes):
+    route = context.original_route
+    if isinstance(route, Mount):
+        verbs = ["MOUNT"]
+    elif isinstance(route, WebSocketRoute):
+        verbs = ["WEBSOCKET"]
+    else:
+        verbs = sorted(context.methods or [])
+    endpoint = context.endpoint
+    routes.append([verbs, context.path or "", getattr(endpoint, "__module__", "") or ""])
+
+failures = {}
+for name in packages:
+    package = importlib.import_module(name)
+    for found in pkgutil.walk_packages(package.__path__, name + "."):
+        try:
+            importlib.import_module(found.name)
+        except BaseException as error:
+            failures[found.name] = repr(error)[:300]
+
+from choregos_adapters import mcp
+
+def below(cls):
+    for sub in cls.__subclasses__():
+        yield sub
+        yield from below(sub)
+
+bases = (mcp.McpClient, mcp.ClientMcp)
+classes = sorted({f"{c.__module__}.{c.__qualname__}" for base in bases for c in below(base)})
+with open(out, "w", encoding="utf-8") as file:
+    json.dump({"closure": closure, "routes": routes, "failures": failures, "subclasses": classes}, file)
+"""
+
+
+@functools.cache
+def _probe() -> dict[str, Any]:
+    doors = [_module_of(path)[0] for path in _python_files(*DOOR_DIRS)]
+    with tempfile.TemporaryDirectory() as directory:
+        out = pathlib.Path(directory) / "probe.json"
+        environment = {**os.environ, "CHOREGOS_FAKES": "1"}
+        done = subprocess.run(
+            [sys.executable, "-c", _PROBE, json.dumps(doors), json.dumps(RUNTIME_PACKAGES), str(out)],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
+        assert done.returncode == 0, f"the probe failed:\n{done.stderr[-4000:]}"
+        result: dict[str, Any] = json.loads(out.read_text("utf-8"))
+        return result
+
+
+def _live_routes() -> list[tuple[str, str]]:
+    """`(VERB /path, endpoint module)` of every route the application serves, the API prefix removed."""
+    found: list[tuple[str, str]] = []
+    for verbs, path, module in _probe()["routes"]:
+        served = path.removeprefix(API_PREFIX) if path.startswith(f"{API_PREFIX}/") else path
+        found += [(f"{verb} {served}", module) for verb in verbs]
+    return found
+
+
+def test_the_doors_import_nothing_that_reaches_an_organisation_connector() -> None:
+    """The doors' whole import closure, not their own lines: a re-export anywhere on the way is seen."""
+    closure = _probe()["closure"]
+    assert "choregos_api.mcp.transport" in closure, "the probe no longer imports the doors"
+    forbidden = FORBIDDEN_MODULES | PLUGIN_SERVER_SURFACE
+    reached = [module for module in closure if _is_forbidden(module, forbidden)]
+    assert not reached, (
+        f"importing the MCP and A2A doors imports {reached}: something they import, directly or not, "
+        "reaches an organisation's connectors. The doors serve Choregos's own tools and workflows; "
+        "forwarding a call to another MCP server is what a gateway does (ADR 0105)."
+    )
+
+
+def test_no_live_route_selects_a_third_party_mcp_server() -> None:
+    routes = _live_routes()
+    assert len(routes) > 200, "the application serves almost nothing: the probe has moved"
+    offenders = sorted(
+        f"{route} ({', '.join(gateway_traits(route))}) from {module}"
+        for route, module in routes
+        if gateway_traits(route) and route not in ALLOWED_PLATFORM_MCP
+    )
+    assert not offenders, (
+        "the application serves a route that picks, catches or merges third-party MCP servers:\n  "
+        + "\n  ".join(offenders)
+        + "\nA passthrough, an aggregation endpoint, a virtual server or a routing of third-party servers "
+        "is a gateway, and Choregos never is one (ADR 0105)."
+    )
+
+
+def test_the_live_doors_broker_and_connector_routes_are_frozen() -> None:
+    routes = _live_routes()
+    for directory, door in DOOR_ROUTES.items():
+        package = _module_of(ROOT / directory / "__init__.py")[0]
+        found = frozen_routes(route for route, module in routes if _is_forbidden(module, [package]))
+        expected = frozen_routes(door)
+        assert found == expected, (
+            f"the application serves other routes from {package}: {sorted(found ^ expected)}. A route that "
+            "serves Choregos's own tools or workflows goes into DOOR_ROUTES; one that forwards to, merges "
+            "or names another MCP server is a gateway (ADR 0105)."
+        )
+    paths = [route for route, _ in routes]
+    tools = frozen_routes(route for route in paths if "/tools" in route and "/internal/" in route)
+    assert tools == frozen_routes(BROKER_ROUTES), (
+        f"the broker's routes changed: {sorted(tools ^ frozen_routes(BROKER_ROUTES))}. An agent lists and "
+        "calls tools per run or per hosted session, never per connector or per server (ADR 0105)."
+    )
+    connectors = frozen_routes(route for route in paths if re.search(r"/connectors/\{[^}]*\}", route))
+    changed = sorted(connectors ^ frozen_routes(CONNECTOR_ROUTES))
+    assert not changed, (
+        f"the routes that address one connector changed: {changed}."
+        " They configure a connector and never call it; a route that forwards to one is a passthrough. A new "
+        "one needs ADR 0105 amended before it goes into CONNECTOR_ROUTES."
+    )
+    named = frozen_routes(
+        route
+        for route in paths
+        if "/internal/" in route
+        and any(name in NAMING_PARAMETERS for name, _ in PATH_PARAMETER.findall(route.split(" ", 1)[1]))
+    )
+    assert named == frozen_routes(INTERNAL_NAMED_ROUTES), (
+        f"the internal routes that take a connector, a tool or a server changed: "
+        f"{sorted(named ^ frozen_routes(INTERNAL_NAMED_ROUTES))}. A per-connector or per-server internal "
+        "route is a gateway; a new one needs ADR 0105 amended before it goes into INTERNAL_NAMED_ROUTES."
+    )
+
+
+def test_every_module_imports_and_only_the_platform_run_servers_extend_the_mcp_client() -> None:
+    """The classes that exist, whatever name their base was imported under."""
+    probe = _probe()
+    failures = {name: error for name, error in probe["failures"].items() if name not in KNOWN_IMPORT_FAILURES}
+    assert not failures, (
+        f"modules of {RUNTIME_PACKAGES} no longer import, so the runtime check cannot see them: {failures}"
+    )
+    subclasses = set(probe["subclasses"])
+    assert subclasses >= RUNTIME_MCP_CLIENTS, "the runtime check no longer sees PluginServerClient"
+    offenders = sorted(subclasses - RUNTIME_MCP_CLIENTS)
+    assert not offenders, (
+        f"classes extend the MCP client at runtime outside the platform-run plugin servers (ADR 0096): "
+        f"{offenders}. A new way to reach MCP servers is one more thing the gateway is for (ADR 0105)."
+    )
 
 
 # --- the orchestrator and the runner ----------------------------------------------------------------
