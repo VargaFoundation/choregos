@@ -28,7 +28,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use Tiingo for daily market data](connector.marketdata.tiingo.md) | a project owner | `marketdata/tiingo` | 2026-10-26 |
 | [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
 | [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-10-16 |
-| [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-16 |
+| [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-28 |
 | [The demo device management (demonstration only)](connector.mdm.demo.md) | anyone | `mdm/demo` | 2026-10-16 |
 | [Connect Ecphoria, the platform's memory](connector.memory.ecphoria.md) | the person who operates the platform | `memory/ecphoria` | 2026-10-16 |
 | [Use the built-in lexical memory](connector.memory.lexical.md) | the person who operates the platform | `memory/lexical` | 2026-10-16 |

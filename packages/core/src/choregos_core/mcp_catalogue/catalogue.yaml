@@ -228,6 +228,31 @@ entries:
   stars: 1947
   stars_as_of: '2026-10-15'
   hosting: null
+- id: atlassian
+  title: Atlassian Rovo
+  description: Jira and Confluence through Atlassian's hosted Rovo MCP server, with a service account API key (Compass
+    needs OAuth).
+  publisher: Atlassian
+  official: true
+  reference: false
+  registry_name: com.atlassian/atlassian-mcp-server
+  registry_version: 2.0.0
+  repo: https://github.com/atlassian/atlassian-mcp-server
+  licence: Apache-2.0
+  terms_url: null
+  transport: remote
+  remote:
+    url: https://mcp.atlassian.com/v2/mcp
+    protocol: streamable-http
+  auth: bearer
+  egress_hosts:
+  - mcp.atlassian.com
+  categories:
+  - documentation
+  - project-management
+  stars: 1100
+  stars_as_of: '2026-10-15'
+  hosting: null
 - id: neon
   title: Neon
   description: Manage Neon Postgres projects, branches and run SQL, including safe migrations on a temporary branch.
@@ -660,30 +685,6 @@ entries:
   categories:
   - design
   stars: 2076
-  stars_as_of: '2026-10-15'
-  hosting: null
-- id: atlassian
-  title: Atlassian Rovo
-  description: Jira, Confluence and Compass through Atlassian's hosted Rovo MCP server.
-  publisher: Atlassian
-  official: true
-  reference: false
-  registry_name: com.atlassian/atlassian-mcp-server
-  registry_version: 2.0.0
-  repo: https://github.com/atlassian/atlassian-mcp-server
-  licence: Apache-2.0
-  terms_url: null
-  transport: remote
-  remote:
-    url: https://mcp.atlassian.com/v2/mcp
-    protocol: streamable-http
-  auth: oauth
-  egress_hosts:
-  - mcp.atlassian.com
-  categories:
-  - documentation
-  - project-management
-  stars: 1100
   stars_as_of: '2026-10-15'
   hosting: null
 - id: sentry
