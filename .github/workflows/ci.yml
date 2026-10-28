@@ -234,6 +234,17 @@ jobs:
         run: uv run pytest apps/api/tests -q
         env:
           CHOREGOS_TEST_SUITE_SUR_POSTGRES: "1"
+      # The orchestrator's suite, on the same PostgreSQL. The orchestrator is the component that
+      # writes straight through the API's models, and the advisory lock of the budget reservation
+      # (`lock_budget_scopes`, S27-11) only exists on PostgreSQL: SQLite stands in with an in-process
+      # lock. Both suites drop and recreate the `public` schema for each test, so they take the
+      # database one after the other, the API's first: its fixture recreates the `vector` extension
+      # that a schema reset removes. The schema is built by `create_all` as the service's superuser:
+      # this step does not prove the orchestrator under RLS.
+      - name: orchestrator suite on PostgreSQL
+        run: uv run pytest apps/orchestrator/tests -q
+        env:
+          CHOREGOS_TEST_ORCH_ON_POSTGRES: "1"
 
   contracts:
     needs: changes
