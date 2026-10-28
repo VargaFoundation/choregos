@@ -37,7 +37,7 @@ SOURCE_FIELDS = {
         "include_attachments",
         "labels",
     },
-    "web": {"url", "max_depth", "max_pages", "exclude", "include_documents"},
+    "web": {"connector", "url", "max_depth", "max_pages", "exclude", "include_documents", "headers"},
     "git": {"connector", "url", "ref", "paths"},
 }
 

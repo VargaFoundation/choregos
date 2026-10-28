@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 from weakref import WeakKeyDictionary
 
 import httpx
@@ -78,6 +79,7 @@ from ..schemas.knowledge import (
     KnowledgeSourcePatch,
     ProjectKnowledgeBaseCreate,
 )
+from ..secret_store import resolved_configuration
 from ..services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
 from ..services.outbound_proxy import proxy_scope
 from ..services.platform_network import check_platform_host
@@ -1024,6 +1026,17 @@ def _web_config(config: dict[str, object]) -> dict[str, object]:
     }
     if exclude:
         checked["exclude"] = exclude
+    headers = config.get("headers") or {}
+    if not isinstance(headers, dict):
+        raise unprocessable("`headers` maps header names to values")
+    if headers:
+        from choregos_adapters.documents.base import SourceRefusedError
+        from choregos_adapters.documents.web import plain_headers
+
+        try:
+            checked["headers"] = plain_headers({str(k): v for k, v in headers.items()})
+        except SourceRefusedError as refused:
+            raise unprocessable(str(refused)) from refused
     if "include_documents" in config:
         if not isinstance(config["include_documents"], bool):
             raise unprocessable("`include_documents` is true or false")
@@ -1058,7 +1071,12 @@ _SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] 
     "git": _git_config,
 }
 
-_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive", "confluence": "Confluence", "git": "private git"}
+_CONNECTED_WHAT = {
+    "sharepoint": "SharePoint or OneDrive",
+    "confluence": "Confluence",
+    "git": "private git",
+    "web": "web site behind a login",
+}
 
 
 async def _checked_source_config(
@@ -1072,8 +1090,17 @@ async def _checked_source_config(
     if kind in CONNECTED_KINDS or (kind in OPTIONALLY_CONNECTED and connector):
         if not connector:
             raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
-        await _documents_connector(session, organisation, connector, kind)
+        found = await _documents_connector(session, organisation, connector, kind)
     checked = _SOURCE_VALIDATORS[kind](config)
+    if kind == "web" and connector:
+        # The credential is pinned to its host: a site elsewhere is refused now, not at its first sync.
+        host = (urlsplit(str(checked["url"])).hostname or "").lower()
+        pinned = str((found.config or {}).get("host") or "").lower()
+        if host != pinned:
+            raise unprocessable(
+                f"`{checked['url']}` is not on `{pinned}`: the connector `{connector}`'s credential "
+                "is never sent to another host"
+            )
     if kind in {"web", "git"}:
         # The organisation's network bounds (ADR 0070): a site its ceiling denies is not crawled, and
         # the refusal comes now (422, nothing an opening could fix), before the egress gate's 409.
@@ -1082,7 +1109,11 @@ async def _checked_source_config(
 
 
 async def _reachable_start(
-    session: AsyncSession, organisation: Organization, kind: str, config: dict[str, object]
+    session: AsyncSession,
+    organisation: Organization,
+    kind: str,
+    config: dict[str, object],
+    connector: str | None = None,
 ) -> None:
     """A web source's start URL answers, checked AFTER the egress gate (which may just have allowed
     its host) and INSIDE the organisation's policy: the guarded client fails closed without one
@@ -1091,17 +1122,31 @@ async def _reachable_start(
         return
     exclude = config.get("exclude") or []
     assert isinstance(exclude, list)
+    headers = dict(config.get("headers") or {})  # type: ignore[call-overload]
+    if connector:
+        # A site behind a login answers its login page to an anonymous request: ask as the source will.
+        from choregos_adapters.documents.base import SourceRefusedError
+        from choregos_adapters.documents.web import WebDocumentsConnector
+
+        found = await _documents_connector(session, organisation, connector, kind)
+        resolved = await resolved_configuration(
+            session, organisation.id, found.kind, found.type, found.config, found.secret_refs
+        )
+        try:
+            headers |= WebDocumentsConnector(resolved).headers()
+        except SourceRefusedError as refused:
+            raise unprocessable(str(refused)) from refused
     try:
         async with (
             egress_scope(session, organisation, "api", "knowledge-source:web"),
             proxy_scope(session, organisation.id, ("knowledge_web",)),
         ):
-            await _check_web_start(str(config["url"]), exclude)
+            await _check_web_start(str(config["url"]), exclude, headers)
     except OutboundProxyError as unusable:
         raise unprocessable(str(unusable)) from unusable
 
 
-async def _check_web_start(url: str, exclude: list[str]) -> None:
+async def _check_web_start(url: str, exclude: list[str], headers: dict[str, str] | None = None) -> None:
     """A start URL that redirects outside the allow-list yields no page: say so now, with the target."""
     from choregos_adapters.documents import web
     from choregos_adapters.documents.base import SourceRefusedError
@@ -1110,7 +1155,7 @@ async def _check_web_start(url: str, exclude: list[str]) -> None:
         return await web.resolve(host)
 
     try:
-        crawl = web.WebCrawlSource(url=url, exclude=exclude, resolver=resolver)
+        crawl = web.WebCrawlSource(url=url, exclude=exclude, resolver=resolver, headers=headers)
         try:
             await crawl.check_start()
         finally:
@@ -1224,7 +1269,7 @@ async def create_knowledge_source(
     await _egress_gate(
         session, principal, organisation, body.kind, body.connector, config, body.name, body.allow_egress
     )
-    await _reachable_start(session, organisation, body.kind, config)
+    await _reachable_start(session, organisation, body.kind, config, body.connector)
     refresh_cron, refresh_timezone = _checked_refresh(
         body.refresh_mode, body.refresh_cron, body.refresh_timezone
     )
@@ -1307,7 +1352,7 @@ async def update_knowledge_source(
             source.name,
             body.allow_egress,
         )
-        await _reachable_start(session, organisation, source.kind, source.config)
+        await _reachable_start(session, organisation, source.kind, source.config, source.connector)
         # Another site, URL or ref: the next sync starts from scratch.
         source.cursor = None
     if refresh_changed:
