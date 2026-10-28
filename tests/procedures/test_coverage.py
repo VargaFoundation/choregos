@@ -15,7 +15,6 @@ from collections.abc import Iterator
 
 import choregos_adapters
 import pytest
-import yaml
 from choregos_adapters import registry
 from choregos_api.knowledge.sync import KINDS as SOURCE_KINDS
 from choregos_core import procedures as core
@@ -96,11 +95,11 @@ def test_every_door_client_of_the_integrations_page_has_a_procedure_that_links_t
 
 
 def test_every_agent_of_the_client_catalogue_is_covered() -> None:
-    folder = ROOT / "packages/core/src/choregos_core/catalogue_d_agents/clients"
-    slugs = [
-        yaml.safe_load(p.read_text(encoding="utf-8"))["catalogue"]["client"] for p in folder.glob("*.yaml")
-    ]
-    assert slugs
+    from choregos_core.catalogue_d_agents import entrees
+
+    # The clients ship in the offline plugin `mcp-clients` since S43-09 (ADR 0093 §6).
+    slugs = [str(e.client) for e in entrees() if e.genre == "external"]
+    assert len(slugs) == 6
     for slug in slugs:
         client = DOOR_ALIASES.get(slug, slug)
         assert CATALOGUE.for_target(f"door_client:{client}") is not None, f"`{slug}` has no procedure"
