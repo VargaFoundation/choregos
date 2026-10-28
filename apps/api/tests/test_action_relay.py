@@ -132,11 +132,11 @@ def _closed_port() -> int:
 
 @pytest.mark.slow
 async def test_the_relay_starts_one_run_on_a_real_temporal(
+    temporal_server: Any,  # first: its start can be slow, and the admin's session must be fresh after it
     client: AsyncClient,
     project: dict[str, Any],
     app: Any,
     monkeypatch: pytest.MonkeyPatch,
-    temporal_server: Any,
 ) -> None:
     from choregos_api.services.action_relay import start_approved_actions
     from choregos_api.temporal import RealTemporal, set_temporal
@@ -193,11 +193,11 @@ async def _state(action_id: str) -> tuple[str, list[tuple[str, int]]]:
 
 @pytest.mark.slow
 async def test_a_worker_runs_the_relayed_action_once(
+    temporal_server: Any,  # first: its start can be slow, and the admin's session must be fresh after it
     client: AsyncClient,
     project: dict[str, Any],
     app: Any,
     monkeypatch: pytest.MonkeyPatch,
-    temporal_server: Any,
     workers: Any,
     noop_effect: list[str],
 ) -> None:
@@ -220,11 +220,11 @@ async def test_a_worker_runs_the_relayed_action_once(
 
 @pytest.mark.slow
 async def test_two_replicas_relaying_one_action_run_it_once(
+    temporal_server: Any,  # first: its start can be slow, and the admin's session must be fresh after it
     client: AsyncClient,
     project: dict[str, Any],
     app: Any,
     monkeypatch: pytest.MonkeyPatch,
-    temporal_server: Any,
     workers: Any,
     noop_effect: list[str],
 ) -> None:
