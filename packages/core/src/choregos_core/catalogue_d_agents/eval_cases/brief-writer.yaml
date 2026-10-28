@@ -1,0 +1,11 @@
+agent: brief-writer
+description: A brief a person approves; no deliverable, no repository, asks rather than invents.
+must_contain:
+- expected deliverable
+- acceptance criteria
+- out of scope
+- you need no repository
+- ask_human
+- '"spec_markdown"'
+must_not_contain:
+- allowed_paths

@@ -1,7 +1,7 @@
 # 0108 — A workflow catalogue: entries from the core, templates, plugins and the organisation, whose agents resolve in the registry
 
-- **Status**: proposed, 2026-10-28, at the product owner's request ("a catalogue of workflows that
-  reference agents from internal or external catalogues")
+- **Status**: accepted, 2026-10-28, by the product owner ("a catalogue of workflows that reference
+  agents from internal or external catalogues"; sharing to the organisation's catalogue is `org_admin`'s)
 - **Concerns**: a new route `GET /orgs/{org}/workflow-catalogue` and its DTO (contract-change),
   `POST /projects/{id}/workflows/adopt`, the optional `metadata.catalogue` block of
   `workflow.schema.json` (contract-change), `workflow_defs.source`, the readiness item
@@ -55,7 +55,7 @@ finding about agents: what cannot be found is not reused.
    Before adopting, the console shows the target project's readiness *as it would be* (the entry's
    requirements against the project's connectors).
 4. **An organisation shares its own workflows.** A project workflow version can be **shared to the
-   catalogue** (`org` source) by whoever holds the right ADR 0074 gives for catalogue writes; the entry
+   catalogue** (`org` source) by an `org_admin` only, the right ADR 0074 gives for catalogue writes; the entry
    is a copy of that version, so later edits in the project do not leak into it until shared again.
 5. **Updates are offered, never applied.** A project's adopted workflow whose source now has a newer
    version shows the existing readiness item (`workflow-template`, generalised to every source) with the

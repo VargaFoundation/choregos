@@ -1,7 +1,7 @@
 # 0109 — The map edits a whole workflow: actors from the registry, every transition field, a workflow born on the map
 
-- **Status**: proposed, 2026-10-28, at the product owner's request ("we must be able to edit
-  workflows graphically")
+- **Status**: accepted, 2026-10-28, by the product owner ("we must be able to edit workflows
+  graphically")
 - **Concerns**: `choregos_core/dsl/edition.py` (new typed operations), `POST /workflows/edit`, the
   console's map and process view (`components/workflows/`), `/p/<slug>/workflows/new`; amends
   [ADR 0023](0023-a-visual-workflow-builder.md) §3 and continues

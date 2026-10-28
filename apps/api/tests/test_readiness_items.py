@@ -202,7 +202,10 @@ def test_without_a_repository_the_workflow_that_asks_for_one_is_named_and_can_be
     assert "a workflow that does not deliver code" in repository.detail
     scm, cd = item_connectors(facts(requirements=required))
     assert scm.state == cd.state == "todo"
-    assert scm.fix.href == cd.fix.href == "/p/dev/workflows", "the way out is another workflow"
+    gesture = "/p/dev/workflows/new?template=default-request&default=1"
+    assert scm.fix.href == cd.fix.href == repository.fix.href == gesture, "the way out is another workflow"
+    published = facts(requirements=required, workflows=("default-simple", "default-request"))
+    assert item_repository(published)[0].fix.href == "/p/dev/workflows", "published: make it the default"
     with_repo = ProjectConfig.model_validate(
         {"slug": "dev", "org": "varga", "repo": {"url": "https://github.com/varga/dev.git"}}
     )

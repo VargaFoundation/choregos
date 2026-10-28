@@ -3758,13 +3758,13 @@ stories:
     depends_on: [S47-14]
     notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
   - id: S49-01
-    title: "feat(core): the `assistant` catalogue entry (role `deliver`) with its eval"
+    title: "feat(core): the `brief-writer` (role `refine`) and `assistant` (role `deliver`) catalogue entries with their evals"
     stream: S49
     sprint: 1
     priority: 1
     size: M
     depends_on: []
-    notes: "ADR 0107 §1. Acceptance: the entry installs, renders its instructions with the context block, and its eval turns red when the instructions are emptied."
+    notes: "ADR 0107 §1. Acceptance: each entry installs, renders its instructions with the context block, and its eval turns red when the instructions are emptied; neither mentions allowed_paths."
   - id: S49-02
     title: "feat(core): the `default-request` core workflow, its requirements pinned to tracker, runtime and gateway"
     stream: S49
@@ -3780,7 +3780,7 @@ stories:
     priority: 2
     size: S
     depends_on: [S49-02]
-    notes: "ADR 0107 §3-5. Acceptance: livraison() picks default-simple with repo.url and default-request without; a template's defaults still win; readiness of a repository-less project lists no repository, scm or cd item; existing projects untouched; D14 updated."
+    notes: "ADR 0107 §3-5. Acceptance: livraison() picks default-simple with repo.url and default-request without; a template's defaults still win; readiness of a repository-less project lists no repository, scm or cd item; existing projects untouched, their readiness links to the one-gesture switch (/workflows/new?template=default-request&default=1); D14 updated."
   - id: S49-04
     title: "contract(schemas): the workflow catalogue DTO, the adopt request and `metadata.catalogue`"
     stream: S49

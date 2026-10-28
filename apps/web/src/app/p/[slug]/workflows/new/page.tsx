@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
 import { renommer } from "@/components/workflows/renommer";
@@ -32,8 +32,13 @@ export default function NewWorkflowPage({
     queryKey: ["workflow-templates"],
     queryFn: () => api.workflowTemplates(),
   });
-  const [nom, setNom] = useState("");
-  const [gabarit, setGabarit] = useState("");
+  // `?template=default-request&default=1`: the readiness fix of a project whose workflow asks for a
+  // repository it does not have (ADR 0107 §4) — one gesture publishes the other workflow and makes it the default.
+  const search = useSearchParams();
+  const asked = search.get("template") ?? "";
+  const [nom, setNom] = useState(asked);
+  const [gabarit, setGabarit] = useState(asked);
+  const [makeDefault, setMakeDefault] = useState(search.get("default") === "1");
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const choisi = templates.data?.find(
@@ -52,6 +57,11 @@ export default function NewWorkflowPage({
     setErreur(null);
     try {
       await api.createWorkflow(slug, nom, renommer(choisi.yaml, nom));
+      if (makeDefault) {
+        const routing = await api.workflowRouting(slug);
+        await api.putWorkflowRouting(slug, { ...routing, default: nom });
+        await client.invalidateQueries({ queryKey: ["readiness", slug] });
+      }
       await client.invalidateQueries({ queryKey: ["workflows", slug] });
       router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}/yaml`);
     } catch (cause) {
@@ -115,6 +125,10 @@ export default function NewWorkflowPage({
             to change it, or choose another name.
           </p>
         )}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={makeDefault} onChange={(event) => setMakeDefault(event.target.checked)} />
+          Make it the project&apos;s default workflow
+        </label>
         {erreur && <ErrorNote>{erreur}</ErrorNote>}
         <Button
           tone="accent"

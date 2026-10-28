@@ -254,8 +254,8 @@ def _connector_item(f: Facts, capability: str, reasons: tuple[str, ...]) -> Read
                 title,
                 "todo",
                 f"{why}; none is configured. A project without a repository makes default a workflow "
-                "that does not deliver code.",
-                ReadinessFix(href=f"/p/{f.slug}/workflows", by="project_owner"),
+                "that does not deliver code, such as `default-request`.",
+                _workflow_without_repository(f),
             )
         return _item(id_, "connections", title, "todo", f"{why}; none is configured.", fix)
     if connector.type in STAND_INS:
@@ -352,6 +352,16 @@ def _has_repository(f: Facts) -> bool:
     return bool(f.config.repo and f.config.repo.url)
 
 
+def _workflow_without_repository(f: Facts) -> ReadinessFix:
+    """The way out for a project with no repository (ADR 0107 §4): publish `default-request` and make it
+    the default in one gesture; once it is published, the Workflows page, where it is made the default."""
+    if "default-request" in f.workflows:
+        return ReadinessFix(href=f"/p/{f.slug}/workflows", by="project_owner")
+    return ReadinessFix(
+        href=f"/p/{f.slug}/workflows/new?template=default-request&default=1", by="project_owner"
+    )
+
+
 def item_repository(f: Facts) -> list[ReadinessItem]:
     reasons = dict(f.requirements).get("scm")
     if reasons is None:
@@ -367,8 +377,8 @@ def item_repository(f: Facts) -> list[ReadinessItem]:
                 "Repository set",
                 "todo",
                 f"the project names no repository URL ({reasons[0] if reasons else 'a workflow needs one'}): "
-                "set one, or make default a workflow that does not deliver code.",
-                fix,
+                "set one, or make default a workflow that does not deliver code, such as `default-request`.",
+                _workflow_without_repository(f),
             )
         ]
     assert repo is not None

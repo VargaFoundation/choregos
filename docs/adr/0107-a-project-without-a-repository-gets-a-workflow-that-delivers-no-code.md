@@ -1,7 +1,7 @@
 # 0107 — A project without a repository gets a workflow that delivers no code
 
-- **Status**: proposed, 2026-10-28, at the product owner's request ("a project does not necessarily
-  have a git repository")
+- **Status**: accepted, 2026-10-28, by the product owner (the names `default-request` and `assistant`;
+  existing projects switch by one gesture, never by a database edit) — implemented by S49-01 to S49-03
 - **Concerns**: `choregos_core/dsl/templates/` (a fourth core workflow, `default-request`),
   `services/definitions.ensure_defaults` and `services/gabarits.livraison` (which workflow a project
   without a template receives), the readiness items of S40-06, the project wizard; amends decision
@@ -42,8 +42,10 @@ neutral one.
    back with a reason) → `done`; with `needs_human` and `abandoned` as in `default-simple`.
 
    Its agents are registry agents named by `agent:` (ADR 0040 §5, installed when the workflow is
-   published): the existing `spec-writer` for the brief, and a new catalogue entry **`assistant`**
-   (role `deliver`) for the deliverable, which ships with its eval like every entry (ADR 0040). The
+   published): two new catalogue entries, **`brief-writer`** (role `refine`) for the brief and
+   **`assistant`** (role `deliver`) for the deliverable, each with its eval like every entry (ADR 0040).
+   `spec-writer` is not reused: it reads code and writes `allowed_paths`, which a request without a
+   repository does not have; both new evals refuse `allowed_paths`. The
    deliverable is a declared text output (`deliverable_markdown`), not a file: the workflow then needs
    no object store either.
 2. **The guard is mechanical**: a core test asserts that `exigences(default-request)` is exactly
@@ -57,9 +59,12 @@ neutral one.
    MCP door all go through it.
 4. **Never rewritten afterwards** (the rule of ADR 0040 §4 and of templates' workflows): adding a
    repository later does not swap the project's workflow, and an existing repository-less project that
-   received `default-simple` keeps it. Readiness already names the workflow that asks for a repository
-   and links to Workflows (S40-06d); from ADR 0108 on, that link opens the catalogue filtered on
-   "needs no repository", where adopting `default-request` is one gesture.
+   received `default-simple` keeps it until someone switches it. **No migration and no database edit**:
+   a workflow is a versioned, audited document and work items are pinned to a version (ADR 0031), so
+   the switch is the same gesture a person would make. The readiness items that ask such a project for
+   a repository link to `/p/<slug>/workflows/new?template=default-request&default=1`, which publishes
+   `default-request` and makes it the default in one confirmation (the routing rules are kept); once it
+   is published, they link to Workflows. From ADR 0108 on, the catalogue offers the same adoption.
 5. **D14 is amended**, not superseded: `docs/plan/00-index.md` reads "`default-simple` for a project
    with a repository, `default-request` without one; production always through the release train".
 

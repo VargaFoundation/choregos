@@ -656,6 +656,12 @@ async def test_la_timeline_raconte_runs_decisions_etats_et_findings(
     assert next(e for e in timeline if e["kind"] == "state_change")["title"] == "demande → sourcing"
 
 
+async def test_a_project_with_a_repository_still_receives_default_simple(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    assert project["workflow_name"] == "default-simple", "D14 is unchanged for a software project"
+
+
 async def test_le_provisioning_demarre_un_workflow_et_expose_son_etat(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
@@ -690,6 +696,12 @@ async def test_a_project_without_template_or_repository_is_activated_without_a_w
     assert created.status_code == 201, created.text
     project = created.json()
     assert project["status"] == "draft"
+    assert project["workflow_name"] == "default-request", "no repository: a workflow that delivers no code"
+    agents = {a["slug"] for a in (await client.get("/api/v1/orgs/varga/agents")).json()}
+    assert {"brief-writer", "assistant"} <= agents, "the agents it names are installed (ADR 0040 §5)"
+    readiness = (await client.get(f"/api/v1/projects/{project['id']}/readiness")).json()
+    ids = {item["id"] for item in readiness["items"]}
+    assert not ids & {"repository", "connector-scm", "connector-cd"}, ids
     dry = await client.post(f"/api/v1/projects/{project['id']}/provision", json={"dry_run": True})
     assert dry.status_code == 202 and dry.json()["status"] == "pending"
     assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "draft"

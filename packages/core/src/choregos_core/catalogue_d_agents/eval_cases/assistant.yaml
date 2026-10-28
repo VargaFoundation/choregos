@@ -1,0 +1,15 @@
+agent: assistant
+description: The deliverable of the approved brief, every fact cited, nothing claimed beyond its tools.
+inputs:
+  human_feedback: The table misses the March figures.
+must_contain:
+- approved brief
+- cite every fact
+- never claim you did something outside your tools
+- acceptance check
+- sent back
+- the march figures
+- '"deliverable_markdown"'
+must_not_contain:
+- allowed_paths
+- git
