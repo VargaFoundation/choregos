@@ -291,7 +291,10 @@ function Secrets({
 }) {
   const client = useQueryClient();
   const guard = useEgressGuard();
-  const [editing, setEditing] = useState(open);
+  // `null` follows `open` (the link's `?connector=`, which can arrive after the first render of a client
+  // navigation); a click takes over.
+  const [toggled, setEditing] = useState<boolean | null>(null);
+  const editing = toggled ?? open;
   const [config, setConfig] = useState<Record<string, unknown>>(instance.config ?? {});
   const [erreur, setErreur] = useState<string | null>(null);
   // A field starting with `_` is the platform's (a plugin server's `_server_token`): no route sets it.
