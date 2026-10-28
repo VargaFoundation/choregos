@@ -135,20 +135,41 @@ async def test_header_routing_reads_the_server_header() -> None:
     assert (await _post(gw, "/mcp", INITIALIZE, _bearer("gw"))).status_code == 404, "no header, no server"
 
 
-async def test_the_upstream_gets_the_gateway_s_credential_never_choregos_s() -> None:
+@pytest.mark.parametrize(
+    ("auth", "auth_header", "seen"),
+    [("bearer", "Authorization", "authorization"), ("header", "X-Api-Key", "x-api-key")],
+)
+async def test_the_upstream_gets_the_gateway_s_credential_never_choregos_s(
+    auth: Any, auth_header: str, seen: str
+) -> None:
     supplier = _server(SUPPLIER_TOOLS, token="upstream-key")
     gw = FakeMcpGateway(
         upstreams={"supplier": GatewayUpstream(server=supplier, token="upstream-key")},
-        auth="bearer",
+        auth=auth,
         token="gw-secret",
     )
-    client = McpClient("https://gw.test/supplier/mcp", token="gw-secret", transport=gw.transport())
+    client = McpClient(
+        "https://gw.test/supplier/mcp", token="gw-secret", auth_header=auth_header, transport=gw.transport()
+    )
     assert _names(await client.list_tools()) == _names(SUPPLIER_TOOLS)
     received = _received(supplier)
     assert received
     assert all(headers.get("authorization") == "Bearer upstream-key" for _, headers, _ in received)
+    assert all("x-api-key" not in headers for _, headers, _ in received), "the API-key header is dropped"
     assert "gw-secret" not in json.dumps(received), "Choregos's credential never reaches the upstream"
-    assert gw.calls[0].headers["authorization"] == "Bearer gw-secret"
+    assert gw.calls[0].headers[seen] == ("Bearer gw-secret" if auth == "bearer" else "gw-secret")
+
+
+async def test_the_upstream_sees_exactly_one_content_type() -> None:
+    supplier = _server(SUPPLIER_TOOLS)
+    gw = FakeMcpGateway(upstreams={"supplier": GatewayUpstream(server=supplier)}, auth="none")
+    client = McpClient("https://gw.test/supplier/mcp", transport=gw.transport())
+    assert _names(await client.list_tools()) == _names(SUPPLIER_TOOLS)
+    assert gw.calls[0].headers["content-type"] == "application/json", "the caller did send one"
+    received = _received(supplier)
+    assert received
+    # Two headers of one name reach the upstream as one value joined by ", ".
+    assert {headers["content-type"] for _, headers, _ in received} == {"application/json"}
 
 
 @pytest.mark.parametrize(
@@ -301,6 +322,43 @@ async def test_an_assertion_that_is_expired_replayed_or_for_another_audience_is_
         (401, "replayed assertion"),
         (401, "assertion for another audience"),
     ]
+
+
+async def test_an_assertion_from_another_issuer_or_without_sub_or_jti_is_refused() -> None:
+    private, jwk = _key_pair("kid1")
+    gw = FakeMcpGateway(
+        upstreams={"supplier": GatewayUpstream(server=_server(SUPPLIER_TOOLS))},
+        auth="jwt_assertion",
+        jwks={"keys": [jwk]},
+        audience=AUDIENCE,
+        issuer="https://idp.test",
+    )
+
+    def signed(**overrides: Any) -> str:
+        issued = int(time.time())
+        claims = {
+            "iss": "https://idp.test",
+            "sub": "agent-7",
+            "aud": AUDIENCE,
+            "iat": issued,
+            "exp": issued + 60,
+            "jti": uuid.uuid4().hex,
+            **overrides,
+        }
+        kept = {key: value for key, value in claims.items() if value is not None}
+        return jwt.encode(kept, private, algorithm="ES256", headers={"kid": "kid1"})
+
+    assert (await _post(gw, "/supplier/mcp", INITIALIZE, _bearer(signed()))).status_code == 200
+    refused = [signed(iss="https://other-idp.test"), signed(sub=None), signed(jti=None)]
+    statuses = [
+        (await _post(gw, "/supplier/mcp", INITIALIZE, _bearer(assertion))).status_code
+        for assertion in refused
+    ]
+    assert statuses == [401, 401, 401]
+    assert [status for status, _ in gw.refusals] == [401, 401, 401]
+    assert "iss" in gw.refusals[0][1]
+    assert "sub" in gw.refusals[1][1]
+    assert "jti" in gw.refusals[2][1]
 
 
 async def test_a_rotated_key_is_fetched_again_from_the_jwks_url() -> None:

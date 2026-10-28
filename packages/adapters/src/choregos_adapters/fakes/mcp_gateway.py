@@ -342,7 +342,9 @@ class FakeMcpGateway:
 
     def _upstream_headers(self, request: httpx.Request, upstream: GatewayUpstream) -> dict[str, str]:
         """The caller's headers, without its credentials, with the gateway's own upstream credential."""
-        dropped = {*_HOP_HEADERS, "authorization", self.auth_header.lower()}
+        # The caller's content-type is dropped too: the gateway sets its own, and keeping both would
+        # send the upstream two values.
+        dropped = {*_HOP_HEADERS, "content-type", "authorization", self.auth_header.lower()}
         if self.identity_header:
             dropped.add(self.identity_header.lower())
         headers = {key: value for key, value in request.headers.items() if key.lower() not in dropped}
