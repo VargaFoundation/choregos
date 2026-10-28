@@ -291,6 +291,30 @@ async def test_configuration_is_the_server_s_schema_and_rolls_the_deployment(
     assert {"protocol": "TCP", "port": 443} in egress[1]["ports"]
 
 
+async def test_the_connector_answers_the_server_s_schema_for_the_console(
+    client: AsyncClient, admin: str, kube: FakeKubernetesApi
+) -> None:
+    """S43-08: the console configures a server with its own schema, not the `mcp` type's (`url`)."""
+    await _install(client)
+    listed = (await client.get(f"{ORG}/connectors/hello")).json()
+    assert listed["server"] == {
+        "plugin": "hello",
+        "version": "1.0.0",
+        "server": "hello",
+        "config_schema": {
+            "type": "object",
+            "properties": {"base_url": {"type": "string", "format": "uri"}, "greeting": {"type": "string"}},
+        },
+        "secret_fields": ["token"],
+    }
+    created = await client.post(
+        f"{ORG}/connectors",
+        json={"name": "plain", "type": "mcp", "config": {"url": "https://mcp.example.com/mcp"}},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["server"] is None, "an ordinary MCP connector is no plugin's server"
+
+
 async def test_a_host_the_bounds_deny_is_refused_at_configuration(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi, settings_env: pytest.MonkeyPatch
 ) -> None:

@@ -1595,20 +1595,26 @@ async def relaunch_knowledge_distillation(
 async def stop_knowledge_distillation(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     """Stops the distillation that is running (S42-10d, ADR 0092): the record says `stopped` at once,
     the workflow is cancelled after the commit. What was spent stays booked; nothing is published."""
-    from ..knowledge.distill import is_running, stopped_record
+    from ..knowledge.distill import is_running, stopped_record, write_if_running
 
     base = await _base(session, principal, org, slug)
     _require(principal, org, base, KnowledgeAction.DISTILL)
     before = base.distillation
-    if not before or not is_running(before):
+    # Written only if the run is still running: a run that published meanwhile is not called stopped.
+    if (
+        not before
+        or not is_running(before)
+        or not await write_if_running(
+            session, base.id, before.get("started_at"), stopped_record(before, principal.email)
+        )
+    ):
         raise ApiError(
             status.HTTP_409_CONFLICT,
             "Conflict",
             f"knowledge base `{slug}` is not being distilled",
             extra={"code": "distill_not_running"},
         )
-    base.distillation = stopped_record(before, principal.email)
-    await session.flush()
+    await session.refresh(base)
     await record(
         session,
         principal,
