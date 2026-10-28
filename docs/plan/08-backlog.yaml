@@ -41,6 +41,9 @@ streams:
   S36: "Agent logs: transcript stored, pod logs and termination reason archived, a logs tab (plan 2026-10-12)"
   S37: "Fewer tokens per run: rtk and headroom, measured, switchable at every level (ADR 0055)"
   S38: "Investment research: deterministic steps, market data, gates on measured numbers, a campaign template (plan 2026-10-14)"
+  S45: "English everywhere, finished (plan 2026-10-27, ADR 0098)"
+  S46: "Consuming an external MCP gateway (plan 2026-10-27, ADR 0097)"
+  S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
 
 stories:
 
@@ -2887,3 +2890,869 @@ stories:
     depends_on: [S38-09]
     acceptance:
       - "Recorded in essai/: non-zero cost, artifact sha256 equals its digest, job replay byte-identical"
+
+  # ───────────────────────── S45, S46, S47 — plan 2026-10-27 (docs/plan/PLAN-2026-10-27.md) ─────────────────────────
+  - id: S45-00
+    title: "docs(plan): the 2026-10-27 plan, streams S45-S47 and the PR template's STATUS row (S45-00)"
+    stream: S45
+    sprint: 0
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-01
+    title: "feat(tools): full-repo English ratchet with per-area baselines, identifier and path passes (S45-01)"
+    stream: S45
+    sprint: 0
+    priority: 1
+    size: L
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-02
+    title: "contract(openapi): access report and role.playbook_not_found in English, S34-03 aliases removed, ?token= for the Tekton sink (S45-02)"
+    stream: S45
+    sprint: 4
+    priority: 1
+    size: L
+    depends_on: [S45-01]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-03
+    title: "fix(orchestrator): read recorded and persisted French keys under both names before any rename (S45-03)"
+    stream: S45
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S45-01]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-04
+    title: "feat(api): the plugin API in English (plugins, effects, quotas, admission, secrets), French names warned until 0.22.0 (S45-04)"
+    stream: S45
+    sprint: 9
+    priority: 1
+    size: L
+    depends_on: [S45-02, S45-03, S45-41]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-05
+    title: "feat(api): English entry points, ontology activation variable and agent catalogue behind compatibility shims (S45-05)"
+    stream: S45
+    sprint: 11
+    priority: 1
+    size: L
+    depends_on: [S45-04]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-06
+    title: "contract(contracts): English names for the contracts package's Python helpers (S45-06)"
+    stream: S45
+    sprint: 5
+    priority: 2
+    size: S
+    depends_on: [S45-02]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-07
+    title: "refactor(core): the workflow DSL, gates, policy, instructions and presets in English (S45-07)"
+    stream: S45
+    sprint: 7
+    priority: 2
+    size: L
+    depends_on: [S45-02, S45-06, S45-41, S47-11]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-08
+    title: "refactor(core): access report, exit codes, MCP helpers, tool catalogue and the rest of core in English (S45-08)"
+    stream: S45
+    sprint: 12
+    priority: 2
+    size: L
+    depends_on: [S45-04, S45-05, S45-06, S45-07, S47-08, S47-12, S47-19]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-09
+    title: "refactor(adapters): fakes, families, memory, market data, identity, documents and storage in English (S45-09)"
+    stream: S45
+    sprint: 3
+    priority: 2
+    size: L
+    depends_on: [S45-41]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-10
+    title: "refactor(adapters): registry, plugin loader, trackers, executors, gateways and SCM in English (S45-10)"
+    stream: S45
+    sprint: 10
+    priority: 2
+    size: L
+    depends_on: [S45-04, S45-41, S46-01, S46-05, S47-14]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-11
+    title: "refactor(runner): the runner in English (S45-11)"
+    stream: S45
+    sprint: 13
+    priority: 2
+    size: M
+    depends_on: [S45-08]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-12
+    title: "refactor(api): root modules, edition plugin API, Principal and configuration in English (S45-12)"
+    stream: S45
+    sprint: 12
+    priority: 2
+    size: L
+    depends_on: [S45-05, S45-41, S47-01, S47-02, S47-03, S47-04, S47-12, S47-13, S47-14, S47-26, S46-07, S46-08]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-13
+    title: "refactor(api): schemas and migration file names in English (S45-13)"
+    stream: S45
+    sprint: 12
+    priority: 2
+    size: M
+    depends_on: [S45-05, S47-05, S47-06, S47-14, S46-07, S46-08, S46-10]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-14
+    title: "refactor(api): the inbound MCP door in English (S45-14)"
+    stream: S45
+    sprint: 13
+    priority: 2
+    size: M
+    depends_on: [S45-03, S45-04, S45-12]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-15
+    title: "refactor(api): agent, skill, auth, project and work-item routers in English (S45-15)"
+    stream: S45
+    sprint: 13
+    priority: 2
+    size: L
+    depends_on: [S45-12, S47-01, S47-03, S47-04, S47-05, S47-06, S47-08, S47-09, S47-10, S47-11, S47-12, S47-14, S47-19, S46-19]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-16
+    title: "refactor(api): internal, connector, webhook, run and action routers in English (S45-16)"
+    stream: S45
+    sprint: 13
+    priority: 2
+    size: M
+    depends_on: [S45-02, S45-12, S46-01, S46-09, S46-10, S47-10, S47-12, S47-13, S47-14, S47-16, S47-38]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-17
+    title: "refactor(api): action, agent, definition, template and installation services in English (S45-17)"
+    stream: S45
+    sprint: 14
+    priority: 2
+    size: L
+    depends_on: [S45-05, S45-12, S45-15, S47-06, S47-10, S47-11]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-18
+    title: "refactor(api): ticket, journey, receipt, routing and skill services, and the English-named rest, in English (S45-18)"
+    stream: S45
+    sprint: 15
+    priority: 2
+    size: L
+    depends_on: [S45-12, S45-17, S46-09, S46-18, S46-19, S47-09, S47-10, S47-14, S47-16]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-19
+    title: "test(api): API tests test_a* to test_d* in English (S45-19)"
+    stream: S45
+    sprint: 16
+    priority: 2
+    size: L
+    depends_on: [S45-04, S45-12, S45-13, S45-14, S45-15, S45-16, S45-17, S45-18, S45-42, S45-48]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-20
+    title: "test(api): API tests test_e* to test_o* in English (S45-20)"
+    stream: S45
+    sprint: 17
+    priority: 2
+    size: L
+    depends_on: [S45-19]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-21
+    title: "test(api): API tests test_p* to test_z* in English (S45-21)"
+    stream: S45
+    sprint: 18
+    priority: 2
+    size: L
+    depends_on: [S45-20]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-22
+    title: "refactor(orchestrator): workflows, queue routing, worker and configuration in English, replay-proven (S45-22)"
+    stream: S45
+    sprint: 4
+    priority: 2
+    size: L
+    depends_on: [S45-03, S45-41, S45-43]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-23
+    title: "refactor(orchestrator): activities in English, wire names unchanged (S45-23)"
+    stream: S45
+    sprint: 11
+    priority: 2
+    size: L
+    depends_on: [S45-10, S45-22, S47-16, S47-19, S47-20]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-24
+    title: "test(orchestrator): tests a-h, eval fixtures and the toy repository in English (S45-24)"
+    stream: S45
+    sprint: 12
+    priority: 2
+    size: L
+    depends_on: [S45-23, S45-43]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-25
+    title: "test(orchestrator): tests i-z, tests/replay helpers and their histories in English (S45-25)"
+    stream: S45
+    sprint: 13
+    priority: 2
+    size: L
+    depends_on: [S45-24, S47-23]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-26
+    title: "refactor(web): the console's lib, API client, types and mocks in English (S45-26)"
+    stream: S45
+    sprint: 11
+    priority: 2
+    size: L
+    depends_on: [S45-02, S46-13, S46-14, S47-17, S47-18, S47-15]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-27
+    title: "refactor(web): the work-item journey and workflow map components in English (S45-27)"
+    stream: S45
+    sprint: 13
+    priority: 2
+    size: L
+    depends_on: [S45-07, S45-26]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-28
+    title: "refactor(web): app pages, shell and remaining components in English (S45-28)"
+    stream: S45
+    sprint: 12
+    priority: 2
+    size: L
+    depends_on: [S45-26, S46-13, S46-14, S47-17, S47-18, S47-15]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-29
+    title: "refactor(web): remaining tests, e2e specs and data-testids in English; TS shims removed (S45-29)"
+    stream: S45
+    sprint: 14
+    priority: 3
+    size: L
+    depends_on: [S45-27, S45-28]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-30
+    title: "test(repo): tests/langue to tests/language, plus docs, ci, dev, licences, integrations and charts tests in English (S45-30)"
+    stream: S45
+    sprint: 19
+    priority: 2
+    size: L
+    depends_on: [S45-05, S45-10, S45-21, S45-23, S45-33]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-31
+    title: "test(repo): conformance, e2e, cluster, live, packaging, tools and fixtures tests in English (S45-31)"
+    stream: S45
+    sprint: 20
+    priority: 2
+    size: L
+    depends_on: [S45-09, S45-10, S45-11, S45-30, S45-33, S45-43, S47-24, S46-11, S46-16]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-32
+    title: "docs(trials): essai/ becomes trials/, in English (S45-32)"
+    stream: S45
+    sprint: 15
+    priority: 2
+    size: L
+    depends_on: [S45-12, S45-29, S45-33]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-33
+    title: "feat(charts): English alert, rule, dashboard, guard, init-container, mount-path, Kyverno and runbook names with upgrade notes (S45-33)"
+    stream: S45
+    sprint: 12
+    priority: 2
+    size: L
+    depends_on: [S45-05, S45-09, S46-12, S47-01, S46-20]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-34
+    title: "chore(repo): Makefile, root config, docker/, infra/ and demo in English (S45-34)"
+    stream: S45
+    sprint: 21
+    priority: 3
+    size: M
+    depends_on: [S45-05, S45-30, S45-31, S45-32, S45-33]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-35
+    title: "docs(plan): plan pages, product review and READMEs in English (S45-35)"
+    stream: S45
+    sprint: 16
+    priority: 2
+    size: L
+    depends_on: [S45-32, S45-33]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-36
+    title: "docs(plan): STATUS.md in English (integrator, S45-36)"
+    stream: S45
+    sprint: 20
+    priority: 2
+    size: L
+    depends_on: [S45-30, S45-32, S45-33, S45-35]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-37
+    title: "docs(plan): the French lines of 08-backlog.yaml in English (integrator, S45-37)"
+    stream: S45
+    sprint: 21
+    priority: 3
+    size: M
+    depends_on: [S45-36]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-38
+    title: "docs: delete docs/fr, the 43 French ADR stubs and the 7 French plan pointers (S45-38)"
+    stream: S45
+    sprint: 22
+    priority: 2
+    size: M
+    depends_on: [S45-11, S45-12, S45-20, S45-30, S45-33, S45-35, S45-36, S45-37]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-39
+    title: "feat(orchestrator): write English keys, values and error types, one release after the readers (S45-39)"
+    stream: S45
+    sprint: 26
+    priority: 3
+    size: M
+    depends_on: [S45-03, S45-25, S45-44, S45-46]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-40
+    title: "refactor(packages): internal aliases and shims defined under packages/ removed (S45-40)"
+    stream: S45
+    sprint: 24
+    priority: 3
+    size: L
+    depends_on: [S45-06, S45-07, S45-08, S45-09, S45-10, S45-11, S45-21, S45-25, S45-29, S45-31, S45-44, S45-45, S45-48, S47-34]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-41
+    title: "feat(core): choregos_core.compat, two-way aliases for renamed module names (S45-41)"
+    stream: S45
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S45-01]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-42
+    title: "test(api): cross-imported API test helpers moved to English kits; conftest in English (S45-42)"
+    stream: S45
+    sprint: 12
+    priority: 2
+    size: L
+    depends_on: [S45-05, S47-01, S47-04, S47-12, S46-01]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-43
+    title: "test(orchestrator): cross-imported orchestrator test helpers moved to English kits; history recorder switched (S45-43)"
+    stream: S45
+    sprint: 3
+    priority: 2
+    size: M
+    depends_on: [S45-01, S47-23, S47-27]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-44
+    title: "docs: upgrade notes folded, renamed names in docs updated, docs residue in English (S45-44)"
+    stream: S45
+    sprint: 23
+    priority: 2
+    size: L
+    depends_on: [S45-08, S45-09, S45-11, S45-12, S45-13, S45-14, S45-15, S45-16, S45-17, S45-18, S45-22, S45-23, S45-25, S45-31, S45-32, S45-33, S45-34, S45-38, S45-48, S47-37, S46-17]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-45
+    title: "chore(repo): residue in unowned areas and the lexicon's blind spots swept; TS members join the ratchet (S45-45)"
+    stream: S45
+    sprint: 23
+    priority: 3
+    size: L
+    depends_on: [S45-21, S45-25, S45-29, S45-31, S45-34, S45-38]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-46
+    title: "refactor(apps): internal aliases and shims defined under apps/ removed (S45-46)"
+    stream: S45
+    sprint: 25
+    priority: 3
+    size: L
+    depends_on: [S45-40, S47-29, S47-30, S47-31, S47-32, S47-33]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-47
+    title: "chore(tools): ratchet strict at zero, AGENTS.md updated, external alias windows tracked (S45-47)"
+    stream: S45
+    sprint: 26
+    priority: 3
+    size: S
+    depends_on: [S45-37, S45-38, S45-44, S45-45, S45-46]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-48
+    title: "refactor(api): database layer, A2A door, egress and knowledge in English (S45-48)"
+    stream: S45
+    sprint: 14
+    priority: 2
+    size: M
+    depends_on: [S45-12, S45-14, S47-05, S47-14]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S45-49
+    title: "chore(repo): external French aliases removed once their 0.22.0 window closed (S45-49)"
+    stream: S45
+    sprint: 27
+    priority: 3
+    size: M
+    depends_on: [S45-47, S45-39]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-01
+    title: "refactor(adapters): English names for the MCP client and the fake MCP hook, French aliases kept (S46-01)"
+    stream: S46
+    sprint: 0
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-02
+    title: "docs(adr): 0097 Choregos consumes an MCP gateway and never is one, with its boundary test (S46-02)"
+    stream: S46
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-03
+    title: "feat(adapters): the MCP client negotiates 2026-07-28, survives a lost session and takes per-request headers (S46-03)"
+    stream: S46
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S46-01]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-04
+    title: "feat(adapters): a fake MCP gateway, scriptable and served alone (S46-04)"
+    stream: S46
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S46-01]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-05
+    title: "feat(adapters): the mcp-gateway connector type, a server the organisation's MCP gateway names (S46-05)"
+    stream: S46
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S46-03, S46-04]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-06
+    title: "contract(openapi): an organisation's MCP gateway, its assertion keys and catalogue installs through it (S46-06)"
+    stream: S46
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S46-02]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-07
+    title: "feat(api): per-organisation assertion keys for the MCP gateway, their JWKS and rotation (S46-07)"
+    stream: S46
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S46-06, S46-13, S47-17]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-08
+    title: "feat(api): the organisation's MCP gateway: one setting, a sealed credential, a test through it (S46-08)"
+    stream: S46
+    sprint: 5
+    priority: 1
+    size: L
+    depends_on: [S46-05, S46-07]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-09
+    title: "feat(api): the broker, governed writes and discovery reach mcp-gateway connectors through the gateway; required mode (S46-09)"
+    stream: S46
+    sprint: 10
+    priority: 1
+    size: L
+    depends_on: [S46-08, S46-18, S45-04]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-10
+    title: "feat(api): MCP catalogue entries install through the organisation's gateway (S46-10)"
+    stream: S46
+    sprint: 11
+    priority: 2
+    size: M
+    depends_on: [S46-09, S46-14]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-11
+    title: "test(e2e): an agent's read and governed writes reach a server through the MCP gateway (S46-11)"
+    stream: S46
+    sprint: 11
+    priority: 1
+    size: M
+    depends_on: [S46-09]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-12
+    title: "feat(charts): global.mcpGateway opens the API and the workers to the MCP gateway, never the runners (S46-12)"
+    stream: S46
+    sprint: 6
+    priority: 2
+    size: M
+    depends_on: [S46-08]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-13
+    title: "feat(web): the MCP gateway card on the Administration page (S46-13)"
+    stream: S46
+    sprint: 3
+    priority: 2
+    size: M
+    depends_on: [S46-06]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-14
+    title: "feat(web): MCP servers through the gateway in the catalogue and on the connectors page (S46-14)"
+    stream: S46
+    sprint: 10
+    priority: 2
+    size: M
+    depends_on: [S46-13]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-15
+    title: "feat(dev): a fake MCP gateway in the local install, behind --profile mcp-gateway (S46-15)"
+    stream: S46
+    sprint: 13
+    priority: 3
+    size: S
+    depends_on: [S46-09, S46-04]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-16
+    title: "test(live): a real MCP gateway in the nightly, failing when it is set and unreachable (S46-16)"
+    stream: S46
+    sprint: 2
+    priority: 2
+    size: S
+    depends_on: [S46-03, S46-04]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-17
+    title: "docs: consuming an MCP gateway in integrations and security (S46-17)"
+    stream: S46
+    sprint: 14
+    priority: 2
+    size: S
+    depends_on: [S46-10, S46-11, S46-12, S46-14, S46-15, S46-16, S46-19]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-18
+    title: "refactor(api): the broker lives in services/broker.py in English, services/courtier.py re-exports it (S46-18)"
+    stream: S46
+    sprint: 0
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-19
+    title: "fix(api): the MCP gateway's host is never a run's, and its openings leave with it (S46-19)"
+    stream: S46
+    sprint: 6
+    priority: 2
+    size: M
+    depends_on: [S46-08]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S46-20
+    title: "feat(api): readiness flags direct MCP connectors under a required gateway; a gateway-down runbook (S46-20)"
+    stream: S46
+    sprint: 11
+    priority: 2
+    size: S
+    depends_on: [S46-09, S46-19, S47-08]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-01
+    title: "fix(api): refuse an empty, published or short session secret at API start and sign with a full-length purpose-bound MAC"
+    stream: S47
+    sprint: 0
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-02
+    title: "fix(api): rate-limit sign-in and webhooks by the trusted-proxy client address, in bounded memory"
+    stream: S47
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S47-01]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-03
+    title: "fix(api): refuse cross-origin cookie mutations, bound X-Request-Id and render explicit CORS from the chart"
+    stream: S47
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S47-02]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-04
+    title: "fix(api): make OIDC discovery mandatory and bind console identity to the provider subject"
+    stream: S47
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S47-03, S47-07]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-05
+    title: "fix(api): an IdP sign-in revokes the organisation roles the IdP granted and no longer maps"
+    stream: S47
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S47-04]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-06
+    title: "contract(projects): a project configuration carries a revision; a PATCH from a stale base answers 409"
+    stream: S47
+    sprint: 0
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-07
+    title: "test(architecture): ratchet the imports that cross layers"
+    stream: S47
+    sprint: 2
+    priority: 2
+    size: S
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-08
+    title: "refactor(api): services stop importing routers; the backend capability table moves to core"
+    stream: S47
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: [S47-07]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-09
+    title: "refactor(api): one organisation lookup shared by every router"
+    stream: S47
+    sprint: 7
+    priority: 2
+    size: M
+    depends_on: [S47-01, S47-06, S47-07, S47-11]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-10
+    title: "refactor(api): routers share helpers through services, never through each other's private names"
+    stream: S47
+    sprint: 12
+    priority: 2
+    size: L
+    depends_on: [S47-09, S47-03, S47-05, S46-01, S46-09, S46-10]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-11
+    title: "feat(core): governance the platform does not enforce is refused when written, not warned"
+    stream: S47
+    sprint: 6
+    priority: 2
+    size: M
+    depends_on: [S47-04, S47-06, S47-20, S45-02]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-12
+    title: "fix(api): a catalogue tool that may write is neither listed nor called unless the deployment marks it read-only"
+    stream: S47
+    sprint: 8
+    priority: 2
+    size: M
+    depends_on: [S46-01, S47-09, S47-13]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-13
+    title: "fix(api): tracker commands are answered, never dropped; a webhook for an ended interpreter is kept"
+    stream: S47
+    sprint: 7
+    priority: 2
+    size: M
+    depends_on: [S47-01, S47-05, S47-11]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-14
+    title: "contract(api): link members to their GitHub user id and honour pause, resume and stop from signed GitHub comments"
+    stream: S47
+    sprint: 8
+    priority: 2
+    size: L
+    depends_on: [S47-13, S47-05, S47-06, S47-03, S47-18, S47-09]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-15
+    title: "feat(web): link a member's GitHub account from the members page"
+    stream: S47
+    sprint: 9
+    priority: 2
+    size: S
+    depends_on: [S47-14, S47-18]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-16
+    title: "fix(api): one HumanRequest constructor, so agent questions and scope changes get a due date"
+    stream: S47
+    sprint: 9
+    priority: 2
+    size: S
+    depends_on: [S46-01, S47-07, S47-12]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-17
+    title: "feat(web): project screens for the cross-backend review metric and the memory re-import"
+    stream: S47
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S47-06]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-18
+    title: "feat(web): organisation memory A/B report and platform gateway keys screens"
+    stream: S47
+    sprint: 2
+    priority: 2
+    size: M
+    depends_on: [S47-17]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-19
+    title: "refactor(core): one definition of the cross-backend review, used by the metric and by the reviewer swap"
+    stream: S47
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-20
+    title: "fix(orchestrator): enforce the project's allowed agent backends at stage start"
+    stream: S47
+    sprint: 5
+    priority: 2
+    size: S
+    depends_on: [S47-19, S47-18]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-21
+    title: "feat(adapters): an e-mail (SMTP) notifier with its fake, honouring the project's notify.emails everywhere a notification is sent"
+    stream: S47
+    sprint: 12
+    priority: 2
+    size: M
+    depends_on: [S46-01, S47-16, S45-09, S45-10, S45-23]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-22
+    title: "ci: run the orchestrator suite on PostgreSQL"
+    stream: S47
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-23
+    title: "test(replay): record histories for ProjectProvisioning, FindingsTriage, MemoryIngestion and AgentTrial, and require one per workflow"
+    stream: S47
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-24
+    title: "ci(nightly): live tests fail when a required service's secrets vanish, and a crashing conformance report surfaces"
+    stream: S47
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: []
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-25
+    title: "ci: one measured Python coverage threshold over every package, enforced by make ci, and a web coverage floor"
+    stream: S47
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: [S47-07]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-26
+    title: "feat(api): put the secret KEKs behind a key-wrapper seam (no KMS shipped)"
+    stream: S47
+    sprint: 9
+    priority: 3
+    size: M
+    depends_on: [S47-12, S47-13]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-27
+    title: "test(orchestrator): the PostgreSQL mode migrates the schema and runs under the application role"
+    stream: S47
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S47-22]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-28
+    title: "docs(plan): reconcile stale STATUS and BLOCKERS rows (integrator)"
+    stream: S47
+    sprint: 21
+    priority: 3
+    size: S
+    depends_on: [S47-23, S45-36]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-29
+    title: "refactor(api): split routers/agents.py into a package without changing a route"
+    stream: S47
+    sprint: 15
+    priority: 3
+    size: M
+    depends_on: [S47-10, S45-15, S45-17]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-30
+    title: "refactor(api): split routers/knowledge.py into a package without changing a route"
+    stream: S47
+    sprint: 14
+    priority: 3
+    size: M
+    depends_on: [S47-09, S45-15]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-31
+    title: "refactor(api): split db/models.py into a package of domain modules with identical metadata"
+    stream: S47
+    sprint: 15
+    priority: 3
+    size: L
+    depends_on: [S47-05, S47-14, S45-48, S45-13]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-32
+    title: "refactor(orchestrator): split workflows/interpreter.py while keeping every Temporal handler in place"
+    stream: S47
+    sprint: 5
+    priority: 3
+    size: L
+    depends_on: [S47-23, S45-22]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-33
+    title: "refactor(orchestrator): split activities/stage.py helpers out, keeping every activity and every patched name where it is"
+    stream: S47
+    sprint: 12
+    priority: 3
+    size: M
+    depends_on: [S47-20, S45-23]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-34
+    title: "refactor(adapters): move the connector type specs and builtin registrations out of the package root"
+    stream: S47
+    sprint: 17
+    priority: 3
+    size: M
+    depends_on: [S47-36, S46-01, S45-09, S45-10]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-35
+    title: "feat(adapters): a GitLab CI adapter (pipeline status, job logs, trigger)"
+    stream: S47
+    sprint: 15
+    priority: 3
+    size: M
+    depends_on: [S47-21, S45-29]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-36
+    title: "feat(adapters): a GitLab SCM adapter with a one-day project access token per run"
+    stream: S47
+    sprint: 16
+    priority: 3
+    size: L
+    depends_on: [S47-35, S47-26]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-37
+    title: "docs(deployment): an 'Upgrading to 0.21' section collecting the operator-visible changes (integrator)"
+    stream: S47
+    sprint: 13
+    priority: 2
+    size: S
+    depends_on: [S47-01, S47-02, S47-03, S47-04, S47-11, S47-12, S47-13, S47-14, S47-20, S47-38, S46-09, S46-12]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-38
+    title: "fix(api): a tracker card move no longer moves a work item"
+    stream: S47
+    sprint: 12
+    priority: 2
+    size: S
+    depends_on: [S47-14]
+    notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"

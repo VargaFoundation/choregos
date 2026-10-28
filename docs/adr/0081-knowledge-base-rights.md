@@ -1,5 +1,8 @@
 # 0081 — Knowledge base rights: reach serves runs, grants give people roles
 
+> **Amended (S42-11e, 2026-10-28)**: a run is served a restricted base only on behalf of a person who may
+> read it ([ADR 0097](0097-a-run-reads-a-restricted-base-on-behalf-of-its-initiator.md)).
+>
 > **Amended (S42-11d, 2026-10-26)**: the owners of the base's project (`project_owner` on `owner_project`)
 > may widen, narrow and restrict it too, as well as organisation administrators. See "Amended" at the end.
 
