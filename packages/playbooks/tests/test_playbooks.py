@@ -79,3 +79,16 @@ def test_verify_prod_with_an_indicator_source_keeps_the_strict_rule() -> None:
     assert "SLO indicators before/after the promotion" in rendered
     assert "When in doubt, it is `no-go`" in rendered
     assert "Only the smoke test was available" not in rendered
+
+
+@pytest.mark.parametrize("role", KNOWN_ROLES)
+def test_a_preview_names_what_only_a_run_knows(role: str) -> None:
+    """The console shows a built-in agent's prompt: the role's own words, the frame, and
+    placeholders where a run puts the work item."""
+    from choregos_playbooks import playbook_origin, preview_playbook
+
+    preview = preview_playbook(role)
+    assert "<work item title>" in preview
+    assert "## Invariants" in preview
+    assert "{{" not in preview and "{%" not in preview
+    assert playbook_origin(role) == "package"

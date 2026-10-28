@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { GesteConfirme } from "@/components/geste-confirme";
@@ -127,7 +128,7 @@ function CarteDeWorkflow({
           {nom}
         </Link>
       }
-      action={workflow.is_default ? <Badge tone="accent">Default</Badge> : undefined}
+      action={workflow.is_default ? <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>Default</Badge> : undefined}
     >
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" data-testid={`workflow-card-${nom}`}>
         <dt className="text-ink-muted">Active version</dt>

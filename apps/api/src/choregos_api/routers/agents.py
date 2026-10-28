@@ -9,7 +9,7 @@ peut que la resserrer : un budget plus bas, moins d'outils. Une surcharge qui é
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from choregos_adapters.storage import ObjectStoreError
 from choregos_core import utcnow
@@ -67,11 +67,17 @@ from ..schemas import (
     AgentVersionPublish,
     AgentVersionRestore,
     ApiTokenCreated,
+    BuiltinAgent,
+    BuiltinMcpServer,
+    BuiltinModelChoice,
+    GroupMember,
+    GroupMembers,
     HostedSourceDto,
     ImplicitAgent,
     ProjectAgentDto,
     ProjectAgentPut,
     RunDto,
+    WorkflowAgent,
 )
 from ..schemas.agents import check_remote_kind
 from ..services.agent_evals import evaluate, gate, suite_for
@@ -1232,13 +1238,10 @@ async def list_project_agents(ctx: ProjectCtx, session: Db) -> list[ProjectAgent
     return [await _projet_dto(session, epingle, agent) for epingle, agent in lignes.tuples()]
 
 
-@router.get(
-    "/projects/{id}/implicit-agents", response_model=list[ImplicitAgent], operation_id="listImplicitAgents"
-)
-async def list_implicit_agents(ctx: ProjectCtx, session: Db) -> list[ImplicitAgent]:
-    """The `agent` actors of the project's active workflows that name no agent of the registry
-    (S30-04): the console used to read every workflow, one request each, to find them."""
-    registre = set(
+async def _agent_actors(ctx: ProjectCtx, session: Db) -> list[WorkflowAgent]:
+    """Every `agent` actor of the project's active workflows, with the registry agent it names, if any,
+    and whether that agent exists in the organisation."""
+    registry = set(
         (await session.execute(select(Agent.slug).where(Agent.org_id == ctx.project.org_id))).scalars()
     )
     workflows = (
@@ -1248,27 +1251,197 @@ async def list_implicit_agents(ctx: ProjectCtx, session: Db) -> list[ImplicitAge
             .order_by(WorkflowDef.name)
         )
     ).all()
-    trouves: list[ImplicitAgent] = []
-    for nom, document in workflows:
-        acteurs = (document or {}).get("actors") or {}
-        for acteur, definition in acteurs.items():
+    found: list[WorkflowAgent] = []
+    for name, document in workflows:
+        actors = (document or {}).get("actors") or {}
+        for actor, definition in actors.items():
             if not isinstance(definition, dict) or definition.get("type") != "agent":
                 continue
-            nomme = str(definition.get("agent") or "").split("@")[0]
-            if nomme and nomme in registre:
-                continue
-            trouves.append(
-                ImplicitAgent(
-                    workflow=nom,
-                    actor=acteur,
+            named = str(definition.get("agent") or "") or None
+            found.append(
+                WorkflowAgent(
+                    workflow=name,
+                    actor=actor,
                     role=definition.get("role"),
                     model=definition.get("model"),
                     backend=definition.get("backend"),
                     max_turns=definition.get("max_turns"),
                     max_minutes=definition.get("max_minutes"),
+                    agent=named,
+                    registered=bool(named) and str(named).split("@")[0] in registry,
                 )
             )
-    return trouves
+    return found
+
+
+@router.get(
+    "/projects/{id}/implicit-agents", response_model=list[ImplicitAgent], operation_id="listImplicitAgents"
+)
+async def list_implicit_agents(ctx: ProjectCtx, session: Db) -> list[ImplicitAgent]:
+    """The `agent` actors of the project's active workflows that name no agent of the registry
+    (S30-04): the console used to read every workflow, one request each, to find them."""
+    return [
+        ImplicitAgent(
+            workflow=a.workflow,
+            actor=a.actor,
+            role=a.role,
+            model=a.model,
+            backend=a.backend,
+            max_turns=a.max_turns,
+            max_minutes=a.max_minutes,
+        )
+        for a in await _agent_actors(ctx, session)
+        if not a.registered
+    ]
+
+
+@router.get(
+    "/projects/{id}/workflow-agents", response_model=list[WorkflowAgent], operation_id="listWorkflowAgents"
+)
+async def list_workflow_agents(ctx: ProjectCtx, session: Db) -> list[WorkflowAgent]:
+    """Every agent the project's active workflows run (S47-39): the registry agents they name and the
+    built-in ones alike, so the console lists them in one table."""
+    return await _agent_actors(ctx, session)
+
+
+#: A role or playbook name, as the workflow DSL takes it; also what keeps a name from leaving the
+#: playbook directories.
+PlaybookName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,62}$")]
+#: The sizes `profile:by_size` tells apart (`choregos_core.models.BY_SIZE_MAP`).
+_SIZES = ("S", "M", "L", "XL")
+
+
+@router.get("/projects/{id}/builtin-agent", response_model=BuiltinAgent, operation_id="describeBuiltinAgent")
+async def describe_builtin_agent(  # noqa: PLR0913 - the actor's own fields, as query parameters
+    ctx: ProjectCtx,
+    session: Db,
+    settings: Config,
+    role: Annotated[PlaybookName, Query()],
+    playbook: Annotated[PlaybookName | None, Query()] = None,
+    model: Annotated[str, Query(min_length=1, max_length=200)] = "profile:by_size",
+    backend: Annotated[str | None, Query(max_length=64)] = None,
+    max_turns: Annotated[int | None, Query(ge=1, le=1000)] = None,
+    max_minutes: Annotated[int | None, Query(ge=1, le=480)] = None,
+) -> BuiltinAgent:
+    """What an `agent` actor that names no registry agent runs in this project: the role's playbook
+    (the prompt, as a run receives it), the model each work item size resolves to, the backend, the
+    limits, the memory and the MCP servers. The console calls it with a step's own fields, so a
+    draft is described too. Read only, no audit record."""
+    from choregos_core import ModelResolutionError, ModelResolver
+    from choregos_core.models import BY_SIZE
+    from choregos_playbooks import playbook_origin, preview_playbook
+    from choregos_tools_mcp.tools import TOOL_SCHEMAS
+
+    from ..catalogue import outils_du_projet
+    from ..db.models import ModelProfileRow
+    from ..services.definitions import policy_engine, project_config
+    from ..services.model_catalogue import load_policy
+
+    config = project_config(ctx.project)
+    name = playbook or role
+    instructions: str | None = None
+    origin: str | None = None
+    error: str | None = None
+    try:
+        instructions = preview_playbook(name)
+        origin = playbook_origin(name)
+    except FileNotFoundError as exc:
+        error = str(exc)
+
+    chosen = backend or config.agent.default_backend
+    rows = (
+        (await session.execute(select(ModelProfileRow).where(ModelProfileRow.scope == "platform")))
+        .scalars()
+        .all()
+    )
+    resolver = ModelResolver(
+        gateway_url="",
+        gateway_models=await _gateway_catalogue(),
+        validated_backends={row.litellm_model: list(row.validated_backends or []) for row in rows},
+        catalogue=await load_policy(session, ctx.project.org_id),
+    )
+    choices: list[BuiltinModelChoice] = []
+    for size in _SIZES if model == BY_SIZE else (None,):
+        try:
+            resolved = resolver.resolve(model, project=config, size=size, backend=chosen, role=role)
+        except ModelResolutionError as exc:
+            choices.append(BuiltinModelChoice(size=size, error=str(exc)))
+            continue
+        choices.append(
+            BuiltinModelChoice(
+                size=size,
+                profile=resolved.profile,
+                litellm_model=resolved.litellm_model,
+                provider_model=resolved.provider_model,
+                turns_factor=resolved.turns_factor,
+                warnings=list(resolved.warnings),
+            )
+        )
+
+    engine = await policy_engine(session, ctx.project.id)
+    servers = [
+        BuiltinMcpServer(
+            name="choregos",
+            description="The platform's tools; every write goes through the internal API",
+            tools=[str(tool["name"]) for tool in TOOL_SCHEMAS]
+            + [tool.name for tool in outils_du_projet(list(config.tools or []), list(config.groups or []))],
+        )
+    ]
+    # A playbook run binds the project's shared memory, written (`_memory_bindings` in the stage).
+    if settings.memory_url:
+        servers.append(BuiltinMcpServer(name="memory", description="The project's shared memory (Ecphoria)"))
+    return BuiltinAgent(
+        role=role,
+        playbook=name,
+        playbook_origin=origin,
+        instructions=instructions,
+        instructions_error=error,
+        model=model,
+        models=choices,
+        backend=chosen,
+        backend_source="actor" if backend else "project",
+        max_turns=max_turns or engine.max_turns(role),
+        max_minutes=max_minutes or engine.max_minutes(role),
+        limits_source="actor" if max_turns or max_minutes else "policy",
+        memory=["project:shared (write)"],
+        mcp_servers=servers,
+    )
+
+
+@router.get(
+    "/projects/{id}/groups/{group}/members", response_model=GroupMembers, operation_id="listGroupMembers"
+)
+async def list_group_members(
+    ctx: ProjectCtx,
+    session: Db,
+    group: Annotated[str, Path(min_length=1, max_length=200)],
+) -> GroupMembers:
+    """Who a person step addressed to `group` waits for: the organisation's members carrying that
+    identity-provider group, and whether each may answer in this project. Empty means the step waits
+    for an organisation administrator. Needs `member:read` on the project, like its members list."""
+    from ..services.human_groups import members_of_group
+
+    ctx.require(Permission.MEMBER_READ)
+    members = await members_of_group(session, ctx.project.org_id, ctx.org_slug, ctx.project.id, group.strip())
+    return GroupMembers(
+        group=group.strip(),
+        members=[
+            GroupMember(email=user.email, display_name=user.display_name or "", can_decide=decides)
+            for user, decides in members
+        ],
+    )
+
+
+async def _gateway_catalogue() -> list[Any]:
+    """The models the deployment's gateway declares, so an alias shows the model behind it; a gateway
+    that cannot list them leaves the alias as it is (the stage does the same)."""
+    from choregos_adapters import build
+    from choregos_adapters.registry import default_gateway_type
+
+    try:
+        return list(await build("gateway", default_gateway_type(), {}).list_models())
+    except Exception:  # the catalogue sharpens the answer, it is not a precondition
+        return []
 
 
 @router.get(

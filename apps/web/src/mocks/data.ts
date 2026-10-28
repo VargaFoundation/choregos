@@ -43,6 +43,7 @@ import type {
   AgentCredential,
   AgentMetrics,
   AgentMetricsSummary,
+  BuiltinAgent,
   ImplicitAgent,
   ApiToken,
   ProjectAgent,
@@ -1307,6 +1308,49 @@ function resolutionDemo(path: string): unknown[] {
       ? { ref, slug, status: "resolved", version: Number(ref.split("@")[1] ?? 1), pinned: false, display_name: titre, lifecycle: "active", in_catalogue: true, reason: null }
       : { ref, slug, status: "not_installed", version: null, pinned: false, display_name: null, lifecycle: null, in_catalogue: true, reason: `agent \`${slug}\` does not exist in the project's organisation` };
   });
+}
+
+/** `GET /projects/{id}/builtin-agent`: what the role's built-in agent runs, as the API would say it. */
+export function builtinAgentDemo(path: string): BuiltinAgent {
+  const query = new URLSearchParams(path.split("?")[1] ?? "");
+  const role = query.get("role") ?? "implement";
+  const model = query.get("model") ?? "profile:by_size";
+  const playbook = query.get("playbook") ?? role;
+  const choice = (size: string | null, profile: string, factor = 1) => ({
+    size,
+    profile,
+    litellm_model: `platform/${profile}`,
+    provider_model: profile === "strong" ? "anthropic/claude-opus-5-5" : "anthropic/claude-sonnet-5-5",
+    turns_factor: factor,
+    error: null,
+    warnings: [],
+  });
+  return {
+    role,
+    playbook,
+    playbook_origin: "package",
+    instructions: `You carry the ${role} role.\n\n## Work item\n**<work item key>** — <work item title>\n\n## Invariants\n- Write \`.choregos/result.json\`.`,
+    instructions_error: null,
+    model,
+    models:
+      model === "profile:by_size"
+        ? [choice("S", "standard"), choice("M", "standard"), choice("L", "strong"), choice("XL", "strong", 1.5)]
+        : [choice(null, model.replace(/^profile:/, ""))],
+    backend: query.get("backend") ?? "claude-code",
+    backend_source: query.get("backend") ? "actor" : "project",
+    max_turns: Number(query.get("max_turns") ?? 80),
+    max_minutes: Number(query.get("max_minutes") ?? 60),
+    limits_source: query.get("max_turns") || query.get("max_minutes") ? "actor" : "policy",
+    memory: ["project:shared (write)"],
+    mcp_servers: [
+      {
+        name: "choregos",
+        description: "The platform's tools; every write goes through the internal API",
+        tools: ["validate_result", "report_finding", "request_scope_change", "ask_human", "get_ticket", "search_memory"],
+      },
+      { name: "memory", description: "The project's shared memory (Ecphoria)", tools: [] },
+    ],
+  };
 }
 
 const releaseFull: WorkflowDef = {
@@ -3321,7 +3365,27 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   // The runs of an agent, newest first (S30-05).
   if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
   if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
+  if (/^\/projects\/[^/]+\/workflow-agents$/.test(route ?? ""))
+    return implicitAgents().map((a) => ({ ...a, agent: null, registered: false })) as T;
   if (/^\/projects\/[^/]+\/agent-resolution$/.test(route ?? "")) return resolutionDemo(path) as T;
+  if (/^\/projects\/[^/]+\/builtin-agent$/.test(route ?? "")) return builtinAgentDemo(path) as T;
+  const groupMatch = /^\/projects\/[^/]+\/groups\/([^/]+)\/members$/.exec(route ?? "");
+  if (groupMatch)
+    return {
+      group: decodeURIComponent(groupMatch[1]!),
+      members: [
+        { email: "lea@acme.dev", display_name: "Léa", can_decide: true },
+        { email: "max@acme.dev", display_name: "Max", can_decide: false },
+      ],
+    } as T;
+  const activityMatch = /^\/projects\/[^/]+\/workflows\/([^/]+)\/activity$/.exec(route ?? "");
+  if (activityMatch)
+    return {
+      workflow: decodeURIComponent(activityMatch[1]!),
+      days: 30,
+      states: [{ state: "ready", open_items: 2, oldest_created_at: null }],
+      steps: [{ transition: "t-implement", runs: 4, succeeded: 3, failed: 1, cost_usd: 6.4, median_minutes: 18 }],
+    } as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   if (method === "GET" && /^\/(orgs|projects)\/[^/]+\/costs$/.test(chemin ?? "") && path.includes("group_by=")) {
