@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.20.6
+  version: 0.20.7
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -252,7 +252,7 @@ paths:
     parameters:
       - { $ref: "#/components/parameters/Id" }
       - { $ref: "#/components/parameters/ConnectorKind" }
-      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+      - { name: field, in: path, required: true, description: "a secret field of the type, or a slot of a field the type pools (`api_key.2` … `api_key.10`, ADR 0089)", schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}(\\.([2-9]|10))?$" } }
     put:
       tags: [connectors]
       operationId: setConnectorSecret
@@ -430,7 +430,7 @@ paths:
     parameters:
       - { $ref: "#/components/parameters/Org" }
       - { name: name, in: path, required: true, schema: { type: string } }
-      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+      - { name: field, in: path, required: true, description: "a secret field of the type, or a slot of a field the type pools (`api_key.2` … `api_key.10`, ADR 0089)", schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}(\\.([2-9]|10))?$" } }
     put:
       tags: [connectors]
       operationId: setOrgConnectorSecret
@@ -4329,7 +4329,7 @@ components:
         config: { type: object, additionalProperties: true, description: "no secret field: a plaintext secret gets 422" }
         secret_ref: { type: [string, "null"] }
         secret_refs: { type: object, additionalProperties: { type: string } }
-        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058)." }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089)." }
     ConnectorTestResult:
       type: object
       required: [ok, checks]
@@ -4409,6 +4409,7 @@ components:
         config_schema: { type: object, additionalProperties: true }
         capabilities: { type: array, items: { type: string }, description: "what the type can do: tracker, scm, identity, mcp…" }
         secret_fields: { type: array, items: { type: string }, description: the configuration keys that are secrets }
+        pooled_fields: { type: array, items: { type: string }, default: [], description: "the secret fields that take several keys, one per slot (`api_key.2` … `api_key.10`, ADR 0089)" }
     ConnectorOperation:
       type: object
       required: [name, access, policy]
@@ -4494,6 +4495,7 @@ components:
         scope: { type: string, enum: [organisation, project], description: "an organisation connector is installed by the administrator; a project connector is configured in the project's settings" }
         capabilities: { type: array, items: { type: string } }
         secret_fields: { type: array, items: { type: string }, description: "field names only, never values" }
+        pooled_fields: { type: array, items: { type: string }, default: [], description: "the secret fields that take several keys, one per slot (ADR 0089)" }
         operations: { type: integer, description: "operations the type declares; an MCP server discovers its own (0)" }
         installed_as: { type: array, items: { type: string }, description: "names of the organisation connectors of this type" }
         configured_in: { type: array, items: { type: string }, description: "slugs of the projects, among those the caller sees, that configure this type" }
@@ -4627,7 +4629,7 @@ components:
         kind: { type: [string, "null"] }
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
-        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058)" }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089)." }
         availability: { $ref: "#/components/schemas/ConnectorAvailability" }
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     OrgConnectorUpdate:

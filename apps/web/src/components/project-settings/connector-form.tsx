@@ -6,7 +6,9 @@ import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import {
   EMPTY_DRAFT,
+  AddKey,
   SecretField,
+  inSlotOrder,
   bodyOfDrafts,
   problemOfDraft,
   type SecretDraft,
@@ -49,14 +51,17 @@ export function ConnectorForm({
   const manquants = champsManquants(schema, config);
   const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
   const memeType = actuel?.type === type;
-  const etats = memeType ? (actuel?.secrets ?? []) : [];
+  const states = memeType ? (actuel?.secrets ?? []) : [];
+  // Slots being added to a pooled field (ADR 0089): typed with the rest, sent on Save.
+  const [adding, setAdding] = useState<string[]>([]);
+  const fields = inSlotOrder([...(choisi?.secret_fields ?? []), ...states.map((s) => s.field), ...adding]);
   return (
     <form
       className="mt-3 space-y-3 border-t border-line pt-3 text-sm"
       onSubmit={(event) => {
         event.preventDefault();
         const kept = Object.fromEntries(
-          etats.filter((s) => s.source === "reference" && s.reference).map((s) => [s.field, s.reference as string]),
+          states.filter((s) => s.source === "reference" && s.reference).map((s) => [s.field, s.reference as string]),
         );
         const { secret_values, secret_refs } = bodyOfDrafts(secrets);
         void onSave({ type, config, secret_refs: { ...kept, ...secret_refs }, secret_values });
@@ -71,6 +76,7 @@ export function ConnectorForm({
             setType(event.target.value);
             setConfig({});
             setSecrets({});
+            setAdding([]);
           }}
         >
           {types.map((t) => (
@@ -93,28 +99,31 @@ export function ConnectorForm({
         </div>
       )}
       <SchemaForm schema={schema} value={config} onChange={setConfig} />
-      {(choisi?.secret_fields ?? []).length > 0 && (
+      {fields.length > 0 && (
         <fieldset className="space-y-2">
           <legend className="text-xs text-ink-muted">Secrets — typed once, never shown again</legend>
-          {(choisi?.secret_fields ?? []).map((champ) => {
-            const etat = etats.find((s) => s.field === champ);
-            return etat ? (
+          {fields.map((field) => {
+            const fieldState = states.find((s) => s.field === field);
+            return fieldState ? (
               <SecretField
-                key={champ}
-                field={champ}
-                state={etat}
-                onSave={(draft) => onSecret(champ, draft)}
-                onClear={() => onClearSecret(champ)}
+                key={field}
+                field={field}
+                state={fieldState}
+                onSave={(draft) => onSecret(field, draft)}
+                onClear={() => onClearSecret(field)}
               />
             ) : (
               <SecretField
-                key={champ}
-                field={champ}
-                draft={secrets[champ] ?? EMPTY_DRAFT}
-                onChange={(draft) => setSecrets({ ...secrets, [champ]: draft })}
+                key={field}
+                field={field}
+                draft={secrets[field] ?? EMPTY_DRAFT}
+                onChange={(draft) => setSecrets({ ...secrets, [field]: draft })}
               />
             );
           })}
+          {(choisi?.pooled_fields ?? []).map((field) => (
+            <AddKey key={`add-${field}`} field={field} taken={fields} onAdd={(slot) => setAdding([...adding, slot])} />
+          ))}
         </fieldset>
       )}
       <div className="flex justify-end">

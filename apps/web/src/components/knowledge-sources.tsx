@@ -12,12 +12,55 @@ import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { RefreshFields } from "@/components/knowledge-refresh";
 import { draftOf, nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary, truncationsOf, type RefreshDraft } from "@/lib/knowledge";
-import type { KnowledgeSource } from "@/lib/types";
+import { orgConnectorHref } from "@/lib/connector-link";
+import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 type Kind = "sharepoint" | "confluence" | "web" | "git";
 const CONNECTED: Kind[] = ["sharepoint", "confluence"];
 const TONE: Record<string, Tone> = { idle: "ok", syncing: "neutral", failed: "danger" };
 const KIND: Record<Kind, string> = { sharepoint: "SharePoint / OneDrive", confluence: "Confluence space or page tree", web: "web site", git: "git repository" };
+
+/**
+ * The connector a source syncs through, next to it (owner review of 2026-10-28): a link to its card in
+ * Administration → Installed connectors. A member who cannot read the organisation's connectors still
+ * sees its name; one that no longer exists says so; a source without one says what it reads instead.
+ */
+function SourceConnector({
+  source,
+  known,
+  unreadable,
+}: {
+  source: KnowledgeSource;
+  known: OrgConnector[] | undefined;
+  unreadable: boolean;
+}) {
+  const name = source.connector;
+  if (!name) {
+    const what = source.kind === "web" ? "the public web" : "a public repository";
+    return (
+      <span className="text-xs text-ink-muted" data-testid={`source-connector-${source.id}`}>
+        no connector: {what}
+      </span>
+    );
+  }
+  const connector = known?.find((c) => c.name === name);
+  return (
+    <span className="text-xs" data-testid={`source-connector-${source.id}`}>
+      via connector{" "}
+      {unreadable ? (
+        <strong data-donnee title="Only the organisation's members with access to its connectors can open it">
+          {name}
+        </strong>
+      ) : (
+        <Link href={orgConnectorHref(name)} className="font-medium underline" data-donnee>
+          {name}
+        </Link>
+      )}
+      {connector && <span className="text-ink-muted"> ({connector.type})</span>}
+      {known && !connector && <span className="text-danger"> (no longer declared)</span>}
+    </span>
+  );
+}
 
 /**
  * Where a knowledge base's documents are synced from (S33-04): SharePoint or OneDrive through the
@@ -85,6 +128,7 @@ export function KnowledgeSources({
               <li key={source.id} className="flex flex-wrap items-baseline gap-2 border-t border-line pt-2">
                 <strong>{source.name}</strong>
                 <span className="text-xs text-ink-muted">{KIND[source.kind as Kind] ?? source.kind}</span>
+                <SourceConnector source={source} known={connectors.data} unreadable={connectors.isError} />
                 <Badge tone={TONE[source.status] ?? "neutral"}>{source.status}</Badge>
                 <span className="text-xs">
                   {source.last_synced_at ? `synced ${relative(source.last_synced_at)}` : "not synced yet"} ·{" "}

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..config import get_settings
 from ..db.models import Connector
-from ..deps import Db, ProjectContext, ProjectCtx
+from ..deps import Db, ProjectContext, ProjectCtx, is_instance_admin
 from ..errors import not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
@@ -26,6 +26,7 @@ from ..schemas import (
 from ..secret_store import derived_project_name, secret_states
 from ..services.connector_health import check_connector
 from ..services.connector_secrets import (
+    SECRET_FIELD,
     drop_replaced_store_values,
     put_values,
     refs_with_values,
@@ -34,7 +35,7 @@ from ..services.connector_secrets import (
 
 router = APIRouter(tags=["connectors"])
 
-Field = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+Field = Annotated[str, Path(pattern=SECRET_FIELD)]
 
 
 def _prefix(ctx: ProjectContext, kind: str) -> str:
@@ -86,6 +87,7 @@ async def list_connector_types() -> list[ConnectorType]:
             config_schema=spec.config_schema,
             capabilities=list(spec.capabilities),
             secret_fields=list(spec.secret_fields),
+            pooled_fields=list(spec.pooled_fields),
         )
         for kind, type_name, spec in connector_types()
     ]
@@ -124,6 +126,7 @@ async def put_connector(
             "enforces no cap. Use `litellm`."
         )
     from ..services.connecteurs import (
+        a_field_of,
         check_runtime_allowed,
         check_type_config,
         spec_du_type,
@@ -154,7 +157,8 @@ async def put_connector(
         body.config,
         body.secret_refs,
         body.secret_ref,
-        may_reference=ctx.principal.can(Permission.TOOLS_GRANT, ctx.org_slug),
+        may_reference=not (body.secret_refs or body.secret_ref)
+        or await is_instance_admin(session, ctx.principal),
         secret_values=body.secret_values,
         store_prefix=prefix,
     )
@@ -169,7 +173,8 @@ async def put_connector(
     before = dict(row.secret_refs or {})
     # A PUT replaces the references, but a sealed value is kept unless this body overrides its field
     # or the type no longer has it: re-saving the configuration must not wipe a typed secret.
-    kept = {f: r for f, r in before.items() if r.startswith("store:") and f in spec.secret_fields}
+    # A slot of a pooled field (`api_key.2`, ADR 0089) is kept like its field.
+    kept = {f: r for f, r in before.items() if r.startswith("store:") and a_field_of(spec, f)}
     after = refs_with_values({**kept, **body.secret_refs}, prefix, body.secret_values)
     metas = await put_values(
         session, store, ctx.project.org_id, prefix, body.secret_values, ctx.principal.email

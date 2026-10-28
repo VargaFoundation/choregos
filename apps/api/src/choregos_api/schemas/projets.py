@@ -160,6 +160,8 @@ class ConnectorType(Dto):
     capabilities: list[str] = Field(default_factory=list)
     #: Les clefs de configuration qui sont des secrets : elles s'écrivent dans `secret_refs`.
     secret_fields: list[str] = Field(default_factory=list)
+    #: The secret fields that take several keys, one per slot (`api_key.2` …, ADR 0089).
+    pooled_fields: list[str] = Field(default_factory=list)
 
 
 class ProjectRequirement(Dto):
