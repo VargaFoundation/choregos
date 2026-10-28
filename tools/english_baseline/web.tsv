@@ -62,7 +62,7 @@ apps/web/src/components/actions/decision.tsx	5
 apps/web/src/components/actions/ontologie.tsx	12
 apps/web/src/components/actions/statut.tsx	4
 apps/web/src/components/activite-du-run.tsx	7
-apps/web/src/components/admin/section.tsx	15
+apps/web/src/components/admin/section.tsx	13
 apps/web/src/components/agents/catalogue.tsx	7
 apps/web/src/components/agents/clients-mcp.tsx	7
 apps/web/src/components/agents/registre.ts	15

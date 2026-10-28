@@ -15,7 +15,7 @@ packages/core/src/choregos_core/domain.py	16
 packages/core/src/choregos_core/dsl/__init__.py	18
 packages/core/src/choregos_core/dsl/dates.py	17
 packages/core/src/choregos_core/dsl/edition.py	95
-packages/core/src/choregos_core/dsl/engine.py	23
+packages/core/src/choregos_core/dsl/engine.py	16
 packages/core/src/choregos_core/dsl/exigences.py	34
 packages/core/src/choregos_core/dsl/graph.py	6
 packages/core/src/choregos_core/dsl/parser.py	12
