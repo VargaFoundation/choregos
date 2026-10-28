@@ -135,20 +135,27 @@ async def test_a_stateless_server_is_served_without_a_session() -> None:
 
 
 def _gateway(seen: Seen, lost: Callable[[str, str | None], bool]) -> Handler:
-    """A gateway in front of replicas. Each `initialize` opens a new session (`s1`, `s2`...) and is
-    refused (400) when it carries a session id; a request is answered 404 when `lost(method, session)`
+    """A strict gateway in front of replicas. Each `initialize` opens a new session (`s1`, `s2`...)
+    and is refused (400) when it carries a session id or an `MCP-Protocol-Version` (the replica may not
+    speak the version agreed before, during a rolling upgrade, say); any later request is refused
+    (400) unless it carries the version agreed. A request is answered 404 when `lost(method, session)`
     says the replica it reached does not hold its session, as the MCP transport prescribes."""
     opened = 0
+    agreed: str | None = None
 
     def handle(request: httpx.Request) -> httpx.Response:
-        nonlocal opened
+        nonlocal opened, agreed
         method, headers, body = _record(seen, request)
         session = headers.get("mcp-session-id")
+        version = headers.get("mcp-protocol-version")
         if method == "initialize":
-            if session is not None:
-                return httpx.Response(400, json={"error": "initialize opens a session, it reuses none"})
+            if session is not None or version is not None:
+                return httpx.Response(400, json={"error": "initialize opens a session and negotiates anew"})
             opened += 1
-            return _initialized(body, body["params"]["protocolVersion"], f"s{opened}")
+            agreed = offered = str(body["params"]["protocolVersion"])
+            return _initialized(body, offered, f"s{opened}")
+        if version != agreed:
+            return httpx.Response(400, json={"error": f"unsupported protocol version {version!r}"})
         if lost(method, session):
             return httpx.Response(404)
         if "id" not in body:
