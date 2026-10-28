@@ -133,4 +133,21 @@ describe("les connecteurs, rangés par ce qu'ils sont (S21-04)", () => {
     expect(await screen.findByRole("heading", { name: "Project delivery tools — configured in each project" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Declare a connector" })).toBeInTheDocument();
   });
+
+  it("a source's link marks a business system's card too (?connector=), not only an MCP server's", async () => {
+    window.history.pushState({}, "", "/admin/connectors?connector=entra-acme");
+    try {
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <OrgConnectorsPage />
+        </QueryClientProvider>,
+      );
+      const card = await screen.findByTestId("connector-entra-acme");
+      expect(card).toHaveAttribute("aria-current", "true");
+      expect(card).toHaveAttribute("id", "connector-card-entra-acme");
+      expect(screen.getByTestId("connector-parc")).not.toHaveAttribute("aria-current");
+    } finally {
+      window.history.pushState({}, "", "/admin/connectors");
+    }
+  });
 });

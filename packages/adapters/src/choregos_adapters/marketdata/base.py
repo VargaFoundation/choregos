@@ -7,21 +7,25 @@ the JSON schema): a symbol can never change the host or the path of the request,
 
 Secrets: a provider key is a constructor argument, appended to the query by the provider that needs
 it. It never appears in a result, in an error message (`scrub`), in a log line or in `repr()`.
+Several keys are used in turn (ADR 0089, `http.pool`): every `get_bars`, `get_instrument` and `test`
+a provider defines runs with one key after another until one answers (`__init_subclass__`).
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import math
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import date
 from typing import Any
 
 import httpx
 
 from ..errors import AdapterError
+from ..http.pool import Pool, Strategy
 
 #: What a symbol may be: letters, digits and `. ^ = _ -` (`BRK-B`, `^GSPC`, `EURUSD=X`, `MC.PA`).
 SYMBOL_PATTERN = r"^[A-Za-z0-9.^=_-]{1,20}$"
@@ -62,6 +66,30 @@ class UnknownSymbol(MarketDataError):  # noqa: N818 - a named refusal, rendered 
 
 class RateLimited(MarketDataError):  # noqa: N818 - a named refusal, rendered as is
     """The provider refused for volume or quota: retrying now would not help."""
+
+
+class KeyRefused(MarketDataError):  # noqa: N818 - a named refusal, rendered as is
+    """The provider refused the key (401/403): the next key of a pool is tried."""
+
+
+#: The calls that carry a key, run through the provider's pool.
+_KEYED = ("get_bars", "get_instrument", "test")
+
+
+def _in_turn(method: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+    @functools.wraps(method)
+    async def call(self: MarketDataProvider, *args: Any, **kwargs: Any) -> Any:
+        keys: Pool | None = getattr(self, "_keys", None)
+        if keys is None:  # a provider without keys of its own (the composite)
+            return await method(self, *args, **kwargs)
+        return await keys.run(
+            lambda: method(self, *args, **kwargs),
+            rate_limited=RateLimited,
+            refused=KeyRefused,
+            exhausted=lambda wait: RateLimited(f"{self.name}: every key is resting (about {wait} s)"),
+        )
+
+    return call
 
 
 def validate_symbol(symbol: Any) -> str:
@@ -157,21 +185,33 @@ class MarketDataProvider:
     def __init__(
         self,
         *,
-        api_key: str = "",
+        api_key: str | Sequence[str] = "",
+        key_rotation: Strategy = "failover",
         timeout_s: float = 20.0,
         transport: httpx.AsyncBaseTransport | None = None,
         backoff_s: float = 0.5,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
-        self._api_key = api_key
+        self._keys = Pool(api_key, strategy=key_rotation)
         self._client = httpx.AsyncClient(
             timeout=timeout_s, transport=transport, headers={"User-Agent": USER_AGENT}
         )
         self._backoff_s = backoff_s
         self._sleep = sleep
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        for name in _KEYED:
+            if name in cls.__dict__:
+                setattr(cls, name, _in_turn(cls.__dict__[name]))
+
     def __repr__(self) -> str:
         return f"<{type(self).__name__}>"
+
+    @property
+    def _api_key(self) -> str:
+        """The key of the call in progress."""
+        return self._keys.current
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -200,8 +240,10 @@ class MarketDataProvider:
 
     # ── helpers ─────────────────────────────────────────────────────────────────────────────
     def scrub(self, text: str) -> str:
-        """The key never leaves in a message, whatever the provider echoes."""
-        return text.replace(self._api_key, "***") if self._api_key else text
+        """No key leaves in a message, whatever the provider echoes."""
+        for key in getattr(self, "_keys", Pool(None)).values:
+            text = text.replace(key, "***")
+        return text
 
     async def fetch(self, url: str, params: dict[str, Any] | None = None) -> httpx.Response:
         """A GET with a bounded retry on 5xx and network errors. 429 raises `RateLimited` at once.

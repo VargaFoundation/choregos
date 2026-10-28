@@ -2,11 +2,11 @@
 
 # Combine several market data sources
 
-For a project owner. Procedure `connector.marketdata.composite`, version 2, reviewed 2026-10-25 against the vendor's own pages.
+For a project owner. Procedure `connector.marketdata.composite`, version 3, reviewed 2026-10-26 against the vendor's own pages.
 
 ## Before you start
 
-- Decide which sources to combine: `stooq`, `yahoo` and `alphavantage`. Each has its own limits and terms:
+- Decide which sources to combine: `stooq`, `yahoo`, `alphavantage` and `tiingo`. Each has its own limits and terms:
   see their procedures. The composite tries them **in order** and falls back to the next when one fails.
 - With `cross_check` on, the closes of two sources are compared and a difference above `tolerance` (2 % by
   default) is reported, which catches a broken or unadjusted source.
@@ -23,7 +23,8 @@ They read public market data. Nothing is written.
 
 Connectors, **Market data**, type **composite**. `sources`: for example `["stooq", "alphavantage"]`.
 `source_configs`: a sub-configuration per provider, for example `{"stooq": {"suffix_map": {}}}`.
-`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`.
+`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`, `tiingo_api_key`.
+To cross-check a range of years, put a full-history source second: `["yahoo", "tiingo"]`.
 
 ## Test it
 
@@ -46,8 +47,9 @@ Press **Test**, then call `get_bars` and compare with a source you trust.
 | `alphavantage_api_key` | Alpha Vantage's key, typed once |
 | `cross_check` | true to compare the closes of two sources |
 | `source_configs` | the configuration of each provider, by name |
-| `sources` | the providers, in the order they are tried: stooq, yahoo, alphavantage |
+| `sources` | the providers, in the order they are tried: stooq, yahoo, alphavantage, tiingo |
 | `stooq_api_key` | Stooq's key, if any, typed once |
+| `tiingo_api_key` | Tiingo's token, typed once |
 | `tolerance` | the largest relative difference of two closes before they disagree, 0.02 by default |
 
 ## Network egress
