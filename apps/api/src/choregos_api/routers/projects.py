@@ -37,6 +37,7 @@ from ..schemas import (
 )
 from ..services import ensure_defaults, persist_event, project_dto
 from ..services.plugin_tracker import wire_template_tracker
+from ..services.projets import config_revision
 from ..temporal import get_temporal, provisioning_id
 
 router = APIRouter(tags=["projects"])
@@ -352,6 +353,23 @@ async def get_project_tools(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
 @router.patch("/projects/{id}", response_model=ProjectDto, operation_id="updateProject")
 async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> ProjectDto:
     ctx.require(Permission.PROJECT_WRITE)
+    # A row lock on PostgreSQL (a no-op on SQLite) that also reloads the instance the request resolved,
+    # without expiring it: two editors of the same configuration are serialised, and the second compares
+    # its `base_revision` with what the first wrote (S47-06).
+    await session.execute(
+        select(Project)
+        .where(Project.id == ctx.project.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    current = config_revision(ctx.project.name, ctx.project.config)
+    if body.base_revision is not None and body.base_revision != current:
+        raise conflict(
+            "the project changed since you read it: reload, then apply your change again",
+            extra={"code": "stale_base", "latest_revision": current},
+        )
+    config_before = dict(ctx.project.config or {})
+    name_before = ctx.project.name
     if body.name is not None:
         ctx.project.name = body.name
     if body.config is not None:
@@ -363,6 +381,7 @@ async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> P
             # contrôle — un propriétaire de projet s'ouvrait ainsi les outils d'un autre métier.
             ctx.require(Permission.TOOLS_GRANT)
         ctx.project.config = body.config.model_dump(mode="json", exclude_none=True)
+    config_after = ctx.project.config or {}
     await record(
         session,
         ctx.principal,
@@ -370,6 +389,12 @@ async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> P
         org_id=ctx.project.org_id,
         target_type="project",
         target_id=ctx.id,
+        changes={
+            key: {"before": config_before.get(key), "after": config_after.get(key)}
+            for key in sorted(config_before.keys() | config_after.keys())
+            if config_before.get(key) != config_after.get(key)
+        },
+        name_changed=ctx.project.name != name_before,
     )
     return await project_dto(session, ctx.project, ctx.org_slug)
 

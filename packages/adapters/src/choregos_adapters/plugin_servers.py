@@ -33,7 +33,7 @@ from typing import Any, Literal
 import httpx
 
 from .executor.tekton import CORE_API, KubernetesClient
-from .mcp.client import ClientMcp
+from .mcp.client import McpClient
 
 APPS_API = "/apis/apps/v1"
 NETWORKING_API = "/apis/networking.k8s.io/v1"
@@ -303,7 +303,7 @@ class PluginServerRuntime:
             await self.client.request("DELETE", f"{_collection(kind, self.namespace)}/{name}")
 
 
-class PluginServerClient(ClientMcp):
+class PluginServerClient(McpClient):
     """The MCP client of a plugin server: the platform's call to a Service of its own cluster.
 
     It posts to one URL only, the Service's, which the platform wrote (never an administrator, never

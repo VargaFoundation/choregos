@@ -29,6 +29,8 @@ class ProjectDto(Dto):
     template_ref: str | None = None
     status: str
     config: dict[str, Any]
+    #: An opaque digest of the name and configuration, to send back as `base_revision` (S47-06).
+    config_revision: str | None = None
     workflow_name: str | None = None
     policy_name: str | None = None
     #: An active workflow of the project has a `via: release_train` transition: only then do trains
@@ -55,6 +57,9 @@ class ProjectCreate(Dto):
 class ProjectUpdate(Dto):
     name: str | None = None
     config: ProjectConfig | None = None
+    #: The `config_revision` the client read. When it is no longer current, the PATCH answers 409
+    #: `stale_base` and writes nothing; absent, the last write wins (S47-06).
+    base_revision: str | None = None
 
 
 class ProvisionRequest(Dto):

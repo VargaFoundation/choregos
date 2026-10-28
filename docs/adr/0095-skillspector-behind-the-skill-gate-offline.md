@@ -58,8 +58,11 @@ external resource.
 - The API image grows by about 190 MB. A new SkillSpector release is a deliberate bump: its rules
   change, and `apps/api/tests/test_skill_scanner.py` runs against the real tool where
   `CHOREGOS_TEST_SKILLSPECTOR_PYTHON` names it.
-- Each API replica downloads about 260 MB a day from OSV's bucket (a platform call, not an
-  organisation's), and the mirror holds about 1 GB on the replica's `/tmp`.
+- Each API replica downloads about 245 MB a day from OSV's bucket (a platform call, not an
+  organisation's), and the mirror holds about 620 MB on the replica's `/tmp` (measured 2026-10-28:
+  257 534 records, built in 16 s with 170 MB of memory).
+- The mirror answers as OSV's API does: withdrawn advisories are left out of queries but readable
+  by id, and a version bound with fewer than three parts reads its missing parts as zero.
 - Publishing is slower: SkillSpector takes 3 to 10 s per version.
 - The mirror covers PyPI and npm only, which is what SkillSpector's dependency check reads.
 - The image's Trivy scan gets one exception (`trivy-secret.yaml`): the Anthropic SDK under

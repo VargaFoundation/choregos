@@ -132,10 +132,12 @@ export type Problem = {
     column?: number;
   }>;
   retry_after?: number;
-  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12) */
+  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12) */
   code?: string;
   /** On `stale_base` and `no_change`: the agent's latest version */
   latest_version?: number;
+  /** On `stale_base` from `updateProject`: the project's current `config_revision` */
+  latest_revision?: string;
   /** On `stale_base`: who published the latest version */
   latest_author?: string | null;
 };
@@ -182,6 +184,8 @@ export type Project = {
   template_ref?: string | null;
   status: "draft" | "provisioning" | "active" | "suspended" | "archived";
   config: S.Project;
+  /** An opaque digest of the name and configuration, to send back as `base_revision` */
+  config_revision?: string;
   workflow_name?: string | null;
   policy_name?: string | null;
   /** An active workflow of the project has a `via: release_train` transition: only then does the project have trains. */
@@ -218,6 +222,8 @@ export type ProjectCreate = {
 export type ProjectUpdate = {
   name?: string;
   config?: S.Project;
+  /** The `config_revision` the client read; when it is no longer current, the PATCH answers 409 `stale_base` and writes nothing; absent, the last write wins */
+  base_revision?: string | null;
 };
 
 export type ProvisionRequest = {
@@ -2216,7 +2222,7 @@ export type KnowledgeBaseCreate = {
   groups?: Array<string>;
   /** `files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search */
   serving_mode?: "files" | "index";
-  /** people read it only through a grant (or as an administrator or owning-project owner); runs that the base is attached to are still served (S42-11, ADR 0081) */
+  /** people read it only through a grant (or as an administrator or owning-project owner); a run attached to it is served it only on behalf of a person who may read it: the person who started its work item, or of a fan-out child its parent's (S42-11, ADR 0081, ADR 0097) */
   restricted?: boolean;
 };
 
@@ -2270,7 +2276,7 @@ export type KnowledgePermissions = {
   /** change the grants */
   share: boolean;
   archive: boolean;
-  /** change scope, projects, groups or restricted (organisation administrator only) */
+  /** change scope, projects, groups or restricted (organisation administrator, or owner of the base's project) */
   widen: boolean;
 };
 
@@ -2385,7 +2391,7 @@ export type KnowledgeBase = {
   sources?: Array<KnowledgeSource> | null;
   /** the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base */
   owner_project?: string | null;
-  /** people read it only through a grant; runs that the base is attached to are still served (S42-11) */
+  /** people read it only through a grant; a run is served it only on behalf of a person who may read it (S42-11, ADR 0097) */
   restricted?: boolean;
   can?: KnowledgePermissions;
   /** the server's sentence when the caller may not edit: shown as is, never guessed from roles */

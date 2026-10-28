@@ -12,13 +12,21 @@ from . import knowledge_fixtures as fx
 BASE = "/api/v1/orgs/varga/knowledge"
 
 
-async def _run(project: dict[str, Any], knowledge: list[dict[str, Any]]) -> str:
+async def _run(
+    project: dict[str, Any], knowledge: list[dict[str, Any]], initiated_by: str | None = None
+) -> str:
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
 
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="BILLING-9", title="T", state="ready")
+        item = WorkItem(
+            project_id=project["id"],
+            tracker_key="BILLING-9",
+            title="T",
+            state="ready",
+            initiated_by=initiated_by,
+        )
         session.add(item)
         await session.flush()
         session.add(
@@ -34,15 +42,24 @@ async def _run(project: dict[str, Any], knowledge: list[dict[str, Any]]) -> str:
     return mint_run_token("run-kb", project_slug="billing-api", work_item_key="BILLING-9", ttl_minutes=30)
 
 
-async def _pinned(project: dict[str, Any]) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Organization
+async def _pinned(
+    project: dict[str, Any], initiated_by: str | None = None, slug: str = "architecture"
+) -> list[dict[str, Any]]:
+    from choregos_api.db.models import Organization, Project
     from choregos_api.db.session import session_scope
+    from choregos_api.knowledge.on_behalf import OnBehalf
     from choregos_api.knowledge.serving import pin
     from sqlalchemy import select
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
-        refs = await pin(session, org.id, project["slug"], ["architecture"])
+        project_id = (
+            await session.execute(
+                select(Project.id).where(Project.org_id == org.id, Project.slug == project["slug"])
+            )
+        ).scalar_one()
+        on_behalf = OnBehalf(session, org.id, project_id, initiated_by)
+        refs = await pin(session, org.id, project["slug"], [slug], on_behalf)
     return [ref.model_dump(mode="json") for ref in refs]
 
 

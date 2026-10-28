@@ -80,7 +80,6 @@ jobs:
         run: uv run pytest tests/conformance -m conformance -q
       - name: conformance report
         run: uv run python -m tests.conformance.report --output conformance.json
-        continue-on-error: true
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: conformance, path: conformance.json, if-no-files-found: ignore }
@@ -110,11 +109,20 @@ jobs:
         run: uv run pytest tests/replay -q
 
   live:
-    # The adapters against the REAL services (LiteLLM, GitLab, Jira, Ecphoria, ACA). They
-    # ran nowhere: neither on PRs nor at night (status review of 2026-09-24). They
-    # are skipped when the secret is missing — and say so — rather than an empty green dot.
+    # The adapters against the REAL services (LiteLLM, GitLab, Jira, Ecphoria, ACA, Rovo). A
+    # service named in CHOREGOS_LIVE_REQUIRED FAILS the job when one of its secrets is missing
+    # (tests/live/conftest.py): a vanished secret must not leave the night green. The other
+    # services, and the optional companions of a required one (the realtime model), are
+    # skipped when their secret is missing — and say so — rather than an empty green dot.
+    # Forks have no secrets: the job only runs on the repository itself.
+    if: github.repository == 'VargaFoundation/choregos'
     runs-on: ubuntu-latest
     env:
+      # The services the night must cover, from the repository variable of the same name (for
+      # example `litellm,gitlab,jira`). The owner adds a service once its secrets are set, never
+      # before: a service listed without its secrets turns every night red. Unset, every service
+      # skips and says so, as before.
+      CHOREGOS_LIVE_REQUIRED: ${{ vars.CHOREGOS_LIVE_REQUIRED }}
       CHOREGOS_LIVE_LITELLM_URL: ${{ secrets.CHOREGOS_LIVE_LITELLM_URL }}
       CHOREGOS_LIVE_LITELLM_KEY: ${{ secrets.CHOREGOS_LIVE_LITELLM_KEY }}
       CHOREGOS_LIVE_GITLAB_TOKEN: ${{ secrets.CHOREGOS_LIVE_GITLAB_TOKEN }}
@@ -123,11 +131,21 @@ jobs:
       CHOREGOS_LIVE_JIRA_EMAIL: ${{ secrets.CHOREGOS_LIVE_JIRA_EMAIL }}
       CHOREGOS_LIVE_JIRA_TOKEN: ${{ secrets.CHOREGOS_LIVE_JIRA_TOKEN }}
       CHOREGOS_LIVE_JIRA_PROJECT: ${{ secrets.CHOREGOS_LIVE_JIRA_PROJECT }}
+      # Not required: these tests skip, saying so, until the secrets exist.
+      CHOREGOS_LIVE_AZURE_TOKEN: ${{ secrets.CHOREGOS_LIVE_AZURE_TOKEN }}
+      CHOREGOS_LIVE_AZURE_SUBSCRIPTION: ${{ secrets.CHOREGOS_LIVE_AZURE_SUBSCRIPTION }}
+      CHOREGOS_LIVE_AZURE_RG: ${{ secrets.CHOREGOS_LIVE_AZURE_RG }}
+      CHOREGOS_LIVE_AZURE_ENV_ID: ${{ secrets.CHOREGOS_LIVE_AZURE_ENV_ID }}
+      CHOREGOS_LIVE_ECPHORIA_URL: ${{ secrets.CHOREGOS_LIVE_ECPHORIA_URL }}
+      CHOREGOS_LIVE_ECPHORIA_TOKEN: ${{ secrets.CHOREGOS_LIVE_ECPHORIA_TOKEN }}
+      CHOREGOS_LIVE_ECPHORIA_TENANT: ${{ secrets.CHOREGOS_LIVE_ECPHORIA_TENANT }}
+      CHOREGOS_LIVE_ROVO_ACCESS_TOKEN: ${{ secrets.CHOREGOS_LIVE_ROVO_ACCESS_TOKEN }}
+      CHOREGOS_LIVE_REALTIME_MODEL: ${{ secrets.CHOREGOS_LIVE_REALTIME_MODEL }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
-      - name: adapters against the real services (skipped without a secret)
+      - name: adapters against the real services (a required service fails without its secrets)
         run: uv run pytest tests/live -q -m live -rs
 
   dependencies:

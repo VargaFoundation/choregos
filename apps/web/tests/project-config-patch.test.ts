@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "@/lib/api";
 import { mergeConfig, useProjectConfigPatch, type ProjectConfigValue } from "@/lib/project-config";
 
 const { api } = vi.hoisted(() => ({ api: { project: vi.fn(), updateProject: vi.fn() } }));
@@ -64,7 +65,10 @@ describe("useProjectConfigPatch", () => {
       ok = await result.current.patch({ notify: { slack_channel: "#dev" } }, { saved: "Notification settings saved" });
     });
     expect(ok).toBe(true);
-    expect(api.updateProject).toHaveBeenCalledWith("dev", { config: { ...config, labels: { team: "core" }, notify: { slack_channel: "#dev" } } });
+    expect(api.updateProject).toHaveBeenCalledWith("dev", {
+      config: { ...config, labels: { team: "core" }, notify: { slack_channel: "#dev" } },
+      base_revision: null,
+    });
     // `groups` is sent as it was: only a holder of tools:grant may change it.
     expect(api.updateProject.mock.calls[0]![1].config.groups).toEqual(["dev", "rh"]);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["project", "dev"] });
@@ -86,5 +90,59 @@ describe("useProjectConfigPatch", () => {
     expect(api.updateProject.mock.calls[0]![1].name).toBe("Dev 2");
     expect(result.current.error).toBe("422: unknown backend");
     expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("sends the revision it read and retries once on stale_base", async () => {
+    // Someone saved between the read and the write: the first PATCH is refused, the second read is newer.
+    api.project
+      .mockResolvedValueOnce({ name: "Dev", config, config_revision: "rev-1" })
+      .mockResolvedValueOnce({ name: "Dev", config: { ...config, labels: { team: "core" } }, config_revision: "rev-2" });
+    api.updateProject
+      .mockRejectedValueOnce(new ApiError(409, { code: "stale_base" }))
+      .mockResolvedValueOnce({});
+    const client = new QueryClient();
+    const { result } = renderHook(() => useProjectConfigPatch("dev"), { wrapper: wrapper(client) });
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.patch({ notify: { slack_channel: "#dev" } });
+    });
+    expect(ok).toBe(true);
+    expect(api.project).toHaveBeenCalledTimes(2);
+    expect(api.updateProject).toHaveBeenCalledTimes(2);
+    expect(api.updateProject.mock.calls[0]![1].base_revision).toBe("rev-1");
+    // The second body carries the second revision, and the change is merged into the NEWER configuration.
+    expect(api.updateProject.mock.calls[1]![1]).toEqual({
+      config: { ...config, labels: { team: "core" }, notify: { slack_channel: "#dev" } },
+      base_revision: "rev-2",
+    });
+    expect(result.current.error).toBeNull();
+  });
+
+  it("gives up after a second stale_base, and says to reload", async () => {
+    api.project.mockResolvedValue({ name: "Dev", config, config_revision: "rev-1" });
+    api.updateProject.mockRejectedValue(new ApiError(409, { code: "stale_base" }));
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useProjectConfigPatch("dev"), { wrapper: wrapper(client) });
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.patch({ tools: [] });
+    });
+    expect(ok).toBe(false);
+    expect(api.updateProject).toHaveBeenCalledTimes(2);
+    expect(result.current.error).toBe("Someone else changed these settings: reload the page");
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a 409 that is not stale_base", async () => {
+    api.project.mockResolvedValue({ name: "Dev", config, config_revision: "rev-1" });
+    api.updateProject.mockRejectedValue(new ApiError(409, { code: "no_change", detail: "nothing changed" }));
+    const client = new QueryClient();
+    const { result } = renderHook(() => useProjectConfigPatch("dev"), { wrapper: wrapper(client) });
+    await act(async () => {
+      await result.current.patch({ tools: [] });
+    });
+    expect(api.updateProject).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toBe("nothing changed");
   });
 });

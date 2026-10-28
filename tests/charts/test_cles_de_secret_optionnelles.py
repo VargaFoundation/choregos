@@ -45,6 +45,8 @@ DE_FONCTIONNALITE = {
     "github-app-client-secret",
     # The key sealing the connector secrets (ADR 0058): absent, typing a secret answers 409.
     "secrets-keks",
+    # The previous session key during a rotation (S47-01): absent, there is no rotation.
+    "session-secret-previous",
 }
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")

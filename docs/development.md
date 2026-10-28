@@ -532,6 +532,92 @@ It is written to the GitOps repository at provisioning, so it takes effect the n
 is provisioned. A malformed quantity is refused at construction, not by Argo CD later. Why there is no
 Temporal queue per organisation: [ADR 0027](adr/0027-noisy-neighbours-at-admission-and-quota.md).
 
+## The English ratchet
+
+Everything new is English ([ADR 0046](adr/0046-english-everywhere.md)), and what is still French
+is counted and can only shrink ([ADR 0098](adr/0098-english-everywhere-finished.md)). The default
+mode of `tools/check_english.py` reads the lines a change adds; `--all` reads **every tracked
+file** and compares three counts per file with its baseline:
+
+| Pass | Counts | Read in |
+| :-- | :-- | :-- |
+| prose | one per French prose line | comments, docstrings and strings (`.py`, `.ts`, `.tsx`, `.js`, `.mjs`, `.mts`, `.css`, `.rs`), Markdown outside code blocks, YAML values and comments, `#` comments (`.sh`, `.toml`, `.ini`, Dockerfiles, `justfile`, `CODEOWNERS`, the Makefile), `--` comments (`.sql`), the text outside the markup (`.html`, `.j2`); never `.json` |
+| identifiers | one per **distinct** French name the file declares | Python by its syntax tree (functions, classes, parameters, names and attributes stored to, `import … as`); TypeScript and JavaScript by `function`, `const`, `let`, `var`, `class`, `interface`, `type` and `enum`; a name that is only used is not read |
+| path | one when a component of the path is French | every tracked file under a scanned directory or at the root, the whole component judged, extension included (`greffons.py`) |
+
+A name is French when one of its words (split on every non-alphanumeric, camelCase split, a
+token that holds a digit dropped) is in `CODE_IDENTIFIER_WORDS`, or at least two distinct French
+function words are in `CODE_IDENTIFIER_WEAK`: `FakeFournisseur` and `test_l_index_de_la_page` are
+French, `McpClient`, `A2aDeclaredCost` and `test_a_tag_must_be_a_lowercase_slug` are not. An
+English word the lexicon flags is a bug of the lexicon: take the word out of it, never edit the
+English file.
+
+### Running it
+
+```bash
+make english-ratchet                                    # = tools/check_english.py --all, part of `make lint`
+uv run python tools/check_english.py --all --report     # the totals per area and pass
+uv run python tools/check_english.py --all --strict     # a stale entry fails too
+uv run python tools/check_english.py --all --area core  # one area (repeatable)
+```
+
+It exits 1 when a file is **above** its baseline or a new file has French; it prints the file and
+its first findings. A stale entry (a count below its baseline, a file that is gone) prints
+`stale: <area> — run tools/check_english.py --update-baseline --area <area>` and exits 0 unless
+`--strict`.
+
+Baselines are `tools/english_baseline/<area>.tsv`: a header line, then sorted `path<TAB>count`
+lines, zero counts omitted. `--update-baseline [--area NAME]` lowers counts, drops zeros and
+files that are gone, and **refuses a rise**, writing nothing. `--update-baseline --init` creates
+the files and only when none exists. `--baseline-dir PATH` points at another directory (the tests).
+The baselines belong to the integrator after S45-01: a pull request does not commit them.
+
+### The 23 areas
+
+The longest matching prefix wins; each area is one baseline file.
+
+| Area | Prefixes |
+| :-- | :-- |
+| `api-mcp`, `api-routers`, `api-services`, `api-schemas`, `api-migrations` | `apps/api/src/choregos_api/` + `mcp/`, `routers/`, `services/`, `schemas/`, `migrations/` |
+| `api-subsystems` | `apps/api/src/choregos_api/` + `db/`, `a2a/`, `egress/`, `knowledge/` |
+| `api-tests`, `api-root` | `apps/api/tests/`, then the rest of `apps/api/` |
+| `orchestrator-tests`, `orchestrator-src` | `apps/orchestrator/tests/`, then the rest of `apps/orchestrator/` |
+| `web` | `apps/web/` |
+| `core`, `adapters`, `runner`, `contracts` | `packages/core/`, `packages/adapters/`, `packages/runner/`, `packages/contracts/` |
+| `packages-other` | the other `packages/` |
+| `tests-language` | `tests/langue/`, `tests/language/`, `tests/docs/`, `tests/ci/`, `tests/dev/`, `tests/licences/`, `tests/integrations/`, `tests/charts/` |
+| `tests` | the rest of `tests/` |
+| `docs-plan`, `docs` | `docs/plan/`, then the rest of `docs/` |
+| `trials` | `essai/`, `trials/` |
+| `ops` | `charts/`, `infra/`, `docker/` |
+| `repo` | everything else |
+
+### Escapes
+
+- `lang: fr-ok` in a comment on a line: the line is not read by the prose pass, and a name
+  declared on it does not count (a name counts while one of its declarations is on a line without
+  the escape). Use it for a name or a sentence that must stay French: a `workflow.patched` id, a
+  French alias, a French sample in a test.
+- `lang: fr-ok-file` in one of the **first five lines** of a file: every pass skips the file, its
+  path included. For a compatibility shim or a redirect stub.
+- `lang: fr-ok alias:internal` or `alias:external` on an alias line, and `lang: fr-ok-file
+  alias:internal` or `alias:external` in a shim's header: the same escapes, saying which window
+  the alias belongs to (ADR 0098 §3).
+- `FROZEN_PATHS` in the tool: paths whose French stem is a recorded workflow id (four replay
+  histories). The path pass skips them; the reason is stored with each.
+- `EXCLUDED` in the tool: the archive, generated files and third-party text, each with its reason.
+
+### What a story that renames does with the baselines (ADR 0098 §9)
+
+1. `--all --report` before: note the totals of the areas the story owns.
+2. Rename and translate. A line that must stay French carries `lang: fr-ok`; a shim carries
+   `lang: fr-ok-file`.
+3. `--all` exits 0. A rename that raises another file's count is fixed, not baselined.
+4. `--update-baseline --area <area>` to see what dropped; `git diff tools/english_baseline` shows
+   only lowered or removed lines.
+5. `git checkout -- tools/english_baseline` before committing; the pull request body gives the
+   totals before and after.
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test
