@@ -1318,6 +1318,12 @@ export type Workflow = {
     inputs?: {
       [key: string]: unknown;
     };
+    /** How the workflow catalogue presents it (ADR 0108); the engine ignores it. */
+    catalogue?: {
+      title?: string;
+      summary?: string;
+      tags?: Array<string>;
+    };
   };
   actors: {
     [key: string]: WorkflowActor;

@@ -21,6 +21,14 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=False, use_enum_values=False)
 
 
+class WorkflowCatalogueInfo(Strict):
+    """How the workflow catalogue presents a workflow (ADR 0108); the engine ignores it."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=80)
+    summary: str | None = Field(default=None, max_length=400)
+    tags: list[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")]] = Field(default_factory=list, max_length=12)
+
+
 class WorkflowMetadata(Strict):
     name: Slug
     version: int = Field(ge=1)
@@ -29,6 +37,7 @@ class WorkflowMetadata(Strict):
     #: Le JSON Schema des CHAMPS d'un ticket de ce workflow (ADR 0031) : la date d'arrivée et le poste
     #: d'un onboarding, par exemple. Validés à la naissance du ticket, transmis aux agents.
     inputs: dict[str, Any] | None = None
+    catalogue: WorkflowCatalogueInfo | None = None
 
 
 #: Un rôle d'agent. Les rôles du paquet (`StageRole`) gardent leur sens — la plateforme
