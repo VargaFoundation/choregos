@@ -1272,6 +1272,44 @@ hosts directly, identically for every project and agent, so the Choregos proxy i
 the runner entry's direct FQDNs. Until then a `502 unreachable` also appears if the proxy pod itself has no
 FQDN rule. The deploy repository sets `global.egress.enabled` and `runner.egressProxy` only after that.
 
+### Rate limits on sign-in and webhooks
+
+The routes without a principal are rate-limited: sign-in (`/api/v1/auth/*`) and every webhook under
+`/api/v1/webhooks/` (GitHub, Tekton, Argo CD, Alertmanager, Jira, GitLab, and the plugin tracker route
+`POST /api/v1/webhooks/plugins/{org}/{plugin}/{server}`, whose deliveries come from outside providers
+through the ingress). Past `CHOREGOS_RATE_LIMIT_PER_MINUTE` requests (600 by default; 0 switches it
+off) in a sliding minute from one client, the API answers `429` with `Retry-After`. Authenticated routes
+are bounded by their principal, not here.
+
+**Per replica.** Each API replica counts in its own memory: with N replicas a client gets up to
+N × `CHOREGOS_RATE_LIMIT_PER_MINUTE` (the chart runs 2 to 8). There is no shared store, by decision:
+the stack has no Redis, and the limit is there to stop one address scanning sign-in or flooding a
+webhook, not a distributed attack, which belongs to the ingress or a WAF. Each replica holds at most
+10 000 client keys and evicts the least recently seen beyond that.
+
+**Keyed on the address the nearest trusted proxy saw.** The key is never the left-most
+`X-Forwarded-For` entry, which the client writes: rotating that header buys no new window, and forging
+someone else's address (a provider's webhook address, say) does not spend their budget. An IPv6 client
+is keyed by its /64.
+
+| Setting | Chart value | Default | What it does |
+| :-- | :-- | :-- | :-- |
+| `CHOREGOS_TRUSTED_PROXY_CIDRS` | `choregos-api.trustedProxyCidrs` | code: `[]`; chart: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` | a JSON list of the proxies' networks. A peer outside them is the client; otherwise `X-Forwarded-For` is read right to left and the first entry outside them is the client. Empty: the TCP peer is the client and the header is ignored |
+| `CHOREGOS_TRUSTED_PROXY_HOPS` | `choregos-api.trustedProxyHops` | `0` | only without CIDRs: the number of proxies that each append one entry; the client is the entry the farthest of them appended |
+
+The API refuses to start on a value of `CHOREGOS_TRUSTED_PROXY_CIDRS` that is not a network, and when
+both settings are set. The chart owns both names: `global.extraEnv` naming either fails at render.
+
+The chart trusts the private ranges because every in-cluster hop (the gateway, the console's Next
+server) has a private address. **Narrow them on-prem** when clients themselves have private addresses:
+a client inside a trusted range can write entries the API will believe. With every hop's address known,
+list only those (`--set-json 'choregos-api.trustedProxyCidrs=["10.42.0.0/16"]'`).
+
+The console's Next server is a trusted hop: it proxies `/api/v1` to the API, so the browser's address
+must reach the API in `X-Forwarded-For`. **If every console sign-in shares one window** (one user's
+retries throttle everyone), the web hop is not forwarding `X-Forwarded-For`, and the key has become the
+web pod's address.
+
 ## Gateways and what each can do
 
 `/platform/models` and a project that declares no `gateway` connector use the deployment's gateway

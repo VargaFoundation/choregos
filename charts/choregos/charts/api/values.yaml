@@ -18,6 +18,16 @@ extraVolumeMounts: []
 proceduresExtra: ""
 service:
   port: 8000
+# The networks of the proxies in front of the API (`CHOREGOS_TRUSTED_PROXY_CIDRS`): the rate limit on
+# sign-in and webhooks keys on the address the nearest trusted proxy saw, the right-most
+# X-Forwarded-For entry outside them.
+# Every in-cluster hop (the gateway, the console's Next server) has a private address, hence the
+# private ranges. Narrow them on-prem, where clients have private addresses too: a client inside a
+# trusted range can write its own X-Forwarded-For entries. `[]`: the TCP peer is the client.
+trustedProxyCidrs: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"]
+# Only with `trustedProxyCidrs: []`: the number of proxies that each append one X-Forwarded-For
+# entry (`CHOREGOS_TRUSTED_PROXY_HOPS`). Setting both makes the API refuse to start.
+trustedProxyHops: 0
 resources:
   requests: { cpu: 200m, memory: 512Mi }
   limits: { cpu: "1", memory: 1Gi }
