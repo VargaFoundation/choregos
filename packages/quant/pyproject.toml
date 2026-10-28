@@ -1,6 +1,6 @@
 [project]
 name = "choregos-quant"
-version = "0.20.5"
+version = "0.20.6"
 description = "Deterministic backtest engine (standard library only): the measured half of a quant screening workflow"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }

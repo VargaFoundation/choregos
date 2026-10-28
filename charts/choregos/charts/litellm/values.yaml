@@ -1,7 +1,7 @@
 image:
   # `litellm-database`: the variant that can hold virtual keys (hence a database).
   repository: ghcr.io/berriai/litellm-database
-  tag: "v1.105.3"
+  tag: "v1.105.5"
 # The aliases Choregos asks for (`profile:*` → `platform/*`), and what they become in
 # amont. Deux formes possibles :
 #   - upstream = another gateway (Diametral): api_base + virtual key;
