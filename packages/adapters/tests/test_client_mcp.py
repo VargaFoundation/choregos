@@ -102,7 +102,7 @@ def test_basic_without_a_username_or_an_unknown_scheme_is_refused() -> None:
         ClientMcp("https://f.test/mcp", token="t", auth_scheme="digest")
 
 
-def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatch) -> None:
     from choregos_adapters import build
 
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
@@ -116,7 +116,7 @@ def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatc
             "username": "a@b.c",
         },
     )
-    assert client._headers()["Authorization"].startswith("Basic ")
+    assert (await client._request_headers())["Authorization"].startswith("Basic ")
 
 
 async def test_a_custom_auth_header_carries_the_raw_key_and_no_authorization() -> None:
