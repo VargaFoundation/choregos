@@ -8,6 +8,7 @@ before that happens in production.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,49 @@ HISTORIES = Path(__file__).parent / "histories"
 
 def history_files() -> list[Path]:
     return sorted(HISTORIES.glob("*.json"))
+
+
+def recorded_workflow_types() -> set[str]:
+    """The workflow type each archived history starts with."""
+    return {
+        json.loads(path.read_text(encoding="utf-8"))["events"][0]["workflowExecutionStartedEventAttributes"][
+            "workflowType"
+        ]["name"]
+        for path in history_files()
+    }
+
+
+def registered_workflow_types() -> set[str]:
+    """The name Temporal knows each registered workflow class by (`@workflow.defn(name=...)`)."""
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+
+    names: set[str] = set()
+    for workflow_class in ALL_WORKFLOWS:
+        definition = getattr(workflow_class, "__temporal_workflow_definition", None)
+        assert definition is not None, f"{workflow_class!r} is in ALL_WORKFLOWS but is no workflow"
+        names.add(definition.name)
+    return names
+
+
+def workflows_without_history(recorded: Iterable[str], expected: Iterable[str]) -> set[str]:
+    """The expected workflow types that no recorded history starts with."""
+    return set(expected) - set(recorded)
+
+
+def test_every_workflow_has_a_history() -> None:
+    """A workflow with no archived history is a workflow whose change nothing replays: record one
+    (`make replay-record`, or the `__main__` block of its `apps/orchestrator/tests/test_*_history.py`)."""
+    missing = workflows_without_history(recorded_workflow_types(), registered_workflow_types())
+    assert not missing, f"no archived history in tests/replay/histories for: {sorted(missing)}"
+
+
+def test_a_workflow_without_a_history_is_reported() -> None:
+    """The guard's own logic, on synthetic types: what has no history is named, what has one is not."""
+    recorded = ["WorkflowInterpreter", "ReleaseTrain", "ReleaseTrain"]
+    expected = ["WorkflowInterpreter", "ReleaseTrain", "AgentTrial", "MemoryIngestion"]
+    assert workflows_without_history(recorded, expected) == {"AgentTrial", "MemoryIngestion"}
+    assert workflows_without_history(expected, expected) == set()
+    assert workflows_without_history([], expected) == set(expected)
 
 
 @pytest.mark.skipif(not history_files(), reason="no archived history (see `make replay-record`)")
