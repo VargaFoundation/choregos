@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CatalogueCard, CatalogueGrid } from "@/components/catalogue/catalogue-grid";
+import { CataloguePurpose } from "@/components/catalogue/catalogue-purpose";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { EnablementDrawer } from "@/components/catalogue/enablement-drawer";
 import { InstallDrawer } from "@/components/catalogue/install-drawer";
@@ -57,6 +58,7 @@ export default function McpCataloguePage() {
           </>
         )}
       </p>
+      <CataloguePurpose kind="mcp-servers" />
       {catalogue.data && (
         <p className="text-xs text-ink-muted" data-testid="catalogue-version">
           Catalogue {catalogue.data.meta.catalogue_version}, generated {catalogue.data.meta.generated_at.slice(0, 10)}.
