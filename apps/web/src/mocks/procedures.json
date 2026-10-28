@@ -2730,13 +2730,13 @@
   {
     "id": "connector.tracker.jira",
     "title": "Use Jira Cloud as the board",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/jira"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-28",
     "sections": [
       {
         "key": "before",
@@ -2756,7 +2756,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the\n   key.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the\n   key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
       },
       {
         "key": "test",
