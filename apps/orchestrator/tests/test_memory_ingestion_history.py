@@ -18,8 +18,9 @@ PAYLOAD = {"project_slug": "replay", "sources": ["closed_issues", "adr"]}
 
 async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import wait_for_event, workers_repartis
     from choregos_orchestrator.workflows.memory import MemoryIngestion
+    from temporalio.api.enums.v1 import EventType
     from temporalio.testing import WorkflowEnvironment
 
     asked: dict[str, list[Any]] = {"ingest": []}
@@ -37,8 +38,11 @@ async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
             handle = await environment.client.start_workflow(
                 "MemoryIngestion", PAYLOAD, id=WORKFLOW_ID, task_queue="test"
             )
-            # The test server's clock stands still until the result is awaited: the signal ends the
-            # first wait, so exactly one cycle runs, and then the loop ends.
+            # `stop` sent before the first task has run would be applied before `run` starts, and
+            # the loop would run no cycle: it is sent once the loop waits on its first timer. The
+            # test server's clock stands still until the result is awaited, so the timer does not
+            # fire first: the signal ends the first wait, exactly one cycle runs, the loop ends.
+            await wait_for_event(handle, EventType.EVENT_TYPE_TIMER_STARTED)
             await handle.signal("stop", {})
             result = await handle.result()
             history = await handle.fetch_history()
@@ -55,6 +59,7 @@ async def test_one_cycle_ingests_the_sources_and_stop_ends_the_loop() -> None:
 
 async def test_the_archived_history_replays() -> None:
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.api.enums.v1 import EventType
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
 
@@ -63,6 +68,9 @@ async def test_the_archived_history_replays() -> None:
     await replayer.replay_workflow(history)
     archived = json.loads(HISTORY.read_text(encoding="utf-8"))
     await replayer.replay_workflow(WorkflowHistory.from_json(WORKFLOW_ID, archived))
+    assert [EventType.Name(event.event_type) for event in history.events] == [
+        event["eventType"] for event in archived["events"]
+    ], "the fresh run takes the archived path: timer, `stop`, one ingestion, completion"
 
 
 if __name__ == "__main__":  # `python -m` from the repository root: records the archived history again
