@@ -115,6 +115,7 @@ async def _dto(session: AsyncSession, instance: OrgConnector, principal: Me) -> 
     dto = OrgConnectorDto.model_validate(instance)
     dto.operations = [OperationDto.model_validate(o) for o in operations]
     dto.secrets = await secret_states(session, instance.org_id, instance.secret_refs or {})
+    dto.server = plugin_servers.console_view(instance)
     organisation = await session.get(Organization, instance.org_id)
     if organisation is not None and instance.availability == SELECTED_PROJECTS:
         visible = await visible_projects(session, principal, organisation.id, organisation.slug)

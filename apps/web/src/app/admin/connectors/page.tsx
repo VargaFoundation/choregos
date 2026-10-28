@@ -44,6 +44,8 @@ export default function OrgConnectorsPage() {
   // Landing from the catalogue (ADR 0065): the connector just installed is marked, with what its
   // first discovery found.
   const arrivee = useArrivee();
+  // Arriving from Catalogue → Plugins (S43-08): the server's connector is marked and its settings open.
+  const focus = useFocus();
   const { metier, mcp } = rangerLesConnecteurs(instances.data ?? []);
   const lecture = instances.error ? (
     <ErrorNote>{String(instances.error)}</ErrorNote>
@@ -128,7 +130,13 @@ export default function OrgConnectorsPage() {
             </Empty>
           ) : (
             mcp.map((instance) => (
-              <Instance key={instance.name} org={org} instance={instance} highlighted={instance.name === arrivee?.name} />
+              <Instance
+                key={instance.name}
+                org={org}
+                instance={instance}
+                highlighted={instance.name === arrivee?.name || instance.name === focus}
+                open={instance.name === focus}
+              />
             ))
           ))}
       </section>
@@ -149,6 +157,12 @@ const subscribeToLocation = (notify: () => void) => {
   return () => window.removeEventListener("popstate", notify);
 };
 
+/** The connector a link asks to show (`?connector=`), its settings open: a plugin's server to configure. */
+function useFocus(): string | null {
+  const search = useSyncExternalStore(subscribeToLocation, () => window.location.search, NO_SEARCH);
+  return new URLSearchParams(search).get("connector");
+}
+
 /** The connector the catalogue just installed, and what its first discovery found (empty on the server). */
 function useArrivee(): { name: string; discovery: string } | null {
   const search = useSyncExternalStore(subscribeToLocation, () => window.location.search, NO_SEARCH);
@@ -157,7 +171,17 @@ function useArrivee(): { name: string; discovery: string } | null {
   return name ? { name, discovery: params.get("discovery") ?? "" } : null;
 }
 
-function Instance({ org, instance, highlighted }: { org: string; instance: OrgConnector; highlighted?: boolean }) {
+function Instance({
+  org,
+  instance,
+  highlighted,
+  open,
+}: {
+  org: string;
+  instance: OrgConnector;
+  highlighted?: boolean;
+  open?: boolean;
+}) {
   const client = useQueryClient();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const type = (types.data ?? []).find((t) => t.kind === instance.kind && t.type === instance.type);
@@ -199,7 +223,23 @@ function Instance({ org, instance, highlighted }: { org: string; instance: OrgCo
         </p>
       )}
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
-      <Secrets org={org} instance={instance} fields={type?.secret_fields ?? []} schema={type?.config_schema} />
+      {instance.server && (
+        <p className="mb-2 text-sm text-ink-muted" data-testid={`plugin-server-${instance.name}`}>
+          The server of the plugin <strong data-donnee>{instance.server.plugin}</strong> {instance.server.version}, run by
+          the platform. Its settings are the server&apos;s own; until they are complete it has no replica.{" "}
+          <Link href="/catalogue/plugins" className="underline">
+            Plugins
+          </Link>
+        </p>
+      )}
+      {/* A plugin's server is configured by its own schema and secret fields, not the `mcp` type's (ADR 0096). */}
+      <Secrets
+        org={org}
+        instance={instance}
+        fields={instance.server?.secret_fields ?? type?.secret_fields ?? []}
+        schema={instance.server?.config_schema ?? type?.config_schema}
+        open={open}
+      />
       {(instance.operations ?? []).length === 0 ? (
         <p className="text-sm text-ink-muted">
           {instance.kind === "mcp"
@@ -241,18 +281,21 @@ function Secrets({
   instance,
   fields,
   schema,
+  open = false,
 }: {
   org: string;
   instance: OrgConnector;
   fields: string[];
   schema?: unknown;
+  open?: boolean;
 }) {
   const client = useQueryClient();
   const guard = useEgressGuard();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(open);
   const [config, setConfig] = useState<Record<string, unknown>>(instance.config ?? {});
   const [erreur, setErreur] = useState<string | null>(null);
-  const names = [...new Set([...fields, ...(instance.secrets ?? []).map((s) => s.field)])];
+  // A field starting with `_` is the platform's (a plugin server's `_server_token`): no route sets it.
+  const names = [...new Set([...fields, ...(instance.secrets ?? []).map((s) => s.field)])].filter((f) => !f.startsWith("_"));
   const refresh = () => client.invalidateQueries({ queryKey: ["org-connectors", org] });
   const jsonSchema = (schema ?? { type: "object", properties: {} }) as JsonSchema;
   if (names.length === 0 && Object.keys(jsonSchema.properties ?? {}).length === 0) return null;
