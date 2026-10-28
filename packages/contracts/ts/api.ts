@@ -982,9 +982,11 @@ export type ProcessStep = {
   writes_branch?: boolean;
 };
 
-/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
+/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`, `metadata.catalogue` and `initial` (ADR 0109). `style: block` writes a collection value as indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones. */
 export type WorkflowOperation = {
-  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor";
+  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor" | "set_workflow";
+  style?: "flow" | "block";
+  swap?: boolean;
   [key: string]: unknown;
 };
 
