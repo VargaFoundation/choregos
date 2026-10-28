@@ -40,10 +40,11 @@ async def test_the_catalogue_lists_core_and_template_workflows_with_what_they_ne
     assert request["needs_repository"] is False
     assert [r["capability"] for r in request["requires"]] == ["tracker", "runtime", "gateway"]
     assert request["groups"] == ["product-owners"]
-    assert {(a["slug"], a["resolution"]) for a in request["agents"]} == {
-        ("brief-writer", "catalogue"),
-        ("assistant", "catalogue"),
-    }, "not installed yet: the platform's catalogue provides them"
+    assert request["agents"] == [], "its two agents are core playbooks (ADR 0107), not registry agents"
+    delivery = _entry(entries, "template:github-software-delivery", "dev-simple")
+    assert ("developer", "catalogue") in {(a["slug"], a["resolution"]) for a in delivery["agents"]}, (
+        "not installed yet: the platform's catalogue (its offline plugins) provides it"
+    )
     assert _entry(entries, "core", "default-simple")["needs_repository"] is True
     hr = [e for e in entries if e["source"] == "template:joiners-leavers"]
     assert hr and all(not e["needs_repository"] for e in hr), "a template's own workflows are listed"
@@ -83,8 +84,15 @@ async def test_adopting_publishes_the_entry_installs_its_agents_and_records_its_
     assert row["is_default"] is True
     routing = (await client.get(f"/api/v1/projects/{pid}/workflow-routing")).json()
     assert routing["default"] == "requests"
-    request = _entry((await client.get(BASE)).json(), "core", "default-request")
-    assert {a["resolution"] for a in request["agents"]} == {"org"}, "installed by the adoption"
+    delivery = await client.post(
+        f"/api/v1/projects/{pid}/workflow-adoptions",
+        json={"source": "template:github-software-delivery", "name": "dev-simple"},
+    )
+    assert delivery.status_code == 201, delivery.text
+    adopted_entry = _entry((await client.get(BASE)).json(), "template:github-software-delivery", "dev-simple")
+    assert {a["resolution"] for a in adopted_entry["agents"]} == {"plugin"}, (
+        "installed by the adoption, from their plugin"
+    )
 
     again = await client.post(
         f"/api/v1/projects/{pid}/workflow-adoptions",

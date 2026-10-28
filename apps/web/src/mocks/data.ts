@@ -1203,10 +1203,7 @@ export const workflowCatalogue: WorkflowCatalogueEntry[] = [
     ],
     needs_repository: false,
     groups: ["product-owners"],
-    agents: [
-      { actor: "writer", slug: "brief-writer", version: null, resolution: "catalogue", plugin: null, display_name: "Brief writer" },
-      { actor: "assistant", slug: "assistant", version: null, resolution: "catalogue", plugin: null, display_name: "Assistant" },
-    ],
+    agents: [],
     yaml: workflow.yaml,
   },
   {

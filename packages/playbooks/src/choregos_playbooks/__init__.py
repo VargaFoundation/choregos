@@ -43,6 +43,9 @@ KNOWN_ROLES = (
     "address_review",
     "release_notes",
     "verify_prod",
+    # A request that delivers no code (ADR 0107): the brief a person approves, then the deliverable.
+    "brief",
+    "deliver",
 )
 
 __version__ = "0.1.0"

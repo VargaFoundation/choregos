@@ -697,8 +697,6 @@ async def test_a_project_without_template_or_repository_is_activated_without_a_w
     project = created.json()
     assert project["status"] == "draft"
     assert project["workflow_name"] == "default-request", "no repository: a workflow that delivers no code"
-    agents = {a["slug"] for a in (await client.get("/api/v1/orgs/varga/agents")).json()}
-    assert {"brief-writer", "assistant"} <= agents, "the agents it names are installed (ADR 0040 §5)"
     readiness = (await client.get(f"/api/v1/projects/{project['id']}/readiness")).json()
     ids = {item["id"] for item in readiness["items"]}
     assert not ids & {"repository", "connector-scm", "connector-cd"}, ids

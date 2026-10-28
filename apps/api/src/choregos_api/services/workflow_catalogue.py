@@ -199,7 +199,7 @@ def named_agents(workflow: Workflow) -> list[tuple[str, str, int | None]]:
 async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> dict[str, Resolution]:
     """Where each slug resolves in the organisation, in the order of ADR 0040 §4: its own agent (a plugin's,
     a remote one), else the platform's catalogue (installed on adoption), else nowhere."""
-    from choregos_core.catalogue_d_agents import entree
+    from .catalogue_d_agents import catalogue_of
 
     if not slugs:
         return {}
@@ -224,6 +224,8 @@ async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> di
         ).all()
         for agent_id, created_by in first:
             authors.setdefault(agent_id, created_by)
+    # The organisation's catalogue (S43-09): the offline plugins, each replaced by its installed version.
+    view = await catalogue_of(session, org_id)
     out: dict[str, Resolution] = {}
     for slug in slugs:
         agent = agents.get(slug)
@@ -237,7 +239,7 @@ async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> di
             else:
                 out[slug] = Resolution("org", display_name=agent.display_name)
             continue
-        found = entree(slug)
+        found = view.entry(slug)
         if found is not None and found.genre == "internal":
             out[slug] = Resolution("catalogue", display_name=str(found.document.get("display_name") or slug))
         else:

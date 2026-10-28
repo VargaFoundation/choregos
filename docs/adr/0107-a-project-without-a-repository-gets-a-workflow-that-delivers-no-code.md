@@ -41,11 +41,12 @@ neutral one.
    project's knowledge bases and allowed tools) → *accept* (the same human group accepts it or sends it
    back with a reason) → `done`; with `needs_human` and `abandoned` as in `default-simple`.
 
-   Its agents are registry agents named by `agent:` (ADR 0040 §5, installed when the workflow is
-   published): two new catalogue entries, **`brief-writer`** (role `refine`) for the brief and
-   **`assistant`** (role `deliver`) for the deliverable, each with its eval like every entry (ADR 0040).
-   `spec-writer` is not reused: it reads code and writes `allowed_paths`, which a request without a
-   repository does not have; both new evals refuse `allowed_paths`. The
+   Its agents run two new **core playbooks**, `brief` for the brief and `deliver` for the deliverable,
+   each with its eval, as `default-simple`'s agents run theirs. `refine` is not reused: it reads code and
+   writes `allowed_paths`, which a request without a repository does not have; both evals refuse
+   `allowed_paths`. (First written as two catalogue entries, `brief-writer` and `assistant`: since
+   S43-09 the agent catalogue is the `choregos-agents` plugins, so they move there in
+   VargaFoundation/choregos#1091, and the workflow may then name them with `agent:`.) The
    deliverable is a declared text output (`deliverable_markdown`), not a file: the workflow then needs
    no object store either.
 2. **The guard is mechanical**: a core test asserts that `exigences(default-request)` is exactly
@@ -73,7 +74,7 @@ neutral one.
 - A project created without a repository is ready once its tracker is chosen: its readiness lists no
   repository, SCM or CD item, because its workflow asks for none.
 - `TEMPLATE_NAMES` gains `default-request`, so the "new workflow" page offers it to every project.
-- The `assistant` entry is generic on purpose; a trade that needs more (HR, finance, legal) brings its
+- The `deliver` playbook is generic on purpose; a trade that needs more (HR, finance, legal) brings its
   own workflow through a template or a plugin (ADR 0093), and the catalogue of ADR 0108 lists it.
 - Stories S49-01 to S49-03 in `docs/plan/08-backlog.yaml`.
 

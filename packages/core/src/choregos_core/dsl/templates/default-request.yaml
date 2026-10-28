@@ -8,9 +8,9 @@ metadata:
   version: 1
   description: Brief → human approval → deliverable → human acceptance. Needs no repository.
 actors:
-  writer: { type: agent, role: refine, agent: brief-writer, model: "profile:standard" }
+  writer: { type: agent, role: brief, model: "profile:standard" }
   owner: { type: human, group: product-owners, sla_hours: 24 }
-  assistant: { type: agent, role: deliver, agent: assistant, model: "profile:by_size" }
+  assistant: { type: agent, role: deliver, model: "profile:by_size" }
 states:
   inbox: { display: To triage, kind: wait, tracker: { status: Todo, label: "choregos:inbox" } }
   refining: { display: Refining, tracker: { status: Refining } }
