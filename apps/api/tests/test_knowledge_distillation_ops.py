@@ -176,6 +176,62 @@ async def test_stopping_a_running_distillation_cancels_the_workflow_and_says_who
     assert again.status_code == 409 and again.json()["code"] == "distill_not_running"
 
 
+async def test_a_progress_write_that_read_the_record_before_a_stop_does_not_undo_it(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The run's progress write reads `running`, a person's stop commits, then the progress write
+    lands: the record stays `stopped` and a second stop has nothing to stop. Played in this order
+    on purpose, it is the interleaving the in-process run and the stop route fell into by chance."""
+    from collections.abc import AsyncIterator
+    from contextlib import asynccontextmanager
+
+    from choregos_api.knowledge import distill as steps
+    from choregos_core import utcnow
+
+    base_id = await _base(client, FOUR, monkeypatch)
+    await _set_record(
+        {"status": "running", "started_at": utcnow().isoformat(), "requested_by": "admin@varga.dev"}
+    )
+    # With nothing in between, the progress is written.
+    await steps._progress("varga", base_id, phase="map", parts_done=1, spent_usd=0.25)
+    kept = await _outcome(client)
+    assert (kept["status"], kept["phase"], kept["parts_done"], kept["spent_usd"]) == (
+        "running",
+        "map",
+        1,
+        0.25,
+    )
+    scope = steps.session_scope
+    stops: list[httpx.Response] = []
+
+    @asynccontextmanager
+    async def stop_right_after_the_read(*args: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        async with scope(*args, **kwargs) as session:
+            read = session.get
+
+            async def read_then_stop(*a: Any, **k: Any) -> Any:
+                found = await read(*a, **k)
+                if not stops:  # the stop commits while this transaction holds what it read
+                    stops.append(await client.post(KB + "/distill/stop"))
+                return found
+
+            monkeypatch.setattr(session, "get", read_then_stop)
+            yield session
+
+    monkeypatch.setattr(steps, "session_scope", stop_right_after_the_read)
+    await steps._progress("varga", base_id, phase="map", parts_done=2, spent_usd=0.5)
+    monkeypatch.setattr(steps, "session_scope", scope)
+    assert [s.status_code for s in stops] == [202], "the stop landed between the read and the write"
+    outcome = await _outcome(client)
+    assert (outcome["status"], outcome.get("code"), outcome.get("stopped_by")) == (
+        "stopped",
+        "cancelled",
+        "admin@varga.dev",
+    ), outcome
+    again = await client.post(KB + "/distill/stop")
+    assert again.status_code == 409 and again.json()["code"] == "distill_not_running"
+
+
 async def test_stopping_nothing_is_refused_and_so_is_a_stranger(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

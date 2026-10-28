@@ -38,7 +38,7 @@ from typing import Any, Protocol
 
 import httpx
 from choregos_core import utcnow
-from sqlalchemy import select
+from sqlalchemy import JSON, select, type_coerce, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import undefer
 
@@ -731,11 +731,27 @@ async def estimate_for(session: Any, base: KnowledgeBase, exclude: list[str] | t
 
 
 async def _progress(org: str, base_id: str, **values: Any) -> None:
-    """Merged into the base's `distillation` while it runs (phase, parts done, spend)."""
+    """Merged into the base's `distillation` while it runs (phase, parts done, spend).
+
+    The write is conditional on the record still being the running record it read: a stop that
+    commits between this read and this write wins, and the run's progress never turns a stopped
+    record back into a running one (a second stop would otherwise be accepted)."""
     async with session_scope(orgs=[org]) as session:
         base = await session.get(KnowledgeBase, base_id)
-        if base is not None and (base.distillation or {}).get("status") == "running":
-            base.distillation = {**(base.distillation or {}), **values, "heartbeat_at": utcnow().isoformat()}
+        before = (base.distillation if base is not None else None) or {}
+        if before.get("status") != "running":
+            return
+        record = type_coerce(KnowledgeBase.distillation, JSON)
+        await session.execute(
+            update(KnowledgeBase)
+            .where(
+                KnowledgeBase.id == base_id,
+                record["status"].as_string() == "running",
+                record["started_at"].as_string().is_not_distinct_from(before.get("started_at")),
+            )
+            .values(distillation={**before, **values, "heartbeat_at": utcnow().isoformat()})
+            .execution_options(synchronize_session=False)
+        )
 
 
 def effective_budget(max_usd: float | None) -> float:
