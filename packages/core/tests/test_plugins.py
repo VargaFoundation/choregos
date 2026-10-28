@@ -191,15 +191,17 @@ def test_an_eval_names_an_agent_of_the_plugin(plugin: Path) -> None:
     assert "evaluates `architect`" in _problems(plugin)
 
 
-CORE_CASES = (
-    Path(__file__).resolve().parents[1] / "src" / "choregos_core" / "catalogue_d_agents" / "eval_cases"
-)
+def _catalogue_cases() -> list[Any]:
+    from choregos_core.catalogue_d_agents.evals import cases
+
+    return cases()
 
 
-@pytest.mark.parametrize("case", sorted(CORE_CASES.glob("*.yaml")), ids=lambda p: p.stem)
-def test_the_eval_format_is_the_core_catalogues(case: Path) -> None:
+@pytest.mark.parametrize("case", _catalogue_cases(), ids=lambda c: c.name)
+def test_the_eval_format_is_the_catalogues(case: Any) -> None:
+    """The catalogue's cases, now in the offline plugins (S43-09), are plugin eval suites."""
     validator = Draft202012Validator(load_schema("plugin-evals.schema.json"))
-    assert not [e.message for e in validator.iter_errors(yaml.safe_load(case.read_text()))]
+    assert not [e.message for e in validator.iter_errors(case.case)]
 
 
 def test_an_eval_suite_with_level_one_and_cases_loads(plugin: Path) -> None:

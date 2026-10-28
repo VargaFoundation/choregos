@@ -51,7 +51,7 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
         .getAllByRole("link")
         .map((lien) => lien.textContent);
     expect(noms("Work")).toEqual(["Projects", "Inbox"]);
-    expect(noms("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers", "Connector types"]);
+    expect(noms("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers", "Connector types", "Plugins"]);
     expect(noms("Organisation")).toEqual(["Integrations", "Spend", "Admin"]);
   });
 

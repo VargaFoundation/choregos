@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -257,6 +258,37 @@ class SpawnSpec(Strict):
     min_succeeded: int = Field(default=0, ge=0, le=100)
 
 
+#: One value an output condition compares with (S48-01).
+ConditionScalar = str | bool | int | float
+
+
+class OutputComparison(Strict):
+    """Comparisons on one output of the last stage (S48-01, ADR 0106); every one given must hold."""
+
+    equals: ConditionScalar | None = None
+    in_: list[ConditionScalar] | None = Field(default=None, alias="in", min_length=1, max_length=50)
+    not_in: list[ConditionScalar] | None = Field(default=None, min_length=1, max_length=50)
+    gt: float | None = None
+    gte: float | None = None
+    lt: float | None = None
+    lte: float | None = None
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> OutputComparison:
+        if not self.model_dump(exclude_none=True):
+            raise ValueError("an output comparison needs one of equals, in, not_in, gt, gte, lt, lte")
+        return self
+
+
+#: What one output must be: a value (equal), a list (one of), or comparisons.
+OutputCondition = ConditionScalar | list[ConditionScalar] | OutputComparison
+
+#: An output name, as the agent writes it.
+OUTPUT_NAME = r"^[a-z][a-z0-9_]{0,62}$"
+
+
 class Transition(Strict):
     id: Identifier | None = None
     from_: str = Field(alias="from")
@@ -267,6 +299,10 @@ class Transition(Strict):
     gates: list[GateSpec] = Field(default_factory=list)
     outputs: list[str] = Field(default_factory=list)
     inputs: list[str] = Field(default_factory=list)
+    #: Choose this transition only when the outputs of the work item's last stage match (S48-01,
+    #: ADR 0106): the first transition from a state whose `when` holds is taken, one without `when`
+    #: is the default. `{"outcome": "pr", "confidence": {"gte": 0.8}}`, `{"done": False}`.
+    when: dict[str, OutputCondition] | None = Field(default=None, min_length=1, max_length=10)
     #: The type of each declared output (ADR 0049): `deck: pptx` is a file the agent writes in
     #: `.choregos/outputs/`; an output not listed is an inline value (markdown or JSON), as before.
     output_types: dict[str, str] = Field(default_factory=dict)
@@ -298,6 +334,14 @@ class Transition(Strict):
         for item in value:
             out.append({"name": item, "params": {}} if isinstance(item, str) else item)
         return out
+
+    @field_validator("when")
+    @classmethod
+    def _output_names(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        for name in value or {}:
+            if not re.fullmatch(OUTPUT_NAME, name):
+                raise ValueError(f"`when` names `{name}`, which is not an output name ({OUTPUT_NAME})")
+        return value
 
     @model_validator(mode="after")
     def _actor_or_train(self) -> Transition:

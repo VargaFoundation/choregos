@@ -146,6 +146,8 @@ class ConnectorCatalogueEntryDto(Dto):
     scope: Literal["organisation", "project"]
     capabilities: list[str]
     secret_fields: list[str]
+    #: the secret fields that take several keys, one per slot (ADR 0089)
+    pooled_fields: list[str] = Field(default_factory=list)
     #: operations the type declares; an MCP server discovers its own (0)
     operations: int
     installed_as: list[str] = Field(default_factory=list)

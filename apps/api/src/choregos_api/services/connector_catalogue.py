@@ -159,6 +159,7 @@ async def list_entries(
                 scope="project" if project_scope else "organisation",
                 capabilities=list(spec.capabilities),
                 secret_fields=list(spec.secret_fields),
+                pooled_fields=list(spec.pooled_fields),
                 operations=len(spec.operations),
                 installed_as=sorted(i.name for i in here),
                 configured_in=configured,

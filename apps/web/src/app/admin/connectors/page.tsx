@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
@@ -12,7 +12,15 @@ import { Glossaire } from "@/components/glossaire";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { dataHandlingProblems } from "@/lib/data-handling";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
-import { EMPTY_DRAFT, SecretField, bodyOfDrafts, problemOfDraft, type SecretDraft } from "@/components/secret-field";
+import {
+  AddKey,
+  EMPTY_DRAFT,
+  SecretField,
+  bodyOfDrafts,
+  inSlotOrder,
+  problemOfDraft,
+  type SecretDraft,
+} from "@/components/secret-field";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
@@ -44,6 +52,8 @@ export default function OrgConnectorsPage() {
   // Landing from the catalogue (ADR 0065): the connector just installed is marked, with what its
   // first discovery found.
   const arrivee = useArrivee();
+  // Arriving from Catalogue → Plugins (S43-08): the server's connector is marked and its settings open.
+  const focus = useFocus();
   const { metier, mcp } = rangerLesConnecteurs(instances.data ?? []);
   const lecture = instances.error ? (
     <ErrorNote>{String(instances.error)}</ErrorNote>
@@ -98,7 +108,10 @@ export default function OrgConnectorsPage() {
           (metier.length === 0 ? (
             <Empty title="No business system yet">Declare one below.</Empty>
           ) : (
-            metier.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
+            metier.map((instance) => (
+              // A source's link (`?connector=`) marks a business system too, without opening its settings.
+              <Instance key={instance.name} org={org} instance={instance} highlighted={instance.name === focus} />
+            ))
           ))}
       </section>
       <section className="space-y-3" aria-labelledby="mcp" data-testid="section-mcp">
@@ -128,7 +141,13 @@ export default function OrgConnectorsPage() {
             </Empty>
           ) : (
             mcp.map((instance) => (
-              <Instance key={instance.name} org={org} instance={instance} highlighted={instance.name === arrivee?.name} />
+              <Instance
+                key={instance.name}
+                org={org}
+                instance={instance}
+                highlighted={instance.name === arrivee?.name || instance.name === focus}
+                open={instance.name === focus}
+              />
             ))
           ))}
       </section>
@@ -149,6 +168,12 @@ const subscribeToLocation = (notify: () => void) => {
   return () => window.removeEventListener("popstate", notify);
 };
 
+/** The connector a link asks to show (`?connector=`), its settings open: a plugin's server to configure. */
+function useFocus(): string | null {
+  const search = useSyncExternalStore(subscribeToLocation, () => window.location.search, NO_SEARCH);
+  return new URLSearchParams(search).get("connector");
+}
+
 /** The connector the catalogue just installed, and what its first discovery found (empty on the server). */
 function useArrivee(): { name: string; discovery: string } | null {
   const search = useSyncExternalStore(subscribeToLocation, () => window.location.search, NO_SEARCH);
@@ -157,10 +182,25 @@ function useArrivee(): { name: string; discovery: string } | null {
   return name ? { name, discovery: params.get("discovery") ?? "" } : null;
 }
 
-function Instance({ org, instance, highlighted }: { org: string; instance: OrgConnector; highlighted?: boolean }) {
+function Instance({
+  org,
+  instance,
+  highlighted,
+  open,
+}: {
+  org: string;
+  instance: OrgConnector;
+  highlighted?: boolean;
+  open?: boolean;
+}) {
   const client = useQueryClient();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const type = (types.data ?? []).find((t) => t.kind === instance.kind && t.type === instance.type);
+  const anchor = `connector-card-${instance.name}`;
+  // The card a link points to is brought into view: the page lists every connector of the organisation.
+  useEffect(() => {
+    if (highlighted) document.getElementById(anchor)?.scrollIntoView?.({ block: "start" });
+  }, [highlighted, anchor]);
   const [diff, setDiff] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   async function decouvrir() {
@@ -190,6 +230,7 @@ function Instance({ org, instance, highlighted }: { org: string; instance: OrgCo
       action={action}
       className={highlighted ? "border-accent" : undefined}
       aria-current={highlighted ? "true" : undefined}
+      id={anchor}
       data-testid={`connector-${instance.name}`}
     >
       <Availability org={org} instance={instance} />
@@ -199,7 +240,24 @@ function Instance({ org, instance, highlighted }: { org: string; instance: OrgCo
         </p>
       )}
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
-      <Secrets org={org} instance={instance} fields={type?.secret_fields ?? []} schema={type?.config_schema} />
+      {instance.server && (
+        <p className="mb-2 text-sm text-ink-muted" data-testid={`plugin-server-${instance.name}`}>
+          The server of the plugin <strong data-donnee>{instance.server.plugin}</strong> {instance.server.version}, run by
+          the platform. Its settings are the server&apos;s own; until they are complete it has no replica.{" "}
+          <Link href="/catalogue/plugins" className="underline">
+            Plugins
+          </Link>
+        </p>
+      )}
+      {/* A plugin's server is configured by its own schema and secret fields, not the `mcp` type's (ADR 0096). */}
+      <Secrets
+        org={org}
+        instance={instance}
+        fields={instance.server?.secret_fields ?? type?.secret_fields ?? []}
+        pooled={type?.pooled_fields ?? []}
+        schema={instance.server?.config_schema ?? type?.config_schema}
+        open={open}
+      />
       {(instance.operations ?? []).length === 0 ? (
         <p className="text-sm text-ink-muted">
           {instance.kind === "mcp"
@@ -240,19 +298,31 @@ function Secrets({
   org,
   instance,
   fields,
+  pooled = [],
   schema,
+  open = false,
 }: {
   org: string;
   instance: OrgConnector;
   fields: string[];
+  pooled?: string[];
   schema?: unknown;
+  open?: boolean;
 }) {
   const client = useQueryClient();
   const guard = useEgressGuard();
-  const [editing, setEditing] = useState(false);
+  // `null` follows `open` (the link's `?connector=`, which can arrive after the first render of a client
+  // navigation); a click takes over.
+  const [toggled, setEditing] = useState<boolean | null>(null);
+  const editing = toggled ?? open;
   const [config, setConfig] = useState<Record<string, unknown>>(instance.config ?? {});
   const [erreur, setErreur] = useState<string | null>(null);
-  const names = [...new Set([...fields, ...(instance.secrets ?? []).map((s) => s.field)])];
+  // Slots being added (`api_key.2`, ADR 0089): shown as "not set" until their first value is typed.
+  const [adding, setAdding] = useState<string[]>([]);
+  // A field starting with `_` is the platform's (a plugin server's `_server_token`): no route sets it.
+  const names = inSlotOrder([...fields, ...(instance.secrets ?? []).map((s) => s.field), ...adding]).filter(
+    (f) => !f.startsWith("_"),
+  );
   const refresh = () => client.invalidateQueries({ queryKey: ["org-connectors", org] });
   const jsonSchema = (schema ?? { type: "object", properties: {} }) as JsonSchema;
   if (names.length === 0 && Object.keys(jsonSchema.properties ?? {}).length === 0) return null;
@@ -310,6 +380,9 @@ function Secrets({
           <ExistingOrNew key={field} org={org} instance={instance} field={field} state={state} onDone={refresh} />
         );
       })}
+      {pooled.map((field) => (
+        <AddKey key={`add-${field}`} field={field} taken={names} onAdd={(slot) => setAdding([...adding, slot])} />
+      ))}
     </div>
   );
 }

@@ -34,7 +34,7 @@ choregos projects list
 
 `--template <name>@<version>` on `create` also provisions the project: repository, board,
 GitOps manifests and scaffolding. Without it, the project is created empty and you attach
-its connectors yourself, from the UI (*Settings → connectors*: type and configuration, secrets referenced never typed) or the API (`PUT /projects/{id}/connectors/{kind}`).
+its connectors yourself, from the UI (*Settings → connectors*: type and configuration; a secret is typed once and sealed, or given by reference) or the API (`PUT /projects/{id}/connectors/{kind}`).
 
 A project needs, at minimum: a **tracker** (where humans look), a **workflow** and a
 **policy**. Everything else has a default or can be added later.
@@ -146,6 +146,17 @@ operator who prefers a vault can instead give a **reference** (`env:NAME`, or a 
 holds no secrets key, typing a value answers 409 and says so ([deployment](deployment.md#secrets)).
 An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
 
+**Several keys for one field** ([ADR 0089](adr/0089-a-secret-field-holds-several-keys.md)). A type
+that pools a field (the market-data providers and their composite, Brave, Tavily) takes extra keys
+in slots `api_key.2` … `api_key.10`, each typed and cleared like a field (`PUT|DELETE
+…/secrets/api_key.2`). The adapter uses them in turn: `config.key_rotation` is `failover` (the first
+that answers, the default) or `round_robin` (spread the calls). A 429 rests a key for its
+`Retry-After` (60 s without one) and the call moves to the next at once; a 401/403 benches it for
+10 minutes and the error names its position (`key 2 of 3`), never the value; when every key rests,
+the call is a rate limit, never a call without a key. The rest is per process (API, worker). To
+replace a key without a gap: type the new one in a free slot, test, clear the old one. Whether a
+vendor allows several keys is yours to check: the free market-data sources allow one per person.
+
 **GitHub: no installation id.** A GitHub connector asks for a repository, not for an installation
 ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). The Choregos GitHub App is
 installed from the console (*Install on GitHub*, which returns to the settings page); the platform
@@ -167,8 +178,10 @@ under the error. No screen asks for an installation id.
 Until a project can run, its overview opens on a **getting started** list, which is the project's
 readiness (below): one list, computed by the API, that the settings page, the CLI and the MCP door share.
 
-A secret is never written in `config` — a secret field there is refused (`422`). It is named by
-**reference**, field by field, and resolved when the adapter is built, in the process that uses it:
+A secret is never written in `config` — a secret field there is refused (`422`). A key the
+organisation owns is **typed** (`secret_values`, sealed, above). A key the operator keeps in a vault
+is named by **reference**, field by field, and resolved when the adapter is built, in the process that
+uses it:
 
 ```bash
 curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
@@ -183,9 +196,10 @@ connector test with its name — never a silent fallback to a default value.
 `env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
 `^CONNECTOR_[A-Z0-9_]+$`, chart value `global.secrets.envPattern`); the platform's own variables
 (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
-pattern. A name outside it is a `422` at write and a connector in error at use. Only the
-organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
-refused. **Breaking:** a reference written before this rule that is outside the pattern stops
+pattern. A name outside it is a `422` at write and a connector in error at use. Only a platform
+administrator writes a reference (ADR 0088) — on a single-organisation install, that organisation's
+administrator; with several, an organisation's administrator and a project owner type the value, and
+an organisation connector that holds a reference is reconfigured by a platform administrator only. **Breaking:** a reference written before this rule that is outside the pattern stops
 resolving; rename the variable (or widen the pattern) and rewrite the reference.
 
 **Every type has its procedure**, in the app and here. Choosing a type in a form opens a side panel with
@@ -258,6 +272,8 @@ reaches the connector only if it is enabled for its project, the effective polic
 groups match and the agent version selects it; the same holds for governed actions.
 
 In the console, **Catalogue → MCP servers** (`/catalogue/mcp-servers`; the former administration path redirects) shows each entry's Install button disabled, with the server's reason, for anyone who may not install. The install panel asks whether the server is available to *selected projects* (the default) or *every project*; an installed server says where it is on ("on in billing-api", "on in no project yet") and **Projects…** opens a panel that turns it on or off per project. **Catalogue → Connectors** (`/catalogue/connectors`) lists every connector type of the registry by family (source code, work trackers, CI, deployment, documents, directory, network operations, notifications), each with its icon, whether it is an organisation or a project connector, where it is installed or configured, and what the caller may do as the server decided: *Declare* (administrator, lands on the declare form with the type chosen), *Configure in <project>* (the project's owner), *Projects…* (turn an installed connector on per project), or the server's reason. *Administration → Connectors* sets each connector's availability, after a confirmation that every project loses it until it is enabled.
+
+**Catalogue → Plugins** (`/catalogue/plugins`, S43-08) shows the deployment's plugin sources (index, trust: keyless identity and issuer, key fingerprint, or the offline directory; a source whose index cannot be read with the reason), what each offers with its versions (one outside this core's range is struck through and not offered), the plugins installed in the organisation (version, source, short content digest, *Default*, what each brought by kind, the newer version → *Upgrade*, *Uninstall* after a confirmation, then what was removed and what was kept as the organisation's own), and the installs and upgrades waiting for a second administrator with their reasons. An install or upgrade answered 202 says *Waiting for a second administrator* and why; the administrator who asked sees the API's refusal if they approve it themselves. Each server of a plugin shows its connector's state (`unconfigured` until its settings satisfy the server's schema, then `deployed`) and *Configure* opens *Administration → Connectors* on it (`?connector=<server>`) with the server's own settings and secret fields. Members read everything; the gestures are disabled for them with the reason ([plugins](plugins.md)).
 
 **The MCP catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) is a list
 of well-known MCP servers shipped in the image, so an administrator does not need to know a
@@ -462,6 +478,31 @@ Before this, the *name* of the target state carried the effect (`pr_*` opened, `
 lifted the production lock. Those names are still read, so a published workflow keeps its
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
+
+**The next step can depend on what the agent answered** ([ADR 0106](adr/0106-a-workflow-chooses-its-next-step-from-the-agent-s-answer.md)).
+Ask the agent for the answers you route on, as outputs, and put a `when` on the transitions that
+leave the state it lands in. The first transition whose `when` holds is taken; one without `when` is
+the default:
+
+```yaml
+transitions:
+  - id: t-develop
+    from: todo
+    to: checkpoint
+    by: developer
+    outputs: [done, findings, confidence]   # "develop it, then answer: finished? findings? how sure?"
+  - { id: t-again,  from: checkpoint, to: todo,   by: platform, when: { done: false } }
+  - { id: t-unsure, from: checkpoint, to: unsure, by: platform, when: { confidence: { lt: 0.6 } } }
+  - { id: t-fix,    from: checkpoint, to: fixing, by: platform, when: { findings: { gt: 0 } } }
+  - { id: t-finish, from: checkpoint, to: done,   by: platform }
+```
+
+A condition is a value (`outcome: pr`), a list of values (`outcome: [pr, reply]`), or comparisons
+(`equals`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`); every condition of a `when` must hold. Numbers and
+booleans written as strings (`"0.85"`, `"false"`) compare as numbers and booleans; an output the stage
+did not write never matches, so an agent that says nothing takes the default. The validator refuses a
+`when` that names an output no transition declares (`when.unknown_output`) and a state whose exits all
+have a `when` (`when.no_default`).
 
 Two validation codes were renamed to English (ADR 0046): `workflow.implicit_effect` (formerly
 `workflow.effet_implicite`) and `gate.nothing_to_check` (formerly `gate.sans_matiere`). For one

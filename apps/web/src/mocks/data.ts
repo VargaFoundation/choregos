@@ -88,6 +88,7 @@ import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
+import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
 
@@ -2362,6 +2363,9 @@ orgConnectors.push({
   ],
 });
 
+// The server of the default plugin `servicenow` (S43-08): an organisation connector named after it, not configured yet.
+orgConnectors.push(serverConnectorOf("servicenow", "0.1.0", "servicenow"));
+
 export const projectOperations: ProjectOperation[] = [
   { connector: "entra-acme", operation: "read_user", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
   { connector: "entra-acme", operation: "create_account", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
@@ -2737,6 +2741,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (channels !== undefined) return structuredClone(channels) as T;
   const network = egressApi(method, path.split("?")[0] ?? path, body);
   if (network !== undefined) return network as T;
+  const plugins = pluginsApi(method, bare, body, orgConnectors);
+  if (plugins !== undefined) return plugins as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).

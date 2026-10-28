@@ -1307,6 +1307,17 @@ export type WorkflowSpawn = {
   min_succeeded?: number;
 };
 
+/** What one output of the last stage must be for the transition to be chosen (S48-01, ADR 0106): a value (equal), a list (one of), or comparisons. A number written as a string compares as a number; `true`/`false` written as strings compare as booleans. */
+export type WorkflowOutputCondition = string | number | boolean | Array<string | number | boolean> | {
+  equals?: string | number | boolean;
+  in?: Array<string | number | boolean>;
+  not_in?: Array<string | number | boolean>;
+  gt?: number;
+  gte?: number;
+  lt?: number;
+  lte?: number;
+};
+
 /** Choregos workflow DSL: a declarative state machine per project (docs/plan/01 §1.4). */
 export type Workflow = {
   apiVersion: "choregos/v1";

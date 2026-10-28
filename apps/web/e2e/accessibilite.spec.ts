@@ -28,6 +28,7 @@ const PAGES = [
   "/admin/connectors",
   "/catalogue/mcp-servers",
   "/catalogue/connectors",
+  "/catalogue/plugins",
   "/admin/members",
   "/admin/audit",
   "/admin/platform",

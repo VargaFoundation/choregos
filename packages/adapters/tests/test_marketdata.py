@@ -18,6 +18,7 @@ from choregos_adapters.marketdata import (
     MarketDataError,
     RateLimited,
     StooqProvider,
+    TiingoProvider,
     UnknownSymbol,
     YahooProvider,
 )
@@ -276,6 +277,76 @@ async def test_alphavantage_compact_asks_for_the_recent_days_whatever_the_range(
         AlphaVantageProvider(api_key=KEY, outputsize="full")
 
 
+# ── tiingo ───────────────────────────────────────────────────────────────────────────────
+
+# AAPL around its 4-for-1 split of 2020-08-31: raw closes before it, split factor 4 on the day.
+TIINGO_ROWS = [
+    {"date": "2020-08-28T00:00:00.000Z", "open": 504.05, "high": 505.77, "low": 498.31, "close": 499.23,
+     "volume": 46907479, "adjClose": 121.37, "splitFactor": 1.0, "divCash": 0.0},
+    {"date": "2020-08-31T00:00:00.000Z", "open": 127.58, "high": 131.0, "low": 126.0, "close": 129.04,
+     "volume": 225702700, "adjClose": 125.47, "splitFactor": 4.0, "divCash": 0.0},
+    {"date": "2020-09-01T00:00:00.000Z", "open": 132.76, "high": 134.8, "low": 130.53, "close": 134.18,
+     "volume": 151948100, "adjClose": 130.47, "splitFactor": 1.0, "divCash": 0.0},
+]  # fmt: skip
+
+
+async def test_tiingo_closes_are_split_adjusted_like_the_other_sources() -> None:
+    """A composite compares `close`, and Yahoo's is split-adjusted: Tiingo's raw close before a split
+    would read as a 300 % divergence. The request runs to today, so a later split rescales it too;
+    the key travels in the header, never in the URL (S38-22)."""
+    transport, vues = fixed(body=TIINGO_ROWS)
+    response = await TiingoProvider(transport=transport, api_key=KEY).get_bars(
+        "AAPL", "2020-08-28", "2020-08-31"
+    )
+    before, day = response["bars"]
+    assert [b["date"] for b in response["bars"]] == ["2020-08-28", "2020-08-31"], "inside the range only"
+    assert before["close"] == pytest.approx(499.23 / 4) and before["volume"] == pytest.approx(46907479 * 4)
+    assert day["close"] == 129.04, "the split's own day is already post-split"
+    assert before["adj_close"] == 121.37 and response["adjusted"] is True
+    url = vues[0].url
+    assert (url.host, url.path) == ("api.tiingo.com", "/tiingo/daily/aapl/prices")
+    assert url.params["startDate"] == "2020-08-28" and url.params["endDate"] >= date.today().isoformat()
+    assert vues[0].headers["Authorization"] == f"Token {KEY}"
+    assert KEY not in str(url) and KEY not in json.dumps(response)
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "error"),
+    [
+        (404, {}, UnknownSymbol),
+        (200, {"detail": "Error: Ticker 'NOPE' not found"}, UnknownSymbol),
+        (401, {"detail": f"Invalid token {KEY}"}, MarketDataError),
+        (200, {"detail": f"You have run over your hourly request allocation, key {KEY}"}, RateLimited),
+        (200, {"unexpected": True}, MarketDataError),
+    ],
+)
+async def test_tiingo_named_errors_and_the_key_is_scrubbed(
+    status: int, body: dict, error: type[Exception]
+) -> None:
+    transport, _ = fixed(status, body=body)
+    with pytest.raises(error) as capture:
+        await TiingoProvider(transport=transport, api_key=KEY).get_bars("NOPE", "2024-01-02", "2024-01-04")
+    assert KEY not in str(capture.value)
+    if status == 401:
+        assert not isinstance(capture.value, UnknownSymbol), "a refused key is not an unknown symbol"
+
+
+async def test_tiingo_instrument_and_its_key() -> None:
+    transport, _ = fixed(
+        body={"ticker": "spy", "name": "SPDR S&P 500 ETF Trust", "exchangeCode": "NYSE ARCA"}
+    )
+    record = await TiingoProvider(transport=transport, api_key=KEY).get_instrument("SPY")
+    assert record == {
+        "symbol": "SPY",
+        "type": "unknown",
+        "provider": "tiingo",
+        "name": "SPDR S&P 500 ETF Trust",
+        "exchange": "NYSE ARCA",
+    }
+    with pytest.raises(MarketDataError, match="api_key"):
+        TiingoProvider()
+
+
 def test_alphavantage_requires_its_key() -> None:
     with pytest.raises(MarketDataError, match="api_key"):
         AlphaVantageProvider()
@@ -345,7 +416,13 @@ HOSTILES = [
 
 @pytest.mark.parametrize("symbole", HOSTILES)
 @pytest.mark.parametrize(
-    "fabrique", [StooqProvider, YahooProvider, lambda **k: AlphaVantageProvider(api_key=KEY, **k)]
+    "fabrique",
+    [
+        StooqProvider,
+        YahooProvider,
+        lambda **k: AlphaVantageProvider(api_key=KEY, **k),
+        lambda **k: TiingoProvider(api_key=KEY, **k),
+    ],
 )
 async def test_a_symbol_cannot_change_the_url(symbole: str, fabrique: Any) -> None:
     vues: list[httpx.Request] = []
@@ -522,8 +599,8 @@ def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
     # `CHOREGOS_FAKES=1` (set by the API's suite when everything runs together) would build the fake.
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
 
-    for nom in ("stooq", "yahoo", "alphavantage", "composite"):
-        spec = spec_of("marketdata", nom)
+    for name in ("stooq", "yahoo", "alphavantage", "tiingo", "composite"):
+        spec = spec_of("marketdata", name)
         assert spec is not None and {o.name for o in spec.operations} == {"get_bars", "get_instrument"}
         assert {o.access for o in spec.operations} == {"read"}
     assert spec_of("marketdata", "stooq").secret_fields == ("api_key",)  # type: ignore[union-attr]
@@ -532,7 +609,7 @@ def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
         "composite",
         {"sources": ["stooq", "alphavantage"], "alphavantage_api_key": KEY, "stooq_api_key": KEY},
     )
-    assert [nom for nom, _ in composite._sources] == ["stooq", "alphavantage"]
+    assert [name for name, _ in composite._sources] == ["stooq", "alphavantage"]
     compact = build(
         "marketdata",
         "composite",
@@ -543,6 +620,13 @@ def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
         },
     )
     assert [s.full_history for _, s in compact._sources] == [True, False], "source_configs reach the provider"
+    three = build(
+        "marketdata",
+        "composite",
+        {"sources": ["yahoo", "tiingo", "alphavantage"], "tiingo_api_key": KEY, "alphavantage_api_key": KEY},
+    )
+    assert [name for name, _ in three._sources] == ["yahoo", "tiingo", "alphavantage"]
+    assert spec_of("marketdata", "tiingo").secret_fields == ("api_key",)  # type: ignore[union-attr]
     assert KEY not in repr(composite)
     from choregos_adapters.errors import ConfigurationError
 

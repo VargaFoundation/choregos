@@ -299,7 +299,7 @@ export type ConnectorUpsert = {
   secret_refs?: {
     [key: string]: string;
   };
-  /** secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). */
+  /** secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089). */
   secret_values?: {
     [key: string]: string;
   };
@@ -376,6 +376,8 @@ export type ConnectorType = {
   capabilities?: Array<string>;
   /** the configuration keys that are secrets */
   secret_fields?: Array<string>;
+  /** the secret fields that take several keys, one per slot (`api_key.2` … `api_key.10`, ADR 0089) */
+  pooled_fields?: Array<string>;
 };
 
 export type ConnectorOperation = {
@@ -425,6 +427,20 @@ export type OrgConnector = {
   availability?: ConnectorAvailability;
   /** the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074) */
   enabled_projects?: Array<string>;
+  /** the plugin server this connector runs (ADR 0096): its configuration is the server's `config_schema` and `secret_fields`, not the `mcp` type's; null for any other connector (contract-change S43-08) */
+  server?: OrgConnectorServer | null;
+};
+
+/** What the console needs to configure a plugin's server, read from its declaration (ADR 0096). */
+export type OrgConnectorServer = {
+  plugin: string;
+  version: string;
+  server: string;
+  /** a JSON Schema */
+  config_schema: {
+    [key: string]: unknown;
+  };
+  secret_fields: Array<string>;
 };
 
 /** `all_projects`: every project whose groups match reaches it (the default). `selected_projects`: only the projects it is enabled for (ADR 0074). */
@@ -458,6 +474,8 @@ export type ConnectorCatalogueEntry = {
   capabilities: Array<string>;
   /** field names only, never values */
   secret_fields: Array<string>;
+  /** the secret fields that take several keys, one per slot (ADR 0089) */
+  pooled_fields?: Array<string>;
   /** operations the type declares; an MCP server discovers its own (0) */
   operations: number;
   /** names of the organisation connectors of this type */
@@ -627,7 +645,7 @@ export type OrgConnectorCreate = {
   secret_refs?: {
     [key: string]: string;
   };
-  /** secret values typed in the console, field -> value: sealed, never returned (ADR 0058) */
+  /** secret values typed in the console, field -> value: sealed, never returned (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089). */
   secret_values?: {
     [key: string]: string;
   };

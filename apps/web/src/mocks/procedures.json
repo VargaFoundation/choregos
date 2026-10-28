@@ -1447,18 +1447,18 @@
   {
     "id": "connector.marketdata.composite",
     "title": "Combine several market data sources",
-    "version": 2,
+    "version": 3,
     "audience": "project_owner",
     "applies_to": {
       "connector": "marketdata/composite"
     },
     "link": null,
-    "reviewed": "2026-10-25",
+    "reviewed": "2026-10-26",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- Decide which sources to combine: `stooq`, `yahoo` and `alphavantage`. Each has its own limits and terms:\n  see their procedures. The composite tries them **in order** and falls back to the next when one fails.\n- With `cross_check` on, the closes of two sources are compared and a difference above `tolerance` (2 % by\n  default) is reported, which catches a broken or unadjusted source."
+        "markdown": "- Decide which sources to combine: `stooq`, `yahoo`, `alphavantage` and `tiingo`. Each has its own limits and terms:\n  see their procedures. The composite tries them **in order** and falls back to the next when one fails.\n- With `cross_check` on, the closes of two sources are compared and a difference above `tolerance` (2 % by\n  default) is reported, which catches a broken or unadjusted source."
       },
       {
         "key": "at",
@@ -1473,7 +1473,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "Connectors, **Market data**, type **composite**. `sources`: for example `[\"stooq\", \"alphavantage\"]`.\n`source_configs`: a sub-configuration per provider, for example `{\"stooq\": {\"suffix_map\": {}}}`.\n`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`."
+        "markdown": "Connectors, **Market data**, type **composite**. `sources`: for example `[\"stooq\", \"alphavantage\"]`.\n`source_configs`: a sub-configuration per provider, for example `{\"stooq\": {\"suffix_map\": {}}}`.\n`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`, `tiingo_api_key`.\nTo cross-check a range of years, put a full-history source second: `[\"yahoo\", \"tiingo\"]`."
       },
       {
         "key": "test",
@@ -1491,12 +1491,13 @@
       "the hosts of the sources it combines"
     ],
     "fields": {
-      "sources": "the providers, in the order they are tried: stooq, yahoo, alphavantage",
+      "sources": "the providers, in the order they are tried: stooq, yahoo, alphavantage, tiingo",
       "source_configs": "the configuration of each provider, by name",
       "cross_check": "true to compare the closes of two sources",
       "tolerance": "the largest relative difference of two closes before they disagree, 0.02 by default",
       "stooq_api_key": "Stooq's key, if any, typed once",
-      "alphavantage_api_key": "Alpha Vantage's key, typed once"
+      "alphavantage_api_key": "Alpha Vantage's key, typed once",
+      "tiingo_api_key": "Tiingo's token, typed once"
     },
     "vendor_docs": [],
     "origin": "shipped"
@@ -1556,6 +1557,68 @@
       {
         "title": "Stooq",
         "url": "https://stooq.com/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.marketdata.tiingo",
+    "title": "Use Tiingo for daily market data",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "marketdata/tiingo"
+    },
+    "link": null,
+    "reviewed": "2026-10-26",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A free Tiingo account and its API token. The free plan gives **30+ years** of daily history, 50 requests an\n  hour, 1,000 a day and 500 distinct symbols a month: a 20-symbol campaign takes 20 requests.\n- Its licence is **internal and personal use only**: the data may not be shown or passed to anyone else. Keep\n  the connector to your own research; a project whose results are shared needs a commercial licence from Tiingo."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Sign up at tiingo.com, then copy the token from your account's API page. One account, one token: do not open\nseveral free accounts to add up their limits."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The token only reads market data. It is yours: do not share one token between organisations."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Market data**, type **Tiingo**. `api_key` in the password field (sealed, shown once). In a\n**composite**, list it after the primary source, for example `[\"yahoo\", \"tiingo\"]`, with the token in\n`tiingo_api_key`: it then cross-checks the whole range, not only the recent days."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** (it reads SPY's metadata, one request), then call `get_bars` for a known ticker."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- \"the key was refused\": the token is wrong or revoked.\n- A message about the hourly or daily allocation: the free limits are reached; wait for the next hour or day.\n- An unknown symbol: Tiingo writes share classes with a dash (`BRK-B`)."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.tiingo.com"
+    ],
+    "fields": {
+      "api_key": "your Tiingo API token, typed once",
+      "timeout_s": "request timeout in seconds"
+    },
+    "vendor_docs": [
+      {
+        "title": "Tiingo: pricing and limits",
+        "url": "https://www.tiingo.com/about/pricing"
+      },
+      {
+        "title": "Tiingo: end-of-day API",
+        "url": "https://www.tiingo.com/documentation/end-of-day"
       }
     ],
     "origin": "shipped"

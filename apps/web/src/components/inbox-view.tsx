@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Statut, propose } from "@/components/actions/statut";
+import { orgConnectorHref } from "@/lib/connector-link";
 import { DecisionBar } from "@/components/decision-bar";
 import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { libelleDeDemande, phraseDeBudget, resumeDeDemande, useADecider } from "@/lib/a-decider";
@@ -252,7 +253,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
 
 /** Where a request came from, so the inbox links back to the thing waiting for it. */
 function OriginLink({ origin }: { origin: string }) {
-  if (origin.startsWith("org-connector:")) return <Link href="/admin/connectors">connector {origin.slice(14)}</Link>;
+  if (origin.startsWith("org-connector:")) return <Link href={orgConnectorHref(origin.slice(14))}>connector {origin.slice(14)}</Link>;
   if (origin.startsWith("skill-import:")) return <Link href="/skills">skills from {origin.slice(13)}</Link>;
   if (origin.startsWith("knowledge-source:")) return <Link href="/knowledge">source {origin.slice(17)}</Link>;
   return <span>{origin}</span>;

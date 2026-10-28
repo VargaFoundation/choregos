@@ -20,6 +20,7 @@ sources:
     egress: [pkg-containers.githubusercontent.com]   # hosts beyond the index's own
 defaultPlugins:
   - {source: varga, name: servicenow, version: "^0.1"}
+  - {source: varga, name: software-delivery, version: "^1.0", preapproved: true}
 offline: /opt/choregos/plugins   # CHOREGOS_PLUGINS_OFFLINE wins over it
 ```
 
@@ -137,6 +138,9 @@ class DefaultPlugin:
     source: str
     name: str
     version: str
+    #: The operator approved it in the deployment's configuration (S43-09): what the gate would send to a
+    #: second administrator is installed, recorded as approved by the configuration. Never via the API.
+    preapproved: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +224,14 @@ def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
                 raise SourceError("config", f"default plugin `{raw['name']}`: {exc}") from exc
         if raw["source"] not in {*names, OFFLINE}:
             raise SourceError("config", f"default plugin `{raw['name']}`: no source `{raw['source']}`")
-        defaults.append(DefaultPlugin(raw["source"], raw["name"], version))
+        if set(raw) - {"source", "name", "version", "preapproved"}:
+            raise SourceError(
+                "config", f"default plugin `{raw['name']}`: source, name, version and preapproved"
+            )
+        preapproved = raw.get("preapproved", False)
+        if not isinstance(preapproved, bool):
+            raise SourceError("config", f"default plugin `{raw['name']}`: `preapproved` is true or false")
+        defaults.append(DefaultPlugin(raw["source"], raw["name"], version, preapproved))
     directory = offline or doc.get("offline") or None
     return PluginsConfig(sources, tuple(defaults), Path(str(directory)) if directory else None)
 
