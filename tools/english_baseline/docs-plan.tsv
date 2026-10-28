@@ -1,0 +1,18 @@
+# docs-plan: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+docs/plan/00-index.md	48
+docs/plan/01-architecture-and-contracts.md	34
+docs/plan/01-architecture-et-contrats.md	1
+docs/plan/02-orchestrator-agents-runner.md	46
+docs/plan/03-connecteurs-templates-front.md	1
+docs/plan/03-connectors-templates-front.md	31
+docs/plan/04-modeles-couts-memoire.md	1
+docs/plan/04-models-costs-memory.md	58
+docs/plan/05-release-train-findings.md	14
+docs/plan/06-deploiement-kubernetes.md	1
+docs/plan/06-kubernetes-deployment.md	48
+docs/plan/07-delivery-parallelisation-conventions.md	56
+docs/plan/08-backlog.yaml	439
+docs/plan/BLOCKERS.md	29
+docs/plan/PRODUCT-REVIEW-2026-10-07.md	69
+docs/plan/REVUE-PRODUIT-2026-10-07.md	1
+docs/plan/STATUS.md	1132

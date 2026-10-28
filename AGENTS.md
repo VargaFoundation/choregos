@@ -20,12 +20,17 @@ Existing French code is renamed package by package (S34-04); do not mass-transla
 does not otherwise touch. `make lint` and CI refuse French in new or modified lines
 (`tools/check_english.py`); a line that must stay French (a `workflow.patched` id, a French alias
 kept for running workflows) carries `lang: fr-ok` in a comment.
+New identifiers are English, and no file's French count may rise: per-file counts live in
+`tools/english_baseline/` and only go down (`make english-ratchet`). A compatibility shim carries
+`lang: fr-ok-file`; an alias line carries `lang: fr-ok alias:internal` or `alias:external`
+(ADR 0098).
 
 ## Commands (the CI's, no others)
 - Everything that blocks a PR: `make ci` = `lint` + `typecheck` + `test` + `contracts-check` + `charts-lint`.
 - Python: `uv run ruff check packages apps/api apps/orchestrator tools tests` then
   `ruff format --check` on the same paths — **`tests/` is one of them**, an E501 there breaks CI.
-  `make lint` also runs `tools/check_english.py` (lines added since `origin/main`).
+  `make lint` also runs `tools/check_english.py` (lines added since `origin/main`) and the full-repo
+  ratchet `make english-ratchet` (`tools/check_english.py --all`, ADR 0098).
 - Typing: `uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools` (strict).
 - Tests: `uv run pytest -q`; `-m "not slow"` leaves out the slow ones (building the
   workspace). Coverage: `make test-cov`, threshold 80 %.

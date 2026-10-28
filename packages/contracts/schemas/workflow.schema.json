@@ -343,6 +343,18 @@
             "type": "string"
           }
         },
+        "when": {
+          "type": "object",
+          "description": "Choose this transition only when the outputs of the work item's last stage match (S48-01, ADR 0106): every key is an output name, every condition must hold. Among the transitions leaving a state, the first in declaration order whose `when` holds is taken; a transition without `when` is the default. A missing output never matches.",
+          "minProperties": 1,
+          "maxProperties": 10,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,62}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/outputCondition"
+          }
+        },
         "output_types": {
           "type": "object",
           "description": "The type of each declared output (ADR 0049); an output not listed is inline markdown or JSON.",
@@ -778,6 +790,80 @@
           "description": "fewer successful children fails the transition"
         }
       }
+    },
+    "outputCondition": {
+      "description": "What one output of the last stage must be for the transition to be chosen (S48-01, ADR 0106): a value (equal), a list (one of), or comparisons. A number written as a string compares as a number; `true`/`false` written as strings compare as booleans.",
+      "oneOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "equals": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
+            "in": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 50,
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "not_in": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 50,
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "gt": {
+              "type": "number"
+            },
+            "gte": {
+              "type": "number"
+            },
+            "lt": {
+              "type": "number"
+            },
+            "lte": {
+              "type": "number"
+            }
+          }
+        }
+      ]
     }
   }
 }

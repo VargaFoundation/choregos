@@ -1,0 +1,7 @@
+# api-mcp: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
+apps/api/src/choregos_api/mcp/__init__.py	4
+apps/api/src/choregos_api/mcp/appelant.py	37
+apps/api/src/choregos_api/mcp/garde_fous.py	14
+apps/api/src/choregos_api/mcp/oauth.py	26
+apps/api/src/choregos_api/mcp/outils.py	65
+apps/api/src/choregos_api/mcp/transport.py	42
