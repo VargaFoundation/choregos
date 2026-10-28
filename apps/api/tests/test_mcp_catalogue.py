@@ -40,7 +40,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Any:
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(outils=[dict(t) for t in TOOLS], jeton="vendor-key")
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", server)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_CATALOGUE_TEST", "vendor-key")
     return server
 
@@ -308,7 +308,7 @@ async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it
     monkeypatch.setenv("CONNECTOR_CATALOGUE_KEYED", "the-raw-key")
     reset_settings_cache()
     server = FakeMcpServer(outils=[dict(t) for t in TOOLS])
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", server)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
 
     installed = await client.post(
         f"{BASE}/keyed/install", json={"secret_refs": {"token": "env:CONNECTOR_CATALOGUE_KEYED"}}

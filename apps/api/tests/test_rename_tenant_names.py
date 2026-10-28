@@ -42,7 +42,7 @@ async def tenant(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatc
     import choregos_adapters
     from choregos_adapters.fakes.rh import FakeFournisseur, serveur_mcp
 
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur_mcp(FakeFournisseur()))
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", serveur_mcp(FakeFournisseur()))
     monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(FIXTURES))
     monkeypatch.setenv("CONNECTOR_RENAME_TEST_SECRET", "s3cret")
     for body in (
