@@ -132,10 +132,12 @@ export type Problem = {
     column?: number;
   }>;
   retry_after?: number;
-  /** A machine code on some 409s: `stale_base`, `no_change`, `eval_failed` (S40-12) */
+  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12) */
   code?: string;
   /** On `stale_base` and `no_change`: the agent's latest version */
   latest_version?: number;
+  /** On `stale_base` from `updateProject`: the project's current `config_revision` */
+  latest_revision?: string;
   /** On `stale_base`: who published the latest version */
   latest_author?: string | null;
 };
@@ -182,6 +184,8 @@ export type Project = {
   template_ref?: string | null;
   status: "draft" | "provisioning" | "active" | "suspended" | "archived";
   config: S.Project;
+  /** An opaque digest of the name and configuration, to send back as `base_revision` */
+  config_revision?: string;
   workflow_name?: string | null;
   policy_name?: string | null;
   /** An active workflow of the project has a `via: release_train` transition: only then does the project have trains. */
@@ -218,6 +222,8 @@ export type ProjectCreate = {
 export type ProjectUpdate = {
   name?: string;
   config?: S.Project;
+  /** The `config_revision` the client read; when it is no longer current, the PATCH answers 409 `stale_base` and writes nothing; absent, the last write wins */
+  base_revision?: string | null;
 };
 
 export type ProvisionRequest = {
