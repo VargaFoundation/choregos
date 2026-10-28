@@ -3,8 +3,9 @@
 
 [ADR 0105](../../docs/adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md): Choregos consumes
 the MCP gateway an organisation runs, through MCP and standard HTTP authentication only, behind the
-broker. It does not host, aggregate or re-serve MCP servers. As ADR 0079 does for graal, the boundary is
-a test, and it has four parts:
+broker. It never routes, aggregates or re-serves third-party MCP servers; the plugin servers it runs under
+ADR 0096 are its own, whitelisted below. As ADR 0079 does for graal, the boundary is a test, and it has
+four parts:
 
   * no vendor name in what ships (a vendor dependency would arrive as an SDK import, a `*_URL` setting,
     a header or a host name, not as an `import` of a gateway);
@@ -126,21 +127,27 @@ PLUGIN_WEBHOOK = "POST /webhooks/plugins/{org}/{plugin}/{server}"
 #: so a rename cannot leave a stale one behind.
 ALLOWED_PLATFORM_MCP = PLUGIN_SERVER_SURFACE | FORWARD_PROXIES | {PLUGIN_WEBHOOK}
 
-#: The routes of the two doors, by directory. A new one is a decision: a route that serves Choregos's own
-#: tools or workflows is added here; one that forwards to, merges or names another MCP server is a gateway.
+#: The routes of the two doors, by directory, one `VERB /path` per verb and by shape (`route_shape`: a
+#: parameter is `{}`, or `{:path}`, whatever its name). A new one is a decision: a route that serves
+#: Choregos's own tools or workflows is added here; one that forwards to, merges or names another MCP server
+#: is a gateway.
 DOOR_ROUTES = {
     "apps/api/src/choregos_api/mcp": frozenset(
         {
-            "/.well-known/oauth-protected-resource",
-            "/.well-known/oauth-protected-resource/{chemin:path}",
-            "/mcp",
-            "/mcp/projects/{projet}",
+            "GET /.well-known/oauth-protected-resource",
+            "GET /.well-known/oauth-protected-resource/{:path}",
+            "GET /mcp",
+            "DELETE /mcp",
+            "POST /mcp",
+            "GET /mcp/projects/{}",
+            "DELETE /mcp/projects/{}",
+            "POST /mcp/projects/{}",
         }
     ),
     "apps/api/src/choregos_api/a2a": frozenset(
         {
-            "/a2a/orgs/{org}",
-            "/a2a/orgs/{org}/.well-known/agent-card.json",
+            "POST /a2a/orgs/{}",
+            "GET /a2a/orgs/{}/.well-known/agent-card.json",
         }
     ),
 }
@@ -171,6 +178,9 @@ NO_GATEWAY_TREES = ("apps/orchestrator/src", "packages/runner/src")
 API_SOURCE = "apps/api/src/choregos_api"
 SOURCE_ROOTS = (*sorted(ROOT.glob("packages/*/src")), *sorted(ROOT.glob("apps/*/src")))
 HTTP_VERBS = frozenset({"get", "post", "put", "patch", "delete", "head", "options", "api_route", "websocket"})
+#: A route added by a call rather than a decorator: `add_api_route` (FastAPI's GET when it lists no methods)
+#: and `mount` (a whole sub-application under a path, read as `MOUNT /path`).
+ROUTE_CALLS = frozenset({"add_api_route", "mount"})
 MCP_CLIENTS = frozenset({"ClientMcp", "McpClient", "PluginServerClient"})
 LISTENERS = frozenset({"start_server", "start_unix_server"})
 PATH_PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)(?::([a-z]+))?\}")
@@ -379,7 +389,7 @@ def _name_of(node: ast.expr) -> str:
 
 
 def _route_path(call: ast.Call) -> str | None:
-    """The path a route decorator names: its `path=` or its first positional argument, when a literal."""
+    """The path a route decorator or call names: its `path=` or first positional argument, if a literal."""
     candidates = [argument.value for argument in call.keywords if argument.arg == "path"] + call.args[:1]
     for candidate in candidates:
         if isinstance(candidate, ast.Constant) and isinstance(candidate.value, str):
@@ -387,8 +397,22 @@ def _route_path(call: ast.Call) -> str | None:
     return None
 
 
+def _verbs(call: ast.Call, default: str) -> str:
+    """The `methods=[...]` a route decorator or call lists, comma-separated, or `default` if it lists none."""
+    for argument in call.keywords:
+        if argument.arg == "methods" and isinstance(argument.value, ast.List | ast.Tuple | ast.Set):
+            return ",".join(
+                str(item.value).upper() for item in argument.value.elts if isinstance(item, ast.Constant)
+            )
+    return default
+
+
 def routes_of(source: str) -> list[str]:
-    """`VERB /path` of every FastAPI route decorator in `source`, the router's own prefix joined."""
+    """`VERB /path` of every FastAPI route in `source`, the router's own prefix joined.
+
+    A route is a decorator (`@router.post(...)`, `@router.api_route(..., methods=[...])`) or a call:
+    `add_api_route(path, ..., methods=[...])` and `mount(path, ...)`, read as `MOUNT /path`.
+    """
     tree = ast.parse(source)
     prefixes: dict[str, str] = {}
     for node in ast.walk(tree):
@@ -415,16 +439,39 @@ def routes_of(source: str) -> list[str]:
             path = _route_path(decorator)
             if path is None:
                 continue
-            verbs = decorator.func.attr.upper()
-            for argument in decorator.keywords:
-                if argument.arg == "methods" and isinstance(argument.value, ast.List | ast.Tuple):
-                    verbs = ",".join(
-                        str(item.value).upper()
-                        for item in argument.value.elts
-                        if isinstance(item, ast.Constant)
-                    )
+            attr = decorator.func.attr
+            verbs = _verbs(decorator, "GET" if attr == "api_route" else attr.upper())
             routes.append(f"{verbs} {prefixes.get(router.id, '')}{path}")
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        owner = node.func.value
+        if node.func.attr not in ROUTE_CALLS or not isinstance(owner, ast.Name):
+            continue
+        path = _route_path(node)
+        if path is None:
+            continue
+        verbs = "MOUNT" if node.func.attr == "mount" else _verbs(node, "GET")
+        routes.append(f"{verbs} {prefixes.get(owner.id, '')}{path}")
     return routes
+
+
+def route_shape(route: str) -> str:
+    """`route` with its path parameters' names left out: `{name}` is `{}`, `{name:path}` is `{:path}`.
+
+    The freeze is on what a door serves, not on what its code calls a parameter: renaming one is not a
+    new route, while a new or removed segment, a new converter or another verb is.
+    """
+    return PATH_PARAMETER.sub(lambda match: f"{{:{match[2]}}}" if match[2] else "{}", route)
+
+
+def frozen_routes(routes: Iterable[str]) -> frozenset[str]:
+    """What the freeze compares: one `VERB /path` per verb, by shape (`route_shape`)."""
+    shapes: set[str] = set()
+    for route in routes:
+        verbs, path = route.split(" ", 1)
+        shapes |= {f"{verb} {route_shape(path)}" for verb in verbs.split(",")}
+    return frozenset(shapes)
 
 
 def gateway_traits(route: str) -> list[str]:
@@ -501,6 +548,12 @@ async def tool(): ...
 async def setting(): ...
 
 def helper(): ...
+
+def create_app():
+    router.add_api_route("/{upstream}/sse", forward, methods=["POST"])
+    app.add_api_route(path="/orgs/{org}/edition", endpoint=edition)
+    app.mount("/servers/{server}", proxy)
+    app.mount("/static", files)
 """
     routes = routes_of(source)
     assert routes == [
@@ -512,10 +565,31 @@ def helper(): ...
         "GET /.well-known/thing/{rest:path}",
         "GET /runs/{id}/tools/{name}",
         "GET /orgs/{org}/mcp-gateway",
+        # `add_api_route` with its router's prefix, then FastAPI's GET when it lists no methods.
+        "POST /gw/{upstream}/sse",
+        "GET /orgs/{org}/edition",
+        "MOUNT /servers/{server}",
+        "MOUNT /static",
     ]
-    assert [route for route in routes if gateway_traits(route)] == routes[:5]
+    assert [route for route in routes if gateway_traits(route)] == [*routes[:5], routes[8], routes[10]]
     # The platform's own plugin webhook is the one route of the API that names a server.
     assert gateway_traits(PLUGIN_WEBHOOK) == ["`{server}` picks an upstream"]
+
+
+def test_the_route_freeze_compares_shapes_and_verbs() -> None:
+    """A parameter's name is not part of a route: a segment, a converter, a verb or a mount is."""
+    door = frozen_routes(["POST /mcp/projects/{project}", "GET,DELETE /mcp", "GET /meta/{rest:path}"])
+    assert door == {"POST /mcp/projects/{}", "GET /mcp", "DELETE /mcp", "GET /meta/{:path}"}
+    renamed = ["POST /mcp/projects/{project_id}", "DELETE,GET /mcp", "GET /meta/{path:path}"]
+    assert frozen_routes(renamed) == door
+    for changed in (
+        ["POST /mcp/projects/{project}/servers", "GET,DELETE /mcp", "GET /meta/{rest:path}"],  # a segment
+        ["POST /mcp/projects/{project:path}", "GET,DELETE /mcp", "GET /meta/{rest:path}"],  # a converter
+        ["POST /mcp/projects/{project}", "GET,DELETE,POST /mcp", "GET /meta/{rest:path}"],  # a verb
+        ["POST /mcp/projects/{project}", "GET,DELETE /mcp", "MOUNT /meta/{rest:path}"],  # a mount
+        ["POST /mcp/projects/{project}", "GET,DELETE /mcp"],  # a removed route
+    ):
+        assert frozen_routes(changed) != door, changed
 
 
 def test_the_client_and_listener_checks_see_what_they_guard() -> None:
@@ -548,23 +622,22 @@ def test_no_route_selects_a_third_party_mcp_server() -> None:
 
 def test_the_doors_and_the_broker_keep_their_routes() -> None:
     routes = _api_routes()
-    for directory, expected in DOOR_ROUTES.items():
-        found = {
-            route.split(" ", 1)[1]
-            for file, listed in routes.items()
-            if file.startswith(f"{directory}/")
-            for route in listed
-        }
+    for directory, door in DOOR_ROUTES.items():
+        expected = frozen_routes(door)
+        found = frozen_routes(
+            route for file, listed in routes.items() if file.startswith(f"{directory}/") for route in listed
+        )
         assert found == expected, (
             f"the routes of {directory} changed: {sorted(found ^ expected)}. A route that serves "
             "Choregos's own tools or workflows goes into DOOR_ROUTES; one that forwards to, merges or "
             "names another MCP server is a gateway (ADR 0105)."
         )
-    tools = {
+    tools = frozen_routes(
         route for listed in routes.values() for route in listed if "/tools" in route and "/internal/" in route
-    }
-    assert tools == BROKER_ROUTES, (
-        f"the broker's routes changed: {sorted(tools ^ BROKER_ROUTES)}. An agent lists and calls tools per "
+    )
+    broker = frozen_routes(BROKER_ROUTES)
+    assert tools == broker, (
+        f"the broker's routes changed: {sorted(tools ^ broker)}. An agent lists and calls tools per "
         "run or per hosted session, never per connector or per server (ADR 0105)."
     )
 
