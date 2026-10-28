@@ -24,6 +24,7 @@ from .base import (
     TrackerAdapter,
 )
 from .errors import ConfigurationError
+from .http.pool import strategy_of
 from .registry import (
     POLITIQUES,
     AdapterSet,
@@ -173,6 +174,15 @@ _TEXTE: dict[str, Any] = {"type": "string"}
 _ENTIER: dict[str, Any] = {"type": "integer"}
 
 #: What every `web_search` type configures beside its key (ADR 0083).
+#: The setting of a type that pools a secret field (ADR 0089): how its keys are used in turn.
+_KEY_ROTATION: dict[str, Any] = {
+    "key_rotation": {
+        "enum": ["failover", "round_robin"],
+        "default": "failover",
+        "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, "
+        "`round_robin` spreads the calls",
+    }
+}
 _WEB_SEARCH_CONFIG: dict[str, Any] = {
     "timeout_s": {"type": "number", "default": 20},
     "price_usd_per_query": {
@@ -539,10 +549,12 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "description": 'ticker suffix -> Stooq market suffix, e.g. {"": ".us", ".L": ".uk"}',
                 },
                 "timeout_s": {"type": "number", "default": 20},
+                **_KEY_ROTATION,
             }
         ),
         ("api_key",),
         operations=_OPERATIONS_MARKETDATA,
+        pooled_fields=("api_key",),
     ),
     ("marketdata", "yahoo"): ConnectorTypeSpec(
         "Yahoo Finance chart (unofficial: personal use only, may break)",
@@ -561,10 +573,12 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "default": "auto",
                     "description": "`compact`: always the last 100 trading days (free key); cross-check only",
                 },
+                **_KEY_ROTATION,
             }
         ),
         ("api_key",),
         operations=_OPERATIONS_MARKETDATA,
+        pooled_fields=("api_key",),
     ),
     ("marketdata", "tiingo"): ConnectorTypeSpec(
         "Tiingo (free key: 30+ years of daily history, internal and personal use only)",
@@ -591,11 +605,13 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                 },
                 "cross_check": {"type": "boolean", "default": True},
                 "tolerance": {"type": "number", "default": 0.02, "minimum": 0},
+                **_KEY_ROTATION,
             },
             ("sources",),
         ),
         ("stooq_api_key", "alphavantage_api_key", "tiingo_api_key"),
         operations=_OPERATIONS_MARKETDATA,
+        pooled_fields=("stooq_api_key", "alphavantage_api_key"),
     ),
     # The `web_search` family (S40-01g, ADR 0083): called by the API's built-in `web_search`, never by a
     # runner. Each type declares what it does with the queries (`choregos_adapters.web_search`); the
@@ -603,16 +619,18 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("web_search", "brave"): ConnectorTypeSpec(
         "Brave Search API",
         ("web_search",),
-        _objet(_WEB_SEARCH_CONFIG),
+        _objet({**_WEB_SEARCH_CONFIG, **_KEY_ROTATION}),
         ("api_key",),
         egress=lambda _cfg: [("api.search.brave.com", 443)],
+        pooled_fields=("api_key",),
     ),
     ("web_search", "tavily"): ConnectorTypeSpec(
         "Tavily search (links and snippets only)",
         ("web_search",),
-        _objet(_WEB_SEARCH_CONFIG),
+        _objet({**_WEB_SEARCH_CONFIG, **_KEY_ROTATION}),
         ("api_key",),
         egress=lambda _cfg: [("api.tavily.com", 443)],
+        pooled_fields=("api_key",),
     ),
     ("web_search", "firecrawl"): ConnectorTypeSpec(
         "Firecrawl search, self-hosted only (no scraping)",
@@ -967,14 +985,16 @@ def _register_marketdata() -> None:
     """The `marketdata` family (S38-03): its free providers, their composite and its fake."""
     from .marketdata import PROVIDERS, CompositeProvider, MarketDataProvider
 
-    def _fournisseur(type_name: str, cfg: dict[str, Any], cle: str = "") -> MarketDataProvider:
+    def _fournisseur(type_name: str, cfg: dict[str, Any], cle: str | list[str] = "") -> MarketDataProvider:
         options: dict[str, Any] = {"timeout_s": float(cfg.get("timeout_s", 20))}
         if type_name == "stooq" and cfg.get("suffix_map"):
             options["suffix_map"] = dict(cfg["suffix_map"])
         if type_name == "alphavantage" and cfg.get("outputsize"):
             options["outputsize"] = str(cfg["outputsize"])
         if type_name != "yahoo":
-            options["api_key"] = str(cle or cfg.get("api_key", ""))
+            # A string, or a list when the field holds several keys (ADR 0089).
+            options["api_key"] = cle or cfg.get("api_key") or ""
+            options["key_rotation"] = strategy_of(cfg.get("key_rotation"))
         return PROVIDERS[type_name](**options)
 
     def _composite(cfg: dict[str, Any]) -> CompositeProvider:
@@ -988,7 +1008,14 @@ def _register_marketdata() -> None:
         configs = cfg.get("source_configs") or {}
         return CompositeProvider(
             [
-                (n, _fournisseur(n, dict(configs.get(n) or {}), str(cfg.get(f"{n}_api_key", ""))))
+                (
+                    n,
+                    _fournisseur(
+                        n,
+                        {"key_rotation": cfg.get("key_rotation"), **dict(configs.get(n) or {})},
+                        cfg.get(f"{n}_api_key") or "",
+                    ),
+                )
                 for n in noms
             ],
             cross_check=bool(cfg.get("cross_check", True)),
@@ -1011,7 +1038,9 @@ def _register_web_search() -> None:
     def _constructeur(nom: str) -> Callable[[dict[str, Any]], SearchBackend]:
         def construire(cfg: dict[str, Any]) -> SearchBackend:
             options: dict[str, Any] = {
-                "api_key": str(cfg.get("api_key", "")),
+                # A string, or a list when the field holds several keys (ADR 0089).
+                "api_key": cfg.get("api_key") or "",
+                "key_rotation": strategy_of(cfg.get("key_rotation")),
                 "timeout_s": float(cfg.get("timeout_s", 20)),
             }
             if nom == "firecrawl":

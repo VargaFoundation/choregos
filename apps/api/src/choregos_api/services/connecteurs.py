@@ -104,6 +104,14 @@ def check_runtime_allowed(type_name: str) -> None:
         )
 
 
+def a_field_of(spec: ConnectorTypeSpec, name: str) -> bool:
+    """A secret field of the type, or a slot of one it pools (`api_key.2`, ADR 0089)."""
+    from choregos_adapters.registry import slot_of
+
+    field, n = slot_of(name)
+    return field in spec.secret_fields and (n == 1 or field in spec.pooled_fields)
+
+
 def verifier_les_secrets(
     spec: ConnectorTypeSpec,
     type_name: str,
@@ -140,11 +148,16 @@ def verifier_les_secrets(
             f"`secret_refs` (`{en_clair[0]}: env:VARIABLE_NAME`) — never inside `config`"
         )
     valeurs = secret_values or {}
-    inconnus = sorted((set(secret_refs) | set(valeurs)) - set(spec.secret_fields))
+    inconnus = sorted(f for f in set(secret_refs) | set(valeurs) if not a_field_of(spec, f))
     if inconnus:
+        pooled = (
+            f"; several keys: {', '.join(f'{p}.2' for p in spec.pooled_fields)} …"
+            if spec.pooled_fields
+            else ""
+        )
         raise unprocessable(
             f"`{type_name}` has no secret field {', '.join(inconnus)} "
-            f"(its own: {', '.join(spec.secret_fields) or 'none'})"
+            f"(its own: {', '.join(spec.secret_fields) or 'none'}{pooled})"
         )
     doubles = sorted(set(secret_refs) & set(valeurs))
     if doubles:
