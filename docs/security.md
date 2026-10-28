@@ -126,7 +126,10 @@ administrator who widens it makes it the organisation's: the owner stops curatin
 
 Since S42-11 ([ADR 0081](adr/0081-knowledge-base-rights.md)) people can also hold a **role on one base**
 (`viewer`, `editor`, `owner`) by a grant to a user, a group or a project, and a base can be `restricted`:
-people then read it only through a grant, while its runs are still served. Only an administrator or the owners of its project widen
+people then read it only through a grant, and a run is served it only on behalf of the person who
+started its work item, when that person reads it ([ADR 0097](adr/0097-a-run-reads-a-restricted-base-on-behalf-of-its-initiator.md)):
+an agent no longer reads for someone what that person may not read. What the run writes after reading
+it is not restricted yet (follow-up in the ADR). Only an administrator or the owners of its project widen
 or restrict a base. A grant never crosses organisations. A source read with a service account (Confluence)
 mirrors everything that account sees, so restricting the base and granting roles is the confidentiality
 boundary, not the source's own permissions.

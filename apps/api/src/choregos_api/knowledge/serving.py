@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """What a run is served of a knowledge base (ADR 0051, S33-02).
 
-When the run is prepared, `pin()` resolves each base its agent names — it must exist and be served
-to the run's project — and pins its ready documents by id, with the digest of the files they make.
+When the run is prepared, `pin()` resolves each base its agent names — it must exist, be served to
+the run's project and, when restricted, be readable by the person the run acts for (ADR 0097) — and
+pins its ready documents by id, with the digest of the files they make.
 The runner then fetches exactly those documents (`GET /internal/runs/{id}/knowledge`), recomputes
 the digest, and lays them read-only under `.choregos/knowledge/<slug>/`, with an `INDEX.md`.
 """
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
 from ..db.models import KnowledgeBase, KnowledgeDocument
-from .access import served_to_project
+from .on_behalf import OnBehalf
 
 INDEX = "INDEX.md"
 _UNSAFE = re.compile(r"[^a-z0-9._-]+")
@@ -72,18 +73,18 @@ async def _base(session: AsyncSession, org_id: str, slug: str) -> KnowledgeBase 
     ).scalar_one_or_none()
 
 
-async def pin(session: AsyncSession, org_id: str, project_slug: str, slugs: list[str]) -> list[KnowledgeRef]:
+async def pin(
+    session: AsyncSession, org_id: str, project_slug: str, slugs: list[str], on_behalf: OnBehalf
+) -> list[KnowledgeRef]:
     """The knowledge bases an agent names, resolved for one run of one project."""
     refs: list[KnowledgeRef] = []
     for slug in dict.fromkeys(slugs):
         base = await _base(session, org_id, slug)
         if base is None:
             raise KnowledgeRefusedError(f"the knowledge base `{slug}` does not exist")
-        if not served_to_project(base, project_slug):
-            raise KnowledgeRefusedError(
-                f"the knowledge base `{slug}` is not served to the project `{project_slug}` "
-                f"(scope `{base.scope}`, status `{base.status}`)"
-            )
+        refusal = await on_behalf.refusal(base, project_slug)
+        if refusal is not None:
+            raise KnowledgeRefusedError(refusal)
         if base.serving_mode == "files":
             documents = await _ready(session, base)
             refs.append(
@@ -101,11 +102,12 @@ async def pin(session: AsyncSession, org_id: str, project_slug: str, slugs: list
 
 
 async def deliver(
-    session: AsyncSession, org_id: str, project_slug: str, ref: dict[str, Any]
+    session: AsyncSession, org_id: str, project_slug: str, ref: dict[str, Any], on_behalf: OnBehalf
 ) -> dict[str, Any]:
-    """The pinned documents of one `files` base, as the runner lays them down."""
+    """The pinned documents of one `files` base, as the runner lays them down. Checked again at each
+    read: a base no longer served, or a grant revoked since the run was prepared, is refused."""
     base = await _base(session, org_id, str(ref["slug"]))
-    if base is None or not served_to_project(base, project_slug):
+    if base is None or await on_behalf.refusal(base, project_slug) is not None:
         raise KnowledgeRefusedError(f"the knowledge base `{ref['slug']}` is no longer served to this run")
     files = files_of(await _ready(session, base, list(ref.get("documents") or [])))
     return {"slug": base.slug, "name": base.name, "digest": knowledge_digest(files), "documents": files}

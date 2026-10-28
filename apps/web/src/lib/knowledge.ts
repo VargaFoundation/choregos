@@ -254,7 +254,7 @@ export function permissionsOf(base: Pick<KnowledgeBase, "can">): KnowledgePermis
 /** Who may read the base, in words: the reach, and whether people need a grant. */
 export function accessLabel(base: Pick<KnowledgeBase, "restricted" | "scope" | "projects" | "groups">): string {
   return base.restricted
-    ? "restricted: people read it through a grant; its runs are still served"
+    ? "restricted: people read it through a grant; a run is served it only for a person who reads it"
     : `readable by ${scopeLabel(base)}`;
 }
 
