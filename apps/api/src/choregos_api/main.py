@@ -57,6 +57,8 @@ from .routers import (
     org_connectors,
     outbound_proxy,
     platform_identity,
+    plugin_sources,
+    plugins,
     procedures,
     projects,
     readiness,
@@ -73,6 +75,7 @@ from .routers import (
     workitems,
 )
 from .services.action_relay import relay_loop
+from .services.plugin_defaults import check_configuration, reconcile_in_background
 from .services.skill_scanner import mirror_loop
 
 API_PREFIX = "/api/v1"
@@ -108,6 +111,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     action_relay = asyncio.create_task(relay_loop())
     # A2A push notifications (ADR 0078 §5): read from the persisted events, at least once.
     a2a_push = asyncio.create_task(push_loop())
+    # The deployment's default plugins in every organisation (ADR 0093 §5), once the schema and the
+    # bootstrap organisation exist. In the background: a slow source never holds the readiness probe.
+    plugin_defaults = asyncio.create_task(reconcile_in_background(settings))
     # The skill scanner's local OSV mirror (ADR 0095), rebuilt in each replica.
     osv_mirror = asyncio.create_task(mirror_loop(settings))
     yield
@@ -115,7 +121,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await conversions.stop()
     if relais is not None:
         await relais.arreter()
-    for task in (rafraichissement, action_relay, a2a_push, osv_mirror):
+    for task in (rafraichissement, action_relay, a2a_push, plugin_defaults, osv_mirror):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -258,6 +264,9 @@ def create_app() -> FastAPI:
     # eux-mêmes. Un greffon déclaré qui ne charge pas arrête le démarrage, exprès.
     charger_les_greffons()
     _verifier_l_edition(settings)
+    # The plugin sources and default plugins (ADR 0093): an unreadable configuration stops the API here,
+    # naming the setting, rather than answering 500 at the first install.
+    check_configuration(settings)
     app = FastAPI(
         title="Choregos API",
         # La version du paquet, pas une constante : l'API s'annonçait `1.0.0` depuis le premier
@@ -350,6 +359,8 @@ def create_app() -> FastAPI:
         agent_session_pods.router,
         skills.router,
         skill_catalogue.router,
+        plugins.router,
+        plugin_sources.router,
         knowledge.router,
         webhooks.router,
         internal.router,

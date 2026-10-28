@@ -1,0 +1,17 @@
+catalogue:
+  version: 1
+  role: greeter
+  summary: Greets the author of a work item and proposes nothing else.
+agent:
+  slug: greeter
+  display_name: Greeter
+  description: Says hello to the author of a work item.
+  tags: [example]
+  spec:
+    instructions: |
+      Greet the author of the work item by name, in one sentence.
+
+      ## Output
+      The greeting.
+    skills:
+      - { slug: greeting }

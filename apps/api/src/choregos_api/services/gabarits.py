@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 from choregos_core import preset_yaml, template_yaml
+from choregos_core.paths import PathOutsideError, files_under, inside, symlinks_under
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,14 +53,21 @@ class Livraison:
 
 
 async def manifeste_du_gabarit(
-    session: AsyncSession, template_ref: str | None
+    session: AsyncSession, template_ref: str | None, org_id: str | None = None
 ) -> tuple[dict[str, Any], Path | None]:
     """Le manifeste de `nom[@version]`, et le dossier du gabarit quand il est sur disque.
 
     Un gabarit publié en base n'a pas de dossier : il ne peut livrer que des workflows du cœur.
+    `plugin:<plugin>/<template>` names a template an installed plugin of `org_id` brought: it carries its
+    files (ADR 0093, S43-04).
     """
     if not template_ref:
         return {}, None
+    if template_ref.startswith("plugin:"):
+        from .plugin_installer import plugin_template
+
+        manifest, folder = await plugin_template(session, org_id, template_ref)
+        return manifest, folder
     nom, _, version = template_ref.partition("@")
     requete = select(Template).where(Template.name == nom)
     if version:
@@ -109,11 +117,10 @@ def _chemin_du_gabarit(ref: str, dossier: Path | None) -> Path:
     """Un chemin que nomme le manifeste : dans le dossier du gabarit, jamais au-dehors."""
     if dossier is None:
         raise unprocessable(f"`{ref}`: a template published in the database carries no file")
-    racine = dossier.resolve()
-    chemin = (racine / ref).resolve()
-    if not chemin.is_relative_to(racine):
-        raise unprocessable(f"`{ref}` goes outside the template's folder")
-    return chemin
+    try:
+        return inside(dossier, ref)
+    except PathOutsideError as erreur:
+        raise unprocessable(f"`{ref}` goes outside the template's folder") from erreur
 
 
 #: Un gabarit nomme un agent ou une skill du catalogue de la plateforme par `catalogue:<nom>` (ADR 0040).
@@ -165,13 +172,10 @@ def _fichiers_du_dossier(ref: str, dossier: Path | None, quoi: str) -> dict[str,
     racine = _chemin_du_gabarit(ref, dossier)
     if not racine.is_dir():
         raise unprocessable(f"`{ref}`: {quoi} missing from the template")
-    fichiers: dict[str, str] = {}
-    for chemin in sorted(racine.rglob("*")):
-        if chemin.is_symlink():
-            raise unprocessable(f"`{ref}`: symbolic link refused ({chemin.name})")
-        if chemin.is_file():
-            fichiers[chemin.relative_to(racine).as_posix()] = chemin.read_text(encoding="utf-8")
-    return fichiers
+    liens = symlinks_under(racine)
+    if liens:
+        raise unprocessable(f"`{ref}`: symbolic link refused ({Path(liens[0]).name})")
+    return {nom: chemin.read_text(encoding="utf-8") for nom, chemin in files_under(racine).items()}
 
 
 def _source_du_workflow(ref: str, dossier: Path | None) -> str:

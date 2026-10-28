@@ -14,6 +14,7 @@ from rich.table import Table
 
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
+from .plugins import plugin_app
 
 app = typer.Typer(
     add_completion=True, help="Choregos — a work item comes in, a controlled release comes out."
@@ -41,6 +42,7 @@ app.add_typer(findings_app, name="findings")
 app.add_typer(workflow_app, name="workflow")
 app.add_typer(dev_app, name="dev")
 app.add_typer(knowledge_app, name="knowledge")
+app.add_typer(plugin_app, name="plugin")
 
 console = Console()
 

@@ -135,6 +135,78 @@ class OciRegistryClient:
             raise RegistryError(f"`{reference}`: the registry serves {digest} under that digest")
         return digest
 
+    async def pull_artifact(self, reference: str, media_type: str, max_bytes: int) -> tuple[str, bytes]:
+        """An OCI artifact's single layer of `media_type` (a plugin, a plugin index; ADR 0093):
+        `(manifest digest, layer bytes)`. The manifest is read by its digest or tag, its digest
+        computed from its bytes; the layer is downloaded (a registry's redirect to its blob storage
+        is followed, httpx drops the token on another origin), capped at `max_bytes`, and its sha256
+        checked against the manifest's."""
+        ref = parse_ref(reference)
+        host = _DOCKER_HUB_API if ref.registry == DOCKER_HUB else ref.registry
+        scheme = "http" if host.startswith(("localhost", "127.0.0.1")) else "https"
+        base = f"{scheme}://{host}/v2/{ref.repository}"
+        accept = {"Accept": "application/vnd.oci.image.manifest.v1+json"}
+        async with httpx.AsyncClient(
+            transport=self._transport, timeout=self._timeout_s, follow_redirects=False
+        ) as client:
+            url = f"{base}/manifests/{ref.digest or ref.tag}"
+            response = await client.get(url, headers=accept)
+            auth: dict[str, str] = {}
+            if response.status_code == 401:
+                token = await _token(client, response.headers.get("www-authenticate", ""))
+                auth = {"Authorization": f"Bearer {token}"}
+                response = await client.get(url, headers={**accept, **auth})
+            if response.status_code == 404:
+                raise RegistryError(f"`{reference}`: the registry has no such artifact")
+            if response.status_code != 200:
+                raise RegistryError(f"`{reference}`: the registry answered {response.status_code}")
+            if len(response.content) > _MAX_MANIFEST_BYTES:
+                raise RegistryError(f"`{reference}`: the manifest is too large")
+            digest = "sha256:" + hashlib.sha256(response.content).hexdigest()
+            announced = response.headers.get("docker-content-digest")
+            if (announced and announced != digest) or (ref.digest is not None and ref.digest != digest):
+                raise RegistryError(f"`{reference}`: the manifest's bytes do not match its digest")
+            layer = _single_layer(reference, response, media_type)
+            size = layer.get("size", 0)
+            if not isinstance(size, int) or size > max_bytes:
+                raise RegistryError(f"`{reference}`: the artifact is larger than {max_bytes} bytes")
+            blob = await _blob(client, f"{base}/blobs/{layer['digest']}", auth, max_bytes, reference)
+        if "sha256:" + hashlib.sha256(blob).hexdigest() != layer["digest"]:
+            raise RegistryError(f"`{reference}`: the layer's bytes do not match the manifest's digest")
+        return digest, blob
+
+
+def _single_layer(reference: str, response: httpx.Response, media_type: str) -> dict[str, object]:
+    try:
+        manifest = response.json()
+    except ValueError as exc:
+        raise RegistryError(f"`{reference}`: the manifest is not JSON") from exc
+    layers = manifest.get("layers") if isinstance(manifest, dict) else None
+    found = [
+        layer
+        for layer in (layers if isinstance(layers, list) else [])
+        if isinstance(layer, dict) and layer.get("mediaType") == media_type
+    ]
+    if len(found) != 1 or not _DIGEST.match(str(found[0].get("digest", ""))):
+        raise RegistryError(f"`{reference}`: the artifact holds no single `{media_type}` layer")
+    return found[0]
+
+
+async def _blob(
+    client: httpx.AsyncClient, url: str, auth: dict[str, str], max_bytes: int, reference: str
+) -> bytes:
+    chunks: list[bytes] = []
+    received = 0
+    async with client.stream("GET", url, headers=auth, follow_redirects=True) as response:
+        if response.status_code != 200:
+            raise RegistryError(f"`{reference}`: the registry answered {response.status_code} for the layer")
+        async for chunk in response.aiter_bytes():
+            received += len(chunk)
+            if received > max_bytes:
+                raise RegistryError(f"`{reference}`: the artifact is larger than {max_bytes} bytes")
+            chunks.append(chunk)
+    return b"".join(chunks)
+
 
 _CHALLENGE = re.compile(r'(\w+)="([^"]*)"')
 

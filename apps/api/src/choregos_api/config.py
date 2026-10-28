@@ -176,6 +176,28 @@ class Settings(BaseSettings):
     #: Whether cosign checks the transparency log (Rekor). `false` only for a key whose signatures
     #: were never uploaded, an air-gapped registry.
     hosted_cosign_tlog: bool = True
+    #: The plugin sources, default plugins and offline directory (ADR 0093, S43-03): a path to a YAML
+    #: file (`sources`, `defaultPlugins`, `offline`) the chart writes. Empty: no source but the offline one.
+    plugins_config: str = ""
+    #: The offline plugin directory baked into the image; wins over the file's `offline`.
+    plugins_offline: str = ""
+    #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
+    #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
+    plugin_servers: Literal["off", "kubernetes"] = "off"
+    plugin_servers_namespace: str = "choregos-plugins"
+    #: Where a server's image may come from, as registry or repository prefixes matched by path
+    #: segment (the rule of `hosted_registries`). Empty: no server runs. Signatures follow
+    #: `hosted_cosign` and its signer (ADR 0080 §8).
+    plugin_servers_registries: list[str] = Field(default_factory=list)
+    #: The RuntimeClass of the servers' pods (gVisor); empty: the cluster's runtime.
+    plugin_servers_runtime_class: str = ""
+    #: How egress is narrowed: `networkpolicy` (public addresses on the configured ports) or `cilium`
+    #: (a CiliumNetworkPolicy naming the exact hosts).
+    plugin_servers_egress: Literal["networkpolicy", "cilium"] = "networkpolicy"
+    #: The namespace of the API's pods, the only ones a server admits; empty: any namespace.
+    plugin_servers_api_namespace: str = ""
+    plugin_servers_cpu: str = "500m"
+    plugin_servers_memory: str = "512Mi"
     #: The base image of each zip runtime, `ref@sha256:…`, over the shipped ones (ADR 0080 §9):
     #: `{"python_3_13": "registry.internal/python:3.13-slim@sha256:…"}`.
     hosted_base_images: dict[str, str] = Field(default_factory=dict)

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/plugin-index.schema.json",
+  "title": "PluginIndex",
+  "description": "A plugin source's index, index.yaml: name → versions → where and what (ADR 0093).",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "plugins"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "release": {
+      "type": "object",
+      "description": "one published version: exactly one of `oci` or `git`",
+      "required": [
+        "digest",
+        "core"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "sha256 of the plugin's canonical tar; checked after every fetch"
+        },
+        "core": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "the plugin's `metadata.core` range"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "oci": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._/:@-]{0,254}$",
+          "description": "an OCI artifact reference (application/vnd.choregos.plugin.v1.tar+gzip)"
+        },
+        "git": {
+          "type": "object",
+          "required": [
+            "url",
+            "commit"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "url": {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 512
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$",
+              "description": "a commit SHA; a branch or a tag is refused"
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 255,
+              "description": "the plugin's directory in the repository"
+            }
+          }
+        }
+      },
+      "if": {
+        "required": [
+          "oci"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "git"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "git"
+        ]
+      }
+    }
+  },
+  "properties": {
+    "apiVersion": {
+      "const": "choregos/v1"
+    },
+    "kind": {
+      "const": "PluginIndex"
+    },
+    "plugins": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "versions"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "versions": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": {
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\\+[0-9a-zA-Z-]+(\\.[0-9a-zA-Z-]+)*)?$"
+            },
+            "additionalProperties": {
+              "$ref": "#/$defs/release"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,8 @@
 # 0067 — A procedure per connector type and per external agent type
 
+> **Amended by [ADR 0093](0093-an-agent-ships-as-a-plugin.md)**: a procedure may come with its plugin
+> (`contents.procedures`), validated like a core procedure, and leaves when the plugin is uninstalled.
+
 - **Status**: accepted, 2026-10-16
 - **Concerns**: `choregos_core.procedures` (the files and the loader), the API (`GET /procedures`),
   the contract (`openapi.yaml`), the console (a side panel at every "add" gesture), the chart
@@ -33,7 +36,9 @@ type, shown when one is added.
    shape is what lets a test hold fifty files to the same standard, and a person always finds the
    failure table in the same place.
 3. **Placeholders are filled by the deployment.** `{{api_url}}`, `{{public_url}}`, `{{org}}`,
-   `{{webhook_url:<source>}}` (the routes of `routers/webhooks.py`) and `{{oauth_callback:remote}}`. An
+   `{{webhook_url:<source>}}` (the routes of `routers/webhooks.py`), `{{plugin_webhook_url:<plugin>/<server>}}`
+   (`/api/v1/webhooks/plugins/<org>/<plugin>/<server>`, ADR 0093; a plugin's procedure may name only its own
+   servers that declare a webhook) and `{{oauth_callback:remote}}`. An
    unknown placeholder is a validation error, never an empty string. `values` lists the ones the console
    shows as copy boxes.
 4. **Served by the API**: `GET /procedures` (the index; `?for=connector:documents/sharepoint`, `source:web`,

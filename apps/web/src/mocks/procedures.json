@@ -2733,6 +2733,62 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.tracker.plugin",
+    "title": "Use a plugin's server as the board",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "tracker/plugin"
+    },
+    "link": null,
+    "reviewed": "2026-10-28",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A plugin installed in the organisation whose server is a tracker (Catalogue, **Plugins**: the server\n  says `tracker`). The plugin's own procedure says how to reach its system; follow it first.\n- The server **configured and running** (status `deployed`). A server that is installed but not\n  configured runs no replica, and a project cannot use it."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Nothing here: the plugin's own procedure covers its system — the account, its rights, and the webhook\nthe system posts to."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The account the plugin's server uses is the one its procedure asks for. Choregos itself needs nothing\nmore: it reaches the server inside the cluster with the server's own token, never with a key of yours."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Plugin server**.\n2. `plugin`: the plugin's name. `server`: its server's name.\n3. Nothing else: where the server answers and its token are read from the organisation's connector each\n   time, never typed nor stored on the project.\n\nA project created from a plugin's template whose tracker is `plugin:<plugin>/<server>` gets this\nconnector by itself."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector: it asks the server for its candidate items. Then create an item in the\nsystem the plugin connects and watch it appear on the board."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `422` when saving: the plugin is not installed in the organisation, or its server is not `deployed` —\n  configure the server first.\n- `404` on the webhook: the URL must name this organisation, the plugin and the server\n  (`/api/v1/webhooks/plugins/<org>/<plugin>/<server>`), and the server must declare a `webhook`.\n- `401` on the webhook: the server did not recognise the delivery — its own secret differs from the one\n  the system sends. See the plugin's procedure.\n- Nothing appears on the board: the item belongs to no project of the organisation on this tracker, or\n  the organisation has several such projects and none holds the item yet."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "plugin": "the name of an installed plugin whose server declares `implements: [tracker]`",
+      "server": "the name of that server, as listed under the plugin in Catalogue, Plugins"
+    },
+    "vendor_docs": [
+      {
+        "title": "Writing a plugin: the tracker profile",
+        "url": "https://github.com/VargaFoundation/choregos/blob/main/docs/plugins.md"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.web_search.brave",
     "title": "Search the web through Brave Search API",
     "version": 1,

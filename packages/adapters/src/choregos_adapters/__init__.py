@@ -8,6 +8,7 @@ la décision est dans `packages/core`, l'orchestration dans `apps/orchestrator`.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -207,6 +208,20 @@ from .netops.cilium import CiliumNetwork as _CiliumNetwork  # noqa: E402 - after
 from .netops.nginx import NginxConfig as _NginxConfig  # noqa: E402 - after the registry
 from .netops.pfsense import PfSenseFirewall as _PfSenseFirewall  # noqa: E402 - after the registry
 
+_PLUGIN_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+
+
+def _check_plugin_tracker(cfg: dict[str, Any]) -> None:
+    """A project's `tracker/plugin` names a plugin and its server, nothing else: where the server
+    answers and its token are the platform's, injected when the adapter is built, never typed."""
+    extra = sorted(set(cfg) - {"plugin", "server"})
+    if extra:
+        raise ConfigurationError(f"a plugin tracker is configured by `plugin` and `server` only, not {extra}")
+    for field in ("plugin", "server"):
+        if not _PLUGIN_NAME.match(str(cfg.get(field) or "")):
+            raise ConfigurationError(f"a plugin tracker needs `{field}`, a plugin or server name")
+
+
 #: La configuration d'un type `demo` : rien, ou l'adresse du processus qui sert les faux.
 _CONFIGURATION_DE_DEMO = _objet(
     {
@@ -254,6 +269,18 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("base_url", "email", "project_key"),
         ),
         ("api_token", "webhook_secret"),
+    ),
+    ("tracker", "plugin"): ConnectorTypeSpec(
+        "a plugin's server (tracker profile, S43-07)",
+        ("tracker",),
+        _objet(
+            {
+                "plugin": {"type": "string", "description": "the installed plugin"},
+                "server": {"type": "string", "description": "its server that `implements: [tracker]`"},
+            },
+            ("plugin", "server"),
+        ),
+        check_config=_check_plugin_tracker,
     ),
     ("tracker", "gitlab-issues"): ConnectorTypeSpec(
         "GitLab Issues",
@@ -978,6 +1005,22 @@ def _register_web_search() -> None:
     register("web_search", "fake")(_faux_web_search)
 
 
+def _plugin_tracker(cfg: dict[str, Any]) -> Any:
+    """`tracker/plugin`: built from what the platform injects (`url`, `token`, `audit`, read from the
+    organisation's connector of the server), never from typed values (S43-07)."""
+    from .plugin_servers import PluginServerClient
+    from .tracker.plugin import PluginTracker
+
+    _check_plugin_tracker({k: v for k, v in cfg.items() if k in {"plugin", "server"}})
+    if not cfg.get("url") or not cfg.get("token"):
+        raise ConfigurationError(
+            f"the plugin tracker `{cfg.get('plugin')}/{cfg.get('server')}` is built by the platform "
+            "from the organisation's connector of that server, which it could not read"
+        )
+    client = PluginServerClient(str(cfg["url"]), token=str(cfg["token"]), transport=cfg.get("transport"))
+    return PluginTracker(client, str(cfg["plugin"]), str(cfg["server"]), audit=cfg.get("audit"))
+
+
 def _register_builtins() -> None:
     """Enregistre les implémentations livrées (import paresseux pour éviter les cycles)."""
     from .fakes import (
@@ -1055,6 +1098,7 @@ def _register_builtins() -> None:
             field_names=cfg.get("field_names"),
         )
     )
+    register("tracker", "plugin", _SPECS_LIVREES[("tracker", "plugin")])(_plugin_tracker)
     register("tracker", "gitlab-issues", _SPECS_LIVREES[("tracker", "gitlab-issues")])(
         lambda cfg: GitLabTracker(
             RestClient(

@@ -28,7 +28,19 @@
         "connectors": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "description": "kind → expected type, e.g. tracker: github-issues"
+          "if": { "required": ["tracker"] },
+          "then": {
+            "properties": {
+              "tracker": {
+                "$comment": "under `then`, not `properties`: a typed optional key beside a string index does not compile in TypeScript",
+                "anyOf": [
+                  { "pattern": "^plugin:[a-z0-9][a-z0-9-]{0,62}/[a-z0-9][a-z0-9-]{0,62}$" },
+                  { "not": { "pattern": "^plugin:" } }
+                ]
+              }
+            }
+          },
+          "description": "kind → expected type, e.g. tracker: github-issues; the tracker may be `plugin:<plugin>/<server>`, the server of a plugin that declares `implements: [tracker]` (ADR 0093, S43-05b; checked when the plugin is validated, run by S43-07)"
         },
         "cluster_capabilities": { "type": "array", "items": { "type": "string" } },
         "azure_capabilities": {

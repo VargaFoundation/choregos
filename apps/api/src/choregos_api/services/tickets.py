@@ -285,7 +285,10 @@ async def tracker_du_projet(session: AsyncSession, project: Project) -> tuple[Co
     from .github_app import pin_installation
 
     try:
+        from .plugin_tracker import pin_plugin_tracker
+
         pinned = await pin_installation(session, project.org_id, "tracker", row.type, row.config)
+        pinned = await pin_plugin_tracker(session, project.org_id, "tracker", row.type, pinned)
         config = configuration_resolue("tracker", row.type, pinned, row.secret_refs, row.secret_ref)
         return row, build("tracker", row.type, config)
     except (AdapterError, SecretIntrouvable, ValueError, KeyError) as erreur:

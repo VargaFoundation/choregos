@@ -35,6 +35,9 @@ async def check_connector(session: AsyncSession, ctx: ProjectContext, row: Conne
         config = await resolved_configuration(
             session, ctx.project.org_id, row.kind, row.type, row.config, row.secret_refs, row.secret_ref
         )
+        from .plugin_tracker import pin_plugin_tracker
+
+        config = await pin_plugin_tracker(session, ctx.project.org_id, row.kind, row.type, config)
         adapter = build(row.kind, row.type, config)
         checks.append(ConnectorCheck(name="construction", ok=True, detail=type(adapter).__name__))
         tester = getattr(adapter, "test", None)

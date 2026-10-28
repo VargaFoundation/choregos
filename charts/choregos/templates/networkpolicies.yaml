@@ -44,6 +44,11 @@ spec:
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-buildkitd } } }]
       ports: [{ protocol: TCP, port: {{ int ((.Values.global.buildkitd | default dict).port | default 1234) }} }]
     {{- end }}
+    {{- $servers := ((.Values.global.plugins | default dict).servers | default dict) }}
+    {{- if $servers.enabled }}
+    # Plugin servers (ADR 0096): their own NetworkPolicy admits the API's pods only.
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ ($servers.namespace | default dict).name | default "choregos-plugins" }} } } }]
+    {{- end }}
     {{- if .Values.demoFakes.enabled }}
     # The fakes served for a demonstration (S20-07): the API and the orchestrator reach them.
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-demo-fakes } } }]

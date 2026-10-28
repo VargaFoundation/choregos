@@ -36,6 +36,7 @@ from ..schemas import (
     ProvisionStep,
 )
 from ..services import ensure_defaults, persist_event, project_dto
+from ..services.plugin_tracker import wire_template_tracker
 from ..temporal import get_temporal, provisioning_id
 
 router = APIRouter(tags=["projects"])
@@ -102,6 +103,11 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     await record(
         session, principal, "org.create", org_id=org.id, target_type="org", target_id=org.id, slug=body.slug
     )
+    # The deployment's default plugins (ADR 0093 §5): a new organisation gets them as the others did at
+    # start-up; one that brings a server waits for an administrator's approval.
+    from ..services.plugin_defaults import reconcile_org
+
+    await reconcile_org(session, org.id)
     return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN, currency=moneta(org))
 
 
@@ -280,6 +286,8 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
     session.add(project)
     await session.flush()
     await ensure_defaults(session, project)
+    # A template whose tracker is a plugin's server wires it, or refuses the project (S43-07).
+    await wire_template_tracker(session, project)
     session.add(
         Membership(
             user_id=principal.user_id,

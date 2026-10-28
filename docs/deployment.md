@@ -629,6 +629,92 @@ A refused file is logged (`procedures.file.refused`) and skipped: the API still 
 files still apply. A plugin can supply the same directory through a `choregos.procedures` entry point
 whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EXTRA`.
 
+## Plugins
+
+A plugin packages agents, skills, templates, evals, procedures and MCP servers in one signed format
+([ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md), [writing one](plugins.md)). The deployment says
+where plugins come from, which ones every organisation gets, and which ones are baked into the image:
+
+```yaml
+global:
+  plugins:
+    sources:
+      - name: varga
+        index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable   # or https://…/index.yaml
+        trust:                    # a keyless cosign signer (regular expressions, matched whole)…
+          identity: https://github.com/VargaFoundation/choregos-agents/.*
+          issuer: https://token.actions.githubusercontent.com
+          # key: /etc/choregos/plugins-keys/acme.pub   # …or a public key, mounted with api.extraVolumes
+        egress: []                # hosts its fetches may reach beyond the index's own
+    defaultPlugins:
+      - { source: varga, name: servicenow, version: "^0.1" }
+    offline: /opt/choregos/plugins   # plugins baked into the image: air-gapped, demo, CI
+```
+
+The chart renders these values into the ConfigMap `choregos-plugins`, mounted read-only in the API at
+`/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. All three are empty by
+default: nothing is rendered and no plugin is installed. A source without `trust` refuses to render;
+there is no unsigned source.
+
+**At start-up**, the API reads the file before it serves anything. A file it cannot read, an invalid
+source, a default plugin naming an undeclared source, an `offline` directory that does not exist in the
+image, or two different offline directories (`offline` here and `CHOREGOS_PLUGINS_OFFLINE` in the
+image's environment; set one) stop the API with a message naming the setting, rather than a 500 at the
+first install.
+
+**Default plugins.** Once started, the API installs each `defaultPlugins` entry in every organisation,
+in the background (a slow registry never holds the readiness probe), and in each organisation created
+later, at its creation:
+
+- it is idempotent: an organisation that has the plugin, at any version, is left alone; running it
+  again changes nothing. Moving to a newer version stays an administrator's gesture (an upgrade);
+- each replica runs it, one organisation at a time under a PostgreSQL advisory lock: two replicas
+  starting together take turns, and the second finds everything done;
+- every fetch passes the same checks as an administrator's install (index, signature, pinned commit,
+  digest, `plugins.lock`, contents, core range). A plugin that fails is logged
+  (`plugin.default.failed`) and the others go on;
+- a default plugin that brings an MCP server is **not** installed by the platform: it waits for an
+  administrator's approval, like any plugin with a server. It is logged
+  (`plugin.default.pending_approval`) and listed by `GET /api/v1/orgs/{org}/plugin-approvals` with
+  `default: true`; any administrator of the organisation approves it there.
+
+What the reconcile installed is listed with `default: true` and `installed_by: null`. The summary of
+each pass is the log line `plugin.default.reconciled` (installed, waiting, failed).
+
+**Egress.** Fetches go through the API's egress guard, opened for each source's own hosts within the
+deployment's ceiling (`global.egress`); the API's network policy must also let it reach the index and
+registry hosts (`choregos-api.egressHosts` documents them for the catalogues).
+
+### Plugin servers
+
+A plugin's MCP server runs in the cluster, started by the API ([ADR 0096](adr/0096-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md),
+[what a server must do](plugins.md#servers)). Off by default: a plugin that brings one is refused.
+
+```yaml
+global:
+  plugins:
+    servers:
+      enabled: true
+      namespace: { name: choregos-plugins, create: false }   # create: true renders the Namespace too
+      registries: [ghcr.io/vargafoundation/choregos-agents]   # where a server's image may come from
+      runtimeClass: ""          # empty: global.runner.runtimeClass, else the cluster's runtime
+      egress: networkpolicy     # or cilium: a CiliumNetworkPolicy names the exact hosts
+      resources: { limits: { cpu: 500m, memory: 512Mi } }
+```
+
+With `enabled`, the chart renders a Role in that namespace (Deployments, Services, NetworkPolicies,
+Secrets; CiliumNetworkPolicies with `egress: cilium`) bound to the API's ServiceAccount, nothing
+cluster-wide, and opens the platform's egress towards the namespace. The namespace must not be the
+release's. Per organisation and server the API writes a Deployment, a Service, a NetworkPolicy (ingress
+from the API's pods only) and a Secret, named `<server>-<hash of the organisation>` and labelled
+`choregos.dev/plugin`, `choregos.dev/server`, `choregos.dev/org`.
+
+What stays with the operator: the namespace (unless `create`), the registry allowlist in two places —
+`registries` here and the prefix of the Kyverno policy `choregos-plugin-server-images`
+(`infra/policies/plugin-servers.yaml`, the namespace name too if it is not `choregos-plugins`) — and,
+for `cilium`, a cluster that runs Cilium with its DNS proxy. Signatures follow `images.hostedCosign`
+and its signer.
+
 ## Multi-tenant installations
 
 For a tenant that may not create cluster-scoped resources:

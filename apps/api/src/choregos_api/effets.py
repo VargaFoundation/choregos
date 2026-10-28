@@ -24,8 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.models import Action, ConnectorOperation, OrgConnector, Project
-from .secret_store import resolved_configuration
-from .services.platform_network import PlatformNetworkRefused, enforce_connector_call, with_identity
+from .services.platform_network import PlatformNetworkRefused, enforce_connector_call
 
 
 class EffetRefuse(Exception):  # noqa: N818 - un refus définitif, rendu tel quel
@@ -126,7 +125,6 @@ async def _appeler_le_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> 
 
     L'action a été approuvée : une opération `approval` s'exécute donc ; une `forbidden` non."""
     import httpx
-    from choregos_adapters import build
     from choregos_adapters.errors import AdapterError, UpstreamError
     from choregos_adapters.mcp import ErreurMcp
     from choregos_contracts import ActionStatus
@@ -156,6 +154,7 @@ async def _appeler_le_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> 
         )
     ).scalar_one_or_none()
     from .services.connecteurs import politique_pour_le_projet
+    from .services.plugin_servers import connector_client
 
     # Celle du PROJET : l'organisation, resserrée par le projet, bornée par ses groupes. Une action
     # approuvée joue une opération `approval` ; une opération que ce projet s'interdit, jamais.
@@ -174,19 +173,8 @@ async def _appeler_le_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> 
     arguments.update(await _arguments_de_la_plateforme(ctx, instance, operation, arguments))
     await _within_the_network_bounds(ctx, instance, f"{nom}/{operation}")
     try:
-        config = await with_identity(
-            ctx.session,
-            instance.org_id,
-            await resolved_configuration(
-                ctx.session,
-                instance.org_id,
-                instance.kind,
-                instance.type,
-                instance.config,
-                instance.secret_refs,
-            ),
-        )
-        client = build(instance.kind, instance.type, config)
+        # A plugin's server (ADR 0096): its Service, its bearer token; any other: its type's adapter.
+        client: Any = await connector_client(ctx.session, instance)
         if hasattr(client, "call_tool"):
             resultat = await client.call_tool(operation, arguments)
             if resultat.get("isError"):
@@ -223,11 +211,14 @@ async def _arguments_de_la_plateforme(
     import hashlib
     import json
 
-    from choregos_adapters import operation_spec
+    from .services.connecteurs import declared_operation
 
-    declared = operation_spec(instance.kind, instance.type, operation)
+    declared = declared_operation(instance, operation)
     if declared is None or not declared.platform_arguments:
         return {}
+    # The platform's, never the agent's: what an agent wrote under these names is dropped first.
+    for name in declared.platform_arguments:
+        arguments.pop(name, None)
     filled: dict[str, Any] = {}
     if "action_key" in declared.platform_arguments:
         canonical = json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str)

@@ -337,6 +337,46 @@ global:
     org: ""
     orgName: ""
     admins: ""
+  # Plugins (ADR 0093, docs/deployment.md#plugins): where they come from, which ones every organisation
+  # gets, and the directory of plugins baked into the image. Rendered into the ConfigMap
+  # `choregos-plugins` (`CHOREGOS_PLUGINS_CONFIG`); an unusable configuration stops the API at start-up.
+  plugins:
+    # Each source: an index (`oci://…` or `https://…/index.yaml`) and a trust policy, a keyless cosign
+    # identity and issuer, or `key:` a public key file mounted in the API (`api.extraVolumes`). Never
+    # unsigned. `egress`: hosts its fetches may reach beyond the index's own.
+    #   - name: varga
+    #     index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable
+    #     trust:
+    #       identity: https://github.com/VargaFoundation/choregos-agents/.*
+    #       issuer: https://token.actions.githubusercontent.com
+    sources: []
+    # Installed in every organisation at start-up and at its creation, idempotently. One that brings a
+    # server waits for an administrator's approval. The source `offline` is the directory below.
+    #   - { source: varga, name: servicenow, version: "^0.1" }
+    defaultPlugins: []
+    # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none.
+    offline: ""
+    # Plugin servers (ADR 0096): the MCP servers plugins bring, run by the API as a Deployment, a
+    # Service, a NetworkPolicy and a Secret per organisation and server, in their own namespace. Off: a
+    # plugin that brings a server is refused. On: the chart grants the API a Role in that namespace only.
+    servers:
+      enabled: false
+      namespace:
+        name: choregos-plugins
+        # Render the Namespace too; false when the platform team lays it down.
+        create: false
+      # Where a server's image may come from, as registry or repository prefixes matched by path
+      # segment (the rule of `global.images.hostedRegistries`). Empty: no server runs. Images are
+      # pinned by digest (the plugin contract) and signed per `global.images.hostedCosign`.
+      #   registries: [ghcr.io/vargafoundation/choregos-agents]
+      registries: []
+      # The RuntimeClass of the servers' pods; empty: `global.runner.runtimeClass`, else the cluster's.
+      runtimeClass: ""
+      # networkpolicy: egress to public addresses on the configured ports (Kubernetes cannot name a
+      # host); cilium: a CiliumNetworkPolicy that names the exact hosts (`toFQDNs`).
+      egress: networkpolicy
+      resources:
+        limits: { cpu: 500m, memory: 512Mi }
   # Development login (`/auth/login?as=<email>`), without an IdP. NEVER in production:
   # the API refuses it by itself in staging/prod. `adminEmails`: who receives ORG_ADMIN.
   devLogin:

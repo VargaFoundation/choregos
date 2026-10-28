@@ -97,6 +97,35 @@ spec:
             - name: CHOREGOS_PROCEDURES_EXTRA
               value: /etc/choregos/procedures
             {{- end }}
+            {{- with (.Values.global.plugins | default dict) }}
+            {{- if or .sources .defaultPlugins .offline }}
+            # Plugin sources, default plugins, offline directory (ADR 0093): the ConfigMap `choregos-plugins`.
+            - name: CHOREGOS_PLUGINS_CONFIG
+              value: /etc/choregos/plugins/plugins.yaml
+            {{- end }}
+            {{- end }}
+            {{- $servers := ((.Values.global.plugins | default dict).servers | default dict) }}
+            {{- if $servers.enabled }}
+            # Plugin servers (ADR 0096): run by the API in their namespace, through its Role there.
+            - name: CHOREGOS_PLUGIN_SERVERS
+              value: kubernetes
+            - name: CHOREGOS_PLUGIN_SERVERS_NAMESPACE
+              value: {{ ($servers.namespace | default dict).name | default "choregos-plugins" | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_REGISTRIES
+              value: {{ toJson ($servers.registries | default list) | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_RUNTIME_CLASS
+              value: {{ $servers.runtimeClass | default ((.Values.global.runner | default dict).runtimeClass | default "") | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_EGRESS
+              value: {{ $servers.egress | default "networkpolicy" | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_API_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            {{- with (($servers.resources | default dict).limits | default dict) }}
+            - name: CHOREGOS_PLUGIN_SERVERS_CPU
+              value: {{ .cpu | default "500m" | quote }}
+            - name: CHOREGOS_PLUGIN_SERVERS_MEMORY
+              value: {{ .memory | default "512Mi" | quote }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.global.agents }}
             {{- if .defaultBackend }}
             # The backend and the profiles a new project inherits (#245).
@@ -287,6 +316,11 @@ spec:
             {{- with .Values.proceduresExtra }}
             - { name: procedures-extra, mountPath: /etc/choregos/procedures, readOnly: true }
             {{- end }}
+            {{- with (.Values.global.plugins | default dict) }}
+            {{- if or .sources .defaultPlugins .offline }}
+            - { name: plugins-config, mountPath: /etc/choregos/plugins, readOnly: true }
+            {{- end }}
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -315,9 +349,15 @@ spec:
         - name: procedures-extra
           configMap: { name: {{ . }} }
         {{- end }}
+        {{- with (.Values.global.plugins | default dict) }}
+        {{- if or .sources .defaultPlugins .offline }}
+        - name: plugins-config
+          configMap: { name: choregos-plugins }
+        {{- end }}
+        {{- end }}
         {{- /* Volumes the chart owns: a name of `extraVolumes` that collides with one of them would
              give an invalid pod, or worse, silently replace a mount. */}}
-        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" "procedures-extra" "cosign" }}
+        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" "mcp-catalogue" "procedures-extra" "cosign" "plugins-config" }}
         {{- range (.Values.extraVolumes | default list) }}
         {{- if has .name $owned }}
         {{- fail (printf "extraVolumes: %q is a volume of the chart; pick another name" .name) }}

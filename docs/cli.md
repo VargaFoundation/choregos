@@ -313,6 +313,66 @@ Options:
   --help  Show this message and exit.
 ```
 
+## `choregos plugin`
+
+Plugins: validate, pack and index them (ADR 0093)
+
+### `choregos plugin index`
+
+```text
+Usage: choregos plugin index [OPTIONS] {directory}
+
+  Write a source index (plugin-index.schema.json) for every plugin under
+  DIRECTORY, located either in an OCI repository or in a git commit.
+
+Arguments:
+  directory  A directory whose subdirectories are plugins.  [required]
+
+Options:
+  -o, --output <path>     The index to write (index.yaml).  [required]
+  --oci-repository <str>  Plugins are published as
+                          <repository>/<name>:<version>.
+  --git-url <str>         Plugins are read from this repository.
+  --git-commit <str>      The commit (40 hex characters) they are read at.
+  --git-path <str>        Where DIRECTORY sits in the repository, e.g.
+                          plugins.
+  --help                  Show this message and exit.
+```
+
+### `choregos plugin pack`
+
+```text
+Usage: choregos plugin pack [OPTIONS] {directory}
+
+  Validate, then write a reproducible archive of the declared files only
+  (plugin.yaml, README.md and LICENSE when present, and what `contents`
+  names): sorted entries, time 0, owner 0. The same files always give the same
+  bytes, and the printed digest is the one an index records.
+
+Arguments:
+  directory  The plugin directory.  [required]
+
+Options:
+  -o, --output <path>  The archive to write (.tar.gz).  [required]
+  --help               Show this message and exit.
+```
+
+### `choregos plugin validate`
+
+```text
+Usage: choregos plugin validate [OPTIONS] {path}
+
+  Check a plugin and everything it ships; print its name, version and content
+  digest. Only what plugin.yaml declares is read: a server's source or a .venv
+  beside it is ignored.
+
+Arguments:
+  path  A plugin directory or a packed .tar.gz.  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
 ## `choregos projects`
 
 Projects

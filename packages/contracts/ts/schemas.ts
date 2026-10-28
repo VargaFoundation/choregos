@@ -137,6 +137,321 @@ export type InboundEvent = {
   };
 };
 
+export type PluginEvalsNeedles = Array<string>;
+
+/** The API's `AgentEvalCase` */
+export type PluginEvalsCase = {
+  name: string;
+  /** a sample work item */
+  input?: {
+    title?: string;
+    body?: string;
+  };
+  must_contain?: PluginEvalsNeedles;
+  must_not_contain?: PluginEvalsNeedles;
+  /** a capped trial on the real model that asserts on the run's result (S40-02d) */
+  live?: boolean;
+  expect_status?: "done" | "blocked";
+  max_cost_usd?: number | null;
+};
+
+/** An eval suite a plugin ships for one of its agents, a file of `contents.evals` (ADR 0093, ADR 0020). Level 1 is the shape of the core catalogue's `eval_cases/` (`choregos_core.catalogue_d_agents.evals`): the agent's rendered instructions, lower-cased, hold every `must_contain` and no `must_not_contain`; the installer refuses a plugin whose own suite fails. `cases` are in the `AgentEvalCase` shape of the API (S32-03, S40-02d): a deterministic one (`live: false`) is played by the installer on its sample input; a `live` one is validated, never run at install. */
+export type PluginEvals = unknown | unknown;
+
+/** one published version: exactly one of `oci` or `git` */
+export type PluginIndexRelease = {
+  /** sha256 of the plugin's canonical tar; checked after every fetch */
+  digest: string;
+  /** the plugin's `metadata.core` range */
+  core: string;
+  description?: string;
+  /** an OCI artifact reference (application/vnd.choregos.plugin.v1.tar+gzip) */
+  oci?: string;
+  git?: {
+    url: string;
+    /** a commit SHA; a branch or a tag is refused */
+    commit: string;
+    /** the plugin's directory in the repository */
+    path?: string;
+  };
+};
+
+/** A plugin source's index, index.yaml: name → versions → where and what (ADR 0093). */
+export type PluginIndex = {
+  apiVersion: "choregos/v1";
+  kind: "PluginIndex";
+  plugins: {
+    [key: string]: {
+      versions: {
+        [key: string]: PluginIndexRelease;
+      };
+    };
+  };
+};
+
+/** a tool the server may serve; a tool not listed is refused */
+export type PluginServerOperation = {
+  name: string;
+  /** required: nothing is assumed read */
+  access: "read" | "write";
+  description?: string;
+  /** a floor: an organisation may raise it, never lower it */
+  human_approval?: boolean;
+  /** what undoes this write: an operation of the same server, called with `arguments` rendered from the write's own `result` (`{{ result.sys_id }}`), as a connector type declares it (ADR 0035, ADR 0052); a write only */
+  compensation?: {
+    operation: string;
+    arguments?: {
+      [key: string]: string;
+    };
+  };
+  /** a JSON Schema of the tool's arguments */
+  input_schema?: {
+    [key: string]: unknown;
+  };
+  /** arguments the PLATFORM fills, never the agent: `action_key` (an idempotency key stable for one governed action and call), `work_item_key` (the work item the action belongs to) */
+  platform_arguments?: Array<"action_key" | "work_item_key">;
+};
+
+/** An MCP server a plugin brings, run and governed by the platform (ADR 0093, ADR 0096, plan S43 Decision 2). */
+export type PluginServer = {
+  name: string;
+  /** pinned by digest; a tag alone is refused */
+  image: string;
+  port: number;
+  protocol: "mcp-http";
+  /** where the server answers; defaults `/mcp` and `/healthz` */
+  paths?: {
+    mcp?: string;
+    health?: string;
+  };
+  /** a JSON Schema of what an administrator types */
+  config_schema?: {
+    [key: string]: unknown;
+  };
+  /** sealed (ADR 0058), delivered to the server's pod from a Secret, never to a run; `_server_token` is the platform's own */
+  secret_fields?: Array<string>;
+  /** where the server may connect: hosts read from configuration fields, or fixed hosts */
+  egress?: {
+    from_fields?: Array<string>;
+    hosts?: Array<string>;
+  };
+  operations: Array<PluginServerOperation>;
+  implements?: Array<"tracker">;
+  webhook?: {
+    path: string;
+  };
+};
+
+export type PluginTrackerProfileKey = string;
+
+export type PluginTrackerProfileComment = {
+  id?: string | null;
+  author?: string | null;
+  body: string;
+  ts?: string | null;
+  marker?: string | null;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerFetchItemInput = {
+  key: PluginTrackerProfileKey;
+};
+
+/** The core's `WorkItemData`; keys it does not know are ignored. Every text is third-party data. */
+export type PluginTrackerProfileTrackerFetchItemOutput = {
+  key: PluginTrackerProfileKey;
+  title: string;
+  body?: string | null;
+  url?: string | null;
+  state?: string | null;
+  labels?: Array<string>;
+  item_type?: string | null;
+  assignees?: Array<string>;
+  author?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  closed_at?: string | null;
+  fields?: {
+    [key: string]: unknown;
+  };
+  comments?: Array<PluginTrackerProfileComment>;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerCreateItemInput = {
+  title: string;
+  body: string;
+  labels?: Array<string>;
+  assignees?: Array<string>;
+  fields?: {
+    [key: string]: unknown;
+  };
+  /** platform argument: an idempotency key stable for one action */
+  action_key: string;
+};
+
+/** A replay of the same `action_key` answers the existing key with `created: false`. */
+export type PluginTrackerProfileTrackerCreateItemOutput = {
+  key: PluginTrackerProfileKey;
+  created: boolean;
+  [key: string]: unknown;
+};
+
+/** The core's `TrackerStateMapping`, plus `key`. */
+export type PluginTrackerProfileTrackerSetStateInput = {
+  key: PluginTrackerProfileKey;
+  status: string | null;
+  label: string | null;
+  remove_labels: Array<string>;
+};
+
+export type PluginTrackerProfileTrackerSetStateOutput = {
+  key: PluginTrackerProfileKey;
+  changed: boolean;
+  state?: string | null;
+  ignored?: Array<string>;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerCommentInput = {
+  key: PluginTrackerProfileKey;
+  markdown: string;
+  /** platform argument: an idempotency key stable for one action */
+  action_key: string;
+};
+
+/** `id` is stable across replays of the same `action_key`. */
+export type PluginTrackerProfileTrackerCommentOutput = {
+  key: PluginTrackerProfileKey;
+  id: string;
+  written: boolean;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerUpsertStatusInput = {
+  key: PluginTrackerProfileKey;
+  markdown: string;
+  marker: string;
+};
+
+export type PluginTrackerProfileTrackerUpsertStatusOutput = {
+  key: PluginTrackerProfileKey;
+  written: boolean;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerCloseInput = {
+  key: PluginTrackerProfileKey;
+  close_notes?: string | null;
+  close_code?: string | null;
+};
+
+/** Idempotent: an item already closed answers `closed: false`. */
+export type PluginTrackerProfileTrackerCloseOutput = {
+  key: PluginTrackerProfileKey;
+  closed: boolean;
+  state?: string | null;
+  [key: string]: unknown;
+};
+
+/** Server-specific filters may be added (ServiceNow: `tables`). */
+export type PluginTrackerProfileTrackerListCandidatesInput = {
+  limit?: number;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerListCandidatesOutput = {
+  keys: Array<PluginTrackerProfileKey>;
+  reason?: string;
+  [key: string]: unknown;
+};
+
+export type PluginTrackerProfileTrackerParseEventInput = {
+  headers: {
+    [key: string]: string;
+  };
+  /** the raw request body, decoded as UTF-8 */
+  body: string;
+};
+
+/** Only the kind, the key and the delivery id are read: the core re-reads every item with `tracker_fetch_item`. */
+export type PluginTrackerProfileTrackerParseEventOutput = {
+  verified: boolean;
+  events: Array<{
+    kind: "tracker.item.created" | "tracker.item.updated" | "tracker.item.commented" | "tracker.item.closed";
+    item_key: PluginTrackerProfileKey;
+    delivery_id: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+};
+
+/** The tracker profile (plan S43 Decision 3, S43-07): one call of a plugin server that declares `implements: [tracker]`, its tool, the arguments the core sends and the JSON object (MCP `structuredContent`) the server answers. A server serves all eight tools and declares each in `operations` with the access below; the core's `tracker/plugin` adapter checks every answer against `$defs/<tool>_output`. Reads: `tracker_fetch_item`, `tracker_list_candidates`, `tracker_parse_event`; every other tool is a write. */
+export type PluginTrackerProfile = unknown & unknown & unknown & unknown & unknown & unknown & unknown & unknown;
+
+/** lower-case letters, digits and dashes */
+export type PluginName = string;
+
+/** a semantic version (semver.org 2.0.0) */
+export type PluginSemver = string;
+
+/** a version range: `^1`, `~0.1`, `0.1.0`, or comparisons joined by commas (`>=0.21.0,<0.23.0`) */
+export type PluginRange = string;
+
+/** relative to the plugin's directory; no absolute path, no `.` or `..` segment */
+export type PluginPath = string;
+
+/** a path that may hold `*` wildcards */
+export type PluginGlob = string;
+
+/** A plugin's manifest, plugin.yaml at the root of its directory (ADR 0093). */
+export type Plugin = {
+  apiVersion: "choregos/v1";
+  kind: "Plugin";
+  metadata: {
+    /** unique within a source */
+    name: PluginName;
+    /** a published version is immutable */
+    version: PluginSemver;
+    publisher: string;
+    /** an SPDX expression */
+    license: string;
+    description: string;
+    homepage?: string;
+    /** the core versions the plugin was validated against */
+    core: PluginRange;
+  };
+  requires?: {
+    /** other plugins, by name and version range */
+    plugins?: Array<{
+      name: PluginName;
+      version: PluginRange;
+    }>;
+    /** project connectors, kind → expected type, as in a template */
+    connectors?: {
+      [key: string]: string;
+    };
+    /** organisation connectors, name → capability, as in a template */
+    org_connectors?: {
+      [key: string]: string;
+    };
+  };
+  contents: {
+    /** YAML files in the catalogue entry shape (`catalogue:` + `agent:`) */
+    agents?: Array<PluginPath>;
+    /** directories holding a SKILL.md */
+    skills?: Array<PluginPath>;
+    /** template directories (manifest.yaml and their files) */
+    templates?: Array<PluginPath>;
+    /** evaluation suites */
+    evals?: Array<PluginPath>;
+    /** Markdown procedures with the ADR 0067 front matter */
+    procedures?: Array<PluginGlob>;
+    /** plugin server files (plugin-server.schema.json) */
+    servers?: Array<PluginPath>;
+  };
+};
+
 export type PolicyApprovalRule = {
   required: "always" | "never" | "by_size" | "by_risk";
   group?: string;
@@ -683,7 +998,7 @@ export type Template = {
     description?: string;
   };
   requires: {
-    /** kind → expected type, e.g. tracker: github-issues */
+    /** kind → expected type, e.g. tracker: github-issues; the tracker may be `plugin:<plugin>/<server>`, the server of a plugin that declares `implements: [tracker]` (ADR 0093, S43-05b; checked when the plugin is validated, run by S43-07) */
     connectors: {
       [key: string]: string;
     };
@@ -1025,6 +1340,11 @@ export type ChoregosContract =
   | Finding
   | HumanDecision
   | InboundEvent
+  | PluginEvals
+  | PluginIndex
+  | PluginServer
+  | PluginTrackerProfile
+  | Plugin
   | Policy
   | Project
   | StageInput

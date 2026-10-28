@@ -2708,6 +2708,140 @@ export type OutboundProxyTest = {
   target: string;
 };
 
+/** What an installed plugin brought, by the identifier each item has in the organisation. */
+export type PluginContents = {
+  /** agent slugs */
+  agents: Array<string>;
+  skills: Array<string>;
+  templates: Array<string>;
+  evals: Array<string>;
+  /** procedure ids (ADR 0067) */
+  procedures: Array<string>;
+  servers: Array<string>;
+};
+
+export type InstalledPlugin = {
+  name: string;
+  version: string;
+  /** the source's name; `offline` for the deployment's offline directory */
+  source: string;
+  /** sha256 of the plugin's canonical tar */
+  digest: string;
+  publisher: string;
+  license: string;
+  description: string;
+  /** installed because the deployment lists it in `plugins.defaultPlugins` */
+  default: boolean;
+  contents: PluginContents;
+  /** null when the start-up reconcile installed it */
+  installed_by: string | null;
+  installed_at: string;
+  /** the newest version the source offers for this core, when newer than `version` */
+  latest: string | null;
+};
+
+export type PluginList = {
+  items: Array<InstalledPlugin>;
+};
+
+/** How a source's signatures are verified: a keyless cosign identity and issuer, or a public key; `none` only for the offline directory. */
+export type PluginTrust = {
+  mode: "keyless" | "key" | "none";
+  issuer?: string | null;
+  identity?: string | null;
+  /** sha256 of the public key; the key itself is not returned */
+  key_fingerprint?: string | null;
+};
+
+export type PluginSourceEntry = {
+  name: string;
+  description: string | null;
+  /** newest first, each with the core range it was validated against */
+  versions: Array<{
+    version: string;
+    core: string;
+    /** this core is inside `core` */
+    admissible: boolean;
+  }>;
+};
+
+export type PluginSource = {
+  name: string;
+  /** `oci://…`, `https://…` or the offline directory's path */
+  index: string;
+  trust: PluginTrust;
+  plugins: Array<PluginSourceEntry>;
+  /** why the index could not be read; `plugins` is then empty */
+  error: string | null;
+};
+
+export type PluginSources = {
+  sources: Array<PluginSource>;
+};
+
+export type PluginInstall = {
+  source: string;
+  name: string;
+  /** an exact version or a range (`^0.1`, `>=1.2.0,<2`) */
+  version: string;
+};
+
+export type PluginInstallPending = {
+  status: "pending_approval";
+  approval_id: string;
+  /** why a second person must approve, e.g. the plugin brings a server */
+  reason: string;
+};
+
+/** An install or upgrade of a plugin that brings a server, waiting for (or given) a second approval. */
+export type PluginApproval = {
+  id: string;
+  action: "install" | "upgrade";
+  source: string;
+  name: string;
+  /** the exact version that was checked */
+  version: string;
+  digest: string;
+  reason: string;
+  /** asked by the start-up reconcile for a plugin of `plugins.defaultPlugins` */
+  default: boolean;
+  /** null when the platform asked (a default plugin) */
+  requested_by: string | null;
+  status: "pending" | "approved";
+  decided_by: string | null;
+  created_at: string;
+  decided_at: string | null;
+};
+
+export type PluginApprovalList = {
+  items: Array<PluginApproval>;
+};
+
+export type PluginKept = {
+  agents: Array<string>;
+  skills: Array<string>;
+};
+
+export type PluginUninstallResult = {
+  name: string;
+  version: string;
+  removed: PluginKept;
+  /** what the organisation changed, a project pins, or a kept agent still carries: now the organisation's own */
+  kept: PluginKept;
+};
+
+export type PluginUpgrade = {
+  /** an exact version or a range; absent, the newest admissible */
+  version?: string;
+};
+
+export type PluginUpgradeResult = {
+  plugin: InstalledPlugin;
+  previous_version: string;
+  /** agent slugs the organisation changed: offered the update, not overwritten (ADR 0040) */
+  offered: Array<string>;
+};
+
 export type RelayOutboundProxy = {
   proxy: RelayProxyCredentials | null;
 };
@@ -3779,6 +3913,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   approveOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/approve"; body: EgressDecision; response: EgressRule };
+  approvePluginInstall: { method: "POST"; path: "/orgs/{org}/plugin-approvals/{approval_id}/approve"; body: never; response: PluginApproval };
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
@@ -4038,6 +4173,7 @@ export interface Operations {
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
   installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
+  installPlugin: { method: "POST"; path: "/orgs/{org}/plugins/install"; body: PluginInstall; response: InstalledPlugin };
   installSkillCatalogueEntry: { method: "POST"; path: "/orgs/{org}/skill-catalogue/{entry_id}/install"; body: SkillCatalogueInstall; response: Skill };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
@@ -4078,6 +4214,9 @@ export interface Operations {
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
+  listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
+  listPluginSources: { method: "GET"; path: "/orgs/{org}/plugin-sources"; body: never; response: PluginSources };
+  listPlugins: { method: "GET"; path: "/orgs/{org}/plugins"; body: never; response: PluginList };
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
   listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
@@ -4100,6 +4239,9 @@ export interface Operations {
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
+  pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
+  [key: string]: unknown;
+}; response: WebhookAck };
   postAgentSessionSocketFrames: { method: "POST"; path: "/internal/agent-sessions/{id}/socket/out"; body: AgentSessionSocketOut; response: AgentSessionSocketRecorded };
   postAgentSessionTurnResult: { method: "POST"; path: "/internal/agent-sessions/{id}/turns/{turn_id}"; body: AgentSessionTurnResult; response: {
   status: "recorded" | "already_recorded";
@@ -4193,6 +4335,7 @@ export interface Operations {
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
   transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
+  uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
@@ -4206,6 +4349,7 @@ export interface Operations {
   updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
+  upgradePlugin: { method: "POST"; path: "/orgs/{org}/plugins/{name}/upgrade"; body: PluginUpgrade; response: PluginUpgradeResult };
   uploadHostedSource: { method: "POST"; path: "/orgs/{org}/hosted-sources"; body: void; response: HostedSource };
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };
   validateProjectWorkflow: { method: "POST"; path: "/projects/{id}/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
