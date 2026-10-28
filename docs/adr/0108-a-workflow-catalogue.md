@@ -3,9 +3,10 @@
 - **Status**: accepted, 2026-10-28, by the product owner ("a catalogue of workflows that reference
   agents from internal or external catalogues"; sharing to the organisation's catalogue is `org_admin`'s)
 - **Concerns**: a new route `GET /orgs/{org}/workflow-catalogue` and its DTO (contract-change),
-  `POST /projects/{id}/workflows/adopt`, the optional `metadata.catalogue` block of
-  `workflow.schema.json` (contract-change), `workflow_defs.source`, the readiness item
-  `workflow-template`, the console's `/p/<slug>/workflows/new` and the project wizard; builds on
+  `POST /projects/{id}/workflow-adoptions`, the optional `metadata.catalogue` block of
+  `workflow.schema.json` (contract-change), `workflow_defs.source` and `origin`, the table
+  `org_workflows`, the readiness item `workflow-catalogue`, the console's
+  `/p/<slug>/workflows/catalogue` and the project wizard; builds on
   [ADR 0031](0031-several-workflows-per-project.md), [ADR 0036](0036-a-template-ships-what-a-plugin-installs.md),
   [ADR 0040](0040-a-built-in-agent-catalogue.md), [ADR 0062](0062-remote-agents-over-a2a.md),
   [ADR 0074](0074-catalogue-rights.md) and [ADR 0093](0093-an-agent-ships-as-a-plugin.md)
@@ -46,10 +47,11 @@ finding about agents: what cannot be found is not reused.
    declares (ADR 0044), and **each agent it names with where it resolves**, in the order of ADR 0040 §4:
    the organisation's own agent, an installed plugin's agent, a remote agent (ADR 0062) — or
    **unresolved**, with the plugin of a configured source that ships it when one does.
-3. **Adopting copies, then installs.** `POST /projects/{id}/workflows/adopt {source, name, version, as?}`
+3. **Adopting copies, then installs.** `POST /projects/{id}/workflow-adoptions {source, name, version?, as?, make_default?}`
    publishes the entry's YAML as a new workflow of the project (renamed by `metadata.name` when `as` is
-   given, refused with 409 when the name is taken, as `create_only` already does), records its origin in
-   `workflow_defs.source` (`catalogue:<source>/<name>@<version>`, generalising today's `template`), and
+   given; a name taken by another workflow is a 409, as `create_only` already does, and adopting the
+   same entry again publishes that workflow's next version), records it as `source: catalogue` with its
+   `origin` (`<source>/<name>@<version>`; `source` stays an enumeration), and
    installs the agents it names under ADR 0040 §5. It **never installs a plugin implicitly**: an
    unresolved agent refuses the adoption with the plugin to install and who may install it (ADR 0074).
    Before adopting, the console shows the target project's readiness *as it would be* (the entry's
@@ -58,8 +60,8 @@ finding about agents: what cannot be found is not reused.
    catalogue** (`org` source) by an `org_admin` only, the right ADR 0074 gives for catalogue writes; the entry
    is a copy of that version, so later edits in the project do not leak into it until shared again.
 5. **Updates are offered, never applied.** A project's adopted workflow whose source now has a newer
-   version shows the existing readiness item (`workflow-template`, generalised to every source) with the
-   diff of ADR 0031's history view; adopting the update publishes the project's next version, and work
+   version turns a readiness item of its own (`workflow-catalogue`) to *check* — the same for an entry the catalogue
+   no longer offers; adopting the update publishes the project's next version, and work
    items keep the version they were born in (ADR 0031 §2).
 6. **The reference syntax does not change.** `agent: <slug>[@N]` stays the only way a workflow names an
    agent; no agent is defined inline in a workflow. A remote or plugin agent is an organisation registry
@@ -89,3 +91,13 @@ finding about agents: what cannot be found is not reused.
   outside without the plugin chain of trust is the supply-chain path ADR 0022 and 0093 close.
 - **Installing the missing plugins during adoption.** Installing a plugin is an organisation-wide,
   separately approved gesture (ADR 0093, 0074); hiding it inside a project gesture would bypass that.
+
+## Implementation — 2026-10-28 (S49-04 to S49-08)
+
+Delivered: the contract, the listing over the four sources, adoption (renaming keeps every other byte),
+sharing by an `org_admin`, the readiness item, the console's catalogue page and the wizard's choice.
+Not yet: naming, for an `unresolved` agent, the plugin of a configured source that ships it (§2, §3) —
+the refusal says that an administrator must install the plugin, not which one, because reading the
+sources' indexes is a network call the listing does not make (S49-05b); and sharing from the console —
+it is an API gesture for now, since the console would have to show the button only to those the server
+says may use it (ADR 0074).

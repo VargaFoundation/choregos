@@ -82,7 +82,7 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
-import type { OutboundProxyPut, OutboundProxyState } from "@/lib/types";
+import type { OutboundProxyPut, OutboundProxyState, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
@@ -1183,6 +1183,75 @@ export const workflowRouting: WorkflowRouting = {
   default: "default-simple",
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
 };
+
+const requirement = (capability: string, reason: string) => ({ capability, reasons: [reason] });
+
+/** The workflow catalogue (ADR 0108): core, a template's, a plugin's with an agent nobody provides, a shared one. */
+export const workflowCatalogue: WorkflowCatalogueEntry[] = [
+  {
+    source: "core",
+    name: "default-request",
+    version: 1,
+    title: "default-request",
+    summary: "Brief → human approval → deliverable → human acceptance. Needs no repository.",
+    tags: [],
+    requires: [
+      requirement("tracker", "work items live in a tracker: the internal one unless you connect another"),
+      requirement("runtime", "default-request: the agent assistant runs somewhere"),
+      requirement("gateway", "default-request: the agent assistant calls models"),
+    ],
+    needs_repository: false,
+    groups: ["product-owners"],
+    agents: [
+      { actor: "writer", slug: "brief-writer", version: null, resolution: "catalogue", plugin: null, display_name: "Brief writer" },
+      { actor: "assistant", slug: "assistant", version: null, resolution: "catalogue", plugin: null, display_name: "Assistant" },
+    ],
+    yaml: workflow.yaml,
+  },
+  {
+    source: "core",
+    name: "default-simple",
+    version: 1,
+    title: "default-simple",
+    summary: "Refinement → human approval → implementation → verification → PR → merge → release train.",
+    tags: [],
+    requires: [
+      requirement("tracker", "work items live in a tracker: the internal one unless you connect another"),
+      requirement("scm", "default-simple: the agent dev (implement) works in a repository"),
+      requirement("cd", "default-simple: the state deployed_prod is production"),
+    ],
+    needs_repository: true,
+    groups: ["product-owners", "release-captains"],
+    agents: [],
+    yaml: workflow.yaml,
+  },
+  {
+    source: "template:joiners-leavers",
+    name: "onboarding",
+    version: 1,
+    title: "Onboarding",
+    summary: "A joiner's accounts, equipment and access, planned by an agent and approved by HR.",
+    tags: ["hr"],
+    requires: [requirement("tracker", "work items live in a tracker: the internal one unless you connect another")],
+    needs_repository: false,
+    groups: ["hr"],
+    agents: [{ actor: "coordinator", slug: "onboarding-coordinator", version: null, resolution: "org", plugin: null, display_name: "Onboarding coordinator" }],
+    yaml: workflow.yaml,
+  },
+  {
+    source: "plugin:servicenow",
+    name: "incident-intake",
+    version: 1,
+    title: "Incident intake",
+    summary: "An incident from ServiceNow, triaged by an agent, routed to its team.",
+    tags: ["itsm"],
+    requires: [requirement("tracker", "work items live in a tracker: the internal one unless you connect another")],
+    needs_repository: false,
+    groups: ["service-desk"],
+    agents: [{ actor: "triager", slug: "snow-triager", version: null, resolution: "unresolved", plugin: null, display_name: null }],
+    yaml: workflow.yaml,
+  },
+];
 
 /** Le flux d'incident : ses demandes portent des champs, que le formulaire déduit de `inputs`. */
 export const hotfix: WorkflowDef = {
@@ -2830,6 +2899,25 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     for (const w of workflowSummaries) w.is_default = w.name === corps.default;
     return workflowRouting as T;
   }
+  if (method === "POST" && /^\/projects\/[^/]+\/workflow-adoptions$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as WorkflowAdopt;
+    const entry = workflowCatalogue.find((e) => e.source === corps.source && e.name === corps.name);
+    if (!entry) throw new ApiError(404, { detail: `Catalogue workflow ${corps.source}/${corps.name} not found` });
+    const missing = entry.agents.filter((a) => a.resolution === "unresolved").map((a) => `\`${a.slug}\``);
+    if (missing.length)
+      throw new ApiError(422, {
+        detail: `\`${entry.name}\` names agents this organisation does not have and no catalogue provides: ${missing.join(", ")}. An organisation administrator installs the plugin that ships them first; adopting never installs one.`,
+      });
+    const name = corps.as || entry.name;
+    if (workflowSummaries.some((w) => w.name === name))
+      throw new ApiError(409, { detail: `\`${name}\` already exists: open it to publish its next version, or choose another name` });
+    workflowSummaries.push({ name, version: 1, is_default: false, open_items: 0, created_by: "you", updated_at: new Date().toISOString() });
+    if (corps.make_default) {
+      workflowRouting.default = name;
+      for (const w of workflowSummaries) w.is_default = w.name === name;
+    }
+    return { ...workflow, name, version: 1, source: "catalogue", origin: `${entry.source}/${entry.name}@${entry.version}`, is_default: !!corps.make_default } as T;
+  }
   const desactive = /^\/projects\/[^/]+\/workflows\/([^/]+)\/deactivate$/.exec(chemin ?? "");
   if (method === "POST" && desactive) {
     const nom = decodeURIComponent(desactive[1]!);
@@ -3441,6 +3529,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
+    [/^\/orgs\/[^/]+\/workflow-catalogue$/, workflowCatalogue],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],

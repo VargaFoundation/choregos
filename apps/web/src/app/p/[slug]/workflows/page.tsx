@@ -61,9 +61,14 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
           Each workflow is a process of its own. A request is born in one — the one it names, else the first routing
           rule it matches, else the default — and stays pinned to that version until it ends.
         </p>
-        <Link href={`/p/${slug}/workflows/new`} className={buttonClasses("secondary", "sm")}>
-          New workflow
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/p/${slug}/workflows/catalogue`} className={buttonClasses("secondary", "sm")}>
+            Browse the catalogue
+          </Link>
+          <Link href={`/p/${slug}/workflows/new`} className={buttonClasses("secondary", "sm")}>
+            New workflow
+          </Link>
+        </div>
       </div>
 
       {workflows.data?.length === 0 && <Empty title="No workflow">Publish one from a template.</Empty>}

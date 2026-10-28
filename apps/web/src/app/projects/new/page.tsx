@@ -30,17 +30,20 @@ export default function NewProjectPage() {
   const router = useRouter();
   const { org } = useSession();
   const templates = useQuery({ queryKey: ["templates"], queryFn: () => api.templates() });
+  // Without a template, the project may start from a catalogue workflow (ADR 0108 §7).
+  const catalogue = useQuery({ queryKey: ["workflow-catalogue", org], queryFn: () => api.workflowCatalogue(org) });
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Ce qui a déjà été créé : un échec au milieu ne se rejoue pas depuis le début (S23-06). Avant, le
   // projet était créé, le tracker refusé, et « create » renvoyait ensuite 409 pour toujours.
-  const [fait, setFait] = useState<{ projet: { id: string; slug: string } | null; tracker: boolean }>({
+  const [fait, setFait] = useState<{ projet: { id: string; slug: string } | null; tracker: boolean; workflow?: boolean }>({
     projet: null,
     tracker: false,
   });
   const [form, setForm] = useState({
     template: "",
+    workflow: "",
     slug: "",
     name: "",
     sansDepot: false,
@@ -58,6 +61,10 @@ export default function NewProjectPage() {
   const slugValid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(form.slug);
   const repoValid = form.sansDepot || form.repo.startsWith("http") || /^[\w.-]+\/[\w.-]+$/.test(form.repo);
   const avecTemplate = !form.sansDepot && form.template !== "";
+  // The workflow the platform gives a project without a template (ADR 0107): adopting it again is moot.
+  const automatique = form.sansDepot ? "core/default-request" : "core/default-simple";
+  const offerts = (catalogue.data ?? []).filter((e) => !form.sansDepot || !e.needs_repository);
+  const choisi = avecTemplate ? undefined : offerts.find((e) => `${e.source}/${e.name}` === form.workflow);
 
   async function create() {
     setBusy(true);
@@ -88,6 +95,10 @@ export default function NewProjectPage() {
         await api.putConnector(projet.id, "tracker", { type: form.tracker, config: {} });
         setFait({ projet, tracker: true });
       }
+      if (choisi && form.workflow !== automatique && !fait.workflow) {
+        await api.adoptWorkflow(projet.id, { source: choisi.source, name: choisi.name, version: choisi.version, make_default: true });
+        setFait({ projet, tracker: true, workflow: true });
+      }
       // Without a template, a project with no repository has nothing to provision: the API activates it.
       if (avecTemplate || form.sansDepot) await api.provision(projet.id);
       router.push(`/p/${projet.slug}`);
@@ -116,6 +127,7 @@ export default function NewProjectPage() {
   const recapitulatif: [string, string][] = [
     ["Organisation", org],
     ["Template", form.sansDepot ? "None — no code repository" : form.template || "None"],
+    ...(avecTemplate ? [] : ([["Workflow", choisi ? `${choisi.title} (${choisi.source})` : "Automatic"]] as [string, string][])),
     ["Identifier", form.slug],
     ["Display name", form.name || form.slug],
     ["Repository", form.sansDepot ? "None" : form.repo],
@@ -183,6 +195,25 @@ export default function NewProjectPage() {
                 </Select>
                 <span className="block text-xs text-ink-muted">
                   A template installs the labels, the board, the webhooks, the namespaces and the CI.
+                </span>
+              </label>
+            )}
+            {!avecTemplate && (
+              <label className="block space-y-1">
+                <span>Workflow</span>
+                <Select aria-label="Workflow" value={form.workflow} onChange={(event) => set("workflow", event.target.value)} className="w-full">
+                  <option value="">
+                    Automatic — {form.sansDepot ? "default-request (needs no repository)" : "default-simple (delivers code)"}
+                  </option>
+                  {offerts.map((entry) => (
+                    <option key={`${entry.source}/${entry.name}`} value={`${entry.source}/${entry.name}`}>
+                      {entry.title} — {entry.source}
+                      {entry.agents.some((a) => a.resolution === "unresolved") ? " (an agent is missing)" : ""}
+                    </option>
+                  ))}
+                </Select>
+                <span className="block text-xs text-ink-muted">
+                  From the workflow catalogue; it becomes the project&apos;s default. More can be adopted later.
                 </span>
               </label>
             )}

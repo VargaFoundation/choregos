@@ -579,6 +579,40 @@ curl         $API/projects/acme:hr/workflows                                    
   `workitem.migrated`; if its state changed in between, the migration is refused
   (`workitem.migration_refused`) and the item carries on, on its own version.
 
+### The workflow catalogue
+
+A project can adopt a workflow instead of writing one ([ADR 0108](adr/0108-a-workflow-catalogue.md)).
+The catalogue lists, for an organisation, the platform's workflows (`core`, including
+`default-request`, which needs no repository — [ADR 0107](adr/0107-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md)),
+every workflow of the deployment's templates (`template:<name>`), those of the templates its installed
+plugins brought (`plugin:<name>`, the external catalogues) and the ones it shared from its projects
+(`org`).
+
+```bash
+curl $API/orgs/acme/workflow-catalogue                    # any member
+curl -X POST $API/projects/acme:hr/workflow-adoptions \
+  -d '{"source": "template:joiners-leavers", "name": "onboarding", "as": "joiners", "make_default": true}'
+curl -X POST $API/orgs/acme/workflow-catalogue \
+  -d '{"project": "hr", "name": "joiners"}'               # org_admin: shares the active version
+```
+
+- Each entry says what it **requires** (computed by the engine, never declared), whether it
+  **needs a repository**, the human groups it declares, and where each agent it names resolves:
+  `org` (the organisation's own), `plugin` (installed by a plugin), `remote` (A2A), `catalogue`
+  (the platform's catalogue: installed on adoption) or `unresolved`.
+- **Adopting** publishes the entry as a workflow of the project with `source: catalogue` and its
+  `origin` (`template:joiners-leavers/onboarding@1`); `as` renames it, every other byte of the YAML
+  kept. A name taken by another workflow is a `409`; adopting the same entry again publishes the next
+  version. An agent that resolves nowhere is a `422` naming it: adopting **never installs a plugin**,
+  an organisation administrator installs it first.
+- **Sharing** copies one version: later edits in the project do not reach the catalogue until it is
+  shared again, and each share of a name is the entry's next version.
+- An adopted workflow whose entry has a newer version (or is gone) turns the readiness item
+  **Adopted workflows up to date** to *check*; nothing is applied on its own.
+- In the console: **Browse the catalogue** on the project's workflows page (a project without a
+  repository opens on the workflows that need none, and each card previews what the project would
+  still need), and a **Workflow** choice in the project wizard when no template is chosen.
+
 ### Bringing a project to a newer template version
 
 A project receives its template's workflows once, when it is born; a newer template version does

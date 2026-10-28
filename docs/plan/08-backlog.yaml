@@ -3861,3 +3861,19 @@ stories:
     size: M
     depends_on: [S49-09, S49-11, S49-12]
     notes: "ADR 0109 §4-6. Acceptance: drag fills both ends of the add-transition form and writes nothing before confirmation; a blank skeleton validates; 'new workflow' opens the map; keyboard equivalent and axe on the map."
+  - id: S49-05b
+    title: "feat(api): an unresolved agent names the plugin of a configured source that ships it"
+    stream: S49
+    sprint: 3
+    priority: 3
+    size: S
+    depends_on: [S49-05]
+    notes: "ADR 0108 §2-3, deferred by S49-05: read the plugin sources' indexes (cached), not on every listing."
+  - id: S49-07b
+    title: "feat(web): share a project workflow to the organisation catalogue from the console, for those the server allows"
+    stream: S49
+    sprint: 4
+    priority: 3
+    size: S
+    depends_on: [S49-07]
+    notes: "ADR 0108 §4 and ADR 0074: the DTO carries `can`, the console never guesses a right from a role."

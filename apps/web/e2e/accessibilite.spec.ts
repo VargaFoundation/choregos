@@ -18,6 +18,7 @@ const PAGES = [
   "/p/billing-api/knowledge/billing-runbooks",
   "/p/billing-api/workflows",
   "/p/billing-api/workflows/new",
+  "/p/billing-api/workflows/catalogue",
   "/p/billing-api/workflows/default-simple",
   "/p/billing-api/workflows/default-simple/map",
   "/p/billing-api/workflows/default-simple/yaml",
