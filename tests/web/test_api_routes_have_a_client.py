@@ -70,24 +70,18 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "command yet: finding VargaFoundation/choregos#1075",
     "/orgs/{org}/aliases/{alias}": "platform administrator's API gesture; its console text lives in the "
     "enterprise repository (S42-14 STATUS row)",
+    "/work-items/{id}/artifacts/{ref}": "one revision's metadata, for API callers; the console lists the "
+    "revisions (/work-items/{id}/artifacts) and downloads one through .../{ref}/content",
+    "/releases/{id}": "one release by id, for API callers; the console reads a project's releases "
+    "(/projects/{id}/releases) and acts on one through /releases/{id}/approve and /abort",
+    "/orgs/{org}/skills/{slug}/versions": "publishes a version from its files as JSON, for API callers; the "
+    "console publishes through the zip import (/skills/import) and the git import (/skills/import-git)",
 }
-
-_PLUGIN_CONSOLE = (
-    'console screen: plugin-plan S43-08 "Console: Catalogue -> Plugins" '
-    "(docs/plan/PLAN-2026-10-27-servicenow.md)"
-)
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
 NO_CLIENT_YET: dict[str, str] = {
     "/orgs/{org}/memory/ab-report": "console screen: S47-18",
     "/platform/gateway/keys": "console screen: S47-18",
-    "/orgs/{org}/plugins": _PLUGIN_CONSOLE,
-    "/orgs/{org}/plugins/install": _PLUGIN_CONSOLE,
-    "/orgs/{org}/plugins/{name}": _PLUGIN_CONSOLE,
-    "/orgs/{org}/plugins/{name}/upgrade": _PLUGIN_CONSOLE,
-    "/orgs/{org}/plugin-sources": _PLUGIN_CONSOLE,
-    "/orgs/{org}/plugin-approvals": _PLUGIN_CONSOLE,
-    "/orgs/{org}/plugin-approvals/{approval_id}/approve": _PLUGIN_CONSOLE,
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
@@ -99,18 +93,29 @@ CLI_ONLY: dict[str, str] = {
 #: Python f-string, or a literal value (`/projects/p1/...`).
 _PARAMETER = r"(?:\$\{[^}]*\}|\{[^}]*\}|[A-Za-z0-9_.:-]+)"
 
+#: Where a client's path starts: right after the quote or backtick that opens its string, after the
+#: console's `${API_BASE}`, or after the API's own `/api/v1` prefix written out.
+_PATH_START = r"(?:(?<=[`\"'])|(?<=\$\{API_BASE\})|(?<=/api/v1))"
+
+#: Where a client's path ends: the closing quote or backtick, a query string, or a `${...}` that appends
+#: one (`${query(...)}`).
+_PATH_END = r"(?=[`\"'?]|\$\{)"
+
 
 def path_pattern(path: str) -> re.Pattern[str]:
     """What a client's call to `path` looks like in its source.
 
-    Literal segments are escaped; a `{param}` segment is any of `_PARAMETER`. The match ends where a
-    path segment cannot go on: `/metrics/cross-backend` is not `/metrics/cross-backend-x`.
+    Literal segments are escaped; a `{param}` segment is any of `_PARAMETER`. The match is the whole
+    path a client writes: it starts the string (after its opening quote or backtick, or after
+    `${API_BASE}` or `/api/v1`) and ends it (at its closing quote or backtick, a query string, or the
+    `${...}` that appends one). A call to `/releases/{id}/abort` is not a call to `/releases/{id}`,
+    nor is a call to `/orgs/{org}/agents/{slug}/releases/{id}/decision`.
     """
     segments = [
         _PARAMETER if segment.startswith("{") and segment.endswith("}") else re.escape(segment)
         for segment in path.strip("/").split("/")
     ]
-    return re.compile("/" + "/".join(segments) + r"(?![A-Za-z0-9_-])")
+    return re.compile(_PATH_START + "/" + "/".join(segments) + _PATH_END)
 
 
 @functools.cache
@@ -198,10 +203,18 @@ def test_the_matcher_sees_a_template_literal_an_fstring_and_a_literal() -> None:
     pattern = path_pattern("/projects/{id}/metrics/cross-backend")
     assert pattern.search("`/projects/${qualify(id)}/metrics/cross-backend${query()}`")
     assert pattern.search('f"/projects/{pid}/metrics/cross-backend"')
-    assert pattern.search("/projects/p1/metrics/cross-backend")
+    assert pattern.search("'/projects/p1/metrics/cross-backend'")
     assert not pattern.search("/projects/p1/metrics/cross-backend-x")
     assert not pattern.search("/projects/p1/metrics/dora")
     assert not pattern.search("/projects/metrics/cross-backend")
+    # The match is the whole path: a longer call, or the same segments inside another path, is not it.
+    assert not pattern.search("`/projects/p1/metrics/cross-backend/sub`")
+    assert not pattern.search("`/x/projects/p1/metrics/cross-backend`")
+    assert not pattern.search("`/orgs/${org}/projects/${id}/metrics/cross-backend`")
+    assert pattern.search("`${API_BASE}/projects/${id}/metrics/cross-backend`")
+    assert pattern.search("`/api/v1/projects/${id}/metrics/cross-backend?window=7`")
+    # A `{param}` segment is not satisfied by a literal sibling the client calls.
+    assert not path_pattern("/releases/{id}").search("request(`/releases/${releaseId}/abort`)")
 
 
 def test_a_new_client_less_path_is_refused() -> None:
