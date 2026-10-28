@@ -79,6 +79,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
     _check_already_fixed_exits(wf, report, source)
+    _check_conditions(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
     _check_effets(wf, report, source)
@@ -153,6 +154,39 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             ["metadata", "inputs"],
             source,
         )
+
+
+def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A transition chosen on the last stage's outputs (S48-01, ADR 0106).
+
+    - Its `when` names outputs some transition of the workflow declares: a typo (`outcom`) would
+      never match, and the work item would always take the default without saying why.
+    - A state whose exits carry `when` keeps one exit without it, the default: when no condition
+      holds (the agent answered something else, or nothing), the work item moves on instead of
+      waiting forever.
+    """
+    declared = {name for t in wf.transitions for name in t.outputs}
+    for index, t in enumerate(wf.transitions):
+        for name in t.when or {}:
+            if name not in declared:
+                report.error(
+                    "when.unknown_output",
+                    f"`when` reads the output `{name}`, which no transition of this workflow declares in "
+                    "`outputs`: it would never match",
+                    ["transitions", index, "when", name],
+                    source,
+                )
+    for state in wf.states:
+        exits = wf.transitions_from(state)
+        if any(t.when for t in exits) and all(t.when for t in exits):
+            index = wf.transitions.index(next(t for t in exits if t.when))
+            report.error(
+                "when.no_default",
+                f"every transition from `{state}` has a `when`: add one without it, taken when no condition "
+                "holds, or a work item whose outputs match none would wait forever",
+                ["transitions", index, "when"],
+                source,
+            )
 
 
 def _check_already_fixed_exits(wf: Workflow, report: ValidationReport, source: Any) -> None:

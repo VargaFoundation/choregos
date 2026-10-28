@@ -39,6 +39,7 @@ jobs:
       hosted-cluster: ${{ steps.filter.outputs.hosted-cluster }}
       hosted-images: ${{ steps.filter.outputs.hosted-images }}
       llm-guard: ${{ steps.filter.outputs.llm-guard }}
+      skill-scanner: ${{ steps.filter.outputs.skill-scanner }}
       web-live: ${{ steps.filter.outputs.web-live }}
     steps:
       - uses: actions/checkout@v7
@@ -179,6 +180,13 @@ jobs:
               - 'uv.lock'
             # The LLM guard in the chart's real LiteLLM (S40-21b, S40-21c): the guard, the chart that
             # ships it with the gateway's image and config, the live test and its fake provider.
+            # The skill gate's second scanner and what pins it (S44-02b).
+            skill-scanner:
+              - 'apps/api/src/choregos_api/scanners/**'
+              - 'apps/api/src/choregos_api/services/skill_scanner.py'
+              - 'apps/api/tests/test_skill_scanner.py'
+              - 'docker/api.Dockerfile'
+              - '.github/workflows/ci.yml'
             llm-guard:
               - 'packages/core/src/choregos_core/llm_guardrail.py'
               - 'charts/choregos/charts/litellm/**'
@@ -234,6 +242,17 @@ jobs:
         run: uv run pytest apps/api/tests -q
         env:
           CHOREGOS_TEST_SUITE_SUR_POSTGRES: "1"
+      # The orchestrator's suite, on the same PostgreSQL. The orchestrator is the component that
+      # writes straight through the API's models, and the advisory lock of the budget reservation
+      # (`lock_budget_scopes`, S27-11) only exists on PostgreSQL: SQLite stands in with an in-process
+      # lock. Both suites drop and recreate the `public` schema for each test, so they take the
+      # database one after the other, the API's first: its fixture recreates the `vector` extension
+      # that a schema reset removes. The schema is built by `create_all` as the service's superuser:
+      # this step does not prove the orchestrator under RLS.
+      - name: orchestrator suite on PostgreSQL
+        run: uv run pytest apps/orchestrator/tests -q
+        env:
+          CHOREGOS_TEST_ORCH_ON_POSTGRES: "1"
 
   contracts:
     needs: changes
@@ -816,6 +835,33 @@ jobs:
           uv run pytest tests/conformance/hosted_real/test_shared_workspace.py packages/runner/tests/test_serve_session_socket_docker.py -rs 2>&1 | tee pytest.out
           test "${PIPESTATUS[0]}" -eq 0
           ! grep -qi skipped pytest.out
+  skill-scanner:
+    # The skill gate's second scanner against the real SkillSpector (ADR 0095, S44-02b), at the commit
+    # the API image pins: a trapped skill is DO_NOT_INSTALL with its vulnerable dependency found in
+    # the fixture mirror, a clean one SAFE, no mirror says so. The `python` job skips these three
+    # tests (SkillSpector is not in the platform's lock); a skip here turns the job red.
+    needs: changes
+    if: needs.changes.outputs.skill-scanner == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - name: SkillSpector at the image's commit, in its own interpreter
+        run: |
+          commit=$(sed -n 's/^ARG SKILLSPECTOR_COMMIT=//p' docker/api.Dockerfile)
+          test -n "$commit"
+          uv venv "$RUNNER_TEMP/skillspector" --python 3.12
+          VIRTUAL_ENV="$RUNNER_TEMP/skillspector" uv pip install \
+            "skillspector @ https://github.com/NVIDIA/SkillSpector/archive/${commit}.tar.gz"
+          echo "CHOREGOS_TEST_SKILLSPECTOR_PYTHON=$RUNNER_TEMP/skillspector/bin/python" >> "$GITHUB_ENV"
+      - name: the gate with the real scanner
+        run: |
+          uv run pytest apps/api/tests/test_skill_scanner.py -rs 2>&1 | tee pytest.out
+          test "${PIPESTATUS[0]}" -eq 0
+          ! grep -qi skipped pytest.out
   llm-guard:
     # The LLM guard in the gateway as the chart ships it (S40-21b, S40-21c): the chart's LiteLLM image,
     # config and guard file, in front of a fake provider that answers with secrets, on every route
@@ -888,7 +934,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, web-live, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, skill-scanner, web-live, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:
