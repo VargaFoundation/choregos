@@ -19,6 +19,16 @@ import type {
   OrgConnector,
   OrgConnectorCreate,
   OrgConnectorUpdate,
+  InstalledPlugin,
+  PluginApproval,
+  PluginApprovalList,
+  PluginInstall,
+  PluginInstallPending,
+  PluginList,
+  PluginSources,
+  PluginUninstallResult,
+  PluginUpgrade,
+  PluginUpgradeResult,
   ProjectOperation,
   ProjectRequirement,
   AgentCatalogueConnection,
@@ -732,6 +742,33 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** The plugins installed in the organisation (ADR 0093): any member reads them. */
+  plugins: (org: string) => request<PluginList>(`/orgs/${org}/plugins`),
+  /** The deployment's plugin sources, each with its trust policy and what its index offers. */
+  pluginSources: (org: string) => request<PluginSources>(`/orgs/${org}/plugin-sources`),
+  /**
+   * Installs a plugin: 201 with the installed plugin, or 202 `pending_approval` when it brings a server or
+   * a high-risk skill (ADR 0050) — the two bodies are told apart by `status` (see `isPending`).
+   */
+  installPlugin: (org: string, body: PluginInstall) =>
+    request<InstalledPlugin | PluginInstallPending>(`/orgs/${org}/plugins/install`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Moves an installed plugin to another version: 200 with what changed, or 202 as for an install. */
+  upgradePlugin: (org: string, name: string, body: PluginUpgrade = {}) =>
+    request<PluginUpgradeResult | PluginInstallPending>(`/orgs/${org}/plugins/${encodeURIComponent(name)}/upgrade`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Uninstalls a plugin; the answer says what was removed and what stayed as the organisation's own. */
+  uninstallPlugin: (org: string, name: string) =>
+    request<PluginUninstallResult>(`/orgs/${org}/plugins/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  /** The installs and upgrades that wait, or waited, for a second administrator. */
+  pluginApprovals: (org: string) => request<PluginApprovalList>(`/orgs/${org}/plugin-approvals`),
+  /** Another administrator than the one who asked approves: 403 for the same one. */
+  approvePlugin: (org: string, id: string) =>
+    request<PluginApproval>(`/orgs/${org}/plugin-approvals/${encodeURIComponent(id)}/approve`, { method: "POST" }),
   /** The connector types of the registry, by family, with the caller's rights (ADR 0074). */
   connectorCatalogue: (org: string) => request<ConnectorCatalogue>(`/orgs/${org}/connector-catalogue`),
   /** The organisation's connectors as one project sees them: on or off, and may the caller switch. */

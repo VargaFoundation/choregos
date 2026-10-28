@@ -55,6 +55,7 @@ from ..db.models import ConnectorOperation, OrgConnector
 from ..errors import conflict, unprocessable, upstream
 from ..logging import get_logger
 from ..rbac import Principal
+from ..schemas.projets import OrgConnectorServer
 from ..secret_store import resolved_configuration, store_ref
 from .connector_secrets import drop_replaced_store_values, put_values, require_store
 
@@ -192,6 +193,21 @@ def spec_of_connector(instance: OrgConnector) -> ConnectorTypeSpec | None:
         (KIND,),
         dict(server.get("config_schema") or {"type": "object"}),
         tuple(server.get("secret_fields") or ()),
+    )
+
+
+def console_view(instance: OrgConnector) -> OrgConnectorServer | None:
+    """The server's plugin and the schema its configuration follows, as the connector routes answer it
+    (S43-08): the console configures a server with its own form, not the `mcp` type's."""
+    server = instance.plugin_server
+    if server is None:
+        return None
+    return OrgConnectorServer(
+        plugin=str(server.get("plugin") or ""),
+        version=str(server.get("version") or ""),
+        server=str(server.get("server") or instance.name),
+        config_schema=dict(server.get("config_schema") or {"type": "object"}),
+        secret_fields=[str(field) for field in server.get("secret_fields") or ()],
     )
 
 

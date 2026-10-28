@@ -554,7 +554,8 @@ test("connecteurs : systèmes métier, serveurs MCP et outils de livraison des p
 test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", async ({ page }) => {
   await page.goto("/admin/connectors");
   await expect(page.getByLabel("Policy of order_laptop")).toHaveValue("forbidden");
-  await page.getByRole("button", { name: "Discover" }).click();
+  // The demo also runs a plugin's server (S43-08): discover the supplier's.
+  await page.getByTestId("connector-supplier-agent").getByRole("button", { name: "Discover" }).click();
   await expect(page.getByRole("status")).toHaveText(
     "1 new (closed until you open them), 1 changed their schema (closed again)",
   );
