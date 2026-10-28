@@ -566,6 +566,13 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("api_key",),
         operations=_OPERATIONS_MARKETDATA,
     ),
+    ("marketdata", "tiingo"): ConnectorTypeSpec(
+        "Tiingo (free key: 30+ years of daily history, internal and personal use only)",
+        ("marketdata",),
+        _objet({"timeout_s": {"type": "number", "default": 20}}),
+        ("api_key",),
+        operations=_OPERATIONS_MARKETDATA,
+    ),
     ("marketdata", "composite"): ConnectorTypeSpec(
         "market data from several sources, with fallback and a cross-check of the closes",
         ("marketdata",),
@@ -573,7 +580,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             {
                 "sources": {
                     "type": "array",
-                    "items": {"enum": ["stooq", "yahoo", "alphavantage"]},
+                    "items": {"enum": ["stooq", "yahoo", "alphavantage", "tiingo"]},
                     "minItems": 1,
                     "description": "provider types, in the order they are tried",
                 },
@@ -587,7 +594,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             },
             ("sources",),
         ),
-        ("stooq_api_key", "alphavantage_api_key"),
+        ("stooq_api_key", "alphavantage_api_key", "tiingo_api_key"),
         operations=_OPERATIONS_MARKETDATA,
     ),
     # The `web_search` family (S40-01g, ADR 0083): called by the API's built-in `web_search`, never by a
