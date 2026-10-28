@@ -24,6 +24,10 @@ goose=1.9.0
 # parce que l'installation était suivie d'un `|| echo`. 0.8.0 porte CVE-2026-22813, corrigée
 # en 1.1.10 — d'où la 1.x et non le plus proche voisin de l'épingle d'origine.
 opencode=1.18.31
+# S40-25b: `@opencode-ai/plugin`, which opencode installs from npm into every config directory at
+# start. The image bakes it into opencode's config root, so a run asks the registry for nothing.
+# Same release train as `opencode`: bump both together (a test refuses a mismatch).
+opencode-plugin=1.18.31
 copilot-cli=0.3.0
 # rtk (ADR 0055): not an agent, a shell-output filter the image carries for every backend.
 # Each digest is checked at build time, and a wrong one fails the build. When Renovate bumps

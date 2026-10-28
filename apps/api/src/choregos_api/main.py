@@ -76,6 +76,7 @@ from .routers import (
 )
 from .services.action_relay import relay_loop
 from .services.plugin_defaults import check_configuration, reconcile_in_background
+from .services.skill_scanner import mirror_loop
 
 API_PREFIX = "/api/v1"
 logger = get_logger("choregos.api")
@@ -113,12 +114,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # The deployment's default plugins in every organisation (ADR 0093 §5), once the schema and the
     # bootstrap organisation exist. In the background: a slow source never holds the readiness probe.
     plugin_defaults = asyncio.create_task(reconcile_in_background(settings))
+    # The skill scanner's local OSV mirror (ADR 0095), rebuilt in each replica.
+    osv_mirror = asyncio.create_task(mirror_loop(settings))
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relais is not None:
         await relais.arreter()
-    for task in (rafraichissement, action_relay, a2a_push, plugin_defaults):
+    for task in (rafraichissement, action_relay, a2a_push, plugin_defaults, osv_mirror):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -283,6 +286,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     install_error_handlers(app)
+    from .org_alias_middleware import OrgAliasMiddleware
+
+    # A former slug is replaced before anything routes (ADR 0090); the log keeps the path as it was sent.
+    app.add_middleware(OrgAliasMiddleware)
     from .limiteur import installer as installer_le_limiteur
 
     installer_le_limiteur(app, settings.rate_limit_per_minute)

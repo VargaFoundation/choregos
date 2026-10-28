@@ -35,3 +35,13 @@ export function rememberedOrg(): string | null {
     return null;
   }
 }
+
+/**
+ * The organisation to show: the remembered one, followed through a rename (ADR 0090). `wanted` may be
+ * a slug the organisation had when it was remembered; `Org.aliases` lists those, so the choice is
+ * kept instead of silently falling back to the first organisation. Null when `orgs` is empty.
+ */
+export function pickOrg(orgs: { slug: string; aliases?: string[] }[], wanted: string | null): string | null {
+  const found = orgs.find((o) => o.slug === wanted) ?? orgs.find((o) => wanted !== null && o.aliases?.includes(wanted));
+  return found?.slug ?? orgs[0]?.slug ?? null;
+}

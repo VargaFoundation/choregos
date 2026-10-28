@@ -299,6 +299,7 @@ EXEMPTEES = {
     "model_profiles": "catalogue de l'instance (seules des lignes `scope=platform` sont écrites)",
     "webhook_deliveries": "empreintes de déduplication, sans contenu ni organisation",
     "alembic_version": "table d'Alembic",
+    "org_slug_aliases": "address -> organisation id, no content: resolved BEFORE any scope exists (ADR 0090)",
 }
 
 
@@ -355,6 +356,37 @@ async def test_named_memories_and_their_facts_are_invisible_across_organisations
         ]
     async with session_scope(orgs="*") as session:
         assert len((await session.execute(select(MemoryStore))).scalars().all()) == 2
+
+
+async def test_a_renamed_organisation_is_still_seen_and_its_old_slug_still_scopes(
+    pg_app: Any, deux_organisations: dict[str, str]
+) -> None:
+    """RLS compares CURRENT slugs. After `a` becomes `z`: the new slug sees the rows, and a scope built
+    from the OLD slug (a workflow payload written before the rename) is resolved to the new one instead
+    of seeing nothing (ADR 0090). An alias never leaks another organisation's rows."""
+    from choregos_api.db.models import Organization, Project
+    from choregos_api.db.org_aliases import current_slug, keep_old_slug
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        org = (await session.execute(select(Organization).where(Organization.slug == "a"))).scalar_one()
+        org.slug = "z"
+        await keep_old_slug(session, org, "a", "test")
+    async with session_scope(orgs=["z"]) as session:
+        assert [p.slug for p in (await session.execute(select(Project))).scalars()] == ["billing-api"]
+        assert (await session.execute(select(Organization.slug))).scalars().all() == ["z"]
+    async with session_scope(orgs=["a"]) as session:  # the old slug, written down earlier
+        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [deux_organisations["a"]]
+        assert (await session.execute(select(Organization.slug))).scalars().all() == ["z"]
+    async with session_scope(orgs=["b"]) as session:
+        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [deux_organisations["b"]]
+    async with session_scope(orgs=["nobody"]) as session:
+        assert (await session.execute(select(Project))).scalars().all() == []
+    async with session_scope(orgs=["b"]) as session:
+        # resolving an alias works under a narrow scope, and leaves that scope as it was
+        assert await current_slug(session, "a") == "z"
+        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [deux_organisations["b"]]
 
 
 async def test_chaque_table_est_sous_rls_ou_exemptee(pg_app: Any) -> None:

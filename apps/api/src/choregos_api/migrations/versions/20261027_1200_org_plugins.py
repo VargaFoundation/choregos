@@ -8,7 +8,7 @@ organisation. New tables, no row written: nothing to scope. The downgrade drops 
 record of what was installed; the agents and skills the plugins installed stay.
 
 Revision ID: d4f6a8c0e2b1
-Revises: a8c0e2f4b6d9
+Revises: f4b6d8a0c2e5
 Create Date: 2026-10-27 12:00:00+00:00
 """
 
@@ -23,7 +23,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "d4f6a8c0e2b1"
-down_revision: str | None = "a8c0e2f4b6d9"
+down_revision: str | None = "f4b6d8a0c2e5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

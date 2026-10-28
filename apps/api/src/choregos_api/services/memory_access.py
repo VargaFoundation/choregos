@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Connector, MemoryStore, Organization, OrgConnector
+from ..db.org_aliases import organisation_by_slug_or_alias
 from ..errors import unprocessable
 from ..rbac import Permission, Principal
 from ..schemas.agents import AgentSpec
@@ -247,9 +248,7 @@ async def search_run_memories(
         readable = [m for m in readable if m["label"] == only]
         if not readable:
             raise not_found("Memory of the run", only)
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org_slug))
-    ).scalar_one_or_none()
+    organisation = await organisation_by_slug_or_alias(session, org_slug)
 
     async def one(memory: dict[str, str]) -> list[Any]:
         try:

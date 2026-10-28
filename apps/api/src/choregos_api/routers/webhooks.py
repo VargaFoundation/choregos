@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from ..config import get_settings
-from ..db.models import Connector, Organization, OrgConnector, Project, WebhookDelivery, WorkItem
+from ..db.models import Connector, OrgConnector, Project, WebhookDelivery, WorkItem
 from ..deps import DbPlateforme
 from ..errors import not_found, unauthorized
 from ..logging import get_logger
@@ -458,13 +458,16 @@ _NOT_FORWARDED = frozenset({"authorization", "cookie", "host", "content-length",
 async def _tracker_servers(session: Any, org: str, plugin: str, server: str) -> list[OrgConnector]:
     """The organisation's running connector of `plugin`'s server `server`, when it is a tracker with a
     webhook. The URL names the organisation: a delivery is never shown to another organisation's server."""
+    from ..db.org_aliases import organisation_by_slug_or_alias
     from ..services.plugin_servers import DEPLOYED
 
+    # A renamed organisation keeps its webhook URL: an old slug is an alias (ADR 0090).
+    owner = await organisation_by_slug_or_alias(session, org)
+    if owner is None:
+        return []
     rows = (
         await session.execute(
-            select(OrgConnector)
-            .join(Organization, Organization.id == OrgConnector.org_id)
-            .where(Organization.slug == org, OrgConnector.name == server)
+            select(OrgConnector).where(OrgConnector.org_id == owner.id, OrgConnector.name == server)
         )
     ).scalars()
     found = []

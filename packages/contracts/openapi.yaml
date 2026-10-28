@@ -126,6 +126,10 @@ paths:
       tags: [projects]
       operationId: updateOrg
       summary: Rename an organisation — its name by its administrator, its slug by the platform administrator
+      description: >-
+        A new slug leaves the old one as an alias (`Org.aliases`): old URLs, MCP and A2A addresses,
+        qualified ids and IdP group names keep resolving to the organisation (ADR 0090). 409 when the
+        slug is another organisation's slug or alias.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgUpdate" } } }
@@ -135,6 +139,19 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/aliases/{alias}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: alias, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [projects]
+      operationId: releaseOrgAlias
+      summary: Release a former slug of an organisation, so another organisation may take it (platform administrator)
+      description: Old addresses and IdP group names that name the alias stop resolving. Audited as `org.alias.release`.
+      responses:
+        "204": { description: Released }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/projects:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -6899,6 +6916,7 @@ components:
         name: { type: string }
         role: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }] }
         currency: { type: string, enum: [EUR, USD], default: EUR, description: "the currency the console shows spend in (S29-03); an organisation setting" }
+        aliases: { type: array, items: { type: string }, default: [], description: "the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address." }
     OrgCreate:
       type: object
       required: [slug, name]

@@ -807,10 +807,12 @@ returns; `NEXT_PUBLIC_DEFAULT_ORG` is a build-time variable of the image and the
 The bootstrap **never renames** an organisation that exists: changing `bootstrap.org` on a running
 instance creates a second organisation (refused on the community edition, which holds one). To
 rename, call `PATCH /api/v1/orgs/<slug>` with `{"name": "…"}` (an organisation administrator), or
-`{"slug": "…"}` (a platform administrator, who need not be a member). A new slug is a decision for
-the operator: the memory tenant (`org:<slug>`), the IdP groups (`choregos:<slug>:<group>`), every
-MCP address (`/mcp/projects/<slug>:<project>`) and every copied console URL name the old one, and
-nothing rewrites them for you.
+`{"slug": "…"}` (a platform administrator, who need not be a member). The old slug stays an
+alias of the organisation (ADR 0090): the IdP groups (`choregos:<old>:<group>`), every MCP address
+(`/mcp/projects/<old>:<project>`), every copied console URL, `bootstrap.org` and `oidc.defaultOrg`
+keep resolving to it, so a restart does not create a second organisation. Update them when convenient,
+not before the rename. The memory tenant (`org:<key>`) never changes. A platform administrator frees an
+alias with `DELETE /api/v1/orgs/<slug>/aliases/<alias>`.
 
 The CLI and CI authenticate with API tokens, which a person issues for themselves once
 logged in (`POST /me/tokens`, `choregos tokens create`). Before anyone has logged in, the

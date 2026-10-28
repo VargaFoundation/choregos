@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     false,
+    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -39,6 +40,22 @@ class Organization(Base, PkMixin, TimestampMixin):
     settings: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
 
     projects: Mapped[list[Project]] = relationship(back_populates="org", cascade="all, delete-orphan")
+
+
+class OrgSlugAlias(Base):
+    """A slug an organisation had (ADR 0090). The organisation's id is its identity; its slug is an
+    address, and an old address keeps resolving to it. It maps an address to an id and holds no content:
+    outside RLS, since an address is resolved before any scope exists.
+    The alias is unique across every alias, and never equal to a current slug (checked on write)."""
+
+    __tablename__ = "org_slug_aliases"
+
+    alias: Mapped[str] = mapped_column(String(64), primary_key=True)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=utcnow, nullable=False
+    )
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
 
 class User(Base, PkMixin, TimestampMixin):

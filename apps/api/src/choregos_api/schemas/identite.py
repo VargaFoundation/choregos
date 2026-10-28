@@ -77,6 +77,8 @@ class OrgDto(Dto):
     #: The currency the console shows spend in (S29-03, decision D4): an organisation setting, EUR by
     #: default. The ledger holds both USD and EUR.
     currency: Literal["EUR", "USD"] = "EUR"
+    #: The slugs the organisation had: they still resolve to it (ADR 0090).
+    aliases: list[str] = Field(default_factory=list)
 
 
 class OrgCreate(Dto):

@@ -13,11 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import (
-    Organization,
     Project,
     Run,
     WorkItem,
 )
+from ..db.org_aliases import organisation_by_slug_or_alias
 from .definitions import effective_policy
 
 MIN_TICKETS_PAR_GROUPE = 10
@@ -37,9 +37,8 @@ async def memory_ab_comparison(session: AsyncSession, org: str, weeks: int = 4) 
         "with_memory": {"projects": [], "rates": [], "costs": [], "tickets": 0},
         "without_memory": {"projects": [], "rates": [], "costs": [], "tickets": 0},
     }
-    organization = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
+    # `org` may be a slug the organisation had when a workflow was started (ADR 0090).
+    organization = await organisation_by_slug_or_alias(session, org)
     if organization is not None:
         # Tout projet non archivé compte : ce qui décide de l'échantillon, ce sont les
         # tickets fermés sur la fenêtre, pas le statut administratif du projet.

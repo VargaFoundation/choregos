@@ -26,7 +26,8 @@ from choregos_core.redaction import redact
 from sqlalchemy import delete, func, select
 
 from ..config import get_settings
-from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, Organization, OrgConnector
+from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, OrgConnector
+from ..db.org_aliases import organisation_by_slug_or_alias
 from ..db.session import session_scope
 from ..logging import get_logger
 from ..secret_store import resolved_configuration
@@ -238,9 +239,8 @@ async def _deleted(changes: Changes, known: dict[str, KnowledgeDocument]) -> set
 
 async def _enter_egress_scope(session: Any, org: str, family: str, source: KnowledgeSource) -> Any:
     """Every call this sync makes is checked against the organisation's egress allowlist (S39-22)."""
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
+    # `org` comes from the loop's payload, written when it started: it may be a former slug (ADR 0090).
+    organisation = await organisation_by_slug_or_alias(session, org)
     if organisation is None:
         return None
     policy = await load_policy(session, organisation)
@@ -252,9 +252,7 @@ async def _enter_proxy_scope(session: Any, org: str) -> Any:
     goes through it or fails, with the proxy named. `None` when none applies."""
     from ..services.outbound_proxy import outbound_proxy_for
 
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
+    organisation = await organisation_by_slug_or_alias(session, org)  # may be a former slug (ADR 0090)
     if organisation is None:
         return None
     proxy = await outbound_proxy_for(session, organisation.id, "knowledge_web")

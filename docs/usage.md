@@ -1030,7 +1030,18 @@ executable file, an outbound URL, a credential-like string, an MCP reference) �
 (prompt-injection phrases, hidden or bidirectional Unicode, encoded blobs, `curl … | sh`) whose
 findings name their file and line, and a licence check (a missing or non-open licence is flagged,
 not refused). A **high-risk version waits for a second person**: until an administrator who did not
-import it approves it, no agent may pin it and no run receives it:
+import it approves it, no agent may pin it and no run receives it.
+
+In the API image, a **second scanner** reads every version a person publishes
+([ADR 0095](adr/0095-skillspector-behind-the-skill-gate-offline.md)): NVIDIA SkillSpector, offline
+(`--no-llm`, every HTTP call answered by a local OSV mirror or refused). It adds a script's AST,
+taint from a secret to a socket, YARA rules, MCP tool poisoning, and dependencies with known
+vulnerabilities (PyPI, npm), as findings `skillspector:<rule>`; a HIGH or CRITICAL one, or its
+`DO_NOT_INSTALL`, makes the version high risk. A scanner that fails holds the version
+(`scanner_failed`); a mirror older than 72 h says the dependency check did not happen
+(`osv_mirror_missing`). `CHOREGOS_SKILL_SCANNER=off` turns it off; `CHOREGOS_OSV_MIRROR_URL` points
+the daily download (OSV's PyPI and npm archives, about 260 MB) at an operator's own copy, or, empty,
+disables it:
 
 ```bash
 curl -X POST $API/orgs/acme/skills/fill-forms/versions/1/approve   # 403 for its importer
@@ -1920,6 +1931,16 @@ showed 8 refused calls to that host here. The runner therefore sets `OPENCODE_DI
 `OPENCODE_DISABLE_AUTOUPDATE` and `OPENCODE_DISABLE_LSP_DOWNLOAD` to `1` for it (an agent's own `launch.env`
 can still override them); the agent only uses the `choregos` provider of its `opencode.json`.
 
+It would also ask `registry.npmjs.org` for `@opencode-ai/plugin`, once for each config directory it reads (its
+global one and the workspace's `.opencode`). The provider package of `opencode.json`
+(`@ai-sdk/openai-compatible`) needs no install: it is bundled in the binary. So the runner image carries
+`@opencode-ai/plugin` already installed under `/opt/choregos/xdg-config/opencode` (the version is the
+`opencode-plugin` line of `versions.lock`, equal to `opencode`), the launch plan points `XDG_CONFIG_HOME` at it,
+writes a stub `.opencode/package.json`, `package-lock.json` and `node_modules/.keep` that opencode takes for an
+installed directory (a project's own files are never overwritten), and sets `OPENCODE_DISABLE_DEFAULT_PLUGINS=1`.
+A run therefore makes no npm call. A project that declares its own opencode plugins still installs them, and
+needs the registry in its `network` section.
+
 **Calls the platform makes for an agent obey the same ceiling.** An MCP connector, a knowledge source
 (web or git) and a git skill source are fetched by the API, which sees the whole request, so the
 organisation's `network` section applies to them twice:
@@ -2365,9 +2386,16 @@ when the slug is taken) is shown on the card.
 `/a2a/orgs/<org>`, the CLI profiles that name `--org <slug>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
 organisation by its id. A platform administrator granted by an edition plugin can rename an
-organisation they do not belong to (the response then carries no `role`). What does not follow: addresses
-already copied elsewhere (an MCP client's configuration), CLI profiles, IdP groups that still name the
-old slug, and `oidc.defaultOrg` if it names it.
+organisation they do not belong to (the response then carries no `role`). The old slug is kept as an
+**alias** of the organisation (`aliases` in `GET /orgs` and in the `PATCH` response, ADR 0090), so what
+was copied elsewhere keeps working: `/api/v1/orgs/<old>/…` and `/a2a/orgs/<old>` (the response carries
+`Link: <current URL>; rel="canonical"`), MCP addresses and qualified ids `<old>:<project>`, the IdP groups
+`choregos:<old>:<group>`, `oidc.defaultOrg` and `bootstrap.org` when they still name it, and the
+sessions and API tokens issued before the rename. No other organisation can take an alias (`409`); the
+organisation can take its own old slug back. A platform administrator frees an alias for good with
+`DELETE /orgs/<current>/aliases/<alias>`, after which the old address answers `404`. What does not
+follow: the display of copied addresses (nothing rewrites them, they only resolve) and CLI profiles that
+store the old slug (they keep working, and show the old one).
 
 **Global memories follow a slug change.** They live under a **memory key**, not under the slug: the
 first time an organisation's slug changes, `settings.memory_key` is set to the old slug and never

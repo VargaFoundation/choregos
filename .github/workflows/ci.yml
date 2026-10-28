@@ -391,6 +391,9 @@ jobs:
       # Runs on pull requests too: a CRITICAL must turn the PR red, not main after the merge.
       - name: Trivy scan (no CRITICAL tolerated)
         uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          # Its one exception: a third-party SDK's docstrings inside SkillSpector (ADR 0095).
+          TRIVY_SECRET_CONFIG: trivy-secret.yaml
         with:
           image-ref: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
           exit-code: "1"

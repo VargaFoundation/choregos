@@ -243,6 +243,23 @@ class Settings(BaseSettings):
     #: The largest file artifact the internal API accepts from a runner, in bytes (ADR 0049).
     artifact_max_bytes: int = 200 * 1024 * 1024
 
+    # Skill scanner (ADR 0095): SkillSpector, offline, beside the gate's own scan (ADR 0050).
+    #: `skillspector` runs it on every version a person publishes; `off` (the default outside the
+    #: image, where SkillSpector is not installed) keeps the gate's own scan alone.
+    skill_scanner: Literal["off", "skillspector"] = "off"
+    #: The interpreter of SkillSpector's own environment, built into the API image.
+    skillspector_python: str = "/opt/skillspector/bin/python"
+    #: A scan runs in a child process, killed past this delay: the version is then held for review.
+    skill_scan_timeout_s: float = 120.0
+    #: Where OSV's PyPI and npm archives are read from to build the local mirror; empty: no download
+    #: (an air-gapped deployment copies a mirror file in, or the dependency check stays incomplete).
+    osv_mirror_url: str = "https://osv-vulnerabilities.storage.googleapis.com"
+    #: The mirror file, one per API replica, on its `/tmp` volume (about 1 GB with npm).
+    osv_mirror_path: str = "/tmp/choregos-osv/osv.sqlite"  # noqa: S108 - the replica's own /tmp volume
+    #: How often the mirror is rebuilt, and past which age a scan no longer uses it.
+    osv_refresh_hours: float = 24.0
+    osv_max_age_hours: float = 72.0
+
     # Knowledge bases (ADR 0051)
     #: The largest file an upload accepts; a bigger one is refused before it is read in full.
     knowledge_max_upload_mib: int = 20
