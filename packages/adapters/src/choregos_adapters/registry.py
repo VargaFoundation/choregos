@@ -110,6 +110,9 @@ class ConnectorTypeSpec:
     #: The secret fields that may hold several keys, one per slot (`api_key`, `api_key.2` …
     #: `api_key.10`, ADR 0089): the adapter receives them as a list, used in turn.
     pooled_fields: tuple[str, ...] = ()
+    #: A demonstration held in memory: its factory refuses to build in staging and prod, so it is
+    #: neither offered nor declarable there (`offered_connector_types`).
+    dev_only: bool = False
 
 
 #: A slot of a pooled field: `api_key.2` … `api_key.10` (ADR 0089). The first slot is the field.
@@ -167,6 +170,17 @@ def connector_types() -> list[tuple[str, str, ConnectorTypeSpec]]:
     """Les types enregistrés — ceux du cœur et ceux des greffons —, sans les faux des tests ni
     les anciens noms : un nouveau projet ne choisit pas un nom qui ment (`pgvector`)."""
     return sorted((k, t, spec) for (k, t), spec in _SPECS.items() if t != "fake" and not spec.deprecated)
+
+
+#: The environments where a `dev_only` type is refused.
+ENVIRONMENTS_WITHOUT_DEMOS = frozenset({"staging", "prod"})
+
+
+def offered_connector_types(environment: str) -> list[tuple[str, str, ConnectorTypeSpec]]:
+    """The types a person may declare in this environment: `connector_types()` without the
+    demonstrations where they would be refused."""
+    demos_refused = environment in ENVIRONMENTS_WITHOUT_DEMOS
+    return [(k, t, spec) for k, t, spec in connector_types() if not (demos_refused and spec.dev_only)]
 
 
 def references_de_secret(

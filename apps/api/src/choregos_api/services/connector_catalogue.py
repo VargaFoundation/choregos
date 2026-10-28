@@ -2,19 +2,21 @@
 """The connector catalogue: the registry's connector types, by family, with what each means in an
 organisation and what the caller may do with it (ADR 0074).
 
-Built from the adapter registry (`choregos_adapters.connector_types()`: fakes and deprecated names
-are already left out), so a type a plugin registers appears without a line here. Platform plumbing
+Built from the adapter registry (`choregos_adapters.offered_connector_types()`: fakes, deprecated
+names and, in staging and prod, the demonstrations are already left out), so a type a plugin
+registers appears without a line here. Platform plumbing
 (`runtime`, `gateway`, `memory`) is how the platform runs, not something a person installs: it is not
 an entry. Nothing secret is in an entry: field names, never values.
 """
 
 from __future__ import annotations
 
-from choregos_adapters import connector_types
+from choregos_adapters import offered_connector_types
 from choregos_core.dsl.exigences import ORDRE
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..db.models import Connector, Organization, OrgConnector, Project
 from ..rbac import Principal
 from ..schemas import (
@@ -129,7 +131,7 @@ async def list_entries(
     enable = projects_where(principal, org, CatalogueAction.ENABLE, visible)
 
     entries: list[ConnectorCatalogueEntryDto] = []
-    for kind, type_name, spec in connector_types():
+    for kind, type_name, spec in offered_connector_types(get_settings().env):
         if kind in PLATFORM_KINDS:
             continue
         project_scope = kind in PROJECT_KINDS

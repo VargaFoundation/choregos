@@ -57,6 +57,7 @@ from ..services.connecteurs import (
     declared_operation,
     plus_stricte,
     spec_du_type,
+    spec_to_declare,
     verifier_les_secrets,
 )
 from ..services.connector_secrets import (
@@ -205,7 +206,7 @@ async def declare_org_connector(
     assert body.kind is not None
     name, kind, type_name = body.name, body.kind, body.type
     config, secret_refs = body.config, body.secret_refs
-    spec = spec_du_type(kind, type_name)
+    spec = spec_to_declare(kind, type_name)
     check_type_config(kind, type_name, config)
     prefix = f"connector/{name}"
     verifier_les_secrets(

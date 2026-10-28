@@ -609,6 +609,9 @@ function ResultCap({
   );
 }
 
+/** The API's rule for a connector's name (`OrgConnectorCreate.name`): checked here, so it is said, not a bare 422. */
+const CONNECTOR_NAME = /^[a-z][a-z0-9-]{1,62}$/;
+
 /** Déclarer une instance : son type (ceux qui exposent des opérations d'abord), sa configuration, ses secrets. */
 function Declarer({ org }: { org: string }) {
   const client = useQueryClient();
@@ -629,6 +632,7 @@ function Declarer({ org }: { org: string }) {
   const type = candidats.find((t) => `${t.kind}/${t.type}` === choix);
   const schema = (type?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
   const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
+  const nameInvalid = nom !== "" && !CONNECTOR_NAME.test(nom);
   async function declarer() {
     if (!type) return;
     setErreur(null);
@@ -680,7 +684,15 @@ function Declarer({ org }: { org: string }) {
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
                 placeholder="entra-acme"
+                aria-invalid={nameInvalid}
+                aria-describedby="declare-connector-name-rule"
               />
+              <span
+                id="declare-connector-name-rule"
+                className={nameInvalid ? "text-xs text-danger" : "text-xs text-ink-muted"}
+              >
+                Lowercase letters, digits and dashes, starting with a letter (2 to 63 characters).
+              </span>
             </label>
             <label className="space-y-1">
               <span className="text-xs text-ink-muted">Type</span>
@@ -736,6 +748,7 @@ function Declarer({ org }: { org: string }) {
             tone="accent"
             disabled={
               !nom ||
+              nameInvalid ||
               !type ||
               champsManquants(schema, config).length > 0 ||
               illisibles.length > 0 ||

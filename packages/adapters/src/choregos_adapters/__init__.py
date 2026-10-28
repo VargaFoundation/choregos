@@ -37,6 +37,7 @@ from .registry import (
     deployment_default_type,
     egress_hosts,
     fakes_enabled,
+    offered_connector_types,
     operation_spec,
     register,
     spec_of,
@@ -75,6 +76,7 @@ __all__ = [
     "deployment_default_type",
     "egress_hosts",
     "fakes_enabled",
+    "offered_connector_types",
     "operation_spec",
     "register",
     "spec_of",
@@ -521,6 +523,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["mdm"],
+        dev_only=True,
     ),
     ("shipping", "demo"): ConnectorTypeSpec(
         "demo carrier (in memory: demonstrations only, refused in staging and prod)",
@@ -528,6 +531,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["shipping"],
+        dev_only=True,
     ),
     ("access_control", "demo"): ConnectorTypeSpec(
         "demo badge readers (in memory: demonstrations only, refused in staging and prod)",
@@ -535,6 +539,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["access_control"],
+        dev_only=True,
     ),
     # The `marketdata` family (S38-03): prices from free sources, read by the platform for a run whose
     # sandbox has no egress. Keys stay API-side (`secret_refs`).
@@ -657,6 +662,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("cd",),
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
+        dev_only=True,
     ),
     # Netops (ADR 0052, S33-08): our own estate, read through the platform.
     ("firewall", "pfsense"): ConnectorTypeSpec(

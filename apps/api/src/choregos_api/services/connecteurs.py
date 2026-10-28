@@ -74,6 +74,22 @@ def spec_du_type(kind: str, type_name: str) -> ConnectorTypeSpec:
     return spec
 
 
+def spec_to_declare(kind: str, type_name: str) -> ConnectorTypeSpec:
+    """`spec_du_type` for a NEW declaration: a demonstration type is refused in staging and prod,
+    where its factory would refuse to build it anyway — say so now, not at the first call."""
+    from choregos_adapters.registry import ENVIRONMENTS_WITHOUT_DEMOS
+
+    from ..config import get_settings
+
+    spec = spec_du_type(kind, type_name)
+    environment = get_settings().env
+    if spec.dev_only and environment in ENVIRONMENTS_WITHOUT_DEMOS:
+        raise unprocessable(
+            f"`{kind}: {type_name}` is a demonstration held in memory: it is refused in {environment}"
+        )
+    return spec
+
+
 def check_type_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
     """The type's own configuration check (S40-01k: a Firecrawl `base_url` is required and never the
     cloud): 422 with the adapter's message, before anything is written."""
