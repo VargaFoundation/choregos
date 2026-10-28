@@ -63,6 +63,29 @@ RUN uv venv /opt/skillspector --python /usr/local/bin/python3.12 \
     "skillspector @ https://github.com/NVIDIA/SkillSpector/archive/${SKILLSPECTOR_COMMIT}.tar.gz" \
  && /opt/skillspector/bin/skillspector --version
 
+# The Hubble CLI, for the `cilium` connector's flows (ADR 0052): Relay speaks gRPC only, and
+# `hubble observe -o jsonpb` is the client the Cilium project maintains. Built from the release's
+# source, not taken as its binary: every published hubble up to v1.20.2 links a Go stdlib with
+# CVE-2026-56857 (CRITICAL, fixed in Go 1.26.9 and 1.27.2) that the image's Trivy gate refuses.
+# The tag is checked against its commit, the build is offline (`-mod=vendor`, the dependencies are
+# in the tag), and the Go image is pinned by digest. v1.19.4 and not v1.17.0: the latter carried
+# three CRITICAL CVEs (cilium, grpc, Go stdlib) that the same gate refused (#490). Any bump
+# re-checks the `observe` flags the connector uses. Cross-compiled on the build platform: Go needs
+# no emulation for arm64.
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS hubble
+ARG HUBBLE_VERSION=v1.19.4
+ARG HUBBLE_COMMIT=39037bdd6cb6acb02a241dde33b5ffcf0e8471e2
+ARG TARGETARCH
+WORKDIR /src
+RUN git clone --quiet --depth 1 --branch "${HUBBLE_VERSION}" https://github.com/cilium/hubble . \
+ && test "$(git rev-parse HEAD)" = "${HUBBLE_COMMIT}" \
+ && CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH:-amd64}" GOTOOLCHAIN=local GOFLAGS=-mod=vendor \
+    go build -trimpath -ldflags "-w -s \
+      -X 'github.com/cilium/cilium/hubble/pkg.GitBranch=${HUBBLE_VERSION}' \
+      -X 'github.com/cilium/cilium/hubble/pkg.GitHash=${HUBBLE_COMMIT}' \
+      -X 'github.com/cilium/cilium/hubble/pkg.Version=${HUBBLE_VERSION#v}'" \
+    -o /out/hubble .
+
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
 FROM python:3.12-slim-bookworm AS commun
 # `PIP_PYTHON` : l'image de l'édition entreprise est construite FROM celle-ci et y ajoute sa roue
@@ -78,19 +101,9 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --create-home --shell /usr/sbin/nologin choregos
-# The Hubble CLI, for the `cilium` connector's flows (ADR 0052): Relay speaks gRPC only, and
-# `hubble observe -o jsonpb` is the client the Cilium project maintains. Pinned, checked against
-# the release's checksum. The connector runs here (API and workers), never in the runner.
-# v1.19.4 and not v1.17.0: the latter carried three CRITICAL CVEs (cilium, grpc, Go stdlib) that
-# the image's Trivy gate refuses (#490). Any bump re-checks the `observe` flags the connector uses.
-ARG HUBBLE_VERSION=v1.19.4
-ARG TARGETARCH
-ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz /tmp/hubble.tar.gz
-ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz.sha256sum /tmp/hubble.sha256sum
-RUN cd /tmp && echo "$(cut -d' ' -f1 hubble.sha256sum)  hubble.tar.gz" | sha256sum -c - \
- && tar -xzf hubble.tar.gz -C /usr/local/bin hubble \
- && rm -f hubble.tar.gz hubble.sha256sum \
- && hubble version
+# The Hubble CLI, built above. The connector runs here (API and workers), never in the runner.
+COPY --from=hubble /out/hubble /usr/local/bin/hubble
+RUN hubble version
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
 # The plugins the platform ships (ADR 0093 §6, S43-09): the built-in agents left the core for
@@ -109,7 +122,7 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 FROM commun AS api
 # `cosign`: publication verifies a hosted agent's image signature on its digest (S41-14, ADR 0080
 # §8). The same release as the `hosted-cosign` CI job, pinned by digest.
-COPY --from=ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 \
+COPY --from=ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d \
   /ko-app/cosign /usr/local/bin/cosign
 # SkillSpector (ADR 0095): the gate runs it on every version a person publishes.
 COPY --from=skillspector /opt/skillspector /opt/skillspector
