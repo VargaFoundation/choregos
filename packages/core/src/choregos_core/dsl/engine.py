@@ -8,6 +8,7 @@ permet de tester tout le comportement d'un workflow sans serveur Temporal ni bas
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,6 +25,7 @@ from choregos_contracts import (
 )
 
 from ..gates import ALREADY_FIXED_GATE, ALREADY_FIXED_UNPROVEN, GateOutcome
+from .conditions import when_holds
 from .legacy import legacy_outputs
 
 
@@ -63,15 +65,18 @@ class WorkflowEngine:
     def is_terminal(self, state: str) -> bool:
         return self.wf.states[state].terminal
 
-    def select_transition(self, state: str, outcome: str | None = None) -> Transition | None:
-        """Choisit la transition à jouer depuis `state`, de façon **déterministe**.
+    def select_transition(
+        self, state: str, outcome: str | None = None, outputs: Mapping[str, Any] | None = None
+    ) -> Transition | None:
+        """Choose the transition to play from `state`, **deterministically**.
 
-        Ordre de préférence :
-        1. la transition dont l'`id` vaut exactement `outcome` ;
-        2. pour `ci_failed`, la transition portée par un agent de rôle `fix_ci` ;
-        3. pour `changes_requested`, la transition portée par un agent `address_review` ;
-        4. sinon, la première transition déclarée depuis cet état (hors transitions de
-           réparation, qui ne se jouent que sur un résultat explicite).
+        In order of preference:
+        1. the transition whose `id` is exactly `outcome` (an incoming event);
+        2. for `ci_failed`, the transition carried by an agent of role `fix_ci`;
+        3. for `changes_requested`, the transition carried by an agent of role `address_review`;
+        4. otherwise, the first transition declared from this state (leaving out the repair
+           transitions, played only on an explicit outcome) whose `when` holds on `outputs`, the
+           last stage's outputs (S48-01); a transition without `when` always holds.
 
         An "already fixed" exit (`already_fixed_exit`) is never selected here: it is taken only after
         the agent step from the same state measured no change (S22-47).
@@ -96,8 +101,12 @@ class WorkflowEngine:
             actor = self.wf.actor_of(t)
             if isinstance(actor, AgentActor) and str(actor.role) in repair_roles:
                 continue
+            if not when_holds(t.when, outputs):
+                continue
             return t
-        return candidates[0]
+        # Only repair transitions, or conditional ones none of which holds: the validator requires a
+        # default (no `when`) beside conditional exits, so a conditional first one is never a fallback.
+        return candidates[0] if when_holds(candidates[0].when, outputs) else None
 
     def already_fixed_exit(self, state: str) -> Transition | None:
         """The platform's "already fixed" exit from `state` (S22-47, #539): a `system` transition
