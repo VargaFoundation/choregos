@@ -97,7 +97,7 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
         run_id = session_run_id(session_id)
         minutes = _minutes_left(record.expires_at)
         org_hosts = await org_runner_hosts(session, record.org_id)
-        # The session's key comes from the organisation's gateway (ADR 0107): its pod calls it there.
+        # The session's key comes from the organisation's gateway (ADR 0108): its pod calls it there.
         gateway_url = await org_gateway_url(session, record.org_id) or settings.gateway_url
         stage_input = StageInput(
             run_id=run_id,

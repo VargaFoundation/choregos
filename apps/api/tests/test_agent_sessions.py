@@ -147,7 +147,7 @@ async def test_a_session_keeps_its_history_on_one_key_and_closing_books_and_revo
 async def test_a_session_calls_the_organisations_own_gateway(
     client: AsyncClient, project: dict[str, Any], upstream: Upstream
 ) -> None:
-    """ADR 0107: the session's key comes from the organisation's gateway, so its model is called
+    """ADR 0108: the session's key comes from the organisation's gateway, so its model is called
     there, not at the deployment's `gateway_url`."""
     from choregos_api.db.models import Organization, OrgConnector
     from choregos_api.db.session import session_scope

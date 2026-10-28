@@ -281,7 +281,7 @@ async def _resolve_model(
     from .model_catalogue import load_policy
 
     resolver = ModelResolver(
-        # The session's key comes from the organisation's gateway: its models are called there (ADR 0107).
+        # The session's key comes from the organisation's gateway: its models are called there (ADR 0108).
         gateway_url=await org_gateway_url(session, org_id) or get_settings().gateway_url,
         gateway_models=await gateway.list_models(),
         catalogue=await load_policy(session, org_id),
@@ -414,7 +414,7 @@ async def respond(
     response_id = f"resp_{uuid4().hex}"
     from .gateway import org_gateway_url
 
-    # The gateway the session's key was minted on (ADR 0107): the organisation's own, else the deployment's.
+    # The gateway the session's key was minted on (ADR 0108): the organisation's own, else the deployment's.
     gateway_url = await org_gateway_url(session, record.org_id) or get_settings().gateway_url
 
     async def complete(body: dict[str, Any]) -> dict[str, Any]:
