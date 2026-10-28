@@ -62,6 +62,14 @@ function page(catalogue: ConnectorCatalogue) {
 }
 
 describe("the connector catalogue page (ADR 0074)", () => {
+  it("says what it is for: the platform's own API integrations, under the connector's account, not the agents' tools", async () => {
+    page(ADMIN);
+    const purpose = await screen.findByRole("complementary", { name: /the platform's own integrations/ });
+    expect(purpose).toHaveTextContent("Choregos calls these systems through their APIs");
+    expect(purpose).toHaveTextContent("never under the person who started the workflow");
+    expect(within(purpose).getByRole("link", { name: /MCP servers/ })).toHaveAttribute("href", "/catalogue/mcp-servers");
+  });
+
   it("groups the cards by family, in the server's order, each with its icon and a scope badge", async () => {
     page(ADMIN);
     await screen.findByTestId("entry-scm-github");

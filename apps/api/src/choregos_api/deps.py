@@ -27,7 +27,7 @@ from .db.session import (
     nommer_l_utilisateur,
     run_after_commit,
 )
-from .errors import forbidden, not_found, unauthorized
+from .errors import ApiError, forbidden, not_found, unauthorized
 from .logging import bind
 from .rbac import Permission, Principal
 from .security import RunClaims, hash_api_token, read_session, verify_run_token
@@ -238,6 +238,16 @@ async def exiger_admin_de_plateforme(session: AsyncSession, principal: Principal
             "reserved for platform administrators: this right covers the whole instance, and you "
             f"do not administer {manquantes or 'any organisation'}."
         )
+
+
+async def is_instance_admin(session: AsyncSession, principal: Principal) -> bool:
+    """`exiger_admin_de_plateforme` as a predicate, for a right that changes what a route accepts
+    rather than whether it opens."""
+    try:
+        await exiger_admin_de_plateforme(session, principal)
+    except ApiError:
+        return False
+    return True
 
 
 async def _accorde_par_un_greffon(session: AsyncSession, principal: Principal) -> bool:

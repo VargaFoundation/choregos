@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { SettingsSection } from "@/components/project-settings/section";
+import { ProjectMemoryStore } from "@/components/memory-store";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
 import { servedToProject } from "@/lib/knowledge";
@@ -40,6 +41,7 @@ export function KnowledgeMemorySection({ slug }: { slug: string }) {
           <p className="text-sm" data-testid="memory-state">
             {policy.data ? (memoryIsOn(policy.data.json) ? "Memory is on: runs recall and propose notes." : "Memory is off in this project's policy.") : "Reading…"}
           </p>
+          <ProjectMemoryStore slug={slug} />
           <p className="mt-2 text-xs">
             <Link href={`/p/${slug}/memory`}>Open Memory</Link>
             <span className="text-ink-muted"> · switched on or off in the guardrails policy (memory.enabled)</span>

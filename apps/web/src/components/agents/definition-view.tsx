@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, Disclosure, Field, Select, buttonClasses } from "@/components/ui";
 import { normalizeSpec } from "@/lib/agent-diff";
+import { orgConnectorHref } from "@/lib/connector-link";
 import { networkSummary } from "@/lib/network";
 import { api } from "@/lib/api";
 import { canEdit, currentVersion, previousVersion, productionVersion, sortedVersions, versionOf } from "@/lib/agent-versions";
@@ -181,6 +182,23 @@ function VersionBar({ agent, shown }: { agent: Agent; shown: AgentVersion }) {
   );
 }
 
+/** The MCP connectors an agent version may call, each a link to its card (owner review of 2026-10-28). */
+export function AgentMcpServers({ servers }: { servers: NonNullable<AgentSpec["mcp_servers"]> }) {
+  if (servers.length === 0) return <>Those of the platform (or of its human)</>;
+  return (
+    <ul>
+      {servers.map((s) => (
+        <li key={s.connector}>
+          <Link href={orgConnectorHref(s.connector)} className="font-mono underline">
+            {s.connector}
+          </Link>
+          <span className="text-ink-muted"> {"—"} {(s.tools ?? []).length ? (s.tools ?? []).join(", ") : "every tool"}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function DefinitionView({ org, agent, version }: { org: string; agent: Agent; version: number | null }) {
   const current = currentVersion(agent);
   const shown = (version != null ? versionOf(agent, version) : undefined) ?? versionOf(agent, current) ?? sortedVersions(agent)[0];
@@ -255,18 +273,7 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
                   ))}
             </Row>
             <Row label="Tools">
-              {(spec.mcp_servers ?? []).length === 0 ? (
-                "Those of the platform (or of its human)"
-              ) : (
-                <ul>
-                  {(spec.mcp_servers ?? []).map((s) => (
-                    <li key={s.connector}>
-                      <span className="font-mono">{s.connector}</span>
-                      <span className="text-ink-muted"> {"—"} {(s.tools ?? []).length ? (s.tools ?? []).join(", ") : "every tool"}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <AgentMcpServers servers={spec.mcp_servers ?? []} />
             </Row>
             <Row label="Knowledge">
               {(spec.knowledge ?? []).length === 0 ? "None" : (spec.knowledge ?? []).map((k) => k.slug).join(", ")}

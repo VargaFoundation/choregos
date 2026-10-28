@@ -336,10 +336,13 @@ def hosts_of_config(
     config: Mapping[str, object], defaults: Mapping[str, object] | None = None
 ) -> list[tuple[str, int]]:
     """The hosts the URL-shaped fields of a connector's or source's configuration point to; a field
-    left out falls back to the type's declared default."""
+    left out falls back to the type's declared default. A field holding a list of URLs gives each
+    one's host (ADR 0089): read as one value, a list yielded no host at all."""
     found: list[tuple[str, int]] = []
     for name in URL_FIELDS:
-        hp = host_port_of(config.get(name) or (defaults or {}).get(name))
-        if hp and hp not in found:
-            found.append(hp)
+        value = config.get(name) or (defaults or {}).get(name)
+        for url in value if isinstance(value, (list, tuple)) else [value]:
+            hp = host_port_of(url)
+            if hp and hp not in found:
+                found.append(hp)
     return found
