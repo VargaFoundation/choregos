@@ -6041,7 +6041,7 @@ components:
         projects: { type: array, items: { type: string }, maxItems: 200 }
         groups: { type: array, items: { type: string }, maxItems: 200 }
         serving_mode: { type: string, enum: [files, index], default: files, description: "`files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search" }
-        restricted: { type: boolean, default: false, description: "people read it only through a grant (or as an administrator or owning-project owner); runs that the base is attached to are still served (S42-11, ADR 0081)" }
+        restricted: { type: boolean, default: false, description: "people read it only through a grant (or as an administrator or owning-project owner); a run attached to it is served it only on behalf of a person who may read it: the person who started its work item, or of a fan-out child its parent's (S42-11, ADR 0081, ADR 0097)" }
     ProjectKnowledgeBaseCreate:
       type: object
       required: [slug, name]
@@ -6096,7 +6096,7 @@ components:
         distill: { type: boolean, description: "distil the base into a skill (spends model budget)" }
         share: { type: boolean, description: "change the grants" }
         archive: { type: boolean }
-        widen: { type: boolean, description: "change scope, projects, groups or restricted (organisation administrator only)" }
+        widen: { type: boolean, description: "change scope, projects, groups or restricted (organisation administrator, or owner of the base's project)" }
     KnowledgeDocument:
       type: object
       required: [id, filename, title, mime, size_bytes, digest, source, status]
@@ -6199,7 +6199,7 @@ components:
         eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
         sources: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeSource" }, description: returned by the reading of one base }
         owner_project: { type: [string, "null"], description: "the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base" }
-        restricted: { type: boolean, description: "people read it only through a grant; runs that the base is attached to are still served (S42-11)" }
+        restricted: { type: boolean, description: "people read it only through a grant; a run is served it only on behalf of a person who may read it (S42-11, ADR 0097)" }
         can: { $ref: "#/components/schemas/KnowledgePermissions" }
         cannot_reason: { type: [string, "null"], description: "the server's sentence when the caller may not edit: shown as is, never guessed from roles" }
         my_role: { type: [string, "null"], enum: [viewer, editor, owner, null], description: "the caller's role on the base through grants or ownership; null for a plain reader through the reach" }
