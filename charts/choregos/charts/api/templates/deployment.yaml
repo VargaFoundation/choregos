@@ -226,6 +226,14 @@ spec:
             {{- end }}
             {{- end }}
             {{- end }}
+            {{- /* A name this chart sets for the API must not also come from global.extraEnv.
+                   S47-02/03/04 add their names to this dict. */}}
+            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" }}
+            {{- range ($.Values.global.extraEnv | default list) }}
+            {{- if hasKey $apiOwned .name }}
+            {{- fail (printf "global.extraEnv: %s is set by the choregos-api chart; use %s instead (two values for one name: Kubernetes keeps the last one without saying so)" .name (get $apiOwned .name)) }}
+            {{- end }}
+            {{- end }}
             {{- include "choregos.commonEnv" . | nindent 12 }}
             {{- with (.Values.global.egress | default dict).denyDomains }}
             # Hosts no run of this deployment may reach (ADR 0070): the effective network of a run
@@ -263,6 +271,9 @@ spec:
             # the WHOLE API in CreateContainerConfigError.
             - name: CHOREGOS_SESSION_SECRET
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: session-secret } }
+            - name: CHOREGOS_SESSION_SECRET_PREVIOUS
+              # Optional: the previous key during a rotation, for verification only; absent, no rotation.
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: session-secret-previous, optional: true } }
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-private-key } }
             - name: CHOREGOS_RUN_TOKEN_PUBLIC_KEY

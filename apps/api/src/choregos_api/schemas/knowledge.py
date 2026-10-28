@@ -31,7 +31,7 @@ class KnowledgeBaseCreate(Dto):
     projects: list[str] = Field(default_factory=list, max_length=200)
     groups: list[str] = Field(default_factory=list, max_length=200)
     serving_mode: ServingMode = "files"
-    #: people read it only through a grant; runs it is attached to are still served (S42-11)
+    #: people read it only through a grant; a run is served it only for a person who reads it (ADR 0097)
     restricted: bool = False
 
     @model_validator(mode="after")
@@ -147,7 +147,7 @@ class KnowledgeBaseDto(Dto):
     distillation: dict[str, Any] | None = None
     #: the project this base was created from (S39-14): its owners curate it and widen its reach
     owner_project: str | None = None
-    #: people read it only through a grant; runs it is attached to are still served (S42-11)
+    #: people read it only through a grant; a run is served it only for a person who reads it (ADR 0097)
     restricted: bool = False
     #: what the caller may do, and the server's sentence when it may not edit (S42-11)
     can: KnowledgePermissions | None = None

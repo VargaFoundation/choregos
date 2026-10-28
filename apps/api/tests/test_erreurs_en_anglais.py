@@ -12,11 +12,11 @@ ou de portée y reste ce qu'il est.
 Les journaux (`logger.info(...)`) ne sont pas lus : ils parlent aux exploitants, côté code, et
 restent en français comme les commentaires.
 
-Le détecteur est celui de `tests/langue/test_anglais.py`, chargé par son chemin : sous
-`--import-mode=importlib`, un module de test n'en importe pas un autre, et une seconde copie
-divergerait. Il ne connaissait pas le vocabulaire des refus de l'API — « Projet introuvable »,
-« jeton de run manquant », « signature HMAC invalide » passaient sans accent ni mot outil : le
-lexique ci-dessous le complète, pour ce balayage.
+The detector is `looks_like_shipped_french` of `tools/check_english.py` (ADR 0098), loaded by its
+path: under `--import-mode=importlib` a test module does not import another one, and a second copy
+would drift. It did not know the vocabulary of the API's refusals — `Projet introuvable`,
+`jeton de run manquant`, `signature HMAC invalide` passed with no accent and no function word:
+the lexicon below completes it, for this sweep.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ import ast
 import importlib.util
 import pathlib
 import re
+import sys
 from collections.abc import Callable, Iterator
 from types import ModuleType
 
@@ -34,16 +35,17 @@ SOURCES = (RACINE / "apps/api/src/choregos_api", RACINE / "packages/ontology/src
 
 
 def _garde_de_langue() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("_garde_de_langue", RACINE / "tests/langue/test_anglais.py")
+    spec = importlib.util.spec_from_file_location("check_english", RACINE / "tools/check_english.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # a dataclass needs its module registered
     spec.loader.exec_module(module)
     return module
 
 
 _GARDE = _garde_de_langue()
-ressemble_a_du_francais: Callable[[str], bool] = _GARDE.ressemble_a_du_francais
-_prose: Callable[[str], str] = _GARDE._prose
+ressemble_a_du_francais = _GARDE.looks_like_shipped_french  # lang: fr-ok alias:internal
+_prose: Callable[[str], str] = _GARDE.shipped_prose
 
 #: Les mots des refus de l'API que le détecteur commun laissait passer, et l'élision (« l'agent »,
 #: « n'a », « d'agent ») qu'aucune contraction anglaise n'écrit après un mot d'une seule lettre.

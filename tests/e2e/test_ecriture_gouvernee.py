@@ -43,7 +43,7 @@ async def _preparer(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> tupl
          "annotations": {"readOnlyHint": True}},
     ]  # fmt: skip
     serveur = FakeMcpServer(outils=outils, jeton="cle-fournisseur", gestes={"commander_poste": _commander})
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", serveur)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     client = platform.client
     await login(client)

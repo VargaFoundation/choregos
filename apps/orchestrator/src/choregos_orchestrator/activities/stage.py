@@ -351,7 +351,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             skills=[]
             if remote_runtime is not None or hosted is not None
             else await _skills_de_l_agent(session, bundle, agent),
-            knowledge=[] if remote_runtime is not None else await _knowledge_of_agent(session, bundle, agent),
+            knowledge=[]
+            if remote_runtime is not None
+            else await _knowledge_of_agent(session, bundle, agent, item),
             permissions=network_permissions(
                 run_network(bundle, agent.spec.network if agent is not None else None, settings, org_hosts),
                 write_paths=allowed_paths,
@@ -1078,11 +1080,13 @@ async def _skills_de_l_agent(session: Any, bundle: Any, agent: Any) -> list[Skil
     return refs
 
 
-async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any) -> list[KnowledgeRef]:
+async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any, item: Any) -> list[KnowledgeRef]:
     """The knowledge bases the agent version reads (ADR 0051), pinned for this run. A base that does
-    not exist, or is not served to this project, stops the run: it would answer without its reference."""
+    not exist, is not served to this project, or is restricted and not readable by the person who
+    started the work item (ADR 0097), stops the run: it would answer without its reference."""
     if agent is None or not agent.spec.knowledge:
         return []
+    from choregos_api.knowledge.on_behalf import OnBehalf
     from choregos_api.knowledge.serving import KnowledgeRefusedError, pin
     from temporalio.exceptions import ApplicationError
 
@@ -1092,6 +1096,7 @@ async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any) -> list[Kno
             bundle.project.org_id,
             bundle.project.slug,
             [ref.slug for ref in agent.spec.knowledge],
+            OnBehalf(session, bundle.project.org_id, bundle.project.id, item.initiated_by),
         )
     except KnowledgeRefusedError as refusal:
         raise ApplicationError(

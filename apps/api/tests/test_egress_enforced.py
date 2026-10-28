@@ -32,7 +32,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(outils=[dict(t) for t in TOOLS])
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", server)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     yield server
 
 
@@ -69,7 +69,7 @@ async def test_a_broker_call_during_a_run_on_a_revoked_host_is_a_tool_error_not_
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(outils=[dict(o) for o in OUTILS])
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", server)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "x")
     # open the host first (the setup declares and discovers under enforce)
     assert (

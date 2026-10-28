@@ -1,10 +1,11 @@
 """Tout ce qu'un utilisateur lit est en anglais (ADR 0039) ; le code, ses commentaires et `docs/plan`
 restent en français.
 
-Le détecteur est volontairement simple — des lettres accentuées, un mot qu'aucun libellé anglais
-n'emploie, ou des mots outils français — et ses faux positifs se règlent par une courte liste de noms
-propres, pas par des exceptions de chemin. Il est ici, avec les gardes qui s'en servent : sous
-`--import-mode=importlib`, un module de test n'en importe pas un autre.
+The detector is deliberately simple (accented letters, a word no English label uses, or French
+function words) and its false positives are settled by a short list of proper names, never by path
+exceptions. Since ADR 0098 it lives in `tools/check_english.py` (`looks_like_shipped_french`); this
+module loads that tool by its path (under `--import-mode=importlib` a test module does not import
+another one) and keeps the former name as an alias for the guards below.
 
 Ce que la plateforme LIVRE se lit en anglais.
 
@@ -18,45 +19,32 @@ des clés, pas du texte.
 
 from __future__ import annotations
 
-import ast
+import importlib.util
 import json
 import pathlib
-import re
-from collections.abc import Iterator
+import sys
+from collections.abc import Callable, Iterator
+from types import ModuleType
 from typing import Any
 
 import pytest
 import yaml
 
-#: Les noms propres gardent leurs accents.
-NOMS_PROPRES = ("Léa", "Hélène", "Zoé", "Varga")
-_ACCENTS = re.compile(r"[àâçéèêëîïôûùüÿœÀÂÇÉÈÊËÎÏÔÛÙÜŸŒ«»]")
-_MOTS = re.compile(
-    r"\b(les|des|une|est|sont|vers|pour|dans|avec|aux|pas|qui|que|leur|chaque|ne|ou|au|du|sur|par)\b",
-    re.IGNORECASE,
-)
-
-
-#: Des mots sans accent qu'aucun libellé anglais n'emploie : « En cours », « Intervention humaine »,
-#: « Cadrage » passaient sans eux.
-_LEXIQUE = re.compile(
-    r"\b(en|cours|ouverte?|humaine?|cadrage|relecture|besoin|demande|poste|compte|groupe|reprise|commande|"
-    r"tu|lis|ecris|verifie)\b",
-    re.IGNORECASE,
-)
-
-
-def ressemble_a_du_francais(texte: str) -> bool:
-    """Vrai pour un accent hors des noms propres, un mot du lexique, ou deux mots outils français."""
-    sans_noms = texte
-    for nom in NOMS_PROPRES:
-        sans_noms = sans_noms.replace(nom, "")
-    if _ACCENTS.search(sans_noms) or _LEXIQUE.search(sans_noms):
-        return True
-    return len(_MOTS.findall(sans_noms)) >= 2
-
-
 RACINE = pathlib.Path(__file__).resolve().parents[2]
+
+
+def _check_english() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("check_english", RACINE / "tools" / "check_english.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # a dataclass needs its module registered
+    spec.loader.exec_module(module)
+    return module
+
+
+_CHECK_ENGLISH = _check_english()
+ressemble_a_du_francais = _CHECK_ENGLISH.looks_like_shipped_french  # lang: fr-ok alias:internal
+_prose: Callable[[str], str] = _CHECK_ENGLISH.shipped_prose
 #: Les clés dont la valeur se montre à quelqu'un.
 VISIBLES = {
     "display",
@@ -98,13 +86,6 @@ def _visibles(valeur: Any, cle: str = "") -> Iterator[tuple[str, str]]:
             yield from _visibles(element, cle)
 
 
-def _prose(texte: str) -> str:
-    """Le texte sans ce qui n'est pas de la prose : blocs et extraits de code, gabarits Jinja."""
-    texte = re.sub(r"```.*?```", "", texte, flags=re.S)
-    texte = re.sub(r"`[^`]*`", "", texte)
-    return re.sub(r"\{\{.*?\}\}|\{%.*?%\}", "", texte, flags=re.S)
-
-
 def test_le_detecteur_reconnait_le_francais_et_laisse_passer_l_anglais() -> None:
     assert ressemble_a_du_francais("Intervention humaine")
     assert ressemble_a_du_francais("En cours")
@@ -134,54 +115,10 @@ def test_aucun_fichier_depose_ni_skill_n_est_en_francais(chemin: pathlib.Path) -
 
 # ───────────────────── ce que le code DIT : les messages (S21-10 et suivantes) ─────────────────────
 
-#: Ce qui reste en français dans le code, et pourquoi. Une ligne ici est une décision, pas un oubli.
-FRANCAIS_VOULU = {
-    # Les motifs de la garde contre l'injection reconnaissent AUSSI une injection écrite en français.
-    "packages/core/src/choregos_core/injection.py",
-}
-
-
-def _chaines_parlees(chemin: pathlib.Path) -> Iterator[tuple[int, str]]:
-    """Les chaînes d'un module qui peuvent arriver à quelqu'un : ni docstrings, ni commentaires
-    sous forme de chaîne, ni motifs d'expression régulière ; une f-string se lit sans ses trous."""
-    arbre = ast.parse(chemin.read_text(encoding="utf-8"))
-    muettes: set[int] = set()
-    for noeud in ast.walk(arbre):
-        if isinstance(noeud, ast.Expr) and isinstance(noeud.value, ast.Constant):
-            muettes.add(id(noeud.value))
-        if isinstance(noeud, ast.JoinedStr):
-            muettes.update(id(v) for v in noeud.values)
-            texte = "".join(
-                v.value for v in noeud.values if isinstance(v, ast.Constant) and isinstance(v.value, str)
-            )
-            yield noeud.lineno, texte
-    for noeud in ast.walk(arbre):
-        if (
-            isinstance(noeud, ast.Constant)
-            and isinstance(noeud.value, str)
-            and id(noeud) not in muettes
-            and "\\b" not in noeud.value
-        ):
-            yield noeud.lineno, noeud.value
-
-
-def _francais_d_un_paquet(racine: str) -> list[str]:
-    fautes = []
-    for chemin in sorted((RACINE / racine).rglob("*.py")):
-        relatif = str(chemin.relative_to(RACINE))
-        if relatif in FRANCAIS_VOULU or "/tests/" in relatif:
-            continue
-        fautes += [
-            f"{relatif}:{ligne}: {texte[:90]!r}"
-            for ligne, texte in _chaines_parlees(chemin)
-            if ressemble_a_du_francais(texte)
-        ]
-    return fautes
-
 
 def test_les_messages_du_coeur_sont_en_anglais() -> None:
     """Validateur, analyseur, carte, garanties, moteur, éditions typées, politique, secrets (S21-10)."""
-    fautes = _francais_d_un_paquet("packages/core/src/choregos_core")
+    fautes = _CHECK_ENGLISH.french_spoken_strings("packages/core/src/choregos_core")
     assert not fautes, "du français dans ce que le cœur dit :\n  " + "\n  ".join(fautes)
 
 
@@ -207,5 +144,5 @@ def test_les_contrats_sont_en_anglais() -> None:
         for cle, texte in _visibles(document)
         if ressemble_a_du_francais(_prose(texte))
     ]
-    fautes += _francais_d_un_paquet("packages/contracts/src/choregos_contracts")
+    fautes += _CHECK_ENGLISH.french_spoken_strings("packages/contracts/src/choregos_contracts")
     assert not fautes, "du français dans les contrats :\n  " + "\n  ".join(fautes)

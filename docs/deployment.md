@@ -81,7 +81,9 @@ The chart never writes production secrets. It expects them to exist:
 
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
-| `global.apiSecretRef` (default `choregos-api-secrets`) | `session-secret`, `run-token-private-key`, `run-token-public-key`, `github-app-id`, `github-app-private-key`, `github-webhook-secret` | API **and** orchestrator |
+| `global.apiSecretRef` (default `choregos-api-secrets`) | `run-token-private-key`, `github-app-id`, `github-app-private-key` | API **and** orchestrator |
+| `global.apiSecretRef`, entries `session-secret`, `run-token-public-key`, `github-webhook-secret` | the session signing key (required, see below), the run-token public key (derived from the private one when absent), the GitHub webhook secret | API only |
+| `global.apiSecretRef`, entry `session-secret-previous` (optional) | the previous session key during a rotation, `CHOREGOS_SESSION_SECRET_PREVIOUS`: verification only | API only |
 | `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
 | `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
 | `global.oidc.secretRef` | `client-secret` | API |
@@ -101,6 +103,32 @@ openssl ecparam -name prime256v1 -genkey -noout    # ES256 private key
 ```
 
 The public key is derived from the private one when it is absent.
+
+**The session secret** (`session-secret`, `CHOREGOS_SESSION_SECRET`) signs the session cookie and the
+sign-in handshakes, and only the API reads it: the workers and the migrations Job never need it. It
+is required. The API refuses to start when it is empty, whatever the environment, and on any deployed
+instance (`global.environment` staging or prod, or a public or API URL served over https, whatever
+`global.environment` says) when it is shorter than 32 bytes or is the default published in the
+repository. The error names the variable. Generate one with:
+
+```bash
+openssl rand -base64 48
+```
+
+Each value signed with it carries a 256-bit tag bound to its purpose (session, OIDC state, OIDC
+handshake, remote OAuth state and handshake): a value signed for one purpose is refused for another.
+The API still reads the session cookies issued by the previous release for one more release; they
+carry a 128-bit tag without a purpose and are accepted as sessions only.
+
+To rotate it, move the old value to `session-secret-previous`, put the new one in `session-secret`,
+redeploy, and remove `session-secret-previous` once `session_max_age_s` (8 hours) has passed: until
+then a session signed with the old key still signs its holder in, and nothing new is signed with it.
+On a deployed instance the previous key must also be at least 32 bytes. With an ExternalSecret, set
+`choregos-api.externalSecrets.sessionSecretPrevious: true` once the vault holds the property (a
+missing property fails the whole ExternalSecret sync). Do not pass it through `global.extraEnv`: a
+`CHOREGOS_SESSION_SECRET_PREVIOUS` there fails the render, because the API chart already sets it. The
+sign-ins in flight at the deploy that adds the purposes (10 minutes at most) fail once and are
+started again.
 
 **The secrets key** (`secrets-keks`, [ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) seals
 the connector secrets typed in the console. It is a list `id:base64`, the first entry sealing and the

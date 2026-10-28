@@ -12,6 +12,7 @@ import pathlib
 import subprocess
 import sys
 from types import ModuleType
+from typing import Any
 
 import pytest
 import yaml
@@ -194,6 +195,12 @@ def test_makefile_reads_comments_only() -> None:
         ("charts/choregos/templates/_helpers.tpl", True),
         ("charts/choregos/templates/NOTES.txt", True),
         ("charts/choregos/dashboards/runs.json", False),
+        ("essai/rh/README.md", True),
+        ("infra/policies/images.yaml", True),
+        ("docker/api.Dockerfile", True),
+        ("examples/agents/plain/x.py", True),
+        ("compose.yaml", True),
+        ("CODEOWNERS", True),
     ],
 )
 def test_what_is_scanned(path: str, scanned: bool) -> None:
@@ -286,10 +293,29 @@ def test_agents_md_says_english_everywhere() -> None:
     assert not french, f"AGENTS.md is in English: {french}"
 
 
-def test_make_lint_runs_the_guard() -> None:
+def _lint_block() -> str:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    lint = makefile.split("\nlint:", 1)[1].split("\n\n", 1)[0]
-    assert "tools/check_english.py" in lint
+    return makefile.split("\nlint:", 1)[1].split("\n\n", 1)[0]
+
+
+def test_make_lint_runs_the_guard() -> None:
+    assert "tools/check_english.py" in _lint_block()
+
+
+def test_make_lint_runs_the_ratchet() -> None:
+    """ADR 0098: `make lint` (so `make ci`) counts the whole tree; `make english-ratchet` is the same line."""
+    ratchet = "tools/check_english.py --all"
+    assert any(line.strip().endswith(ratchet) for line in _lint_block().splitlines())
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    target = makefile.split("\nenglish-ratchet:", 1)[1].split("\n\n", 1)[0]
+    assert ratchet in target
+    assert "ADR 0098" in target.splitlines()[0], "the help text names the decision"
+
+
+def _english_job() -> dict[str, Any]:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    job: dict[str, Any] = workflow["jobs"]["english"]
+    return job
 
 
 def test_ci_runs_the_guard_on_every_pull_request_with_history() -> None:
@@ -298,13 +324,56 @@ def test_ci_runs_the_guard_on_every_pull_request_with_history() -> None:
     assert "needs" not in job, "behind the path filter, a docs-only pull request would skip it"
     checkout = next(step for step in job["steps"] if step.get("uses", "").startswith("actions/checkout"))
     assert checkout["with"]["fetch-depth"] == 0
-    (run,) = [step["run"] for step in job["steps"] if "run" in step]
+    (run,) = [step["run"] for step in job["steps"] if "--range" in step.get("run", "")]
     assert "tools/check_english.py" in run
-    assert "--range" in run
     assert "pull_request.base.sha" in run
     assert "english" in workflow["jobs"]["ci-ok"]["needs"]
+
+
+def test_ci_runs_the_ratchet() -> None:
+    steps = [step for step in _english_job()["steps"] if "--all" in step.get("run", "")]
+    assert len(steps) == 1, "one step runs the full-repo ratchet"
+    assert "tools/check_english.py" in steps[0]["run"]
+    assert steps[0]["name"] == "full-repo French ratchet"
+
+
+def test_shipped_detector_is_the_former_one() -> None:
+    """The detector of ADR 0039 §4 moved here from `tests/langue/test_anglais.py` (ADR 0098)."""
+    for french in ("Intervention humaine", "En cours", "Remettre le badge en main propre"):  # lang: fr-ok
+        assert ce.looks_like_shipped_french(french), french
+    for english in (
+        "Needs a human",
+        "Léa's Claude Code",
+        "Hand the badge to its holder in person",
+    ):  # lang: fr-ok
+        assert not ce.looks_like_shipped_french(english), english
+    assert ce.shipped_prose("a `code` span and {{ a_placeholder }} stay out") == "a  span and  stay out"
 
 
 def test_templates_are_scanned() -> None:
     """S39-11: a shipped template is read by every user, its prose is read like the rest."""
     assert ce.is_scanned("templates/x/workflows/a.yaml")
+
+
+def test_spoken_strings_skip_docstrings_patterns_and_holes() -> None:
+    """The sweep of what a package says: docstrings, patterns and an f-string's holes are not read."""
+    source = (
+        '"""A docstring."""\n'
+        "def f(name):\n"
+        '    """Another one."""\n'
+        '    pattern = r"\\bdemande\\b"\n'  # lang: fr-ok
+        '    return f"hello {name} and goodbye", "plain text"\n'
+    )
+    assert sorted(text for _, text in ce.spoken_strings(source)) == ["hello  and goodbye", "plain text"]
+
+
+def test_a_french_spoken_string_is_found_in_a_package(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "pkg" / "src"
+    package.mkdir(parents=True)
+    (package / "said.py").write_text(
+        'MESSAGE = "Intervention humaine"\nOK = "Needs a human"\n', encoding="utf-8"
+    )  # lang: fr-ok
+    monkeypatch.setattr(ce, "ROOT", tmp_path)
+    assert ce.french_spoken_strings("pkg/src") == ["pkg/src/said.py:1: 'Intervention humaine'"]  # lang: fr-ok

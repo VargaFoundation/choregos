@@ -1374,8 +1374,8 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     distillation: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     #: the project this base was created from (S39-14): its owners curate it and widen its reach
     owner_project: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    #: people read it only through a grant (or as an administrator or owning-project owner); runs
-    #: that the base is attached to are still served (S42-11, ADR 0081)
+    #: people read it only through a grant (or as an administrator or owning-project owner); a run
+    #: is served it only on behalf of a person who reads it (S42-11e, ADR 0097)
     restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 

@@ -374,6 +374,39 @@ async def test_a_base_the_project_is_not_served_stops_the_run(
     assert refusal.value.non_retryable and refusal.value.type == "KnowledgeRefused"
 
 
+async def test_a_restricted_base_is_pinned_only_for_an_initiator_who_reads_it(setup: Fixture) -> None:
+    """S42-11e (ADR 0097): the run acts for the person who started the work item."""
+    from choregos_api.db.models import Membership, Project, User, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _agent(setup)
+    await _knowledge(setup, "hr", scope="org", projects=[], groups=[], serving_mode="files", restricted=True)
+    await _reads(["hr"])
+
+    async def started_by(initiated_by: str) -> None:
+        async with session_scope() as session:
+            item = await session.get(WorkItem, setup.work_item_id)
+            assert item is not None
+            item.initiated_by = initiated_by
+
+    await started_by("schedule:nightly")
+    with pytest.raises(ApplicationError, match="acts for nobody") as refusal:
+        await prepare_stage(_plan(setup, agent="coordinateur"))
+    assert refusal.value.non_retryable and refusal.value.type == "KnowledgeRefused"
+
+    async with session_scope() as session:
+        projet = await session.get(Project, setup.project_id)
+        assert projet is not None
+        user = User(email="hr-lead@example.org", display_name="HR lead")
+        session.add(user)
+        await session.flush()
+        session.add(Membership(user_id=user.id, org_id=projet.org_id, role="org_admin"))
+    await started_by("person:hr-lead@example.org")
+    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    assert [ref["slug"] for ref in entree["knowledge"]] == ["hr"]
+
+
 async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending_review(
     setup: Fixture,
 ) -> None:
