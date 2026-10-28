@@ -26,6 +26,7 @@ from .server import MAX_HEAD_BYTES, Relay
 from .source import ApiProxySource, CachedProxySource
 
 MIN_CLIENT_TOKEN = 16
+UNRESOLVED = ("<no value>", "<nil>")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,13 @@ def settings_from(env: Mapping[str, str]) -> RelaySettings:
     missing = [name for name in names if not env.get(name, "").strip()]
     if missing:
         raise SystemExit(f"the relay needs {', '.join(missing)}")
+    unresolved = [
+        name for name in (*names, "CHOREGOS_RELAY_LISTEN") if env.get(name, "").strip() in UNRESOLVED
+    ]
+    if unresolved:
+        # A secret template whose key is missing writes this text and syncs fine (see `config.py`): taken as a
+        # token, every call to the API would be refused and the relay would fail closed on all traffic.
+        raise SystemExit(f"{', '.join(unresolved)} holds an unresolved template value, not a setting")
     client_token = env["CHOREGOS_RELAY_CLIENT_TOKEN"].strip()
     if len(client_token) < MIN_CLIENT_TOKEN:
         raise SystemExit(f"CHOREGOS_RELAY_CLIENT_TOKEN must be {MIN_CLIENT_TOKEN} characters or more")

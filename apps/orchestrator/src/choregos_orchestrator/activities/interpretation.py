@@ -59,7 +59,27 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "fields": dict(item.fields or {}),
             # The attempts each transition already spent, read from its runs (#550).
             "attempts_spent": spent,
+            # What the last stage answered: a transition's `when` chooses on it (S48-01).
+            "last_outputs": await last_outputs(session, item.id),
         }
+
+
+async def last_outputs(session: Any, work_item_id: str) -> dict[str, Any] | None:
+    """The outputs of the work item's last finished run with a result, for a restarted interpreter
+    (S48-01). A run still queued or running has none yet; the interpreter reads its result when it
+    awaits it, and takes its outputs from there."""
+    row = (
+        await session.execute(
+            select(Run.result)
+            .where(Run.work_item_id == work_item_id, Run.result.is_not(None), Run.ended_at.is_not(None))
+            .order_by(Run.ended_at.desc(), Run.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    outputs = row.get("outputs") if isinstance(row, dict) else None
+    if not isinstance(outputs, dict):
+        return None
+    return {k: v for k, v in outputs.items() if v is not None} or None
 
 
 async def consistent_progress(session: Any, work_item_id: str) -> tuple[str, dict[str, int]]:

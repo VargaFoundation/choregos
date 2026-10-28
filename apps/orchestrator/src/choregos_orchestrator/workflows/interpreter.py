@@ -216,6 +216,9 @@ class InterpreterInput:
     #: The run whose sandbox is suspended while a person answers (S35-03), across a
     #: `continue_as_new`: `{run_id, key, until, answered}`.
     suspended: dict[str, Any] | None = None
+    #: The outputs of the last stage, which a transition's `when` reads (S48-01), across a
+    #: `continue_as_new`.
+    last_outputs: dict[str, Any] | None = None
 
 
 @dataclass
@@ -245,6 +248,8 @@ class WorkflowInterpreter:
         self.last_run: str | None = None
         self.pending_request: str | None = None
         self.last_outcome: str | None = None
+        #: The outputs of the work item's last stage: a transition's `when` chooses on them (S48-01).
+        self.last_outputs: dict[str, Any] | None = None
         self.workflow_override: dict[str, Any] | None = None
         self.state_mapping: dict[str, str] = {}
         #: Le signal `migrate` entier : la définition, son identifiant, le mapping.
@@ -415,7 +420,7 @@ class WorkflowInterpreter:
                     engine = self._migrate(engine)
                 continue
 
-            transition = engine.select_transition(self.state, self.last_outcome)
+            transition = engine.select_transition(self.state, self.last_outcome, self.last_outputs)
             self.last_outcome = None
             if transition is None:
                 moved = await self._wait_external(engine, context)
@@ -454,6 +459,7 @@ class WorkflowInterpreter:
                         "attempts_reset": dict(self.remises),
                         "parked": list(self.reprise) if self.reprise else None,
                         "suspended": self.suspension,
+                        "last_outputs": self.last_outputs,
                     }
                 )
 
@@ -472,6 +478,9 @@ class WorkflowInterpreter:
             # A restarted interpreter starts from what the ticket has cost, not from zero.
             self.cost_usd = max(self.cost_usd, float(context.get("ticket_cost_usd", 0.0)))
         self.state = params.resume_from or context.get("state") or engine.initial_state
+        # Across a `continue_as_new` the payload carries them; a restarted interpreter reads the last
+        # run's back from the database (S48-01).
+        self.last_outputs = params.last_outputs or context.get("last_outputs") or None
         if self.version_des_champs == 0:  # a `fields_changed` that arrived before the read is newer
             self.champs = dict(context.get("fields") or {})
 
@@ -608,6 +617,9 @@ class WorkflowInterpreter:
             workflow.logger.warning("diff du run non collecté : %s", message_de(exc))
         self.current_run = None
         self.last_run = run_id  # les transitions `system` évaluent leurs gates sur ce run
+        # What the stage answered: the next selection reads it (S48-01). Taken from the result the
+        # activity returned, so a replay reads the same values.
+        self.last_outputs = result.outputs.model_dump(mode="json", exclude_none=True) or None
 
         outcomes = await self._gates(params, transition, run_id)
 

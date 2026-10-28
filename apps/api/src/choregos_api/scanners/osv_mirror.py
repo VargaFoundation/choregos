@@ -108,10 +108,14 @@ def built_at(path: Path) -> float | None:
 
 
 def _semver_key(version: str) -> tuple[Any, ...] | None:
-    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?", version.strip())
+    # A bound may name fewer parts (`13.0` in an npm ECOSYSTEM range): the missing ones are zero.
+    match = re.fullmatch(
+        r"v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?", version.strip()
+    )
     if not match:
         return None
     major, minor, patch, pre = match.groups()
+    minor, patch = minor or "0", patch or "0"
     # A release sorts after its pre-releases; pre-release identifiers compare numerically when numeric.
     pre_key: tuple[Any, ...] = (1,)
     if pre:
@@ -210,10 +214,11 @@ class Mirror:
                 "WHERE a.ecosystem = ? AND a.name = ? ORDER BY v.id",
                 (ecosystem, normalize(ecosystem, name)),
             ).fetchall()
+        # A withdrawn advisory stays readable by its id, as on OSV, but no query returns it.
         return [
             {"id": vuln_id, "modified": modified or ""}
             for vuln_id, modified, record in rows
-            if affects(json.loads(record), ecosystem, name, version)
+            if not (data := json.loads(record)).get("withdrawn") and affects(data, ecosystem, name, version)
         ]
 
     def query_batch(self, queries: Iterable[dict[str, Any]]) -> dict[str, Any]:
