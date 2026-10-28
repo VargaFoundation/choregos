@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_adapters import build, configuration_resolue
+from choregos_adapters import build
 from choregos_adapters.base import GatewayAdapter
 from choregos_adapters.registry import default_gateway_type
 from sqlalchemy import select
@@ -43,8 +43,12 @@ async def org_gateway_and_type(session: AsyncSession, org_id: str) -> tuple[str,
         gateway = build("gateway", kind, {})
     else:
         kind = connector.type
-        config = configuration_resolue(
-            connector.kind, connector.type, connector.config, connector.secret_refs
+        from ..secret_store import resolved_configuration
+
+        # Through the store: a key the organisation typed is a `store:` reference, which only the
+        # platform reads, with the organisation's context (ADR 0058; finding #985).
+        config = await resolved_configuration(
+            session, org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
         gateway = build("gateway", kind, config)
     return kind, gateway

@@ -65,6 +65,10 @@
  },
  {
   "kind": "marketdata",
+  "type": "tiingo"
+ },
+ {
+  "kind": "marketdata",
   "type": "yahoo"
  },
  {

@@ -34,7 +34,7 @@ choregos projects list
 
 `--template <name>@<version>` on `create` also provisions the project: repository, board,
 GitOps manifests and scaffolding. Without it, the project is created empty and you attach
-its connectors yourself, from the UI (*Settings → connectors*: type and configuration, secrets referenced never typed) or the API (`PUT /projects/{id}/connectors/{kind}`).
+its connectors yourself, from the UI (*Settings → connectors*: type and configuration; a secret is typed once and sealed, or given by reference) or the API (`PUT /projects/{id}/connectors/{kind}`).
 
 A project needs, at minimum: a **tracker** (where humans look), a **workflow** and a
 **policy**. Everything else has a default or can be added later.
@@ -167,8 +167,10 @@ under the error. No screen asks for an installation id.
 Until a project can run, its overview opens on a **getting started** list, which is the project's
 readiness (below): one list, computed by the API, that the settings page, the CLI and the MCP door share.
 
-A secret is never written in `config` — a secret field there is refused (`422`). It is named by
-**reference**, field by field, and resolved when the adapter is built, in the process that uses it:
+A secret is never written in `config` — a secret field there is refused (`422`). A key the
+organisation owns is **typed** (`secret_values`, sealed, above). A key the operator keeps in a vault
+is named by **reference**, field by field, and resolved when the adapter is built, in the process that
+uses it:
 
 ```bash
 curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
@@ -183,9 +185,10 @@ connector test with its name — never a silent fallback to a default value.
 `env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
 `^CONNECTOR_[A-Z0-9_]+$`, chart value `global.secrets.envPattern`); the platform's own variables
 (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
-pattern. A name outside it is a `422` at write and a connector in error at use. Only the
-organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
-refused. **Breaking:** a reference written before this rule that is outside the pattern stops
+pattern. A name outside it is a `422` at write and a connector in error at use. Only a platform
+administrator writes a reference (ADR 0088) — on a single-organisation install, that organisation's
+administrator; with several, an organisation's administrator and a project owner type the value, and
+an organisation connector that holds a reference is reconfigured by a platform administrator only. **Breaking:** a reference written before this rule that is outside the pattern stops
 resolving; rename the variable (or widen the pattern) and rewrite the reference.
 
 **Every type has its procedure**, in the app and here. Choosing a type in a form opens a side panel with

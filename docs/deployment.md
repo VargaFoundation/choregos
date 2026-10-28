@@ -144,14 +144,16 @@ it, `env:` references keep working, the API logs `secrets.key_missing` at start-
 secret answers 409. Keep it in the vault: **losing it loses every sealed value**. To rotate, put the
 new key first, redeploy, then run `choregos admin secrets rewrap` (see
 [the runbook](runbooks/rotation-secrets.md#connector-secrets-key-secrets-keks)) before dropping the
-old key. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
+old key, and drop it only once no database backup older than the rewrap can still be restored. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
 (turn it on once the key exists in the store: a missing remote property fails the whole object).
 
 `global.devSecrets: true` makes the chart generate all of the above itself, the secrets key
 included (drawn once, then re-read). It exists for a
 bench and says so; never use it in production.
 
-**Connector secrets by `env:NAME`.** A secret a connector references (`secret_refs: {api_token:
+**Connector secrets by `env:NAME`.** Only for a key the operator owns: an organisation's own key (a
+market-data key, a tracker token) is typed in the console and sealed under `secrets-keks`, never mapped
+into the pods here, where any organisation's connector could name it (S39-06e). A secret a connector references (`secret_refs: {api_token:
 env:CONNECTOR_JIRA_TOKEN}`) must be mapped into the API and worker pods (`global.extraEnv` with
 `valueFrom: {secretKeyRef: …}`, from a Secret) under a name matching `global.secrets.envPattern` —
 by default `^CONNECTOR_[A-Z0-9_]+$`, set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CHOREGOS_*`,

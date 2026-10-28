@@ -64,7 +64,7 @@ describe("the inbox's network access card (S39-22)", () => {
     expect(card.textContent).toContain("the API");
     expect(card.textContent).toContain("the vendor connector");
     expect(card.textContent).toContain("asked by lea@acme.dev");
-    expect(within(card).getByRole("link", { name: "connector vendor" })).toHaveAttribute("href", "/admin/connectors");
+    expect(within(card).getByRole("link", { name: "connector vendor" })).toHaveAttribute("href", "/admin/connectors?connector=vendor");
   });
 
   it("an administrator approves it: the endpoint is called and the list is read again", async () => {

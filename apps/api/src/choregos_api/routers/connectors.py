@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..config import get_settings
 from ..db.models import Connector
-from ..deps import Db, ProjectContext, ProjectCtx
+from ..deps import Db, ProjectContext, ProjectCtx, is_instance_admin
 from ..errors import not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
@@ -26,6 +26,7 @@ from ..schemas import (
 from ..secret_store import derived_project_name, secret_states
 from ..services.connector_health import check_connector
 from ..services.connector_secrets import (
+    SECRET_FIELD,
     drop_replaced_store_values,
     put_values,
     refs_with_values,
@@ -34,7 +35,7 @@ from ..services.connector_secrets import (
 
 router = APIRouter(tags=["connectors"])
 
-Field = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+Field = Annotated[str, Path(pattern=SECRET_FIELD)]
 
 
 def _prefix(ctx: ProjectContext, kind: str) -> str:
@@ -154,7 +155,8 @@ async def put_connector(
         body.config,
         body.secret_refs,
         body.secret_ref,
-        may_reference=ctx.principal.can(Permission.TOOLS_GRANT, ctx.org_slug),
+        may_reference=not (body.secret_refs or body.secret_ref)
+        or await is_instance_admin(session, ctx.principal),
         secret_values=body.secret_values,
         store_prefix=prefix,
     )

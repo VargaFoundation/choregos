@@ -1,6 +1,7 @@
 # 0058 — Connector secrets are write-only values, sealed in the database
 
-- **Status**: accepted, 2026-10-16
+- **Status**: accepted, 2026-10-16; §10 amended by [ADR 0088](0088-a-deployment-reference-is-the-operator-s.md)
+  (a deployment reference is written by a platform administrator)
 - **Concerns**: connectors (`org_connectors`, `connectors`), the API (`secret_store.py`,
   `routers/org_connectors.py`, `routers/connectors.py`), the orchestrator's `load_project`, the
   contract (`openapi.yaml`), the chart (`global.secrets`), the console; amends
