@@ -44,6 +44,7 @@ streams:
   S45: "English everywhere, finished (plan 2026-10-27, ADR 0098)"
   S46: "Consuming an external MCP gateway (plan 2026-10-27, ADR 0097)"
   S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
+  S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0107-0109)"
 
 stories:
 
@@ -3756,3 +3757,107 @@ stories:
     size: S
     depends_on: [S47-14]
     notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S49-01
+    title: "feat(core): the `assistant` catalogue entry (role `deliver`) with its eval"
+    stream: S49
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "ADR 0107 §1. Acceptance: the entry installs, renders its instructions with the context block, and its eval turns red when the instructions are emptied."
+  - id: S49-02
+    title: "feat(core): the `default-request` core workflow, its requirements pinned to tracker, runtime and gateway"
+    stream: S49
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S49-01]
+    notes: "ADR 0107 §1-2. Acceptance: `default-request` is in TEMPLATE_NAMES; a test asserts exigences() == {tracker, runtime, gateway} and turns red when a repository role, a production state or a pull request is added; a replayed history (tests/replay) if the interpreter is touched."
+  - id: S49-03
+    title: "feat(api): a project without a template receives `default-request` when it names no repository"
+    stream: S49
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S49-02]
+    notes: "ADR 0107 §3-5. Acceptance: livraison() picks default-simple with repo.url and default-request without; a template's defaults still win; readiness of a repository-less project lists no repository, scm or cd item; existing projects untouched; D14 updated."
+  - id: S49-04
+    title: "contract(schemas): the workflow catalogue DTO, the adopt request and `metadata.catalogue`"
+    stream: S49
+    sprint: 2
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "ADR 0108 §1-3, contract-change PR (ADR 0001)."
+  - id: S49-05
+    title: "feat(api): `GET /orgs/{org}/workflow-catalogue` lists core, template, plugin and org entries with computed requirements and agent resolution"
+    stream: S49
+    sprint: 2
+    priority: 2
+    size: M
+    depends_on: [S49-04]
+    notes: "ADR 0108 §1-2. Acceptance: each source listed; requirements equal exigences(); an agent absent everywhere is `unresolved` with the plugin that ships it when a configured source has it."
+  - id: S49-06
+    title: "feat(api): adopt a catalogue workflow into a project"
+    stream: S49
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S49-05]
+    notes: "ADR 0108 §3. Acceptance: the YAML is published as a new workflow with source `catalogue:<source>/<name>@<version>`; named agents installed per ADR 0040 §5; an unresolved agent refuses with the plugin to install; a taken name is 409; no plugin is ever installed by this route."
+  - id: S49-07
+    title: "feat(api): share a project workflow version to the organisation catalogue; updates offered by the readiness item"
+    stream: S49
+    sprint: 2
+    priority: 4
+    size: M
+    depends_on: [S49-06]
+    notes: "ADR 0108 §4-5. Acceptance: sharing copies the version; editing the project's workflow does not change the entry; a newer source version turns `workflow-template` to check, never rewrites."
+  - id: S49-08
+    title: "feat(web): the workflow catalogue in the console and the wizard"
+    stream: S49
+    sprint: 2
+    priority: 4
+    size: M
+    depends_on: [S49-06]
+    notes: "ADR 0108 §2-3, §7. Acceptance: a gallery with source, tags and a 'needs a repository' filter; the readiness preview before adopting; the wizard offers a catalogue workflow; RTL and Playwright on the mocks."
+  - id: S49-09
+    title: "feat(web): the Actors panel on the map (agents from the registry and catalogues, human groups, jobs)"
+    stream: S49
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S49-05]
+    notes: "ADR 0109 §2. Acceptance: add, change and remove an actor through the existing operations; a not-installed agent shows its install gesture; removing a used actor is refused as in YAML."
+  - id: S49-10
+    title: "feat(core): block-style `set_transition` values and their inverse for `task`, `action` and `spawn`"
+    stream: S49
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "ADR 0109 §1, §3. Acceptance: an operation then its inverse gives back the original bytes on every core, template and demo workflow."
+  - id: S49-11
+    title: "feat(web): a form for every transition field (inputs, outputs, on_fail, on_reject, does, task, action, spawn, release train)"
+    stream: S49
+    sprint: 3
+    priority: 2
+    size: L
+    depends_on: [S49-10]
+    notes: "ADR 0109 §3. Acceptance: one console test per field; the validator's refusal is shown in the form."
+  - id: S49-12
+    title: "feat(core): `set_workflow` for description, work-item fields and the initial state"
+    stream: S49
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: []
+    notes: "ADR 0109 §3. Acceptance: round-trip test; a field builder in the console for metadata.inputs."
+  - id: S49-13
+    title: "feat(web): drawing a transition opens its form, and a new workflow is born on the map"
+    stream: S49
+    sprint: 3
+    priority: 3
+    size: M
+    depends_on: [S49-09, S49-11, S49-12]
+    notes: "ADR 0109 §4-6. Acceptance: drag fills both ends of the add-transition form and writes nothing before confirmation; a blank skeleton validates; 'new workflow' opens the map; keyboard equivalent and axe on the map."
