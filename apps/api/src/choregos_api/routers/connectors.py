@@ -26,6 +26,7 @@ from ..schemas import (
 from ..secret_store import derived_project_name, secret_states
 from ..services.connector_health import check_connector
 from ..services.connector_secrets import (
+    SECRET_FIELD,
     drop_replaced_store_values,
     put_values,
     refs_with_values,
@@ -34,7 +35,7 @@ from ..services.connector_secrets import (
 
 router = APIRouter(tags=["connectors"])
 
-Field = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+Field = Annotated[str, Path(pattern=SECRET_FIELD)]
 
 
 def _prefix(ctx: ProjectContext, kind: str) -> str:

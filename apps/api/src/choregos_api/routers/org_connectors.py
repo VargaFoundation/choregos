@@ -60,6 +60,7 @@ from ..services.connecteurs import (
     verifier_les_secrets,
 )
 from ..services.connector_secrets import (
+    SECRET_FIELD,
     drop_replaced_store_values,
     put_values,
     refs_with_values,
@@ -407,7 +408,7 @@ async def update_org_connector(
 async def set_org_connector_secret(
     org: str,
     name: Nom,
-    field: Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")],
+    field: Annotated[str, Path(pattern=SECRET_FIELD)],
     body: SecretValue,
     session: Db,
     principal: Me,
@@ -446,7 +447,7 @@ async def set_org_connector_secret(
 async def clear_org_connector_secret(
     org: str,
     name: Nom,
-    field: Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")],
+    field: Annotated[str, Path(pattern=SECRET_FIELD)],
     session: Db,
     principal: Me,
 ) -> OrgConnectorDto:
