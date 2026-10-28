@@ -65,9 +65,10 @@ class SourceUnavailableError(RuntimeError):
 async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     """The adapter of a source: under `CHOREGOS_FAKES`, its scripted fake."""
     config = source.config or {}
-    # A web source's connector is opened below, once the network policy has been read: its crawl keeps
-    # the organisation's user agent and rate.
-    if source.kind in CONNECTED_KINDS or (source.kind == "git" and source.connector):
+    # A git or web source's connector is opened below, once the network policy has been read: a private
+    # repository or a walled site obeys the ceiling at every sync like a public one, and keeps the
+    # organisation's user agent.
+    if source.kind in CONNECTED_KINDS:
         connector = await _source_connector(session, source)
         resolved = await resolved_configuration(
             session, source.org_id, connector.kind, connector.type, connector.config, connector.secret_refs
@@ -91,6 +92,8 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
                     PlatformNetworkRefused(host, reason, f"knowledge source `{source.name}`").message()
                 )
         agent, per_host = await user_agent(session, source.org_id), (net.per_host_per_minute if net else None)
+    # A connector gone or of another type fails the sync, under the fakes too.
+    named = await _source_connector(session, source) if source.connector else None
     if fakes_enabled():
         from choregos_adapters.fakes.documents import fake_source
 
@@ -98,15 +101,9 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     if source.kind == "web":
         from choregos_adapters.documents.web import WebCrawlSource, WebDocumentsConnector, plain_headers
 
-        if source.connector:
-            connector = await _source_connector(session, source)
+        if named is not None:
             resolved = await resolved_configuration(
-                session,
-                source.org_id,
-                connector.kind,
-                connector.type,
-                connector.config,
-                connector.secret_refs,
+                session, source.org_id, named.kind, named.type, named.config, named.secret_refs
             )
             return WebDocumentsConnector(resolved).source(
                 dict(config), key=source.id, user_agent=agent, per_host_per_minute=per_host
@@ -122,8 +119,13 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             per_host_per_minute=per_host,
         )
     if source.kind == "git":
-        from choregos_adapters.documents.git import GitSource
+        from choregos_adapters.documents.git import GitDocumentsConnector, GitSource
 
+        if named is not None:
+            resolved = await resolved_configuration(
+                session, source.org_id, named.kind, named.type, named.config, named.secret_refs
+            )
+            return GitDocumentsConnector(resolved).source(dict(config), key=source.id, user_agent=agent)
         return GitSource(
             url=str(config["url"]),
             ref=str(config.get("ref", "main")),
