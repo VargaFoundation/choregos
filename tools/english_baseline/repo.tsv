@@ -7,4 +7,3 @@ demo/outils/catalogue.yaml	1
 demo/seed.py	17
 justfile	1
 pyproject.toml	16
-tools/e2e_live_api.py	1
