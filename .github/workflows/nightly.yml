@@ -118,9 +118,11 @@ jobs:
     if: github.repository == 'VargaFoundation/choregos'
     runs-on: ubuntu-latest
     env:
-      # Only the services whose secrets the repository holds. Another service joins this list
-      # once its secrets are set, never before: it would turn the night red for nothing.
-      CHOREGOS_LIVE_REQUIRED: litellm,gitlab,jira
+      # The services the night must cover, from the repository variable of the same name (for
+      # example `litellm,gitlab,jira`). The owner adds a service once its secrets are set, never
+      # before: a service listed without its secrets turns every night red. Unset, every service
+      # skips and says so, as before.
+      CHOREGOS_LIVE_REQUIRED: ${{ vars.CHOREGOS_LIVE_REQUIRED }}
       CHOREGOS_LIVE_LITELLM_URL: ${{ secrets.CHOREGOS_LIVE_LITELLM_URL }}
       CHOREGOS_LIVE_LITELLM_KEY: ${{ secrets.CHOREGOS_LIVE_LITELLM_KEY }}
       CHOREGOS_LIVE_GITLAB_TOKEN: ${{ secrets.CHOREGOS_LIVE_GITLAB_TOKEN }}

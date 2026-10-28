@@ -40,16 +40,18 @@ def test_no_nightly_step_hides_a_failure() -> None:
     assert not hidden, f"a failing step must reach the alert job: {hidden}"
 
 
-def test_the_live_job_requires_the_services_it_has_secrets_for() -> None:
+def test_the_live_job_reads_its_required_services_from_the_repository() -> None:
+    """Which services the night must cover is the owner's call, made once their secrets exist: a list
+    written here would turn every night red before then (the repository held none of them on
+    2026-10-28). So the job takes the list from the repository variable, and passes every secret of
+    every service it could name (see the test below)."""
     env = _jobs()["live"]["env"]
-    listed = str(env.get("CHOREGOS_LIVE_REQUIRED", "")).split(",")
-    required = [item.strip().lower() for item in listed if item.strip()]
-    assert required, "without a required service every missing secret is a skip, and the night stays green"
-    for service in required:
-        prefix = f"CHOREGOS_LIVE_{service.upper()}_"
-        variables = [name for name in env if name.startswith(prefix)]
-        assert variables, f"{service} is required but the job passes none of its {prefix}* secrets"
-        assert all("secrets." in str(env[name]) for name in variables), variables
+    assert str(env.get("CHOREGOS_LIVE_REQUIRED", "")).replace(" ", "") == (
+        "${{vars.CHOREGOS_LIVE_REQUIRED}}"
+    ), "without a required service every missing secret is a skip, and the night stays green"
+    for name, value in env.items():
+        if name.startswith("CHOREGOS_LIVE_") and name != "CHOREGOS_LIVE_REQUIRED":
+            assert "secrets." in str(value), f"{name} must come from a secret, never be written here"
 
 
 def test_the_live_job_does_not_run_on_forks() -> None:
