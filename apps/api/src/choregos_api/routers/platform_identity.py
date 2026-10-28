@@ -15,6 +15,7 @@ from ..config import Settings
 from ..deps import Config, Db, Me, exiger_admin_de_plateforme
 from ..mcp.oauth import emetteur
 from ..schemas import PlatformIdentity, PlatformIdentityRow
+from ..tenant_sign_in import has_resolver
 
 router = APIRouter(tags=["admin"])
 
@@ -69,6 +70,12 @@ def _rows(settings: Settings) -> list[PlatformIdentityRow]:
             "Organisation for unprefixed groups",
             settings.oidc_default_org or "none",
             src("oidc_default_org"),
+        ),
+        row(
+            "oidc.per_organisation",
+            "Organisations' own identity providers",
+            "declared by an extension" if has_resolver() else "instance provider only",
+            "derived",
         ),
         row(
             "mcp.oauth.enabled",

@@ -178,6 +178,22 @@ administrator accepts it. Publishing a version that binds a global memory needs 
 caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
 Facts carry their organisation and sit under forced row-level security.
 
+## A customer's own identity provider
+
+When an edition lets each organisation sign in with its own provider
+([ADR 0107](adr/0107-each-organisation-signs-in-with-its-own-identity-provider.md)), that provider is run
+by the customer, not by the operator, so the core does not trust it as it trusts the instance's:
+
+- it signs in only addresses whose domain the edition's resolver gives to the same organisation; a
+  domain no tenant owns is signed in by the instance's provider only;
+- the roles it grants land on its own organisation, whatever its groups name;
+- its subjects are stored as `tenant:<org id>:<sub>`, never mixed with another provider's;
+- a discovery document that cannot be read fails the sign-in instead of being guessed, and an address it
+  marks unverified is refused.
+
+An edition proving another protocol (SAML) finishes its sign-in with `terminer_la_connexion(org=…)` to
+get the same confinement. The resolver must map a domain only to an organisation that proved it owns it.
+
 ## Decisions that need a fresh sign-in
 
 Some gestures are too consequential to be made from a browser left open: the session must have been

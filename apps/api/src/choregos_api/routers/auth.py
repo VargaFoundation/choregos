@@ -38,14 +38,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..config import Settings, get_settings
 from ..db.models import ApiToken, Membership, Organization, Project, User
-from ..db.org_aliases import current_slugs
+from ..db.org_aliases import current_slugs, organisation_by_slug_or_alias
 from ..deps import Config, Db, DbPlateforme, Me, resolve_project
 from ..edition import mappeur_de_groupes
-from ..errors import ApiError, not_found, unauthorized, unprocessable
+from ..errors import ApiError, not_found, unauthorized, unprocessable, upstream
 from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
+from ..tenant_sign_in import OidcProvider, SignInHint, TenantSignIn, email_domain, resolve
 
 router = APIRouter(tags=["session"])
 logger = get_logger("choregos.auth")
@@ -99,7 +100,14 @@ async def oidc_endpoints(settings: Settings) -> dict[str, str]:
     disant : un IdP qui ne publie pas sa découverte est rare, un Keycloak dont le réseau
     tousse au démarrage l'est moins.
     """
-    issuer = settings.oidc_issuer.rstrip("/")
+    return await _discover(settings.oidc_issuer, keycloak_fallback=True)
+
+
+async def _discover(issuer: str, *, keycloak_fallback: bool) -> dict[str, str]:
+    """The discovery itself. Only the instance's provider falls back on the Keycloak layout: a
+    tenant's provider whose document cannot be read fails the sign-in (502), it is never guessed.
+    """
+    issuer = issuer.rstrip("/")
     if issuer in _endpoints:
         return _endpoints[issuer]
     import httpx
@@ -118,12 +126,28 @@ async def oidc_endpoints(settings: Settings) -> dict[str, str]:
             "userinfo": str(document.get("userinfo_endpoint") or keycloak["userinfo"]),
         }
     except Exception as exc:
+        if not keycloak_fallback:
+            logger.warning("tenant OIDC discovery failed", issuer=issuer, error=str(exc))
+            raise upstream(
+                "oidc", f"the identity provider {issuer} publishes no readable discovery document"
+            ) from exc
         logger.warning(
             "découverte OIDC impossible, disposition Keycloak supposée", issuer=issuer, error=str(exc)
         )
         found = keycloak
     _endpoints[issuer] = found
     return found
+
+
+async def _provider_endpoints(provider: OidcProvider) -> dict[str, str]:
+    """A tenant's endpoints: the three it states, else its discovery document."""
+    if provider.authorization_endpoint:
+        return {
+            "authorize": provider.authorization_endpoint,
+            "token": provider.token_endpoint,
+            "userinfo": provider.userinfo_endpoint,
+        }
+    return await _discover(provider.issuer, keycloak_fallback=False)
 
 
 def oublier_la_decouverte() -> None:
@@ -150,7 +174,9 @@ def _pkce() -> tuple[str, str]:
     return verifier, base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def _handshake(settings: Settings, redirect: str, *, reauth: bool = False) -> tuple[str, str, str]:
+def _handshake(
+    settings: Settings, redirect: str, *, reauth: bool = False, org: str | None = None
+) -> tuple[str, str, str]:
     """Rend (state signé, cookie signé, code_challenge). Le nonce lie les deux.
 
     `reauth` voyage dans le cookie signé : le retour de l'IdP doit savoir qu'une authentification
@@ -159,7 +185,11 @@ def _handshake(settings: Settings, redirect: str, *, reauth: bool = False) -> tu
     nonce = secrets.token_urlsafe(24)
     verifier, challenge = _pkce()
     expiry = int(time.time()) + OIDC_HANDSHAKE_S
-    state = sign_session({"n": nonce, "r": redirect, "exp": expiry}, settings, purpose="oidc-state")
+    claims: dict[str, Any] = {"n": nonce, "r": redirect, "exp": expiry}
+    # The tenant whose provider is asked, signed: the callback exchanges the code with that one.
+    if org:
+        claims["o"] = org
+    state = sign_session(claims, settings, purpose="oidc-state")
     poignee: dict[str, Any] = {"n": nonce, "v": verifier, "exp": expiry}
     if reauth:
         poignee["a"] = 1
@@ -198,19 +228,41 @@ def _poser_cookie_oidc(response: Response, cookie: str, settings: Settings) -> N
 @router.get("/auth/login", operation_id="authLogin")
 async def login(
     request: Request,
+    session: DbPlateforme,
     settings: Config,
     redirect_to: Annotated[str | None, Query()] = None,
     reauth: Annotated[bool, Query()] = False,
+    org: Annotated[str | None, Query(max_length=120)] = None,
+    login_hint: Annotated[str | None, Query(max_length=320)] = None,
 ) -> RedirectResponse:
     """Redirige vers l'IdP. En dev, `?as=email` ouvre une session directement.
 
     `reauth=1` demande à l'IdP de RE-authentifier l'utilisateur même s'il a déjà une session chez
     lui (`prompt=login`, `max_age=0`) : c'est le chemin d'une porte qui exige une authentification
     fraîche, sans quoi l'IdP rendrait la main sans rien demander et `iat` mentirait.
+
+    `org` (a sign-in link per organisation) and `login_hint` (the address typed on the sign-in
+    page) choose the tenant's own provider when an extension declared one (ADR 0107); otherwise
+    the instance's. `login_hint` is passed on to the provider, which may prefill its form.
     """
     target = redirection_sure(redirect_to, settings)
-    state, cookie, challenge = _handshake(settings, target, reauth=reauth)
     as_user = request.query_params.get("as")
+    tenant: TenantSignIn | None = None
+    if not (as_user and settings.dev_login_enabled):
+        tenant = await resolve(session, SignInHint(org=org, email_domain=email_domain(login_hint)))
+        if tenant is not None and org and not await _same_organisation(session, tenant.org, org):
+            raise unauthorized(f"the sign-in resolver answered organisation {tenant.org!r} for {org!r}")
+    if tenant is not None and tenant.start_path is not None:
+        # Another protocol (SAML…), started by the extension's own route.
+        forwarded = {"redirect_to": target} | ({"login_hint": login_hint} if login_hint else {})
+        joiner = "&" if "?" in tenant.start_path else "?"
+        return RedirectResponse(
+            url=f"{tenant.start_path}{joiner}{urlencode(forwarded)}",
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
+    state, cookie, challenge = _handshake(
+        settings, target, reauth=reauth, org=tenant.org if tenant is not None else None
+    )
     if as_user and settings.dev_login_enabled:
         response = RedirectResponse(
             url=f"/api/v1/auth/callback?code=dev:{quote(as_user, safe='')}&state={quote(state, safe='')}",
@@ -218,11 +270,16 @@ async def login(
         )
         _poser_cookie_oidc(response, cookie, settings)
         return response
-    endpoints = await oidc_endpoints(settings)
+    if tenant is not None and tenant.oidc is not None:
+        endpoints = await _provider_endpoints(tenant.oidc)
+        client_id, scopes = tenant.oidc.client_id, tenant.oidc.scopes
+    else:
+        endpoints = await oidc_endpoints(settings)
+        client_id, scopes = settings.oidc_client_id, settings.oidc_scopes
     params = {
-        "client_id": settings.oidc_client_id,
+        "client_id": client_id,
         "response_type": "code",
-        "scope": settings.oidc_scopes,
+        "scope": scopes,
         "redirect_uri": f"{settings.api_url}/api/v1/auth/callback",
         "state": state,
         "code_challenge": challenge,
@@ -230,6 +287,8 @@ async def login(
     }
     if reauth:
         params |= {"prompt": "login", "max_age": "0"}
+    if login_hint:
+        params["login_hint"] = login_hint
     response = RedirectResponse(
         url=f"{endpoints['authorize']}?{urlencode(params)}", status_code=status.HTTP_307_TEMPORARY_REDIRECT
     )
@@ -273,12 +332,21 @@ def roles_des_groupes(groups: list[str], default_org: str) -> dict[str, Role]:
 
 
 async def _map_groups_to_roles(
-    session: Any, user: User, groups: list[str], settings: Settings, *, ecraser: bool = True
+    session: Any,
+    user: User,
+    groups: list[str],
+    settings: Settings,
+    *,
+    ecraser: bool = True,
+    only_org: Organization | None = None,
 ) -> None:
     """Les groupes OIDC deviennent des rôles d'organisation — chacun sur SON organisation.
 
     `ecraser=False` (connexion de développement) : un rôle déjà posé — par l'amorçage, par
     un admin — n'est pas rétrogradé. L'IdP, lui, fait foi : ce qu'il dit remplace.
+
+    `only_org`: the groups come from that tenant's own provider (ADR 0107). A bare group applies
+    to it, and a role on any other organisation is dropped.
     """
     if ecraser:
         # The IdP's groups, kept as it states them: an approval rule naming a group checks them
@@ -288,7 +356,8 @@ async def _map_groups_to_roles(
     # Le mappeur du cœur, ou celui qu'un greffon a déclaré (édition entreprise : un préfixe par
     # organisation, des groupes SAML/SCIM). L'indirection tient en une ligne et évite un fork de
     # ce fichier — c'est tout ce que la couture C3 demandait, et rien de plus.
-    roles = mappeur_de_groupes(roles_des_groupes)(groups, settings.oidc_default_org)
+    default_org = only_org.slug if only_org is not None else settings.oidc_default_org
+    roles = mappeur_de_groupes(roles_des_groupes)(groups, default_org)
     if not roles:
         return
     # A group that names a FORMER slug (`choregos:<old>:<group>`, or `CHOREGOS_OIDC_DEFAULT_ORG` left at
@@ -301,6 +370,8 @@ async def _map_groups_to_roles(
         if actuel not in resolu or rang[role] < rang[resolu[actuel]]:
             resolu[actuel] = role
     roles = resolu
+    if only_org is not None:
+        roles = {slug: role for slug, role in roles.items() if slug == only_org.slug}
     orgs = (await session.execute(select(Organization).where(Organization.slug.in_(roles)))).scalars().all()
     for org in orgs:
         existing = (
@@ -316,6 +387,45 @@ async def _map_groups_to_roles(
             session.add(Membership(user_id=user.id, org_id=org.id, role=str(roles[org.slug])))
         elif ecraser:
             existing.role = str(roles[org.slug])
+
+
+async def _same_organisation(session: Any, first: str, second: str) -> bool:
+    """Two slugs, current or former, name the same organisation (ADR 0090)."""
+    a = await organisation_by_slug_or_alias(session, first)
+    b = await organisation_by_slug_or_alias(session, second)
+    return a is not None and b is not None and a.id == b.id
+
+
+async def _tenant_user(
+    session: Any,
+    tenant_org: str,
+    *,
+    email: str,
+    name: str,
+    sub: str | None,
+    groups: list[str],
+    settings: Settings,
+) -> User:
+    """A sign-in vouched for by a tenant's own provider, confined to that tenant (ADR 0107).
+
+    The address must belong to a domain the resolver gives to this same tenant, or any tenant's
+    provider could sign in a member of another one. The subject is namespaced by the tenant: two
+    providers may issue the same `sub`.
+    """
+    org = await organisation_by_slug_or_alias(session, tenant_org)
+    if org is None:
+        raise unauthorized(f"organisation {tenant_org!r} does not exist")
+    domain = email_domain(email)
+    owner = await resolve(session, SignInHint(email_domain=domain)) if domain else None
+    if owner is None or not await _same_organisation(session, owner.org, org.slug):
+        logger.warning("tenant sign-in refused: foreign domain", org=org.slug, domain=domain)
+        raise unauthorized(
+            f"the address domain {domain!r} does not belong to organisation {org.slug!r}: "
+            "its provider cannot sign it in"
+        )
+    user = await _ensure_user(session, email, name, f"tenant:{org.id}:{sub}" if sub else None)
+    await _map_groups_to_roles(session, user, groups, settings, only_org=org)
+    return user
 
 
 async def _groupes_de_developpement(session: Any, email: str, settings: Settings) -> list[str]:
@@ -357,7 +467,21 @@ async def callback(
     else:
         import httpx
 
-        endpoints = await oidc_endpoints(settings)
+        tenant_org = str(attendu.get("o") or "")
+        provider: OidcProvider | None = None
+        if tenant_org:
+            tenant = await resolve(session, SignInHint(org=tenant_org))
+            if tenant is None or tenant.oidc is None:
+                raise unauthorized(
+                    f"organisation {tenant_org!r} no longer signs in with its own OIDC provider: "
+                    "start the sign-in again"
+                )
+            provider = tenant.oidc
+            endpoints = await _provider_endpoints(provider)
+            client_id, client_secret = provider.client_id, provider.client_secret
+        else:
+            endpoints = await oidc_endpoints(settings)
+            client_id, client_secret = settings.oidc_client_id, settings.oidc_client_secret
         async with httpx.AsyncClient(timeout=10) as client:
             token_response = await client.post(
                 endpoints["token"],
@@ -365,8 +489,8 @@ async def callback(
                     "grant_type": "authorization_code",
                     "code": code,
                     "redirect_uri": f"{settings.api_url}/api/v1/auth/callback",
-                    "client_id": settings.oidc_client_id,
-                    "client_secret": settings.oidc_client_secret,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "code_verifier": str(poignee.get("v") or ""),
                 },
             )
@@ -389,8 +513,21 @@ async def callback(
             ).json()
         if not info.get("email"):
             raise unauthorized("the IdP did not provide an e-mail: the `email` scope is missing")
-        user = await _ensure_user(session, info["email"], info.get("name", ""), info.get("sub"))
-        await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
+        if provider is not None:
+            if provider.require_email_verified and info.get("email_verified") is False:
+                raise unauthorized("the identity provider says this address is not verified")
+            user = await _tenant_user(
+                session,
+                tenant_org,
+                email=info["email"],
+                name=info.get("name", ""),
+                sub=info.get("sub"),
+                groups=list(info.get(provider.groups_claim) or []),
+                settings=settings,
+            )
+        else:
+            user = await _ensure_user(session, info["email"], info.get("name", ""), info.get("sub"))
+            await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 
     response = await ouvrir_la_session(session, user, target, settings, canal="oidc", auth_time=auth_time)
     response.delete_cookie(OIDC_COOKIE)
@@ -434,7 +571,7 @@ async def ouvrir_la_session(
     return response
 
 
-async def terminer_la_connexion(
+async def terminer_la_connexion(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-only
     session: Any,
     *,
     email: str,
@@ -444,18 +581,28 @@ async def terminer_la_connexion(
     cible: str,
     canal: str,
     settings: Settings | None = None,
+    org: str | None = None,
 ) -> RedirectResponse:
     """Pour un protocole d'authentification apporté par un greffon, APRÈS qu'il a vérifié
     l'identité (signature d'assertion, audience, fraîcheur) : crée ou retrouve l'utilisateur,
     traduit ses groupes en rôles par le mappeur en service, ouvre la session.
 
     Le cœur ne vérifie RIEN de l'identité passée ici : c'est la responsabilité de l'appelant.
+
+    `org`: the identity comes from that tenant's own provider (a SAML IdP declared through
+    `tenant_sign_in`). The sign-in is then confined to the tenant exactly as an OIDC one is
+    (ADR 0107): the address domain must be the tenant's, roles land on the tenant only.
     """
     reglages = settings or get_settings()
     if not email:
         raise unauthorized("the IdP did not provide an e-mail")
-    user = await _ensure_user(session, email, nom, sujet)
-    await _map_groups_to_roles(session, user, list(groupes), reglages)
+    if org:
+        user = await _tenant_user(
+            session, org, email=email, name=nom, sub=sujet, groups=list(groupes), settings=reglages
+        )
+    else:
+        user = await _ensure_user(session, email, nom, sujet)
+        await _map_groups_to_roles(session, user, list(groupes), reglages)
     return await ouvrir_la_session(session, user, cible, reglages, canal=canal)
 
 

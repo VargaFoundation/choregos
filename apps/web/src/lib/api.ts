@@ -354,11 +354,14 @@ export const api = {
   },
   getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
-  loginUrl: (next?: string, as?: string, reauth = false) => {
+  /** `tenant` picks the organisation's own identity provider, by sign-in link or by address (ADR 0107). */
+  loginUrl: (next?: string, as?: string, reauth = false, tenant: { org?: string; loginHint?: string } = {}) => {
     const params = new URLSearchParams();
     if (next) params.set("redirect_to", next);
     if (as) params.set("as", as);
     if (reauth) params.set("reauth", "1");
+    if (tenant.org) params.set("org", tenant.org);
+    if (tenant.loginHint) params.set("login_hint", tenant.loginHint);
     const q = params.toString();
     return `${API_BASE}/auth/login${q ? `?${q}` : ""}`;
   },

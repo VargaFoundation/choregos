@@ -80,10 +80,18 @@ paths:
       operationId: authLogin
       security: []
       summary: Redirect to the OIDC IdP
+      description: >-
+        `org` (a sign-in link per organisation) and `login_hint` (the address typed on the sign-in
+        page) pick the organisation's own identity provider when an extension declared one
+        (ADR 0107), else the instance's; `login_hint` is passed on to the provider.
       parameters:
         - { name: redirect_to, in: query, schema: { type: string } }
+        - { name: org, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: login_hint, in: query, schema: { type: string, maxLength: 320 } }
       responses:
-        "307": { description: Redirect to the IdP }
+        "307": { description: Redirect to the IdP, or to an extension's sign-in route }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502": { description: The organisation's identity provider publishes no readable discovery document }
   /auth/callback:
     get:
       tags: [session]
