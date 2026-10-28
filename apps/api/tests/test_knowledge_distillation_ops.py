@@ -211,6 +211,78 @@ async def test_a_stopped_run_makes_no_further_call_and_publishes_nothing(
     assert (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).status_code == 404
 
 
+STOPPED = {
+    "status": "stopped",
+    "code": "cancelled",
+    "started_at": "2026-10-26T10:00:00+00:00",
+    "stopped_by": "admin@varga.dev",
+}
+
+
+async def test_a_progress_write_never_resurrects_a_run_stopped_meanwhile(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flake of 2026-10-28: the run read `running`, the stop committed, the run wrote its progress
+    back over `stopped`, and a second stop found the run still going."""
+    from choregos_api.knowledge import distill as module
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    base_id = await _base(client, FOUR, monkeypatch)
+    await _set_record({**STOPPED, "status": "running"})
+    read = AsyncSession.get
+
+    async def read_then_stopped(self: AsyncSession, *args: Any, **kwargs: Any) -> Any:
+        row = await read(self, *args, **kwargs)
+        monkeypatch.setattr(AsyncSession, "get", read)
+        await _set_record(STOPPED)  # another session commits the stop between the read and the write
+        return row
+
+    monkeypatch.setattr(AsyncSession, "get", read_then_stopped)
+    await module._progress("varga", base_id, phase="map", parts_done=1)
+    assert (await _outcome(client))["status"] == "stopped"
+    assert (await client.post(KB + "/distill/stop")).status_code == 409
+
+
+async def test_a_stop_just_before_publishing_publishes_nothing(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.knowledge import distill as module
+
+    base_id = await _base(client, FOUR, monkeypatch)
+    await _set_record({**STOPPED, "status": "running", "requested_by": "admin@varga.dev"})
+    progress = module._progress
+
+    async def stopped_at_publish(org: str, base: str, **values: Any) -> None:
+        await progress(org, base, **values)
+        if values.get("phase") == "publish":
+            await _set_record(STOPPED)
+
+    monkeypatch.setattr(module, "_progress", stopped_at_publish)
+    outcome = await module.distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
+    assert (outcome["status"], outcome["code"]) == ("stopped", "cancelled"), outcome
+    assert (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).status_code == 404
+
+
+async def test_a_write_lands_only_on_the_run_that_is_still_running(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.knowledge.distill import write_if_running
+
+    base_id = await _base(client, FOUR, monkeypatch)
+    started = STOPPED["started_at"]
+    for record, started_at, lands in (
+        (STOPPED, started, False),
+        ({**STOPPED, "status": "running"}, "2026-10-26T09:00:00+00:00", False),  # a relaunch since
+        ({**STOPPED, "status": "running"}, started, True),
+    ):
+        await _set_record(record)
+        async with session_scope(orgs=TOUT) as session:
+            written = await write_if_running(session, base_id, started_at, {"status": "running", "x": 1})
+        assert written is lands
+        assert ((await _outcome(client)).get("x") == 1) is lands
+
+
 async def test_a_cancelled_answer_does_not_overwrite_a_new_running_record(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

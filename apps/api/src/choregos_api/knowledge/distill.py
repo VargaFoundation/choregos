@@ -38,7 +38,7 @@ from typing import Any, Protocol
 
 import httpx
 from choregos_core import utcnow
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import undefer
 
@@ -169,6 +169,27 @@ def stopped_record(before: dict[str, Any], stopped_by: str) -> dict[str, Any]:
         "stopped_by": stopped_by,
         "at": utcnow().isoformat(),
     }
+
+
+async def write_if_running(
+    session: Any, base_id: str, started_at: str | None, record: dict[str, Any]
+) -> bool:
+    """Writes `record` only while the run that started at `started_at` is still `running`, in one
+    statement: a stop committed meanwhile (or a relaunch) is never overwritten by a late write of this
+    run. Reading the record and writing it back would lose that stop (S42-10e)."""
+    running = [
+        KnowledgeBase.id == base_id,
+        KnowledgeBase.distillation["status"].as_string() == "running",
+    ]
+    if started_at:
+        running.append(KnowledgeBase.distillation["started_at"].as_string() == started_at)
+    written = await session.execute(
+        update(KnowledgeBase)
+        .where(*running)
+        .values(distillation=record)
+        .execution_options(synchronize_session=False)
+    )
+    return bool(written.rowcount == 1)
 
 
 async def _refuse_if_stopped(org: str, base_id: str) -> None:
@@ -734,8 +755,14 @@ async def _progress(org: str, base_id: str, **values: Any) -> None:
     """Merged into the base's `distillation` while it runs (phase, parts done, spend)."""
     async with session_scope(orgs=[org]) as session:
         base = await session.get(KnowledgeBase, base_id)
-        if base is not None and (base.distillation or {}).get("status") == "running":
-            base.distillation = {**(base.distillation or {}), **values, "heartbeat_at": utcnow().isoformat()}
+        current = (base.distillation or {}) if base is not None else {}
+        if current.get("status") == "running":
+            await write_if_running(
+                session,
+                base_id,
+                current.get("started_at"),
+                {**current, **values, "heartbeat_at": utcnow().isoformat()},
+            )
 
 
 def effective_budget(max_usd: float | None) -> float:
@@ -1106,7 +1133,19 @@ async def step_publish(
         }
         if started:
             outcome["started_at"] = started
-        base.distillation = outcome
+        # In one statement, unless stopped since the last check: then the session rolls back and no
+        # version is published.
+        published: Any = await session.execute(
+            update(KnowledgeBase)
+            .where(
+                KnowledgeBase.id == base_id,
+                func.coalesce(KnowledgeBase.distillation["status"].as_string(), "") != "stopped",
+            )
+            .values(distillation=outcome)
+            .execution_options(synchronize_session=False)
+        )
+        if published.rowcount != 1:
+            raise DistillationError("the distillation was stopped", "cancelled")
     logger.info("knowledge.distilled", org=org, base=base_id, status=outcome["status"], parts=parts)
     return outcome
 

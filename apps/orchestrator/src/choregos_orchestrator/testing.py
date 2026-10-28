@@ -18,9 +18,13 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import AsyncIterator, Iterable, Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .repartition import ACTIVITES_PAR_FILE, file_de, nom_de_l_activite
+
+if TYPE_CHECKING:
+    from temporalio.api.enums.v1 import EventType
+    from temporalio.client import WorkflowHandle
 
 
 def avec_doublures(activites: Iterable[Any], remplacements: Mapping[str, Any] | None = None) -> list[Any]:
@@ -87,3 +91,53 @@ async def workers_repartis(
         for worker in workers:
             await pile.enter_async_context(worker)
         yield par_file
+
+
+#: The events that close a run: once one is in the history, no other event will follow.
+_CLOSED = (
+    "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED",
+    "EVENT_TYPE_WORKFLOW_EXECUTION_FAILED",
+    "EVENT_TYPE_WORKFLOW_EXECUTION_TIMED_OUT",
+    "EVENT_TYPE_WORKFLOW_EXECUTION_CANCELED",
+    "EVENT_TYPE_WORKFLOW_EXECUTION_TERMINATED",
+    "EVENT_TYPE_WORKFLOW_EXECUTION_CONTINUED_AS_NEW",
+)
+
+
+async def wait_for_event(
+    handle: WorkflowHandle[Any, Any],
+    event_type: EventType.ValueType,
+    *,
+    count: int = 1,
+    seconds: float = 30.0,
+) -> None:
+    """Return once the workflow's history holds `count` events of `event_type`.
+
+    A signal sent straight after `start_workflow` can reach the server before the workflow's first
+    task has run: it then lands in the first activation, before `run` starts, and a loop that a
+    `stop` signal ends never runs a cycle. A test that signals a running loop first waits here for
+    the event that proves the loop is running (the timer it waits on, the activity it scheduled).
+    Polling the history does not unlock the time-skipping test server's clock: only awaiting a
+    result does, so a timer the loop waits on does not fire while the test waits.
+
+    Fails with an `AssertionError` after `seconds`, or as soon as the run is closed.
+    """
+    import asyncio
+
+    from temporalio.api.enums.v1 import EventType
+
+    wanted = EventType.Name(event_type)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + seconds
+    while True:
+        seen = [EventType.Name(event.event_type) for event in (await handle.fetch_history()).events]
+        if seen.count(wanted) >= count:
+            return
+        closed = bool(seen) and seen[-1] in _CLOSED
+        if closed or loop.time() >= deadline:
+            why = "the run closed" if closed else f"{seconds} s"
+            raise AssertionError(
+                f"{count} x {wanted} expected in {handle.id}'s history, "
+                f"{seen.count(wanted)} after {why}; seen: {seen}"
+            )
+        await asyncio.sleep(0.05)

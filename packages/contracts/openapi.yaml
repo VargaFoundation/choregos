@@ -4448,6 +4448,22 @@ components:
         operations: { type: array, items: { $ref: "#/components/schemas/ConnectorOperation" } }
         availability: { $ref: "#/components/schemas/ConnectorAvailability" }
         enabled_projects: { type: array, items: { type: string }, description: "the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074)" }
+        server:
+          description: "the plugin server this connector runs (ADR 0096): its configuration is the server's `config_schema` and `secret_fields`, not the `mcp` type's; null for any other connector (contract-change S43-08)"
+          oneOf:
+            - $ref: "#/components/schemas/OrgConnectorServer"
+            - { type: "null" }
+    OrgConnectorServer:
+      type: object
+      additionalProperties: false
+      description: What the console needs to configure a plugin's server, read from its declaration (ADR 0096).
+      required: [plugin, version, server, config_schema, secret_fields]
+      properties:
+        plugin: { type: string }
+        version: { type: string }
+        server: { type: string }
+        config_schema: { type: object, additionalProperties: true, description: "a JSON Schema" }
+        secret_fields: { type: array, items: { type: string } }
     ConnectorAvailability:
       type: string
       enum: [all_projects, selected_projects]
