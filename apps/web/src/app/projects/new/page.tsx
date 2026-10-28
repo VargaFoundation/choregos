@@ -88,7 +88,8 @@ export default function NewProjectPage() {
         await api.putConnector(projet.id, "tracker", { type: form.tracker, config: {} });
         setFait({ projet, tracker: true });
       }
-      if (avecTemplate) await api.provision(projet.id);
+      // Without a template, a project with no repository has nothing to provision: the API activates it.
+      if (avecTemplate || form.sansDepot) await api.provision(projet.id);
       router.push(`/p/${projet.slug}`);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "refused";

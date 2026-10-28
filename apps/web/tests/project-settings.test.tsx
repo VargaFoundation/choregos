@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/app/p/[slug]/settings/page";
 import { manquantEnPremier } from "@/components/connecteurs";
 import { configurationEnClair, workflowsQuiExigent } from "@/components/project-settings/connector-card";
+import { activationGesture } from "@/components/project-settings/general-section";
 import { resumeDeLaPolitique } from "@/components/project-settings/guardrails-section";
 import { api } from "@/lib/api";
 import { connectorTypes } from "@/mocks/data";
@@ -91,6 +92,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       knowledgeBases: vi.fn(async () => []),
       backends: vi.fn(async () => [{ name: "claude-code", enabled: true, capabilities: [] }, { name: "codex", enabled: false, capabilities: [] }]),
       suspendProject: vi.fn(async () => projectDto),
+      provision: vi.fn(async () => ({ project_id: "p", status: "succeeded", steps: [] })),
       deleteProject: vi.fn(async () => undefined),
       githubStatus: vi.fn(async () => ({
         configured: true,
@@ -120,6 +122,22 @@ async function renderPage() {
 }
 
 describe("the project settings page (S40-03b)", () => {
+  it("a draft project can be activated from General, and an active one shows no button", async () => {
+    vi.mocked(api.project).mockResolvedValueOnce({ ...structuredClone(projectDto), status: "draft", template_ref: null, config: { slug: "dev", org: "acme" } } as never);
+    await renderPage();
+    expect(await screen.findByTestId("project-status")).toHaveTextContent("draft");
+    fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+    await vi.waitFor(() => expect(api.provision).toHaveBeenCalledWith("dev"));
+  });
+
+  it("names the gesture by what the project has", () => {
+    const config = { slug: "dev", org: "acme" };
+    expect(activationGesture({ status: "active", template_ref: null, config })).toBeNull();
+    expect(activationGesture({ status: "draft", template_ref: null, config })).toBe("Activate");
+    expect(activationGesture({ status: "draft", template_ref: "github-aca@1", config })).toBe("Provision");
+    expect(activationGesture({ status: "suspended", template_ref: null, config })).toBe("Resume");
+  });
+
   it("renders its sections in order, each with a heading", async () => {
     await renderPage();
     await screen.findByTestId("connecteur-tracker");

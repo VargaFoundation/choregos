@@ -81,6 +81,13 @@ def test_a_draft_project_is_to_do_and_names_the_failing_step() -> None:
     assert item_provisioned(facts(status="provisioning"))[0].state == "todo"
 
 
+def test_an_inactive_project_points_at_the_gesture_that_activates_it() -> None:
+    (draft,) = item_provisioned(facts(status="draft"))
+    assert draft.fix.href == "/p/dev/settings#general" and "activate it" in draft.detail
+    (suspended,) = item_provisioned(facts(status="suspended"))
+    assert "resume it" in suspended.detail
+
+
 def test_no_active_workflow_is_to_do_and_no_default_is_to_check() -> None:
     assert item_workflow(facts(workflows=(), default_workflow=None))[0].state == "todo"
     assert item_workflow(facts(default_workflow=None))[0].state == "check"
@@ -183,6 +190,24 @@ def test_no_test_command_is_to_check() -> None:
     )
     assert states(item_repository(facts(requirements=required)))["repository"] == "todo", "no URL"
     assert item_repository(facts()) == [], "no scm required: nothing to say about a repository"
+
+
+def test_without_a_repository_the_workflow_that_asks_for_one_is_named_and_can_be_changed() -> None:
+    required = (
+        ("scm", ("default-simple: the agent dev (implement) works in a repository",)),
+        ("cd", ("default-simple: the state deployed_prod is production",)),
+    )
+    (repository,) = item_repository(facts(requirements=required))
+    assert repository.state == "todo" and "default-simple: the agent dev" in repository.detail
+    assert "a workflow that does not deliver code" in repository.detail
+    scm, cd = item_connectors(facts(requirements=required))
+    assert scm.state == cd.state == "todo"
+    assert scm.fix.href == cd.fix.href == "/p/dev/workflows", "the way out is another workflow"
+    with_repo = ProjectConfig.model_validate(
+        {"slug": "dev", "org": "varga", "repo": {"url": "https://github.com/varga/dev.git"}}
+    )
+    (scm,) = item_connectors(facts(requirements=required[:1], config=with_repo))
+    assert scm.fix.href == "/p/dev/settings#connections", "a project with a repository connects it"
 
 
 def test_the_dod_facts_count_as_measured_checks() -> None:

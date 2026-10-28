@@ -56,6 +56,8 @@ PROVIDED_BY_THE_DEPLOYMENT = frozenset({"runtime", "gateway", "memory", "tracker
 #: Secret fields that never block a connector: a webhook secret only matters once GitHub can reach us.
 OPTIONAL_SECRETS = {"webhook_secret"}
 GITHUB_KINDS = {"tracker": "github-issues", "scm": "github"}
+#: Capabilities that only make sense for a project that delivers code from a repository.
+NEED_A_REPOSITORY = frozenset({"scm", "ci", "cd"})
 
 CAPABILITY_TITLES = {
     "tracker": "Tracker",
@@ -175,7 +177,7 @@ def _item(id_: str, section: str, title: str, state: str, detail: str, fix: Read
 
 
 def item_provisioned(f: Facts) -> list[ReadinessItem]:
-    fix = _fix(f.slug, "")
+    fix = _fix(f.slug, "general")
     if f.status == "active":
         return [_item("provisioned", "general", "Project provisioned", "done", "provisioning ran.", fix)]
     if f.status == "provisioning":
@@ -183,13 +185,15 @@ def item_provisioned(f: Facts) -> list[ReadinessItem]:
             _item("provisioned", "general", "Project provisioned", "todo", "provisioning is running.", fix)
         ]
     why = f" Provisioning failed at: {f.provision_failure}." if f.provision_failure else ""
+    gesture = "resume it" if f.status == "suspended" else "activate it"
     return [
         _item(
             "provisioned",
             "general",
             "Project provisioned",
             "todo",
-            f"the project is {f.status}: nothing runs until it is active.{why}",
+            f"the project is {f.status}: nothing runs until it is active.{why} "
+            f"Settings › General: {gesture}.",
             fix,
         )
     ]
@@ -242,6 +246,17 @@ def _connector_item(f: Facts, capability: str, reasons: tuple[str, ...]) -> Read
     if connector is None:
         if platform:
             return _item(id_, "connections", title, "done", "provided by the platform.", fix)
+        if capability in NEED_A_REPOSITORY and not _has_repository(f):
+            # The project has no repository: connecting one is a choice, not the only way out.
+            return _item(
+                id_,
+                "connections",
+                title,
+                "todo",
+                f"{why}; none is configured. A project without a repository makes default a workflow "
+                "that does not deliver code.",
+                ReadinessFix(href=f"/p/{f.slug}/workflows", by="project_owner"),
+            )
         return _item(id_, "connections", title, "todo", f"{why}; none is configured.", fix)
     if connector.type in STAND_INS:
         return _item(
@@ -333,19 +348,32 @@ def item_stale_tests(f: Facts) -> list[ReadinessItem]:
     return items
 
 
+def _has_repository(f: Facts) -> bool:
+    return bool(f.config.repo and f.config.repo.url)
+
+
 def item_repository(f: Facts) -> list[ReadinessItem]:
-    if "scm" not in {capability for capability, _ in f.requirements}:
+    reasons = dict(f.requirements).get("scm")
+    if reasons is None:
         return []
     fix = _fix(f.slug, "general")
     repo = f.config.repo
-    items = [
-        _item("repository", "general", "Repository set", "done", f"`{repo.url}`.", fix)
-        if repo and repo.url
-        else _item(
-            "repository", "general", "Repository set", "todo", "the project names no repository URL.", fix
-        )
-    ]
-    measured = bool(repo and repo.test_command) or bool(f.config.dod.facts)
+    if not _has_repository(f):
+        # Asked by a workflow, not by the project: one without a repository changes its workflow.
+        return [
+            _item(
+                "repository",
+                "general",
+                "Repository set",
+                "todo",
+                f"the project names no repository URL ({reasons[0] if reasons else 'a workflow needs one'}): "
+                "set one, or make default a workflow that does not deliver code.",
+                fix,
+            )
+        ]
+    assert repo is not None
+    items = [_item("repository", "general", "Repository set", "done", f"`{repo.url}`.", fix)]
+    measured = bool(repo.test_command) or bool(f.config.dod.facts)
     items.append(
         _item(
             "repository-checks",
