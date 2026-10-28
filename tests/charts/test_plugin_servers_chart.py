@@ -1,4 +1,4 @@
-"""`global.plugins.servers` (ADR 0094, S43-06): the API's Role in the plugins namespace only, its
+"""`global.plugins.servers` (ADR 0096, S43-06): the API's Role in the plugins namespace only, its
 settings, the namespace when asked, and the platform's egress towards the servers.
 
 Off by default: no Role, no variable, the API refuses a plugin that brings a server.

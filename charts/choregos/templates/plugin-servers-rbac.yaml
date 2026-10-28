@@ -1,5 +1,5 @@
 {{- /*
-Plugin servers (ADR 0094): the API runs them in their own namespace, and nowhere else. A Role there
+Plugin servers (ADR 0096): the API runs them in their own namespace, and nowhere else. A Role there
 (the objects of a server: its Deployment, Service, NetworkPolicy, Secret; CiliumNetworkPolicy with
 `egress: cilium`), bound to the API's ServiceAccount. The namespace itself only with `create: true`.
 */ -}}

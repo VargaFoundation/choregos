@@ -212,7 +212,7 @@ export type PluginServerOperation = {
   platform_arguments?: Array<"action_key" | "work_item_key">;
 };
 
-/** An MCP server a plugin brings, run and governed by the platform (ADR 0093, ADR 0094, plan S43 Decision 2). */
+/** An MCP server a plugin brings, run and governed by the platform (ADR 0093, ADR 0096, plan S43 Decision 2). */
 export type PluginServer = {
   name: string;
   /** pinned by digest; a tag alone is refused */

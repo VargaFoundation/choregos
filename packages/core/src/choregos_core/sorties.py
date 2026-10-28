@@ -30,6 +30,8 @@ class Exit(IntEnum):
     BUDGET_EXCEEDED = 70
     #: The context reduction the run requires did not start, and the policy says `fail` (ADR 0055).
     CONTEXT_UNAVAILABLE = 80
+    #: The kernel cannot confine the agent and the deployment says `enforce` (ADR 0094).
+    CONFINEMENT_UNAVAILABLE = 90
 
     @property
     def explanation(self) -> str:
@@ -44,6 +46,7 @@ class Exit(IntEnum):
             Exit.KNOWLEDGE_INVALID: "knowledge base missing, or its digest does not match",
             Exit.BUDGET_EXCEEDED: "the gateway refused the run's key: its budget is spent",
             Exit.CONTEXT_UNAVAILABLE: "the context reduction the policy requires did not start",
+            Exit.CONFINEMENT_UNAVAILABLE: "confinement required, the kernel cannot confine the agent",
         }[self]
 
 

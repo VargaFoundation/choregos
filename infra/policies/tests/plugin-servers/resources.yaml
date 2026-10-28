@@ -1,4 +1,4 @@
-# Pods of the plugins namespace judged by `choregos-plugin-server-images` (ADR 0094).
+# Pods of the plugins namespace judged by `choregos-plugin-server-images` (ADR 0096).
 apiVersion: v1
 kind: Pod
 metadata:

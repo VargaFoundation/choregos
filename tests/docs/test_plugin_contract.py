@@ -130,7 +130,7 @@ def test_a_read_operation_has_no_compensation() -> None:
 
 
 def test_a_compensation_names_its_operation_and_arguments_rendered_from_the_result() -> None:
-    """ADR 0094: the shape a connector type declares (`OperationSpec.compensation`), so the broker
+    """ADR 0096: the shape a connector type declares (`OperationSpec.compensation`), so the broker
     attaches it to the governed action as it does for pfSense."""
     doc = copy.deepcopy(_example("plugin-server"))
     resolve = next(o for o in doc["operations"] if o["name"] == "resolve_incident")

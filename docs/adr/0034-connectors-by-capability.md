@@ -7,7 +7,7 @@
   sidecar; follows [ADR 0029](0029-a-platform-for-governed-agents.md) and
   [ADR 0033](0033-agent-registry-and-skill-library.md)
 
-> **Amended by [ADR 0094](0094-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md)**: an
+> **Amended by [ADR 0096](0096-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md)**: an
 > organisation `mcp` connector may be a plugin's server, named after it; its declared operations are the
 > floor the broker enforces (`human_approval` never lowered, an undeclared tool refused), and its
 > configuration is the server's own schema.

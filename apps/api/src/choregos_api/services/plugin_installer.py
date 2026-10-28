@@ -16,7 +16,7 @@ The plugin arrives already loaded and validated by `choregos_core.plugins` (S43-
   install, wins and is left untouched (ADR 0040 §4);
 - keeps the files the platform serves again (templates with their files, eval suites, procedures) in
   `org_plugin_files`, under the plugin's content digest and the organisation's RLS;
-- runs the plugin's servers and governs them as organisation connectors (`plugin_servers.py`, ADR 0094):
+- runs the plugin's servers and governs them as organisation connectors (`plugin_servers.py`, ADR 0096):
   each server is checked with the rest (image rules, a free connector name) and provisioned with it.
 
 An upgrade follows ADR 0040: an agent the organisation changed (a version not written by this plugin)

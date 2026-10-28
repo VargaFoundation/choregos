@@ -1,4 +1,4 @@
-# Plugin servers (ADR 0094): in the namespace the API runs them in, a pod runs only an image pinned
+# Plugin servers (ADR 0096): in the namespace the API runs them in, a pod runs only an image pinned
 # by digest and under the registries the operator allows for plugin servers. The API checks the same
 # rule before it creates anything (`CHOREGOS_PLUGIN_SERVERS_REGISTRIES`); this one holds when the
 # API, or anyone with rights in the namespace, writes a Deployment behind it.

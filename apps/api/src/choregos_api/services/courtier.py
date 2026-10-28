@@ -405,7 +405,7 @@ async def _appeler(
     except PlatformRateLimited as limite:
         return 429, {"error": str(limite), "type": "rate_limited"}
     try:
-        # A plugin's server (ADR 0094): its Service, its bearer token; any other: its type's adapter.
+        # A plugin's server (ADR 0096): its Service, its bearer token; any other: its type's adapter.
         client: Any = await connector_client(session, instance)
         if hasattr(client, "call_tool"):
             resultat = await client.call_tool(outil.operation.name, arguments)

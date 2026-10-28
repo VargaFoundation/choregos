@@ -106,7 +106,7 @@ spec:
             {{- end }}
             {{- $servers := ((.Values.global.plugins | default dict).servers | default dict) }}
             {{- if $servers.enabled }}
-            # Plugin servers (ADR 0094): run by the API in their namespace, through its Role there.
+            # Plugin servers (ADR 0096): run by the API in their namespace, through its Role there.
             - name: CHOREGOS_PLUGIN_SERVERS
               value: kubernetes
             - name: CHOREGOS_PLUGIN_SERVERS_NAMESPACE

@@ -181,7 +181,7 @@ class Settings(BaseSettings):
     plugins_config: str = ""
     #: The offline plugin directory baked into the image; wins over the file's `offline`.
     plugins_offline: str = ""
-    #: Plugin servers (ADR 0094): `kubernetes` runs them in `plugin_servers_namespace` through the API's
+    #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
     #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
     plugin_servers: Literal["off", "kubernetes"] = "off"
     plugin_servers_namespace: str = "choregos-plugins"

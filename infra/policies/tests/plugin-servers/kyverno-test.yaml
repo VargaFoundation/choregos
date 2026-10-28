@@ -1,4 +1,4 @@
-# One entry per pod, so a wrong verdict names its pod (ADR 0094, S43-06).
+# One entry per pod, so a wrong verdict names its pod (ADR 0096, S43-06).
 apiVersion: cli.kyverno.io/v1alpha1
 kind: Test
 metadata:

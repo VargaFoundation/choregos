@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A plugin's server is an organisation connector (S43-06, ADR 0094): `org_connectors.plugin_server`
+"""A plugin's server is an organisation connector (S43-06, ADR 0096): `org_connectors.plugin_server`
 
 The installer writes the server's declaration there; the broker reads its operations as the
 governance floor. Nullable, no backfill: no existing connector is a plugin's. The downgrade drops the

@@ -310,7 +310,7 @@ async def update_org_connector(
     if body.config is not None and server is None:
         check_type_config(instance.kind, instance.type, config)
     elif body.config is not None:
-        # A plugin's server (ADR 0094): its own schema, and the hosts it would reach within the bounds.
+        # A plugin's server (ADR 0096): its own schema, and the hosts it would reach within the bounds.
         problems = plugin_servers.configuration_problems(instance.plugin_server or {}, config, partial=True)
         if problems:
             raise unprocessable(
@@ -587,7 +587,7 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         empreinte = empreinte_du_schema(outil.input_schema)
         acces = "read" if outil.read_only else "write"
         if declared is not None:
-            # A plugin's server (ADR 0094): its `operations` are the floor. A tool it does not declare
+            # A plugin's server (ADR 0096): its `operations` are the floor. A tool it does not declare
             # is never added; a declared one keeps its declared access, whatever the server hints.
             if outil.name not in declared:
                 undeclared_tools.append(outil.name)
@@ -616,7 +616,7 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         operation.output_schema = getattr(outil, "output_schema", None)
         if declared is not None and operation.schema_digest is None:
             # A declared operation the server lists for the first time: its schema is learnt, not a
-            # drift — the plugin's declaration opened it at its floor (ADR 0094).
+            # drift — the plugin's declaration opened it at its floor (ADR 0096).
             operation.schema_digest, operation.input_schema = empreinte, outil.input_schema
             operation.description = operation.description or outil.description or None
             diff.unchanged += 1

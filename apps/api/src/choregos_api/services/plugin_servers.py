@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A plugin's servers: run by the platform, governed as organisation connectors (ADR 0094, S43-06).
+"""A plugin's servers: run by the platform, governed as organisation connectors (ADR 0096, S43-06).
 
 A plugin brings code only as an MCP server image. When the plugin is installed (after the second
 approval, ADR 0050), each of its servers becomes:

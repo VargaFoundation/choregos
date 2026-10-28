@@ -46,7 +46,7 @@ spec:
     {{- end }}
     {{- $servers := ((.Values.global.plugins | default dict).servers | default dict) }}
     {{- if $servers.enabled }}
-    # Plugin servers (ADR 0094): their own NetworkPolicy admits the API's pods only.
+    # Plugin servers (ADR 0096): their own NetworkPolicy admits the API's pods only.
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ ($servers.namespace | default dict).name | default "choregos-plugins" }} } } }]
     {{- end }}
     {{- if .Values.demoFakes.enabled }}

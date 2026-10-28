@@ -4,7 +4,7 @@ Source: the product owner's requests of 2026-10-27: "plan an agent for ServiceNo
 complete plugin that embeds its agent, in a format the platform understands — the same for every future
 agent; create an open-source repository of agents packaged in that format; a deployment lists the
 plugins it installs by default, and plugins from other repositories must be possible".
-Checked against `main` at `7919257b`. Stream number: **S43**. ADR numbers reserved: **0093**, **0094**
+Checked against `main` at `7919257b`. Stream number: **S43**. ADR numbers reserved: **0093**, **0096** (0094 was taken by S44-01 meanwhile)
 (0088-0092 are taken by open pull requests).
 
 Status words: **exists** (in the code), **missing**, **broken** (exists and is wrong).
@@ -170,7 +170,7 @@ Core — `VargaFoundation/choregos`:
 | S43-03 | Sources and trust: OCI pull and cosign verification, pinned git, offline directory, supply-chain gate, fakes | 02 |
 | S43-04 | Installer: agents (catalogue rules), skills, templates **with their files**, evals, procedures; provenance; uninstall | 02 |
 | S43-05 | Chart `plugins.{sources, defaultPlugins, offline}`, start-up reconcile | 03, 04 |
-| S43-06 | Plugin servers: run, network, image rules, operations as the governance floor; ADR 0094 | 04 |
+| S43-06 | Plugin servers: run, network, image rules, operations as the governance floor; ADR 0096 | 04 |
 | S43-07 | `tracker/plugin` adapter, `POST /webhooks/plugins/{plugin}/{server}`, replayed history | 06 |
 | S43-08 | Console: Catalogue → Plugins (sources, contents, versions, install, upgrade, rights) | 04 |
 | S43-09 | The built-in agents leave the core: provenance migration, baked lock, default values | A-03 |
@@ -202,7 +202,7 @@ a start-up reconcile run twice changing nothing, provenance migrated without byp
 | ADR | Title | Amends |
 |:--|:--|:--|
 | 0093 | An agent ships as a plugin: one format, signed sources, default plugins per deployment | 0040 (the catalogue becomes plugins), 0065, 0067 (procedures come with their plugin) |
-| 0094 | A plugin's code runs as an MCP server the platform runs and governs; a plugin can be a tracker | 0034, 0080 (image rules shared) |
+| 0096 | A plugin's code runs as an MCP server the platform runs and governs; a plugin can be a tracker | 0034, 0080 (image rules shared) |
 
 ## 4. What stays with the operator
 

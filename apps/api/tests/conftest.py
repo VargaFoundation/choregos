@@ -17,7 +17,7 @@ os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 # The egress allowlist (S39-22) only warns in the suites: the tests that prove it ask for `enforce`.
 os.environ.setdefault("CHOREGOS_EGRESS_MODE", "warn")
-# The registry the test plugins' servers come from (ADR 0094): the tests that prove the allowlist set another.
+# The registry the test plugins' servers come from (ADR 0096): the tests that prove the allowlist set another.
 os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", '["ghcr.io/vargafoundation/choregos-agents"]')
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")

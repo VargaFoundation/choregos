@@ -186,7 +186,7 @@ def _check_server(path: Path, ref: str, problems: list[str]) -> dict[str, Any] |
     for duplicate in sorted({n for n in names if names.count(n) > 1}):
         problems.append(f"{ref}: operation `{duplicate}` is declared twice")
     for op in doc["operations"]:
-        undo = (op.get("compensation") or {}).get("operation")  # ADR 0094: `{operation, arguments}`
+        undo = (op.get("compensation") or {}).get("operation")  # ADR 0096: `{operation, arguments}`
         if undo is not None and undo not in names:
             problems.append(
                 f"{ref}: `{op['name']}` is compensated by `{undo}`, which the server does not declare"

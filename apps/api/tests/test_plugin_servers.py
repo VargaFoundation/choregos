@@ -1,4 +1,4 @@
-"""A plugin's server, run and governed by the platform (S43-06, ADR 0094).
+"""A plugin's server, run and governed by the platform (S43-06, ADR 0096).
 
 Each guard has its test: installing runs the server (Deployment, Service, NetworkPolicy, Secret) under
 the pod rules; the connector is named after the server and carries one operation per declared one at
@@ -426,7 +426,7 @@ async def test_uninstall_deletes_the_server_and_its_connector(
 async def test_the_platform_fills_its_arguments_and_drops_the_agent_s(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    """`platform_arguments` (ADR 0052, declared by the server since ADR 0094): an agent that writes an
+    """`platform_arguments` (ADR 0052, declared by the server since ADR 0096): an agent that writes an
     `action_key` of its own does not choose the idempotency key the server trusts."""
     from types import SimpleNamespace
 

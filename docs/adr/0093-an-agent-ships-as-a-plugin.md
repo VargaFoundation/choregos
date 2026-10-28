@@ -59,7 +59,7 @@ its sources and their trust, the installer, and a way to run a plugin's server w
    (`read`/`write`, nothing is assumed read), an optional `human_approval` floor that an organisation may
    raise and never lower, and for a write an optional `compensation`. A tool not listed is refused.
    `implements: [tracker]` and `webhook.path` let a server act as a tracker. How the platform runs and
-   governs these servers is ADR 0094's (S43-06).
+   governs these servers is ADR 0096's (S43-06).
 3. **Distribution.** A published plugin is an OCI artifact
    (`application/vnd.choregos.plugin.v1.tar+gzip`) signed with cosign, or a git reference pinned to a
    40-hex commit. Its identity is the **content digest**: the sha256 of a canonical tar of the directory
@@ -99,7 +99,7 @@ its sources and their trust, the installer, and a way to run a plugin's server w
   `apps/api/tests/test_contract_conformance.py` until S43-03, S43-04 and S43-07 serve them.
 - The word "plugin" changes meaning in the documentation: what was called a plugin (a Python
   wheel loaded through `choregos.plugins`) is an extension.
-- Not decided here: how plugin servers run (ADR 0094), the console's catalogue pages (S43-08).
+- Not decided here: how plugin servers run (ADR 0096), the console's catalogue pages (S43-08).
 
 ## Precisions (S43-05, 2026-10-27)
 
@@ -132,5 +132,5 @@ Found by the first real plugin (`servicenow`, choregos-agents PR #2):
   only for a server of its own plugin that declares a `webhook`.
 - **A template's tracker may be a plugin's server**: `requires.connectors.tracker:
   plugin:<plugin>/<server>` (`template.schema.json`), checked at validation against a server of the same
-  plugin that declares `implements: [tracker]`. The adapter that runs it is S43-07 (ADR 0094, "The
+  plugin that declares `implements: [tracker]`. The adapter that runs it is S43-07 (ADR 0096, "The
   tracker half").

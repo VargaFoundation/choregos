@@ -1,4 +1,4 @@
-"""The objects that run a plugin's server, and how they are applied (ADR 0094, S43-06)."""
+"""The objects that run a plugin's server, and how they are applied (ADR 0096, S43-06)."""
 
 from __future__ import annotations
 

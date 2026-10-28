@@ -201,7 +201,7 @@ installed plugin requires cannot be uninstalled (409).
 
 ## Servers
 
-A plugin brings code only as an MCP server image (ADR 0094). Installing the plugin (after the second
+A plugin brings code only as an MCP server image (ADR 0096). Installing the plugin (after the second
 approval) runs each of its servers and governs it:
 
 - **an organisation connector named after the server.** `servers/servicenow.yaml` with
@@ -317,7 +317,7 @@ approval).
 - **Webhooks.** A procedure gives `{{plugin_webhook_url:<plugin>/<server>}}`; the system posts its
   deliveries there. `POST /webhooks/plugins/{org}/{plugin}/{server}` forwards the headers (without
   `Authorization`, `Cookie`) and the body to the server's `tracker_parse_event` over `/mcp` — the
-  server's only door the platform authenticates (ADR 0094 §6), so a server's own `webhook.path` is not
+  server's only door the platform authenticates (ADR 0096 §6), so a server's own `webhook.path` is not
   called by the core. The URL names the organisation, so a delivery reaches only that organisation's
   server (401 if the server does not recognise it, 404 if the organisation does not run that server as a
   tracker with a webhook). Each event is de-duplicated on its `delivery_id`, then its

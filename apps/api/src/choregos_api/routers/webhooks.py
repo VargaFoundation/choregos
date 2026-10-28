@@ -526,7 +526,7 @@ async def plugin_webhook(
     """A delivery for a plugin server that is a tracker (plan S43 Decision 3).
 
     The headers and body go to the server's `tracker_parse_event` through `/mcp` with the server's
-    bearer token — the only door of the server the platform authenticates (ADR 0094 §6) — and the
+    bearer token — the only door of the server the platform authenticates (ADR 0096 §6) — and the
     server says whether the delivery is its own (its secret) and which items changed. Each event is
     de-duplicated on the server's `delivery_id`, then its item is RE-READ with `tracker_fetch_item`:
     nothing of the payload but the key is trusted. The URL names the organisation, so only that

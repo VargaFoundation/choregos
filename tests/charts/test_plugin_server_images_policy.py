@@ -1,4 +1,4 @@
-"""`choregos-plugin-server-images` (ADR 0094, S43-06), read in Python.
+"""`choregos-plugin-server-images` (ADR 0096, S43-06), read in Python.
 
 `make policies-test` lets the Kyverno engine judge the pods of `infra/policies/tests/plugin-servers`;
 this test plays the same expectations against the policy's own regular expression (RE2 and Python

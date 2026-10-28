@@ -10,7 +10,7 @@
   [ADR 0063](0063-agents-written-in-code.md), [ADR 0070](0070-network-access-is-bounded-and-enforced-per-run.md)
   and [ADR 0071](0071-an-agent-version-reaches-production-through-channels.md)
 
-> **Amended by [ADR 0094](0094-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md)**: the image
+> **Amended by [ADR 0096](0096-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md)**: the image
 > rules of §8 (registry allowlist, digest, cosign `off`/`warn`/`enforce` and its signer) also govern a
 > plugin's server image, with an allowlist of its own (`plugins.servers.registries`).
 

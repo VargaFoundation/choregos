@@ -173,7 +173,7 @@ async def _appeler_le_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> 
     arguments.update(await _arguments_de_la_plateforme(ctx, instance, operation, arguments))
     await _within_the_network_bounds(ctx, instance, f"{nom}/{operation}")
     try:
-        # A plugin's server (ADR 0094): its Service, its bearer token; any other: its type's adapter.
+        # A plugin's server (ADR 0096): its Service, its bearer token; any other: its type's adapter.
         client: Any = await connector_client(ctx.session, instance)
         if hasattr(client, "call_tool"):
             resultat = await client.call_tool(operation, arguments)

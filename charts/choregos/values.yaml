@@ -356,7 +356,7 @@ global:
     defaultPlugins: []
     # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none.
     offline: ""
-    # Plugin servers (ADR 0094): the MCP servers plugins bring, run by the API as a Deployment, a
+    # Plugin servers (ADR 0096): the MCP servers plugins bring, run by the API as a Deployment, a
     # Service, a NetworkPolicy and a Secret per organisation and server, in their own namespace. Off: a
     # plugin that brings a server is refused. On: the chart grants the API a Role in that namespace only.
     servers:

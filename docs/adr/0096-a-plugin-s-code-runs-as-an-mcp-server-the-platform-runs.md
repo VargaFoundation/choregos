@@ -1,4 +1,4 @@
-# 0094 — A plugin's code runs as an MCP server the platform runs and governs
+# 0096 — A plugin's code runs as an MCP server the platform runs and governs
 
 - **Status**: accepted, 2026-10-27, by the product owner's requests of that day (plan
   `docs/plan/PLAN-2026-10-27-servicenow.md`, Decision 2, stream S43) — implemented by S43-06; the

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A plugin's MCP server, as the platform runs it in Kubernetes (ADR 0094, plan S43 Decision 2).
+"""A plugin's MCP server, as the platform runs it in Kubernetes (ADR 0096, plan S43 Decision 2).
 
 `server_manifests` turns one server into the objects that run it in the plugins namespace, and
 `PluginServerRuntime` applies them through the same `KubernetesClient` the executors use (fake:

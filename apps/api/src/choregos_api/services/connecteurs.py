@@ -23,7 +23,7 @@ def plus_stricte(a: str, b: str | None) -> str:
 
 
 def declared_operation(connector: OrgConnector, operation: str) -> OperationSpec | None:
-    """What is declared of one operation of this connector: by its plugin's server (ADR 0094), else
+    """What is declared of one operation of this connector: by its plugin's server (ADR 0096), else
     by its type (ADR 0052); `None` for a discovered MCP tool."""
     from choregos_adapters import operation_spec
 
@@ -46,13 +46,13 @@ def declared_operation(connector: OrgConnector, operation: str) -> OperationSpec
 
 def undeclared(connector: OrgConnector, operation: str) -> bool:
     """A tool a plugin's server serves that its `operations` do not declare: refused, whatever a row
-    of `connector_operations` says (ADR 0094). Never true for another connector."""
+    of `connector_operations` says (ADR 0096). Never true for another connector."""
     server = connector.plugin_server
     return server is not None and operation not in (server.get("operations") or {})
 
 
 def human_floor(connector: OrgConnector, operation: str, policy: str) -> str:
-    """An operation its type (or its plugin's server) declares `human_approval` (ADR 0052, ADR 0094)
+    """An operation its type (or its plugin's server) declares `human_approval` (ADR 0052, ADR 0096)
     is never below `approval`: the organisation cannot open it to the policy, and a row edited behind
     the API does not either. An operation a plugin's server does not declare is `forbidden`."""
     if undeclared(connector, operation):
