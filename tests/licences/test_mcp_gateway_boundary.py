@@ -127,30 +127,35 @@ PLUGIN_WEBHOOK = "POST /webhooks/plugins/{org}/{plugin}/{server}"
 #: so a rename cannot leave a stale one behind.
 ALLOWED_PLATFORM_MCP = PLUGIN_SERVER_SURFACE | FORWARD_PROXIES | {PLUGIN_WEBHOOK}
 
-#: The routes of the two doors, by directory, one `VERB /path` per verb and by shape (`route_shape`: a
-#: parameter is `{}`, or `{:path}`, whatever its name). A new one is a decision: a route that serves
-#: Choregos's own tools or workflows is added here; one that forwards to, merges or names another MCP server
-#: is a gateway.
+#: The routes of the two doors, by directory, one `VERB /path` per verb, parameter names included: a door
+#: that took a `{connector}` or a `{server}` would serve another server. A new route is a decision: one that
+#: serves Choregos's own tools or workflows is added here; one that forwards to, merges or names another MCP
+#: server is a gateway.
 DOOR_ROUTES = {
     "apps/api/src/choregos_api/mcp": frozenset(
         {
             "GET /.well-known/oauth-protected-resource",
-            "GET /.well-known/oauth-protected-resource/{:path}",
+            "GET /.well-known/oauth-protected-resource/{path:path}",
             "GET /mcp",
             "DELETE /mcp",
             "POST /mcp",
-            "GET /mcp/projects/{}",
-            "DELETE /mcp/projects/{}",
-            "POST /mcp/projects/{}",
+            "GET /mcp/projects/{project}",
+            "DELETE /mcp/projects/{project}",
+            "POST /mcp/projects/{project}",
         }
     ),
     "apps/api/src/choregos_api/a2a": frozenset(
         {
-            "POST /a2a/orgs/{}",
-            "GET /a2a/orgs/{}/.well-known/agent-card.json",
+            "POST /a2a/orgs/{org}",
+            "GET /a2a/orgs/{org}/.well-known/agent-card.json",
         }
     ),
 }
+
+#: The door's parameters still have French names until the English rename of the MCP door (plan story
+#: S45-14); the freeze reads them under their English names. A rename to any other name changes the freeze,
+#: and is a decision like a new route.
+FORMER_PARAMETER_NAMES = {"projet": "project", "chemin": "path"}  # lang: fr-ok
 
 #: The broker's routes: an agent lists and calls its tools per run (or per hosted session), never per
 #: connector or per server.
@@ -181,6 +186,8 @@ HTTP_VERBS = frozenset({"get", "post", "put", "patch", "delete", "head", "option
 #: A route added by a call rather than a decorator: `add_api_route` (FastAPI's GET when it lists no methods)
 #: and `mount` (a whole sub-application under a path, read as `MOUNT /path`).
 ROUTE_CALLS = frozenset({"add_api_route", "mount"})
+#: A mount hands every path beneath it to another application, whatever that application is.
+MOUNT = "MOUNT"
 MCP_CLIENTS = frozenset({"ClientMcp", "McpClient", "PluginServerClient"})
 LISTENERS = frozenset({"start_server", "start_unix_server"})
 PATH_PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)(?::([a-z]+))?\}")
@@ -389,11 +396,23 @@ def _name_of(node: ast.expr) -> str:
 
 
 def _route_path(call: ast.Call) -> str | None:
-    """The path a route decorator or call names: its `path=` or first positional argument, if a literal."""
+    """The path a route decorator or call names: its `path=` or first positional argument.
+
+    A literal is read as written. An f-string is read with each interpolated name as a parameter of that name
+    (`f"{API_PREFIX}/edition"` is `{API_PREFIX}/edition`) and any other expression as `{}`, so a gateway
+    route cannot hide behind one. Anything else (a variable) is not read.
+    """
     candidates = [argument.value for argument in call.keywords if argument.arg == "path"] + call.args[:1]
     for candidate in candidates:
         if isinstance(candidate, ast.Constant) and isinstance(candidate.value, str):
             return candidate.value
+        if isinstance(candidate, ast.JoinedStr):
+            return "".join(
+                str(part.value)
+                if isinstance(part, ast.Constant)
+                else f"{{{_name_of(part.value) if isinstance(part, ast.FormattedValue) else ''}}}"
+                for part in candidate.values
+            )
     return None
 
 
@@ -451,33 +470,36 @@ def routes_of(source: str) -> list[str]:
         path = _route_path(node)
         if path is None:
             continue
-        verbs = "MOUNT" if node.func.attr == "mount" else _verbs(node, "GET")
+        verbs = MOUNT if node.func.attr == "mount" else _verbs(node, "GET")
         routes.append(f"{verbs} {prefixes.get(owner.id, '')}{path}")
     return routes
 
 
-def route_shape(route: str) -> str:
-    """`route` with its path parameters' names left out: `{name}` is `{}`, `{name:path}` is `{:path}`.
-
-    The freeze is on what a door serves, not on what its code calls a parameter: renaming one is not a
-    new route, while a new or removed segment, a new converter or another verb is.
-    """
-    return PATH_PARAMETER.sub(lambda match: f"{{:{match[2]}}}" if match[2] else "{}", route)
+def _english_parameter(match: re.Match[str]) -> str:
+    name = FORMER_PARAMETER_NAMES.get(match[1], match[1])
+    return f"{{{name}:{match[2]}}}" if match[2] else f"{{{name}}}"
 
 
 def frozen_routes(routes: Iterable[str]) -> frozenset[str]:
-    """What the freeze compares: one `VERB /path` per verb, by shape (`route_shape`)."""
-    shapes: set[str] = set()
+    """What the freeze compares: one `VERB /path` per verb, parameter names included.
+
+    A parameter's name says what a route selects (a project, an organisation, a run, or a connector, a
+    server), so it is part of the route. Only the door's former French names are read as their English ones.
+    """
+    found: set[str] = set()
     for route in routes:
         verbs, path = route.split(" ", 1)
-        shapes |= {f"{verb} {route_shape(path)}" for verb in verbs.split(",")}
-    return frozenset(shapes)
+        english = PATH_PARAMETER.sub(_english_parameter, path)
+        found |= {f"{verb} {english}" for verb in verbs.split(",")}
+    return frozenset(found)
 
 
 def gateway_traits(route: str) -> list[str]:
     """What in a route's path says it forwards to, merges or names a third-party server."""
-    path = route.split(" ", 1)[1]
+    verbs, path = route.split(" ", 1)
     traits: list[str] = []
+    if verbs == MOUNT:
+        traits.append("a mount hands every sub-path to another application")
     for name, converter in PATH_PARAMETER.findall(path):
         if name in UPSTREAM_PARAMETERS:
             traits.append(f"`{{{name}}}` picks an upstream")
@@ -554,6 +576,9 @@ def create_app():
     app.add_api_route(path="/orgs/{org}/edition", endpoint=edition)
     app.mount("/servers/{server}", proxy)
     app.mount("/static", files)
+    app.add_api_route(f"{API_PREFIX}/edition", edition)
+    router.add_api_route(f"/{settings.upstream_prefix}/{{rest:path}}", forward)
+    app.add_api_route(PATH, forward)
 """
     routes = routes_of(source)
     assert routes == [
@@ -570,26 +595,41 @@ def create_app():
         "GET /orgs/{org}/edition",
         "MOUNT /servers/{server}",
         "MOUNT /static",
+        # An f-string path: an interpolated name is a parameter of that name, `{{`/`}}` a literal brace pair.
+        "GET {API_PREFIX}/edition",
+        "GET /gw/{upstream_prefix}/{rest:path}",
+        # `app.add_api_route(PATH, ...)`: a variable path is not read.
     ]
-    assert [route for route in routes if gateway_traits(route)] == [*routes[:5], routes[8], routes[10]]
+    flagged = [route for route in routes if gateway_traits(route)]
+    # Every mount is flagged, `/static` too: a mount hands every sub-path to another application.
+    assert flagged == [*routes[:5], routes[8], routes[10], routes[11], routes[13]]
+    assert gateway_traits("MOUNT /static") == ["a mount hands every sub-path to another application"]
     # The platform's own plugin webhook is the one route of the API that names a server.
     assert gateway_traits(PLUGIN_WEBHOOK) == ["`{server}` picks an upstream"]
 
 
-def test_the_route_freeze_compares_shapes_and_verbs() -> None:
-    """A parameter's name is not part of a route: a segment, a converter, a verb or a mount is."""
-    door = frozen_routes(["POST /mcp/projects/{project}", "GET,DELETE /mcp", "GET /meta/{rest:path}"])
-    assert door == {"POST /mcp/projects/{}", "GET /mcp", "DELETE /mcp", "GET /meta/{:path}"}
-    renamed = ["POST /mcp/projects/{project_id}", "DELETE,GET /mcp", "GET /meta/{path:path}"]
-    assert frozen_routes(renamed) == door
+def test_the_route_freeze_compares_names_and_verbs() -> None:
+    """A parameter's name is part of a route, as are a segment, a converter, a verb and a mount."""
+    door = frozen_routes(["POST /mcp/projects/{project}", "GET,DELETE /mcp", "GET /meta/{path:path}"])
+    assert door == {"POST /mcp/projects/{project}", "GET /mcp", "DELETE /mcp", "GET /meta/{path:path}"}
+    # The order of the verbs and the door's former French names do not matter.
+    assert frozen_routes(["POST /mcp/projects/{project}", "DELETE,GET /mcp", "GET /meta/{path:path}"]) == door
+    former = ["POST /mcp/projects/{projet}", "GET,DELETE /mcp", "GET /meta/{chemin:path}"]  # lang: fr-ok
+    assert frozen_routes(former) == door
     for changed in (
-        ["POST /mcp/projects/{project}/servers", "GET,DELETE /mcp", "GET /meta/{rest:path}"],  # a segment
-        ["POST /mcp/projects/{project:path}", "GET,DELETE /mcp", "GET /meta/{rest:path}"],  # a converter
-        ["POST /mcp/projects/{project}", "GET,DELETE,POST /mcp", "GET /meta/{rest:path}"],  # a verb
-        ["POST /mcp/projects/{project}", "GET,DELETE /mcp", "MOUNT /meta/{rest:path}"],  # a mount
+        ["POST /mcp/projects/{connector}", "GET,DELETE /mcp", "GET /meta/{path:path}"],  # another name
+        ["POST /mcp/projects/{project_id}", "GET,DELETE /mcp", "GET /meta/{path:path}"],  # another name
+        ["POST /mcp/projects/{project}/servers", "GET,DELETE /mcp", "GET /meta/{path:path}"],  # a segment
+        ["POST /mcp/projects/{project:path}", "GET,DELETE /mcp", "GET /meta/{path:path}"],  # a converter
+        ["POST /mcp/projects/{project}", "GET,DELETE,POST /mcp", "GET /meta/{path:path}"],  # a verb
+        ["POST /mcp/projects/{project}", "GET,DELETE /mcp", "MOUNT /meta/{path:path}"],  # a mount
         ["POST /mcp/projects/{project}", "GET,DELETE /mcp"],  # a removed route
     ):
         assert frozen_routes(changed) != door, changed
+    # The broker's names are English: `{name}` turned into `{connector}` is a change.
+    assert frozen_routes(["POST /internal/runs/{id}/tools/{connector}"]) != frozen_routes(
+        ["POST /internal/runs/{id}/tools/{name}"]
+    )
 
 
 def test_the_client_and_listener_checks_see_what_they_guard() -> None:
