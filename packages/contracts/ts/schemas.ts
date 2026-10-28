@@ -174,6 +174,8 @@ export type PluginIndexRelease = {
     /** the plugin's directory in the repository */
     path?: string;
   };
+  /** the agents this release ships (ADR 0108): a workflow catalogue names the plugin of a missing agent without fetching it */
+  agents?: Array<string>;
 };
 
 /** A plugin source's index, index.yaml: name → versions → where and what (ADR 0093). */

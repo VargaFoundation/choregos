@@ -864,7 +864,7 @@ export type WorkflowCatalogueAgent = {
   version?: number | null;
   /** `org`: the organisation's own agent; `plugin`: installed by a plugin; `remote`: an A2A agent; `catalogue`: absent but in the platform's catalogue, installed on adoption; `unresolved`: nowhere, adoption is refused */
   resolution: "org" | "plugin" | "remote" | "catalogue" | "unresolved";
-  /** for `plugin`, the plugin that installed it */
+  /** for `plugin`, the plugin that installed it; for `unresolved`, a plugin of a configured source that ships it (`<name> <version> (<source>)`), when one does */
   plugin?: string | null;
   display_name?: string | null;
 };
@@ -906,6 +906,8 @@ export type WorkflowSummary = {
   open_items: number;
   created_by?: string | null;
   updated_at?: string | null;
+  /** the caller may share it to the organisation's catalogue (ADR 0108 §4, ADR 0074: the server decides) */
+  can_share?: boolean;
 };
 
 export type WorkflowRouting = {
@@ -933,6 +935,8 @@ export type WorkflowValidation = {
   warnings: Array<WorkflowIssue>;
   graph?: WorkflowGraph;
   process?: Array<ProcessStep>;
+  /** the workflow as the engine read it (ADR 0109) */
+  document?: S.Workflow;
 };
 
 /** A transition in plain words — the process view (ADR 0031). */

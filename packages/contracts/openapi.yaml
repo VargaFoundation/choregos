@@ -4813,7 +4813,7 @@ components:
           description: >-
             `org`: the organisation's own agent; `plugin`: installed by a plugin; `remote`: an A2A agent;
             `catalogue`: absent but in the platform's catalogue, installed on adoption; `unresolved`: nowhere, adoption is refused
-        plugin: { type: [string, "null"], description: "for `plugin`, the plugin that installed it" }
+        plugin: { type: [string, "null"], description: "for `plugin`, the plugin that installed it; for `unresolved`, a plugin of a configured source that ships it (`<name> <version> (<source>)`), when one does" }
         display_name: { type: [string, "null"] }
     WorkflowAdopt:
       type: object
@@ -4853,6 +4853,7 @@ components:
         open_items: { type: integer, description: "Open tickets pinned to one of its versions." }
         created_by: { type: [string, "null"] }
         updated_at: { type: [string, "null"], format: date-time }
+        can_share: { type: boolean, default: false, description: "the caller may share it to the organisation's catalogue (ADR 0108 §4, ADR 0074: the server decides)" }
     WorkflowRouting:
       type: object
       required: [default, rules]
@@ -4885,6 +4886,7 @@ components:
         warnings: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" } }
         graph: { $ref: "#/components/schemas/WorkflowGraph" }
         process: { type: array, items: { $ref: "#/components/schemas/ProcessStep" } }
+        document: { $ref: "./schemas/workflow.schema.json", description: "the workflow as the engine read it (ADR 0109)" }
     ProcessStep:
       type: object
       description: A transition in plain words — the process view (ADR 0031).
