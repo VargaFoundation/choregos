@@ -737,24 +737,38 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
 }
 
 
-#: Le serveur MCP des faux (`CHOREGOS_FAKES=1`) : un seul, que les tests et la démo scriptent.
-FAUX_MCP: Any = None
+#: The fake MCP server of CHOREGOS_FAKES=1: one, scripted by the tests and the demo.
+FAKE_MCP: Any = None
 
 
-def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
+def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
     from .fakes.mcp import FakeMcpServer
-    from .mcp import ClientMcp
+    from .mcp import McpClient
 
-    global FAUX_MCP  # noqa: PLW0603 - un faux partagé, comme les autres faux de la plateforme
-    if FAUX_MCP is None:
-        FAUX_MCP = FakeMcpServer()
-    return ClientMcp(
+    global FAKE_MCP  # noqa: PLW0603 - a shared fake, like the platform's other fakes
+    if FAKE_MCP is None:
+        FAKE_MCP = FakeMcpServer()
+    return McpClient(
         cfg.get("url", "http://fake-mcp.test/mcp"),
         token=cfg.get("token", ""),
         auth_scheme=cfg.get("auth_scheme", "bearer"),
         username=cfg.get("username", ""),
         auth_header=cfg.get("auth_header", "Authorization"),
-        transport=FAUX_MCP.transport(),
+        transport=FAKE_MCP.transport(),
+        user_agent=str(cfg.get("user_agent", "")),
+    )
+
+
+def _mcp_client(cfg: dict[str, Any]) -> Any:
+    from .mcp import McpClient
+
+    return McpClient(
+        cfg["url"],
+        token=cfg.get("token", ""),
+        auth_scheme=cfg.get("auth_scheme", "bearer"),
+        username=cfg.get("username", ""),
+        auth_header=cfg.get("auth_header", "Authorization"),
+        timeout_s=float(cfg.get("timeout_s", 30)),
         user_agent=str(cfg.get("user_agent", "")),
     )
 
@@ -799,9 +813,9 @@ def _guichet_de_demo(famille: str, *, en_production: bool) -> Any:
             # Servi par un seul processus (`choregos_adapters.fakes.serveur`) : là où l'API et
             # l'orchestrateur sont deux processus, un faux en mémoire leur montrerait deux états.
             from .fakes.rh import GuichetDistant
-            from .mcp import ClientMcp
+            from .mcp import McpClient
 
-            return GuichetDistant(ClientMcp(str(cfg["url"]), token=str(cfg.get("api_key", ""))))
+            return GuichetDistant(McpClient(str(cfg["url"]), token=str(cfg.get("api_key", ""))))
         if famille not in FAUX_METIER:
             FAUX_METIER[famille] = FAUX_PAR_FAMILLE[famille]()
         return Guichet(FAUX_METIER[famille], str(cfg.get("api_key", "")))
@@ -934,9 +948,9 @@ def _cd_de_demo(cfg: dict[str, Any]) -> Any:
             "démonstration, pas un déploiement."
         )
     if cfg.get("url"):
-        from .mcp import ClientMcp
+        from .mcp import McpClient
 
-        return CdDeDemo(GuichetDistant(ClientMcp(str(cfg["url"]), token=str(cfg.get("api_key", "")))))
+        return CdDeDemo(GuichetDistant(McpClient(str(cfg["url"]), token=str(cfg.get("api_key", "")))))
     if "cd" not in FAUX_METIER:
         FAUX_METIER["cd"] = FakeCdDeDemo()
     return CdDeDemo(Guichet(FAUX_METIER["cd"], str(cfg.get("api_key", ""))))
@@ -1044,7 +1058,7 @@ def _register_builtins() -> None:
     register("memory", "fake")(lambda cfg: FakeMemory())
     register("gateway", "fake")(lambda cfg: FakeGateway())
     register("notify", "fake")(lambda cfg: FakeNotifier())
-    register("mcp", "fake")(_client_du_faux_mcp)
+    register("mcp", "fake")(_fake_mcp_client)
     register("identity", "fake")(_annuaire_du_faux_entra)
     from .fakes.documents import FakeDocumentsConnector
 
@@ -1271,20 +1285,8 @@ def _register_builtins() -> None:
 
     _register_marketdata()
     _register_web_search()
-    # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
-    from .mcp import ClientMcp
-
-    register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(
-        lambda cfg: ClientMcp(
-            cfg["url"],
-            token=cfg.get("token", ""),
-            auth_scheme=cfg.get("auth_scheme", "bearer"),
-            username=cfg.get("username", ""),
-            auth_header=cfg.get("auth_header", "Authorization"),
-            timeout_s=float(cfg.get("timeout_s", 30)),
-            user_agent=str(cfg.get("user_agent", "")),
-        )
-    )
+    # A real MCP server (ADR 0034): its operations are DISCOVERED, and are born closed.
+    register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(_mcp_client)
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(
         lambda cfg: SlackNotifier(
             webhook_url=cfg.get("webhook_url", _env("CHOREGOS_SLACK_WEBHOOK", "")),

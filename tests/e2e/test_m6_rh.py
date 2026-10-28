@@ -56,7 +56,7 @@ class Faux:
         self.fournisseur = FakeFournisseur()
         self.serveur = serveur_mcp(self.fournisseur, jeton=CLE_FOURNISSEUR)
         monkeypatch.setattr(choregos_adapters, "FAUX_ENTRA", self.annuaire)
-        monkeypatch.setattr(choregos_adapters, "FAUX_MCP", self.serveur)
+        monkeypatch.setattr(choregos_adapters, "FAKE_MCP", self.serveur)
         for famille, faux in (
             ("mdm", self.parc),
             ("shipping", self.transporteur),
