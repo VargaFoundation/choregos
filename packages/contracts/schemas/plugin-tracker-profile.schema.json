@@ -1,0 +1,673 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/plugin-tracker-profile.schema.json",
+  "title": "PluginTrackerCall",
+  "description": "The tracker profile (plan S43 Decision 3, S43-07): one call of a plugin server that declares `implements: [tracker]`, its tool, the arguments the core sends and the JSON object (MCP `structuredContent`) the server answers. A server serves all eight tools and declares each in `operations` with the access below; the core's `tracker/plugin` adapter checks every answer against `$defs/<tool>_output`. Reads: `tracker_fetch_item`, `tracker_list_candidates`, `tracker_parse_event`; every other tool is a write.",
+  "type": "object",
+  "required": [
+    "tool",
+    "input"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tool": {
+      "enum": [
+        "tracker_fetch_item",
+        "tracker_create_item",
+        "tracker_set_state",
+        "tracker_comment",
+        "tracker_upsert_status",
+        "tracker_close",
+        "tracker_list_candidates",
+        "tracker_parse_event"
+      ]
+    },
+    "input": {
+      "type": "object"
+    },
+    "output": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_fetch_item"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_fetch_item_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_fetch_item_output"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_create_item"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_create_item_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_create_item_output"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_set_state"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_set_state_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_set_state_output"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_comment"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_comment_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_comment_output"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_upsert_status"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_upsert_status_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_upsert_status_output"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_close"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_close_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_close_output"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_list_candidates"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_list_candidates_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_list_candidates_output"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tool": {
+            "const": "tracker_parse_event"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/tracker_parse_event_input"
+          },
+          "output": {
+            "$ref": "#/$defs/tracker_parse_event_output"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "comment": {
+      "type": "object",
+      "required": [
+        "body"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "ts": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "marker": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "tracker_fetch_item_input": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        }
+      }
+    },
+    "tracker_fetch_item_output": {
+      "type": "object",
+      "required": [
+        "key",
+        "title"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "item_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "assignees": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updated_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "closed_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fields": {
+          "type": "object"
+        },
+        "comments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/comment"
+          }
+        }
+      },
+      "description": "The core's `WorkItemData`; keys it does not know are ignored. Every text is third-party data."
+    },
+    "tracker_create_item_input": {
+      "type": "object",
+      "required": [
+        "title",
+        "body",
+        "action_key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "body": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assignees": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fields": {
+          "type": "object"
+        },
+        "action_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "platform argument: an idempotency key stable for one action"
+        }
+      }
+    },
+    "tracker_create_item_output": {
+      "type": "object",
+      "required": [
+        "key",
+        "created"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "created": {
+          "type": "boolean"
+        }
+      },
+      "description": "A replay of the same `action_key` answers the existing key with `created: false`."
+    },
+    "tracker_set_state_input": {
+      "type": "object",
+      "required": [
+        "key",
+        "status",
+        "label",
+        "remove_labels"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "remove_labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "The core's `TrackerStateMapping`, plus `key`."
+    },
+    "tracker_set_state_output": {
+      "type": "object",
+      "required": [
+        "key",
+        "changed"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ignored": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tracker_comment_input": {
+      "type": "object",
+      "required": [
+        "key",
+        "markdown",
+        "action_key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "markdown": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "action_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "platform argument: an idempotency key stable for one action"
+        }
+      }
+    },
+    "tracker_comment_output": {
+      "type": "object",
+      "required": [
+        "key",
+        "id",
+        "written"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "written": {
+          "type": "boolean"
+        }
+      },
+      "description": "`id` is stable across replays of the same `action_key`."
+    },
+    "tracker_upsert_status_input": {
+      "type": "object",
+      "required": [
+        "key",
+        "markdown",
+        "marker"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "markdown": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "marker": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,80}$"
+        }
+      }
+    },
+    "tracker_upsert_status_output": {
+      "type": "object",
+      "required": [
+        "key",
+        "written"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "written": {
+          "type": "boolean"
+        }
+      }
+    },
+    "tracker_close_input": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "close_notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "close_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "tracker_close_output": {
+      "type": "object",
+      "required": [
+        "key",
+        "closed"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "closed": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "description": "Idempotent: an item already closed answers `closed: false`."
+    },
+    "tracker_list_candidates_input": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": true,
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "description": "Server-specific filters may be added (ServiceNow: `tables`)."
+    },
+    "tracker_list_candidates_output": {
+      "type": "object",
+      "required": [
+        "keys"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "keys": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/key"
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "tracker_parse_event_input": {
+      "type": "object",
+      "required": [
+        "headers",
+        "body"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string",
+          "description": "the raw request body, decoded as UTF-8"
+        }
+      }
+    },
+    "tracker_parse_event_output": {
+      "type": "object",
+      "required": [
+        "verified",
+        "events"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "verified": {
+          "type": "boolean"
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "item_key",
+              "delivery_id"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "tracker.item.created",
+                  "tracker.item.updated",
+                  "tracker.item.commented",
+                  "tracker.item.closed"
+                ]
+              },
+              "item_key": {
+                "$ref": "#/$defs/key"
+              },
+              "delivery_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      },
+      "description": "Only the kind, the key and the delivery id are read: the core re-reads every item with `tracker_fetch_item`."
+    }
+  }
+}

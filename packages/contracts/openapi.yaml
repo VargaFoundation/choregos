@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.20.5
+  version: 0.20.6
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -126,6 +126,10 @@ paths:
       tags: [projects]
       operationId: updateOrg
       summary: Rename an organisation — its name by its administrator, its slug by the platform administrator
+      description: >-
+        A new slug leaves the old one as an alias (`Org.aliases`): old URLs, MCP and A2A addresses,
+        qualified ids and IdP group names keep resolving to the organisation (ADR 0090). 409 when the
+        slug is another organisation's slug or alias.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgUpdate" } } }
@@ -135,6 +139,19 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/aliases/{alias}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: alias, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [projects]
+      operationId: releaseOrgAlias
+      summary: Release a former slug of an organisation, so another organisation may take it (platform administrator)
+      description: Old addresses and IdP group names that name the alias stop resolving. Audited as `org.alias.release`.
+      responses:
+        "204": { description: Released }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/projects:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1485,7 +1502,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /projects/{id}/costs.csv:
@@ -1498,7 +1515,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
@@ -1532,7 +1549,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /orgs/{org}/costs.csv:
@@ -1545,7 +1562,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
-        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /orgs/{org}/egress:
@@ -2560,6 +2577,123 @@ paths:
         "409": { $ref: "#/components/responses/EgressRequired" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository's host did not answer, or not usefully" }
+  /orgs/{org}/plugins:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listPlugins
+      description: >-
+        The plugins installed in the organisation (ADR 0093): version, source, content digest, what each brought, and
+        the newest version its source offers. Any member of the organisation.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PluginList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/plugin-sources:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listPluginSources
+      description: >-
+        The plugin sources this deployment declares (chart `plugins.sources`, and the offline directory as the source
+        `offline`), each with its trust policy and the plugins and versions its index offers. Sources are set by the
+        operator, not through the API. A source whose index cannot be read is listed with `error`. Any member.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PluginSources" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/plugins/install:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: installPlugin
+      description: >-
+        Installs a plugin from a declared source (ADR 0093). The supply-chain gate (ADR 0050) runs first: the fetched
+        content's digest must equal the index's, the signature must verify against the source's trust policy, and every
+        file is validated; any failure is a 422 naming the check, and nothing is written. `version` is an exact version
+        or a range; the newest matching version whose `core` range admits this core is chosen. A plugin that brings a
+        server needs a second person's approval: the answer is then a 202 and nothing is installed until it is given.
+        Rights per ADR 0074; audited as `plugin.install`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PluginInstall" } } }
+      responses:
+        "201": { description: Installed, content: { application/json: { schema: { $ref: "#/components/schemas/InstalledPlugin" } } } }
+        "202": { description: Waiting for a second approval, content: { application/json: { schema: { $ref: "#/components/schemas/PluginInstallPending" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/plugins/{name}/upgrade:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/PluginName" }
+    post:
+      tags: [agents]
+      operationId: upgradePlugin
+      description: >-
+        Moves an installed plugin to another version of its source, through the same gate as an install. The catalogue
+        rules of ADR 0040 hold: an agent the organisation changed is offered the new version, never overwritten
+        (`offered`), and project pins do not move. Without `version`, the newest admissible one. Audited as
+        `plugin.upgrade`.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/PluginUpgrade" } } }
+      responses:
+        "200": { description: Upgraded, content: { application/json: { schema: { $ref: "#/components/schemas/PluginUpgradeResult" } } } }
+        "202": { description: Waiting for a second approval, content: { application/json: { schema: { $ref: "#/components/schemas/PluginInstallPending" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/plugins/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/PluginName" }
+    delete:
+      tags: [agents]
+      operationId: uninstallPlugin
+      description: >-
+        Uninstalls a plugin: what it brought and nobody changed is retired, what an organisation changed or a project
+        pins is kept and loses its plugin provenance, and its servers stop. The answer lists what was removed and what
+        was kept as the organisation's own (contract-change S43-05: was a 204 without a body, so the person
+        uninstalling did not learn what stayed). Requests still waiting for a second approval of this plugin are
+        dropped. 409 when another installed plugin requires it. Audited as `plugin.uninstall`.
+      responses:
+        "200": { description: Uninstalled, content: { application/json: { schema: { $ref: "#/components/schemas/PluginUninstallResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/plugin-approvals:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listPluginApprovals
+      description: >-
+        The plugin installs and upgrades that waited, or still wait, for a second approval (ADR 0050, ADR 0093 §4):
+        a plugin that brings a server, at the exact version and content digest that was checked. A default plugin
+        the start-up reconcile could not install on its own is here with `default: true` and no `requested_by`.
+        Newest first, at most 200. Any member of the organisation (contract-change S43-05).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PluginApprovalList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/plugin-approvals/{approval_id}/approve:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: approval_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: approvePluginInstall
+      description: >-
+        A second administrator approves a waiting install or upgrade: the plugin is obtained again at the recorded
+        version, through every check of the gate, and installed only if its content digest is the one that was
+        checked (409 otherwise). The administrator who asked cannot approve (403); a request of the platform (a
+        default plugin) is approved by any administrator. Rights per ADR 0074; audited as `plugin.approve`
+        (contract-change S43-05).
+      responses:
+        "200": { description: Approved and installed, content: { application/json: { schema: { $ref: "#/components/schemas/PluginApproval" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/skill-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -2861,6 +2995,43 @@ paths:
         "202": { description: Distilling, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/distill/stop:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: stopKnowledgeDistillation
+      description: >-
+        Stops the distillation that is running on the base (S42-10d). The model calls already made stay stored by digest
+        and booked in the cost ledger, nothing is published, and `distillation` becomes `status: stopped` with
+        `code: cancelled`, `stopped_by`, the parts done and the spend so far. A relaunch reuses the stored parts.
+        Same rights as `distill`. 409 when no distillation is running (`distill_not_running`).
+      responses:
+        "202": { description: Stop requested; the base carries the stopped record, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/distill/relaunch:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: relaunchKnowledgeDistillation
+      description: >-
+        Starts again the last distillation of the base, whatever its outcome (failed, stopped or finished) (S42-10d).
+        Without a body it keeps the last run's `exclude` and `max_usd`; a body replaces them. Parts already stored for
+        the same digest are not called again, so only what changed or never finished is paid for. Same rights as
+        `distill`. 409 when one is running, when there is no previous distillation (`distill_nothing_to_relaunch`),
+        or when the estimate exceeds `max_usd` (`distill_over_budget`).
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDistillRequest" } } }
+      responses:
+        "202": { description: Distilling again, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/knowledge/{slug}/distill/estimate:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3106,6 +3277,28 @@ paths:
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/plugins/{org}/{plugin}/{server}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: plugin, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: server, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: pluginWebhook
+      description: >-
+        A delivery for a plugin server that declares `webhook` and `implements: [tracker]` (ADR 0093, S43-07). The core
+        forwards the body and headers to the server's `tracker_parse_event` tool over its authenticated `/mcp` (the
+        tracker profile, `plugin-tracker-profile.schema.json`); the server verifies the delivery and returns normalised
+        events, which the core de-duplicates on their `delivery_id` and acts on only after re-reading each item with
+        `tracker_fetch_item`. The URL names the organisation, so a delivery reaches only that organisation's server.
+        401 when the server does not recognise the delivery, 404 when the organisation runs no such plugin server as a
+        tracker with a webhook.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/runs/{id}/input:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3753,6 +3946,7 @@ components:
       required: true
       description: a capability; the registry says which ones exist (`GET /connectors/types`, ADR 0034)
       schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
+    PluginName: { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
     Cursor: { name: cursor, in: query, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
   responses:
@@ -5847,7 +6041,7 @@ components:
         projects: { type: array, items: { type: string }, maxItems: 200 }
         groups: { type: array, items: { type: string }, maxItems: 200 }
         serving_mode: { type: string, enum: [files, index], default: files, description: "`files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search" }
-        restricted: { type: boolean, default: false, description: "people read it only through a grant (or as an administrator or owning-project owner); runs that the base is attached to are still served (S42-11, ADR 0081)" }
+        restricted: { type: boolean, default: false, description: "people read it only through a grant (or as an administrator or owning-project owner); a run attached to it is served it only on behalf of a person who may read it: the person who started its work item, or of a fan-out child its parent's (S42-11, ADR 0081, ADR 0097)" }
     ProjectKnowledgeBaseCreate:
       type: object
       required: [slug, name]
@@ -5902,7 +6096,7 @@ components:
         distill: { type: boolean, description: "distil the base into a skill (spends model budget)" }
         share: { type: boolean, description: "change the grants" }
         archive: { type: boolean }
-        widen: { type: boolean, description: "change scope, projects, groups or restricted (organisation administrator only)" }
+        widen: { type: boolean, description: "change scope, projects, groups or restricted (organisation administrator, or owner of the base's project)" }
     KnowledgeDocument:
       type: object
       required: [id, filename, title, mime, size_bytes, digest, source, status]
@@ -5932,6 +6126,26 @@ components:
       properties:
         exclude: { type: array, maxItems: 20, items: { type: string, maxLength: 200 }, default: [], description: "filename globs of documents left out (`*.xlsx`, `archive/*`)" }
         max_usd: { type: [number, "null"], minimum: 0, description: "stop and publish nothing when the spend would pass this; null keeps the platform's budget" }
+    KnowledgeDistillRun:
+      type: object
+      description: >-
+        One distillation run, as kept in `distillation.history` (S42-10d): how it ended and what it cost. The last five
+        runs before the current one, newest first.
+      required: [status]
+      properties:
+        status: { type: string, enum: [running, pending_review, approved, rejected, failed, stopped], description: "how the run ended (`running` only for a run whose end was never recorded)" }
+        code: { type: [string, "null"], description: "why it failed or was stopped: `too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`" }
+        error: { type: [string, "null"] }
+        requested_by: { type: [string, "null"], description: who started it }
+        stopped_by: { type: [string, "null"], description: who stopped it, when stopped }
+        started_at: { type: [string, "null"], format: date-time }
+        at: { type: [string, "null"], format: date-time, description: when it ended }
+        phase: { type: [string, "null"], enum: [plan, map, reduce, publish, null] }
+        parts_done: { type: integer }
+        parts_total: { type: integer }
+        spent_usd: { type: number, description: "what the run's model calls cost; parts reused from an earlier run cost nothing" }
+        skill: { type: [string, "null"] }
+        version: { type: [integer, "null"] }
     KnowledgeDistillEstimate:
       type: object
       required: [characters, tokens_estimate, documents, parts, calls, model, priced_by, within_budget, biggest]
@@ -5985,14 +6199,33 @@ components:
         eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
         sources: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeSource" }, description: returned by the reading of one base }
         owner_project: { type: [string, "null"], description: "the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base" }
-        restricted: { type: boolean, description: "people read it only through a grant; runs that the base is attached to are still served (S42-11)" }
+        restricted: { type: boolean, description: "people read it only through a grant; a run is served it only on behalf of a person who may read it (S42-11, ADR 0097)" }
         can: { $ref: "#/components/schemas/KnowledgePermissions" }
         cannot_reason: { type: [string, "null"], description: "the server's sentence when the caller may not edit: shown as is, never guessed from roles" }
         my_role: { type: [string, "null"], enum: [viewer, editor, owner, null], description: "the caller's role on the base through grants or ownership; null for a plain reader through the reach" }
         grants: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeGrant" }, description: returned by the reading of one base, to a caller who may share it }
         distillation:
           type: [object, "null"]
-          description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one)"
+          properties:
+            status: { type: string, enum: [running, pending_review, approved, rejected, failed, stopped] }
+            code: { type: [string, "null"] }
+            error: { type: [string, "null"] }
+            at: { type: [string, "null"], format: date-time }
+            requested_by: { type: [string, "null"] }
+            started_at: { type: [string, "null"], format: date-time }
+            phase: { type: [string, "null"], enum: [plan, map, reduce, publish, null] }
+            parts_done: { type: integer }
+            parts_total: { type: integer }
+            spent_usd: { type: number }
+            skill: { type: [string, "null"] }
+            version: { type: [integer, "null"] }
+            principles: { type: [integer, "null"] }
+            dropped: { type: array, items: { type: string } }
+            history: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/KnowledgeDistillRun" }, description: "the runs before this one, newest first (S42-10d)" }
+            stopped_by: { type: [string, "null"], description: "who stopped the run, when `status` is `stopped`" }
+            exclude: { type: array, items: { type: string }, description: "the globs the run left out, kept for a relaunch" }
+            max_usd: { type: [number, "null"], description: "the cap the run was started with, kept for a relaunch" }
+          description: "the last distillation: `status` (running, pending_review, failed, stopped), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one); `history` holds the runs before it, `stopped_by` who stopped it, `exclude` and `max_usd` what a relaunch reuses"
         eval_result:
           type: [object, "null"]
           description: the last run of the eval set
@@ -6320,6 +6553,155 @@ components:
         error: { type: [string, "null"], description: "names the proxy; never the password" }
         elapsed_ms: { type: integer, minimum: 0 }
         target: { type: string, description: "the echo endpoint that was fetched" }
+    PluginContents:
+      type: object
+      additionalProperties: false
+      description: What an installed plugin brought, by the identifier each item has in the organisation.
+      required: [agents, skills, templates, evals, procedures, servers]
+      properties:
+        agents: { type: array, items: { type: string }, description: "agent slugs" }
+        skills: { type: array, items: { type: string } }
+        templates: { type: array, items: { type: string } }
+        evals: { type: array, items: { type: string } }
+        procedures: { type: array, items: { type: string }, description: "procedure ids (ADR 0067)" }
+        servers: { type: array, items: { type: string } }
+    InstalledPlugin:
+      type: object
+      additionalProperties: false
+      required: [name, version, source, digest, publisher, license, description, default, contents, installed_by, installed_at, latest]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string }
+        source: { type: string, description: "the source's name; `offline` for the deployment's offline directory" }
+        digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$", description: "sha256 of the plugin's canonical tar" }
+        publisher: { type: string }
+        license: { type: string }
+        description: { type: string }
+        default: { type: boolean, description: "installed because the deployment lists it in `plugins.defaultPlugins`" }
+        contents: { $ref: "#/components/schemas/PluginContents" }
+        installed_by: { type: [string, "null"], description: "null when the start-up reconcile installed it" }
+        installed_at: { type: string, format: date-time }
+        latest: { type: [string, "null"], description: "the newest version the source offers for this core, when newer than `version`" }
+    PluginList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InstalledPlugin" } }
+    PluginTrust:
+      type: object
+      additionalProperties: false
+      description: "How a source's signatures are verified: a keyless cosign identity and issuer, or a public key; `none` only for the offline directory."
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [keyless, key, none] }
+        issuer: { type: [string, "null"] }
+        identity: { type: [string, "null"] }
+        key_fingerprint: { type: [string, "null"], description: "sha256 of the public key; the key itself is not returned" }
+    PluginSourceEntry:
+      type: object
+      additionalProperties: false
+      required: [name, description, versions]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        description: { type: [string, "null"] }
+        versions:
+          type: array
+          description: "newest first, each with the core range it was validated against"
+          items:
+            type: object
+            additionalProperties: false
+            required: [version, core, admissible]
+            properties:
+              version: { type: string }
+              core: { type: string }
+              admissible: { type: boolean, description: "this core is inside `core`" }
+    PluginSource:
+      type: object
+      additionalProperties: false
+      required: [name, index, trust, plugins, error]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        index: { type: string, description: "`oci://…`, `https://…` or the offline directory's path" }
+        trust: { $ref: "#/components/schemas/PluginTrust" }
+        plugins: { type: array, items: { $ref: "#/components/schemas/PluginSourceEntry" } }
+        error: { type: [string, "null"], description: "why the index could not be read; `plugins` is then empty" }
+    PluginSources:
+      type: object
+      additionalProperties: false
+      required: [sources]
+      properties:
+        sources: { type: array, items: { $ref: "#/components/schemas/PluginSource" } }
+    PluginInstall:
+      type: object
+      additionalProperties: false
+      required: [source, name, version]
+      properties:
+        source: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string, minLength: 1, maxLength: 128, description: "an exact version or a range (`^0.1`, `>=1.2.0,<2`)" }
+    PluginInstallPending:
+      type: object
+      additionalProperties: false
+      required: [status, approval_id, reason]
+      properties:
+        status: { const: pending_approval }
+        approval_id: { type: string }
+        reason: { type: string, description: "why a second person must approve, e.g. the plugin brings a server" }
+    PluginApproval:
+      type: object
+      additionalProperties: false
+      description: "An install or upgrade of a plugin that brings a server, waiting for (or given) a second approval."
+      required: [id, action, source, name, version, digest, reason, default, requested_by, status, decided_by, created_at, decided_at]
+      properties:
+        id: { type: string }
+        action: { type: string, enum: [install, upgrade] }
+        source: { type: string }
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string, description: "the exact version that was checked" }
+        digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        reason: { type: string }
+        default: { type: boolean, description: "asked by the start-up reconcile for a plugin of `plugins.defaultPlugins`" }
+        requested_by: { type: [string, "null"], description: "null when the platform asked (a default plugin)" }
+        status: { type: string, enum: [pending, approved] }
+        decided_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: [string, "null"], format: date-time }
+    PluginApprovalList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PluginApproval" } }
+    PluginKept:
+      type: object
+      additionalProperties: false
+      required: [agents, skills]
+      properties:
+        agents: { type: array, items: { type: string } }
+        skills: { type: array, items: { type: string } }
+    PluginUninstallResult:
+      type: object
+      additionalProperties: false
+      required: [name, version, removed, kept]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        version: { type: string }
+        removed: { $ref: "#/components/schemas/PluginKept" }
+        kept: { $ref: "#/components/schemas/PluginKept", description: "what the organisation changed, a project pins, or a kept agent still carries: now the organisation's own" }
+    PluginUpgrade:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: string, minLength: 1, maxLength: 128, description: "an exact version or a range; absent, the newest admissible" }
+    PluginUpgradeResult:
+      type: object
+      additionalProperties: false
+      required: [plugin, previous_version, offered]
+      properties:
+        plugin: { $ref: "#/components/schemas/InstalledPlugin" }
+        previous_version: { type: string }
+        offered: { type: array, items: { type: string }, description: "agent slugs the organisation changed: offered the update, not overwritten (ADR 0040)" }
     RelayOutboundProxy:
       type: object
       additionalProperties: false
@@ -6534,6 +6916,7 @@ components:
         name: { type: string }
         role: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }] }
         currency: { type: string, enum: [EUR, USD], default: EUR, description: "the currency the console shows spend in (S29-03); an organisation setting" }
+        aliases: { type: array, items: { type: string }, default: [], description: "the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address." }
     OrgCreate:
       type: object
       required: [slug, name]

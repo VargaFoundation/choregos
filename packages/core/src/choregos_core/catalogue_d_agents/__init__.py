@@ -63,7 +63,13 @@ def _contexte() -> str:
 
 
 def _lire(chemin: Path) -> EntreeDuCatalogue:
-    brut = yaml.safe_load(chemin.read_text(encoding="utf-8"))
+    return entry_of(yaml.safe_load(chemin.read_text(encoding="utf-8")))
+
+
+def entry_of(brut: dict[str, Any]) -> EntreeDuCatalogue:
+    """An entry from a catalogue document (`catalogue:` + `agent:`), wherever it was read: the core's
+    directory or a plugin's agent file (ADR 0093). The context block precedes an internal agent's
+    instructions either way."""
     meta, document = dict(brut["catalogue"]), dict(brut["agent"])
     genre = document.get("kind", "internal")
     spec = dict(document.get("spec") or {})
@@ -115,4 +121,11 @@ def fichiers_de_la_skill(nom: str) -> dict[str, str]:
     }
 
 
-__all__ = ["EntreeDuCatalogue", "entree", "entrees", "fichiers_de_la_skill", "skills_du_catalogue"]
+__all__ = [
+    "EntreeDuCatalogue",
+    "entree",
+    "entrees",
+    "entry_of",
+    "fichiers_de_la_skill",
+    "skills_du_catalogue",
+]

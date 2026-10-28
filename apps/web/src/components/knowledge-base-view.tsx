@@ -129,7 +129,7 @@ export function KnowledgeBaseView({
           </Link>
         ) : null}
         {can.distill ? (
-          <KnowledgeDistill org={org} slug={slug} onStarted={refresh} />
+          <KnowledgeDistill org={org} slug={slug} onStarted={refresh} distillation={base.data.distillation} />
         ) : (
           <button type="button" className="ml-2 text-ink-subtle underline" disabled title={why}>
             Distill

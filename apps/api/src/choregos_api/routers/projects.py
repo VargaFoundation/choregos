@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 from ..audit import record
 from ..config import get_settings
 from ..db.models import Membership, Organization, Project
+from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_old_slug, release
 from ..db.session import TOUT, limiter_aux_organisations
 from ..deps import Db, Me, Pagination, ProjectCtx, exiger_admin_de_plateforme
 from ..edition import est_entreprise
@@ -35,6 +36,7 @@ from ..schemas import (
     ProvisionStep,
 )
 from ..services import ensure_defaults, persist_event, project_dto
+from ..services.plugin_tracker import wire_template_tracker
 from ..temporal import get_temporal, provisioning_id
 
 router = APIRouter(tags=["projects"])
@@ -44,10 +46,17 @@ router = APIRouter(tags=["projects"])
 async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
     """Les organisations de l'appelant, avec son rôle — ce que le front affiche dans son sélecteur."""
     slugs = set(principal.org_roles) | {q.split("/", 1)[0] for q in principal.project_roles}
-    rows = (await session.execute(select(Organization).where(Organization.slug.in_(slugs)))).scalars()
+    rows = list((await session.execute(select(Organization).where(Organization.slug.in_(slugs)))).scalars())
+    aliases = await aliases_by_org(session, [o.id for o in rows])
     return sorted(
         (
-            OrgDto(slug=o.slug, name=o.name, role=principal.org_roles.get(o.slug), currency=moneta(o))
+            OrgDto(
+                slug=o.slug,
+                name=o.name,
+                role=principal.org_roles.get(o.slug),
+                currency=moneta(o),
+                aliases=aliases[o.id],
+            )
             for o in rows
         ),
         key=lambda o: o.slug,
@@ -81,9 +90,7 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
                 "the community edition holds a single organisation. Several organisations, and the "
                 "isolation between them, are the enterprise edition (docs/adr/0024-two-editions.md)."
             )
-    if (
-        await session.execute(select(Organization).where(Organization.slug == body.slug))
-    ).scalar_one_or_none():
+    if await holder_of_slug(session, body.slug) is not None:  # a current slug, or a former one (ADR 0090)
         raise conflict(f"organisation `{body.slug}` already exists")
     if any(
         memory_key(other) == body.slug for other in (await session.execute(select(Organization))).scalars()
@@ -96,6 +103,11 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     await record(
         session, principal, "org.create", org_id=org.id, target_type="org", target_id=org.id, slug=body.slug
     )
+    # The deployment's default plugins (ADR 0093 §5): a new organisation gets them as the others did at
+    # start-up; one that brings a server waits for an administrator's approval.
+    from ..services.plugin_defaults import reconcile_org
+
+    await reconcile_org(session, org.id)
     return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN, currency=moneta(org))
 
 
@@ -106,18 +118,22 @@ def moneta(organisation: Organization) -> Any:
 
 @router.patch("/orgs/{org}", response_model=OrgDto, operation_id="updateOrg")
 async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> OrgDto:
-    """Renomme une organisation. Son NOM, son administrateur le change. Son SLUG, seul
-    l'administrateur de la plateforme : il est dans chaque URL de la console, chaque adresse de la
-    porte MCP (`/mcp/projects/<org>:<projet>`), chaque identifiant qualifié (`<org>:<projet>`) et le
-    nom des groupes de l'IdP (`choregos:<org>:<groupe>`) — le changer est un geste d'instance.
+    """Renames an organisation. Its NAME, its administrator changes. Its SLUG, only the platform
+    administrator: it is in every console URL, every MCP door address (`/mcp/projects/<org>:<project>`),
+    every qualified id (`<org>:<project>`) and the IdP's group names (`choregos:<org>:<group>`), so
+    changing it is an instance gesture.
 
     Global memories (S40-11) follow: their tenant is `org:<memory key>`, and the key is the slug the
     organisation had when its slug first changed (`settings["memory_key"]`, set once, never
     overwritten), so a rename never orphans them.
 
-    Projets, appartenances, jetons et tout ce qui en dépend suivent : ils tiennent à l'organisation
-    par son identifiant, pas par son slug. Ce qui ne suit pas : les adresses déjà copiées ailleurs, et
-    les groupes de l'IdP qui nomment l'ancien slug.
+    Projects, memberships, tokens and everything that depends on them follow: they hold the
+    organisation by its id, not its slug (ADR 0090). Addresses already copied elsewhere and IdP groups
+    that name the old slug keep working: the old slug becomes an ALIAS of the organisation
+    (`Org.aliases`), resolved by URLs (`/orgs/<alias>/…`, `/a2a/orgs/<alias>`), MCP addresses and
+    qualified ids (`resolve_project`), the IdP group mapping, the bootstrap and the payloads waiting in
+    a workflow (`session_scope`). A slug that is taken, or an alias of ANOTHER organisation, is refused
+    (409); the platform administrator releases an alias with `DELETE /orgs/{org}/aliases/{alias}`.
     """
     est_admin = principal.org_roles.get(org) == Role.ORG_ADMIN
     if not est_admin:
@@ -134,9 +150,11 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         # transaction ne verrait plus la ligne qu'elle renomme, et la mise à jour serait refusée. Le
         # droit d'instance vient d'être établi : la suite de la requête voit l'instance.
         await limiter_aux_organisations(session, TOUT)
-        pris = await session.execute(select(Organization.id).where(Organization.slug == body.slug))
-        if pris.first() is not None:
-            raise conflict(f"organisation `{body.slug}` already exists")
+        # A slug is unique across current slugs AND aliases: another organisation's old address is
+        # not free (ADR 0090). An organisation may take back one of its own former slugs.
+        holder = await holder_of_slug(session, body.slug)
+        if holder is not None and holder != organisation.id:
+            raise conflict(f"`{body.slug}` is already taken, or is a former slug of another organisation")
         # A slug another organisation keeps as its memory key is not free either: two organisations
         # would share one memory tenant.
         for other in (await session.execute(select(Organization))).scalars():
@@ -148,7 +166,17 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
                 **(organisation.settings or {}),
                 MEMORY_KEY_SETTING: organisation.slug,
             }
+        ancien = organisation.slug
         organisation.slug = body.slug
+        await session.flush()
+        # The old slug stays an address of the organisation (ADR 0090), and the copy of the slug the
+        # project configuration holds (`ProjectConfig.org`) is rewritten with it.
+        await keep_old_slug(session, organisation, ancien, principal.email)
+        for projet in (
+            await session.execute(select(Project).where(Project.org_id == organisation.id))
+        ).scalars():
+            if (projet.config or {}).get("org") == ancien:
+                projet.config = {**projet.config, "org": body.slug}
     if body.name is not None:
         organisation.name = body.name
     if body.currency is not None:
@@ -162,7 +190,28 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         name=organisation.name,
         role=Role.ORG_ADMIN if est_admin else None,  # a non-member platform admin has no role here
         currency=moneta(organisation),
+        aliases=await aliases_of(session, organisation.id),
     )
+
+
+@router.delete(
+    "/orgs/{org}/aliases/{alias}", status_code=status.HTTP_204_NO_CONTENT, operation_id="releaseOrgAlias"
+)
+async def release_org_alias(org: str, alias: str, session: Db, principal: Me) -> None:
+    """Free a former slug of the organisation, so another organisation may take it (ADR 0090).
+
+    The platform administrator's gesture, like the rename: it is the one that breaks the old addresses
+    and the IdP group names that still name the alias.
+    """
+    await exiger_admin_de_plateforme(session, principal)
+    await limiter_aux_organisations(session, TOUT)
+    organisation = await _org(session, org)
+    if not await release(session, organisation.id, alias):
+        raise not_found("Alias", alias)
+    await record(
+        session, principal, "org.alias.release", org_id=organisation.id, target_type="org",
+        target_id=organisation.id, alias=alias,
+    )  # fmt: skip
 
 
 async def _org(session: Any, slug: str) -> Organization:
@@ -237,6 +286,8 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
     session.add(project)
     await session.flush()
     await ensure_defaults(session, project)
+    # A template whose tracker is a plugin's server wires it, or refuses the project (S43-07).
+    await wire_template_tracker(session, project)
     session.add(
         Membership(
             user_id=principal.user_id,

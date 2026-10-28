@@ -71,6 +71,11 @@ def test_all_declared_schemas_exist() -> None:
         ("context-pack.example.json", "context-pack.schema.json"),
         ("event.example.json", "event.schema.json"),
         ("ui-manifest.example.json", "ui-manifest.schema.json"),
+        ("plugin.example.json", "plugin.schema.json"),
+        ("plugin-server.example.json", "plugin-server.schema.json"),
+        ("plugin-index.example.json", "plugin-index.schema.json"),
+        ("plugin-evals.example.json", "plugin-evals.schema.json"),
+        ("plugin-tracker-profile.example.json", "plugin-tracker-profile.schema.json"),
     ],
 )
 def test_example_matches_json_schema(example: str, schema_name: str) -> None:
@@ -580,3 +585,42 @@ def test_a_knowledge_document_and_a_sync_summary_say_what_was_cut() -> None:
     summary = schemas["KnowledgeSource"]["properties"]["last_summary"]["properties"]
     assert summary["truncated"]["type"] == "integer"
     assert summary["truncated_reasons"]["items"] == {"type": "string"}
+
+
+def test_the_distillation_job_is_in_the_contract() -> None:
+    """S42-10d: a distillation can be stopped and relaunched, keeps its last runs, and its spend is a
+    cost kind of its own."""
+    spec = contracts.load_openapi()
+    paths = spec["paths"]
+    stop = paths["/orgs/{org}/knowledge/{slug}/distill/stop"]["post"]
+    relaunch = paths["/orgs/{org}/knowledge/{slug}/distill/relaunch"]["post"]
+    assert stop["operationId"] == "stopKnowledgeDistillation"
+    assert relaunch["operationId"] == "relaunchKnowledgeDistillation"
+    assert relaunch["requestBody"]["required"] is False
+    assert "409" in stop["responses"] and "409" in relaunch["responses"]
+    run = spec["components"]["schemas"]["KnowledgeDistillRun"]
+    assert {"status", "code", "requested_by", "stopped_by", "spent_usd", "parts_done"} <= set(
+        run["properties"]
+    )
+    distillation = spec["components"]["schemas"]["KnowledgeBase"]["properties"]["distillation"]
+    assert {"history", "stopped_by", "exclude", "max_usd"} <= set(distillation["properties"])
+    assert distillation["properties"]["history"]["maxItems"] == 5
+    for route in (
+        "/projects/{id}/costs",
+        "/projects/{id}/costs.csv",
+        "/orgs/{org}/costs",
+        "/orgs/{org}/costs.csv",
+    ):
+        kind = next(p for p in paths[route]["get"]["parameters"] if p.get("name") == "kind")
+        assert kind["schema"]["enum"] == ["model", "tool", "distill"], route
+
+
+def test_an_organisation_lists_the_slugs_it_had_and_an_alias_can_be_released() -> None:
+    """ADR 0090: a rename keeps the old slug as an alias; the platform administrator can release one."""
+    spec = contracts.load_openapi()
+    org = spec["components"]["schemas"]["Org"]
+    assert org["properties"]["aliases"]["items"] == {"type": "string"}
+    assert "aliases" not in org["required"], "an older server that sends no aliases stays valid"
+    release = spec["paths"]["/orgs/{org}/aliases/{alias}"]["delete"]
+    assert release["operationId"] == "releaseOrgAlias"
+    assert set(release["responses"]) == {"204", "403", "404"}

@@ -1,0 +1,119 @@
+# Pods of the plugins namespace judged by `choregos-plugin-server-images` (ADR 0096).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-allowed
+  namespace: choregos-plugins
+spec:
+  containers:
+  - name: server
+    image: ghcr.io/vargafoundation/choregos-agents/servicenow-mcp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-tag
+  namespace: choregos-plugins
+spec:
+  containers:
+  - name: server
+    image: ghcr.io/vargafoundation/choregos-agents/servicenow-mcp:0.1.0
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-other-registry
+  namespace: choregos-plugins
+spec:
+  containers:
+  - name: server
+    image: ghcr.io/acme/servicenow-mcp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-lookalike-prefix
+  namespace: choregos-plugins
+spec:
+  containers:
+  - name: server
+    image: ghcr.io/vargafoundation/choregos-agents-evil/x@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-init-unpinned
+  namespace: choregos-plugins
+spec:
+  containers:
+  - name: server
+    image: ghcr.io/vargafoundation/choregos-agents/servicenow-mcp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    securityContext: &id001
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  automountServiceAccountToken: false
+  initContainers:
+  - name: setup
+    image: busybox:1.36
+    securityContext: *id001

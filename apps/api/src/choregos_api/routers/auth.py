@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..config import Settings, get_settings
 from ..db.models import ApiToken, Membership, Organization, Project, User
+from ..db.org_aliases import current_slugs
 from ..deps import Config, Db, DbPlateforme, Me, resolve_project
 from ..edition import mappeur_de_groupes
 from ..errors import ApiError, not_found, unauthorized, unprocessable
@@ -158,11 +159,11 @@ def _handshake(settings: Settings, redirect: str, *, reauth: bool = False) -> tu
     nonce = secrets.token_urlsafe(24)
     verifier, challenge = _pkce()
     expiry = int(time.time()) + OIDC_HANDSHAKE_S
-    state = sign_session({"n": nonce, "r": redirect, "exp": expiry}, settings)
+    state = sign_session({"n": nonce, "r": redirect, "exp": expiry}, settings, purpose="oidc-state")
     poignee: dict[str, Any] = {"n": nonce, "v": verifier, "exp": expiry}
     if reauth:
         poignee["a"] = 1
-    cookie = sign_session(poignee, settings)
+    cookie = sign_session(poignee, settings, purpose="oidc-handshake")
     return state, cookie, challenge
 
 
@@ -290,6 +291,16 @@ async def _map_groups_to_roles(
     roles = mappeur_de_groupes(roles_des_groupes)(groups, settings.oidc_default_org)
     if not roles:
         return
+    # A group that names a FORMER slug (`choregos:<old>:<group>`, or `CHOREGOS_OIDC_DEFAULT_ORG` left at
+    # the old slug) grants its role on the renamed organisation (ADR 0090). When a current slug and an
+    # alias of the same organisation both appear, the higher role wins, as for two groups of one slug.
+    rang = {role: i for i, role in enumerate(GROUP_ROLES.values())}
+    resolu: dict[str, Role] = {}
+    for nom, role in roles.items():
+        actuel = (await current_slugs(session, [nom]))[nom]
+        if actuel not in resolu or rang[role] < rang[resolu[actuel]]:
+            resolu[actuel] = role
+    roles = resolu
     orgs = (await session.execute(select(Organization).where(Organization.slug.in_(roles)))).scalars().all()
     for org in orgs:
         existing = (
@@ -329,8 +340,8 @@ async def callback(
     settings: Config,
 ) -> RedirectResponse:
     """Vérifie `state` et le nonce, échange le code (PKCE), ouvre la session, pose le cookie signé."""
-    attendu = read_session(state, settings)
-    poignee = read_session(request.cookies.get(OIDC_COOKIE, ""), settings)
+    attendu = read_session(state, settings, purpose="oidc-state")
+    poignee = read_session(request.cookies.get(OIDC_COOKIE, ""), settings, purpose="oidc-handshake")
     if not attendu or not poignee or attendu.get("n") != poignee.get("n"):
         raise unauthorized("invalid or expired sign-in state: start the sign-in again")
     target = redirection_sure(str(attendu.get("r") or ""), settings)

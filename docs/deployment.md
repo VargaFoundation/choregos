@@ -81,7 +81,9 @@ The chart never writes production secrets. It expects them to exist:
 
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
-| `global.apiSecretRef` (default `choregos-api-secrets`) | `session-secret`, `run-token-private-key`, `run-token-public-key`, `github-app-id`, `github-app-private-key`, `github-webhook-secret` | API **and** orchestrator |
+| `global.apiSecretRef` (default `choregos-api-secrets`) | `run-token-private-key`, `github-app-id`, `github-app-private-key` | API **and** orchestrator |
+| `global.apiSecretRef`, entries `session-secret`, `run-token-public-key`, `github-webhook-secret` | the session signing key (required, see below), the run-token public key (derived from the private one when absent), the GitHub webhook secret | API only |
+| `global.apiSecretRef`, entry `session-secret-previous` (optional) | the previous session key during a rotation, `CHOREGOS_SESSION_SECRET_PREVIOUS`: verification only | API only |
 | `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
 | `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
 | `global.oidc.secretRef` | `client-secret` | API |
@@ -101,6 +103,32 @@ openssl ecparam -name prime256v1 -genkey -noout    # ES256 private key
 ```
 
 The public key is derived from the private one when it is absent.
+
+**The session secret** (`session-secret`, `CHOREGOS_SESSION_SECRET`) signs the session cookie and the
+sign-in handshakes, and only the API reads it: the workers and the migrations Job never need it. It
+is required. The API refuses to start when it is empty, whatever the environment, and on any deployed
+instance (`global.environment` staging or prod, or a public or API URL served over https, whatever
+`global.environment` says) when it is shorter than 32 bytes or is the default published in the
+repository. The error names the variable. Generate one with:
+
+```bash
+openssl rand -base64 48
+```
+
+Each value signed with it carries a 256-bit tag bound to its purpose (session, OIDC state, OIDC
+handshake, remote OAuth state and handshake): a value signed for one purpose is refused for another.
+The API still reads the session cookies issued by the previous release for one more release; they
+carry a 128-bit tag without a purpose and are accepted as sessions only.
+
+To rotate it, move the old value to `session-secret-previous`, put the new one in `session-secret`,
+redeploy, and remove `session-secret-previous` once `session_max_age_s` (8 hours) has passed: until
+then a session signed with the old key still signs its holder in, and nothing new is signed with it.
+On a deployed instance the previous key must also be at least 32 bytes. With an ExternalSecret, set
+`choregos-api.externalSecrets.sessionSecretPrevious: true` once the vault holds the property (a
+missing property fails the whole ExternalSecret sync). Do not pass it through `global.extraEnv`: a
+`CHOREGOS_SESSION_SECRET_PREVIOUS` there fails the render, because the API chart already sets it. The
+sign-ins in flight at the deploy that adds the purposes (10 minutes at most) fail once and are
+started again.
 
 **The secrets key** (`secrets-keks`, [ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) seals
 the connector secrets typed in the console. It is a list `id:base64`, the first entry sealing and the
@@ -378,7 +406,7 @@ are where backends and executors are configured; *Administration → Platform* o
 A project that names its own `agent` or `models` keeps them. When a runner pod dies before it can
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
-digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start…), or why the container never started.
+digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094…), or why the container never started.
 
 ## Theme
 
@@ -629,6 +657,92 @@ A refused file is logged (`procedures.file.refused`) and skipped: the API still 
 files still apply. A plugin can supply the same directory through a `choregos.procedures` entry point
 whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EXTRA`.
 
+## Plugins
+
+A plugin packages agents, skills, templates, evals, procedures and MCP servers in one signed format
+([ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md), [writing one](plugins.md)). The deployment says
+where plugins come from, which ones every organisation gets, and which ones are baked into the image:
+
+```yaml
+global:
+  plugins:
+    sources:
+      - name: varga
+        index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable   # or https://…/index.yaml
+        trust:                    # a keyless cosign signer (regular expressions, matched whole)…
+          identity: https://github.com/VargaFoundation/choregos-agents/.*
+          issuer: https://token.actions.githubusercontent.com
+          # key: /etc/choregos/plugins-keys/acme.pub   # …or a public key, mounted with api.extraVolumes
+        egress: []                # hosts its fetches may reach beyond the index's own
+    defaultPlugins:
+      - { source: varga, name: servicenow, version: "^0.1" }
+    offline: /opt/choregos/plugins   # plugins baked into the image: air-gapped, demo, CI
+```
+
+The chart renders these values into the ConfigMap `choregos-plugins`, mounted read-only in the API at
+`/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. All three are empty by
+default: nothing is rendered and no plugin is installed. A source without `trust` refuses to render;
+there is no unsigned source.
+
+**At start-up**, the API reads the file before it serves anything. A file it cannot read, an invalid
+source, a default plugin naming an undeclared source, an `offline` directory that does not exist in the
+image, or two different offline directories (`offline` here and `CHOREGOS_PLUGINS_OFFLINE` in the
+image's environment; set one) stop the API with a message naming the setting, rather than a 500 at the
+first install.
+
+**Default plugins.** Once started, the API installs each `defaultPlugins` entry in every organisation,
+in the background (a slow registry never holds the readiness probe), and in each organisation created
+later, at its creation:
+
+- it is idempotent: an organisation that has the plugin, at any version, is left alone; running it
+  again changes nothing. Moving to a newer version stays an administrator's gesture (an upgrade);
+- each replica runs it, one organisation at a time under a PostgreSQL advisory lock: two replicas
+  starting together take turns, and the second finds everything done;
+- every fetch passes the same checks as an administrator's install (index, signature, pinned commit,
+  digest, `plugins.lock`, contents, core range). A plugin that fails is logged
+  (`plugin.default.failed`) and the others go on;
+- a default plugin that brings an MCP server is **not** installed by the platform: it waits for an
+  administrator's approval, like any plugin with a server. It is logged
+  (`plugin.default.pending_approval`) and listed by `GET /api/v1/orgs/{org}/plugin-approvals` with
+  `default: true`; any administrator of the organisation approves it there.
+
+What the reconcile installed is listed with `default: true` and `installed_by: null`. The summary of
+each pass is the log line `plugin.default.reconciled` (installed, waiting, failed).
+
+**Egress.** Fetches go through the API's egress guard, opened for each source's own hosts within the
+deployment's ceiling (`global.egress`); the API's network policy must also let it reach the index and
+registry hosts (`choregos-api.egressHosts` documents them for the catalogues).
+
+### Plugin servers
+
+A plugin's MCP server runs in the cluster, started by the API ([ADR 0096](adr/0096-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md),
+[what a server must do](plugins.md#servers)). Off by default: a plugin that brings one is refused.
+
+```yaml
+global:
+  plugins:
+    servers:
+      enabled: true
+      namespace: { name: choregos-plugins, create: false }   # create: true renders the Namespace too
+      registries: [ghcr.io/vargafoundation/choregos-agents]   # where a server's image may come from
+      runtimeClass: ""          # empty: global.runner.runtimeClass, else the cluster's runtime
+      egress: networkpolicy     # or cilium: a CiliumNetworkPolicy names the exact hosts
+      resources: { limits: { cpu: 500m, memory: 512Mi } }
+```
+
+With `enabled`, the chart renders a Role in that namespace (Deployments, Services, NetworkPolicies,
+Secrets; CiliumNetworkPolicies with `egress: cilium`) bound to the API's ServiceAccount, nothing
+cluster-wide, and opens the platform's egress towards the namespace. The namespace must not be the
+release's. Per organisation and server the API writes a Deployment, a Service, a NetworkPolicy (ingress
+from the API's pods only) and a Secret, named `<server>-<hash of the organisation>` and labelled
+`choregos.dev/plugin`, `choregos.dev/server`, `choregos.dev/org`.
+
+What stays with the operator: the namespace (unless `create`), the registry allowlist in two places —
+`registries` here and the prefix of the Kyverno policy `choregos-plugin-server-images`
+(`infra/policies/plugin-servers.yaml`, the namespace name too if it is not `choregos-plugins`) — and,
+for `cilium`, a cluster that runs Cilium with its DNS proxy. Signatures follow `images.hostedCosign`
+and its signer.
+
 ## Multi-tenant installations
 
 For a tenant that may not create cluster-scoped resources:
@@ -721,10 +835,12 @@ returns; `NEXT_PUBLIC_DEFAULT_ORG` is a build-time variable of the image and the
 The bootstrap **never renames** an organisation that exists: changing `bootstrap.org` on a running
 instance creates a second organisation (refused on the community edition, which holds one). To
 rename, call `PATCH /api/v1/orgs/<slug>` with `{"name": "…"}` (an organisation administrator), or
-`{"slug": "…"}` (a platform administrator, who need not be a member). A new slug is a decision for
-the operator: the memory tenant (`org:<slug>`), the IdP groups (`choregos:<slug>:<group>`), every
-MCP address (`/mcp/projects/<slug>:<project>`) and every copied console URL name the old one, and
-nothing rewrites them for you.
+`{"slug": "…"}` (a platform administrator, who need not be a member). The old slug stays an
+alias of the organisation (ADR 0090): the IdP groups (`choregos:<old>:<group>`), every MCP address
+(`/mcp/projects/<old>:<project>`), every copied console URL, `bootstrap.org` and `oidc.defaultOrg`
+keep resolving to it, so a restart does not create a second organisation. Update them when convenient,
+not before the rename. The memory tenant (`org:<key>`) never changes. A platform administrator frees an
+alias with `DELETE /api/v1/orgs/<slug>/aliases/<alias>`.
 
 The CLI and CI authenticate with API tokens, which a person issues for themselves once
 logged in (`POST /me/tokens`, `choregos tokens create`). Before anyone has logged in, the

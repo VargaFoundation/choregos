@@ -273,10 +273,16 @@ def available(kind: ConnectorKind | str) -> list[str]:
     return sorted(type_name for (k, type_name) in _REGISTRY if k == str(kind))
 
 
+#: Types that stay themselves under `CHOREGOS_FAKES`: their fake is what they call, not the adapter. A
+#: plugin tracker (S43-07) under fakes talks to the in-memory server of the tracker profile
+#: (`FakePluginTrackerServer`, the transport the API injects), so the profile mapping is what runs.
+BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset({("tracker", "plugin")})
+
+
 def build(kind: ConnectorKind | str, type_name: str, config: dict[str, Any] | None = None) -> Any:
     """Construit un adaptateur. En mode fakes, le type demandé est ignoré."""
     config = config or {}
-    if fakes_enabled():
+    if fakes_enabled() and (str(kind), type_name) not in BUILT_UNDER_FAKES:
         type_name = "fake"
     factory = _REGISTRY.get((str(kind), type_name))
     if factory is None:

@@ -14,6 +14,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 #: cette chaîne au lieu d'échouer. Helm et l'opérateur Infisical le font tous les deux.
 GABARIT_NON_RESOLU = ("<no value>", "<nil>")
 
+#: The session secret the code ships with. It is published in the repository, so no deployed
+#: instance may sign with it (`security.check_session_secret`).
+DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
+#: The shortest session secret a deployed instance accepts: a 256-bit HMAC key.
+MIN_SESSION_SECRET_BYTES = 32
+
 
 #: Les clients de la page Integrations qu'un client OAuth pré-enregistré peut servir (ADR 0030).
 CLIENTS_OAUTH = frozenset(
@@ -77,7 +83,10 @@ class Settings(BaseSettings):
     #: (`claude-code`, `claude-ai`…), en JSON : `{"claude-code": {"client_id": "…", "callback_port":
     #: 33418}}`. La page en tire la commande exacte ; sans eux, elle ne propose que les jetons.
     mcp_oauth_clients: dict[str, ClientOAuth] = Field(default_factory=dict)
-    session_secret: str = "dev-session-secret-change-me"
+    session_secret: str = DEFAULT_SESSION_SECRET
+    #: A verification-only key during a rotation (`CHOREGOS_SESSION_SECRET_PREVIOUS`): a value signed
+    #: with it still reads, and nothing is signed with it.
+    session_secret_previous: str = ""
     session_cookie: str = "choregos_session"
     session_max_age_s: int = 8 * 3600
     #: Connexion de développement (`/auth/login?as=<email>`) : ÉTEINTE par défaut. Elle
@@ -176,6 +185,28 @@ class Settings(BaseSettings):
     #: Whether cosign checks the transparency log (Rekor). `false` only for a key whose signatures
     #: were never uploaded, an air-gapped registry.
     hosted_cosign_tlog: bool = True
+    #: The plugin sources, default plugins and offline directory (ADR 0093, S43-03): a path to a YAML
+    #: file (`sources`, `defaultPlugins`, `offline`) the chart writes. Empty: no source but the offline one.
+    plugins_config: str = ""
+    #: The offline plugin directory baked into the image; wins over the file's `offline`.
+    plugins_offline: str = ""
+    #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
+    #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
+    plugin_servers: Literal["off", "kubernetes"] = "off"
+    plugin_servers_namespace: str = "choregos-plugins"
+    #: Where a server's image may come from, as registry or repository prefixes matched by path
+    #: segment (the rule of `hosted_registries`). Empty: no server runs. Signatures follow
+    #: `hosted_cosign` and its signer (ADR 0080 §8).
+    plugin_servers_registries: list[str] = Field(default_factory=list)
+    #: The RuntimeClass of the servers' pods (gVisor); empty: the cluster's runtime.
+    plugin_servers_runtime_class: str = ""
+    #: How egress is narrowed: `networkpolicy` (public addresses on the configured ports) or `cilium`
+    #: (a CiliumNetworkPolicy naming the exact hosts).
+    plugin_servers_egress: Literal["networkpolicy", "cilium"] = "networkpolicy"
+    #: The namespace of the API's pods, the only ones a server admits; empty: any namespace.
+    plugin_servers_api_namespace: str = ""
+    plugin_servers_cpu: str = "500m"
+    plugin_servers_memory: str = "512Mi"
     #: The base image of each zip runtime, `ref@sha256:…`, over the shipped ones (ADR 0080 §9):
     #: `{"python_3_13": "registry.internal/python:3.13-slim@sha256:…"}`.
     hosted_base_images: dict[str, str] = Field(default_factory=dict)
@@ -220,6 +251,23 @@ class Settings(BaseSettings):
     object_store_secret_key: str = ""
     #: The largest file artifact the internal API accepts from a runner, in bytes (ADR 0049).
     artifact_max_bytes: int = 200 * 1024 * 1024
+
+    # Skill scanner (ADR 0095): SkillSpector, offline, beside the gate's own scan (ADR 0050).
+    #: `skillspector` runs it on every version a person publishes; `off` (the default outside the
+    #: image, where SkillSpector is not installed) keeps the gate's own scan alone.
+    skill_scanner: Literal["off", "skillspector"] = "off"
+    #: The interpreter of SkillSpector's own environment, built into the API image.
+    skillspector_python: str = "/opt/skillspector/bin/python"
+    #: A scan runs in a child process, killed past this delay: the version is then held for review.
+    skill_scan_timeout_s: float = 120.0
+    #: Where OSV's PyPI and npm archives are read from to build the local mirror; empty: no download
+    #: (an air-gapped deployment copies a mirror file in, or the dependency check stays incomplete).
+    osv_mirror_url: str = "https://osv-vulnerabilities.storage.googleapis.com"
+    #: The mirror file, one per API replica, on its `/tmp` volume (about 1 GB with npm).
+    osv_mirror_path: str = "/tmp/choregos-osv/osv.sqlite"  # noqa: S108 - the replica's own /tmp volume
+    #: How often the mirror is rebuilt, and past which age a scan no longer uses it.
+    osv_refresh_hours: float = 24.0
+    osv_max_age_hours: float = 72.0
 
     # Knowledge bases (ADR 0051)
     #: The largest file an upload accepts; a bigger one is refused before it is read in full.
@@ -296,6 +344,15 @@ class Settings(BaseSettings):
         """
         https = any(u.strip().lower().startswith("https://") for u in (self.public_url, self.api_url))
         return self.env in {"staging", "prod"} or https
+
+    @property
+    def deployed(self) -> bool:
+        """Whether this instance is reachable as a deployment.
+
+        True in staging/prod, and whatever `env` says when it is served over https (the config and
+        the chart both default `env` to dev). S47-02 and S47-13 reuse it.
+        """
+        return self.cookies_secure
 
     @model_validator(mode="after")
     def _pas_de_porte_derobee_en_production(self) -> Settings:

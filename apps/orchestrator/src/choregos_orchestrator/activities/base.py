@@ -20,6 +20,7 @@ from choregos_api.services import default_workflow, policy_model, workflow_model
 from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
 from choregos_api.services.definitions import ceiling_of
 from choregos_api.services.github_app import pin_for_runtime
+from choregos_api.services.plugin_tracker import pin_plugin_tracker
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import Message, PolicyEngine
 from choregos_core.memory_scope import memory_key
@@ -107,7 +108,13 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     # A GitHub connector builds with the installation its organisation claimed, injected here and
     # never stored (ADR 0073); on a multi-organisation instance an unclaimed owner raises.
     configs = {
-        c.kind: await pin_for_runtime(session, project.org_id, c.kind, c.type, dict(c.config or {}))
+        c.kind: await pin_plugin_tracker(
+            session,
+            project.org_id,
+            c.kind,
+            c.type,
+            await pin_for_runtime(session, project.org_id, c.kind, c.type, dict(c.config or {})),
+        )
         for c in connectors
     }
     return ProjectBundle(

@@ -172,6 +172,11 @@ SCHEMA_FILES = (
     "event.schema.json",
     "ui-manifest.schema.json",
     "artifact.schema.json",
+    "plugin.schema.json",
+    "plugin-server.schema.json",
+    "plugin-index.schema.json",
+    "plugin-evals.schema.json",
+    "plugin-tracker-profile.schema.json",
 )
 
 

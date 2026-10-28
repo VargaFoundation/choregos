@@ -8,6 +8,7 @@ la décision est dans `packages/core`, l'orchestration dans `apps/orchestrator`.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -207,6 +208,20 @@ from .netops.cilium import CiliumNetwork as _CiliumNetwork  # noqa: E402 - after
 from .netops.nginx import NginxConfig as _NginxConfig  # noqa: E402 - after the registry
 from .netops.pfsense import PfSenseFirewall as _PfSenseFirewall  # noqa: E402 - after the registry
 
+_PLUGIN_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+
+
+def _check_plugin_tracker(cfg: dict[str, Any]) -> None:
+    """A project's `tracker/plugin` names a plugin and its server, nothing else: where the server
+    answers and its token are the platform's, injected when the adapter is built, never typed."""
+    extra = sorted(set(cfg) - {"plugin", "server"})
+    if extra:
+        raise ConfigurationError(f"a plugin tracker is configured by `plugin` and `server` only, not {extra}")
+    for field in ("plugin", "server"):
+        if not _PLUGIN_NAME.match(str(cfg.get(field) or "")):
+            raise ConfigurationError(f"a plugin tracker needs `{field}`, a plugin or server name")
+
+
 #: La configuration d'un type `demo` : rien, ou l'adresse du processus qui sert les faux.
 _CONFIGURATION_DE_DEMO = _objet(
     {
@@ -254,6 +269,18 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("base_url", "email", "project_key"),
         ),
         ("api_token", "webhook_secret"),
+    ),
+    ("tracker", "plugin"): ConnectorTypeSpec(
+        "a plugin's server (tracker profile, S43-07)",
+        ("tracker",),
+        _objet(
+            {
+                "plugin": {"type": "string", "description": "the installed plugin"},
+                "server": {"type": "string", "description": "its server that `implements: [tracker]`"},
+            },
+            ("plugin", "server"),
+        ),
+        check_config=_check_plugin_tracker,
     ),
     ("tracker", "gitlab-issues"): ConnectorTypeSpec(
         "GitLab Issues",
@@ -710,24 +737,38 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
 }
 
 
-#: Le serveur MCP des faux (`CHOREGOS_FAKES=1`) : un seul, que les tests et la démo scriptent.
-FAUX_MCP: Any = None
+#: The fake MCP server of CHOREGOS_FAKES=1: one, scripted by the tests and the demo.
+FAKE_MCP: Any = None
 
 
-def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
+def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
     from .fakes.mcp import FakeMcpServer
-    from .mcp import ClientMcp
+    from .mcp import McpClient
 
-    global FAUX_MCP  # noqa: PLW0603 - un faux partagé, comme les autres faux de la plateforme
-    if FAUX_MCP is None:
-        FAUX_MCP = FakeMcpServer()
-    return ClientMcp(
+    global FAKE_MCP  # noqa: PLW0603 - a shared fake, like the platform's other fakes
+    if FAKE_MCP is None:
+        FAKE_MCP = FakeMcpServer()
+    return McpClient(
         cfg.get("url", "http://fake-mcp.test/mcp"),
         token=cfg.get("token", ""),
         auth_scheme=cfg.get("auth_scheme", "bearer"),
         username=cfg.get("username", ""),
         auth_header=cfg.get("auth_header", "Authorization"),
-        transport=FAUX_MCP.transport(),
+        transport=FAKE_MCP.transport(),
+        user_agent=str(cfg.get("user_agent", "")),
+    )
+
+
+def _mcp_client(cfg: dict[str, Any]) -> Any:
+    from .mcp import McpClient
+
+    return McpClient(
+        cfg["url"],
+        token=cfg.get("token", ""),
+        auth_scheme=cfg.get("auth_scheme", "bearer"),
+        username=cfg.get("username", ""),
+        auth_header=cfg.get("auth_header", "Authorization"),
+        timeout_s=float(cfg.get("timeout_s", 30)),
         user_agent=str(cfg.get("user_agent", "")),
     )
 
@@ -772,9 +813,9 @@ def _guichet_de_demo(famille: str, *, en_production: bool) -> Any:
             # Servi par un seul processus (`choregos_adapters.fakes.serveur`) : là où l'API et
             # l'orchestrateur sont deux processus, un faux en mémoire leur montrerait deux états.
             from .fakes.rh import GuichetDistant
-            from .mcp import ClientMcp
+            from .mcp import McpClient
 
-            return GuichetDistant(ClientMcp(str(cfg["url"]), token=str(cfg.get("api_key", ""))))
+            return GuichetDistant(McpClient(str(cfg["url"]), token=str(cfg.get("api_key", ""))))
         if famille not in FAUX_METIER:
             FAUX_METIER[famille] = FAUX_PAR_FAMILLE[famille]()
         return Guichet(FAUX_METIER[famille], str(cfg.get("api_key", "")))
@@ -907,9 +948,9 @@ def _cd_de_demo(cfg: dict[str, Any]) -> Any:
             "démonstration, pas un déploiement."
         )
     if cfg.get("url"):
-        from .mcp import ClientMcp
+        from .mcp import McpClient
 
-        return CdDeDemo(GuichetDistant(ClientMcp(str(cfg["url"]), token=str(cfg.get("api_key", "")))))
+        return CdDeDemo(GuichetDistant(McpClient(str(cfg["url"]), token=str(cfg.get("api_key", "")))))
     if "cd" not in FAUX_METIER:
         FAUX_METIER["cd"] = FakeCdDeDemo()
     return CdDeDemo(Guichet(FAUX_METIER["cd"], str(cfg.get("api_key", ""))))
@@ -978,6 +1019,22 @@ def _register_web_search() -> None:
     register("web_search", "fake")(_faux_web_search)
 
 
+def _plugin_tracker(cfg: dict[str, Any]) -> Any:
+    """`tracker/plugin`: built from what the platform injects (`url`, `token`, `audit`, read from the
+    organisation's connector of the server), never from typed values (S43-07)."""
+    from .plugin_servers import PluginServerClient
+    from .tracker.plugin import PluginTracker
+
+    _check_plugin_tracker({k: v for k, v in cfg.items() if k in {"plugin", "server"}})
+    if not cfg.get("url") or not cfg.get("token"):
+        raise ConfigurationError(
+            f"the plugin tracker `{cfg.get('plugin')}/{cfg.get('server')}` is built by the platform "
+            "from the organisation's connector of that server, which it could not read"
+        )
+    client = PluginServerClient(str(cfg["url"]), token=str(cfg["token"]), transport=cfg.get("transport"))
+    return PluginTracker(client, str(cfg["plugin"]), str(cfg["server"]), audit=cfg.get("audit"))
+
+
 def _register_builtins() -> None:
     """Enregistre les implémentations livrées (import paresseux pour éviter les cycles)."""
     from .fakes import (
@@ -1001,7 +1058,7 @@ def _register_builtins() -> None:
     register("memory", "fake")(lambda cfg: FakeMemory())
     register("gateway", "fake")(lambda cfg: FakeGateway())
     register("notify", "fake")(lambda cfg: FakeNotifier())
-    register("mcp", "fake")(_client_du_faux_mcp)
+    register("mcp", "fake")(_fake_mcp_client)
     register("identity", "fake")(_annuaire_du_faux_entra)
     from .fakes.documents import FakeDocumentsConnector
 
@@ -1055,6 +1112,7 @@ def _register_builtins() -> None:
             field_names=cfg.get("field_names"),
         )
     )
+    register("tracker", "plugin", _SPECS_LIVREES[("tracker", "plugin")])(_plugin_tracker)
     register("tracker", "gitlab-issues", _SPECS_LIVREES[("tracker", "gitlab-issues")])(
         lambda cfg: GitLabTracker(
             RestClient(
@@ -1227,20 +1285,8 @@ def _register_builtins() -> None:
 
     _register_marketdata()
     _register_web_search()
-    # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
-    from .mcp import ClientMcp
-
-    register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(
-        lambda cfg: ClientMcp(
-            cfg["url"],
-            token=cfg.get("token", ""),
-            auth_scheme=cfg.get("auth_scheme", "bearer"),
-            username=cfg.get("username", ""),
-            auth_header=cfg.get("auth_header", "Authorization"),
-            timeout_s=float(cfg.get("timeout_s", 30)),
-            user_agent=str(cfg.get("user_agent", "")),
-        )
-    )
+    # A real MCP server (ADR 0034): its operations are DISCOVERED, and are born closed.
+    register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(_mcp_client)
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(
         lambda cfg: SlackNotifier(
             webhook_url=cfg.get("webhook_url", _env("CHOREGOS_SLACK_WEBHOOK", "")),

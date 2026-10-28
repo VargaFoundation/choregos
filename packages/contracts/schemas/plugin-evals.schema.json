@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/plugin-evals.schema.json",
+  "title": "PluginEvals",
+  "description": "An eval suite a plugin ships for one of its agents, a file of `contents.evals` (ADR 0093, ADR 0020). Level 1 is the shape of the core catalogue's `eval_cases/` (`choregos_core.catalogue_d_agents.evals`): the agent's rendered instructions, lower-cased, hold every `must_contain` and no `must_not_contain`; the installer refuses a plugin whose own suite fails. `cases` are in the `AgentEvalCase` shape of the API (S32-03, S40-02d): a deterministic one (`live: false`) is played by the installer on its sample input; a `live` one is validated, never run at install.",
+  "type": "object",
+  "required": [
+    "agent"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "must_contain"
+      ]
+    },
+    {
+      "required": [
+        "cases"
+      ]
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "needles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "maxItems": 200
+    },
+    "case": {
+      "type": "object",
+      "description": "The API's `AgentEvalCase`",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "input": {
+          "type": "object",
+          "description": "a sample work item",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "body": {
+              "type": "string",
+              "maxLength": 20000
+            }
+          }
+        },
+        "must_contain": {
+          "$ref": "#/$defs/needles"
+        },
+        "must_not_contain": {
+          "$ref": "#/$defs/needles"
+        },
+        "live": {
+          "type": "boolean",
+          "default": false,
+          "description": "a capped trial on the real model that asserts on the run's result (S40-02d)"
+        },
+        "expect_status": {
+          "enum": [
+            "done",
+            "blocked"
+          ],
+          "default": "done"
+        },
+        "max_cost_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 0.5
+        }
+      }
+    }
+  },
+  "properties": {
+    "agent": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,62}$",
+      "description": "the slug of an agent the same plugin ships"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "must_contain": {
+      "$ref": "#/$defs/needles",
+      "description": "level 1: what the rendered instructions must hold (case-insensitive)"
+    },
+    "must_not_contain": {
+      "$ref": "#/$defs/needles",
+      "description": "level 1: what they must never hold (case-insensitive)"
+    },
+    "inputs": {
+      "type": "object",
+      "description": "the template inputs the instructions are rendered with"
+    },
+    "production_indicators": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "what the project can measure in production, for the rendering (S22-48)"
+    },
+    "min_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 1,
+      "description": "the share of `must_contain` that must be found"
+    },
+    "cases": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  }
+}

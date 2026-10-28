@@ -1,0 +1,16 @@
+apiVersion: choregos/v1
+kind: Plugin
+metadata:
+  name: desk
+  version: 1.0.0
+  publisher: Varga Foundation
+  license: Apache-2.0
+  description: A test plugin whose server is a project's tracker (the tracker profile, S43-07).
+  homepage: https://github.com/VargaFoundation/choregos
+  core: ">=0.20.0"
+requires:
+  plugins: []
+  connectors: {}
+contents:
+  templates: [templates/desk-flow]
+  servers: [servers/desk.yaml]

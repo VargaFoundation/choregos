@@ -256,7 +256,7 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="supplier-key")
-    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", server)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_SUPPLIER_KEY", "supplier-key")
     yield server
 

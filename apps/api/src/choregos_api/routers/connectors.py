@@ -136,6 +136,14 @@ async def put_connector(
     await check_connector_declaration(session, ctx.project.org_id, body.config, kind)
     if kind == "runtime":
         check_runtime_allowed(body.type)
+    if (kind, body.type) == ("tracker", "plugin"):
+        from ..services.plugin_tracker import tracker_problem
+
+        problem = await tracker_problem(
+            session, ctx.project.org_id, str(body.config["plugin"]), str(body.config["server"])
+        )
+        if problem is not None:
+            raise unprocessable(problem)
     body = body.model_copy(
         update={"config": await checked_config(session, ctx.project.org_id, kind, body.type, body.config)}
     )

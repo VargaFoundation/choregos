@@ -1,6 +1,24 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le type de connecteur `mcp` (ADR 0034) : un vrai serveur MCP, joint par la plateforme."""
+"""The `mcp` connector type (ADR 0034): a real MCP server, reached by the platform."""
 
-from .client import ClientMcp, ErreurMcp, OutilMcp, empreinte_du_schema
+from .client import (
+    ClientMcp,  # lang: fr-ok alias:internal
+    ErreurMcp,  # lang: fr-ok alias:internal
+    McpClient,
+    McpError,
+    McpTool,
+    OutilMcp,  # lang: fr-ok alias:internal
+    empreinte_du_schema,  # lang: fr-ok alias:internal
+    schema_digest,
+)
 
-__all__ = ["ClientMcp", "ErreurMcp", "OutilMcp", "empreinte_du_schema"]
+__all__ = [
+    "ClientMcp",  # lang: fr-ok alias:internal
+    "ErreurMcp",  # lang: fr-ok alias:internal
+    "McpClient",
+    "McpError",
+    "McpTool",
+    "OutilMcp",  # lang: fr-ok alias:internal
+    "empreinte_du_schema",  # lang: fr-ok alias:internal
+    "schema_digest",
+]

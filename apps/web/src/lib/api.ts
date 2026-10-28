@@ -583,6 +583,13 @@ export const api = {
       method: "POST",
       ...(body ? { body: JSON.stringify(body) } : {}),
     }),
+  stopKnowledgeDistillation: (org: string, slug: string) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/distill/stop`, { method: "POST" }),
+  relaunchKnowledgeDistillation: (org: string, slug: string, body?: KnowledgeDistillRequest) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/distill/relaunch`, {
+      method: "POST",
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }),
   estimateKnowledgeDistillation: (org: string, slug: string, exclude: string[] = []) =>
     request<KnowledgeDistillEstimate>(
       `/orgs/${org}/knowledge/${slug}/distill/estimate${exclude.length ? `?${exclude.map((e) => `exclude=${encodeURIComponent(e)}`).join("&")}` : ""}`,
@@ -941,7 +948,7 @@ export const api = {
   },
 };
 
-export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" };
+export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" | "distill" };
 
 function compact(filtre: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(filtre).filter(([, v]) => v)) as Record<string, string>;

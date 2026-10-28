@@ -50,3 +50,6 @@ choregos.db-wal
 *.db-shm
 *.db-wal
 .pnpm-store/
+
+# test_confinement.py: a directory outside $TMPDIR, removed by the test, left only if it is killed
+.confinement-*/

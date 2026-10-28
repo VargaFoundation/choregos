@@ -148,6 +148,51 @@ async def test_a_base_that_left_ends_quietly() -> None:
     assert result == {"status": "gone"} and [n for n, _ in calls] == ["plan"]
 
 
+async def test_a_cancelled_run_is_completed_as_cancelled_and_publishes_nothing() -> None:
+    import asyncio
+
+    from choregos_orchestrator.workflows.knowledge_distill import KnowledgeDistill
+    from temporalio.client import WorkflowFailureError
+    from temporalio.testing import WorkflowEnvironment
+    from temporalio.worker import Worker
+
+    activities, calls = stubs(plan_of([1.0, 1.0, 1.0]))
+
+    @activity.defn(name="distill_part")
+    async def slow_part(payload: dict[str, Any]) -> dict[str, Any]:
+        calls.append(("part", payload))
+        await asyncio.sleep(3600)
+        return {"status": "done", "cost_usd": 1.0}
+
+    activities = [a for a in activities if a.__temporal_activity_definition.name != "distill_part"]  # type: ignore[attr-defined]
+    activities.append(slow_part)
+    environment = await WorkflowEnvironment.start_time_skipping()
+    try:
+        async with Worker(
+            environment.client, task_queue="test", workflows=[KnowledgeDistill], activities=activities
+        ):
+            handle = await environment.client.start_workflow(
+                "KnowledgeDistill",
+                PAYLOAD,
+                id="knowledge-distill-kb-1",
+                task_queue="test",
+                execution_timeout=timedelta(days=1),
+            )
+            while not any(name == "part" for name, _ in calls):
+                await asyncio.sleep(0.05)
+            await handle.cancel()
+            try:
+                result = await handle.result()
+            except WorkflowFailureError:  # the workflow must answer, not end cancelled
+                result = {"status": "workflow-cancelled"}
+    finally:
+        await environment.shutdown()
+    names = [name for name, _ in calls]
+    assert names[-1] == "fail" and "publish" not in names and "reduce" not in names
+    assert calls[-1][1]["code"] == "cancelled"
+    assert result == {"status": "failed", "code": "cancelled"}
+
+
 async def test_the_archived_history_replays() -> None:
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory

@@ -2202,7 +2202,7 @@ export type KnowledgeBaseCreate = {
   groups?: Array<string>;
   /** `files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search */
   serving_mode?: "files" | "index";
-  /** people read it only through a grant (or as an administrator or owning-project owner); runs that the base is attached to are still served (S42-11, ADR 0081) */
+  /** people read it only through a grant (or as an administrator or owning-project owner); a run attached to it is served it only on behalf of a person who may read it: the person who started its work item, or of a fan-out child its parent's (S42-11, ADR 0081, ADR 0097) */
   restricted?: boolean;
 };
 
@@ -2256,7 +2256,7 @@ export type KnowledgePermissions = {
   /** change the grants */
   share: boolean;
   archive: boolean;
-  /** change scope, projects, groups or restricted (organisation administrator only) */
+  /** change scope, projects, groups or restricted (organisation administrator, or owner of the base's project) */
   widen: boolean;
 };
 
@@ -2292,6 +2292,29 @@ export type KnowledgeDistillRequest = {
   exclude?: Array<string>;
   /** stop and publish nothing when the spend would pass this; null keeps the platform's budget */
   max_usd?: number | null;
+};
+
+/** One distillation run, as kept in `distillation.history` (S42-10d): how it ended and what it cost. The last five runs before the current one, newest first. */
+export type KnowledgeDistillRun = {
+  /** how the run ended (`running` only for a run whose end was never recorded) */
+  status: "running" | "pending_review" | "approved" | "rejected" | "failed" | "stopped";
+  /** why it failed or was stopped: `too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled` */
+  code?: string | null;
+  error?: string | null;
+  /** who started it */
+  requested_by?: string | null;
+  /** who stopped it */
+  stopped_by?: string | null;
+  started_at?: string | null;
+  /** when it ended */
+  at?: string | null;
+  phase?: "plan" | "map" | "reduce" | "publish" | null;
+  parts_done?: number;
+  parts_total?: number;
+  /** what the run's model calls cost; parts reused from an earlier run cost nothing */
+  spent_usd?: number;
+  skill?: string | null;
+  version?: number | null;
 };
 
 export type KnowledgeDistillEstimate = {
@@ -2348,7 +2371,7 @@ export type KnowledgeBase = {
   sources?: Array<KnowledgeSource> | null;
   /** the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base */
   owner_project?: string | null;
-  /** people read it only through a grant; runs that the base is attached to are still served (S42-11) */
+  /** people read it only through a grant; a run is served it only on behalf of a person who may read it (S42-11, ADR 0097) */
   restricted?: boolean;
   can?: KnowledgePermissions;
   /** the server's sentence when the caller may not edit: shown as is, never guessed from roles */
@@ -2357,9 +2380,30 @@ export type KnowledgeBase = {
   my_role?: "viewer" | "editor" | "owner" | null;
   /** returned by the reading of one base */
   grants?: Array<KnowledgeGrant> | null;
-  /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one) */
+  /** the last distillation: `status` (running, pending_review, failed, stopped), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one); `history` holds the runs before it, `stopped_by` who stopped it, `exclude` and `max_usd` what a relaunch reuses */
   distillation?: {
-    [key: string]: unknown;
+    status?: "running" | "pending_review" | "approved" | "rejected" | "failed" | "stopped";
+    code?: string | null;
+    error?: string | null;
+    at?: string | null;
+    requested_by?: string | null;
+    started_at?: string | null;
+    phase?: "plan" | "map" | "reduce" | "publish" | null;
+    parts_done?: number;
+    parts_total?: number;
+    spent_usd?: number;
+    skill?: string | null;
+    version?: number | null;
+    principles?: number | null;
+    dropped?: Array<string>;
+    /** the runs before this one, newest first (S42-10d) */
+    history?: Array<KnowledgeDistillRun>;
+    /** who stopped the run, when `status` is `stopped` */
+    stopped_by?: string | null;
+    /** the globs the run left out, kept for a relaunch */
+    exclude?: Array<string>;
+    /** the cap the run was started with, kept for a relaunch */
+    max_usd?: number | null;
   } | null;
   /** the last run of the eval set */
   eval_result?: {
@@ -2664,6 +2708,140 @@ export type OutboundProxyTest = {
   target: string;
 };
 
+/** What an installed plugin brought, by the identifier each item has in the organisation. */
+export type PluginContents = {
+  /** agent slugs */
+  agents: Array<string>;
+  skills: Array<string>;
+  templates: Array<string>;
+  evals: Array<string>;
+  /** procedure ids (ADR 0067) */
+  procedures: Array<string>;
+  servers: Array<string>;
+};
+
+export type InstalledPlugin = {
+  name: string;
+  version: string;
+  /** the source's name; `offline` for the deployment's offline directory */
+  source: string;
+  /** sha256 of the plugin's canonical tar */
+  digest: string;
+  publisher: string;
+  license: string;
+  description: string;
+  /** installed because the deployment lists it in `plugins.defaultPlugins` */
+  default: boolean;
+  contents: PluginContents;
+  /** null when the start-up reconcile installed it */
+  installed_by: string | null;
+  installed_at: string;
+  /** the newest version the source offers for this core, when newer than `version` */
+  latest: string | null;
+};
+
+export type PluginList = {
+  items: Array<InstalledPlugin>;
+};
+
+/** How a source's signatures are verified: a keyless cosign identity and issuer, or a public key; `none` only for the offline directory. */
+export type PluginTrust = {
+  mode: "keyless" | "key" | "none";
+  issuer?: string | null;
+  identity?: string | null;
+  /** sha256 of the public key; the key itself is not returned */
+  key_fingerprint?: string | null;
+};
+
+export type PluginSourceEntry = {
+  name: string;
+  description: string | null;
+  /** newest first, each with the core range it was validated against */
+  versions: Array<{
+    version: string;
+    core: string;
+    /** this core is inside `core` */
+    admissible: boolean;
+  }>;
+};
+
+export type PluginSource = {
+  name: string;
+  /** `oci://…`, `https://…` or the offline directory's path */
+  index: string;
+  trust: PluginTrust;
+  plugins: Array<PluginSourceEntry>;
+  /** why the index could not be read; `plugins` is then empty */
+  error: string | null;
+};
+
+export type PluginSources = {
+  sources: Array<PluginSource>;
+};
+
+export type PluginInstall = {
+  source: string;
+  name: string;
+  /** an exact version or a range (`^0.1`, `>=1.2.0,<2`) */
+  version: string;
+};
+
+export type PluginInstallPending = {
+  status: "pending_approval";
+  approval_id: string;
+  /** why a second person must approve, e.g. the plugin brings a server */
+  reason: string;
+};
+
+/** An install or upgrade of a plugin that brings a server, waiting for (or given) a second approval. */
+export type PluginApproval = {
+  id: string;
+  action: "install" | "upgrade";
+  source: string;
+  name: string;
+  /** the exact version that was checked */
+  version: string;
+  digest: string;
+  reason: string;
+  /** asked by the start-up reconcile for a plugin of `plugins.defaultPlugins` */
+  default: boolean;
+  /** null when the platform asked (a default plugin) */
+  requested_by: string | null;
+  status: "pending" | "approved";
+  decided_by: string | null;
+  created_at: string;
+  decided_at: string | null;
+};
+
+export type PluginApprovalList = {
+  items: Array<PluginApproval>;
+};
+
+export type PluginKept = {
+  agents: Array<string>;
+  skills: Array<string>;
+};
+
+export type PluginUninstallResult = {
+  name: string;
+  version: string;
+  removed: PluginKept;
+  /** what the organisation changed, a project pins, or a kept agent still carries: now the organisation's own */
+  kept: PluginKept;
+};
+
+export type PluginUpgrade = {
+  /** an exact version or a range; absent, the newest admissible */
+  version?: string;
+};
+
+export type PluginUpgradeResult = {
+  plugin: InstalledPlugin;
+  previous_version: string;
+  /** agent slugs the organisation changed: offered the update, not overwritten (ADR 0040) */
+  offered: Array<string>;
+};
+
 export type RelayOutboundProxy = {
   proxy: RelayProxyCredentials | null;
 };
@@ -2851,6 +3029,8 @@ export type Org = {
   role?: Role | null;
   /** the currency the console shows spend in (S29-03); an organisation setting */
   currency?: "EUR" | "USD";
+  /** the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address. */
+  aliases?: Array<string>;
 };
 
 export type OrgCreate = {
@@ -3733,6 +3913,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   approveOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/approve"; body: EgressDecision; response: EgressRule };
+  approvePluginInstall: { method: "POST"; path: "/orgs/{org}/plugin-approvals/{approval_id}/approve"; body: never; response: PluginApproval };
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
@@ -3992,6 +4173,7 @@ export interface Operations {
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
   installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
+  installPlugin: { method: "POST"; path: "/orgs/{org}/plugins/install"; body: PluginInstall; response: InstalledPlugin };
   installSkillCatalogueEntry: { method: "POST"; path: "/orgs/{org}/skill-catalogue/{entry_id}/install"; body: SkillCatalogueInstall; response: Skill };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
@@ -4032,6 +4214,9 @@ export interface Operations {
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
+  listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
+  listPluginSources: { method: "GET"; path: "/orgs/{org}/plugin-sources"; body: never; response: PluginSources };
+  listPlugins: { method: "GET"; path: "/orgs/{org}/plugins"; body: never; response: PluginList };
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
   listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
@@ -4054,6 +4239,9 @@ export interface Operations {
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
+  pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
+  [key: string]: unknown;
+}; response: WebhookAck };
   postAgentSessionSocketFrames: { method: "POST"; path: "/internal/agent-sessions/{id}/socket/out"; body: AgentSessionSocketOut; response: AgentSessionSocketRecorded };
   postAgentSessionTurnResult: { method: "POST"; path: "/internal/agent-sessions/{id}/turns/{turn_id}"; body: AgentSessionTurnResult; response: {
   status: "recorded" | "already_recorded";
@@ -4107,8 +4295,10 @@ export interface Operations {
   sources?: Array<string>;
 }; response: void };
   reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
+  relaunchKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/relaunch"; body: KnowledgeDistillRequest; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
   releaseAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases"; body: AgentReleaseCreate; response: AgentRelease };
+  releaseOrgAlias: { method: "DELETE"; path: "/orgs/{org}/aliases/{alias}"; body: never; response: void };
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   requestOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/requests"; body: EgressRequestCreate; response: EgressRule };
@@ -4131,6 +4321,7 @@ export interface Operations {
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
+  stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
@@ -4144,6 +4335,7 @@ export interface Operations {
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
   transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
+  uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
@@ -4157,6 +4349,7 @@ export interface Operations {
   updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
+  upgradePlugin: { method: "POST"; path: "/orgs/{org}/plugins/{name}/upgrade"; body: PluginUpgrade; response: PluginUpgradeResult };
   uploadHostedSource: { method: "POST"; path: "/orgs/{org}/hosted-sources"; body: void; response: HostedSource };
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };
   validateProjectWorkflow: { method: "POST"; path: "/projects/{id}/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };

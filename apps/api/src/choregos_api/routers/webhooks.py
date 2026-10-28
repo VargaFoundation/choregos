@@ -13,14 +13,14 @@ from typing import Annotated, Any
 from choregos_contracts import InboundEvent, InboundEventType
 from choregos_core import utcnow
 from choregos_core.dsl.trains import approbation_du_train, env_du_train, train_apres_fusion
-from fastapi import APIRouter, Header, Request, Response, status
+from fastapi import APIRouter, Header, Path, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from ..config import get_settings
-from ..db.models import Project, WebhookDelivery, WorkItem
+from ..db.models import Connector, OrgConnector, Project, WebhookDelivery, WorkItem
 from ..deps import DbPlateforme
-from ..errors import unauthorized
+from ..errors import not_found, unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
@@ -101,11 +101,14 @@ async def _project_for(session: Any, slug_or_repo: str | None) -> Project | None
     return rows[0]
 
 
-async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
-    """Achemine chaque événement : signal au workflow du ticket, ou démarrage si `agent-ready`."""
+async def _dispatch(session: Any, events: list[InboundEvent], project_of: Project | None = None) -> int:
+    """Route each event: a signal to its work item's workflow, or a start on `agent-ready`.
+
+    `project_of`: the project, already known from the organisation that verified the delivery (a plugin
+    server's webhook, S43-07): never looked up by slug across organisations."""
     delivered = 0
     for event in events:
-        project = await _project_for(session, event.project_slug)
+        project = project_of or await _project_for(session, event.project_slug)
         if project is None:
             logger.info("événement sans projet connu", event_type=str(event.type), slug=event.project_slug)
             continue
@@ -442,3 +445,144 @@ async def gitlab_webhook(
     events = parse_gitlab_event(x_gitlab_event, delivery, json.loads(body or b"{}"))
     delivered = await _dispatch(session, events)
     return WebhookAck(accepted=True, events=delivered)
+
+
+# ───────────────────────────── A plugin's tracker server (S43-07) ─────────────────────────────
+
+PluginName = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
+OrgSlug = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")]
+#: Headers a delivery never forwards to the server: the caller's own credentials and transport.
+_NOT_FORWARDED = frozenset({"authorization", "cookie", "host", "content-length", "connection"})
+
+
+async def _tracker_servers(session: Any, org: str, plugin: str, server: str) -> list[OrgConnector]:
+    """The organisation's running connector of `plugin`'s server `server`, when it is a tracker with a
+    webhook. The URL names the organisation: a delivery is never shown to another organisation's server."""
+    from ..db.org_aliases import organisation_by_slug_or_alias
+    from ..services.plugin_servers import DEPLOYED
+
+    # A renamed organisation keeps its webhook URL: an old slug is an alias (ADR 0090).
+    owner = await organisation_by_slug_or_alias(session, org)
+    if owner is None:
+        return []
+    rows = (
+        await session.execute(
+            select(OrgConnector).where(OrgConnector.org_id == owner.id, OrgConnector.name == server)
+        )
+    ).scalars()
+    found = []
+    for row in rows:
+        declared = row.plugin_server or {}
+        if (declared.get("plugin"), declared.get("server")) != (plugin, server):
+            continue
+        if "tracker" in (declared.get("implements") or []) and declared.get("webhook"):
+            found.append(row)
+    return sorted((r for r in found if r.status == DEPLOYED), key=lambda r: str(r.org_id))
+
+
+async def _projects_on(session: Any, org_id: str, plugin: str, server: str) -> list[Project]:
+    """The organisation's projects whose tracker is this plugin server."""
+    rows = await session.execute(
+        select(Project, Connector)
+        .join(Connector, Connector.project_id == Project.id)
+        .where(Project.org_id == org_id, Connector.kind == "tracker", Connector.type == "plugin")
+        .order_by(Project.slug)
+    )
+    return [
+        project
+        for project, connector in rows.all()
+        if ((connector.config or {}).get("plugin"), (connector.config or {}).get("server"))
+        == (plugin, server)
+    ]
+
+
+async def _project_of_item(session: Any, projects: list[Project], key: str) -> Project | None:
+    """The project that holds `key`; else the organisation's only project on this tracker."""
+    if not projects:
+        return None
+    held = (
+        await session.execute(
+            select(WorkItem.project_id).where(
+                WorkItem.project_id.in_([p.id for p in projects]), WorkItem.tracker_key == key
+            )
+        )
+    ).scalars()
+    ids = set(held)
+    owners = [p for p in projects if p.id in ids]
+    if len(owners) == 1:
+        return owners[0]
+    return projects[0] if len(projects) == 1 and not owners else None
+
+
+@router.post(
+    "/plugins/{org}/{plugin}/{server}",
+    response_model=WebhookAck,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="pluginWebhook",
+)
+async def plugin_webhook(
+    org: OrgSlug, plugin: PluginName, server: PluginName, request: Request, session: DbPlateforme
+) -> WebhookAck:
+    """A delivery for a plugin server that is a tracker (plan S43 Decision 3).
+
+    The headers and body go to the server's `tracker_parse_event` through `/mcp` with the server's
+    bearer token — the only door of the server the platform authenticates (ADR 0096 §6) — and the
+    server says whether the delivery is its own (its secret) and which items changed. Each event is
+    de-duplicated on the server's `delivery_id`, then its item is RE-READ with `tracker_fetch_item`:
+    nothing of the payload but the key is trusted. The URL names the organisation, so only that
+    organisation's server sees the delivery. 404: the organisation runs no tracker server of that
+    name; 401: the server does not recognise the delivery."""
+    from choregos_adapters import build
+    from choregos_adapters.errors import AdapterError
+
+    from ..services.plugin_tracker import pin_plugin_tracker
+
+    candidates = await _tracker_servers(session, org, plugin, server)
+    if not candidates:
+        raise not_found("Plugin tracker server", f"{org}/{plugin}/{server}")
+    body = await request.body()
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in _NOT_FORWARDED}
+    for connector in candidates:
+        config = await pin_plugin_tracker(
+            session, connector.org_id, "tracker", "plugin", {"plugin": plugin, "server": server}
+        )
+        try:
+            adapter = build("tracker", "plugin", config)
+            verified, events = await adapter.parse_event(headers, body)
+        except AdapterError as failed:
+            logger.warning("plugin.webhook.server_failed", plugin=plugin, server=server, error=str(failed))
+            continue
+        if not verified:
+            continue
+        projects = await _projects_on(session, connector.org_id, plugin, server)
+        delivered = duplicates = 0
+        for found in events:
+            delivery = f"{connector.id}:{found['delivery_id']}"[:255]
+            if await _already_seen(session, "plugin", delivery, found["kind"], body):
+                duplicates += 1
+                continue
+            project = await _project_of_item(session, projects, found["item_key"])
+            if project is None:
+                logger.info("plugin.webhook.unrouted", plugin=plugin, server=server, key=found["item_key"])
+                continue
+            item = await adapter.fetch_item(found["item_key"])
+            event = InboundEvent(
+                type=InboundEventType(found["kind"]),
+                source=f"plugin:{plugin}/{server}",
+                delivery_id=found["delivery_id"],
+                project_slug=project.slug,
+                work_item_key=item.key,
+                payload={
+                    "title": item.title,
+                    "body": item.body,
+                    "url": item.url,
+                    "labels": list(item.labels),
+                    "item_type": item.item_type,
+                    "state": item.state,
+                },
+            )
+            delivered += await _dispatch(session, [event], project_of=project)
+        return WebhookAck(
+            accepted=True, events=delivered, duplicate=bool(events) and duplicates == len(events)
+        )
+    raise unauthorized("no server recognised the delivery")

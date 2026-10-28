@@ -57,6 +57,8 @@ from .routers import (
     org_connectors,
     outbound_proxy,
     platform_identity,
+    plugin_sources,
+    plugins,
     procedures,
     projects,
     readiness,
@@ -72,7 +74,10 @@ from .routers import (
     workflows,
     workitems,
 )
+from .security import check_session_secret
 from .services.action_relay import relay_loop
+from .services.plugin_defaults import check_configuration, reconcile_in_background
+from .services.skill_scanner import mirror_loop
 
 API_PREFIX = "/api/v1"
 logger = get_logger("choregos.api")
@@ -107,12 +112,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     action_relay = asyncio.create_task(relay_loop())
     # A2A push notifications (ADR 0078 §5): read from the persisted events, at least once.
     a2a_push = asyncio.create_task(push_loop())
+    # The deployment's default plugins in every organisation (ADR 0093 §5), once the schema and the
+    # bootstrap organisation exist. In the background: a slow source never holds the readiness probe.
+    plugin_defaults = asyncio.create_task(reconcile_in_background(settings))
+    # The skill scanner's local OSV mirror (ADR 0095), rebuilt in each replica.
+    osv_mirror = asyncio.create_task(mirror_loop(settings))
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relais is not None:
         await relais.arreter()
-    for task in (rafraichissement, action_relay, a2a_push):
+    for task in (rafraichissement, action_relay, a2a_push, plugin_defaults, osv_mirror):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -255,6 +265,12 @@ def create_app() -> FastAPI:
     # eux-mêmes. Un greffon déclaré qui ne charge pas arrête le démarrage, exprès.
     charger_les_greffons()
     _verifier_l_edition(settings)
+    # The API signs the sessions, so it alone refuses a session secret that cannot sign safely: the
+    # orchestrator and the migrations Job build the same Settings without it (see `check_session_secret`).
+    check_session_secret(settings)
+    # The plugin sources and default plugins (ADR 0093): an unreadable configuration stops the API here,
+    # naming the setting, rather than answering 500 at the first install.
+    check_configuration(settings)
     app = FastAPI(
         title="Choregos API",
         # La version du paquet, pas une constante : l'API s'annonçait `1.0.0` depuis le premier
@@ -274,6 +290,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     install_error_handlers(app)
+    from .org_alias_middleware import OrgAliasMiddleware
+
+    # A former slug is replaced before anything routes (ADR 0090); the log keeps the path as it was sent.
+    app.add_middleware(OrgAliasMiddleware)
     from .limiteur import installer as installer_le_limiteur
 
     installer_le_limiteur(app, settings.rate_limit_per_minute)
@@ -343,6 +363,8 @@ def create_app() -> FastAPI:
         agent_session_pods.router,
         skills.router,
         skill_catalogue.router,
+        plugins.router,
+        plugin_sources.router,
         knowledge.router,
         webhooks.router,
         internal.router,

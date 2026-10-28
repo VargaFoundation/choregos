@@ -1,0 +1,21 @@
+{
+  "agent": "greeter",
+  "description": "The greeting names the author.",
+  "must_contain": ["greet the author"],
+  "must_not_contain": ["without approval"],
+  "cases": [
+    {
+      "name": "greets-by-name",
+      "input": {"title": "Say hello", "body": "Greet Ada."},
+      "must_contain": ["author"]
+    },
+    {
+      "name": "live-greeting",
+      "live": true,
+      "expect_status": "done",
+      "max_cost_usd": 0.1,
+      "input": {"title": "Say hello"},
+      "must_contain": ["Hello"]
+    }
+  ]
+}

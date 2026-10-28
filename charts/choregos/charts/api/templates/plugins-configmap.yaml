@@ -1,0 +1,25 @@
+{{- if .Values.enabled }}
+{{- $plugins := .Values.global.plugins | default dict }}
+{{- if or $plugins.sources $plugins.defaultPlugins $plugins.offline }}
+{{- range ($plugins.sources | default list) }}
+{{- if not .trust }}
+{{- fail (printf "global.plugins.sources: the source %q has no trust policy; a source is never unsigned (ADR 0093)" (.name | default "?")) }}
+{{- end }}
+{{- end }}
+# The plugin sources, default plugins and offline directory (ADR 0093), read by the API from
+# CHOREGOS_PLUGINS_CONFIG. The API checks it at start-up and refuses to start when it is unusable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: choregos-plugins
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+data:
+  plugins.yaml: |
+    {{- $doc := dict "sources" ($plugins.sources | default list) "defaultPlugins" ($plugins.defaultPlugins | default list) }}
+    {{- if $plugins.offline }}
+    {{- $_ := set $doc "offline" $plugins.offline }}
+    {{- end }}
+    {{- toYaml $doc | nindent 4 }}
+{{- end }}
+{{- end }}

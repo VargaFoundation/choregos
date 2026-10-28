@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/plugin-server.schema.json",
+  "title": "PluginServer",
+  "description": "An MCP server a plugin brings, run and governed by the platform (ADR 0093, ADR 0096, plan S43 Decision 2).",
+  "type": "object",
+  "required": [
+    "name",
+    "image",
+    "port",
+    "protocol",
+    "operations"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "operation": {
+      "type": "object",
+      "description": "a tool the server may serve; a tool not listed is refused",
+      "required": [
+        "name",
+        "access"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "access": {
+          "enum": [
+            "read",
+            "write"
+          ],
+          "description": "required: nothing is assumed read"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "human_approval": {
+          "type": "boolean",
+          "default": false,
+          "description": "a floor: an organisation may raise it, never lower it"
+        },
+        "compensation": {
+          "type": "object",
+          "description": "what undoes this write: an operation of the same server, called with `arguments` rendered from the write's own `result` (`{{ result.sys_id }}`), as a connector type declares it (ADR 0035, ADR 0052); a write only",
+          "required": [
+            "operation"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "arguments": {
+              "type": "object",
+              "maxProperties": 32,
+              "propertyNames": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 500
+              }
+            }
+          }
+        },
+        "input_schema": {
+          "type": "object",
+          "description": "a JSON Schema of the tool's arguments"
+        },
+        "platform_arguments": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "action_key",
+              "work_item_key"
+            ]
+          },
+          "description": "arguments the PLATFORM fills, never the agent: `action_key` (an idempotency key stable for one governed action and call), `work_item_key` (the work item the action belongs to)"
+        }
+      },
+      "if": {
+        "properties": {
+          "access": {
+            "const": "read"
+          }
+        },
+        "required": [
+          "access"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "compensation"
+          ]
+        }
+      }
+    }
+  },
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "image": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._/:-]{0,254}@sha256:[0-9a-f]{64}$",
+      "description": "pinned by digest; a tag alone is refused"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "protocol": {
+      "enum": [
+        "mcp-http"
+      ]
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "where the server answers; defaults `/mcp` and `/healthz`",
+      "properties": {
+        "mcp": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9/_.-]{0,127}$",
+          "default": "/mcp"
+        },
+        "health": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9/_.-]{0,127}$",
+          "default": "/healthz"
+        }
+      }
+    },
+    "config_schema": {
+      "type": "object",
+      "description": "a JSON Schema of what an administrator types"
+    },
+    "secret_fields": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "description": "sealed (ADR 0058), delivered to the server's pod from a Secret, never to a run; `_server_token` is the platform's own"
+    },
+    "egress": {
+      "type": "object",
+      "description": "where the server may connect: hosts read from configuration fields, or fixed hosts",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "from_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
+        },
+        "hosts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9*][A-Za-z0-9.*-]{0,252}$"
+          }
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/operation"
+      }
+    },
+    "implements": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "tracker"
+        ]
+      }
+    },
+    "webhook": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9/_-]{0,127}$"
+        }
+      }
+    }
+  }
+}

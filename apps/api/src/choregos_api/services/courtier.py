@@ -1,635 +1,74 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le courtier (ADR 0034) : ce qu'un run atteint des connecteurs de l'organisation, et comment.
+# lang: fr-ok-file alias:internal (a compatibility shim: the former names stay importable until S45)
+"""Former name of services/broker.py (ADR 0034, ADR 0046), kept for importers until S45 switches them.
 
-Un agent ne reçoit jamais la clé d'un serveur MCP ni son adresse : il nomme un outil
-(`<connecteur>__<opération>`), le side-car `choregos-tools` le transmet à `/internal`, et la
-plateforme fait l'appel avec la clé DU CONNECTEUR, résolue ici. Le jeton du run reste l'unique
-justificatif dans le pod ; la clé du serveur atteint le serveur, jamais le pod.
-
-Ce qu'un run voit est l'intersection de quatre décisions :
-- la SÉLECTION de son agent : la version nomme ses serveurs (`mcp_servers`) et, au besoin, des
-  motifs d'outils (ADR 0033) — un agent qui ne nomme pas un connecteur n'en voit rien ;
-- l'ACTIVATION par l'organisation : la politique effective doit être `allowed` — `approval` passe
-  par une action gouvernée (ADR 0035), `forbidden` n'existe pas pour le run ;
-- les GROUPES de l'opération, qui doivent croiser ceux du projet (aucun : tous) ;
-- ce que le PROJET resserre.
+The implementation lives in `broker.py`. This module defines nothing: it re-exports the broker's
+names, and each former French name as an alias of its English one.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
-import time
-import uuid
-from collections.abc import Callable
-from dataclasses import dataclass
-from fnmatch import fnmatchcase
-from typing import Any
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from ..db.models import (
-    AgentVersion,
-    ConnectorOperation,
-    OrgConnector,
-    Project,
-    ProjectOperationPolicy,
-    Run,
-)
-from ..secret_store import resolved_configuration
-from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
-from .connecteurs import human_floor, plus_stricte
-from .platform_network import (
-    WHERE,
-    PlatformNetworkRefused,
-    PlatformRateLimited,
-    enforce_connector_call,
-    with_identity,
+from .broker import (
+    SEPARATOR,
+    TRUNCATED,
+    ArgumentsRefused,
+    BrokerTool,
+    bounded_payload,
+    bounded_result,
+    broker_tools,
+    call,
+    call_id,
+    check_arguments,
+    output_refusal,
+    propose_call,
+    readable_text,
+    result_limit,
+    result_text,
+    selection_of_spec,
+    session_text,
+    tools_of_selection,
+    write_through_action,
 )
 
-SEPARATEUR = "__"
-#: L'espace des identifiants d'une écriture appelée par un run : le même appel (run, outil,
-#: arguments) est la même action — un agent qui le répète ne fait pas deux fois l'écriture.
-_ESPACE_DES_APPELS = uuid.UUID("6b3f0f3e-6c0e-4f0a-9a52-0e3c8f1d2b41")
-
-
-@dataclass(frozen=True)
-class OutilDuCourtier:
-    nom: str
-    connecteur: OrgConnector
-    operation: ConnectorOperation
-    #: `approval` : l'appel PROPOSE une action gouvernée (ADR 0035) au lieu d'atteindre le serveur.
-    sous_validation: bool = False
-
-    @property
-    def ecriture(self) -> bool:
-        """Une opération d'ÉCRITURE : même permise, elle passe par une action gouvernée (#241)."""
-        return self.operation.access == "write"
-
-    def annonce(self) -> dict[str, Any]:
-        """Le format MCP que le side-car sert à l'agent."""
-        description = self.operation.description or self.operation.name
-        if self.sous_validation:
-            description += " — needs a human approval: calling it proposes the action, it does not run it"
-        elif self.ecriture:
-            description += " — runs as a governed action: journaled, done once, undone if a later step fails"
-        return {
-            "name": self.nom,
-            "description": f"[{self.connecteur.name}] {description}",
-            "inputSchema": self.operation.input_schema or {"type": "object"},
-        }
-
-
-async def _selection(session: AsyncSession, run: Run) -> dict[str, list[str]]:
-    """{connecteur: motifs} que la version de l'agent du run nomme ; rien sans agent du registre."""
-    job = (run.stage_input or {}).get("job") if run.backend == "job" else None
-    if isinstance(job, dict):
-        # A job (ADR 0056) names its operations in the workflow (`tools:`), reviewed with it; the
-        # orchestrator copied them into the run's StageInput, which the run cannot rewrite.
-        return {str(c): [str(m) for m in motifs or []] for c, motifs in (job.get("tools") or {}).items()}
-    if not run.agent_slug or not run.agent_version:
-        return {}
-    from ..db.models import Agent
-
-    spec = (
-        await session.execute(
-            select(AgentVersion.spec)
-            .join(Agent, Agent.id == AgentVersion.agent_id)
-            .where(Agent.slug == run.agent_slug, AgentVersion.version == run.agent_version)
-        )
-    ).scalar_one_or_none()
-    # Comme pour la porte (S18-06) : un serveur nommé sans motif n'ouvre RIEN ; tout, c'est `*`,
-    # écrit — une version d'agent dit ce qu'elle prend, elle ne le prend pas par omission.
-    return selection_of_spec(spec)
-
-
-def selection_of_spec(spec: dict[str, Any] | None) -> dict[str, list[str]]:
-    """{connector: patterns} a version's `mcp_servers` names (see `_selection`)."""
-    selection: dict[str, list[str]] = {}
-    for server in (spec or {}).get("mcp_servers") or []:
-        if isinstance(server, dict) and server.get("connector"):
-            selection[str(server["connector"])] = [str(m) for m in server.get("tools") or []]
-    return selection
-
-
-async def outils_du_courtier(session: AsyncSession, run: Run, project: Project) -> dict[str, OutilDuCourtier]:
-    return await tools_of_selection(session, await _selection(session, run), project)
-
-
-async def tools_of_selection(
-    session: AsyncSession, selection: dict[str, list[str]], project: Project
-) -> dict[str, OutilDuCourtier]:
-    """What a selection reaches in a project: the run's, or a session's agent's (S41-09)."""
-    if not selection:
-        return {}
-    groupes = {str(g) for g in ((project.config or {}).get("groups") or [])}
-    lignes = (
-        await session.execute(
-            select(ConnectorOperation, OrgConnector)
-            .join(OrgConnector, OrgConnector.id == ConnectorOperation.connector_id)
-            .where(OrgConnector.org_id == project.org_id, OrgConnector.name.in_(list(selection)))
-        )
-    ).all()
-    resserres = {
-        p.operation_id: p.policy
-        for p in (
-            await session.execute(
-                select(ProjectOperationPolicy).where(ProjectOperationPolicy.project_id == project.id)
-            )
-        ).scalars()
-    }
-    allumes = await enabled_ids(session, project)
-    outils: dict[str, OutilDuCourtier] = {}
-    for operation, connecteur in lignes:
-        # ADR 0074: an organisation connector restricted to selected projects reaches only those.
-        if connecteur.availability == SELECTED_PROJECTS and connecteur.id not in allumes:
-            continue
-        effective = human_floor(
-            connecteur, operation.name, plus_stricte(operation.policy, resserres.get(operation.id))
-        )
-        if effective == "forbidden":
-            continue
-        if operation.groups and not groupes & set(operation.groups):
-            continue
-        if not any(fnmatchcase(operation.name, m) for m in selection.get(connecteur.name, [])):
-            continue
-        nom = f"{connecteur.name}{SEPARATEUR}{operation.name}"
-        outils[nom] = OutilDuCourtier(nom, connecteur, operation, sous_validation=effective == "approval")
-    return outils
-
-
-async def proposer_l_appel(
-    session: AsyncSession, run: Run, project: Project, outil: OutilDuCourtier, arguments: dict[str, Any]
-) -> dict[str, Any]:
-    """Un outil sous validation, appelé : une action gouvernée, proposée au nom de l'agent du run
-    (`agent:<slug>`). Rien n'atteint le serveur avant qu'un humain ré-authentifié l'approuve —
-    et qui possède l'agent ne l'approuve pas (séparation des rôles)."""
-    action = await _proposer_l_action_de_l_outil(session, run, project, outil, arguments)
-    return {
-        "action": action.id,
-        "status": action.status,
-        "message": "proposed: a person approves it in the console before anything is done",
-        "decision_path": f"/p/{project.slug}/actions/{action.id}",
-    }
-
-
-async def _proposer_l_action_de_l_outil(
-    session: AsyncSession,
-    run: Run,
-    project: Project,
-    outil: OutilDuCourtier,
-    arguments: dict[str, Any],
-    action_id: str | None = None,
-) -> Any:
-    """L'action d'un appel d'outil : un effet `connector.call`, au nom de l'agent du run."""
-    from choregos_adapters import operation_spec
-    from choregos_contracts import ActionOrigin
-
-    from ..rbac import SYSTEM
-    from ..schemas.actions import ActionCreate, ActionEffectSpec, Approbateur, ApprovalSpec
-    from .actions import proposer
-
-    effet: dict[str, Any] = {
-        "effect": "connector.call",
-        "with": {
-            "connector": outil.connecteur.name,
-            "operation": outil.operation.name,
-            "arguments": arguments,
-        },
-    }
-    # What undoes it, as its type declares it (ADR 0052): a firewall rule changed by an action that
-    # fails later is put back as it was.
-    declaree = operation_spec(outil.connecteur.kind, outil.connecteur.type, outil.operation.name)
-    if declaree is not None and declaree.compensation:
-        effet["compensate"] = {
-            "effect": "connector.call",
-            "with": {"connector": outil.connecteur.name, **declaree.compensation},
-        }
-    # Who approves (ADR 0052): the members of the group the organisation named for this operation —
-    # with at least a developer's rank on the project —, otherwise the project's owners (ADR 0035).
-    approbation = (
-        ApprovalSpec(approvers=[Approbateur(role="developer", group=outil.operation.approver_group)])
-        if outil.operation.approver_group
-        else ApprovalSpec()
-    )
-    corps = ActionCreate(
-        kind=f"{outil.connecteur.name}.{outil.operation.name}",
-        title=f"{outil.operation.description or outil.operation.name} ({outil.connecteur.name})",
-        justification=f"proposed by the agent {run.agent_slug} in run {run.id}",
-        params={"arguments": arguments},
-        effects=[ActionEffectSpec.model_validate(effet)],
-        approval=approbation,
-        work_item_id=run.work_item_id,
-    )
-    return await proposer(
-        session,
-        project,
-        corps,
-        origine=ActionOrigin.TOOL.value,
-        propose_par={"kind": "agent", "id": f"agent:{run.agent_slug}", "run_id": run.id},
-        principal=SYSTEM,
-        run_id=run.id,
-        action_id=action_id,
-    )
-
-
-def identifiant_de_l_appel(run_id: str, outil: str, arguments: dict[str, Any]) -> str:
-    """Le même appel (run, outil, arguments) est la même action : rejoué, il ne refait rien."""
-    canonique = json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str)
-    return str(uuid.uuid5(_ESPACE_DES_APPELS, f"{run_id}:{outil}:{canonique}"))
-
-
-async def ecrire_par_une_action(
-    session: AsyncSession, run: Run, project: Project, outil: OutilDuCourtier, arguments: dict[str, Any]
-) -> tuple[int, dict[str, Any], bool]:
-    """Une écriture PERMISE, appelée par un run (#241, amende l'ADR 0034) : une action gouvernée,
-    approuvée par la politique — consignée sous sa clé, faite une fois, compensée si une étape
-    suivante échoue — et jouée par l'`ActionWorkflow`, jamais par la requête. Le courtier en attend
-    l'issue, borné (`courtier_attente_ecriture_s`), pour rendre à l'agent ce que le serveur a
-    répondu ; au-delà, 202 et l'identifiant de l'action. Le même appel rejoué rend la même action.
-
-    Rend (code, corps, nouvelle) — `nouvelle` : cet appel a créé l'action (le prix se compte une fois).
-    """
-    from choregos_contracts import ActionStatus
-
-    from ..config import get_settings
-    from ..db.models import Action
-    from ..db.session import TOUT, limiter_aux_organisations, session_scope
-    from ..temporal import action_id as identifiant_temporal
-    from ..temporal import get_temporal
-    from .actions import approuvee_par_la_politique, politique_de_l_action
-
-    ident = identifiant_de_l_appel(run.id, outil.nom, arguments)
-    action = await session.get(Action, ident)
-    nouvelle = action is None
-    if action is None:
-        action = await _proposer_l_action_de_l_outil(session, run, project, outil, arguments, ident)
-        pire, _motifs = await politique_de_l_action(session, project, action.effects, action.params or {})
-        if pire != "allowed":
-            # Resserrée depuis l'annonce (l'organisation, le projet) : une personne en décide.
-            return 202, _en_attente(project, action), nouvelle
-        await approuvee_par_la_politique(session, project, action)
-        # La ligne doit être VISIBLE avant que le workflow la lise, et l'attente ci-dessous lit ce
-        # que le worker valide : on valide ici, puis la portée du jeton de run se repose — elle ne
-        # vit que le temps d'une transaction.
-        await session.commit()
-        await limiter_aux_organisations(session, TOUT)
-        await get_temporal().start_action(identifiant_temporal(action.id), {"action_id": action.id})
-    fin = time.monotonic() + get_settings().courtier_attente_ecriture_s
-    finies = {ActionStatus.SUCCEEDED.value, ActionStatus.FAILED.value, ActionStatus.REJECTED.value}
-    while True:
-        # Une lecture COURTE par tour : une transaction tenue ouverte entre deux tours garderait,
-        # sous SQLite, le verrou qui empêche le worker de valider ce qu'il écrit — l'attente se
-        # bornerait elle-même.
-        async with session_scope(orgs=TOUT) as lecture:
-            etat = await lecture.get(Action, ident)
-            statut = etat.status if etat is not None else action.status
-        if statut in finies or time.monotonic() >= fin:
-            break
-        await asyncio.sleep(0.2)
-    await session.refresh(action)
-    if action.status == ActionStatus.SUCCEEDED.value:
-        # The write is done: its result is masked and capped like a read's (#755), never refused —
-        # a 422 would tell the agent that an effect that happened did not.
-        resultat = await _resultat_de_l_action(session, action)
-        return 200, bounded_result(resultat, outil.operation.result_max_bytes), nouvelle
-    if action.status in finies:
-        refus = {"error": action.error or f"action {action.status}", "action": action.id}
-        return 422, refus, nouvelle
-    if action.status == ActionStatus.PENDING_APPROVAL.value:
-        return 202, _en_attente(project, action), nouvelle
-    return (
-        202,
-        {
-            "action": action.id,
-            "status": action.status,
-            "message": "the write runs as a governed action and is not finished yet: its result will be "
-            "in the action's journal",
-            "decision_path": f"/p/{project.slug}/actions/{action.id}",
-        },
-        nouvelle,
-    )
-
-
-def _en_attente(project: Project, action: Any) -> dict[str, Any]:
-    return {
-        "action": action.id,
-        "status": action.status,
-        "message": "proposed: a person approves it in the console before anything is done",
-        "decision_path": f"/p/{project.slug}/actions/{action.id}",
-    }
-
-
-async def _resultat_de_l_action(session: AsyncSession, action: Any) -> dict[str, Any]:
-    """Ce que l'écriture a rendu, au format d'un résultat MCP : l'agent lit la même chose qu'un appel
-    direct — plus l'identifiant de l'action qui l'a faite."""
-    from ..db.models import ActionEffect
-
-    effet = (
-        await session.execute(
-            select(ActionEffect).where(ActionEffect.action_id == action.id, ActionEffect.position == 0)
-        )
-    ).scalar_one_or_none()
-    rendu: dict[str, Any] = dict(effet.result or {}) if effet is not None else {}
-    if isinstance(rendu.get("content"), list):
-        return {**rendu, "action": action.id}
-    texte = {"type": "text", "text": _json(rendu)}
-    return {"content": [texte], "structuredContent": rendu, "action": action.id}
-
-
-class ArgumentsRefuses(ValueError):  # noqa: N818 - un refus motivé, rendu en 400
-    pass
-
-
-def verifier_les_arguments(outil: OutilDuCourtier, arguments: dict[str, Any]) -> None:
-    """Le schéma annoncé est appliqué, AVANT l'appel : un fournisseur payant ne reçoit pas un
-    appel malformé, et le registre ne le compte pas."""
-    if not outil.operation.input_schema:
-        return
-    import jsonschema
-
-    try:
-        jsonschema.validate(arguments, outil.operation.input_schema)
-    except jsonschema.ValidationError as exc:
-        chemin = "/".join(str(p) for p in exc.absolute_path) or "(root)"
-        raise ArgumentsRefuses(
-            f"argument refused by the schema of {outil.nom} at {chemin}: {exc.message}"
-        ) from exc
-
-
-async def appeler(
-    session: AsyncSession,
-    outil: OutilDuCourtier,
-    arguments: dict[str, Any],
-    *,
-    run: Run | None = None,
-    project: Project | None = None,
-) -> tuple[int, dict[str, Any]]:
-    """`tools/call` on the server, with the connector's key resolved HERE, never in the pod.
-
-    Two halves of one network policy hold it (ADR 0070, amended): the organisation's network bounds
-    are read FIRST, so a host its ceiling refuses (403) or that the organisation already called too
-    often this minute (429) never receives the call; then every request runs under the
-    organisation's egress allowlist (S39-22, ADR 0066), so a host it has not opened is a tool error
-    that says so, not a timeout."""
-    from .egress import egress_scope_for_org
-
-    async with egress_scope_for_org(session, outil.connecteur.org_id, "api", f"mcp:{outil.connecteur.name}"):
-        return await _appeler(session, outil, arguments, run=run, project=project)
-
-
-async def _appeler(
-    session: AsyncSession,
-    outil: OutilDuCourtier,
-    arguments: dict[str, Any],
-    *,
-    run: Run | None = None,
-    project: Project | None = None,
-) -> tuple[int, dict[str, Any]]:
-    import httpx
-    from choregos_adapters import build
-    from choregos_adapters.errors import AdapterError
-    from choregos_adapters.mcp import ErreurMcp
-    from choregos_core.redaction import redact
-    from choregos_core.secrets import SecretIntrouvable
-
-    instance = outil.connecteur
-    try:
-        await enforce_connector_call(
-            session,
-            instance,
-            project=project,
-            run_id=run.id if run else None,
-            agent_slug=run.agent_slug if run else None,
-        )
-    except PlatformNetworkRefused as refus:
-        return 403, {"error": f"{refus.message()}: {WHERE}", "type": "network_policy"}
-    except PlatformRateLimited as limite:
-        return 429, {"error": str(limite), "type": "rate_limited"}
-    try:
-        config = await with_identity(
-            session,
-            instance.org_id,
-            await resolved_configuration(
-                session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
-            ),
-        )
-        client = build(instance.kind, instance.type, config)
-        if hasattr(client, "call_tool"):
-            resultat = await client.call_tool(outil.operation.name, arguments)
-        else:
-            # Un connecteur qui n'est pas MCP (un annuaire) : son opération déclarée, par son nom,
-            # rendue au format d'un résultat MCP — l'agent lit la même chose partout.
-            brut = await client.executer(outil.operation.name, arguments)
-            resultat = {"content": [{"type": "text", "text": _json(brut)}], "structuredContent": brut}
-    except ErreurMcp as erreur:
-        return 502, {"error": redact(str(erreur))}
-    except AdapterError as refus:
-        return 422, {"error": redact(str(refus))}
-    except (SecretIntrouvable, httpx.HTTPError) as panne:
-        return 502, {"error": redact(f"{instance.name} unreachable: {panne}")}
-    refusal = output_refusal(outil, resultat)
-    if refusal is not None:
-        return 422, {"error": refusal, "type": "output_schema"}
-    # A job (ADR 0056) has no model to protect: a snapshot's seven years of bars are its input, and a
-    # cut answer is no bars at all. It is masked, never cut (S40-13b).
-    job = run is not None and run.backend == "job"
-    return (200 if not resultat.get("isError") else 422), bounded_result(
-        resultat, outil.operation.result_max_bytes, cut=not job
-    )
-
-
-#: The marker a capped result ends with: the agent knows it did not read everything.
-TRUNCATED = "[truncated by the platform: {returned} of {total} bytes; ask for less]"
-
-
-def output_refusal(outil: OutilDuCourtier, resultat: dict[str, Any]) -> str | None:
-    """Why a successful result breaks the `outputSchema` its server declared, or None (#755).
-
-    A server that declares one and answers outside it is not answering the operation the
-    organisation opened: the agent gets a 422 that names where, not the payload."""
-    schema = outil.operation.output_schema
-    if not schema or resultat.get("isError"):
-        return None
-    import jsonschema
-
-    if "structuredContent" not in resultat:
-        return (
-            f"result of {outil.nom} refused: its server declares an output schema"
-            " and sent no structuredContent"
-        )
-    try:
-        jsonschema.validate(resultat["structuredContent"], schema)
-    except jsonschema.ValidationError as exc:
-        where = "/".join(str(p) for p in exc.absolute_path) or "(root)"
-        # The rule broken, never `exc.message`: it quotes the value, and the value is the payload.
-        rule = f"{exc.validator} {json.dumps(exc.validator_value, default=str)[:200]}"
-        return f"result of {outil.nom} refused by its output schema at {where}: fails `{rule}`"
-    except jsonschema.SchemaError as exc:
-        return f"result of {outil.nom} refused: its server declares an invalid output schema ({exc.message})"
-    return None
-
-
-def result_limit(declared: int | None = None) -> int:
-    """The cap a tool result is held to (S40-17): what its operation or its catalogue entry declares,
-    else `broker_result_max_bytes` — and never above `broker_result_ceiling_bytes`."""
-    from ..config import get_settings
-
-    settings = get_settings()
-    return min(declared or settings.broker_result_max_bytes, settings.broker_result_ceiling_bytes)
-
-
-def bounded_result(
-    resultat: dict[str, Any], declared: int | None = None, *, cut: bool = True
-) -> dict[str, Any]:
-    """A tool result as the agent may read it (#755): secrets masked in what it says, and no larger
-    than `result_limit(declared)`. A larger one keeps its text, cut, with `TRUNCATED` at the end;
-    its `structuredContent` is dropped, since half an object is not the object. `cut=False` masks
-    only: a job reads the answer, not a model (S40-13b)."""
-    masked = _masked(resultat)
-    if not cut:
-        return masked
-    limit = result_limit(declared)
-    total = len(_json(masked).encode("utf-8"))
-    if total <= limit:
-        return masked
-    kept = {k: v for k, v in masked.items() if k not in ("content", "structuredContent")}
-    return _cut(
-        texte_du_resultat(masked),
-        lambda note: {**kept, "content": [{"type": "text", "text": note}]},
-        total,
-        limit,
-    )
-
-
-def bounded_payload(payload: Any, declared: int | None = None) -> Any:
-    """Any tool answer as the agent may read it (#759): a catalogue tool's JSON, a plugin's body. An
-    MCP result goes through `bounded_result`; anything else has its strings masked and, when larger
-    than `result_limit(declared)`, becomes `{"text": <its JSON, cut, with TRUNCATED>, "truncated"}`."""
-    if isinstance(payload, dict) and isinstance(payload.get("content"), list):
-        return bounded_result(payload, declared)
-    masked = _masked_strings(payload)
-    limit = result_limit(declared)
-    total = len(_json(masked).encode("utf-8"))
-    if total <= limit:
-        return masked
-    return _cut(_json(masked), lambda note: {"text": note}, total, limit)
-
-
-def _cut(text: str, shape: Callable[[str], dict[str, Any]], total: int, limit: int) -> dict[str, Any]:
-    """`shape(text cut + TRUNCATED)` with `truncated` beside it, no larger than `limit` as JSON."""
-    whole = text.encode("utf-8")
-    room = limit
-    while True:
-        kept = whole[:room].decode("utf-8", errors="ignore")
-        returned = len(kept.encode("utf-8"))
-        cut = {
-            **shape(f"{kept}\n{TRUNCATED.format(returned=returned, total=total)}"),
-            "truncated": {"returned_bytes": returned, "total_bytes": total},
-        }
-        # JSON escapes what it quotes: shrink by what is still over, until it fits.
-        over = len(_json(cut).encode("utf-8")) - limit
-        if over <= 0 or room == 0:
-            return cut
-        room = max(0, room - over)
-
-
-def _masked_strings(value: Any) -> Any:
-    """`redact` on every string of a JSON value, keys left as they are."""
-    from choregos_core.redaction import redact
-
-    if isinstance(value, str):
-        return redact(value)
-    if isinstance(value, list):
-        return [_masked_strings(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _masked_strings(v) for k, v in value.items()}
-    return value
-
-
-def _masked(resultat: dict[str, Any]) -> dict[str, Any]:
-    """`redact` on every text the agent reads: text blocks, embedded text resources, and the strings
-    of `structuredContent`. Binary blocks (images, audio) are left as they are: base64 is not prose."""
-    from choregos_core.redaction import redact
-
-    def block(bloc: Any) -> Any:
-        if not isinstance(bloc, dict):
-            return bloc
-        if bloc.get("type") == "text" and isinstance(bloc.get("text"), str):
-            return {**bloc, "text": redact(bloc["text"])}
-        resource = bloc.get("resource")
-        if (
-            bloc.get("type") == "resource"
-            and isinstance(resource, dict)
-            and isinstance(resource.get("text"), str)
-        ):
-            return {**bloc, "resource": {**resource, "text": redact(resource["text"])}}
-        return bloc
-
-    masked = dict(resultat)
-    if isinstance(masked.get("content"), list):
-        masked["content"] = [block(b) for b in masked["content"]]
-    if "structuredContent" in masked:
-        masked["structuredContent"] = _masked_strings(masked["structuredContent"])
-    return masked
-
-
-def _json(valeur: Any) -> str:
-    import json
-
-    return json.dumps(valeur, ensure_ascii=False, default=str)
-
-
-def texte_du_resultat(resultat: dict[str, Any]) -> str:
-    """Ce que l'agent lira : les blocs texte d'un résultat MCP."""
-    blocs = resultat.get("content") or []
-    return "\n".join(str(b.get("text", "")) for b in blocs if isinstance(b, dict) and b.get("type") == "text")
-
-
-def session_text(result: dict[str, Any]) -> str:
-    """What a session's model reads of a tool answer (S40-18c): its text blocks, then its
-    `structuredContent` as JSON unless a text block already serializes it, as MCP asks a server to
-    do. The answer was bounded and masked before (`bounded_result`), its structured part with it."""
-    text = texte_du_resultat(result)
-    structured = result.get("structuredContent")
-    if structured is None or _serialized_in_text(result, structured):
-        return text
-    return f"{text}\n{_json(structured)}" if text else _json(structured)
-
-
-def _serialized_in_text(result: dict[str, Any], structured: Any) -> bool:
-    for block in result.get("content") or []:
-        if isinstance(block, dict) and block.get("type") == "text":
-            try:
-                if json.loads(str(block.get("text", ""))) == structured:
-                    return True
-            except ValueError:
-                continue
-    return False
-
-
-def readable_text(payload: Any) -> str:
-    """What the agent will read of any tool answer: an MCP result's text blocks and every string of
-    its `structuredContent` (S40-18b), otherwise every string of the JSON, keys included — a
-    catalogue provider or a plugin writes both (S40-18)."""
-    if isinstance(payload, dict) and isinstance(payload.get("content"), list):
-        structured = payload.get("structuredContent")
-        if structured is None:
-            return texte_du_resultat(payload)
-        return f"{texte_du_resultat(payload)}\n{readable_text(structured)}"
-    strings: list[str] = []
-
-    def walk(value: Any) -> None:
-        if isinstance(value, str):
-            strings.append(value)
-        elif isinstance(value, list):
-            for v in value:
-                walk(v)
-        elif isinstance(value, dict):
-            for k, v in value.items():
-                strings.append(str(k))
-                walk(v)
-
-    walk(payload)
-    return "\n".join(strings)
+OutilDuCourtier = BrokerTool  # lang: fr-ok alias:internal
+SEPARATEUR = SEPARATOR  # lang: fr-ok alias:internal
+outils_du_courtier = broker_tools  # lang: fr-ok alias:internal
+proposer_l_appel = propose_call  # lang: fr-ok alias:internal
+identifiant_de_l_appel = call_id  # lang: fr-ok alias:internal
+ecrire_par_une_action = write_through_action  # lang: fr-ok alias:internal
+ArgumentsRefuses = ArgumentsRefused  # lang: fr-ok alias:internal
+verifier_les_arguments = check_arguments  # lang: fr-ok alias:internal
+appeler = call  # lang: fr-ok alias:internal
+texte_du_resultat = result_text  # lang: fr-ok alias:internal
+
+__all__ = [
+    "SEPARATEUR",
+    "SEPARATOR",
+    "TRUNCATED",
+    "ArgumentsRefused",
+    "ArgumentsRefuses",
+    "BrokerTool",
+    "OutilDuCourtier",
+    "appeler",
+    "bounded_payload",
+    "bounded_result",
+    "broker_tools",
+    "call",
+    "call_id",
+    "check_arguments",
+    "ecrire_par_une_action",
+    "identifiant_de_l_appel",
+    "outils_du_courtier",
+    "output_refusal",
+    "propose_call",
+    "proposer_l_appel",
+    "readable_text",
+    "result_limit",
+    "result_text",
+    "selection_of_spec",
+    "session_text",
+    "texte_du_resultat",
+    "tools_of_selection",
+    "verifier_les_arguments",
+    "write_through_action",
+]

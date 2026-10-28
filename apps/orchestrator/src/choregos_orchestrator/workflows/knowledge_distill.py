@@ -9,12 +9,13 @@ a failing part ends the run through `fail_distillation`: the base says why, noth
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ActivityError, ApplicationError
+from temporalio.exceptions import ActivityError, ApplicationError, CancelledError
 
 from .planification import executer_activite
 
@@ -28,6 +29,8 @@ EPSILON = 1e-9
 
 def _code_of(error: BaseException) -> tuple[str, str]:
     cause = getattr(error, "cause", None) or error
+    if isinstance(cause, CancelledError):  # the run was stopped (S42-10d): not a gateway failure
+        return "stopped", "cancelled"
     if isinstance(cause, ApplicationError) and cause.type == "DistillationError":
         return str(cause.message), str(cause.details[0]) if cause.details else "gateway"
     return str(cause), "gateway"
@@ -93,6 +96,22 @@ class KnowledgeDistill:
                     "requested_by": payload["requested_by"],
                     "spent_usd": self.spent,
                     "parts": len(digests),
+                },
+            )
+        except asyncio.CancelledError:
+            # A person stopped the run (S42-10d, ADR 0092). The model call in flight finishes and is
+            # booked by its own activity; nothing more is called and nothing is published. The base's
+            # record is already `stopped` (the API wrote it before cancelling), `fail_distillation`
+            # completes it. Only this branch is new: a history without a cancellation replays unchanged.
+            return await self._call(
+                activities.fail_distillation,
+                {
+                    "org": payload["org"],
+                    "base_id": payload["base_id"],
+                    "requested_by": payload["requested_by"],
+                    "code": "cancelled",
+                    "error": "stopped",
+                    "spent_usd": self.spent,
                 },
             )
         except (ActivityError, ApplicationError) as error:

@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Organization, RemoteCredential
+from ..db.org_aliases import current_slug
 from ..deps import Config, Db, Me
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
@@ -305,8 +306,12 @@ async def authorize_remote_credential(
     )
     nonce = secrets.token_urlsafe(24)
     expiry = int(time.time()) + HANDSHAKE_S
-    state = sign_session({"n": nonce, "o": org, "c": name, "exp": expiry}, settings)
-    cookie = sign_session({"n": nonce, "v": verifier, "exp": expiry}, settings)
+    state = sign_session(
+        {"n": nonce, "o": org, "c": name, "exp": expiry}, settings, purpose="remote-oauth-state"
+    )
+    cookie = sign_session(
+        {"n": nonce, "v": verifier, "exp": expiry}, settings, purpose="remote-oauth-handshake"
+    )
     query: dict[str, str] = {
         "response_type": "code",
         "client_id": str(config["client_id"]),
@@ -348,8 +353,10 @@ async def remote_credential_callback(
     settings: Config,
 ) -> RedirectResponse:
     """The provider's redirect: verify state and cookie, exchange the code, seal the refresh token."""
-    expected = read_session(state, settings)
-    handshake = read_session(request.cookies.get(OAUTH_COOKIE, ""), settings)
+    expected = read_session(state, settings, purpose="remote-oauth-state")
+    handshake = read_session(
+        request.cookies.get(OAUTH_COOKIE, ""), settings, purpose="remote-oauth-handshake"
+    )
     now = time.time()
     if (
         not expected
@@ -359,6 +366,7 @@ async def remote_credential_callback(
     ):
         raise forbidden("invalid or expired authorisation state: start the connection again")
     org, name = str(expected.get("o") or ""), str(expected.get("c") or "")
+    org = await current_slug(session, org)  # the handshake may span a rename (ADR 0090)
     _manage(principal, org)
     organisation = await _organisation(session, org)
     row = await _credential(session, organisation, name)

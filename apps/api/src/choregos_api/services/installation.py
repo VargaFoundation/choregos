@@ -60,6 +60,8 @@ def _install_message(auteur: str) -> str:
         return f"Installed from the catalogue ({name})"
     if source == "template":
         return f"Installed from the template {name}"
+    if source == "plugin":
+        return f"Installed from the plugin {name.partition('/')[0]} ({name.partition('/')[2]})"
     return f"Installed by {auteur}"
 
 
@@ -128,9 +130,9 @@ async def installer_skills_et_agents(
             tags=list(corps.tags),
             owner_id=None,
             status="active",
-            # What the built-in catalogue installs is common to everyone (ADR 0061); a template's
-            # agents belong to the organisation.
-            scope="platform" if provenance.startswith("catalogue:") else "org",
+            # What the built-in catalogue or a plugin installs is common to everyone (ADR 0061, ADR
+            # 0093); a template's agents belong to the organisation.
+            scope="platform" if provenance.startswith(("catalogue:", "plugin:")) else "org",
         )
         session.add(agent)
         await session.flush()

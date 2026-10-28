@@ -275,7 +275,7 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
     policy = await active_policy(session, project.id)
     livree = None
     if workflow is None or policy is None:
-        livree = livraison(*await manifeste_du_gabarit(session, project.template_ref))
+        livree = livraison(*await manifeste_du_gabarit(session, project.template_ref, project.org_id))
     if workflow is None:
         assert livree is not None
         workflow = await _publier_ce_que_livre_le_gabarit(session, project, livree)

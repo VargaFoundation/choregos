@@ -177,6 +177,11 @@ export function distillationLabel(d: Record<string, unknown> | null | undefined)
     const spent = Number(d.spent_usd ?? 0);
     return `failed: ${why ? `${why} (${detail})` : detail}${spent > 0 ? ` \u00b7 $${spent.toFixed(2)} spent` : ""}`;
   }
+  if (d.status === "stopped") {
+    const spent = Number(d.spent_usd ?? 0);
+    const by = d.stopped_by ? ` by ${String(d.stopped_by)}` : "";
+    return `stopped${by}${spent > 0 ? ` \u00b7 $${spent.toFixed(2)} spent` : ""}`;
+  }
   const dropped = Array.isArray(d.dropped) ? d.dropped.length : 0;
   return `${String(d.skill)} v${String(d.version)}: ${String(d.principles)} principles, waiting for review${dropped ? ` (${dropped} dropped: no source)` : ""}`;
 }
@@ -274,4 +279,13 @@ export const grantKey = (g: Pick<KnowledgeGrant, "subject_type" | "subject">): s
 /** The grants as the PUT sends them: only what the server reads. */
 export function grantsBody(grants: KnowledgeGrant[]): KnowledgeGrant[] {
   return grants.map((g) => ({ subject_type: g.subject_type, subject: g.subject, role: g.role }));
+}
+
+/** One finished run of the history, in words: `failed (the model gateway failed) \u00b7 $1.20 \u00b7 by a@b.c`. */
+export function runLabel(run: Record<string, unknown>): string {
+  const status = String(run.status ?? "");
+  const why = FAILURES[String(run.code ?? "")];
+  const spent = Number(run.spent_usd ?? 0);
+  const parts = Number(run.parts_total ?? 0) ? ` \u00b7 ${Number(run.parts_done ?? 0)}/${Number(run.parts_total)} parts` : "";
+  return `${status}${why && status !== "pending_review" ? ` (${why})` : ""}${parts} \u00b7 $${spent.toFixed(2)}${run.requested_by ? ` \u00b7 by ${String(run.requested_by)}` : ""}`;
 }
