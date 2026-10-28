@@ -2376,9 +2376,16 @@ when the slug is taken) is shown on the card.
 `/a2a/orgs/<org>`, the CLI profiles that name `--org <slug>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
 organisation by its id. A platform administrator granted by an edition plugin can rename an
-organisation they do not belong to (the response then carries no `role`). What does not follow: addresses
-already copied elsewhere (an MCP client's configuration), CLI profiles, IdP groups that still name the
-old slug, and `oidc.defaultOrg` if it names it.
+organisation they do not belong to (the response then carries no `role`). The old slug is kept as an
+**alias** of the organisation (`aliases` in `GET /orgs` and in the `PATCH` response, ADR 0090), so what
+was copied elsewhere keeps working: `/api/v1/orgs/<old>/…` and `/a2a/orgs/<old>` (the response carries
+`Link: <current URL>; rel="canonical"`), MCP addresses and qualified ids `<old>:<project>`, the IdP groups
+`choregos:<old>:<group>`, `oidc.defaultOrg` and `bootstrap.org` when they still name it, and the
+sessions and API tokens issued before the rename. No other organisation can take an alias (`409`); the
+organisation can take its own old slug back. A platform administrator frees an alias for good with
+`DELETE /orgs/<current>/aliases/<alias>`, after which the old address answers `404`. What does not
+follow: the display of copied addresses (nothing rewrites them, they only resolve) and CLI profiles that
+store the old slug (they keep working, and show the old one).
 
 **Global memories follow a slug change.** They live under a **memory key**, not under the slug: the
 first time an organisation's slug changes, `settings.memory_key` is set to the old slug and never

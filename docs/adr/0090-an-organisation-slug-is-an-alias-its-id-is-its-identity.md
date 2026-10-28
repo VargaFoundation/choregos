@@ -57,8 +57,12 @@ Temporal ids built from ids, memories keyed by the first slug). What breaks is w
    key may use the slug. A slug that must be stored by something outside the platform's control (an IdP, a
    URL, a deployment value) is covered by an alias.
 2. **A rename keeps the old slug as an alias.** A table `org_slug_aliases(alias PK, org_id, created_at,
-   created_by)` holds every slug an organisation has left. The table is identity data and, like
-   `organizations`, is outside RLS (ADR 0026). `Org.aliases` lists them (`GET /orgs`, `PATCH /orgs/{org}`).
+   created_by)` holds every slug an organisation has left. The table maps an address to an
+   id and holds no content, so it is outside RLS: an address is resolved before any scope exists.
+   `organizations` itself is under RLS (a row is visible when its slug is in the scope), so the resolver
+   reads it under the platform scope for the length of its own query and restores the caller's scope right
+   after, in the same transaction. It only maps an address to an organisation; what the caller may do with
+   it is still decided by its memberships. `Org.aliases` lists them (`GET /orgs`, `PATCH /orgs/{org}`).
 3. **An alias resolves everywhere a slug is read from outside.**
    - REST and A2A: a middleware rewrites `/api/v1/orgs/<alias>/…` and `/a2a/orgs/<alias>…` to the current
      slug before routing and adds `Link: <current URL>; rel="canonical"` to the response. It is a rewrite,

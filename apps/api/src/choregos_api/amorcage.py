@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from .config import Settings
 from .db.models import Membership, Organization, User
+from .db.org_aliases import organisation_by_slug_or_alias
 from .db.session import session_scope
 from .logging import get_logger
 
@@ -31,9 +32,9 @@ async def amorcer(settings: Settings) -> dict[str, list[str]]:
         return {"organisations": [], "administrateurs": []}
     crees: dict[str, list[str]] = {"organisations": [], "administrateurs": []}
     async with session_scope(orgs="*") as session:
-        org = (
-            await session.execute(select(Organization).where(Organization.slug == settings.bootstrap_org))
-        ).scalar_one_or_none()
+        # By slug OR by former slug: once the organisation has been renamed, the deployment's value
+        # still names the old one, and a restart must not create a second organisation (ADR 0090).
+        org = await organisation_by_slug_or_alias(session, settings.bootstrap_org)
         if org is None:
             org = Organization(
                 slug=settings.bootstrap_org, name=settings.bootstrap_org_name or settings.bootstrap_org
