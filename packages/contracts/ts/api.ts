@@ -3223,6 +3223,8 @@ export type WorkItem = {
   /** The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise. */
   budget_usd?: number | null;
   estimate?: CostEstimate | null;
+  /** Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>` for a webhook, `schedule:<name>`… Null for a work item from before S40-22. */
+  initiated_by?: string | null;
   created_at?: string;
   closed_at?: string | null;
 };
@@ -3247,6 +3249,26 @@ export type CostEstimate = {
   p80_usd?: number | null;
   sample_size?: number;
   over_p80?: boolean;
+};
+
+/** A webhook event a project received, and what the platform did with it (S42-06f). */
+export type ReceivedEvent = {
+  id: string;
+  received_at: string;
+  /** jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server> */
+  source: string;
+  event_type: string;
+  delivery_id?: string | null;
+  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready";
+  work_item_key?: string | null;
+  work_item_id?: string | null;
+  /** Built from typed fields only: key, label, from → to, PR number, conclusion. */
+  summary: string;
+};
+
+export type ReceivedEventPage = {
+  items: Array<ReceivedEvent>;
+  meta: PageMeta;
 };
 
 export type WorkItemPage = {
@@ -3283,6 +3305,14 @@ export type TimelineEntry = {
   actor_kind?: "user" | "agent" | "system";
   ref_id?: string | null;
   cost_usd?: number | null;
+  via?: TrackerWrite | null;
+};
+
+/** The tracker write behind a timeline entry (ADR 0107 point 4): the project's tracker connector type and the account it wrote under. `account` is null when the connector names none (a GitHub App installation, a GitLab token). */
+export type TrackerWrite = {
+  /** The tracker connector's type: jira, github-issues, gitlab-issues, plugin… */
+  type: string;
+  account?: string | null;
 };
 
 export type GitToken = {
@@ -3413,6 +3443,22 @@ export type Run = RunSummary & {
   context_pack_url?: string | null;
   playbook_checksum?: string | null;
   allowed_paths?: Array<string>;
+  /** The agent whose version ran the step. */
+  agent_slug?: string | null;
+  agent_version?: number | null;
+  /** The work item's initiator, copied at stage start (ADR 0077). */
+  initiated_by?: string | null;
+  /** The organisation connectors this run's agent may call through the broker, and the account each one calls with (ADR 0107): resolved by the API, so a member who cannot read the organisation's connectors still sees them. */
+  tool_connectors?: Array<ToolConnector>;
+};
+
+export type ToolConnector = {
+  name: string;
+  type: string;
+  /** bearer or basic, for an `mcp` connector */
+  auth_scheme?: string | null;
+  /** The account the connector calls as, when its configuration names one (a `basic` username). */
+  account?: string | null;
 };
 
 export type RunEvent = {
@@ -4248,6 +4294,7 @@ export interface Operations {
   listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: Array<ProjectOrgConnector> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
+  listReceivedEvents: { method: "GET"; path: "/projects/{id}/received-events"; body: never; response: ReceivedEventPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };

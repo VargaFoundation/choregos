@@ -974,6 +974,25 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { description: Unknown workflow, invalid fields or a budget wider than allowed }
         "502": { description: The project's tracker refused or did not answer; nothing was created }
+  /projects/{id}/received-events:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: listReceivedEvents
+      summary: The webhook events the project received, newest first
+      description: >-
+        One entry per event of a verified delivery that reached this project (S42-06f): what it was,
+        and what the platform did with it (created or started a work item, signalled its workflow,
+        boarded a train, updated its labels) or why it did nothing. A delivery that names no project,
+        fails its signature or repeats one already seen is not listed. Never a payload, a header, a
+        comment or an email: a summary built from typed fields.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReceivedEventPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /work-items/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -7122,6 +7141,11 @@ components:
         totals: { $ref: "#/components/schemas/Totals" }
         budget_usd: { type: [number, "null"], description: "The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise." }
         estimate: { oneOf: [{ $ref: "#/components/schemas/CostEstimate" }, { type: "null" }] }
+        initiated_by:
+          type: [string, "null"]
+          description: >-
+            Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>`
+            for a webhook, `schedule:<name>`… Null for a work item from before S40-22.
         created_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
     Totals:
@@ -7144,6 +7168,28 @@ components:
         p80_usd: { type: [number, "null"] }
         sample_size: { type: integer, default: 0 }
         over_p80: { type: boolean, default: false }
+    ReceivedEvent:
+      type: object
+      description: A webhook event a project received, and what the platform did with it (S42-06f).
+      required: [id, received_at, source, event_type, outcome, summary]
+      properties:
+        id: { type: string }
+        received_at: { type: string, format: date-time }
+        source: { type: string, description: "jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>" }
+        event_type: { type: string }
+        delivery_id: { type: [string, "null"] }
+        outcome:
+          type: string
+          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready]
+        work_item_key: { type: [string, "null"] }
+        work_item_id: { type: [string, "null"] }
+        summary: { type: string, description: "Built from typed fields only: key, label, from → to, PR number, conclusion." }
+    ReceivedEventPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReceivedEvent" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     WorkItemPage:
       type: object
       required: [items, meta]
@@ -7181,6 +7227,17 @@ components:
         actor_kind: { type: string, enum: [user, agent, system], default: system }
         ref_id: { type: [string, "null"] }
         cost_usd: { type: [number, "null"] }
+        via: { oneOf: [{ $ref: "#/components/schemas/TrackerWrite" }, { type: "null" }] }
+    TrackerWrite:
+      type: object
+      description: >-
+        The tracker write behind a timeline entry (ADR 0107 point 4): the project's tracker connector
+        type and the account it wrote under. `account` is null when the connector names none (a GitHub
+        App installation, a GitLab token).
+      required: [type]
+      properties:
+        type: { type: string, description: "The tracker connector's type: jira, github-issues, gitlab-issues, plugin…" }
+        account: { type: [string, "null"] }
     GitToken:
       type: object
       required: [token]
@@ -7317,6 +7374,24 @@ components:
             context_pack_url: { type: [string, "null"] }
             playbook_checksum: { type: [string, "null"] }
             allowed_paths: { type: array, items: { type: string } }
+            agent_slug: { type: [string, "null"], description: "The agent whose version ran the step." }
+            agent_version: { type: [integer, "null"] }
+            initiated_by: { type: [string, "null"], description: "The work item's initiator, copied at stage start (ADR 0077)." }
+            tool_connectors:
+              type: array
+              description: >-
+                The organisation connectors this run's agent may call through the broker, and the
+                account each one calls with (ADR 0107): resolved by the API, so a member who cannot
+                read the organisation's connectors still sees them.
+              items: { $ref: "#/components/schemas/ToolConnector" }
+    ToolConnector:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        auth_scheme: { type: [string, "null"], description: "bearer or basic, for an `mcp` connector" }
+        account: { type: [string, "null"], description: "The account the connector calls as, when its configuration names one (a `basic` username)." }
     RunEvent:
       type: object
       required: [seq, type, ts]
