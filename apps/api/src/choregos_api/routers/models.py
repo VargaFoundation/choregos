@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from ..audit import record
-from ..db.models import ModelProfileRow
+from ..db.models import ModelProfileRow, Project
 from ..deps import Db, ProjectCtx
 from ..errors import unprocessable
 from ..rbac import Permission
@@ -61,6 +61,14 @@ async def get_models(ctx: ProjectCtx) -> ProjectModels:
 async def put_models(ctx: ProjectCtx, body: ProjectModels, session: Db) -> ProjectModels:
     """Refuse une combinaison backend × modèle non validée, sauf `allow_unvalidated`."""
     ctx.require(Permission.MODELS_WRITE)
+    # The same row lock as `PATCH /projects/{id}`: the profiles are merged into the configuration as it
+    # is NOW, so a concurrent write of another section is not undone (S47-06).
+    await session.execute(
+        select(Project)
+        .where(Project.id == ctx.project.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     from choregos_contracts import ModelProfile
 
     config = ProjectConfig.model_validate(ctx.project.config)
