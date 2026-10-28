@@ -277,10 +277,12 @@ async def open_session(
 async def _resolve_model(
     session: AsyncSession, org_id: str, gateway: GatewayAdapter, spec: AgentSpec, config: ProjectConfig
 ) -> Any:
+    from .gateway import org_gateway_url
     from .model_catalogue import load_policy
 
     resolver = ModelResolver(
-        gateway_url=get_settings().gateway_url,
+        # The session's key comes from the organisation's gateway: its models are called there (ADR 0107).
+        gateway_url=await org_gateway_url(session, org_id) or get_settings().gateway_url,
         gateway_models=await gateway.list_models(),
         catalogue=await load_policy(session, org_id),
     )
@@ -410,12 +412,15 @@ async def respond(
         messages.append({"role": "user", "content": text})
         await journal(session, record, "input.text", {"text": text[:2000]})
     response_id = f"resp_{uuid4().hex}"
+    from .gateway import org_gateway_url
+
+    # The gateway the session's key was minted on (ADR 0107): the organisation's own, else the deployment's.
+    gateway_url = await org_gateway_url(session, record.org_id) or get_settings().gateway_url
 
     async def complete(body: dict[str, Any]) -> dict[str, Any]:
-        settings = get_settings()
         async with httpx.AsyncClient(transport=_OVERRIDES.get("transport"), timeout=300) as http:
             answer = await http.post(
-                f"{settings.gateway_url.rstrip('/')}/chat/completions",
+                f"{gateway_url.rstrip('/')}/chat/completions",
                 json=body,
                 headers={"Authorization": f"Bearer {key}"},
             )

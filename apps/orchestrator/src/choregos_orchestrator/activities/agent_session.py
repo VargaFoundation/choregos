@@ -66,6 +66,7 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
     from choregos_api.services.agent_hosted_sessions import session_run_id
     from choregos_api.services.agent_sessions import secret_name
     from choregos_api.services.agents import AgentIndisponible, resoudre_l_agent
+    from choregos_api.services.gateway import org_gateway_url
     from choregos_api.services.hosted_builds import builds_for
 
     from .stage import _hosted_call
@@ -96,6 +97,8 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
         run_id = session_run_id(session_id)
         minutes = _minutes_left(record.expires_at)
         org_hosts = await org_runner_hosts(session, record.org_id)
+        # The session's key comes from the organisation's gateway (ADR 0107): its pod calls it there.
+        gateway_url = await org_gateway_url(session, record.org_id) or settings.gateway_url
         stage_input = StageInput(
             run_id=run_id,
             # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
@@ -105,7 +108,7 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
             work_item=WorkItemRef(key=f"session:{session_id}", title=f"Session with {served}"),
             transition=TransitionRef(id="session", role="session", **{"from": "open"}, to="open"),
             agent=AgentRef(backend="hosted"),
-            model=ModelRef(litellm_model=record.model, base_url=settings.gateway_url),
+            model=ModelRef(litellm_model=record.model, base_url=gateway_url),
             hosted=hosted,
             # In the pod's Secret, never here.
             gateway_key=None,

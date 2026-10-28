@@ -111,6 +111,27 @@ async def test_a_session_pod_gets_no_workspace_whatever_the_version_asks(setup: 
     assert (await _record(session_id)).stage_input["hosted"]["workspace"] == "none"
 
 
+async def test_a_session_pod_calls_the_organisations_own_gateway(setup: Fixture) -> None:
+    """ADR 0107: the session's key comes from the organisation's gateway, so the pod calls its models
+    there, not at the deployment's `gateway_url`."""
+    from choregos_api.db.models import OrgConnector, Project
+    from choregos_api.db.session import session_scope
+
+    await _agent(setup, _hosted(protocols=["responses"]))
+    async with session_scope(orgs="*") as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        session.add(
+            OrgConnector(
+                org_id=project.org_id, name="acme-llm", kind="gateway", type="openai-compatible",
+                config={"base_url": "https://llm.acme.example/v1"},
+            )
+        )  # fmt: skip
+    session_id = await _session(setup)
+    await pod_activities.start_session_pod({"session_id": session_id})
+    assert (await _record(session_id)).stage_input["model"]["base_url"] == "https://llm.acme.example/v1"
+
+
 async def test_a_second_start_starts_nothing(setup: Fixture) -> None:
     await _agent(setup, _hosted())
     session_id = await _session(setup)

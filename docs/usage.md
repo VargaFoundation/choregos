@@ -83,8 +83,10 @@ presses *Allow and install*: the hosts are opened and the connector created in o
 sees who the administrators are and presses *Ask an administrator*; the request waits in the
 administrators' inbox and the person retries once it is approved. When the cluster's network also
 needs a change, the modal shows it (a snippet to copy, and a prefilled issue when the deployment
-configures one): Choregos cannot apply it. `/admin/egress` lists the rules, the requests and the
-ceiling. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
+configures one): Choregos cannot apply it. `/admin/egress` (**Administration → Network**) is the
+organisation's network in one page (S44-04): what its agents may reach (the ceiling's `network`
+section), the hosts Choregos calls (rules, requests, the deployment's ceiling, what the platform must
+still open) and, for an `org_admin`, the outbound proxy and the network activity. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
 The list is one half of the organisation's network policy; the other half is its **bounds**, the
 `network` section of its policy ceiling (see *The ceiling's `network` section* below, [ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
 a host the ceiling denies, or that lies outside its allowed set, is refused before any opening is
@@ -1286,6 +1288,7 @@ without naming one, which you can register, then name in the workflow (`agent: <
 ### Platform
 
 `/admin/platform` (**Administration → Platform**) shows what the deployment can run, in two cards.
+How people sign in to the instance is on **Administration → Identity** (below).
 
 - **Coding agents (backends).** A backend is the coding agent CLI that the runner image ships and
   that executes an agent stage ([Actor](concepts.md#actor)). Per backend the page shows its
@@ -1300,16 +1303,40 @@ without naming one, which you can register, then name in the workflow (`agent: <
   deployment (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
   `allowedBackends`) and by the project's policy. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
-- **Executors (where agent stages run).** Read-only: `agent_sandbox`, `k8s_job`, `tekton`, `aca`,
-  `local_docker`, each with a one-line explanation and its set-up procedure. The list is the
+- **Executors (where agent stages run).** Read-only. The card opens with the executor(s) this
+  deployment runs ("Agent stages run on `k8s_job` in this deployment"), listed first as *In use*; the
+  others follow as *Not turned on here*, with what each needs (`agent_sandbox`: the
+  kubernetes-sigs/agent-sandbox operator on the cluster; `tekton`: Tekton Pipelines), a one-line
+  explanation and its set-up procedure. The list is the
   deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
   chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
   was removed (S42-07b), only the `GET` remains.
 
+### Identity
+
+`/admin/identity` (**Administration → Identity**, S44-04) is the one page about who people are and how
+they sign in: the read-only card *How people sign in to this instance* (platform administrators), then
+every identity section a plugin declares (an `icon` of `fingerprint` or `log-in`: single sign-on,
+directory provisioning), drawn on this page instead of as entries of their own. A plugin block that
+reads `/platform/identity` again is not drawn a second time; an old `/admin/x/<section>` link to such
+a section opens this page.
+
 ### Models
 
 `/admin/models` (the **Models** page of the administration) is the organisation's model catalogue
-([ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)), whatever the gateway is. **Sync from
+([ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)), whatever the gateway is.
+
+- **Whose gateway** ([ADR 0107](adr/0107-an-organisation-brings-its-own-model-gateway.md)): the Gateway
+  card says whether models are routed by the deployment's gateway, shared by the organisations of the
+  instance, or by the organisation's own. An `org_admin` connects the organisation's own gateway with
+  *Connect your organisation's gateway*: a connector of kind `gateway` (`litellm` or
+  `openai-compatible`; `direct` is refused) declared in **Installed connectors**, one per
+  organisation. Its secret is typed once and sealed. The catalogue then lists and syncs that gateway,
+  and every run of a project that does not declare a gateway of its own, and every agent session,
+  gets its key from it and calls its `base_url`. Its host must be open (**Administration → Network**).
+- **Listed by the gateway**: in `open` mode the page also lists what the gateway offers that the
+  catalogue does not hold yet (usable now; *Sync from gateway* brings them in to set their roles,
+  usages and price), or says that the gateway lists nothing or could not be reached. **Sync from
 the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
 list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
 the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price per 1k tokens that
@@ -1919,12 +1946,12 @@ wall: see [security](security.md).
 
 **Where each network setting lives in the console.**
 
-- *The organisation's* — **Administration → Network access** (an `org_admin` writes it, a member reads it):
+- *The organisation's* — **Administration → Network**, card *What agents may reach* (an `org_admin` writes it, a member reads it):
   the allowed hosts (**No cap**, **Any public host**, or **Only these hosts**, one per line), the denied
   hosts, the requests per minute per host and per run, the built-in web tools (inherit, allow, deny) and
   the contact written into the User-Agent. It is the `network` section of the policy ceiling: saving
-  reads the whole ceiling again and replaces only that section, so the **Policy ceiling** card below
-  it and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
+  reads the whole ceiling again and replaces only that section, so the **Policy ceiling** card (on the
+  administration's overview) and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
   flagged before anything is sent.
 - *The agent's* — the **Network access** section of the agent builder (new agent, new version): **Same as
   the project's policy**, **No internet** or **Only these hosts**, the politeness, and the built-in web

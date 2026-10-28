@@ -921,7 +921,7 @@ it nothing breaks: the index serves full-text only and the knowledge page says s
 database: `CREATE EXTENSION vector;` as a superuser, then `ALTER TABLE knowledge_chunks ADD COLUMN
 embedding_vec vector;` as the owner of the schema, then **reindex** each index base.
 
-**Checking the sign-in configuration from the console.** *Admin → Platform* shows a read-only card,
+**Checking the sign-in configuration from the console.** *Admin → Identity* shows a read-only card,
 "How people sign in to this instance", for the platform administrator: the OIDC issuer, client id and
 discovery URL, whether the client secret is set (never its value), the redirect URI to register at the
 identity provider (`<apiUrl>/api/v1/auth/callback`), the MCP door's OAuth issuer, audience and registered

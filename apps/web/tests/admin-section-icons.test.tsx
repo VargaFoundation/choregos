@@ -50,12 +50,27 @@ describe("plugin section icons", () => {
       </QueryClientProvider>,
     );
     const bar = screen.getByRole("complementary", { name: "Sidebar" });
-    const titles = ["Organisations", "Platform administrators", "Limits", "Identity", "Instance sign-in", "Appearance"];
+    // "Identity" is the core's own entry; the two identity sections live inside it (S44-04).
+    const titles = ["Organisations", "Platform administrators", "Limits", "Identity", "Appearance"];
     const icons = [];
     for (const title of titles) icons.push(iconOf(await within(bar).findByRole("link", { name: title })));
     expect(new Set(icons).size).toBe(titles.length);
     expect(icons[0]).toContain("lucide-building");
     expect(iconOf(within(bar).getByRole("link", { name: "Older plugin" }))).toContain("lucide-settings");
+  });
+
+  it("folds the identity sections into the one Identity entry (S44-04)", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <BarreLaterale />
+      </QueryClientProvider>,
+    );
+    const bar = screen.getByRole("complementary", { name: "Sidebar" });
+    await within(bar).findByRole("link", { name: "Appearance" });
+    expect(within(bar).getAllByRole("link", { name: "Identity" }).map((l) => l.getAttribute("href"))).toEqual([
+      "/admin/identity",
+    ]);
+    expect(within(bar).queryByRole("link", { name: "Instance sign-in" })).toBeNull();
   });
 
   it("knows every name of the contract's vocabulary, and falls back on an unknown one", () => {
