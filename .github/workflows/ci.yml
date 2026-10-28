@@ -465,7 +465,7 @@ jobs:
     env:
       BUILDKIT_IMAGE: moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89
       BUILDKIT_VERSION: v0.34.1
-      BUILDKIT_SHA256: 4e044bcd62a0c0bbe6a8c94d73989de2bfe4c04dbc0f9d6021cf96b72cd1d965
+      BUILDKIT_SHA256: a59539daf547fe0958efe2d07e41c0a6944e1112a66d7e519ec1cf5b673ef15b
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
