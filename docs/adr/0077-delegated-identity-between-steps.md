@@ -1,7 +1,9 @@
 # 0077 — Delegated identity between the steps of a work item
 
 - **Status**: accepted, 2026-10-22 — points 2 and 4 implemented by S40-22; point 3 (on-behalf-of token
-  exchange) not implemented (#756)
+  exchange) not implemented (#756); point 1 amended by
+  [ADR 0107](0107-an-agent-acts-under-an-identity.md) (2026-10-28): an agent may request a child agent,
+  which the platform runs with the parent's identity attenuated
 - **Concerns**: the run token (`security.py`, `mint_run_token`), the `runs` table, the run's access
   record (`GET /runs/{id}/access`), the tool broker (`services/courtier.py`), the connector types of
   the registry (`choregos_adapters`); builds on [ADR 0021](0021-spiffe-behind-the-run-token.md) (the
