@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
@@ -100,7 +100,10 @@ export default function OrgConnectorsPage() {
           (metier.length === 0 ? (
             <Empty title="No business system yet">Declare one below.</Empty>
           ) : (
-            metier.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
+            metier.map((instance) => (
+              // A source's link (`?connector=`) marks a business system too, without opening its settings.
+              <Instance key={instance.name} org={org} instance={instance} highlighted={instance.name === focus} />
+            ))
           ))}
       </section>
       <section className="space-y-3" aria-labelledby="mcp" data-testid="section-mcp">
@@ -185,6 +188,11 @@ function Instance({
   const client = useQueryClient();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const type = (types.data ?? []).find((t) => t.kind === instance.kind && t.type === instance.type);
+  const anchor = `connector-card-${instance.name}`;
+  // The card a link points to is brought into view: the page lists every connector of the organisation.
+  useEffect(() => {
+    if (highlighted) document.getElementById(anchor)?.scrollIntoView?.({ block: "start" });
+  }, [highlighted, anchor]);
   const [diff, setDiff] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   async function decouvrir() {
@@ -214,6 +222,7 @@ function Instance({
       action={action}
       className={highlighted ? "border-accent" : undefined}
       aria-current={highlighted ? "true" : undefined}
+      id={anchor}
       data-testid={`connector-${instance.name}`}
     >
       <Availability org={org} instance={instance} />
