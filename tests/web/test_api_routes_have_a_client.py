@@ -5,8 +5,9 @@ make none) and the CLI (`packages/cli/src`) are the platform's clients. A path n
 names is a feature nobody reaches without `curl`: the cross-backend review metric and the memory
 re-import were such features until this story gave them a screen. The guard reads the contract's
 paths and fails for one that no client names, unless one of the allowlists below holds it with its
-reason. An entry that is no longer true (the path left the contract, or a client calls it now) fails
-too: the allowlists say what is client-less today, not what was.
+reason. An entry that is no longer true (the path left the contract, or a client calls it now; a
+machine-only route served outside the contract that the API no longer declares) fails too: the
+allowlists say what is client-less today, not what was.
 
 A PR that adds a path to the contract adds its client, or its entry here, in the same PR.
 """
@@ -25,16 +26,28 @@ OPENAPI = ROOT / "packages" / "contracts" / "openapi.yaml"
 WEB_SRC = ROOT / "apps" / "web" / "src"
 WEB_MOCKS = WEB_SRC / "mocks"
 CLI_SRC = ROOT / "packages" / "cli" / "src"
+API_SRC = ROOT / "apps" / "api" / "src"
 
 #: Routes only machines call, never a screen or a command. An entry ending in `/*` covers every path
-#: under that prefix. The MCP door (`/mcp`, `/mcp/projects/{project}`), the A2A door
-#: (`/a2a/orgs/{org}` and its agent card) and `/metrics` are machine-only too, but the API serves them
-#: outside the contract (`include_in_schema=False`): no contract path names them, so they need an entry
-#: only when one enters the contract. Later stories add their machine-only routes here.
+#: under that prefix. The MCP and A2A doors, their discovery documents and `/metrics` are served
+#: outside the contract (`include_in_schema=False`): no contract path names them yet, so their entries
+#: are checked against the API's own route declarations instead, and cover them the day one enters the
+#: contract. Later stories (S46-07, S47-14, S47-15) add their machine-only routes here.
 MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/webhooks/*": "a forge, a tracker, a pipeline, a deployer, Alertmanager or a plugin's server posts "
     "its signed events",
     "/internal/*": "a runner or an agent session calls it from its pod, with its run token",
+    "/mcp": "the MCP door (ADR 0030): an external MCP client calls the organisation's tools over "
+    "JSON-RPC; outside the contract",
+    "/mcp/projects/{project}": "the MCP door narrowed to one project, for the same clients; outside the "
+    "contract",
+    "/.well-known/oauth-protected-resource": "the MCP door's protected-resource metadata, read by an MCP "
+    "client before it asks for a token; outside the contract",
+    "/a2a/orgs/{org}": "the A2A door (ADR 0078): another agent sends the organisation a task over "
+    "JSON-RPC; outside the contract",
+    "/a2a/orgs/{org}/.well-known/agent-card.json": "the A2A door's agent card, read by the calling agent; "
+    "outside the contract",
+    "/metrics": "the Prometheus scrape, read by the monitoring stack; outside the contract",
     "/healthz": "the liveness probe of the kubelet and of the load balancer",
     "/readyz": "the readiness probe",
     "/orgs/{org}/agents/{slug}/responses": "the direct-invocation door (ADR 0080 §10): a person's program "
@@ -54,7 +67,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/projects/{id}/workflows/validate": "the project-scoped twin of /workflows/validate, which the console "
     "and the CLI call; its extra actor-group warning is for API callers",
     "/templates/{name}": "platform template authoring by API (getTemplate, updateTemplate), no screen or "
-    "command; finding filed by S47-17",
+    "command yet: finding VargaFoundation/choregos#1075",
     "/orgs/{org}/aliases/{alias}": "platform administrator's API gesture; its console text lives in the "
     "enterprise repository (S42-14 STATUS row)",
 }
@@ -127,9 +140,33 @@ def cli_text() -> str:
     return _read(CLI_SRC.rglob("*.py"))
 
 
+#: A route the API declares: a FastAPI route decorator or `add_api_route`, its path as first argument.
+_ROUTE_DECLARATION = re.compile(
+    r"(?:@\w+\.(?:get|post|put|patch|delete|api_route)|\.add_api_route)\(\s*\"(/[^\"]*)\""
+)
+
+
+def route_shape(path: str) -> str:
+    """A path with its parameters' names left out: `/mcp/projects/{projet}` is `/mcp/projects/{}`."""
+    return re.sub(r"\{[^}]*\}", "{}", path)
+
+
+def declared_routes(source: str) -> set[str]:
+    """The shapes of the routes a Python source declares."""
+    return {route_shape(path) for path in _ROUTE_DECLARATION.findall(source)}
+
+
+@functools.cache
+def api_routes() -> frozenset[str]:
+    """Every route `apps/api/src` declares, as written there (a router's prefix is not added)."""
+    return frozenset(declared_routes(_read(API_SRC.rglob("*.py"))))
+
+
 def is_machine_only(path: str) -> bool:
     return any(
-        path.startswith(entry.removesuffix("*")) if entry.endswith("/*") else path == entry
+        path.startswith(entry.removesuffix("*"))
+        if entry.endswith("/*")
+        else route_shape(path) == route_shape(entry)
         for entry in MACHINE_ONLY_ROUTES
     )
 
@@ -172,10 +209,24 @@ def test_a_new_client_less_path_is_refused() -> None:
     assert unexplained(["/projects/{id}/metrics/brand-new"], web, "") == ["/projects/{id}/metrics/brand-new"]
     assert unexplained(["/projects/{id}/metrics/dora"], web, "") == []
     assert unexplained(["/internal/runs/{id}/brand-new", "/healthz"], "", "") == []
+    # A machine-only door that enters the contract is covered whatever its parameter is named.
+    assert unexplained(["/mcp/projects/{slug}"], "", "") == []
+
+
+def test_the_api_route_declarations_are_read() -> None:
+    source = """
+@router.api_route("/mcp/projects/{projet}", methods=["GET", "DELETE"])
+@router.post("/a2a/orgs/{org}")
+@app.get("/metrics", tags=["session"], include_in_schema=False)
+app.add_api_route("/edition", current_edition, methods=["GET"], include_in_schema=False)
+document = (await client.get("/not-a-route")).json()
+"""
+    assert declared_routes(source) == {"/mcp/projects/{}", "/a2a/orgs/{}", "/metrics", "/edition"}
 
 
 def test_every_allowlist_entry_is_still_true() -> None:
     paths = set(contract_paths())
+    served = api_routes()
     web, cli = web_text(), cli_text()
     lists = {
         "MACHINE_ONLY_ROUTES": MACHINE_ONLY_ROUTES,
@@ -193,6 +244,12 @@ def test_every_allowlist_entry_is_still_true() -> None:
                     stale.append(f"{name}[{entry}] covers no path of the contract")
                 continue
             if entry not in paths:
+                if name == "MACHINE_ONLY_ROUTES":
+                    if route_shape(entry) not in served:
+                        stale.append(
+                            f"{name}[{entry}] is neither a path of the contract nor a route of the API"
+                        )
+                    continue
                 stale.append(f"{name}[{entry}] is not a path of the contract")
                 continue
             pattern = path_pattern(entry)
