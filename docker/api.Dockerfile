@@ -86,6 +86,26 @@ RUN git clone --quiet --depth 1 --branch "${HUBBLE_VERSION}" https://github.com/
       -X 'github.com/cilium/cilium/hubble/pkg.Version=${HUBBLE_VERSION#v}'" \
     -o /out/hubble .
 
+# `cosign`, the release binary checked against the release's checksums: the release's binaries are
+# built with Go 1.27.3, but the `ghcr.io/sigstore/cosign/cosign:v3.1.4` image is a separate build,
+# with Go 1.27.1, which links CVE-2026-56857 (measured with `go version`, S41-14c).
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS cosign
+ARG COSIGN_VERSION=v3.1.4
+ARG COSIGN_SHA256_AMD64=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+ARG COSIGN_SHA256_ARM64=ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2
+ARG TARGETARCH
+RUN set -eu; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) sum="${COSIGN_SHA256_AMD64}" ;; \
+      arm64) sum="${COSIGN_SHA256_ARM64}" ;; \
+      *) echo "no cosign for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p /out; \
+    curl -fsSL -o /out/cosign \
+      "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${TARGETARCH:-amd64}"; \
+    echo "${sum}  /out/cosign" | sha256sum -c -; \
+    chmod 0755 /out/cosign
+
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
 FROM python:3.12-slim-bookworm AS commun
 # `PIP_PYTHON` : l'image de l'édition entreprise est construite FROM celle-ci et y ajoute sa roue
@@ -121,9 +141,8 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # --- Cible `api` : le service HTTP.
 FROM commun AS api
 # `cosign`: publication verifies a hosted agent's image signature on its digest (S41-14, ADR 0080
-# §8). The same release as the `hosted-cosign` CI job, pinned by digest.
-COPY --from=ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d \
-  /ko-app/cosign /usr/local/bin/cosign
+# §8). The same release as the `hosted-cosign` CI job, fetched and checked in the `cosign` stage above.
+COPY --from=cosign /out/cosign /usr/local/bin/cosign
 # SkillSpector (ADR 0095): the gate runs it on every version a person publishes.
 COPY --from=skillspector /opt/skillspector /opt/skillspector
 ENV CHOREGOS_SKILL_SCANNER=skillspector

@@ -90,11 +90,13 @@ def test_no_stage_takes_hubble_as_a_release_binary() -> None:
     assert "COPY --from=hubble /out/hubble /usr/local/bin/hubble" in text
 
 
-def test_cosign_is_a_release_built_with_a_fixed_go() -> None:
+def test_cosign_is_a_release_binary_built_with_a_fixed_go() -> None:
     text = DOCKERFILE.read_text(encoding="utf-8")
-    (tag,) = re.findall(r"ghcr\.io/sigstore/cosign/cosign:v([\d.]+)@sha256:[0-9a-f]{64}", text)
-    # v3.1.4 is the first cosign built with a fixed Go (1.27.3), measured with `go version`.
-    assert tuple(int(part) for part in tag.split(".")) >= (3, 1, 4)
+    (release,) = re.findall(r"^ARG COSIGN_VERSION=v([\d.]+)$", text, re.M)
+    # v3.1.4's release binaries are built with Go 1.27.3, measured with `go version`; its image
+    # `ghcr.io/sigstore/cosign/cosign:v3.1.4` is another build, with Go 1.27.1: never copied.
+    assert tuple(int(part) for part in release.split(".")) >= (3, 1, 4)
+    assert "COPY --from=ghcr.io/sigstore/cosign" not in text
 
 
 def test_the_fixed_go_check_reads_versions_right() -> None:
