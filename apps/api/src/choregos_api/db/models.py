@@ -149,6 +149,8 @@ class WorkflowDef(Base, PkMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(64))
     version: Mapped[int] = mapped_column(Integer, default=1)
     source: Mapped[str] = mapped_column(String(16), default="platform")
+    #: For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0111).
+    origin: Mapped[str | None] = mapped_column(String(200), nullable=True)
     yaml: Mapped[str] = mapped_column(Text)
     json_doc: Mapped[dict[str, Any]] = mapped_column("json", Json, default=dict)
     checksum: Mapped[str] = mapped_column(String(80), index=True)
@@ -1588,6 +1590,26 @@ class OrgPlugin(Base, PkMixin, TimestampMixin):
     #: Who installed this version; `None` for the start-up reconcile (S43-05).
     installed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     installed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OrgWorkflow(Base, PkMixin, TimestampMixin):
+    """A workflow an organisation shared to its catalogue (ADR 0111 §4): a copy of one version of a
+    project's workflow, so later edits in the project do not reach it until shared again. Each share of
+    the same name is the next `version`; the catalogue offers the highest."""
+
+    __tablename__ = "org_workflows"
+    __table_args__ = (
+        UniqueConstraint("org_id", "name", "version", name="uq_org_workflows_org_name_version"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    version: Mapped[int] = mapped_column(Integer)
+    yaml: Mapped[str] = mapped_column(Text)
+    checksum: Mapped[str] = mapped_column(String(80))
+    #: `<project>/<workflow>@<version>` it was copied from.
+    shared_from: Mapped[str] = mapped_column(String(200))
+    shared_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class OrgPluginFile(Base, PkMixin, TimestampMixin):

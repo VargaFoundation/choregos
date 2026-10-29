@@ -68,3 +68,38 @@ async def test_ce_qui_ne_s_applique_pas_recoit_422(client: AsyncClient, admin: s
     assert mal_formee.status_code == 422, mal_formee.text
     sans_operation = await client.post("/api/v1/workflows/edit", json={"yaml": ORIGINE, "operations": []})
     assert sans_operation.status_code == 422
+
+
+async def test_set_workflow_and_a_block_value_go_through_the_api_and_come_back(
+    client: AsyncClient, admin: str
+) -> None:
+    """ADR 0112 §3: the workflow's own fields, and a human task written as lines."""
+    texte = template_yaml("default-request")
+    reponse = await _editer(
+        client,
+        texte,
+        {"op": "set_workflow", "field": "description", "value": "Requests of the HR desk."},
+        {
+            "op": "set_workflow",
+            "field": "inputs",
+            "value": {"type": "object", "properties": {"verdict": {"type": "string"}}},
+            "style": "block",
+        },
+        {
+            "op": "set_transition",
+            "id": "t-accept",
+            "field": "task",
+            "value": {
+                "title": "Accept the deliverable",
+                "form": {"type": "object", "properties": {"verdict": {"type": "string"}}},
+                "attest": "I read it.",
+            },
+            "style": "block",
+        },
+    )
+    assert reponse.status_code == 200, reponse.text
+    corps = reponse.json()
+    assert corps["valid"] is True
+    assert "    task:\n      title: Accept the deliverable\n" in corps["yaml"]
+    annulee = await _editer(client, corps["yaml"], *corps["inverse"])
+    assert annulee.json()["yaml"] == texte

@@ -68,6 +68,15 @@ DOCUMENTS = {
 }
 
 
+#: A human task's form (S20-06), the kind of nested value the map writes in block style (ADR 0112 §3).
+TASK = {
+    "title": "Hand over the badge",
+    "instructions": "Give the joiner their badge.",
+    "form": {"type": "object", "required": ["badge"], "properties": {"badge": {"type": "string"}}},
+    "attest": "I handed the badge over in person.",
+}
+
+
 def _commentaires(texte: str) -> list[str]:
     return [m.group(0) for m in re.finditer(r"#[^\n]*", texte)]
 
@@ -79,6 +88,17 @@ def _operations(texte: str) -> list[dict[str, Any]]:
     acteurs = list(document["actors"])
     transitions = [t for t in document["transitions"] if t.get("id")]
     ops: list[dict[str, Any]] = []
+    ops += [
+        {"op": "set_workflow", "field": "description", "value": "A new description"},
+        {"op": "set_workflow", "field": "initial", "value": etats[0]},
+        {"op": "set_workflow", "field": "initial", "unset": True},
+        {
+            "op": "set_workflow",
+            "field": "inputs",
+            "value": {"type": "object", "properties": {"start": {"type": "string", "format": "date"}}},
+            "style": "block",
+        },
+    ]
     for place in (None, 0, 1):
         ops.append({"op": "add_state", "name": "nouvel_etat", "spec": {"kind": "wait"}, "index": place})
         ops.append({"op": "add_actor", "name": "nouvel_acteur", "spec": {"type": "system"}, "index": place})
@@ -110,6 +130,15 @@ def _operations(texte: str) -> list[dict[str, Any]]:
             {"op": "set_transition", "id": ident, "field": "by", "value": acteurs[-1]},
             {"op": "set_transition", "id": ident, "field": "to", "unset": True},
             {"op": "add_gate", "transition": ident, "gate": "scope_respected"},
+            {"op": "set_transition", "id": ident, "field": "gates", "value": ["outputs_present"]},
+            {"op": "set_transition", "id": ident, "field": "task", "value": TASK, "style": "block"},
+            {
+                "op": "set_transition",
+                "id": ident,
+                "field": "gates",
+                "value": ["outputs_present"],
+                "style": "block",
+            },
             {
                 "op": "add_gate",
                 "transition": ident,
@@ -217,9 +246,9 @@ def test_une_garantie_ajoutee_garde_le_style_de_sa_liste() -> None:
             {"op": "remove_transition", "id": "t-inconnue"}, "does not exist", id="transition-inconnue"
         ),
         pytest.param(
-            {"op": "set_transition", "id": "t-valider", "field": "gates", "value": []},
-            "block style",
-            id="valeur-en-bloc",
+            {"op": "set_workflow", "field": "name", "value": "autre"},
+            "the name is the route's",
+            id="nom-du-workflow",
         ),
         pytest.param({"op": "set_transition", "id": "t-valider", "field": "id", "value": "x"}, "id", id="id"),
         pytest.param(
@@ -405,3 +434,57 @@ def test_chaque_geste_de_la_console_se_greffe_et_se_defait(geste: dict[str, Any]
     assert isinstance(yaml.safe_load(edition.yaml), dict)
     inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
     assert editer(edition.yaml, inverse).yaml == texte
+
+
+def test_a_block_value_is_written_one_field_per_line_under_the_transition() -> None:
+    """ADR 0112 §3: a reviewer reads a human task as lines, not as one flow line."""
+    texte = template_yaml("default-request")
+    fields = {"type": "object", "properties": {"badge": {"type": "string"}}}
+    edition = editer(
+        texte,
+        [
+            {"op": "set_workflow", "field": "inputs", "value": fields, "style": "block"},
+            {"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"},
+        ],
+    )
+    added = [line for line in edition.yaml.splitlines() if line not in texte.splitlines()]
+    assert "    task:" in added and "  inputs:" in added, added
+    assert "      title: Hand over the badge" in added
+    assert all(len(line) < 110 for line in added)
+    (accept,) = [t for t in yaml.safe_load(edition.yaml)["transitions"] if t["id"] == "t-accept"]
+    assert accept["task"] == TASK
+    assert parse_workflow(edition.yaml)[1].valid
+    assert editer(edition.yaml, edition.inverse).yaml == texte
+
+
+def test_a_value_written_in_block_style_can_be_replaced() -> None:
+    """It was refused before ADR 0112: the whole key's lines are replaced, and the inverse puts them back."""
+    texte = template_yaml("default-request")
+    with_task = editer(
+        texte, [{"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"}]
+    ).yaml
+    other = {**TASK, "title": "Return the laptop"}
+    edition = editer(
+        with_task,
+        [{"op": "set_transition", "id": "t-accept", "field": "task", "value": other, "style": "block"}],
+    )
+    (accept,) = [t for t in yaml.safe_load(edition.yaml)["transitions"] if t["id"] == "t-accept"]
+    assert accept["task"]["title"] == "Return the laptop"
+    assert editer(edition.yaml, edition.inverse).yaml == with_task
+
+
+def test_set_workflow_writes_initial_after_metadata_and_the_fields_in_metadata() -> None:
+    texte = template_yaml("default-request")
+    edition = editer(
+        texte,
+        [
+            {"op": "set_workflow", "field": "initial", "value": "refining"},
+            {"op": "set_workflow", "field": "description", "value": "Requests of the HR desk."},
+        ],
+    )
+    lines = edition.yaml.splitlines()
+    assert lines[lines.index("actors:") - 1] == "initial: refining", "right after metadata"
+    document = yaml.safe_load(edition.yaml)
+    assert document["metadata"]["description"] == "Requests of the HR desk."
+    assert _commentaires(edition.yaml) == _commentaires(texte)
+    assert editer(edition.yaml, edition.inverse).yaml == texte

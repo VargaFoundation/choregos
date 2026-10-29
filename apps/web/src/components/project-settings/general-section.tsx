@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { SettingsSection } from "@/components/project-settings/section";
 import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
@@ -47,6 +47,7 @@ export function GeneralSection({ slug }: { slug: string }) {
       lead="The project's identity, the repository the runs work in, and the checks the runner measures itself rather than believing the agent."
     >
       {project.error && <ErrorNote>{String(project.error)}</ErrorNote>}
+      {project.data && <ProjectActivation project={project.data} slug={slug} />}
       {project.data && (
         // Re-seeded from the server after each save, never while a person is typing.
         <GeneralForm
@@ -57,6 +58,56 @@ export function GeneralSection({ slug }: { slug: string }) {
         />
       )}
     </SettingsSection>
+  );
+}
+
+/** What the button does for a project that is not active: none when there is nothing to do here. */
+export function activationGesture(project: Pick<ProjectDto, "status" | "template_ref" | "config">): string | null {
+  const status = project.status;
+  if (status === "active" || status === "archived") return null;
+  if (status === "provisioning") return "Provisioning…";
+  if (status === "suspended") return "Resume";
+  const repo = (project.config as ProjectConfigValue | undefined)?.repo?.url;
+  // Without a template or a repository, there is nothing to provision: the API activates it at once.
+  return project.template_ref || repo ? "Provision" : "Activate";
+}
+
+/** A project that is not active runs nothing; this is where it becomes active. */
+function ProjectActivation({ project, slug }: { project: ProjectDto; slug: string }) {
+  const client = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const gesture = activationGesture(project);
+  if (gesture === null) return null;
+  async function activate() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.provision(slug);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["project", slug] }),
+        client.invalidateQueries({ queryKey: ["readiness", slug] }),
+        client.invalidateQueries({ queryKey: ["provision", slug] }),
+      ]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "refused");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card title="Status">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <p className="min-w-0 flex-1" data-testid="project-status">
+          The project is <strong>{project.status}</strong>: nothing runs until it is active.
+          {gesture === "Provision" && " Provisioning runs its template's steps; the overview follows them."}
+        </p>
+        <Button tone="accent" onClick={() => void activate()} disabled={busy || project.status === "provisioning"}>
+          {gesture}
+        </Button>
+      </div>
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </Card>
   );
 }
 

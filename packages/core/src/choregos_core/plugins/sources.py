@@ -268,6 +268,8 @@ class Release:
     git: GitRelease | None = None
     #: the offline directory's plugin (a directory or a `.tar.gz`)
     path: Path | None = None
+    #: the agents it ships, when the index says so (ADR 0111): read without fetching the plugin
+    agents: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,6 +311,7 @@ def parse_index(raw: bytes | str | dict[str, Any], *, trusted: bool = False) -> 
                 description=rel.get("description"),
                 oci=rel.get("oci"),
                 git=GitRelease(git["url"], git["commit"], git.get("path", "")) if git else None,
+                agents=tuple(rel.get("agents") or ()),
             )
     return Index(releases, trusted)
 
@@ -431,13 +434,14 @@ def offline_index(directory: Path) -> Index:
                 name, version, plugin_digest = plugin.name, plugin.version, plugin.digest
                 core = plugin.core
                 description = str(plugin.manifest["metadata"].get("description") or "") or None
+                agents = tuple(sorted(plugin.agents))
         except PluginError as exc:
             raise SourceError("content", f"{candidate.name}: {exc}") from exc
         check_lock(lock, name, version, plugin_digest)
         if version in releases.get(name, {}):
             raise SourceError("index", f"`{name}` {version} is twice in the offline directory")
         releases.setdefault(name, {})[version] = Release(
-            name, version, plugin_digest, core, description, path=candidate
+            name, version, plugin_digest, core, description, path=candidate, agents=agents
         )
     return Index(releases, trusted=True)
 

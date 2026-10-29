@@ -26,7 +26,9 @@ ENGLISH_LABELS = {
 _ON_FAILURE = re.compile(r"^on failure \(≤\d+\)$")
 
 
-@pytest.mark.parametrize("name", TEMPLATE_NAMES)
+@pytest.mark.parametrize(
+    "name", [n for n in TEMPLATE_NAMES if n != "blank"]
+)  # a skeleton has no secondary edge
 def test_secondary_edge_labels_are_english(name: str) -> None:
     labels = {e["label"] for e in to_graph(load_template(name))["edges"] if e["kind"] != "nominal"}
     assert labels, "a template without a secondary edge proves nothing"

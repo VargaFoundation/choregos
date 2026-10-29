@@ -24,6 +24,8 @@ from ..db.models import Template
 from ..errors import unprocessable
 
 WORKFLOW_SANS_GABARIT = "template:default-simple@1"
+#: Without a template and without a repository: a workflow that delivers no code (ADR 0110).
+WORKFLOW_WITHOUT_REPOSITORY = "template:default-request@1"
 POLITIQUE_SANS_GABARIT = "preset:solo"
 
 
@@ -84,12 +86,15 @@ async def manifeste_du_gabarit(
     return dict(yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}), dossier
 
 
-def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
-    """Les sources que livre un manifeste ; sans gabarit, `default-simple` et `solo`."""
+def livraison(manifeste: dict[str, Any], dossier: Path | None, *, has_repository: bool = True) -> Livraison:
+    """The sources a manifest ships; without a template, `solo` and `default-simple` — or
+    `default-request` for a project that names no repository (ADR 0110). A template's own workflows
+    always win."""
     defauts = manifeste.get("defaults") or {}
     refs = list(defauts.get("workflows") or ([defauts["workflow"]] if defauts.get("workflow") else []))
+    fallback = WORKFLOW_SANS_GABARIT if has_repository else WORKFLOW_WITHOUT_REPOSITORY
     return Livraison(
-        workflows=[_source_du_workflow(ref, dossier) for ref in refs or [WORKFLOW_SANS_GABARIT]],
+        workflows=[_source_du_workflow(ref, dossier) for ref in refs or [fallback]],
         politique=_source_de_la_politique(str(defauts.get("policy") or POLITIQUE_SANS_GABARIT), dossier),
         defaut=defauts.get("default_workflow"),
         routage=list(defauts.get("routing") or []),

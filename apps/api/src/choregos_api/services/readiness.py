@@ -45,6 +45,7 @@ from .definitions import active_policy, policy_model, workflow_model
 from .gabarits import manifeste_du_gabarit, shipped_workflows
 from .human_groups import groups_known_in, unknown_group_warnings
 from .projets import declares_a_release_train
+from .workflow_catalogue import parse_origin
 
 #: A test older than this is worth running again.
 STALE_TEST = timedelta(days=7)
@@ -56,6 +57,8 @@ PROVIDED_BY_THE_DEPLOYMENT = frozenset({"runtime", "gateway", "memory", "tracker
 #: Secret fields that never block a connector: a webhook secret only matters once GitHub can reach us.
 OPTIONAL_SECRETS = {"webhook_secret"}
 GITHUB_KINDS = {"tracker": "github-issues", "scm": "github"}
+#: Capabilities that only make sense for a project that delivers code from a repository.
+NEED_A_REPOSITORY = frozenset({"scm", "ci", "cd"})
 
 CAPABILITY_TITLES = {
     "tracker": "Tracker",
@@ -160,6 +163,9 @@ class Facts:
     #: empty when there is no template or it cannot be read any more (nothing is judged then)
     template: str | None = None
     template_workflows: tuple[TemplateWorkflowFact, ...] = ()
+    #: the active workflows adopted from the catalogue (ADR 0111): (name, origin, version it offers now,
+    #: None when the entry is gone)
+    adopted: tuple[tuple[str, str, int | None], ...] = ()
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -175,7 +181,7 @@ def _item(id_: str, section: str, title: str, state: str, detail: str, fix: Read
 
 
 def item_provisioned(f: Facts) -> list[ReadinessItem]:
-    fix = _fix(f.slug, "")
+    fix = _fix(f.slug, "general")
     if f.status == "active":
         return [_item("provisioned", "general", "Project provisioned", "done", "provisioning ran.", fix)]
     if f.status == "provisioning":
@@ -183,13 +189,15 @@ def item_provisioned(f: Facts) -> list[ReadinessItem]:
             _item("provisioned", "general", "Project provisioned", "todo", "provisioning is running.", fix)
         ]
     why = f" Provisioning failed at: {f.provision_failure}." if f.provision_failure else ""
+    gesture = "resume it" if f.status == "suspended" else "activate it"
     return [
         _item(
             "provisioned",
             "general",
             "Project provisioned",
             "todo",
-            f"the project is {f.status}: nothing runs until it is active.{why}",
+            f"the project is {f.status}: nothing runs until it is active.{why} "
+            f"Settings › General: {gesture}.",
             fix,
         )
     ]
@@ -242,6 +250,17 @@ def _connector_item(f: Facts, capability: str, reasons: tuple[str, ...]) -> Read
     if connector is None:
         if platform:
             return _item(id_, "connections", title, "done", "provided by the platform.", fix)
+        if capability in NEED_A_REPOSITORY and not _has_repository(f):
+            # The project has no repository: connecting one is a choice, not the only way out.
+            return _item(
+                id_,
+                "connections",
+                title,
+                "todo",
+                f"{why}; none is configured. A project without a repository makes default a workflow "
+                "that does not deliver code, such as `default-request`.",
+                _workflow_without_repository(f),
+            )
         return _item(id_, "connections", title, "todo", f"{why}; none is configured.", fix)
     if connector.type in STAND_INS:
         return _item(
@@ -333,19 +352,42 @@ def item_stale_tests(f: Facts) -> list[ReadinessItem]:
     return items
 
 
+def _has_repository(f: Facts) -> bool:
+    return bool(f.config.repo and f.config.repo.url)
+
+
+def _workflow_without_repository(f: Facts) -> ReadinessFix:
+    """The way out for a project with no repository (ADR 0110 §4): publish `default-request` and make it
+    the default in one gesture; once it is published, the Workflows page, where it is made the default."""
+    if "default-request" in f.workflows:
+        return ReadinessFix(href=f"/p/{f.slug}/workflows", by="project_owner")
+    return ReadinessFix(
+        href=f"/p/{f.slug}/workflows/new?template=default-request&default=1", by="project_owner"
+    )
+
+
 def item_repository(f: Facts) -> list[ReadinessItem]:
-    if "scm" not in {capability for capability, _ in f.requirements}:
+    reasons = dict(f.requirements).get("scm")
+    if reasons is None:
         return []
     fix = _fix(f.slug, "general")
     repo = f.config.repo
-    items = [
-        _item("repository", "general", "Repository set", "done", f"`{repo.url}`.", fix)
-        if repo and repo.url
-        else _item(
-            "repository", "general", "Repository set", "todo", "the project names no repository URL.", fix
-        )
-    ]
-    measured = bool(repo and repo.test_command) or bool(f.config.dod.facts)
+    if not _has_repository(f):
+        # Asked by a workflow, not by the project: one without a repository changes its workflow.
+        return [
+            _item(
+                "repository",
+                "general",
+                "Repository set",
+                "todo",
+                f"the project names no repository URL ({reasons[0] if reasons else 'a workflow needs one'}): "
+                "set one, or make default a workflow that does not deliver code, such as `default-request`.",
+                _workflow_without_repository(f),
+            )
+        ]
+    assert repo is not None
+    items = [_item("repository", "general", "Repository set", "done", f"`{repo.url}`.", fix)]
+    measured = bool(repo.test_command) or bool(f.config.dod.facts)
     items.append(
         _item(
             "repository-checks",
@@ -643,6 +685,57 @@ def item_workflow_template(f: Facts) -> list[ReadinessItem]:
     ]
 
 
+def item_workflow_catalogue(f: Facts) -> list[ReadinessItem]:
+    """An adopted workflow whose catalogue entry has a newer version (ADR 0111 §5): offered, never applied."""
+    if not f.adopted:
+        return []
+    title = "Adopted workflows up to date"
+    fix = ReadinessFix(href=f"/p/{f.slug}/workflows/catalogue", by="project_owner")
+    behind: list[str] = []
+    for name, origin, offered in f.adopted:
+        parts = parse_origin(origin)
+        if parts is None:
+            continue
+        if offered is None:
+            behind.append(f"`{name}` came from `{origin}`, which the catalogue no longer offers")
+        elif offered > parts[2]:
+            behind.append(f"`{name}` is `{origin}`; version {offered} is offered")
+    if not behind:
+        shown = ", ".join(f"`{name}`" for name, _, _ in f.adopted)
+        return [
+            _item(
+                "workflow-catalogue", "general", title, "done", f"{shown} as the catalogue offers them.", fix
+            )
+        ]
+    return [
+        _item(
+            "workflow-catalogue",
+            "general",
+            title,
+            "check",
+            "; ".join(behind) + ". Adopt it again to publish the next version; a work item in progress "
+            "stays on its version.",
+            fix,
+        )
+    ]
+
+
+async def adopted_facts(
+    session: AsyncSession, org_id: str, rows: list[Any]
+) -> tuple[tuple[str, str, int | None], ...]:
+    adopted = [row for row in rows if row.source == "catalogue" and row.origin]
+    if not adopted:
+        return ()
+    from .workflow_catalogue import offered
+
+    current = {(o.source, o.name): o.version for o in await offered(session, org_id)}
+    out: list[tuple[str, str, int | None]] = []
+    for row in adopted:
+        parts = parse_origin(row.origin)
+        out.append((row.name, row.origin, current.get((parts[0], parts[1])) if parts else None))
+    return tuple(sorted(out))
+
+
 ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_provisioned,
     item_workflow,
@@ -659,6 +752,7 @@ ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_object_store,
     item_runtime_class,
     item_workflow_template,
+    item_workflow_catalogue,
     item_tools,
     item_first_work_item,
 )
@@ -925,6 +1019,7 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         template_workflows=await template_workflow_facts(
             session, project.template_ref, list(workflow_rows), project.org_id
         ),
+        adopted=await adopted_facts(session, project.org_id, list(workflow_rows)),
         slug=project.slug,
         status=project.status,
         provision_failure=(f"{failed.get('name')}: {failed.get('message')}" if failed else None),
