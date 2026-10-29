@@ -6,18 +6,21 @@ platform's side. Each backend declares what it does with the queries (`DECLARED`
 ceiling decides whether that is acceptable, before any query leaves.
 
 Secrets: the key is a constructor argument, sent in a header. It never appears in a result, in an
-error message (`scrub`) or in `repr()`.
+error message (`scrub`) or in `repr()`. Several keys are used in turn (ADR 0089, `http.pool`): a 429
+moves the query to the next key, a refused key rests for 10 minutes.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
 import httpx
 from choregos_core.web_search import DataHandling
 
 from ..errors import AdapterError
+from ..http.pool import Pool, Strategy
 from ..http.proxy import OutboundProxyHttpError, ProxyRoutingTransport
 
 USER_AGENT = "choregos-web-search/1.0 (+https://github.com/varga-foundation/choregos)"
@@ -38,6 +41,10 @@ class SearchRateLimited(SearchError):  # noqa: N818 - a named refusal, rendered 
     def __init__(self, message: str, retry_after_s: int = 60) -> None:
         super().__init__(message)
         self.retry_after_s = retry_after_s
+
+
+class SearchKeyRefused(SearchError):  # noqa: N818 - a named refusal
+    """The backend refused the key (401/403): the next key of a pool is tried."""
 
 
 def result(title: Any, url: Any, snippet: Any, published_at: Any = None) -> dict[str, Any] | None:
@@ -68,11 +75,12 @@ class SearchBackend:
     def __init__(
         self,
         *,
-        api_key: str = "",
+        api_key: str | Sequence[str] = "",
+        key_rotation: Strategy = "failover",
         timeout_s: float = 20.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        self._api_key = api_key
+        self._keys = Pool(api_key, strategy=key_rotation)
         if self.PROXIED:
             # Reads the calling organisation's proxy for `web_search` on each request (the API enters
             # it); with none in context, the call goes direct through `transport`.
@@ -83,6 +91,11 @@ class SearchBackend:
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}>"
+
+    @property
+    def _api_key(self) -> str:
+        """The key of the call in progress."""
+        return self._keys.current
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -101,7 +114,13 @@ class SearchBackend:
         if site is not None and not _SITE.fullmatch(site):
             raise SearchError("site refused: a host name is expected, e.g. docs.python.org")
         count = max(1, min(int(max_results), MAX_RESULTS))
-        found = await self._search(query.strip(), count, site, recency)
+        found = await self._keys.run(
+            lambda: self._search(query.strip(), count, site, recency),
+            rate_limited=SearchRateLimited,
+            refused=SearchKeyRefused,
+            exhausted=lambda wait: SearchRateLimited(f"{self.name}: every key is resting", wait),
+            retry_after=lambda limited: getattr(limited, "retry_after_s", None),
+        )
         return [r for r in found if r is not None][:count]
 
     async def _search(
@@ -114,10 +133,12 @@ class SearchBackend:
 
     # ── helpers ─────────────────────────────────────────────────────────────────────────────
     def scrub(self, text: str) -> str:
-        return text.replace(self._api_key, "***") if self._api_key else text
+        for key in self._keys.values:
+            text = text.replace(key, "***")
+        return text
 
     def _require_key(self) -> None:
-        if not self._api_key:
+        if not self._keys.values:
             raise SearchError(f"{self.name}: no api_key configured")
 
     async def _send(self, method: str, url: str, **kwargs: Any) -> Any:
@@ -135,7 +156,7 @@ class SearchBackend:
             wait = response.headers.get("retry-after", "")
             raise SearchRateLimited(f"{self.name}: rate limited (429)", int(wait) if wait.isdigit() else 60)
         if response.status_code in {401, 403}:
-            raise SearchError(f"{self.name}: the key was refused (HTTP {response.status_code})")
+            raise SearchKeyRefused(f"{self.name}: the key was refused (HTTP {response.status_code})")
         if response.status_code >= 400:
             raise SearchError(f"{self.name}: HTTP {response.status_code}")
         try:

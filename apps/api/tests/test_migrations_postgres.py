@@ -521,3 +521,29 @@ async def test_a_downgrade_deletes_rows_under_rls(monkeypatch: pytest.MonkeyPatc
         assert pins == [("pa-version", 1)], "the channel pin is deleted, the version pin kept"
     finally:
         await _clean()
+
+
+async def test_the_catalogue_agents_get_their_plugin_under_rls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """S43-09: the provenance rewrite and the `org_plugins` rows, as the migrating role sees them."""
+    from .test_catalogue_provenance_migration import (
+        AFTER,
+        AUTHORS,
+        BEFORE,
+        BEFORE_AUTHORS,
+        PLUGINS,
+        SEED,
+        SKILL_AUTHORS,
+        check_upgraded,
+    )
+
+    config = await _migrate_as_the_job(monkeypatch)
+    try:
+        await asyncio.to_thread(command.upgrade, config, BEFORE)
+        await _seed(SEED)
+        await asyncio.to_thread(command.upgrade, config, AFTER)
+        check_upgraded(*await _fetch(AUTHORS, SKILL_AUTHORS, PLUGINS))
+        await asyncio.to_thread(command.downgrade, config, BEFORE)
+        authors, _, plugins = await _fetch(AUTHORS, SKILL_AUTHORS, PLUGINS)
+        assert authors == BEFORE_AUTHORS and plugins == [], "the downgrade ran under the same scope"
+    finally:
+        await _clean()

@@ -124,6 +124,23 @@ def test_a_default_plugin_names_a_declared_source() -> None:
         parse_config({"defaultPlugins": [{"source": "nowhere", "name": "x", "version": "1"}]})
 
 
+def test_a_default_plugin_is_preapproved_only_when_the_operator_says_so() -> None:
+    """S43-09: `preapproved` is the operator's approval in the deployment's configuration, off by default."""
+    config = parse_config(
+        {
+            "defaultPlugins": [
+                {"source": "offline", "name": "a", "version": "1", "preapproved": True},
+                {"source": "offline", "name": "b", "version": "1"},
+            ]
+        }
+    )
+    assert [(d.name, d.preapproved) for d in config.default_plugins] == [("a", True), ("b", False)]
+    for wrong in ({"preapproved": "yes"}, {"approved": True}):
+        with pytest.raises(SourceError) as caught:
+            parse_config({"defaultPlugins": [{"source": "offline", "name": "a", "version": "1", **wrong}]})
+        assert _check(caught) == "config"
+
+
 # -- indexes and resolution ------------------------------------------------------------------------------
 
 

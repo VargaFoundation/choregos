@@ -2,8 +2,10 @@
 """The `mcp` connector type (ADR 0034): a real MCP server, reached by the platform."""
 
 from .client import (
+    CLIENT_VERSIONS,
     ClientMcp,  # lang: fr-ok alias:internal
     ErreurMcp,  # lang: fr-ok alias:internal
+    HeadersProvider,
     McpClient,
     McpError,
     McpTool,
@@ -13,8 +15,10 @@ from .client import (
 )
 
 __all__ = [
+    "CLIENT_VERSIONS",
     "ClientMcp",  # lang: fr-ok alias:internal
     "ErreurMcp",  # lang: fr-ok alias:internal
+    "HeadersProvider",
     "McpClient",
     "McpError",
     "McpTool",

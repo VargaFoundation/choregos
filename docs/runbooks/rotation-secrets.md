@@ -65,11 +65,16 @@ wrapped it, so a rotation is a list, never a swap ([ADR 0058](../adr/0058-connec
 3. Re-wrap: `choregos admin secrets rewrap` (platform administrator). It re-wraps the data keys
    under `k2`; the values are never read out. It answers the number of rows changed and is safe to
    repeat.
-4. When it answers `0` and a connector test passes, remove `k1` from the list and redeploy.
+4. When it answers `0` and a connector test passes, **keep `k1` in the list** until the oldest
+   database backup taken before step 3 has left the retention window (WAL-G base backups and WAL
+   archive). Then remove it and redeploy.
 
 Never drop `k1` before step 3: a value sealed under a key the list no longer holds is unreadable
-(the connector shows `error`, and the message names the missing key id). Back the list up with the
-database: the database without the key is useless, and the key without the database is too.
+(the connector shows `error`, and the message names the missing key id). Step 4's wait is the same
+rule applied to a restore: a backup from before the rewrap still holds rows wrapped under `k1`, and
+restoring it with a list that dropped `k1` loses them. An old key that only opens costs nothing to
+keep. The vault (Infisical) is itself backed up, and its secret history may still hold `k1`; do not
+rely on that, it is a second restore under pressure.
 
 ## Check it is fixed
 

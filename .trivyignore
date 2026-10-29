@@ -1,0 +1,12 @@
+# Trivy's exceptions for the images' CRITICAL gate (ci.yml, release.yml, nightly.yml). One line per
+# finding, each with its reason and an expiry (`exp:`): past it, the finding counts again and the gate
+# is red until someone looks. Nothing here is a blanket rule.
+
+# CVE-2026-56857 (GO-2026-6604), Go standard library before 1.26.9 / 1.27.2: `Root.Mkdir(All)` can
+# follow a junction out of the root — a Windows junction; the Go vulnerability database lists only
+# `os` and `internal/syscall/windows`. Every image is Linux: there is no junction to follow. NVD scores
+# it 3.3 LOW, Ubuntu MEDIUM; Trivy's source says CRITICAL. Found 2026-10-28 in third-party binaries
+# built with Go 1.26.4: cosign and hubble (api, orchestrator), gitleaks and trivy (runner); upstream
+# fixes exist for cosign (v3.1.4) and trivy (v0.76.1), none yet for hubble and gitleaks. Revisit when
+# they ship one, at the latest at the expiry.
+CVE-2026-56857 exp:2027-01-31

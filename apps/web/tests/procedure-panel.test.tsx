@@ -125,7 +125,7 @@ describe("the setup procedure panel (S39-23b)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "How to set this up" }));
     const panel = screen.getByTestId("procedure-panel");
     expect(panel).toHaveTextContent("Rovo MCP Server");
-    expect(panel).toHaveTextContent("https://mcp.atlassian.com/v1/mcp");
+    expect(panel).toHaveTextContent("https://mcp.atlassian.com/v2/mcp");
   });
 
   it("renders nothing when there is no procedure, or when the API cannot be reached", async () => {
@@ -147,7 +147,7 @@ describe("the setup procedure panel (S39-23b)", () => {
     expect(api.getProcedure).toHaveBeenCalledWith("connector.mcp.mcp.atlassian-rovo");
   });
 
-  it("keeps one panel open at a time, and makes room for it on the page", async () => {
+  it("keeps one panel open at a time, over the page without reflowing it", async () => {
     view(
       <>
         <ProcedurePanel target="source:confluence" autoOpen={false} />
@@ -156,12 +156,22 @@ describe("the setup procedure panel (S39-23b)", () => {
     );
     fireEvent.click(await screen.findByRole("button", { name: "How to set this up" }));
     expect(screen.getByTestId("procedure-panel")).toHaveTextContent("Confluence space or page tree");
-    expect(document.body.classList.contains("procedure-open")).toBe(true);
+    // Opening help never moves the page under it (the form being filled in stays where it was).
+    expect(document.body.className).toBe("");
+    expect(document.body.getAttribute("style")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Set up the connector" }));
     expect(screen.getAllByTestId("procedure-panel")).toHaveLength(1);
     expect(screen.getByTestId("procedure-panel")).toHaveTextContent("Connect Confluence Cloud");
     fireEvent.click(screen.getByTestId("procedure-close"));
-    expect(document.body.classList.contains("procedure-open")).toBe(false);
+    expect(screen.queryByTestId("procedure-panel")).toBeNull();
+  });
+
+  it("closes on Escape", async () => {
+    view(<ProcedurePanel target="source:confluence" autoOpen={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "How to set this up" }));
+    expect(screen.getByTestId("procedure-panel")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("procedure-panel")).toBeNull();
   });
 
   it("works every time when the browser's storage is blocked", async () => {
@@ -180,6 +190,7 @@ describe("the setup procedure panel (S39-23b)", () => {
 
 describe("what picks a preset", () => {
   it("knows Atlassian's Rovo MCP address and nothing else", () => {
+    expect(presetOfMcpUrl("https://mcp.atlassian.com/v2/mcp")).toBe("atlassian-rovo");
     expect(presetOfMcpUrl("https://mcp.atlassian.com/v1/mcp")).toBe("atlassian-rovo");
     expect(presetOfMcpUrl("https://mcp.example.com/mcp")).toBeUndefined();
     expect(presetOfMcpUrl(undefined)).toBeUndefined();

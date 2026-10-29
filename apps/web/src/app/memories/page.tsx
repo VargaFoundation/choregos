@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, Card, Drawer, Empty, ErrorNote, Eyebrow, Heading, Input, Select } from "@/components/ui";
+import { OrganisationMemoryStore } from "@/components/memory-store";
 import { api } from "@/lib/api";
 import { reachLabel } from "@/lib/memories";
 import { useSession } from "@/lib/session";
@@ -61,6 +62,7 @@ export default function MemoriesPage() {
           Facts learned from work, shared across projects. An agent binds the ones it reads, in order, and at most one it writes
           to; what it writes here is a proposal an administrator accepts. A project&apos;s own memories are in the project.
         </p>
+        <OrganisationMemoryStore org={org} />
       </div>
       <Card
         title="Organisation memories"

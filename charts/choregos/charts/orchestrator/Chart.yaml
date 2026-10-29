@@ -2,5 +2,5 @@ apiVersion: v2
 name: choregos-orchestrator
 description: Choregos Temporal workers (one deployment per task queue)
 type: application
-version: 0.20.6
-appVersion: "0.20.6"
+version: 0.21.0
+appVersion: "0.21.0"

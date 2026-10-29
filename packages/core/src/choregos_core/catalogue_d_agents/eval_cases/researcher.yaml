@@ -1,8 +1,0 @@
-agent: researcher
-description: Two real options with evidence; changes nothing.
-must_contain:
-- two real options
-- path:line
-- docs/adr/
-- you change nothing
-- '"research_markdown"'

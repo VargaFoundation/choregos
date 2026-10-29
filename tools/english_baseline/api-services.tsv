@@ -6,7 +6,6 @@ apps/api/src/choregos_api/services/agent_lifecycle.py	7
 apps/api/src/choregos_api/services/agents.py	31
 apps/api/src/choregos_api/services/catalogue_d_agents.py	32
 apps/api/src/choregos_api/services/connecteurs.py	18
-apps/api/src/choregos_api/services/courtier.py	80
 apps/api/src/choregos_api/services/couts.py	4
 apps/api/src/choregos_api/services/definitions.py	64
 apps/api/src/choregos_api/services/evenements.py	6

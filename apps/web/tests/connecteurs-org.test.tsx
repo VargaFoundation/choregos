@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { lignesDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
@@ -132,5 +132,45 @@ describe("les connecteurs, rangés par ce qu'ils sont (S21-04)", () => {
     expect(screen.getByText(/Connectors this organisation has installed/)).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Project delivery tools — configured in each project" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Declare a connector" })).toBeInTheDocument();
+  });
+
+  it("a source's link marks a business system's card too (?connector=), not only an MCP server's", async () => {
+    window.history.pushState({}, "", "/admin/connectors?connector=entra-acme");
+    try {
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <OrgConnectorsPage />
+        </QueryClientProvider>,
+      );
+      const card = await screen.findByTestId("connector-entra-acme");
+      expect(card).toHaveAttribute("aria-current", "true");
+      expect(card).toHaveAttribute("id", "connector-card-entra-acme");
+      expect(screen.getByTestId("connector-parc")).not.toHaveAttribute("aria-current");
+    } finally {
+      window.history.pushState({}, "", "/admin/connectors");
+    }
+  });
+
+  it("says the name's rule and keeps Declare off for a name the API refuses, not a bare 422", async () => {
+    params.set("type", "documents/sharepoint");
+    try {
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <OrgConnectorsPage />
+        </QueryClientProvider>,
+      );
+      await screen.findAllByRole("option", { name: /sharepoint/ });
+      const name = screen.getByPlaceholderText("entra-acme");
+      const declare = screen.getByRole("button", { name: "Declare" });
+      fireEvent.change(name, { target: { value: "Diametral Confluence" } });
+      expect(name).toHaveAttribute("aria-invalid", "true");
+      expect(name).toHaveAccessibleDescription(/Lowercase letters, digits and dashes/);
+      expect(declare).toBeDisabled();
+      fireEvent.change(name, { target: { value: "diametral-confluence" } });
+      expect(name).toHaveAttribute("aria-invalid", "false");
+      expect(declare).toBeEnabled();
+    } finally {
+      params.delete("type");
+    }
   });
 });

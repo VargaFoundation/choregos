@@ -46,5 +46,6 @@ describe("the icon of a connector (S40-03b)", () => {
     expect(connectorIconOf("tracker", "plugin").kind).toBe("lucide");
     expect(connectorIconOf("gateway", "litellm")).toEqual(connectorIconOf("gateway", "anything"));
     expect(connectorIconOf("brand-new-kind", "x").kind).toBe("lucide");
+    expect(connectorIconOf("documents", "web")).not.toEqual(connectorIconOf("documents", "anything"));
   });
 });

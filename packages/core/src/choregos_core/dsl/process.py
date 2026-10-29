@@ -21,7 +21,7 @@ from choregos_contracts.workflow import (
     effet_de_la_transition,
 )
 
-from choregos_core.gates import DIFF_GATES
+from choregos_core.gates import DIFF_GATES, is_async_gate
 
 #: Ce que vérifie chaque garantie, en une phrase. Un test exige un résumé pour chaque garantie
 #: connue : une garantie nouvelle sans résumé ferait parler la vue processus dans le vide.
@@ -50,6 +50,51 @@ RESUMES: dict[str, str] = {
     "scope_respected": "the agent stayed within its allowed paths",
     "tool_called": "the required tool was actually called",
 }
+
+
+def _listed(values: Any) -> str:
+    return ", ".join(f"`{v}`" for v in values)
+
+
+def gate_detail(name: str, params: dict[str, Any], timeout_hours: int | None = None) -> str | None:
+    """What a guarantee holds the step to, with the thresholds it actually applies — the defaults of
+    `choregos_core.gates` when the workflow sets none — and how long an asynchronous one waits."""
+    parts: list[str] = []
+    if name == "diff_size_max":
+        files = params.get("files", params.get("n"))
+        lines = params.get("lines")
+        parts.append(
+            f"at most {files if files is not None else 60} files and "
+            f"{lines if lines is not None else 100_000} lines changed"
+            + (" (the platform's defaults)" if files is None and lines is None else "")
+        )
+    elif name == "coverage_delta_min":
+        threshold = float(params.get("x", params.get("min", 0.0)))
+        parts.append(f"coverage may not move by less than {threshold:+.2f} points")
+    elif name == "scope_respected":
+        paths = params.get("paths")
+        parts.append(
+            f"only files under {_listed(paths)}"
+            if paths
+            else "only the work item's allowed paths; with none declared, anything passes"
+        )
+    elif name == "tool_called" and params.get("tools"):
+        parts.append(f"calls {_listed(params['tools'])}")
+    elif name == "evidence_facts":
+        for key, minimum in (params.get("min") or {}).items():
+            parts.append(f"`{key}` ≥ {minimum}")
+        for key, maximum in (params.get("max") or {}).items():
+            parts.append(f"`{key}` ≤ {maximum}")
+        if params.get("must_be_true"):
+            parts.append(f"{_listed(params['must_be_true'])} true")
+    elif name == "outputs_in":
+        for key, allowed in (params.get("values") or {}).items():
+            parts.append(f"`{key}` in {_listed(allowed)}")
+    elif params:
+        parts.append(", ".join(f"{key}: {value}" for key, value in params.items()))
+    if is_async_gate(name):
+        parts.append(f"waits for it up to {timeout_hours or 24} h")
+    return "; ".join(parts) or None
 
 
 def _affiche(wf: Workflow, etat: str) -> str:
@@ -111,13 +156,22 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
     for t in wf.transitions:
         type_, nom, qui = _qui(wf, t)
         noms = [g.name for g in t.gates]
+        gate_params = {g.name: dict(g.params) for g in t.gates}
         if t.action is not None and "action_succeeded" not in noms:
             noms.insert(0, "action_succeeded")  # implicite : une transition à action l'attend toujours
-        garanties = [{"name": nom, "summary": RESUMES.get(nom, nom)} for nom in noms]
+        garanties = [
+            {
+                "name": nom,
+                "summary": RESUMES.get(nom, nom),
+                "detail": gate_detail(nom, gate_params.get(nom, {}), t.timeout_hours),
+                "asynchronous": is_async_gate(nom),
+            }
+            for nom in noms
+        ]
         conditions = []
         if t.outputs:
             conditions.append("it produced " + ", ".join(f"`{o}`" for o in t.outputs))
-        conditions += [g["summary"] for g in garanties]
+        conditions += [RESUMES.get(nom, nom) for nom in noms]
         phrase = f"From “{_affiche(wf, t.from_)}”, {qui} moves the item to “{_affiche(wf, t.to)}”"
         action = _action(t)
         if action:

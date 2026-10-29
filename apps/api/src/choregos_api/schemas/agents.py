@@ -1233,6 +1233,81 @@ class ImplicitAgent(Dto):
     max_minutes: int | None = None
 
 
+class WorkflowAgent(ImplicitAgent):
+    """An `agent` actor of an active workflow (S47-39), the registry agent it names or none."""
+
+    #: `slug` or `slug@N`, as the workflow writes it; absent for a built-in agent.
+    agent: str | None = None
+    #: Whether the agent it names exists in the organisation's registry.
+    registered: bool = False
+
+
+class BuiltinModelChoice(Dto):
+    """The model a built-in agent runs for one work item size, as the runtime's resolver says."""
+
+    #: `S`, `M`, `L`, `XL` for `profile:by_size`; absent when the size does not matter.
+    size: str | None = None
+    profile: str | None = None
+    litellm_model: str | None = None
+    #: The model behind a `platform/*` alias, when the gateway says which.
+    provider_model: str | None = None
+    turns_factor: float = 1.0
+    #: Why a run of this size would be refused, in the resolver's words.
+    error: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class BuiltinMcpServer(Dto):
+    """An MCP server a built-in agent's run is given, and the tools it serves."""
+
+    name: str
+    description: str
+    tools: list[str] = Field(default_factory=list)
+
+
+class BuiltinAgent(Dto):
+    """What a workflow actor that names no registry agent runs (`agent` actor without `agent:`):
+    the role's playbook, the model, the backend, the limits and the tools — read only."""
+
+    role: str
+    playbook: str
+    #: `package` when the platform's own prompt, `deployment` when `CHOREGOS_PLAYBOOKS_DIR` supplies it.
+    playbook_origin: str | None = None
+    #: The prompt a run receives, with what only a run knows shown as `<placeholders>`.
+    instructions: str | None = None
+    #: Why the playbook could not be read (an unknown role or playbook).
+    instructions_error: str | None = None
+    #: The prompt as a registry agent's instructions (rendered in the sandbox, framed after): what
+    #: "register" gives the agent, so it starts from what it ran.
+    instructions_template: str | None = None
+    model: str
+    models: list[BuiltinModelChoice] = Field(default_factory=list)
+    backend: str
+    backend_source: Literal["actor", "project"]
+    max_turns: int
+    max_minutes: int
+    limits_source: Literal["actor", "policy"]
+    memory: list[str] = Field(default_factory=list)
+    mcp_servers: list[BuiltinMcpServer] = Field(default_factory=list)
+
+
+class GroupMember(Dto):
+    """A member of the organisation who carries a group."""
+
+    email: str
+    display_name: str = ""
+    #: Whether their role lets them answer a step of this project (`item:decide`).
+    can_decide: bool
+
+
+class GroupMembers(Dto):
+    """Who a step addressed to a group waits for (ADR 0044): the group comes from the identity
+    provider, as of each member's last sign-in."""
+
+    group: str
+    members: list[GroupMember] = Field(default_factory=list)
+
+
 class AgentCredentialCreate(Dto):
     """Un jeton `mcp:*` de la porte (son id), ou un client OAuth (son `client_id`, l'`azp` du jeton)."""
 

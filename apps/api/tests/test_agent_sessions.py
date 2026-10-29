@@ -33,8 +33,10 @@ class Upstream:
         self.gateway = gateway
         self.model = FakeModelServer()
         self.tokens_in, self.tokens_out = 1_000, 200
+        self.urls: list[str] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
+        self.urls.append(str(request.url))
         bearer = request.headers.get("authorization", "").removeprefix("Bearer ")
         key_id = next((k for k, v in self.gateway.keys.items() if str(v.key) == bearer), None)
         if key_id is None:
@@ -140,6 +142,30 @@ async def test_a_session_keeps_its_history_on_one_key_and_closing_books_and_revo
     assert types[0] == "session.opened" and types[-1] == "session.closed"
     assert types.count("input.text") == 2 and types.count("response.completed") == 2
     assert [e["seq"] for e in read["events"]] == list(range(1, len(types) + 1))
+
+
+async def test_a_session_calls_the_organisations_own_gateway(
+    client: AsyncClient, project: dict[str, Any], upstream: Upstream
+) -> None:
+    """ADR 0109: the session's key comes from the organisation's gateway, so its model is called
+    there, not at the deployment's `gateway_url`."""
+    from choregos_api.db.models import Organization, OrgConnector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        session.add(
+            OrgConnector(
+                org_id=org.id, name="acme-llm", kind="gateway", type="openai-compatible",
+                config={"base_url": "https://llm.acme.example/v1"},
+            )
+        )  # fmt: skip
+    await _agent(client)
+    upstream.model.say("Shipped.")
+    answered = await _ask(client, "Where is order 42?")
+    assert answered.status_code == 200, answered.text
+    assert upstream.urls == ["https://llm.acme.example/v1/chat/completions"]
 
 
 async def test_a_spent_key_fails_the_response_and_closes_the_session(
