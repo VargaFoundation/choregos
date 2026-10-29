@@ -1329,7 +1329,7 @@ async def describe_builtin_agent(  # noqa: PLR0913 - the actor's own fields, as 
     draft is described too. Read only, no audit record."""
     from choregos_core import ModelResolutionError, ModelResolver
     from choregos_core.models import BY_SIZE
-    from choregos_playbooks import playbook_origin, preview_playbook
+    from choregos_playbooks import playbook_instructions, playbook_origin, preview_playbook
     from choregos_tools_mcp.tools import TOOL_SCHEMAS
 
     from ..catalogue import outils_du_projet
@@ -1340,10 +1340,12 @@ async def describe_builtin_agent(  # noqa: PLR0913 - the actor's own fields, as 
     config = project_config(ctx.project)
     name = playbook or role
     instructions: str | None = None
+    template: str | None = None
     origin: str | None = None
     error: str | None = None
     try:
         instructions = preview_playbook(name)
+        template = playbook_instructions(name)
         origin = playbook_origin(name)
     except FileNotFoundError as exc:
         error = str(exc)
@@ -1396,6 +1398,7 @@ async def describe_builtin_agent(  # noqa: PLR0913 - the actor's own fields, as 
         playbook_origin=origin,
         instructions=instructions,
         instructions_error=error,
+        instructions_template=template,
         model=model,
         models=choices,
         backend=chosen,

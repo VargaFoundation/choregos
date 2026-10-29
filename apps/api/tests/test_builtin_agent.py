@@ -24,6 +24,9 @@ async def test_the_role_s_prompt_is_what_a_run_receives(client: AsyncClient, pro
     assert "You implement the specification" in agent["instructions"]
     assert "<work item title>" in agent["instructions"], "what only a run knows is named, not invented"
     assert "## Invariants" in agent["instructions"]
+    template = agent["instructions_template"]
+    assert "You implement the specification" in template and "{{ ticket.get('title', '') }}" in template
+    assert "{{ output_contract }}" not in template, "the frame adds it: it would reach the agent twice"
 
 
 async def test_by_size_names_the_model_of_every_size(client: AsyncClient, project: dict[str, Any]) -> None:

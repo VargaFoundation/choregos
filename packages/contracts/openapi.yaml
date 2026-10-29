@@ -6017,7 +6017,7 @@ components:
       properties:
         state: { type: string }
         open_items: { type: integer }
-        oldest_created_at: { type: [string, "null"], format: date-time, description: When the oldest open item in this state was filed. }
+        waiting_since: { type: [string, "null"], format: date-time, description: "When the longest-waiting open item entered this state: its last `state_changed` event into it, else its filing." }
     StepActivity:
       type: object
       required: [transition, runs, succeeded, failed, cost_usd]
@@ -6064,6 +6064,7 @@ components:
         playbook_origin: { type: [string, "null"], description: "`package` or `deployment` (`CHOREGOS_PLAYBOOKS_DIR`)." }
         instructions: { type: [string, "null"] }
         instructions_error: { type: [string, "null"] }
+        instructions_template: { type: [string, "null"], description: "The prompt as a registry agent's instructions (rendered in the sandbox, framed after): what registering the agent gives it." }
         model: { type: string }
         models: { type: array, items: { $ref: "#/components/schemas/BuiltinModelChoice" } }
         backend: { type: string }

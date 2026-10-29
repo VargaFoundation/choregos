@@ -319,22 +319,42 @@ async def workflow_activity(
     steps. Every version of the workflow counts. Read only."""
     from statistics import median
 
-    from ..db.models import Run
+    from choregos_contracts import EventType
+
+    from ..db.models import Event, Run
 
     await _actif(session, ctx, name)
     versions = select(WorkflowDef.id).where(WorkflowDef.project_id == ctx.id, WorkflowDef.name == name)
-    open_rows = (
+    open_items = (
         await session.execute(
-            select(WorkItem.state, func.count(), func.min(WorkItem.created_at))
-            .where(
+            select(WorkItem.id, WorkItem.state, WorkItem.created_at).where(
                 WorkItem.project_id == ctx.id,
                 WorkItem.workflow_def_id.in_(versions),
                 WorkItem.closed_at.is_(None),
             )
-            .group_by(WorkItem.state)
-            .order_by(WorkItem.state)
         )
     ).all()
+    # When each open item entered its state: its last `state_changed` event into that state, else its
+    # filing (an item still in its initial state has none).
+    entered: dict[str, Any] = {item.id: item.created_at for item in open_items}
+    state_of = {item.id: item.state for item in open_items}
+    if open_items:
+        changes = (
+            await session.execute(
+                select(Event.work_item_id, Event.payload, Event.ts)
+                .where(
+                    Event.type == str(EventType.WORKITEM_STATE_CHANGED),
+                    Event.work_item_id.in_(list(state_of)),
+                )
+                .order_by(Event.ts)
+            )
+        ).all()
+        for change in changes:
+            if (change.payload or {}).get("to") == state_of.get(str(change.work_item_id)):
+                entered[str(change.work_item_id)] = change.ts
+    by_state: dict[str, list[Any]] = {}
+    for item in open_items:
+        by_state.setdefault(item.state, []).append(entered[item.id])
     since = utcnow() - timedelta(days=days)
     runs = (
         await session.execute(
@@ -372,8 +392,8 @@ async def workflow_activity(
         workflow=name,
         days=days,
         states=[
-            StateActivity(state=state, open_items=count, oldest_created_at=oldest)
-            for state, count, oldest in open_rows
+            StateActivity(state=state, open_items=len(times), waiting_since=min(times))
+            for state, times in sorted(by_state.items())
         ],
         steps=steps,
     )

@@ -103,3 +103,48 @@ async def test_the_activity_counts_open_items_by_state_and_runs_by_step(
     assert step["cost_usd"] == 2.0 and step["median_minutes"] == 20.0
     unknown = await client.get(f"/api/v1/projects/{project['id']}/workflows/nope/activity")
     assert unknown.status_code == 404
+
+
+async def test_a_state_s_wait_starts_when_the_item_entered_it_not_when_it_was_filed(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """The map said how many items wait in a state but not since when: the filing date of the oldest
+    is not its wait. The last `state_changed` event into the state is."""
+    from choregos_api.db.models import Event, WorkflowDef, WorkItem
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    name = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()[0]["name"]
+    now = datetime.now(UTC)
+    async with session_scope() as session:
+        definition = (
+            (await session.execute(select(WorkflowDef.id).where(WorkflowDef.project_id == project["id"])))
+            .scalars()
+            .first()
+        )
+        moved = WorkItem(project_id=project["id"], tracker_key="W-1", title="T", state="ready",
+                         workflow_def_id=definition, created_at=now - timedelta(days=10))  # fmt: skip
+        fresh = WorkItem(project_id=project["id"], tracker_key="W-2", title="T", state="inbox",
+                         workflow_def_id=definition, created_at=now - timedelta(hours=5))  # fmt: skip
+        session.add_all([moved, fresh])
+        await session.flush()
+
+        def change(to: str, ago: timedelta) -> Event:
+            return Event(
+                project_id=project["id"],
+                work_item_id=moved.id,
+                type="choregos.workitem.state_changed",
+                payload={"from": "x", "to": to},
+                ts=now - ago,
+            )
+
+        # Into `ready` 9 days ago, out, and back 2 days ago: the wait counts from the last entry.
+        session.add_all([change("ready", timedelta(days=9)), change("spec", timedelta(days=8)),
+                         change("ready", timedelta(days=2))])  # fmt: skip
+    body = (await client.get(f"/api/v1/projects/{project['id']}/workflows/{name}/activity")).json()
+    # SQLite hands back naive datetimes (UTC); PostgreSQL aware ones.
+    since = {
+        s["state"]: datetime.fromisoformat(s["waiting_since"]).replace(tzinfo=UTC) for s in body["states"]
+    }
+    assert abs(since["ready"] - (now - timedelta(days=2))) < timedelta(minutes=1)
+    assert abs(since["inbox"] - (now - timedelta(hours=5))) < timedelta(minutes=1), "no event: its filing"

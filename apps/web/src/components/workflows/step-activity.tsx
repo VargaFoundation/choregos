@@ -23,6 +23,31 @@ export function openItemsByState(activity: WorkflowActivity | undefined): Map<st
   return new Map((activity?.states ?? []).map((s) => [s.state, s.open_items]));
 }
 
+/** A wait in words: "40 min", "5 h", "3 d". */
+export function waitInWords(since: string, now: number = Date.now()): string {
+  const minutes = Math.max(0, Math.round((now - Date.parse(since)) / 60_000));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours} h` : `${Math.round(hours / 24)} d`;
+}
+
+/**
+ * How many open work items wait for a step — in the state it leaves — and for how long the
+ * longest has (since it last entered that state); null when none waits.
+ */
+export function waitingSentence(
+  activity: WorkflowActivity | undefined,
+  state: string,
+  display: string,
+  now: number = Date.now(),
+): string | null {
+  const here = activity?.states?.find((s) => s.state === state);
+  if (!here || here.open_items === 0) return null;
+  const items = `${here.open_items} work item${here.open_items > 1 ? "s" : ""}`;
+  const longest = here.waiting_since ? `, the longest for ${waitInWords(here.waiting_since, now)}` : "";
+  return `${items} wait${here.open_items > 1 ? "" : "s"} in “${display}”${longest}.`;
+}
+
 /** What a step's runs did over the period, in one line; null when it never ran. */
 export function stepActivitySentence(activity: WorkflowActivity | undefined, transition: string): string | null {
   const step = activity?.steps?.find((s) => s.transition === transition);
