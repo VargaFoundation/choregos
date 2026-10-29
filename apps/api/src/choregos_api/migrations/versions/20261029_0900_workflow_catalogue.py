@@ -7,8 +7,8 @@ an adopted workflow came from. A new table and a nullable column: no row is writ
 The downgrade drops both; adopted workflows keep `source: catalogue` and their text.
 
 Revision ID: e2a4c6e8f0b3
-Revises: b8d0f2a4c6e1
-Create Date: 2026-10-28 21:00:00+00:00
+Revises: c783c8336a18
+Create Date: 2026-10-29 09:00:00+00:00
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e2a4c6e8f0b3"
-down_revision: str | None = "b8d0f2a4c6e1"
+down_revision: str | None = "c783c8336a18"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
