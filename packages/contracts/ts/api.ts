@@ -3911,6 +3911,19 @@ export type McpGatewayConflict = {
   title: string;
   status: number;
   detail?: string;
+  /** the request path, as the API always sets it on a problem */
+  instance?: string;
+  /** the problem's `errors` list, as on `Problem` (an API refusal may carry it) */
+  errors?: Array<{
+    loc?: Array<string>;
+    msg?: string;
+    code?: string;
+    /** @deprecated */
+    deprecated_code?: string;
+    line?: number;
+    column?: number;
+  }>;
+  retry_after?: number;
   code: "gateway_in_use" | "gateway_required" | "gateway_not_configured" | "gateway_assertion_key_missing";
   /** the connectors that go through the gateway (`gateway_in_use`) */
   connectors?: Array<string>;

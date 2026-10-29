@@ -163,3 +163,24 @@ def test_catalogue_entries_say_their_routes_and_installs_take_one() -> None:
     assert not list(v.iter_errors({"route": None}))
     assert list(v.iter_errors({"route": "proxy"}))
     assert list(v.iter_errors({"gateway_server": "-bad"}))
+
+
+def test_a_problem_body_the_api_sends_matches_the_gateway_conflict_alone() -> None:
+    """The API always adds `instance` to a problem; the closed schema must accept it (S46-06)."""
+    from choregos_api.errors import conflict
+
+    body = conflict("x", extra={"code": "gateway_required"}).to_problem("/api/v1/orgs/acme/connectors")
+    assert body["instance"] == "/api/v1/orgs/acme/connectors"
+    assert not list(_validator("McpGatewayConflict").iter_errors(body))
+    branches = _409("createOrgConnector")["content"]["application/problem+json"]["schema"]["oneOf"]
+    matching = [
+        branch["$ref"]
+        for branch in branches
+        if not list(
+            jsonschema.Draft202012Validator({"components": SPEC["components"], **branch}).iter_errors(body)
+        )
+    ]
+    assert matching == ["#/components/schemas/McpGatewayConflict"]
+    # `errors` and `retry_after` are members the API may add to any problem.
+    fuller = body | {"errors": [{"loc": ["body"], "msg": "m"}], "retry_after": 3}
+    assert not list(_validator("McpGatewayConflict").iter_errors(fuller))

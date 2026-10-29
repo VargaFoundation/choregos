@@ -8027,6 +8027,20 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+        instance: { type: string, description: "the request path, as the API always sets it on a problem" }
+        errors:
+          type: array
+          description: "the problem's `errors` list, as on `Problem` (an API refusal may carry it)"
+          items:
+            type: object
+            properties:
+              loc: { type: array, items: { type: string } }
+              msg: { type: string }
+              code: { type: string }
+              deprecated_code: { type: string, deprecated: true }
+              line: { type: integer }
+              column: { type: integer }
+        retry_after: { type: integer }
         code: { type: string, enum: [gateway_in_use, gateway_required, gateway_not_configured, gateway_assertion_key_missing] }
         connectors: { type: array, items: { type: string }, description: "the connectors that go through the gateway (`gateway_in_use`)" }
     EgressRuleCreate:
