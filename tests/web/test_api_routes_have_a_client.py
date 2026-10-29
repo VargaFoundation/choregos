@@ -48,6 +48,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/a2a/orgs/{org}/.well-known/agent-card.json": "the A2A door's agent card, read by the calling agent; "
     "outside the contract",
     "/metrics": "the Prometheus scrape, read by the monitoring stack; outside the contract",
+    "/orgs/{org}/mcp-gateway/jwks.json": "the MCP gateway reads the organisation's public assertion keys "
+    "to verify the calls Choregos signs (ADR 0105); unauthenticated",
     "/healthz": "the liveness probe of the kubelet and of the load balancer",
     "/readyz": "the readiness probe",
     "/orgs/{org}/agents/{slug}/responses": "the direct-invocation door (ADR 0080 §10): a person's program "
@@ -82,6 +84,9 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 NO_CLIENT_YET: dict[str, str] = {
     "/orgs/{org}/memory/ab-report": "console screen: S47-18",
     "/platform/gateway/keys": "console screen: S47-18",
+    "/orgs/{org}/mcp-gateway": "contract only until S46-08 serves it; console card: S46-13",
+    "/orgs/{org}/mcp-gateway/test": "contract only until S46-08 serves it; console card: S46-13",
+    "/orgs/{org}/mcp-gateway/assertion-key": "contract only until S46-07 serves it; console card: S46-13",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
