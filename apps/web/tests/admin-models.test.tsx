@@ -23,6 +23,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
       previewModelCuration: vi.fn(),
       syncModelCatalogue: vi.fn().mockResolvedValue({ added: 1, missing: 0, seen: 2 }),
       addModelCatalogueEntry: vi.fn().mockResolvedValue({}),
+      orgConnectors: vi.fn(),
+      usableModels: vi.fn(),
     },
   };
 });
@@ -85,6 +87,8 @@ function show() {
 beforeEach(() => {
   session.role = "org_admin";
   vi.mocked(api.modelCatalogue).mockResolvedValue(catalogue());
+  vi.mocked(api.orgConnectors).mockResolvedValue([]);
+  vi.mocked(api.usableModels).mockResolvedValue([]);
   vi.mocked(api.updateModelCatalogueEntry).mockClear();
   vi.mocked(api.putModelCatalogueSettings).mockClear();
 });
@@ -228,5 +232,56 @@ describe("the Models page", () => {
     expect(screen.queryByRole("button", { name: "Add a model manually" })).toBeNull();
     expect(screen.queryByLabelText("Input price of platform/standard")).toBeNull();
     expect(screen.getByLabelText("Model of the standard tier")).toBeDisabled();
+  });
+
+  it("says the gateway is the deployment's, and offers an administrator to connect the organisation's (S44-04)", async () => {
+    show();
+    expect(await screen.findByTestId("gateway-owner")).toHaveTextContent("the deployment's litellm gateway");
+    expect(screen.getByRole("link", { name: "Connect your organisation's gateway" })).toHaveAttribute(
+      "href",
+      "/admin/connectors?type=gateway/litellm#declare",
+    );
+  });
+
+  it("names the organisation's own gateway when it brings one, and offers no second one", async () => {
+    vi.mocked(api.orgConnectors).mockResolvedValue([
+      { name: "acme-llm", kind: "gateway", type: "litellm" } as Awaited<ReturnType<typeof api.orgConnectors>>[number],
+    ]);
+    show();
+    await waitFor(() => expect(screen.getByTestId("gateway-owner")).toHaveTextContent("your organisation's gateway acme-llm"));
+    expect(screen.queryByRole("link", { name: "Connect your organisation's gateway" })).toBeNull();
+  });
+
+  it("a member is not offered to connect a gateway", async () => {
+    session.role = "viewer";
+    show();
+    await screen.findByTestId("gateway-owner");
+    expect(screen.queryByRole("link", { name: "Connect your organisation's gateway" })).toBeNull();
+  });
+
+  it("shows what the gateway lists before any sync, in open mode", async () => {
+    vi.mocked(api.modelCatalogue).mockResolvedValue(catalogue({ entries: [] }));
+    vi.mocked(api.usableModels).mockResolvedValue([
+      { model_name: "azure/gpt-5", display_name: "azure/gpt-5", provider: "azure", input_cost_per_1k: 0.001, output_cost_per_1k: 0.002 },
+    ]);
+    show();
+    const listed = await screen.findByTestId("gateway-listed");
+    expect(listed).toHaveTextContent("azure/gpt-5");
+    expect(listed).toHaveTextContent("via azure");
+    expect(api.usableModels).toHaveBeenCalledWith("acme");
+  });
+
+  it("says when the gateway lists nothing, rather than showing an empty page", async () => {
+    vi.mocked(api.modelCatalogue).mockResolvedValue(catalogue({ entries: [] }));
+    show();
+    expect(await screen.findByTestId("gateway-lists-nothing")).toHaveTextContent("Sync from gateway says why");
+  });
+
+  it("does not ask the gateway in curated mode: only the catalogue counts", async () => {
+    vi.mocked(api.modelCatalogue).mockResolvedValue(catalogue({ mode: "curated" }));
+    show();
+    await screen.findByTestId("model-platform/standard");
+    expect(api.usableModels).not.toHaveBeenCalled();
+    expect(screen.queryByText("Listed by the gateway")).toBeNull();
   });
 });

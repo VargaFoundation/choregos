@@ -3,8 +3,11 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { NetworkActivityCard } from "@/components/admin/network-activity";
+import { NetworkCeilingCard } from "@/components/admin/network-ceiling";
+import { OutboundProxyCard } from "@/components/admin/outbound-proxy";
 import { PlatformChangeBlock } from "@/components/egress/egress-modal";
-import { Alert, Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Alert, Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { FAMILY_LABEL, hostLabel, outsideCeiling } from "@/lib/egress";
 import { relative } from "@/lib/format";
@@ -12,11 +15,15 @@ import { useSession } from "@/lib/session";
 import type { EgressRule, EgressVerdict } from "@/lib/types";
 
 /**
- * The organisation's network access (S39-22, ADR 0066): the hosts Choregos may call for it, who asked,
- * who decided, and what the platform must still open. Revoking closes a host from the next call.
+ * The organisation's network, in one place (S44-04): what its agents may reach (ADR 0070), the hosts
+ * Choregos may call for it (S39-22, ADR 0066: who asked, who decided, what the platform must still
+ * open; revoking closes a host from the next call), its outbound proxy (ADR 0087) and the network
+ * activity. These cards were spread over the administration's overview, next to the session and the
+ * tokens, and read as one confused block.
  */
 export default function EgressPage() {
-  const { org } = useSession();
+  const { org, me } = useSession();
+  const orgAdmin = (me?.memberships ?? []).some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
   const client = useQueryClient();
   const overview = useQuery({ queryKey: ["egress", org], queryFn: () => api.orgEgress(org) });
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +54,13 @@ export default function EgressPage() {
     }
   }
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <NetworkCeilingCard org={org} canEdit={orgAdmin} />
+
+      <section className="space-y-4" aria-labelledby="network-hosts">
+      <Heading as="h2" size="lg" id="network-hosts">
+        Hosts Choregos calls
+      </Heading>
       <p className="max-w-3xl text-sm text-ink-muted">
         The hosts Choregos may call for {org} — an MCP server, a git repository, a web site. Adding one of those asks
         for the host first; an administrator allows it, anyone else asks. Choregos cannot change the cluster&apos;s
@@ -186,6 +199,14 @@ export default function EgressPage() {
             ))}
           </div>
         </Card>
+      )}
+      </section>
+
+      {orgAdmin && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <OutboundProxyCard org={org} canEdit={orgAdmin} />
+          <NetworkActivityCard org={org} />
+        </div>
       )}
     </div>
   );

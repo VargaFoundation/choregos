@@ -28,6 +28,7 @@ from ..services import (
     Naissance,
     noter_les_etiquettes,
     nouveau_ticket,
+    received_events,
     workflow_du_ticket,
     workflow_model,
 )
@@ -101,6 +102,51 @@ async def _project_for(session: Any, slug_or_repo: str | None) -> Project | None
     return rows[0]
 
 
+def _host(url: Any) -> str:
+    """The host of an address, lowercased; empty for anything that is not one."""
+    from urllib.parse import urlsplit
+
+    return (urlsplit(url).hostname or "").lower() if isinstance(url, str) else ""
+
+
+async def _jira_project_for(session: Any, payload: dict[str, Any]) -> tuple[Project | None, bool]:
+    """The project a Jira delivery is for, by its tracker connector's `project_key`.
+
+    A Jira project key (`XXX` in `XXX-42`) is not the Choregos project's slug: routing by the slug
+    dropped every event of a project named otherwise, with a log line as the only trace. Two
+    projects whose connectors hold the same key are told apart by the Jira site the issue lives on
+    (`issue.self`); if that does not settle it, nothing is routed. Returns the project and whether a
+    connector decided: `(None, False)` lets the caller fall back to the slug, `(None, True)` does not.
+    """
+    issue = payload.get("issue") if isinstance(payload, dict) else None
+    if not isinstance(issue, dict):
+        return None, False
+    key = issue.get("key")
+    if not isinstance(key, str) or "-" not in key:
+        return None, False
+    prefix = key.rsplit("-", 1)[0].upper()
+    rows = (
+        await session.execute(
+            select(Connector, Project)
+            .join(Project, Project.id == Connector.project_id)
+            .where(Connector.kind == "tracker", Connector.type == "jira")
+        )
+    ).all()
+    matches = [
+        (connector, project)
+        for connector, project in rows
+        if str((connector.config or {}).get("project_key", "")).upper() == prefix
+    ]
+    if len(matches) > 1 and (site := _host(issue.get("self"))):
+        matches = [m for m in matches if _host((m[0].config or {}).get("base_url")) == site]
+    if len(matches) == 1:
+        return matches[0][1], True
+    if matches:
+        logger.warning("jira event matches several projects, not routed", project_key=prefix)
+        return None, True
+    return None, False
+
+
 async def _dispatch(session: Any, events: list[InboundEvent], project_of: Project | None = None) -> int:
     """Route each event: a signal to its work item's workflow, or a start on `agent-ready`.
 
@@ -114,6 +160,7 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
             continue
         key = event.work_item_key
         if key is None:
+            received_events.record(session, project, event, "ignored_no_item_key")
             continue
         item = (
             await session.execute(
@@ -125,7 +172,9 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
             AGENT_READY_LABEL in event.payload.get("labels", [])
             or event.payload.get("label") == AGENT_READY_LABEL
         )
+        created = False
         if item is None and should_start:
+            created = True
             # Né dans le workflow que désignent ses étiquettes ou son type (ADR 0031) — plus en
             # `inbox` en dur, qui tuait le ticket sur un workflow commençant ailleurs (#173).
             item = await nouveau_ticket(
@@ -142,6 +191,7 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
                 ),
             )
         if item is None:
+            received_events.record(session, project, event, "ignored_not_agent_ready")
             continue
         etiquettes = event.payload.get("labels")
         if event.type in ETIQUETTES_A_JOUR and isinstance(etiquettes, list):
@@ -162,8 +212,24 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
         await deliver_inbound(project.slug, key, event)
         if event.type == InboundEventType.PR_MERGED:
             await _embarquer(session, project, item, event)
+        received_events.record(
+            session, project, event, _outcome(event, created, should_start, etiquettes), item
+        )
         delivered += 1
     return delivered
+
+
+def _outcome(event: InboundEvent, created: bool, started: bool, labels: Any) -> str:
+    """What `_dispatch` did with an event that reached a work item (S42-06f)."""
+    if created:
+        return "created_work_item"
+    if started:
+        return "started"
+    if event.type == InboundEventType.PR_MERGED:
+        return "boarded"
+    if event.type in ETIQUETTES_A_JOUR and isinstance(labels, list):
+        return "labels_updated"
+    return "signalled"
 
 
 async def _embarquer(session: Any, project: Project, item: WorkItem, event: InboundEvent) -> None:
@@ -333,6 +399,7 @@ async def argocd_webhook(
         await get_temporal().signal(
             train_id(project.slug, str(event.payload["env"])), "deploy_event", event.model_dump(mode="json")
         )
+        received_events.record(session, project, event, "signalled")
     return WebhookAck(accepted=True, events=1)
 
 
@@ -392,6 +459,7 @@ async def alertmanager_webhook(
         project = await _project_for(session, event.project_slug)
         if project is not None:
             await get_temporal().signal(f"mem-{project.slug}", "alert", event.model_dump(mode="json"))
+            received_events.record(session, project, event, "signalled")
         count += 1
     return WebhookAck(accepted=True, events=count)
 
@@ -418,8 +486,12 @@ async def jira_webhook(
 
     from choregos_adapters.tracker.jira_events import parse_jira_event
 
-    events = parse_jira_event(delivery, json.loads(body or b"{}"))
-    delivered = await _dispatch(session, events)
+    payload = json.loads(body or b"{}")
+    events = parse_jira_event(delivery, payload)
+    project, decided = await _jira_project_for(session, payload)
+    if decided and project is None:
+        return WebhookAck(accepted=True, events=0)
+    delivered = await _dispatch(session, events, project_of=project)
     return WebhookAck(accepted=True, events=delivered)
 
 

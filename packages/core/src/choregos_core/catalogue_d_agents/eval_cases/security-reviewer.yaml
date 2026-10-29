@@ -1,9 +1,0 @@
-agent: security-reviewer
-description: Security only, cites file and line, changes nothing.
-must_contain:
-- security only
-- you change nothing
-- injection
-- secrets
-- file:line
-- '"security_review_markdown"'

@@ -22,6 +22,8 @@ from __future__ import annotations
 import re
 from typing import Any, Final
 
+from . import tenant_sign_in
+
 COMMUNAUTAIRE: Final = "community"
 ENTREPRISE: Final = "enterprise"
 
@@ -205,3 +207,4 @@ def reinitialiser() -> None:
     _MAPPEUR.pop("fonction", None)
     _VALIDATIONS_DE_SESSION.clear()
     _ADMINISTRATEURS_DE_PLATEFORME.clear()
+    tenant_sign_in.reset()

@@ -19,14 +19,14 @@ test("browse, filter, install and land on the connector", async ({ page }) => {
   await page.getByLabel("Search the catalogue").fill("github");
   await expect(page.getByTestId("entry-github")).toBeVisible();
 
-  // The drawer: a name and a secret by reference, never the key.
+  // The drawer: a name and the organisation's token, typed once and sealed by the platform (S39-06e).
   await page.getByTestId("entry-github").getByRole("button", { name: "Install" }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer).toContainText("Install GitHub");
   // Both aids at this one gesture (S39-23 and S39-22): the setup procedure beside the form, and, because the
   // organisation has not opened the server's host, the network access modal before the install goes through.
   await expect(drawer.getByTestId("install-procedure")).toBeVisible();
-  await drawer.getByLabel("Secret, by reference").fill("env:CONNECTOR_GITHUB");
+  await drawer.getByLabel("token value").fill("ghp_typed_once");
   await drawer.getByRole("button", { name: "Install" }).click();
   const modal = page.getByTestId("egress-modal");
   await expect(modal).toBeVisible();

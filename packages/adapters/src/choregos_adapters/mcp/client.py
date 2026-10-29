@@ -2,17 +2,37 @@
 """An MCP client, written by hand like the server (ADR 0017): the platform reaches an MCP server
 that the organisation declared (`initialize`, `tools/list`, `tools/call`) over Streamable HTTP.
 
-What it does, and why:
-- `initialize` first, then `notifications/initialized`; the `Mcp-Session-Id` header the server
-  returns then goes with every request, and so does `MCP-Protocol-Version`;
+What is negotiated:
+- `initialize` offers the newest of `CLIENT_VERSIONS` (2026-07-28) and carries no
+  `MCP-Protocol-Version` header: a server that does not know the offer answers a version it
+  speaks, where a header naming the offer would be refused (400) before the offer is read;
+- the version the server answers must be one of `CLIENT_VERSIONS`, or the call stops on an
+  `McpError` that names it; once agreed (`negotiated_version`), it goes in `MCP-Protocol-Version`
+  on every later request, `notifications/initialized` included.
+
+What is recovered, once and only once:
+- a lost session: a 404 to a request that carried an `Mcp-Session-Id` (the session lived on
+  another gateway replica, or expired) opens a new session and sends the request again; a second
+  404 is an error, never a loop. A server that issues no session id (stateless, the normative
+  transport of 2026-07-28) is served without one, and `initialize` never carries a former id;
+- a stale credential: a 401, when a `headers_provider` is given, asks it for fresh headers
+  (`refresh=True`) and sends the request again; a second 401 is an error.
+Nothing else is retried: not a 5xx, not a timeout.
+
+What goes with every request: the static `headers` (a gateway's routing header, say), the
+connector's token, then the headers of `headers_provider`, awaited per request: that is where an
+OAuth token cache or a per-call signed assertion plugs in. A token and a provider are exclusive.
+Header values are never logged.
+
+Also:
 - an answer arrives as JSON or as an SSE stream (`text/event-stream`): the client reads the message
   that carries the request's id, and nothing else;
 - `tools/list` follows `nextCursor` to the end: a server pages, and a tool on page 2 that the
   client did not see would never be seen again;
 - the token is THE CONNECTOR'S, resolved by the platform: a run's token never leaves.
 
-What it does not do: server notifications, server-to-client requests (sampling, elicitation),
-resuming an interrupted stream.
+What it does not do: tasks, elicitation, sampling and the other server-to-client requests, server
+notifications, resuming an interrupted stream.
 """
 
 from __future__ import annotations
@@ -20,16 +40,25 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Final
 
 import httpx
-from choregos_core.mcp import VERSIONS
 
 from ..http.egress import guarded
 
 #: Beyond this, a server that pages without end is an error, not a list.
 MAX_PAGES = 50
+
+#: The versions this CLIENT speaks, newest first; `initialize` offers the first. It differs from
+#: `choregos_core.mcp.VERSIONS`, what Choregos's own servers claim (the sidecar, the API's door):
+#: they do not implement 2026-07-28, and answer an offer of it with a version listed here.
+CLIENT_VERSIONS: Final = ("2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+
+#: Headers computed per request (an OAuth token from a cache, a per-call signed assertion). The
+#: argument is `refresh`: True after a 401, when a cached credential must be renewed.
+HeadersProvider = Callable[[bool], Awaitable[Mapping[str, str]]]
 
 
 class McpError(RuntimeError):
@@ -77,7 +106,7 @@ def _read_sse(text: str, request_id: int) -> dict[str, Any] | None:
 
 
 class McpClient:
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one keyword per transport option
         self,
         url: str,
         *,
@@ -88,11 +117,15 @@ class McpClient:
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
         user_agent: str = "",
+        headers: Mapping[str, str] | None = None,
+        headers_provider: HeadersProvider | None = None,
     ) -> None:
         if auth_scheme not in {"bearer", "basic"}:
             raise ValueError(f"unknown MCP auth scheme `{auth_scheme}`: `bearer` or `basic`")
         if auth_scheme == "basic" and not username:
             raise ValueError("the `basic` auth scheme needs a `username` (the account's email)")
+        if token and headers_provider is not None:
+            raise ValueError("give a token or a headers_provider, not both")
         self.url = url
         self._token = token
         # `bearer` (default): `Authorization: Bearer <token>`. `basic`: `Basic base64(username:token)`,
@@ -104,10 +137,15 @@ class McpClient:
         self._auth_header = auth_header
         #: Sent on every request when given: who is calling, and how to reach them (ADR 0070).
         self._user_agent = user_agent
+        #: Sent as they are with every request: a gateway's routing header, say.
+        self._static_headers = dict(headers or {})
+        #: Awaited for every request, merged last: an OAuth token cache, a per-call signed assertion.
+        self._headers_provider = headers_provider
         self._timeout = timeout_s
         self._transport = transport
         self._session: str | None = None
-        self._version: str = VERSIONS[0]
+        #: The version agreed at `initialize`; None until then.
+        self._version: str | None = None
         self._next_id = 0
         self.server: dict[str, Any] = {}
 
@@ -116,14 +154,20 @@ class McpClient:
         # former name, kept for importers (ADR 0046)
         return self.server
 
-    def _headers(self) -> dict[str, str]:
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "MCP-Protocol-Version": self._version,
-        }
+    @property
+    def negotiated_version(self) -> str | None:
+        """The protocol version the server answered at `initialize`; None before it."""
+        return self._version
+
+    async def _request_headers(self, *, initialize: bool = False, refresh: bool = False) -> dict[str, str]:
+        """The headers of one request. Their values (tokens, assertions) are never logged."""
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        if not initialize and self._version:
+            # Never on `initialize`: a server refuses a version it does not know before reading the offer.
+            headers["MCP-Protocol-Version"] = self._version
         if self._user_agent:
             headers["User-Agent"] = self._user_agent
+        headers.update(self._static_headers)
         if self._token and self._auth_scheme == "basic":
             pair = base64.b64encode(f"{self._username}:{self._token}".encode()).decode("ascii")
             headers["Authorization"] = f"Basic {pair}"
@@ -131,6 +175,8 @@ class McpClient:
             headers["Authorization"] = f"Bearer {self._token}"
         elif self._token:
             headers[self._auth_header] = self._token
+        if self._headers_provider is not None:
+            headers.update(await self._headers_provider(refresh))
         if self._session:
             headers["Mcp-Session-Id"] = self._session
         return headers
@@ -141,7 +187,26 @@ class McpClient:
         body: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id, "method": method}
         if params is not None:
             body["params"] = params
-        response = await http.post(self.url, json=body, headers=self._headers())
+        initialize = method == "initialize"
+        with_session = self._session is not None
+        response = await self._post(http, body, initialize=initialize)
+        if response.status_code == 401 and self._headers_provider is not None:
+            # A cached credential expired: the provider renews it, once.
+            response = await self._post(http, body, initialize=initialize, refresh=True)
+        if response.status_code == 404 and not initialize and with_session:
+            # The session is lost (it lived on another gateway replica, or expired): `_open` drops
+            # its id and opens a new one, once.
+            await self._open(http)
+            response = await self._post(http, body, initialize=False)
+        return self._parse(response, method, request_id)
+
+    async def _post(
+        self, http: httpx.AsyncClient, body: dict[str, Any], *, initialize: bool, refresh: bool = False
+    ) -> httpx.Response:
+        headers = await self._request_headers(initialize=initialize, refresh=refresh)
+        return await http.post(self.url, json=body, headers=headers)
+
+    def _parse(self, response: httpx.Response, method: str, request_id: int) -> Any:
         if response.status_code in {401, 403}:
             raise McpError(f"{method}: refused by the server ({response.status_code})", response.status_code)
         if response.status_code >= 400:
@@ -164,23 +229,29 @@ class McpClient:
         return message.get("result")
 
     async def _open(self, http: httpx.AsyncClient) -> None:
+        # A new session: `initialize` never carries the id of a former one (a client called twice).
+        self._session = None
         result = await self._send(
             http,
             "initialize",
             {
-                "protocolVersion": VERSIONS[0],
+                "protocolVersion": CLIENT_VERSIONS[0],
                 "capabilities": {},
                 "clientInfo": {"name": "choregos", "version": "1"},
             },
         )
         self.server = dict(result or {})
         version = self.server.get("protocolVersion")
-        if isinstance(version, str):
-            self._version = version
+        if not isinstance(version, str) or version not in CLIENT_VERSIONS:
+            raise McpError(
+                f"initialize: the server answered protocol version {version!r}, "
+                f"which this client does not speak ({', '.join(CLIENT_VERSIONS)})"
+            )
+        self._version = version
         await http.post(
             self.url,
             json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-            headers=self._headers(),
+            headers=await self._request_headers(),
         )
 
     def _http(self) -> httpx.AsyncClient:

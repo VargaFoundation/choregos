@@ -119,7 +119,9 @@ jobs:
       # The secret scanner's configuration and its one exception (ADR 0095), as on `main`.
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: trivy-secret.yaml
+          sparse-checkout: |
+            trivy-secret.yaml
+            .trivyignore
           sparse-checkout-cone-mode: false
       - name: Trivy scan of the published image (no CRITICAL tolerated)
         # The images of `main` were scanned, those of a release — the ones that go to

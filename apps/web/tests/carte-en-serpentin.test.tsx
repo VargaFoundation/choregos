@@ -38,6 +38,22 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     expect(screen.getByTestId("etape-t-specify")).toHaveAccessibleName(/→ spec_markdown, allowed_paths$/);
   });
 
+  it("without a work item, a platform box says what it waits for, not empty boxes, and every detour says why", () => {
+    render(<CarteEnSerpentin graph={graph} process={process} initial={initial} />);
+    const map = screen.getByTestId("carte-en-serpentin");
+    expect(map.textContent).not.toContain("☐");
+    expect(map.textContent).toMatch(/waits for: [a-z ,]+/);
+    const labels = [...map.querySelectorAll("[data-testid^='arc-label-']")].map((e) => e.textContent);
+    expect(labels).toContain("if rejected");
+  });
+
+  it("writes how many open work items wait after a state's name", () => {
+    const { container } = render(<CarteEnSerpentin graph={graph} process={process} initial={initial} />);
+    const state = container.querySelector("[data-segment]")!.getAttribute("data-segment")!;
+    render(<CarteEnSerpentin graph={graph} process={process} initial={initial} openItems={new Map([[state, 3]])} />);
+    expect(screen.getAllByTestId("carte-en-serpentin")[1]!.textContent).toContain("3 open · ");
+  });
+
   it("a highlight puts data-flow on the boxes it names", () => {
     const highlight = new Map<string, "produces" | "reads">([["t-test", "produces"], ["t-implement", "reads"]]);
     render(<CarteEnSerpentin graph={graph} process={process} initial={initial} highlight={highlight} />);

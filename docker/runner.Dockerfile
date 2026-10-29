@@ -54,6 +54,22 @@ RUN set -eux; \
       *) echo "no rtk for ${TARGETARCH}" >&2; exit 1 ;; \
     esac
 
+# gitleaks, built from its tag: every published gitleaks up to v8.30.1 links a Go stdlib with
+# CVE-2026-56857 (CRITICAL, fixed in Go 1.26.9 and 1.27.2) that the images job's Trivy gate refuses
+# (S41-14c). The tag is checked against its commit; the modules are fetched by the pinned Go and
+# checked against the tag's `go.sum` (`-mod=readonly`). Cross-compiled on the build platform.
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS gitleaks
+ARG GITLEAKS_VERSION=v8.30.1
+ARG GITLEAKS_COMMIT=83d9cd684c87d95d656c1458ef04895a7f1cbd8e
+ARG TARGETARCH
+WORKDIR /src
+RUN git clone --quiet --depth 1 --branch "${GITLEAKS_VERSION}" https://github.com/gitleaks/gitleaks . \
+ && test "$(git rev-parse HEAD)" = "${GITLEAKS_COMMIT}" \
+ && CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH:-amd64}" GOTOOLCHAIN=local GOFLAGS=-mod=readonly \
+    go build -trimpath \
+      -ldflags "-s -w -X github.com/zricethezav/gitleaks/v8/version.Version=${GITLEAKS_VERSION}" \
+      -o /out/gitleaks .
+
 # headroom (ADR 0055): its own venv, so its dependency tree (litellm, onnxruntime, transformers)
 # never meets the runner's. `--require-hashes` checks every wheel against
 # `docker/headroom/requirements.txt` (`make headroom-lock`). The Kompress model is fetched here, at
@@ -105,8 +121,9 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # Scanners de sécurité, utilisés par la boucle DoD et la CI des projets.
-COPY --from=aquasec/trivy:0.74.0 /usr/local/bin/trivy /usr/local/bin/trivy
-COPY --from=zricethezav/gitleaks:v8.30.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
+# trivy 0.76.1 is the first built with a Go without CVE-2026-56857 (1.27.3); gitleaks is built above.
+COPY --from=aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c /usr/local/bin/trivy /usr/local/bin/trivy
+COPY --from=gitleaks /out/gitleaks /usr/local/bin/gitleaks
 # rtk is installed but switched off: only a policy turns it on for a run (ADR 0055).
 COPY --from=rtk /usr/local/bin/rtk /usr/local/bin/rtk
 # headroom too: only a policy starts it, on loopback, for one run (ADR 0055). Its venv stays off

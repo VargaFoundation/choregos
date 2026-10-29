@@ -105,6 +105,59 @@ def render_playbook(role: str, **variables: Any) -> str:
     return template.render({**defaults, **variables})
 
 
+#: What a preview shows in place of what only a run knows: the console shows the prompt a role's
+#: built-in agent receives, with each part a run fills in named, not invented.
+PREVIEW_VARIABLES: dict[str, Any] = {
+    "ticket": {
+        "key": "<work item key>",
+        "title": "<work item title>",
+        "body": "<work item description>",
+    },
+    "spec": "<the approved specification, when the work item has one>",
+    "plan_markdown": "<the plan, when the work item has one>",
+    "allowed_paths": ["<the work item's allowed paths>"],
+    "production_indicators": ["<the production indicator sources the run can read>"],
+}
+
+
+def playbook_origin(role: str) -> str:
+    """`deployment` when `CHOREGOS_PLAYBOOKS_DIR` supplies the role's prompt, `package` otherwise."""
+    return "package" if playbook_path(role).is_relative_to(ROLES_DIR) else "deployment"
+
+
+def preview_playbook(role: str) -> str:
+    """A role's prompt as a run receives it, with what only a run knows shown as `<placeholders>`."""
+    return render_playbook(role, **PREVIEW_VARIABLES)
+
+
+#: What a role's prompt says that `frame` adds after a registry agent's instructions: written there
+#: too, it would reach the agent twice.
+_FRAMED_LINES = ("{{ output_contract }}", "## Invariants", "{{ invariants }}")
+
+
+def playbook_instructions(role: str) -> str:
+    """A role's prompt as a registry agent's instructions: what "register" gives a built-in agent, so
+    the registered agent starts from what it ran and its author edits that, not an empty page.
+
+    The instructions are rendered in a sandbox with no file loader and framed afterwards (ADR 0033):
+    the shared fragment is written in place of its `include`, and the frame's own parts — the output
+    contract, the invariants — are left to the frame.
+    """
+    path = playbook_path(role)  # raises if the role is unknown
+    source = path.read_text(encoding="utf-8")
+    base = (ROLES_DIR / "_base.md").read_text(encoding="utf-8")
+    for directory in extra_roles_dirs():
+        if (directory / "_base.md").exists():
+            base = (directory / "_base.md").read_text(encoding="utf-8")
+            break
+    source = source.replace('{% include "_base.md" %}', base.rstrip("\n"))
+    lines = [line for line in source.splitlines() if line.strip() not in _FRAMED_LINES]
+    text = "\n".join(lines)
+    while "\n\n\n" in text:
+        text = text.replace("\n\n\n", "\n\n")
+    return text.strip() + "\n"
+
+
 def frame(instructions: str) -> str:
     """A registry agent's instructions, followed by the frame it cannot change (ADR 0033).
 
@@ -171,7 +224,10 @@ __all__ = [
     "OUTPUT_CONTRACT",
     "extra_roles_dirs",
     "frame",
+    "playbook_instructions",
+    "playbook_origin",
     "playbook_path",
     "playbook_source",
+    "preview_playbook",
     "render_playbook",
 ]

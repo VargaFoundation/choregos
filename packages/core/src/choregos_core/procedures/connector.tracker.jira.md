@@ -3,8 +3,8 @@ id: connector.tracker.jira
 title: Use Jira Cloud as the board
 applies_to: {connector: tracker/jira}
 audience: project_owner
-version: 1
-reviewed: 2026-10-16
+version: 2
+reviewed: 2026-10-28
 vendor_docs:
   - {title: "Manage API tokens for your Atlassian account", url: "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/"}
   - {title: "Jira automation actions (Send web request)", url: "https://support.atlassian.com/cloud-automation/docs/jira-automation-actions/"}
@@ -52,7 +52,9 @@ use a classic token unless you have tested it.
 
 1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.
 2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the
-   key.
+   key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the
+   project's slug; two projects holding the same key are told apart by the Jira site, and a key held
+   twice on the same site routes nothing.
 3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are
    `Cost (€)`, `Size`, `Risk` and `Run`.
 4. `api_token`: the token, in the password field (sealed, shown once).

@@ -255,11 +255,33 @@ describe("les panneaux de la carte et de la vue processus", () => {
     );
 
     // Le délai lu est prérempli ; vidé, il retire la limite.
-    const delai = screen.getByLabelText("At most (hours, empty: no limit)");
+    const delai = screen.getByLabelText("At most (hours, empty: the default)");
     expect(delai).toHaveValue(72);
     fireEvent.change(delai, { target: { value: "" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Set" })[1]!);
     await waitFor(() => expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.delai("t-implement", null)]));
+  });
+
+  it("says each guarantee in words with its threshold, what each actor is, and how long the step waits", async () => {
+    await rendre(
+      <>
+        <Sonde />
+        <PanneauDeTransition
+          arete={{ ...graphe.edges[0]!, gates: ["scope_respected", "diff_size_max"] }}
+          acteurs={["dev", "owner"]}
+          definitions={{ dev: { type: "agent", role: "implement" }, owner: { type: "human", group: "product-owners" } }}
+          gates={[
+            { name: "scope_respected", summary: "the agent stayed within its allowed paths", detail: null },
+            { name: "diff_size_max", summary: "the change stays under the size limit", detail: "at most 10 files and 400 lines changed" },
+          ]}
+          timing="It waits for ci green up to 24 h (no limit set)."
+        />
+      </>,
+    );
+    const gateList = screen.getByTestId("garanties-de-la-transition");
+    expect(gateList).toHaveTextContent("diff_size_max — the change stays under the size limitat most 10 files and 400 lines changed");
+    expect(screen.getByRole("option", { name: "owner — person · product-owners" })).toBeInTheDocument();
+    expect(screen.getByTestId("delai-en-clair")).toHaveTextContent("It waits for ci green up to 24 h");
   });
 
   it("une flèche secondaire ne s'édite pas ici : le panneau renvoie au YAML", async () => {

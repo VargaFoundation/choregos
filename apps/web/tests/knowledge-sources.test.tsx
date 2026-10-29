@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { api } from "@/lib/api";
-import { nextSyncLabel, pageIdsOf, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
+import { describeRefresh, draftOf, headersOf, nextSyncLabel, pageIdsOf, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
 import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -52,6 +52,10 @@ describe("what a source says", () => {
       url: "https://git.test/r.git", max_depth: 5, max_pages: 120, include_documents: true,
     });
     expect(sourceConfig("git", fields)).toEqual({ url: "https://git.test/r.git", ref: "main", paths: ["docs/*.md", "*.md"] });
+    expect(sourceConfig("web", { ...fields, headers: "Accept-Language: fr\nnot a header\n X-Env : prod " })).toEqual({
+      url: "https://git.test/r.git", max_depth: 2, max_pages: 50, headers: { "Accept-Language": "fr", "X-Env": "prod" },
+    });
+    expect(headersOf("")).toEqual({});
   });
 });
 
@@ -159,10 +163,15 @@ describe("the sources of a base (S33-04)", () => {
       next_sync_at: new Date(Date.now() + 23 * 60_000).toISOString(),
     };
     view([cron]);
-    expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("cron 0 6 * * 1-5 (Europe/Paris) · next in 23 minutes");
+    expect(screen.getByTestId("knowledge-sources")).toHaveTextContent(
+      "every weekday (Monday to Friday) at 06:00 (Europe/Paris) · next in 23 minutes",
+    );
     expect(refreshLabel({ ...source, refresh_mode: "manual" })).toBe("manual");
+    expect(refreshLabel({ ...source, refresh_mode: "cron", refresh_cron: "*/15 9-17 * * *", refresh_timezone: "UTC" })).toBe(
+      "cron */15 9-17 * * * (UTC)",
+    );
     expect(nextSyncLabel({ refresh_mode: "manual" })).toBe("—");
-    expect(refreshBody({ mode: "manual", interval: "5", cron: "", timezone: "UTC" })).toEqual({ refresh_mode: "manual" });
+    expect(refreshBody({ ...draftOf(), mode: "manual" })).toEqual({ refresh_mode: "manual" });
   });
 
   it("edits the refresh of a source, or of all of them", async () => {
@@ -183,6 +192,48 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByLabelText("apply to all sources"));
     fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
     await waitFor(() => expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(2));
+  });
+
+  it("offers refreshes a person reads, stored as an interval or a cron (S47-48)", () => {
+    const base = { ...draftOf(), timezone: "Europe/Paris" };
+    expect(refreshBody({ ...base, mode: "hours", hours: "6" })).toEqual({ refresh_mode: "interval", interval_minutes: 360 });
+    expect(refreshBody({ ...base, mode: "minutes", interval: "15" })).toEqual({ refresh_mode: "interval", interval_minutes: 15 });
+    const cron = (patch: Partial<typeof base>) => refreshBody({ ...base, ...patch });
+    expect(cron({ mode: "daily", time: "07:30" })).toEqual({ refresh_mode: "cron", refresh_cron: "30 7 * * *", refresh_timezone: "Europe/Paris" });
+    expect(cron({ mode: "weekdays", time: "06:00" }).refresh_cron).toBe("0 6 * * 1-5");
+    expect(cron({ mode: "weekly", time: "18:05", days: [4, 1, 4] }).refresh_cron).toBe("5 18 * * 1,4");
+    expect(cron({ mode: "weekly", days: [] }).refresh_cron).toBe("0 6 * * 1");
+    expect(cron({ mode: "monthly", dayOfMonth: "15", time: "02:00" }).refresh_cron).toBe("0 2 15 * *");
+    expect(cron({ mode: "cron", cron: " */30 * * * * " }).refresh_cron).toBe("*/30 * * * *");
+    expect(describeRefresh({ ...base, mode: "weekly", days: [1, 4], time: "18:05" })).toBe("every Monday and Thursday at 18:05");
+    // A stored cron reads back as the choice that wrote it; any other stays a cron of one's own.
+    const back = (refresh_cron: string) => draftOf({ refresh_mode: "cron", refresh_cron, refresh_timezone: "Europe/Paris" });
+    expect(back("5 18 * * 1,4")).toMatchObject({ mode: "weekly", days: [1, 4], time: "18:05" });
+    expect(back("0 2 15 * *")).toMatchObject({ mode: "monthly", dayOfMonth: "15", time: "02:00" });
+    expect(back("*/15 9-17 * * *")).toMatchObject({ mode: "cron", cron: "*/15 9-17 * * *" });
+    expect(draftOf({ refresh_mode: "interval", interval_minutes: 120 })).toMatchObject({ mode: "hours", hours: "2" });
+    expect(draftOf({ refresh_mode: "interval", interval_minutes: 45 })).toMatchObject({ mode: "minutes", interval: "45" });
+  });
+
+  it("edits a refresh to chosen days of the week, and says it in words", async () => {
+    vi.mocked(api.updateKnowledgeSource).mockResolvedValue(source);
+    view([source]);
+    fireEvent.click(screen.getByRole("button", { name: "edit refresh" }));
+    const form = within(screen.getByRole("form", { name: "edit refresh" }));
+    fireEvent.change(form.getByLabelText("refresh mode"), { target: { value: "weekly" } });
+    expect(form.queryByLabelText("cron expression")).toBeNull();
+    fireEvent.click(form.getByLabelText("Thu"));
+    fireEvent.change(form.getByLabelText("time of day"), { target: { value: "18:30" } });
+    fireEvent.change(form.getByLabelText("time zone"), { target: { value: "UTC" } });
+    expect(form.getByTestId("refresh-summary")).toHaveTextContent("Syncs every Monday and Thursday at 18:30, UTC time.");
+    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    await waitFor(() =>
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1", {
+        refresh_mode: "cron",
+        refresh_cron: "30 18 * * 1,4",
+        refresh_timezone: "UTC",
+      }),
+    );
   });
 
   it("shows the API's reason when a cron is refused", async () => {
@@ -283,6 +334,49 @@ describe("the sources of a base (S33-04)", () => {
         "framework",
         expect.objectContaining({ kind: "git", connector: "acme-github" }),
       ),
+    );
+  });
+
+  it("reads a site behind a login through a documents/web connector, with plain headers of its own (S47-48)", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    vi.mocked(api.orgConnectors).mockResolvedValue([
+      connector("intranet", "documents", "web"),
+      connector("acme-github", "documents", "git"),
+    ]);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://intranet.example.com/docs/" } });
+    await screen.findByRole("option", { name: "intranet" });
+    expect(screen.queryByRole("option", { name: "acme-github" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("web connector"), { target: { value: "intranet" } });
+    fireEvent.change(screen.getByLabelText("http headers"), { target: { value: "Accept-Language: fr" } });
+    expect(screen.queryByTestId("secret-header")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({
+          kind: "web",
+          connector: "intranet",
+          config: { url: "https://intranet.example.com/docs/", max_depth: 2, max_pages: 50, headers: { "Accept-Language": "fr" } },
+        }),
+      ),
+    );
+  });
+
+  it("flags a credential typed as a plain header, and sends an anonymous crawl without a connector", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://example.com/" } });
+    fireEvent.change(screen.getByLabelText("http headers"), { target: { value: "Authorization: Bearer abc" } });
+    expect(screen.getByTestId("secret-header")).toHaveTextContent("Authorization looks like a credential");
+    expect(await screen.findByTestId("no-web-connector")).toHaveAttribute("href", "/admin/connectors?type=documents/web");
+    fireEvent.change(screen.getByLabelText("http headers"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", expect.objectContaining({ kind: "web", connector: null })),
     );
   });
 });

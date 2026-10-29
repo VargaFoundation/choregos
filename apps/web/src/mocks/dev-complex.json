@@ -1734,15 +1734,21 @@
    "gates": [
     {
      "name": "scope_respected",
-     "summary": "the agent stayed within its allowed paths"
+     "summary": "the agent stayed within its allowed paths",
+     "detail": "only the work item's allowed paths; with none declared, anything passes",
+     "asynchronous": false
     },
     {
      "name": "no_secrets",
-     "summary": "no secret leaks into the change"
+     "summary": "no secret leaks into the change",
+     "detail": null,
+     "asynchronous": false
     },
     {
      "name": "diff_size_max",
-     "summary": "the change stays under the size limit"
+     "summary": "the change stays under the size limit",
+     "detail": "at most 60 files and 3000 lines changed",
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 3 time(s) from “Planned”, then goes to “Needs a human”.",
@@ -1780,7 +1786,9 @@
    "gates": [
     {
      "name": "evidence_present",
-     "summary": "the platform measured the evidence the stage owes"
+     "summary": "the platform measured the evidence the stage owes",
+     "detail": null,
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 3 time(s) from “Planned”, then goes to “Needs a human”.",
@@ -1815,15 +1823,21 @@
    "gates": [
     {
      "name": "scope_respected",
-     "summary": "the agent stayed within its allowed paths"
+     "summary": "the agent stayed within its allowed paths",
+     "detail": "only the work item's allowed paths; with none declared, anything passes",
+     "asynchronous": false
     },
     {
      "name": "no_secrets",
-     "summary": "no secret leaks into the change"
+     "summary": "no secret leaks into the change",
+     "detail": null,
+     "asynchronous": false
     },
     {
      "name": "docs_updated",
-     "summary": "the change updates its documentation when it changes anything else"
+     "summary": "the change updates its documentation when it changes anything else",
+     "detail": null,
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 2 time(s) from “Tested”, then goes to “Needs a human”.",
@@ -1861,7 +1875,9 @@
    "gates": [
     {
      "name": "outputs_in",
-     "summary": "the outputs take an allowed value (a review's verdict, a size)"
+     "summary": "the outputs take an allowed value (a review's verdict, a size)",
+     "detail": "`verdict` in `approve`",
+     "asynchronous": false
     }
    ],
    "on_fail": null,
@@ -1897,7 +1913,9 @@
    "gates": [
     {
      "name": "outputs_in",
-     "summary": "the outputs take an allowed value (a review's verdict, a size)"
+     "summary": "the outputs take an allowed value (a review's verdict, a size)",
+     "detail": "`verdict` in `approve`",
+     "asynchronous": false
     }
    ],
    "on_fail": null,
@@ -1932,11 +1950,15 @@
    "gates": [
     {
      "name": "scope_respected",
-     "summary": "the agent stayed within its allowed paths"
+     "summary": "the agent stayed within its allowed paths",
+     "detail": "only the work item's allowed paths; with none declared, anything passes",
+     "asynchronous": false
     },
     {
      "name": "no_secrets",
-     "summary": "no secret leaks into the change"
+     "summary": "no secret leaks into the change",
+     "detail": null,
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 2 time(s) from “Addressing the review”, then goes to “Needs a human”.",
@@ -2061,7 +2083,9 @@
    "gates": [
     {
      "name": "ci_green",
-     "summary": "the CI pipeline is green"
+     "summary": "the CI pipeline is green",
+     "detail": "waits for it up to 24 h",
+     "asynchronous": true
     }
    ],
    "on_fail": "On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”.",
@@ -2094,11 +2118,15 @@
    "gates": [
     {
      "name": "scope_respected",
-     "summary": "the agent stayed within its allowed paths"
+     "summary": "the agent stayed within its allowed paths",
+     "detail": "only the work item's allowed paths; with none declared, anything passes",
+     "asynchronous": false
     },
     {
      "name": "no_secrets",
-     "summary": "no secret leaks into the change"
+     "summary": "no secret leaks into the change",
+     "detail": null,
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 2 time(s) from “Fixing the CI”, then goes to “Needs a human”.",
@@ -2189,11 +2217,15 @@
    "gates": [
     {
      "name": "outputs_in",
-     "summary": "the outputs take an allowed value (a review's verdict, a size)"
+     "summary": "the outputs take an allowed value (a review's verdict, a size)",
+     "detail": "`verdict` in `approve`",
+     "asynchronous": false
     },
     {
      "name": "evidence_facts",
-     "summary": "the facts the step counted meet the declared minimums"
+     "summary": "the facts the step counted meet the declared minimums",
+     "detail": "`smoke_ok` true",
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 1 time(s) from “In production”, then goes to “Needs a human”.",

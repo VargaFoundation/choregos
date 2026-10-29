@@ -28,6 +28,10 @@
   "type": "sharepoint"
  },
  {
+  "kind": "documents",
+  "type": "web"
+ },
+ {
   "kind": "firewall",
   "type": "pfsense"
  },
@@ -58,6 +62,10 @@
  {
   "kind": "marketdata",
   "type": "stooq"
+ },
+ {
+  "kind": "marketdata",
+  "type": "tiingo"
  },
  {
   "kind": "marketdata",
