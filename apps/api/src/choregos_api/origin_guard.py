@@ -5,10 +5,12 @@ Threat: the session cookie is `SameSite=Lax`, which stops a page on another *sit
 sibling subdomain (same site, other origin). Such a page can submit a form or a `fetch` to the API and
 the browser attaches the cookie. The cookie branch of `deps.current_principal` has no Origin check.
 
-Rule: a request that is not a safe method, carries the session cookie and no `Authorization` header must
-come from the console's origin (or a listed CORS origin). A browser always sends `Origin` on such a
-request, or `Sec-Fetch-Site` when it omits it; an `Origin` of `null` is refused. A request with neither
-header (a CLI) passes, and so does every request without the session cookie (webhooks, bearer tokens).
+Rule: a request that is not a safe method, carries the session cookie and no `Authorization: Bearer`
+header must come from the console's origin (or a listed CORS origin). A browser always sends `Origin` on
+such a request, or `Sec-Fetch-Site` when it omits it (an empty `Origin` counts as omitted); an `Origin`
+of `null` is refused. Origins are compared normalised (lower-case, default port dropped). A request with
+neither header (a CLI) passes, and so does every request without the session cookie (webhooks, bearer
+tokens). Any other `Authorization` scheme does not exempt: the cookie still authenticates it.
 """
 
 from __future__ import annotations
@@ -27,8 +29,19 @@ _FOREIGN_FETCH_SITES = frozenset({"cross-site", "same-site"})
 
 
 def origin_of(url: str) -> str:
+    """`scheme://host[:port]`, lower-cased, without the scheme's default port (`:443` https, `:80` http)."""
     parts = urlsplit(url.strip())
-    return f"{parts.scheme}://{parts.netloc}"
+    scheme = parts.scheme  # urlsplit lower-cases the scheme and `hostname`
+    host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    if port is None or (scheme, port) in {("https", 443), ("http", 80)}:
+        return f"{scheme}://{host}"
+    return f"{scheme}://{host}:{port}"
 
 
 def allowed_origins(settings: Settings) -> set[str]:
@@ -55,14 +68,13 @@ def install_origin_guard(app: FastAPI) -> None:
     @app.middleware("http")
     async def origin_guard(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         settings = get_settings()
-        if (
-            request.method not in SAFE_METHODS
-            and settings.session_cookie in request.cookies
-            and "authorization" not in request.headers
-        ):
-            origin = request.headers.get("origin")
-            if origin is not None:
-                refused = origin.strip() == "null" or not origin_allowed(origin, settings)
+        # Only a bearer token exempts the request: `deps.current_principal` falls back to the cookie for
+        # any other `Authorization` value.
+        bearer = request.headers.get("authorization", "").lower().startswith("bearer ")
+        if request.method not in SAFE_METHODS and settings.session_cookie in request.cookies and not bearer:
+            origin = request.headers.get("origin", "").strip()
+            if origin:
+                refused = origin == "null" or not origin_allowed(origin, settings)
             else:
                 refused = request.headers.get("sec-fetch-site", "").lower() in _FOREIGN_FETCH_SITES
             if refused:
