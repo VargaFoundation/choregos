@@ -3756,3 +3756,19 @@ stories:
     size: S
     depends_on: [S47-14]
     notes: "Full story (context, steps, tests, acceptance): docs/plan/PLAN-2026-10-27.md §5"
+  - id: S47-39
+    title: "feat(web): a built-in agent says what it runs — prompt, model by size, backend, limits, MCP tools"
+    stream: S47
+    sprint: 13
+    priority: 2
+    size: M
+    depends_on: []
+    notes: "From the 2026-10-28 screenshots of the default-simple map and the project's agents page; STATUS says what it proves"
+  - id: S47-40
+    title: "feat(web): the workflow map says what its shape did not — gates, delays, who, activity"
+    stream: S47
+    sprint: 14
+    priority: 2
+    size: L
+    depends_on: [S47-39]
+    notes: "Second pass on the 2026-10-28 screenshots; STATUS says what it proves"

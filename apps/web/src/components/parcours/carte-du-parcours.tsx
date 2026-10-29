@@ -136,6 +136,7 @@ export function CarteEnSerpentin({
   onChoisir,
   largeurInitiale = 1100,
   highlight,
+  openItems,
 }: {
   graph: WorkItemJourney["graph"];
   process: WorkItemJourney["process"];
@@ -145,6 +146,8 @@ export function CarteEnSerpentin({
   largeurInitiale?: number;
   /** The boxes an artifact row lights up: who produces it, who reads it (S39-13). Decoration only. */
   highlight?: Map<string, "produces" | "reads"> | null;
+  /** How many open work items wait in each state (S47-39), written after the state's name. */
+  openItems?: Map<string, number> | null;
 }) {
   const modele = useMemo(() => modeler({ graph, process: process ?? [], initial: initial ?? null }), [graph, process, initial]);
   const instant = useMemo(() => structure(modele), [modele]);
@@ -178,6 +181,7 @@ export function CarteEnSerpentin({
           onChoisir={(id) => onChoisir?.(id)}
           statique
           flux={highlight ?? undefined}
+          openItems={openItems ?? undefined}
         />
         <Exceptions modele={modele} instant={instant} />
       </div>
@@ -357,6 +361,7 @@ function Carte({
   onChoisir,
   statique = false,
   flux,
+  openItems,
 }: {
   modele: Modele;
   placement: Placement;
@@ -367,6 +372,7 @@ function Carte({
   /** La carte d'un workflow sans ticket : chaque case prend la couleur de qui la porte (S22-05). */
   statique?: boolean;
   flux?: Map<string, "produces" | "reads">;
+  openItems?: Map<string, number>;
 }) {
   const toutes = useMemo(() => [...modele.etapes, ...modele.detours.map((d) => d.etape)], [modele]);
   const fini = instant.etat === modele.chemin.at(-1);
@@ -440,7 +446,14 @@ function Carte({
                   fill={actif ? COULEUR.en_cours : "var(--choregos-ink-muted)"}
                 >
                   <title>{modele.nom(segment.etat)}</title>
-                  {tronquer(actif ? `now · ${modele.nom(segment.etat)}` : modele.nom(segment.etat), etiquette.largeurMax)}
+                  {tronquer(
+                    actif
+                      ? `now · ${modele.nom(segment.etat)}`
+                      : openItems?.get(segment.etat)
+                        ? `${openItems.get(segment.etat)} open · ${modele.nom(segment.etat)}`
+                        : modele.nom(segment.etat),
+                    etiquette.largeurMax,
+                  )}
                 </text>
               </g>
             );
@@ -469,7 +482,9 @@ function Carte({
                     <animateMotion dur="1.4s" repeatCount="indefinite" path={trace.d} />
                   </circle>
                 )}
-                {pris.fois > 0 && arc.genre === "renvoi" && (
+                {/* A workflow's map says why each dashed arc exists ("if rejected"); a work item's says
+                    the ones it took. */}
+                {((pris.fois > 0 && arc.genre === "renvoi") || (statique && arc.genre !== "retour")) && (
                   <text
                     stroke="var(--choregos-surface)"
                     strokeWidth={4}
@@ -479,7 +494,8 @@ function Carte({
                     textAnchor="middle"
                     fontSize={11}
                     fontWeight={600}
-                    fill={COULEUR_DU_RENVOI}
+                    fill={pris.fois > 0 ? COULEUR_DU_RENVOI : "var(--choregos-ink-muted)"}
+                    data-testid={`arc-label-${arc.cle}`}
                   >
                     {arc.libelle}
                     {pris.fois > 1 ? ` ×${pris.fois}` : ""}
@@ -669,7 +685,7 @@ function Libelle({
 }
 
 /** Ce qu'une case dit sous elle : la tentative en cours, le verdict, les preuves, qui a décidé. */
-function detailDe(etape: Etape, etat: EtatEtape): string | null {
+function detailDe(etape: Etape, etat: EtatEtape, statique = false): string | null {
   const derniere = etat.tentatives.at(-1);
   if (etat.verdict) return etat.verdict === "approve" ? "✓ approved" : etat.verdict.replace(/_/g, " ");
   const preuves = (derniere?.evidence ?? {}) as Record<string, unknown>;
@@ -684,6 +700,8 @@ function detailDe(etape: Etape, etat: EtatEtape): string | null {
   if (etape.genre === "train" && derniere)
     return derniere.decided_by ? `approved by ${derniere.decided_by.split("@")[0]}` : derniere.status;
   if (etape.genre === "platform" && etape.gates.length) {
+    // A workflow's map has no work item: nothing is met or unmet yet, and empty boxes read as failures.
+    if (statique) return `waits for: ${etape.gates.map((g) => g.replace(/_/g, " ")).join(", ")}`;
     const coche = etat.statut === "fait" ? "☑" : "☐";
     return etape.gates.map((g) => `${coche} ${g.replace(/_/g, " ")}`).join("  ");
   }
@@ -717,7 +735,7 @@ function BoutonDEtape({
   statique?: boolean;
   flux?: "produces" | "reads";
 }) {
-  const detail = detailDe(etape, etat);
+  const detail = detailDe(etape, etat, statique);
   const sorties = statique ? sortiesDe(etape) : null;
   const tour = tourDe(etape, etat);
   const genre = {

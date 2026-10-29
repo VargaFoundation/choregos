@@ -109,6 +109,16 @@ def _firecrawl_check(config: dict[str, Any]) -> None:
     checked_base_url(config.get("base_url"))
 
 
+def _web_documents_check(config: dict[str, Any]) -> None:
+    from .documents.base import SourceRefusedError
+    from .documents.web import check_connector_config
+
+    try:
+        check_connector_config(config)
+    except SourceRefusedError as refused:
+        raise ConfigurationError(str(refused)) from refused
+
+
 def _github_client(config: dict[str, Any]) -> Any:
     """Construit le client GitHub depuis la configuration du connecteur ou l'environnement."""
     import os
@@ -490,6 +500,35 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             }
         ),
         ("token", "private_key"),
+    ),
+    # A web site behind a login as a knowledge source (S47-48): a bearer token, HTTP Basic or one named
+    # header, pinned to `host`.
+    ("documents", "web"): ConnectorTypeSpec(
+        "Web site behind a login (bearer, basic or header)",
+        ("documents",),
+        _objet(
+            {
+                "host": {
+                    "type": "string",
+                    "description": "the site's host; the credential is sent nowhere else",
+                },
+                "auth": {"type": "string", "enum": ["bearer", "basic", "header"], "default": "bearer"},
+                "username": {"type": "string", "description": "auth basic: the user name"},
+                "header_name": {
+                    "type": "string",
+                    "description": "auth header: the header the secret goes in (X-API-Key, Cookie)",
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "plain headers sent with every request, e.g. Accept-Language",
+                },
+            },
+            ("host",),
+        ),
+        ("secret",),
+        egress=lambda config: [(str(config.get("host") or ""), 443)] if config.get("host") else [],
+        check_config=_web_documents_check,
     ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
@@ -1296,6 +1335,9 @@ def _register_builtins() -> None:
     from .documents.git import GitDocumentsConnector
 
     register("documents", "git", _SPECS_LIVREES[("documents", "git")])(GitDocumentsConnector)
+    from .documents.web import WebDocumentsConnector
+
+    register("documents", "web", _SPECS_LIVREES[("documents", "web")])(WebDocumentsConnector)
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(

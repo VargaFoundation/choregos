@@ -903,6 +903,10 @@ export type ProcessStep = {
   gates?: Array<{
     name?: string;
     summary?: string;
+    /** The thresholds the guarantee applies (the platform's defaults when the workflow sets none), and how long an asynchronous one waits. */
+    detail?: string | null;
+    /** True for a guarantee that waits for an outside event (CI, review, scans) up to the transition's `timeout_hours`. */
+    asynchronous?: boolean;
   }>;
   on_fail?: string | null;
   on_reject?: string | null;
@@ -2034,6 +2038,92 @@ export type ImplicitAgent = {
   backend?: string | null;
   max_turns?: number | null;
   max_minutes?: number | null;
+};
+
+/** An `agent` actor of an active workflow, and the registry agent it names, if any. */
+export type WorkflowAgent = {
+  workflow: string;
+  actor: string;
+  role?: string | null;
+  model?: string | null;
+  backend?: string | null;
+  max_turns?: number | null;
+  max_minutes?: number | null;
+  /** `slug` or `slug@N` as the workflow writes it; null for a built-in agent. */
+  agent?: string | null;
+  /** Whether the agent it names exists in the organisation's registry. */
+  registered?: boolean;
+};
+
+export type GroupMember = {
+  email: string;
+  display_name?: string;
+  /** Whether their role lets them answer a step of this project (`item:decide`). */
+  can_decide: boolean;
+};
+
+export type GroupMembers = {
+  group: string;
+  members?: Array<GroupMember>;
+};
+
+export type StateActivity = {
+  state: string;
+  open_items: number;
+  /** When the oldest open item in this state was filed. */
+  oldest_created_at?: string | null;
+};
+
+export type StepActivity = {
+  transition: string;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  cost_usd: number;
+  median_minutes?: number | null;
+};
+
+export type WorkflowActivity = {
+  workflow: string;
+  days: number;
+  states?: Array<StateActivity>;
+  steps?: Array<StepActivity>;
+};
+
+/** The model a built-in agent runs for one work item size (`size` absent when the size does not matter), or why a run would be refused. */
+export type BuiltinModelChoice = {
+  size?: string | null;
+  profile?: string | null;
+  litellm_model?: string | null;
+  provider_model?: string | null;
+  turns_factor?: number;
+  error?: string | null;
+  warnings?: Array<string>;
+};
+
+export type BuiltinMcpServer = {
+  name: string;
+  description: string;
+  tools?: Array<string>;
+};
+
+/** What a workflow actor that names no registry agent runs. */
+export type BuiltinAgent = {
+  role: string;
+  playbook: string;
+  /** `package` or `deployment` (`CHOREGOS_PLAYBOOKS_DIR`). */
+  playbook_origin?: string | null;
+  instructions?: string | null;
+  instructions_error?: string | null;
+  model: string;
+  models?: Array<BuiltinModelChoice>;
+  backend: string;
+  backend_source: "actor" | "project";
+  max_turns: number;
+  max_minutes: number;
+  limits_source: "actor" | "policy";
+  memory?: Array<string>;
+  mcp_servers?: Array<BuiltinMcpServer>;
 };
 
 export type AgentCredentialCreate = {
@@ -3996,6 +4086,7 @@ export interface Operations {
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
+  describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
@@ -4184,6 +4275,7 @@ export interface Operations {
   getWorkItemJourney: { method: "GET"; path: "/work-items/{id}/journey"; body: never; response: WorkItemJourney };
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
+  getWorkflowActivity: { method: "GET"; path: "/projects/{id}/workflows/{name}/activity"; body: never; response: WorkflowActivity };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
   githubAppSetup: { method: "GET"; path: "/github/setup"; body: never; response: void };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
@@ -4224,6 +4316,7 @@ export interface Operations {
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
+  listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
@@ -4257,6 +4350,7 @@ export interface Operations {
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
+  listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: Array<WorkflowAgent> };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };

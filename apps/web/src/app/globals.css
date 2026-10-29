@@ -211,10 +211,3 @@
   }
 }
 
-/* The setup procedure panel (ADR 0067) sits beside the page on wide screens: the page makes room
-   for it instead of being covered. Under that width the panel is a sheet at the bottom. */
-@media (min-width: 1280px) {
-  body.procedure-open {
-    padding-right: 26rem;
-  }
-}

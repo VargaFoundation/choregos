@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-57 procedures.
+58 procedures.
 
 ## Connectors
 
@@ -17,6 +17,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect Confluence Cloud](connector.documents.confluence.md) | an organisation administrator | `documents/confluence` | 2026-10-16 |
 | [Connect a private git repository as a documents source](connector.documents.git.md) | an organisation administrator | `documents/git` | 2026-10-16 |
 | [Connect SharePoint and OneDrive](connector.documents.sharepoint.md) | an organisation administrator | `documents/sharepoint` | 2026-10-16 |
+| [Connect a web site behind a login as a documents source](connector.documents.web.md) | an organisation administrator | `documents/web` | 2026-10-28 |
 | [Connect a pfSense firewall](connector.firewall.pfsense.md) | an organisation administrator | `firewall/pfsense` | 2026-10-16 |
 | [Use the direct gateway (development only)](connector.gateway.direct.md) | the person who operates the platform | `gateway/direct` | 2026-10-16 |
 | [Connect a LiteLLM gateway](connector.gateway.litellm.md) | the person who operates the platform | `gateway/litellm` | 2026-10-16 |
@@ -59,7 +60,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Add a Confluence space or page tree to a knowledge base](source.confluence.md) | an organisation administrator | `confluence` | 2026-10-16 |
 | [Add a git repository's documentation to a knowledge base](source.git.md) | a project owner | `git` | 2026-10-16 |
 | [Add a SharePoint or OneDrive source to a knowledge base](source.sharepoint.md) | an organisation administrator | `sharepoint` | 2026-10-16 |
-| [Add a web site to a knowledge base](source.web.md) | a project owner | `web` | 2026-10-16 |
+| [Add a web site to a knowledge base](source.web.md) | a project owner | `web` | 2026-10-28 |
 
 ## Clients of the MCP door
 

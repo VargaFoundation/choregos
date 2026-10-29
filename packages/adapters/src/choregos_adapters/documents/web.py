@@ -9,13 +9,21 @@ A crawl sees the whole site each time (`full=True`): a page it no longer reaches
 that lists nothing at all is not such a case (a moved site, a redirect, a wall): it reports its start
 URL as unreadable, so it deletes nothing. Redirects are followed only inside the allow-list; `exclude`
 holds path globs that are neither fetched nor followed.
+
+A site behind a login is read with the headers of a `documents/web` connector (S47-48): a bearer
+token, HTTP Basic, or one named header (an API key, a session cookie). The credential is pinned to the
+connector's host, and every request of a crawl stays on its start origin, so it is never sent
+elsewhere. A source may also carry plain headers of its own (`Accept-Language`); a credential never
+goes there.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import ipaddress
+import re
 import socket
 from collections.abc import Awaitable, Callable
 from fnmatch import fnmatchcase
@@ -114,6 +122,7 @@ class WebCrawlSource:
         user_agent: str = USER_AGENT,
         per_host_per_minute: int | None = None,
         sleep: Sleep = asyncio.sleep,
+        headers: dict[str, str] | None = None,
     ) -> None:
         parts = urlsplit(url)
         if parts.scheme != "https" and not (allow_http and parts.scheme == "http"):
@@ -137,7 +146,7 @@ class WebCrawlSource:
             timeout=20.0,
             transport=guarded(transport, proxy_kind="knowledge_web"),
             follow_redirects=False,
-            headers={"User-Agent": user_agent},
+            headers={**checked_headers(headers or {}), "User-Agent": user_agent},
         )
         self._pages: dict[str, bytes] = {}
 
@@ -161,6 +170,10 @@ class WebCrawlSource:
     async def _get(self, url: str, robots: RobotFileParser | None = None) -> tuple[str, httpx.Response]:
         """One GET, following redirects that stay inside the allow-list. Anything else is returned as is."""
         for _ in range(MAX_REDIRECTS + 1):
+            parts = urlsplit(url)
+            if f"{parts.scheme}://{parts.netloc}" != self.origin:
+                # The client carries the source's headers, a credential among them: never off the origin.
+                raise SourceRefusedError(f"`{url}` is not on `{self.origin}`")
             response = await self._http.get(url)
             location = response.headers.get("location")
             if not (300 <= response.status_code < 400 and location):
@@ -266,3 +279,133 @@ class WebCrawlSource:
         _, response = await self._get(item.ref)
         response.raise_for_status()
         return response.content
+
+
+#: An HTTP header name (RFC 9110 `token`).
+_HEADER_NAME = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,100}$")
+#: Headers the crawl sets itself, or that would change where it goes.
+RESERVED_HEADERS = frozenset({"host", "user-agent", "content-length", "transfer-encoding", "connection"})
+#: The names a credential travels under: refused as a source's plain header, they belong in a connector.
+_CREDENTIAL_NAME = re.compile(r"auth|cookie|token|key|secret|session|password|signature", re.IGNORECASE)
+MAX_HEADERS = 20
+MAX_HEADER_VALUE = 4096
+
+
+def checked_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Headers a crawl may send: well-formed names, values on one line, none the crawl sets itself."""
+    if len(headers) > MAX_HEADERS:
+        raise SourceRefusedError(f"at most {MAX_HEADERS} headers")
+    for name, value in headers.items():
+        if not isinstance(name, str) or not _HEADER_NAME.match(name):
+            raise SourceRefusedError(f"not a header name: `{name}`")
+        if name.lower() in RESERVED_HEADERS:
+            raise SourceRefusedError(f"the crawl sets `{name}` itself")
+        if not isinstance(value, str) or len(value) > MAX_HEADER_VALUE or any(c in value for c in "\r\n\0"):
+            raise SourceRefusedError(
+                f"the value of `{name}` is one line of at most {MAX_HEADER_VALUE} characters"
+            )
+    return dict(headers)
+
+
+def plain_headers(headers: dict[str, str]) -> dict[str, str]:
+    """A source's own headers: no credential among them, it would be stored in the clear."""
+    checked = checked_headers(headers)
+    for name in checked:
+        if _CREDENTIAL_NAME.search(name):
+            raise SourceRefusedError(
+                f"`{name}` looks like a credential: it goes in a `documents/web` connector, "
+                "where it is a secret"
+            )
+    return checked
+
+
+_HOST = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
+
+
+def check_connector_config(config: dict[str, Any]) -> None:
+    """A `documents/web` connector's configuration, refused when saved rather than at its first sync."""
+    host = str(config.get("host") or "").strip().lower()
+    if not _HOST.match(host):
+        raise SourceRefusedError(f"`host` is a host name, `docs.example.com`, not `{host}`")
+    auth = str(config.get("auth") or "bearer")
+    if auth not in {"bearer", "basic", "header"}:
+        raise SourceRefusedError(f"unknown web auth `{auth}`: `bearer`, `basic` or `header`")
+    if auth == "basic" and not str(config.get("username") or ""):
+        raise SourceRefusedError("an `auth: basic` connector has a `username`")
+    if auth == "header":
+        name = str(config.get("header_name") or "")
+        if not _HEADER_NAME.match(name) or name.lower() in RESERVED_HEADERS:
+            raise SourceRefusedError(f"`header_name` is a header the secret goes in, not `{name}`")
+    extra = config.get("headers") or {}
+    if not isinstance(extra, dict):
+        raise SourceRefusedError("the connector's `headers` map names to values")
+    checked_headers(extra)
+
+
+class WebDocumentsConnector:
+    """A `documents/web` connector: the credential of a site behind a login, pinned to its host.
+
+    `auth: bearer` sends `Authorization: Bearer <secret>`; `auth: basic` sends HTTP Basic with
+    `username` and the secret as the password; `auth: header` sends the secret in `header_name` (an
+    `X-API-Key`, a `Cookie`). `headers` are plain headers sent with it. A source on another host is
+    refused, so the credential is never sent elsewhere.
+    """
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.host = str(config.get("host") or "").strip().lower()
+        self.auth = str(config.get("auth") or "bearer")
+
+    def headers(self) -> dict[str, str]:
+        secret = str(self.config.get("secret") or "")
+        if not secret:
+            raise SourceRefusedError("the `documents/web` connector has no `secret`")
+        extra = self.config.get("headers") or {}
+        if not isinstance(extra, dict):
+            raise SourceRefusedError("the connector's `headers` map names to values")
+        out = checked_headers({str(k): str(v) for k, v in extra.items()})
+        if self.auth == "bearer":
+            out["Authorization"] = f"Bearer {secret}"
+        elif self.auth == "basic":
+            user = str(self.config.get("username") or "")
+            if not user:
+                raise SourceRefusedError("an `auth: basic` connector has a `username`")
+            out["Authorization"] = "Basic " + base64.b64encode(f"{user}:{secret}".encode()).decode()
+        elif self.auth == "header":
+            name = str(self.config.get("header_name") or "")
+            if not name:
+                raise SourceRefusedError("an `auth: header` connector names its `header_name`")
+            out[name] = secret
+        else:
+            raise SourceRefusedError(f"unknown web auth `{self.auth}`: `bearer`, `basic` or `header`")
+        return checked_headers(out)
+
+    def source(
+        self,
+        config: dict[str, Any],
+        *,
+        key: str,
+        user_agent: str = USER_AGENT,
+        per_host_per_minute: int | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+        resolver: Resolver = resolve,
+    ) -> WebCrawlSource:
+        url = str(config["url"])
+        check_connector_config(self.config)
+        if (urlsplit(url).hostname or "").lower() != self.host:
+            raise SourceRefusedError(
+                f"`{url}` is not on `{self.host}`: the connector's credential is never sent to another host"
+            )
+        own = config.get("headers") or {}
+        return WebCrawlSource(
+            url=url,
+            max_depth=int(config.get("max_depth", 2)),
+            max_pages=int(config.get("max_pages", 50)),
+            exclude=config.get("exclude"),
+            include_documents=config.get("include_documents") is True,
+            user_agent=user_agent,
+            per_host_per_minute=per_host_per_minute,
+            transport=transport,
+            resolver=resolver,
+            headers={**plain_headers(dict(own)), **self.headers()},
+        )
