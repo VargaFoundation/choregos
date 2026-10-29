@@ -32,6 +32,10 @@ trustedProxyCidrs: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"]
 # Only with `trustedProxyCidrs: []`: the number of proxies that each append one X-Forwarded-For
 # entry (`CHOREGOS_TRUSTED_PROXY_HOPS`). Setting both makes the API refuse to start.
 trustedProxyHops: 0
+# Browser origins allowed to call the API directly (`CHOREGOS_CORS_ORIGINS`, also the voice socket's).
+# Empty: the console's public URL. List every origin when a second console, or the voice page served
+# elsewhere, calls the API.
+corsOrigins: []
 resources:
   requests: { cpu: 200m, memory: 512Mi }
   limits: { cpu: "1", memory: 1Gi }
