@@ -153,6 +153,8 @@ import type {
   FindingPage,
   MeDto,
   Memory,
+  MemoryAbReport,
+  GatewayKeyInfo,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -977,6 +979,11 @@ export const api = {
   /** Named memories (S40-11, ADR 0075): the organisation's, global and project, with who uses each. */
   memories: (org: string, filter: { scope?: "global" | "project"; project?: string } = {}) =>
     request<MemoryStore[]>(`/orgs/${org}/memories${query(compact(filter))}`),
+  /** Tickets with and without a memory over the last `weeks` (1-52): the report's verdict says whether memory helps. */
+  memoryAbReport: (org: string = DEFAULT_ORG, weeks = 4) =>
+    request<MemoryAbReport>(`/orgs/${org}/memory/ab-report${query({ weeks: String(weeks) })}`),
+  /** Platform administrators only: the keys the model gateway minted for runs, never the secret. */
+  gatewayKeys: () => request<GatewayKeyInfo[]>("/platform/gateway/keys"),
   memory: (org: string, slug: string) => request<MemoryStore>(`/orgs/${org}/memories/${slug}`),
   createGlobalMemory: (org: string, body: MemoryStoreCreate) =>
     request<MemoryStore>(`/orgs/${org}/memories`, { method: "POST", body: JSON.stringify(body) }),

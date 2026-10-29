@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, Card, Drawer, Empty, ErrorNote, Eyebrow, Heading, Input, Select } from "@/components/ui";
+import { MemoryAbReportCard } from "@/components/memory-ab-report";
 import { OrganisationMemoryStore } from "@/components/memory-store";
 import { api } from "@/lib/api";
 import { reachLabel } from "@/lib/memories";
@@ -124,6 +125,7 @@ export default function MemoriesPage() {
           </div>
         )}
       </Card>
+      <MemoryAbReportCard org={org} />
       <Drawer open={open} onClose={() => setOpen(false)} title="New organisation memory">
         <form
           className="space-y-3 text-sm"

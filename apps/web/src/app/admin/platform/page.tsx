@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { GatewayKeysCard } from "@/components/admin/gateway-keys";
 import { Alert, Button, Card, Code, Empty, EtatDeLecture, Field, Input, StateBadge } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { AgentBackendInfo, ExecutorInfo } from "@/lib/types";
@@ -112,6 +113,9 @@ export default function PlatformPage() {
         <EtatDeLecture lecture={executors} quoi="the executors" />
         {executors.data?.length === 0 && <Empty>No executor registered</Empty>}
       </Card>
+      <div className="lg:col-span-2">
+        <GatewayKeysCard />
+      </div>
     </div>
   );
 }

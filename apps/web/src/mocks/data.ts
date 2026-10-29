@@ -2784,6 +2784,24 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return structuredClone(mockOrg) as T;
   }
   if (/^\/orgs\/[^/]+\/outbound-proxy/.test(bare)) return outboundProxyApi(method, bare, body) as T;
+  if (method === "GET" && /^\/orgs\/[^/]+\/memory\/ab-report$/.test(bare)) {
+    const weeks = Number(new URLSearchParams(path.split("?")[1] ?? "").get("weeks") ?? "4");
+    return {
+      org: "acme",
+      weeks,
+      since: "2026-10-01T00:00:00Z",
+      with_memory: { projects: ["billing-api"], tickets: 18, first_pass_merge_rate: 0.72, cost_per_ticket_usd: 1.8 },
+      without_memory: { projects: ["checkout-web"], tickets: 15, first_pass_merge_rate: 0.53, cost_per_ticket_usd: 2.4 },
+      verdict: "Memory helps: more tickets merge at first pass, at a lower cost.",
+      detail: `Over ${weeks} weeks, 33 tickets in two projects. The groups are small: read the gap as a signal, not a proof.`,
+    } as T;
+  }
+  if (method === "GET" && bare === "/platform/gateway/keys") {
+    return [
+      { key_id: "gk-7f3a91", run_id: "run-1042", project_slug: "billing-api", budget_usd: 5, spend_usd: 1.37, expires_at: "2026-10-30T12:00:00Z", revoked: false, created_at: "2026-10-29T09:00:00Z" },
+      { key_id: "gk-2c84be", run_id: "run-1031", project_slug: "checkout-web", budget_usd: 2, spend_usd: 2, expires_at: null, revoked: true, created_at: "2026-10-28T14:30:00Z" },
+    ] as T;
+  }
   if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
     if (method === "PUT") {
       mockCeiling = { ceiling: (body as { ceiling: Record<string, unknown> | null }).ceiling, updated_by: me.email, updated_at: new Date().toISOString() };
