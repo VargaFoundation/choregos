@@ -1,4 +1,4 @@
-# 0108 — An organisation brings its own model gateway, and its runs use it
+# 0109 — An organisation brings its own model gateway, and its runs use it
 
 - **Status**: accepted, 2026-10-28 — implemented by S44-04
 - **Concerns**: `services/gateway.py` (`org_gateway`), `createOrgConnector` (`routers/org_connectors.py`),

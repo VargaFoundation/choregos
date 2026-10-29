@@ -112,7 +112,7 @@ async def test_a_session_pod_gets_no_workspace_whatever_the_version_asks(setup: 
 
 
 async def test_a_session_pod_calls_the_organisations_own_gateway(setup: Fixture) -> None:
-    """ADR 0108: the session's key comes from the organisation's gateway, so the pod calls its models
+    """ADR 0109: the session's key comes from the organisation's gateway, so the pod calls its models
     there, not at the deployment's `gateway_url`."""
     from choregos_api.db.models import OrgConnector, Project
     from choregos_api.db.session import session_scope

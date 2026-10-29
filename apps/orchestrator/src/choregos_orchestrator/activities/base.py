@@ -58,7 +58,7 @@ class ProjectBundle:
     #: network (ADR 0070). `policy` above is already brought down to it.
     ceiling: PolicyCeiling | None = None
     #: The URL the run's agent calls its models at when the gateway is a connector's (the project's,
-    #: else the organisation's own, ADR 0108) and names one; `None`: the deployment's `gateway_url`.
+    #: else the organisation's own, ADR 0109) and names one; `None`: the deployment's `gateway_url`.
     #: The key is minted on that gateway: the agent must call the same one.
     gateway_url: str | None = None
 
@@ -137,7 +137,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     }
     if "gateway" not in specs and (own := await org_gateway_spec(session, project.org_id)) is not None:
         specs["gateway"] = own
-    # The key is minted on the gateway built here: the project's, else the organisation's (ADR 0108).
+    # The key is minted on the gateway built here: the project's, else the organisation's (ADR 0109).
     gateway_url = str((specs.get("gateway") or {}).get("config", {}).get("base_url") or "") or None
     return ProjectBundle(
         project=project,

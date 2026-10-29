@@ -1374,7 +1374,7 @@ a section opens this page.
 `/admin/models` (the **Models** page of the administration) is the organisation's model catalogue
 ([ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)), whatever the gateway is.
 
-- **Whose gateway** ([ADR 0108](adr/0108-an-organisation-brings-its-own-model-gateway.md)): the Gateway
+- **Whose gateway** ([ADR 0109](adr/0109-an-organisation-brings-its-own-model-gateway.md)): the Gateway
   card says whether models are routed by the deployment's gateway, shared by the organisations of the
   instance, or by the organisation's own. An `org_admin` connects the organisation's own gateway with
   *Connect your organisation's gateway*: a connector of kind `gateway` (`litellm` or
