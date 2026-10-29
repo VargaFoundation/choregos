@@ -651,6 +651,35 @@ loses its type. Never `alias_names` or `replace_module` in a module under
 `apps/orchestrator/src/choregos_orchestrator/workflows/`: the Temporal sandbox re-imports those
 modules, and they keep plain typed aliases.
 
+## Layering: what may import what
+
+The API is a dependency that only shrinks ([ADR 0099](adr/0099-the-api-is-a-dependency-that-only-shrinks.md)).
+
+- The orchestrator and extensions (entry-point packages such as `choregos_ontology`) may import the
+  API's persistence and services, never its HTTP layer (`routers`, `deps`, `main`, `mcp`, `a2a`,
+  `fastapi`).
+- Services never import routers. One import remains (`services/readiness.py`), ratcheted and
+  removed by S47-08.
+- Routers share helpers through services, not by importing each other's private names. An import
+  inside one router package (`routers/agents/`) is allowed.
+- There will be one organisation lookup, `services.organisations.organisation_by_slug`. It does
+  not exist yet: S47-09 creates it.
+
+Five guards count the crossings that exist today and refuse a new one. Each asserts
+`count <= CEILING`, so a removal never turns it red:
+
+| Guard | Counts |
+|---|---|
+| `tests/architecture/test_orchestrator_imports_of_the_api.py` | `choregos_api` imports in `apps/orchestrator/src` |
+| `tests/architecture/test_packages_imports_of_the_api.py` | `choregos_api` imports in `packages/*/src` (only `choregos_ontology/service`) |
+| `apps/api/tests/test_layering_services_do_not_import_routers.py` | modules outside `routers/` that import a router |
+| `apps/api/tests/test_layering_router_private_imports.py` | private names imported between router units |
+| `apps/api/tests/test_one_organisation_lookup.py` | module-level `_organisation` / `_org` helpers in routers |
+
+Hand-off rule: a PR from any track that removes a counted import lowers that guard's `CEILING` in
+the same PR. A PR that adds one is refused, unless it is a mechanical rename that splits a
+statement (raise `CEILING` by that number and say so in the PR body) or ADR 0099 is amended.
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test
