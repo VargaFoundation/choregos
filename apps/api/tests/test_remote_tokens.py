@@ -104,3 +104,21 @@ async def test_a_bearer_and_a_none_credential(client: AsyncClient, admin: str, r
         org_id = (await session.execute(select(Organization.id))).scalar_one()
         assert (await access_token_for(session, org_id, "static")).token == "the-static-token"
         assert (await access_token_for(session, org_id, "open")).token == ""
+
+
+async def test_an_api_key_credential_gives_its_key_as_it_was_sealed(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent
+) -> None:
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.remote_tokens import access_token_for
+    from sqlalchemy import select
+
+    created = await client.post(
+        BASE, json={"name": "servicenow", "type": "api_key", "token": "the-api-key", "header": "x-sn-apikey"}
+    )
+    assert created.status_code == 201, created.text
+    async with session_scope() as session:
+        org_id = (await session.execute(select(Organization.id))).scalar_one()
+        assert (await access_token_for(session, org_id, "servicenow")).token == "the-api-key"
+    assert remote.oauth_requests == [], "a static key is exchanged with nobody"

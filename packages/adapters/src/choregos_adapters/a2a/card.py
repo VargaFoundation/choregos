@@ -9,6 +9,9 @@ registry's feet is not the agent somebody reviewed.
 
 The parser is tolerant of both A2A 0.3 (`protocolVersion`, `securitySchemes`, `capabilities`) and
 the 1.0 shape (`supportedInterfaces`); it never invents a field the card does not carry.
+
+An API key scheme counts only when the key travels in a request header: a key in a query string
+ends up in every proxy and access log on the way, and a cookie is a browser's business.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ MAX_CARD_BYTES = 512 * 1024
 #: The credential types an organisation can hold for a remote agent (ADR 0062).
 AUTH_OAUTH = "oauth2_authorization_code"
 AUTH_BEARER = "bearer"
+AUTH_API_KEY = "api_key"
 AUTH_NONE = "none"
 DCR_EXTENSIONS = ("setup-dcr", "dynamic-client-registration", "dcr")
 
@@ -50,13 +54,16 @@ class AgentCard:
     protocol_version: str
     skills: tuple[CardSkill, ...]
     streaming: bool
-    #: `oauth2_authorization_code` | `bearer` | `none`: the schemes the card accepts, in its order.
+    #: `oauth2_authorization_code` | `bearer` | `api_key` | `none`: the schemes the card accepts, in
+    #: its order.
     auth_types: tuple[str, ...]
     token_url: str | None = None
     authorization_url: str | None = None
     scopes: tuple[str, ...] = ()
     #: The Dynamic Client Registration endpoint a card advertises in an extension, if any.
     dcr_url: str | None = None
+    #: The request headers the card's API key schemes name, as the card spells them.
+    api_key_headers: tuple[str, ...] = ()
     digest: str = field(default="")
 
     @property
@@ -65,6 +72,10 @@ class AgentCard:
 
     def skill(self, skill_id: str) -> CardSkill | None:
         return next((s for s in self.skills if s.id == skill_id), None)
+
+    def takes_api_key_in(self, header: str) -> bool:
+        """The card names this header for an API key (header names are case-insensitive)."""
+        return header.lower() in {h.lower() for h in self.api_key_headers}
 
     @property
     def major(self) -> int:
@@ -104,7 +115,7 @@ def parse_card(raw: dict[str, Any]) -> AgentCard:
         if isinstance(s, dict) and s.get("id")
     )
     capabilities = raw.get("capabilities") or {}
-    auth, token_url, auth_url, scopes = _security(raw)
+    security = _security(raw)
     return AgentCard(
         raw=raw,
         url=url,
@@ -113,21 +124,28 @@ def parse_card(raw: dict[str, Any]) -> AgentCard:
         protocol_version=version,
         skills=skills,
         streaming=bool(capabilities.get("streaming")),
-        auth_types=auth,
-        token_url=token_url,
-        authorization_url=auth_url,
-        scopes=scopes,
+        auth_types=tuple(dict.fromkeys(security.kinds)),
+        token_url=security.token_url,
+        authorization_url=security.authorization_url,
+        scopes=security.scopes,
         dcr_url=_dcr_url(capabilities),
+        api_key_headers=tuple(dict.fromkeys(security.api_key_headers)),
         digest=digest_of(raw),
     )
 
 
-def _security(raw: dict[str, Any]) -> tuple[tuple[str, ...], str | None, str | None, tuple[str, ...]]:
-    schemes = raw.get("securitySchemes") or {}
-    kinds: list[str] = []
+@dataclass
+class _Security:
+    kinds: list[str] = field(default_factory=list)
     token_url: str | None = None
-    auth_url: str | None = None
+    authorization_url: str | None = None
     scopes: tuple[str, ...] = ()
+    api_key_headers: list[str] = field(default_factory=list)
+
+
+def _security(raw: dict[str, Any]) -> _Security:
+    schemes = raw.get("securitySchemes") or {}
+    found = _Security()
     for scheme in schemes.values() if isinstance(schemes, dict) else []:
         if not isinstance(scheme, dict):
             continue
@@ -138,17 +156,25 @@ def _security(raw: dict[str, Any]) -> tuple[tuple[str, ...], str | None, str | N
                 "authorizationCode"
             )
             if isinstance(flow, dict):
-                kinds.append(AUTH_OAUTH)
-                token_url = flow.get("tokenUrl")
-                auth_url = flow.get("authorizationUrl")
-                scopes = tuple((flow.get("scopes") or {}).keys())
+                found.kinds.append(AUTH_OAUTH)
+                found.token_url = flow.get("tokenUrl")
+                found.authorization_url = flow.get("authorizationUrl")
+                found.scopes = tuple((flow.get("scopes") or {}).keys())
         elif kind == "http" and str(scheme.get("scheme", "")).lower() == "bearer":
-            kinds.append(AUTH_BEARER)
-        elif kind in {"apikey", "openidconnect", "mutualtls"}:
-            continue
+            found.kinds.append(AUTH_BEARER)
+        elif kind in {"apikey", "apikeysecurityscheme"}:
+            # 0.3: `{type: apiKey, in, name}`; 1.0: `{apiKeySecurityScheme: {location, name}}`.
+            body = scheme.get("apiKeySecurityScheme") or scheme
+            if not isinstance(body, dict):
+                continue
+            where = str(body.get("in") or body.get("location") or "").lower()
+            name = str(body.get("name") or "")
+            if where == "header" and name:
+                found.kinds.append(AUTH_API_KEY)
+                found.api_key_headers.append(name)
     if not schemes and not raw.get("security"):
-        kinds.append(AUTH_NONE)
-    return tuple(dict.fromkeys(kinds)), token_url, auth_url, scopes
+        found.kinds.append(AUTH_NONE)
+    return found
 
 
 def _dcr_url(capabilities: dict[str, Any]) -> str | None:

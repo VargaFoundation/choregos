@@ -12,8 +12,12 @@ import type { RemoteCredential, RemoteCredentialCreate } from "@/lib/types";
 export const CREDENTIAL_TYPES: Record<RemoteCredential["type"], string> = {
   oauth2_authorization_code: "OAuth (a person authorises)",
   bearer: "Bearer token",
+  api_key: "API key (in a header)",
   none: "None",
 };
+
+/** An HTTP header name (RFC 9110 `token`): where an API key travels, never the key itself. */
+const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$/;
 
 const STATUS_TONE = { connected: "ok", pending: "waiting", error: "danger", revoked: "neutral" } as const;
 
@@ -93,7 +97,14 @@ export function RemoteCredentials({
                   <TD className="font-mono text-xs" data-donnee>
                     {credential.name}
                   </TD>
-                  <TD className="text-xs">{CREDENTIAL_TYPES[credential.type]}</TD>
+                  <TD className="text-xs">
+                    {CREDENTIAL_TYPES[credential.type]}
+                    {credential.header && (
+                      <span className="block font-mono" data-testid={`header-${credential.name}`}>
+                        {credential.header}
+                      </span>
+                    )}
+                  </TD>
                   <TD>
                     <Badge tone={STATUS_TONE[credential.status]}>{credential.status}</Badge>
                     <p className="mt-1 text-xs text-ink-muted" data-testid={`status-${credential.name}`}>
@@ -147,6 +158,7 @@ function AddCredential({ org, onAdded }: { org: string; onAdded: () => void }) {
   const [type, setType] = useState<RemoteCredential["type"]>("oauth2_authorization_code");
   const [cardUrl, setCardUrl] = useState("");
   const [token, setToken] = useState("");
+  const [header, setHeader] = useState("");
   const [error, setError] = useState<string | null>(null);
   const create = useMutation({
     mutationFn: (body: RemoteCredentialCreate) => api.createRemoteCredential(org, body),
@@ -154,6 +166,7 @@ function AddCredential({ org, onAdded }: { org: string; onAdded: () => void }) {
       setName("");
       setCardUrl("");
       setToken("");
+      setHeader("");
       setError(null);
       onAdded();
     },
@@ -161,7 +174,13 @@ function AddCredential({ org, onAdded }: { org: string; onAdded: () => void }) {
   });
   const valid =
     /^[a-z][a-z0-9-]{1,62}$/.test(name) &&
-    (type === "oauth2_authorization_code" ? /^https:\/\//.test(cardUrl) : type === "bearer" ? token.length > 0 : true);
+    (type === "oauth2_authorization_code"
+      ? /^https:\/\//.test(cardUrl)
+      : type === "bearer"
+        ? token.length > 0
+        : type === "api_key"
+          ? token.length > 0 && HEADER_NAME.test(header)
+          : true);
   return (
     <Card title="Add a credential">
       <form
@@ -173,7 +192,8 @@ function AddCredential({ org, onAdded }: { org: string; onAdded: () => void }) {
             name,
             type,
             ...(type === "oauth2_authorization_code" && { card_url: cardUrl }),
-            ...(type === "bearer" && { token }),
+            ...((type === "bearer" || type === "api_key") && { token }),
+            ...(type === "api_key" && { header }),
           });
         }}
       >
@@ -206,8 +226,13 @@ function AddCredential({ org, onAdded }: { org: string; onAdded: () => void }) {
             )}
           </Field>
         )}
-        {type === "bearer" && (
-          <Field label="Token" hint="Typed once, sealed in the secret store, never shown again.">
+        {type === "api_key" && (
+          <Field label="Header" hint="The request header the agent reads the key in, as its card names it: x-sn-apikey for ServiceNow.">
+            {(props) => <Input {...props} value={header} onChange={(e) => setHeader(e.target.value)} placeholder="x-sn-apikey" />}
+          </Field>
+        )}
+        {(type === "bearer" || type === "api_key") && (
+          <Field label={type === "bearer" ? "Token" : "Key"} hint="Typed once, sealed in the secret store, never shown again.">
             {(props) => (
               <Input {...props} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
             )}

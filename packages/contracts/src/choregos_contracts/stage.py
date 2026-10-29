@@ -14,6 +14,8 @@ from .workflow import Strict
 STAGE_INPUT_SCHEMA = "choregos/StageInput/v1"
 STAGE_RESULT_SCHEMA = "choregos/StageResult/v1"
 CONTEXT_PACK_SCHEMA = "choregos/ContextPack/v1"
+#: An HTTP header name (RFC 9110 `token`), the one a remote agent's API key travels in (ADR 0062).
+HEADER_NAME = r"^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$"
 
 
 def file_outputs(outputs: list[str], output_types: dict[str, str]) -> list[str]:
@@ -297,6 +299,9 @@ class RemoteCall(Strict):
     #: The NAME of the organisation credential the access token comes from (never the token). The
     #: orchestrator reads it to mint the token; the runner does not need it.
     credential: str | None = None
+    #: The request header the token travels in, as an `api_key` credential names it (`x-sn-apikey`);
+    #: `None` sends it as `Authorization: Bearer`. A header name, never a value.
+    token_header: str | None = Field(default=None, pattern=HEADER_NAME)
 
 
 #: The runner's loopback listeners a hosted container is pointed at: model, MCP, egress (ADR 0080).

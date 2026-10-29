@@ -76,7 +76,7 @@ from .garde import garde_contre_l_injection
 from .images import named_image
 from .job import NO_MODEL, prepare_job
 from .plan import StagePlan
-from .remote import A2A_BACKEND, a2a_runtime, check_remote_agent, remote_budget, remote_call
+from .remote import A2A_BACKEND, a2a_runtime, check_remote_agent, remote_budget, remote_call, token_header
 from .run_key import reserve_key
 from .run_network import admit_network, network_permissions, run_network
 
@@ -334,7 +334,13 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 image=agent_image,
             ),
             model=resolved.to_ref() if resolved is not None else NO_MODEL,
-            remote=remote_call(remote_runtime, agent.agent.slug, budget)
+            # With the header an API key travels in (S48-03); the key itself waits for `start_run`.
+            remote=remote_call(
+                remote_runtime,
+                agent.agent.slug,
+                budget,
+                await token_header(session, bundle.project.org_id, remote_runtime),
+            )
             if remote_runtime is not None
             else None,
             prompt=_prompt_call(agent),

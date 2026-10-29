@@ -4,8 +4,9 @@
 It serves an Agent Card (GET) and a JSON-RPC endpoint (POST) over `httpx.MockTransport`
 (`fake.transport()`), so the client, the runner and the orchestrator talk to it exactly as they
 would talk to Atlassian's gateway — without a network. Scriptable: the states a task goes through,
-its artifacts, a question (`input-required`), a failure, a bearer token it demands, a streaming or
-polling-only agent, a card that changes between two fetches, and a slow agent (a fake clock).
+its artifacts, a question (`input-required`), a failure, a bearer token or an API key it demands, a
+streaming or polling-only agent, a card that changes between two fetches, and a slow agent (a fake
+clock).
 
 Every request is recorded in `fake.requests` (method, params, whether the call carried a token — the
 token itself is kept apart in `fake.tokens`, so a test can assert it never reaches a journal).
@@ -39,10 +40,13 @@ class FakeA2aAgent:
     data_artifacts: list[tuple[str, Any]] = field(default_factory=list)
     skills: list[str] = field(default_factory=lambda: ["work-in-jira", "work-in-confluence"])
     streaming: bool = True
-    #: When set, the endpoint refuses (401) any call without `Authorization: Bearer <token>`.
+    #: When set, the endpoint refuses (401) any call without this token where the card asks for it:
+    #: `Authorization: Bearer <token>`, or `<api_key_header>: <token>` for an `api_key` card.
     required_token: str | None = None
-    #: The security scheme the card advertises: `oauth2`, `bearer` or `none`.
+    #: The security scheme the card advertises: `oauth2`, `bearer`, `api_key` or `none`.
     security: str = "oauth2"
+    #: The header an `api_key` card names (ServiceNow's is `x-sn-apikey`).
+    api_key_header: str = "X-API-Key"
     host: str = HOST
     #: Raised for the method that is called: `{"stream": -32601}` makes streaming unsupported.
     method_errors: dict[str, int] = field(default_factory=dict)
@@ -106,6 +110,9 @@ class FakeA2aAgent:
         elif self.security == "bearer":
             card["securitySchemes"] = {"token": {"type": "http", "scheme": "bearer"}}
             card["security"] = [{"token": []}]
+        elif self.security == "api_key":
+            card["securitySchemes"] = {"key": {"type": "apiKey", "in": "header", "name": self.api_key_header}}
+            card["security"] = [{"key": []}]
         return card
 
     def _task(self, task_id: str, state: str, context_id: str, *, with_artifacts: bool) -> dict[str, Any]:
@@ -154,7 +161,10 @@ class FakeA2aAgent:
         if request.method != "POST" or request.url.path != "/v1/rpc":
             return httpx.Response(404)
         auth = request.headers.get("authorization")
-        token = auth.removeprefix("Bearer ") if auth and auth.startswith("Bearer ") else None
+        if self.security == "api_key":
+            token = request.headers.get(self.api_key_header)
+        else:
+            token = auth.removeprefix("Bearer ") if auth and auth.startswith("Bearer ") else None
         self.tokens.append(token)
         if self.required_token is not None and token != self.required_token:
             return httpx.Response(401, json={"error": "unauthorized"})
@@ -162,7 +172,12 @@ class FakeA2aAgent:
         names = {v: k for k, v in _METHODS[1 if self.protocol_version.startswith("1") else 0].items()}
         key = names.get(body["method"])
         self.requests.append(
-            {"method": body["method"], "params": body.get("params", {}), "has_token": token is not None}
+            {
+                "method": body["method"],
+                "params": body.get("params", {}),
+                "has_token": token is not None,
+                "has_authorization": auth is not None,
+            }
         )
         if key is None or key in self.method_errors:
             code = self.method_errors.get(key or "", -32601)

@@ -1,6 +1,6 @@
 # 0062 — Remote agents over A2A
 
-- **Status**: accepted, 2026-10-16
+- **Status**: accepted, 2026-10-16; §7 amended 2026-10-29 (S48-03): an `api_key` credential
 - **Concerns**: the stage input (`stage-input.schema.json`, `StageInput.remote`), the agent registry
   (`Agent.kind`, `AgentSpec.runtime`), the organisation's remote credentials (`/orgs/{org}/remote-credentials`),
   the orchestrator's stage preparation and run start, the runner, the cost ledger; builds on
@@ -86,6 +86,29 @@ What Rovo actually exposes (checked 2026-10-15):
    Temporal payload, no journal. The credential row is locked during the exchange. **Who authorises
    matters**: the remote agent acts with that person's permissions. The recommendation is a dedicated,
    least-privileged account.
+
+   **Amended 2026-10-29 (S48-03; the product owner's request, for ServiceNow's AI agents).** A fourth
+   type, `api_key`: a static key sealed like a bearer token (`remote/<name>/token`), and the **request
+   header** it travels in (`x-sn-apikey` for ServiceNow), a name kept in the credential's public
+   configuration. Why: ServiceNow's A2A endpoints read an API key in a header of the instance's
+   choosing, and a bearer token in `Authorization` is not that.
+   - The card says where the key goes. An A2A `apiKey` scheme (`{type: apiKey, in, name}`, or 1.0's
+     `apiKeySecurityScheme {location, name}`) counts only with `in: header`: a key in a query string
+     ends up in every proxy and access log on the way, and a cookie is a browser's business; both stay
+     unsupported. Publication accepts an `api_key` credential only when the card names its header
+     (case-insensitively), and discovery offers only those.
+   - The key travels **alone** in that header, never also as `Authorization: Bearer`: a key is not
+     handed to a header nobody named for it. The orchestrator copies the header's NAME into
+     `RemoteCall.token_header` (contract change); the key itself takes the bearer token's path to
+     the run's Secret (`CHOREGOS_RUN_REMOTE_TOKEN`) and nowhere else.
+   - A header that frames the request or belongs to a proxy or a browser (`Host`, `Content-Type`,
+     `Accept`, `Cookie`, `Transfer-Encoding`…) is refused at creation; the header name is an RFC 9110
+     token, so no value can be smuggled into it.
+   - *Rejected*: taking the header from the card alone, with a credential that holds only the key —
+     a card that names two headers, or changes its header, would decide where a sealed key goes.
+   - *Not decided here*: a card behind authentication (ServiceNow can require the key to read the
+     card; the platform reads cards anonymously, so that setting must stay off); OAuth client
+     credentials with a client registered by hand, which ServiceNow also offers.
 8. **Egress is admission.** The stage is refused (`AgentIndisponible`, the interpreter's existing
    configuration refusal: the work item is escalated, a person fixes the configuration) when the
    endpoint host is not in the project's `sandbox.network.allow_domains`, naming the fix; so is a

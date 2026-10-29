@@ -202,6 +202,49 @@ async def test_a_bearer_credential_is_sealed_and_never_returned(
     assert (await client.post(BASE, json={"name": "nope", "type": "bearer"})).status_code == 422
 
 
+async def test_an_api_key_is_sealed_and_only_its_header_is_kept(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent
+) -> None:
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.secret_store import get_secret_store
+    from sqlalchemy import select
+
+    key = "-".join(["snkey", "3c9e1a7b" * 3])
+    created = await client.post(
+        BASE, json={"name": "servicenow", "type": "api_key", "token": key, "header": "x-sn-apikey"}
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["type"] == "api_key" and body["status"] == "connected"
+    assert body["header"] == "x-sn-apikey", "the header is a name, shown; the key is not"
+    assert key not in created.text + (await client.get(BASE)).text + await _everything_stored()
+    async with session_scope() as session:
+        org = (await session.execute(select(Organization))).scalars().one()
+        sealed = await get_secret_store().get_many(session, org.id, ["remote/servicenow/token"])
+    assert sealed["remote/servicenow/token"] == key
+
+
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        ({"type": "api_key", "header": "x-sn-apikey"}, "needs the key"),
+        ({"type": "api_key", "token": "k"}, "needs the key"),
+        ({"type": "api_key", "token": "k", "header": "Content-Type"}, "frames the request"),
+        ({"type": "api_key", "token": "k", "header": "host"}, "frames the request"),
+        ({"type": "api_key", "token": "k", "header": "x sn apikey"}, "header"),
+        ({"type": "api_key", "token": "k", "header": "x-key\r\nX-Injected: 1"}, "header"),
+        ({"type": "bearer", "token": "k", "header": "x-sn-apikey"}, "only an `api_key` credential"),
+    ],
+)
+async def test_an_api_key_needs_its_key_and_a_header_it_can_travel_in(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent, body: dict[str, str], said: str
+) -> None:
+    refused = await client.post(BASE, json={"name": "servicenow", **body})
+    assert refused.status_code == 422 and said in refused.text, refused.text
+    assert (await client.get(BASE)).json() == []
+
+
 async def test_revoking_deletes_the_sealed_values(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:

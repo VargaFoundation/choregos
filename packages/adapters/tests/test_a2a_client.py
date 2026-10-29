@@ -114,6 +114,27 @@ async def test_the_token_is_sent_as_bearer_and_only_there() -> None:
     assert fake.requests[0]["params"]["message"]["metadata"] == {"choregos": {"run_id": "r1"}}
 
 
+async def test_an_api_key_travels_alone_in_the_header_its_credential_names() -> None:
+    """ServiceNow reads its key in `x-sn-apikey`: the same key as a bearer token would be refused there,
+    and sent in both it would reach a header nobody named for it."""
+    fake = FakeA2aAgent(security="api_key", api_key_header="x-sn-apikey", required_token="the-key")
+    client = A2aClient(
+        fake.endpoint,
+        "the-key",
+        fake.protocol_version,
+        transport=fake.transport(),
+        token_header="x-sn-apikey",
+    )
+    async with client:
+        assert (await client.send(client.message([text_part("x")]))).state == "working"
+        _ = [e async for e in client.stream(client.message([text_part("x")]))]
+    assert fake.tokens == ["the-key", "the-key"]
+    assert not any(r["has_authorization"] for r in fake.requests), "no bearer header beside the key"
+    async with _client(fake, token="the-key") as bearer:
+        with pytest.raises(A2aAuthRequired):
+            await bearer.send(bearer.message([text_part("x")]))
+
+
 async def test_states_are_normalised_across_versions() -> None:
     from choregos_adapters.a2a.client import normalise_state
 

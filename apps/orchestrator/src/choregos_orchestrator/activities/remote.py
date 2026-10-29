@@ -107,7 +107,20 @@ async def check_credential(session: Any, org_id: str, runtime: Any) -> None:
         )
 
 
-def remote_call(runtime: Any, slug: str, budget: Budget) -> RemoteCall:
+async def token_header(session: Any, org_id: str, runtime: Any) -> str | None:
+    """The request header the run's token travels in: an `api_key` credential's, else `None`
+    (`Authorization: Bearer`). A header name, never the key: it may ride in the `StageInput`."""
+    if runtime is None or runtime.credential is None:
+        return None
+    from choregos_api.services.remote_agents import credential_named
+
+    row = await credential_named(session, org_id, runtime.credential)
+    if row is None or row.type != "api_key":
+        return None
+    return str((row.config or {}).get("header") or "") or None
+
+
+def remote_call(runtime: Any, slug: str, budget: Budget, header: str | None = None) -> RemoteCall:
     pinned = runtime.pinned_card
     return RemoteCall(
         endpoint=pinned.url,
@@ -123,6 +136,7 @@ def remote_call(runtime: Any, slug: str, budget: Budget) -> RemoteCall:
         ),
         agent_slug=slug,
         credential=runtime.credential,
+        token_header=header,
     )
 
 

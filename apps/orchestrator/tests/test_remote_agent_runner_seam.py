@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from choregos_adapters.a2a import parse_card
 from choregos_adapters.fakes.a2a import FakeA2aAgent
 from choregos_contracts import ContextPack, StageResult, StageStatus
 from choregos_orchestrator.activities import stage as stage_activities
@@ -20,7 +21,7 @@ from choregos_runner.config import RunnerSettings
 from choregos_runner.runner import Runner
 
 from .conftest import Fixture
-from .test_remote_agent_step import HOST, TOKEN, _decor, _plan
+from .test_remote_agent_step import HOST, TOKEN, _decor, _plan, _runtime
 
 pytestmark = pytest.mark.asyncio
 
@@ -58,10 +59,8 @@ class InternalApi:
         return None
 
 
-async def test_the_runner_calls_the_remote_agent_with_the_token_the_orchestrator_minted(
-    setup: Fixture, tmp_path: Path
-) -> None:
-    await _decor(setup)
+async def _pod(setup: Fixture, fake: FakeA2aAgent, tmp_path: Path) -> tuple[Any, InternalApi]:
+    """Prepares and starts the step, then runs the runner with what the executor would give the pod."""
     prepared = await stage_activities.prepare_stage(_plan(setup))
     await stage_activities.start_run(
         {
@@ -71,14 +70,6 @@ async def test_the_runner_calls_the_remote_agent_with_the_token_the_orchestrator
         }
     )
     spec = setup.adapters.executor.started[-1]
-
-    fake = FakeA2aAgent(
-        host=f"https://{HOST}",
-        required_token=TOKEN,
-        answer="Three open issues.",
-        artifacts=[("issues.csv", "k\n1\n")],
-    )
-    fake.security = "oauth2"
     api = InternalApi()
     settings = RunnerSettings(
         run_id=spec.run_id, workspace=tmp_path / "workspace", run_token="run-token-value"
@@ -91,7 +82,21 @@ async def test_the_runner_calls_the_remote_agent_with_the_token_the_orchestrator
     stage_input = spec.stage_input
     assert stage_input is not None and stage_input.remote is not None
     # The pinned card is the one the agent had when the version was published: the fake's.
-    outcome = await runner.execute(stage_input, api)  # type: ignore[arg-type]
+    return await runner.execute(stage_input, api), api  # type: ignore[arg-type]
+
+
+async def test_the_runner_calls_the_remote_agent_with_the_token_the_orchestrator_minted(
+    setup: Fixture, tmp_path: Path
+) -> None:
+    await _decor(setup)
+    fake = FakeA2aAgent(
+        host=f"https://{HOST}",
+        required_token=TOKEN,
+        answer="Three open issues.",
+        artifacts=[("issues.csv", "k\n1\n")],
+    )
+    fake.security = "oauth2"
+    outcome, api = await _pod(setup, fake, tmp_path)
 
     assert outcome.exit_code == 0, outcome.detail
     result = api.results[-1]
@@ -99,3 +104,26 @@ async def test_the_runner_calls_the_remote_agent_with_the_token_the_orchestrator
     assert set(fake.tokens) == {TOKEN}, "the remote agent saw the token the orchestrator minted, and no other"
     assert api.outputs["response.md"].startswith(b"Three open issues.") and "issues.csv" in api.outputs
     assert result.artifacts.reports["remote_provenance"] == "remote:rovo"
+
+
+async def test_an_api_key_reaches_the_remote_agent_alone_in_its_header(
+    setup: Fixture, tmp_path: Path
+) -> None:
+    """S48-03 end to end: the header's name rides in the StageInput, the key in the run's Secret, and
+    the agent reads the key where its card said, never as a bearer token."""
+    fake = FakeA2aAgent(
+        host=f"https://{HOST}",
+        security="api_key",
+        api_key_header="x-sn-apikey",
+        required_token=TOKEN,
+        answer="Incident triaged.",
+    )
+    card = parse_card(fake.card_document())
+    pinned = {"url": card.url, "protocol_version": card.protocol_version, "digest": card.digest}
+    await _decor(setup, runtime=_runtime(pinned_card={**pinned, "skills": fake.skills}), header="x-sn-apikey")
+    outcome, api = await _pod(setup, fake, tmp_path)
+
+    assert outcome.exit_code == 0, outcome.detail
+    assert api.results[-1].status is StageStatus.DONE, api.results[-1].summary
+    assert set(fake.tokens) == {TOKEN}, "the key the organisation sealed, read in `x-sn-apikey`"
+    assert not any(r["has_authorization"] for r in fake.requests)

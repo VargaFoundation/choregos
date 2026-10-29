@@ -3,8 +3,9 @@
 
 A remote agent is only as trustworthy as the card somebody read. Publication fetches the card (https
 only, no redirect to another host, bounded), checks that the skill exists and that the credential the
-version names is of a type the card accepts, and pins the card: its URL, protocol version, skills and
-SHA-256. The runner reads the card again before it sends anything and refuses on drift.
+version names is of a type the card accepts (an API key, in a header the card names), and pins the
+card: its URL, protocol version, skills and SHA-256. The runner reads the card again before it sends
+anything and refuses on drift.
 """
 
 from __future__ import annotations
@@ -12,7 +13,15 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from choregos_adapters.a2a import AUTH_BEARER, AUTH_NONE, AUTH_OAUTH, AgentCard, CardError, fetch_card
+from choregos_adapters.a2a import (
+    AUTH_API_KEY,
+    AUTH_BEARER,
+    AUTH_NONE,
+    AUTH_OAUTH,
+    AgentCard,
+    CardError,
+    fetch_card,
+)
 from choregos_core.egress import EgressRefusedError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +69,14 @@ async def credential_named(session: AsyncSession, org_id: str, name: str) -> Rem
     return found
 
 
+def credential_fits(card: AgentCard, credential: RemoteCredential) -> bool:
+    """The card accepts this credential: its type, and for an API key the header it travels in."""
+    if credential.type == AUTH_API_KEY:
+        header = str((credential.config or {}).get("header") or "")
+        return AUTH_API_KEY in card.auth_types and card.takes_api_key_in(header)
+    return credential.type in {AUTH_OAUTH, AUTH_BEARER, AUTH_NONE} and credential.type in card.auth_types
+
+
 async def pin_remote_runtime(session: AsyncSession, org_id: str, spec: AgentSpec) -> AgentSpec:
     """The spec with its `pinned_card` filled, after the checks of ADR 0062 §2. Not an `a2a` spec: as is."""
     runtime = spec.runtime
@@ -101,12 +118,17 @@ async def _credential_problems(
         return [{"loc": loc, "msg": f"no remote credential `{runtime.credential}` in this organisation"}]
     if credential.status == "revoked":
         return [{"loc": loc, "msg": f"the remote credential `{runtime.credential}` is revoked"}]
-    accepted_types = {AUTH_OAUTH: AUTH_OAUTH, AUTH_BEARER: AUTH_BEARER}
-    if credential.type == AUTH_NONE:
-        if AUTH_NONE in card.auth_types:
-            return []
-    elif credential.type in accepted_types and credential.type in card.auth_types:
+    if credential_fits(card, credential):
         return []
+    header = (credential.config or {}).get("header")
+    if credential.type == AUTH_API_KEY and AUTH_API_KEY in card.auth_types:
+        return [
+            {
+                "loc": loc,
+                "msg": f"the credential `{credential.name}` sends its key in `{header}`, "
+                f"the card asks for it in: {', '.join(card.api_key_headers)}",
+            }
+        ]
     return [
         {
             "loc": loc,

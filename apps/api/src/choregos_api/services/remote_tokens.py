@@ -82,7 +82,7 @@ async def access_token_for(
         raise RemoteCredentialError(f"the remote credential `{name}` is revoked")
     if row.type == "none":
         return AccessToken("")
-    if row.type == "bearer":
+    if row.type in {"bearer", "api_key"}:  # a static secret: sealed once, sent as it is
         token = await _read(session, store, org_id, secret_name(name, "token"))
         remember_secret(token)
         return AccessToken(token)

@@ -3,8 +3,8 @@ id: agent.remote.a2a
 title: Add a remote agent (A2A)
 applies_to: {agent: remote.a2a}
 audience: org_admin
-version: 1
-reviewed: 2026-10-16
+version: 2
+reviewed: 2026-10-29
 vendor_docs:
   - {title: "A2A protocol specification", url: "https://a2a-protocol.org/latest/specification/"}
 values: ["oauth_callback:remote"]
@@ -27,20 +27,24 @@ egress: ["the agent card's host", "the agent endpoint's host", "the token endpoi
 2. Note the card URL. If it uses OAuth and its card advertises **dynamic client registration**, you
    register nothing. Otherwise register a client at the vendor with the redirect address below and keep
    its client id and secret.
-3. Authentication is one of: OAuth 2.0 authorization code with PKCE; a bearer token; or none.
+3. Authentication is one of: OAuth 2.0 authorization code with PKCE; a bearer token; an **API key** in
+   the request header the card names (ServiceNow's is `x-sn-apikey`); or none. A key the card wants in
+   a query string or a cookie is not supported: a query string ends up in every access log on the way.
 
 ## Permissions
 
 - The credential decides what the agent may do. Prefer a dedicated account holding only the access the
   agent needs.
 - OAuth redirect (callback) address to register, when the vendor needs one: `{{oauth_callback:remote}}`.
-- The refresh token is sealed in the platform's secret store and never shown again; reconnecting replaces
-  it.
+- The refresh token, a bearer token or an API key is sealed in the platform's secret store and never shown
+  again; reconnecting (or a new credential) replaces it. An API key's header is a name and is shown.
 
 ## In Choregos
 
 1. Administration, **Remote agents**, **Connect**: give the card URL, then sign in **as the account the
-   agent will act as** and accept. The credential shows `connected` and who it is authorised as.
+   agent will act as** and accept. The credential shows `connected` and who it is authorised as. For a
+   bearer token or an API key, **Add a credential** instead: type the token, or the key and the header
+   the card names, once.
 2. **Agents**, **New**, **Remote agent (A2A)**: paste the card URL, **Read the card**, pick the skill and
    the credential, set the timeout and the **declared cost** (A2A reports none: it is declared, not
    measured), then publish. Publication pins the card's digest.
@@ -57,6 +61,8 @@ Add a two-step workflow: the remote agent, then a human review of its answer. Th
 
 - `remote_card_changed`: the card changed since publication. Publish a new version to accept it.
 - `remote_auth_required`: the credential expired or was revoked. Reconnect it.
+- Publication refused because the credential "sends its key in" another header than the card's: add a
+  credential with the header the card names (the card summary shows it).
 - `remote_input_required`: the agent asked a question. It is shown; answering it from the console is not
   supported yet.
 - `remote_timeout`: the remote task is cancelled; raise the timeout or narrow the task.

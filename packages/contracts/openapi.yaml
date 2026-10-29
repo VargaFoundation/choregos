@@ -2001,7 +2001,7 @@ paths:
     post:
       tags: [agents]
       operationId: createRemoteCredential
-      description: "OAuth: registers the platform at the card's DCR endpoint (the credential is `pending` until authorised). Bearer: seals the token. `agent:manage`."
+      description: "OAuth: registers the platform at the card's DCR endpoint (the credential is `pending` until authorised). Bearer: seals the token. API key: seals the key, sent in the request header the credential names. `agent:manage`."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/RemoteCredentialCreate" } } }
@@ -5293,11 +5293,12 @@ components:
         skills: { type: array, items: { type: string } }
     RemoteCredential:
       type: object
-      description: What the organisation holds to call remote agents. No secret is ever returned - the refresh token lives sealed in the secret store.
+      description: What the organisation holds to call remote agents. No secret is ever returned - the refresh token, a bearer token and an API key live sealed in the secret store.
       required: [name, type, status]
       properties:
         name: { type: string }
-        type: { type: string, enum: [oauth2_authorization_code, bearer, none] }
+        type: { type: string, enum: [oauth2_authorization_code, bearer, api_key, none] }
+        header: { type: [string, "null"], description: "api_key: the request header the key travels in (a name, never the key)" }
         status: { type: string, enum: [pending, connected, error, revoked] }
         authorised_as: { type: [string, "null"], description: "whose permissions a remote agent acts with: the person who authorised it" }
         scopes: { type: array, items: { type: string } }
@@ -5313,9 +5314,10 @@ components:
       required: [name, type]
       properties:
         name: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
-        type: { type: string, enum: [oauth2_authorization_code, bearer, none] }
+        type: { type: string, enum: [oauth2_authorization_code, bearer, api_key, none] }
         card_url: { type: [string, "null"], pattern: "^https://", description: "OAuth: the card whose Dynamic Client Registration endpoint the platform registers itself at" }
-        token: { type: [string, "null"], writeOnly: true, description: "bearer: the token, write-only, sealed in the secret store" }
+        token: { type: [string, "null"], writeOnly: true, description: "bearer: the token; api_key: the key. Write-only, sealed in the secret store" }
+        header: { type: [string, "null"], pattern: "^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$", description: "api_key: the request header the key travels in, as the card names it (ServiceNow: x-sn-apikey)" }
     RemoteCredentialAuthorization:
       type: object
       required: [redirect_url]
@@ -5344,7 +5346,8 @@ components:
         protocol_version: { type: string }
         digest: { type: string }
         skills: { type: array, items: { $ref: "#/components/schemas/RemoteSkillInfo" } }
-        auth_types: { type: array, items: { type: string }, description: "oauth2_authorization_code, bearer, none: what the card accepts" }
+        auth_types: { type: array, items: { type: string }, description: "oauth2_authorization_code, bearer, api_key, none: what the card accepts" }
+        api_key_headers: { type: array, items: { type: string }, description: "the request headers the card's API key schemes name; a key in a query string or a cookie is not supported" }
         scopes: { type: array, items: { type: string } }
         streaming: { type: boolean }
         dcr_available: { type: boolean, description: "the card advertises Dynamic Client Registration" }

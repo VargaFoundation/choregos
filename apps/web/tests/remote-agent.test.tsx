@@ -107,6 +107,39 @@ describe("the remote credentials page (ADR 0062)", () => {
     await waitFor(() => expect(screen.getByLabelText("Name")).toHaveValue(""));
   });
 
+  it("an API key asks for the header it travels in, then the key as a password field, sent once", async () => {
+    wrap(<RemoteCredentials org="acme" />);
+    await screen.findByTestId("remote-credentials");
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "servicenow" } });
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "api_key" } });
+    const key = screen.getByLabelText("Key");
+    expect(key).toHaveAttribute("type", "password");
+    fireEvent.change(key, { target: { value: "the-typed-key" } });
+    const add = screen.getByRole("button", { name: "Add the credential" });
+    expect(add).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Header/), { target: { value: "x sn apikey" } });
+    expect(add).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Header/), { target: { value: "x-sn-apikey" } });
+    fireEvent.click(add);
+    await waitFor(() =>
+      expect(api.createRemoteCredential).toHaveBeenLastCalledWith("acme", {
+        name: "servicenow",
+        type: "api_key",
+        token: "the-typed-key",
+        header: "x-sn-apikey",
+      }),
+    );
+  });
+
+  it("an API key credential shows the header it travels in", async () => {
+    vi.mocked(api.remoteCredentials).mockResolvedValue([
+      ...remoteCredentials,
+      { name: "servicenow", type: "api_key", header: "x-sn-apikey", status: "connected" },
+    ]);
+    wrap(<RemoteCredentials org="acme" />);
+    expect(await screen.findByTestId("header-servicenow")).toHaveTextContent("x-sn-apikey");
+  });
+
   it("an OAuth credential cannot be added without an https card", async () => {
     wrap(<RemoteCredentials org="acme" />);
     await screen.findByTestId("remote-credentials");
@@ -193,6 +226,17 @@ describe("registering a remote agent from its card (ADR 0062)", () => {
     await read();
     expect(screen.getByTestId("no-credential")).toHaveTextContent(/administration/);
     expect(screen.getByRole("button", { name: "Publish the agent" })).toBeDisabled();
+  });
+
+  it("a card that asks for an API key names the header it reads it in", async () => {
+    vi.mocked(api.discoverRemoteAgent).mockResolvedValue({
+      ...rovoDiscovery,
+      card: { ...rovoDiscovery.card, auth_types: ["api_key"], api_key_headers: ["x-sn-apikey"], dcr_available: false },
+      credentials: [],
+    });
+    await read();
+    expect(screen.getByTestId("card-auth")).toHaveTextContent("API key (in a header) · x-sn-apikey");
+    expect(screen.getByTestId("no-credential")).toHaveTextContent("API key (in a header)");
   });
 
   it("a card that cannot be read shows why and offers nothing else", async () => {

@@ -56,6 +56,7 @@ async def _decor(
     runtime: dict[str, Any] | None = None,
     allow: bool = True,
     credential: str | None = "connected",
+    header: str | None = None,
 ) -> None:
     """The remote agent, the credential holding its token, and the project's egress policy."""
     from choregos_api.db.models import Agent, AgentVersion, PolicyDef, Project, RemoteCredential
@@ -85,8 +86,8 @@ async def _decor(
                 RemoteCredential(
                     org_id=project.org_id,
                     name="rovo",
-                    type="bearer",
-                    config={},
+                    type="api_key" if header else "bearer",
+                    config={"header": header} if header else {},
                     status=credential,
                     secret_ref="store:remote/rovo/token",
                 )
@@ -141,6 +142,7 @@ async def test_a_remote_agents_step_carries_the_call_and_no_model(setup: Fixture
     assert remote["card_digest"].startswith("sha256:") and remote["timeout_s"] == 600
     assert remote["declared_cost"] == {"per_task_usd": 0.05, "per_minute_usd": 0.01}
     assert remote["credential"] == "rovo" and remote["agent_slug"] == "rovo"
+    assert remote["token_header"] is None, "a bearer token travels as `Authorization: Bearer`"
     assert stage_input["memory_scope"] == "none", "the project's memory is not sent to a third party"
     assert stage_input["tools"]["mcp"] == {} and stage_input["skills"] == []
     assert setup.adapters.gateway.keys == {}, "no gateway key exists for a remote agent"
@@ -173,6 +175,26 @@ async def test_the_access_token_reaches_the_executor_spec_and_nothing_that_outli
         run = await session.get(Run, prepared["run_id"])
         assert run is not None and TOKEN not in json.dumps(run.stage_input) + json.dumps(run.tokens or {})
     assert setup.adapters.gateway.keys == {}
+
+
+async def test_an_api_key_names_its_header_in_the_call_and_the_key_stays_in_the_secret(
+    setup: Fixture,
+) -> None:
+    await _decor(setup, header="x-sn-apikey")
+    prepared = await stage_activities.prepare_stage(_plan(setup))
+    assert prepared["stage_input"]["remote"]["token_header"] == "x-sn-apikey"
+    assert TOKEN not in json.dumps(prepared)
+    await stage_activities.start_run(
+        {
+            "project_id": setup.project_id,
+            "work_item_id": setup.work_item_id,
+            "stage_input": prepared["stage_input"],
+        }
+    )
+    spec = setup.adapters.executor.started[-1]
+    assert spec.remote_token == TOKEN, "the key reaches the run's Secret, like a bearer token"
+    assert spec.stage_input.remote is not None and spec.stage_input.remote.token_header == "x-sn-apikey"
+    assert TOKEN not in spec.stage_input.model_dump_json()
 
 
 async def test_a_host_the_policy_does_not_allow_is_refused_before_any_reservation(setup: Fixture) -> None:

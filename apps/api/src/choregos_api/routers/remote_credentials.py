@@ -11,6 +11,10 @@ registered itself (Dynamic Client Registration, RFC 7591) at the endpoint the ca
 3. The provider redirects to `GET /remote-credentials/oauth/callback`: the code is exchanged, the
    REFRESH token is sealed in the secret store and never returned, `authorised_as` is recorded.
 
+A bearer token or an API key is sealed at creation and the credential is `connected` at once. An API
+key also names the request header it travels in (ServiceNow's is `x-sn-apikey`); publication checks
+that the card asks for the key in that header.
+
 Everything needs `agent:manage` (org_admin). Whoever authorises is who the remote agent acts as: a
 dedicated, least-privileged account is the recommendation (docs/integrations.md).
 """
@@ -26,7 +30,7 @@ from typing import Annotated, Any
 from urllib.parse import urlencode, urlsplit
 
 import httpx
-from choregos_adapters.a2a import AUTH_BEARER, AUTH_NONE, AUTH_OAUTH, AgentCard
+from choregos_adapters.a2a import AUTH_API_KEY, AUTH_BEARER, AUTH_OAUTH, AgentCard
 from choregos_core import utcnow
 from choregos_core.redaction import remember_secret
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
@@ -55,7 +59,7 @@ from ..schemas import (
 from ..secret_store import SecretStoreUnavailable, get_secret_store
 from ..security import read_session, sign_session
 from ..services.egress import egress_scope, ensure_or_409, remote_agent_targets
-from ..services.remote_agents import a2a_transport, credential_named, read_card
+from ..services.remote_agents import a2a_transport, credential_fits, credential_named, read_card
 from ..services.remote_tokens import secret_name, store_refresh_token
 
 
@@ -81,6 +85,26 @@ Name = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
 OAUTH_COOKIE = "choregos_remote_oauth"
 HANDSHAKE_S = 600
 CALLBACK_PATH = "/api/v1/remote-credentials/oauth/callback"
+#: Headers an API key may not take the place of: they frame the request, or belong to a proxy or a
+#: browser. Compared lower-cased.
+RESERVED_HEADERS = frozenset(
+    {
+        "accept",
+        "connection",
+        "content-length",
+        "content-type",
+        "cookie",
+        "expect",
+        "host",
+        "keep-alive",
+        "proxy-authorization",
+        "proxy-connection",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+    }
+)
 #: Atlassian's OAuth 2.0 (3LO) wants these two on the authorisation request.
 ATLASSIAN_AUTHORIZE = {"audience": "api.atlassian.com", "prompt": "consent"}
 ATLASSIAN_ME = "https://api.atlassian.com/me"
@@ -112,6 +136,7 @@ def _dto(row: RemoteCredential) -> RemoteCredentialDto:
     return RemoteCredentialDto(
         name=row.name,
         type=row.type,
+        header=config.get("header"),
         status=row.status,
         authorised_as=row.authorised_as,
         scopes=list(config.get("scopes") or []),
@@ -169,6 +194,8 @@ async def create_remote_credential(
     organisation = await _organisation(session, org)
     if await credential_named(session, organisation.id, body.name) is not None:
         raise conflict(f"remote credential `{body.name}` already exists in {org}")
+    if body.header is not None and body.type != AUTH_API_KEY:
+        raise unprocessable("`header` names where an API key travels: only an `api_key` credential has one")
     row = RemoteCredential(
         org_id=organisation.id,
         name=body.name,
@@ -187,9 +214,13 @@ async def create_remote_credential(
             raise conflict(NO_KEY_MESSAGE)
         card = await read_card(body.card_url)
         row.config = await _register_client(session, organisation, row, card, body.card_url, settings, store)
-    elif body.type == AUTH_BEARER:
+    elif body.type in (AUTH_BEARER, AUTH_API_KEY):
+        if body.type == AUTH_API_KEY and not (body.token and body.header):
+            raise unprocessable("an API key credential needs the key (`token`) and its `header`")
         if not body.token:
             raise unprocessable("a bearer credential needs its `token`")
+        if body.header is not None and body.header.lower() in RESERVED_HEADERS:
+            raise unprocessable(f"`{body.header}` frames the request: an API key cannot travel in it")
         if not store.available():
             from ..secret_store import NO_KEY_MESSAGE
 
@@ -204,6 +235,8 @@ async def create_remote_credential(
         row.secret_ref = f"store:{secret_name(body.name, 'token')}"
         row.status = "connected"
         row.config = {"card_url": body.card_url, "host": _host(body.card_url)}
+        if body.header:
+            row.config["header"] = body.header
     else:  # none
         row.status = "connected"
         row.config = {"card_url": body.card_url, "host": _host(body.card_url)}
@@ -491,6 +524,7 @@ def card_summary(card: AgentCard) -> RemoteCardSummary:
         digest=card.digest,
         skills=[RemoteSkillInfo(id=s.id, name=s.name, description=s.description) for s in card.skills],
         auth_types=list(card.auth_types),
+        api_key_headers=list(card.api_key_headers),
         scopes=list(card.scopes),
         streaming=card.streaming,
         dcr_available=card.dcr_url is not None,
@@ -529,12 +563,7 @@ async def discover_remote_agent(
     rows = (
         await session.execute(select(RemoteCredential).where(RemoteCredential.org_id == organisation.id))
     ).scalars()
-    credentials = sorted(
-        r.name
-        for r in rows
-        if r.status != "revoked"
-        and (r.type in card.auth_types or (r.type == AUTH_NONE and AUTH_NONE in card.auth_types))
-    )
+    credentials = sorted(r.name for r in rows if r.status != "revoked" and credential_fits(card, r))
     slug = "".join(c if c.isalnum() else "-" for c in (card.name or "remote-agent").lower()).strip("-")
     slug = ("agent-" + slug if not slug[:1].isalpha() else slug)[:62] or "remote-agent"
     proposed = AgentCreate(

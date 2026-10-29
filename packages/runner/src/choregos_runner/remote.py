@@ -14,7 +14,8 @@ same publication, same gates — except that no local agent starts. It:
    facts from data parts are DECLARED (provenance `remote:<slug>`, never listed as measured).
 
 Failures are results (`failed`, with a reason), not exits: the orchestrator reads them like any step's.
-The access token is the run's, from its Secret; it is sent to the endpoint and nowhere else.
+The access token is the run's, from its Secret; it is sent to the endpoint and nowhere else, as a
+bearer token or, for an API key, in the header `RemoteCall.token_header` names.
 """
 
 from __future__ import annotations
@@ -176,7 +177,12 @@ async def run_remote(
     )
 
     client = A2aClient(
-        remote.endpoint, token or None, remote.protocol_version, transport=transport, timeout=60.0
+        remote.endpoint,
+        token or None,
+        remote.protocol_version,
+        transport=transport,
+        timeout=60.0,
+        token_header=remote.token_header,
     )
     message = client.message(parts, metadata=metadata)
     task = A2aTask(id="", context_id="", state="submitted")

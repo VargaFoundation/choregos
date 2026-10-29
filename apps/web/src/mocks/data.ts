@@ -3258,8 +3258,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/agents\/discover$/.test(chemin ?? "")) return rovoDiscovery as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/remote-credentials$/.test(chemin ?? "")) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as { name: string; type: RemoteCredential["type"]; card_url?: string };
-    return { name: corps.name, type: corps.type, status: corps.type === "oauth2_authorization_code" ? "pending" : "connected", card_url: corps.card_url ?? null, host: null, scopes: [] } as T;
+    const corps = JSON.parse(String(init.body ?? "{}")) as { name: string; type: RemoteCredential["type"]; card_url?: string; header?: string };
+    return {
+      name: corps.name,
+      type: corps.type,
+      header: corps.header ?? null,
+      status: corps.type === "oauth2_authorization_code" ? "pending" : "connected",
+      card_url: corps.card_url ?? null,
+      host: null,
+      scopes: [],
+    } as T;
   }
   const autorise = /^\/orgs\/[^/]+\/remote-credentials\/([^/]+)\/authorize$/.exec(chemin ?? "");
   if (method === "POST" && autorise) return { redirect_url: `/admin/remote-agents?connected=${autorise[1]}` } as T;

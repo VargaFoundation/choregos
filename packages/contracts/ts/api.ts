@@ -1296,10 +1296,12 @@ export type A2aPinnedCard = {
   skills?: Array<string>;
 };
 
-/** What the organisation holds to call remote agents. No secret is ever returned - the refresh token lives sealed in the secret store. */
+/** What the organisation holds to call remote agents. No secret is ever returned - the refresh token, a bearer token and an API key live sealed in the secret store. */
 export type RemoteCredential = {
   name: string;
-  type: "oauth2_authorization_code" | "bearer" | "none";
+  type: "oauth2_authorization_code" | "bearer" | "api_key" | "none";
+  /** api_key: the request header the key travels in (a name, never the key) */
+  header?: string | null;
   status: "pending" | "connected" | "error" | "revoked";
   /** whose permissions a remote agent acts with: the person who authorised it */
   authorised_as?: string | null;
@@ -1315,11 +1317,13 @@ export type RemoteCredential = {
 
 export type RemoteCredentialCreate = {
   name: string;
-  type: "oauth2_authorization_code" | "bearer" | "none";
+  type: "oauth2_authorization_code" | "bearer" | "api_key" | "none";
   /** OAuth: the card whose Dynamic Client Registration endpoint the platform registers itself at */
   card_url?: string | null;
-  /** bearer: the token, write-only, sealed in the secret store */
+  /** bearer: the token; api_key: the key. Write-only, sealed in the secret store */
   token?: string | null;
+  /** api_key: the request header the key travels in, as the card names it (ServiceNow: x-sn-apikey) */
+  header?: string | null;
 };
 
 export type RemoteCredentialAuthorization = {
@@ -1345,8 +1349,10 @@ export type RemoteCardSummary = {
   protocol_version: string;
   digest: string;
   skills?: Array<RemoteSkillInfo>;
-  /** oauth2_authorization_code, bearer, none: what the card accepts */
+  /** oauth2_authorization_code, bearer, api_key, none: what the card accepts */
   auth_types?: Array<string>;
+  /** the request headers the card's API key schemes name; a key in a query string or a cookie is not supported */
+  api_key_headers?: Array<string>;
   scopes?: Array<string>;
   streaming?: boolean;
   /** the card advertises Dynamic Client Registration */

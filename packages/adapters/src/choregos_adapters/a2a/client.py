@@ -218,7 +218,11 @@ def file_part(name: str, content: bytes, mime_type: str = "application/octet-str
 
 
 class A2aClient:
-    """One remote agent's endpoint. The token is the caller's: it is sent, never logged or returned."""
+    """One remote agent's endpoint. The token is the caller's: it is sent, never logged or returned.
+
+    It travels as `Authorization: Bearer <token>`, or alone in `token_header` when the credential is
+    an API key (`x-sn-apikey: <key>`): never both, so a key is not handed to a header that was not
+    named for it."""
 
     def __init__(
         self,
@@ -228,9 +232,11 @@ class A2aClient:
         *,
         transport: httpx.AsyncBaseTransport | None = None,
         timeout: float = 60.0,
+        token_header: str | None = None,
     ) -> None:
         self.endpoint = endpoint
         self._token = token
+        self._token_header = token_header
         major = protocol_version.split(".", 1)[0]
         self._methods = _METHODS[1 if major.isdigit() and int(major) >= 1 else 0]
         self._http = httpx.AsyncClient(transport=transport, timeout=timeout, follow_redirects=False)
@@ -249,7 +255,9 @@ class A2aClient:
             "Content-Type": "application/json",
             "Accept": "text/event-stream" if stream else "application/json",
         }
-        if self._token:
+        if self._token and self._token_header:
+            headers[self._token_header] = self._token
+        elif self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         return headers
 

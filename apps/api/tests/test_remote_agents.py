@@ -148,6 +148,62 @@ async def test_a_credential_of_a_type_the_card_does_not_accept_is_refused(
     assert (await client.get(f"{AGENTS}/rovo")).status_code == 404
 
 
+async def test_an_api_key_publishes_an_agent_whose_card_asks_for_it_in_that_header(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent
+) -> None:
+    remote.security, remote.api_key_header = "api_key", "x-sn-apikey"
+    created = await client.post(
+        CREDENTIALS, json={"name": "rovo", "type": "api_key", "token": "the-key", "header": "X-SN-APIKEY"}
+    )
+    assert created.status_code == 201, created.text
+    published = await client.post(AGENTS, json=_body(remote))
+    assert published.status_code == 201, published.text
+
+
+async def test_an_api_key_for_another_header_than_the_cards_is_refused_naming_both(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent
+) -> None:
+    remote.security, remote.api_key_header = "api_key", "x-sn-apikey"
+    await client.post(
+        CREDENTIALS, json={"name": "rovo", "type": "api_key", "token": "the-key", "header": "X-API-Key"}
+    )
+    refused = await client.post(AGENTS, json=_body(remote))
+    assert refused.status_code == 422, refused.text
+    assert "X-API-Key" in refused.text and "x-sn-apikey" in refused.text
+    assert (await client.get(f"{AGENTS}/rovo")).status_code == 404
+
+
+async def test_a_bearer_token_does_not_fit_a_card_that_asks_for_a_key_nor_a_key_a_bearer_card(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent
+) -> None:
+    remote.security = "api_key"
+    await _credential(client)  # bearer
+    refused = await client.post(AGENTS, json=_body(remote))
+    assert refused.status_code == 422 and "the card accepts: api_key" in refused.text
+    remote.security = "bearer"
+    await client.post(
+        CREDENTIALS, json={"name": "key", "type": "api_key", "token": "the-key", "header": "X-API-Key"}
+    )
+    refused = await client.post(AGENTS, json=_body(remote, credential="key"))
+    assert refused.status_code == 422 and "the card accepts: bearer" in refused.text
+
+
+async def test_discovery_offers_the_api_keys_that_travel_in_the_cards_header(
+    client: AsyncClient, admin: str, remote: FakeA2aAgent
+) -> None:
+    remote.security, remote.api_key_header = "api_key", "x-sn-apikey"
+    for name, header in (("servicenow", "x-sn-apikey"), ("elsewhere", "X-API-Key")):
+        await client.post(CREDENTIALS, json={"name": name, "type": "api_key", "token": "k", "header": header})
+    await client.post(CREDENTIALS, json={"name": "static", "type": "bearer", "token": "t-value"})
+    found = await client.post(f"{AGENTS}/discover", json={"card_url": remote.card_url})
+    assert found.status_code == 200, found.text
+    body = found.json()
+    assert body["card"]["auth_types"] == ["api_key"]
+    assert body["card"]["api_key_headers"] == ["x-sn-apikey"]
+    assert body["credentials"] == ["servicenow"]
+    assert body["proposed"]["spec"]["runtime"]["credential"] == "servicenow"
+
+
 async def test_a_credential_that_does_not_exist_or_is_missing_is_refused(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:

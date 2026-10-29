@@ -161,7 +161,10 @@ export function RemoteAgentForm({
               </div>
               <div>
                 <dt className="text-ink-muted">Authentication</dt>
-                <dd data-testid="card-auth">{(card.auth_types ?? []).map((t) => AUTH_LABEL[t] ?? t).join(", ") || "none this platform supports"}</dd>
+                <dd data-testid="card-auth">
+                  {(card.auth_types ?? []).map((t) => AUTH_LABEL[t] ?? t).join(", ") || "none this platform supports"}
+                  {(card.api_key_headers ?? []).length > 0 && <span className="font-mono"> · {(card.api_key_headers ?? []).join(", ")}</span>}
+                </dd>
               </div>
               <div>
                 <dt className="text-ink-muted">Streaming</dt>

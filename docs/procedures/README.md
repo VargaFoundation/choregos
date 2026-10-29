@@ -81,5 +81,5 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | Procedure | For | Applies to | Reviewed |
 | :-- | :-- | :-- | :-- |
 | [Add an agent written in code](agent.code.md) | the person who operates the platform | `code` | 2026-10-16 |
-| [Add a remote agent (A2A)](agent.remote.a2a.md) | an organisation administrator | `remote.a2a` | 2026-10-16 |
+| [Add a remote agent (A2A)](agent.remote.a2a.md) | an organisation administrator | `remote.a2a` | 2026-10-29 |
 | [Add Atlassian Rovo as a remote agent](agent.remote.a2a.atlassian-rovo.md) | an organisation administrator | `remote.a2a` (card host `a2a.atlassian.com`) | 2026-10-16 |

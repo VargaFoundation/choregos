@@ -89,6 +89,7 @@ from .skill_files import (
     skill_file_bytes,
 )
 from .stage import (
+    HEADER_NAME,
     STAGE_INPUT_SCHEMA,
     STAGE_RESULT_SCHEMA,
     AgentRef,
@@ -217,6 +218,7 @@ __all__ = [
     "A2A_MAX_FILE_BYTES_DEFAULT",
     "ARTIFACT_NAME_PATTERN",
     "ARTIFACT_TYPES",
+    "HEADER_NAME",
     "INERT_BINARY_EXTENSIONS",
     "MAX_BINARY_BYTES",
     "RUN_ACTORS",

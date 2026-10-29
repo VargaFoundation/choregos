@@ -883,6 +883,8 @@ export type StageInput = {
     agent_slug: string;
     /** the name of the organisation credential the access token comes from (never the token) */
     credential?: string | null;
+    /** the request header the token travels in, as an api_key credential names it; absent: Authorization: Bearer */
+    token_header?: string | null;
   } | null;
   /** Set for a step a hosted agent carries (ADR 0080): `agent.backend` is `hosted`; the agent's own container serves Foundry's contract beside the runner. No credential is here: the container reaches the model, MCP and the internet only through the runner's loopback listeners. At most one of `job`, `remote`, `hosted`, `prompt` is set. */
   hosted?: {

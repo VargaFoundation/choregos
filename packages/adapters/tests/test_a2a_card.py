@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from choregos_adapters.a2a import AUTH_OAUTH, CardError, digest_of, fetch_card, parse_card
+from choregos_adapters.a2a import AUTH_API_KEY, AUTH_OAUTH, CardError, digest_of, fetch_card, parse_card
 from choregos_adapters.fakes.a2a import FakeA2aAgent
 
 ROVO = json.loads((Path(__file__).parent / "fixtures" / "a2a" / "rovo-agent-card.json").read_text())
@@ -49,6 +49,32 @@ def test_a_card_that_declares_no_security_accepts_none() -> None:
     card = parse_card(FakeA2aAgent(security="none").card_document())
     assert card.auth_types == ("none",)
     assert parse_card(FakeA2aAgent(security="bearer").card_document()).auth_types == ("bearer",)
+
+
+def test_an_api_key_in_a_header_is_accepted_and_the_header_named() -> None:
+    card = parse_card(FakeA2aAgent(security="api_key", api_key_header="x-sn-apikey").card_document())
+    assert card.auth_types == (AUTH_API_KEY,)
+    assert card.api_key_headers == ("x-sn-apikey",)
+    assert card.takes_api_key_in("X-SN-APIKEY"), "header names are case-insensitive"
+    assert not card.takes_api_key_in("X-API-Key")
+
+
+def test_an_api_key_in_the_1_0_shape_is_read_too() -> None:
+    raw = FakeA2aAgent(security="none").card_document()
+    raw["securitySchemes"] = {"key": {"apiKeySecurityScheme": {"location": "header", "name": "X-API-Key"}}}
+    raw["security"] = [{"key": []}]
+    card = parse_card(raw)
+    assert card.auth_types == (AUTH_API_KEY,) and card.api_key_headers == ("X-API-Key",)
+
+
+@pytest.mark.parametrize("where", ["query", "cookie", ""])
+def test_a_key_outside_a_header_is_not_supported(where: str) -> None:
+    """A key in a query string lands in every access log on the way; a cookie is a browser's."""
+    raw = FakeA2aAgent(security="none").card_document()
+    raw["securitySchemes"] = {"key": {"type": "apiKey", "in": where, "name": "api_key"}}
+    raw["security"] = [{"key": []}]
+    card = parse_card(raw)
+    assert card.auth_types == () and card.api_key_headers == ()
 
 
 async def test_fetch_reads_the_card_over_the_transport() -> None:

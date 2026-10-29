@@ -116,6 +116,29 @@ async def test_the_access_token_is_in_no_journal_no_result_no_summary(
     assert TOKEN.encode() not in client.outputs["response.md"][1], "nor in the stored answer"
 
 
+async def test_an_api_key_travels_in_the_header_the_call_names_and_nowhere_else(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    fake = FakeA2aAgent(
+        answer=f"echo {TOKEN}",
+        timeline=["completed"],
+        security="api_key",
+        api_key_header="x-sn-apikey",
+        required_token=TOKEN,
+    )
+    step = _remote(stage_input, fake)
+    assert step.remote is not None
+    step = step.model_copy(update={"remote": step.remote.model_copy(update={"token_header": "x-sn-apikey"})})
+    outcome, client = await _run(step, fake, runner_settings)
+
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    assert client.results[-1].status is StageStatus.DONE, client.results[-1].summary
+    assert fake.tokens and set(fake.tokens) == {TOKEN}, "the remote read the key in its header"
+    assert not any(r["has_authorization"] for r in fake.requests), "never also as a bearer token"
+    dump = json.dumps(list(client.events), default=str) + client.results[-1].model_dump_json()
+    assert TOKEN not in dump, "a key is masked like a token"
+
+
 async def test_a_card_that_changed_stops_the_step_before_any_message(
     stage_input: StageInput, runner_settings: Any
 ) -> None:

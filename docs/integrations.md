@@ -385,6 +385,38 @@ that against the ticket and the day and books it as a ledger line of kind `exter
 shows it apart). With nothing declared the line says `unmeasured`: Choregos does not know what Rovo
 costs.
 
+### Another agent, with an API key (ServiceNow)
+
+Some agents take a static key, in a request header of their own, instead of OAuth. ServiceNow's AI
+agents exposed over A2A read theirs in `x-sn-apikey` (a REST API key whose user is the account the
+agent acts as: make it a dedicated integration account). The credential is of type `api_key`:
+
+- console: **Administration → Remote agents → Add a credential**, type *API key (in a header)*, the
+  header the card names and the key, typed once;
+- API: `POST /orgs/{org}/remote-credentials` with `{"name": "servicenow", "type": "api_key", "token":
+  "<the key>", "header": "x-sn-apikey"}`.
+
+The key is sealed like a bearer token and never shown again; the header is a name and is shown.
+Publication accepts the credential only when the card declares an `apiKey` scheme **in a header of that
+name** (header names compare case-insensitively); the card summary shows the header it wants. In a run,
+the key travels **alone** in that header (never also as `Authorization: Bearer`), from the run's Secret,
+to the pinned endpoint only. A key the card wants in a query string or a cookie is not supported.
+
+What is not proven from this repository, and is the first thing to check on a ServiceNow Personal
+Developer Instance:
+
+- **ServiceNow's real card has not been read.** If it declares no `apiKey` scheme, publication refuses
+  every credential (the card says it needs none): the card is the contract, and that case is not
+  decided yet.
+- **A card behind authentication is not read.** ServiceNow can require the key to read the card
+  (*Agent Card - Direct Discovery*, `Requires authentication`); the platform reads cards anonymously, so
+  leave that setting off.
+- The card and endpoint paths are not under `/.well-known/`: a ServiceNow community article gives
+  `https://<instance>.service-now.com/api/sn_aia/a2a/v2/agent_card/id/<agent sys_id>` for the card.
+  Paste the card URL the AI Agent Studio shows; Choregos takes the endpoint from the card.
+- OAuth client credentials (which ServiceNow also offers) are not supported: an OAuth credential here
+  needs Dynamic Client Registration.
+
 ### Limits, said plainly
 
 Not built: Choregos **as** a Rovo agent inside Jira (it needs a Forge app and an A2A server); an agent

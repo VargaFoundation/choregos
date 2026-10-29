@@ -2,6 +2,7 @@
 """A2A (Agent2Agent) client: the Agent Card and the four calls of a step (ADR 0062)."""
 
 from .card import (
+    AUTH_API_KEY,
     AUTH_BEARER,
     AUTH_NONE,
     AUTH_OAUTH,
@@ -26,6 +27,7 @@ from .client import (
 )
 
 __all__ = [
+    "AUTH_API_KEY",
     "AUTH_BEARER",
     "AUTH_NONE",
     "AUTH_OAUTH",
