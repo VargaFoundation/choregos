@@ -24,16 +24,16 @@ from __future__ import annotations
 
 import contextlib
 from typing import Any
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Query, WebSocket
 
-from ..config import Settings, get_settings
+from ..config import get_settings
 from ..db.models import AgentSessionRecord
 from ..db.session import session_scope
 from ..deps import current_principal
 from ..errors import ApiError, not_found
 from ..logging import get_logger
+from ..origin_guard import origin_allowed
 from ..schemas.agent_sessions import SLUG
 from ..secret_store import get_secret_store
 from ..services.agent_governance import Action, decide
@@ -58,19 +58,6 @@ log = get_logger(__name__)
 SECONDS_PER_MINUTE = 60.0
 #: A WebSocket close reason is at most 123 bytes.
 _REASON = 120
-
-
-def _origin(url: str) -> str:
-    parts = urlsplit(url.strip())
-    return f"{parts.scheme}://{parts.netloc}"
-
-
-def origin_allowed(origin: str | None, settings: Settings) -> bool:
-    """No `Origin` (a CLI, a server) passes; a browser's must be the console's, the API's, or CORS's."""
-    if not origin:
-        return True
-    allowed = {_origin(settings.public_url), _origin(settings.api_url), *map(_origin, settings.cors_list)}
-    return _origin(origin) in allowed
 
 
 @router.websocket("/orgs/{org}/agents/{slug}/realtime")

@@ -25,11 +25,12 @@ from .adaptateurs import brancher_memoire_lexicale
 from .amorcage import amorcer
 from .config import get_settings
 from .db.session import create_all, dispose_engine
-from .errors import install_error_handlers, internal_error
+from .errors import REQUEST_ID_PATTERN, install_error_handlers, internal_error
 from .events import RelaisPostgres
 from .knowledge.conversion import conversions
 from .logging import bind, clear, configure_logging, get_logger
 from .metriques import boucle_de_rafraichissement, exposer, requetes_http
+from .origin_guard import check_cors_origins, install_origin_guard
 from .routers import (
     actions,
     admin,
@@ -283,12 +284,16 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         openapi_url="/openapi.json",
     )
+    check_cors_origins(settings)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        # Every request header apps/web/src/lib/api.ts sets (only Content-Type), plus the credentials
+        # and tracing ones; never `*`.
+        allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-Id"],
+        expose_headers=["X-Request-Id"],
     )
     install_error_handlers(app)
     from .org_alias_middleware import OrgAliasMiddleware
@@ -298,6 +303,9 @@ def create_app() -> FastAPI:
     from .limiteur import installer as installer_le_limiteur
 
     installer_le_limiteur(app, settings.rate_limit_per_minute)
+    # After the limiter and before the logging middleware: logging stays outermost, so a refusal is
+    # logged with its request id.
+    install_origin_guard(app)
 
     @app.middleware("http")
     async def logging_middleware(
@@ -307,7 +315,8 @@ def create_app() -> FastAPI:
         clear()
         # Un identifiant par requête, repris de l'entrée s'il y en a un (ingress, client),
         # rendu en réponse : c'est ce qui relie un journal de l'API à un journal du front.
-        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
+        supplied = request.headers.get("x-request-id", "")
+        request_id = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid.uuid4().hex[:16]
         request.state.request_id = request_id
         bind(path=request.url.path, method=request.method, request_id=request_id)
         try:
