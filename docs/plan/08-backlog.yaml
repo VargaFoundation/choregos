@@ -45,6 +45,7 @@ streams:
   S46: "Consuming an external MCP gateway (plan 2026-10-27, ADR 0097)"
   S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
   S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0110-0112)"
+  S50: "An agent acts under an identity: assigned, own, on behalf of a person; child agents (ADR 0107)"
 
 stories:
 
@@ -3901,3 +3902,30 @@ stories:
     size: S
     depends_on: [S47-40]
     notes: "The two gaps the S47-39/S47-40 STATUS rows named; STATUS says what it proves"
+
+  # ───────────── S50 — An agent acts under an identity (ADR 0107) ─────────────
+  # Story 1 (who writes, shown) is S42-06g, delivered with #1099.
+  - id: S50-01
+    title: "feat(api,adapters): connector identity modes — declared by the type, chosen by the agent version, `as` on audit"
+    stream: S50
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: []
+    notes: "ADR 0107 story 2: assigned and own first; on-behalf-of is declared but refused until S50-02"
+  - id: S50-02
+    title: "feat(api): an agent acts on behalf of a person — the RFC 8693 exchange, Microsoft Graph first (#756)"
+    stream: S50
+    sprint: 2
+    priority: 2
+    size: L
+    depends_on: [S50-01]
+    notes: "ADR 0107 story 3: Atlassian needs each person's OAuth consent (the A2A credential of ADR 0062); GitHub user-to-server tokens of the App"
+  - id: S50-03
+    title: "feat(orchestrator,api): request_agent — a child run the platform starts, with an attenuated identity and a depth bound"
+    stream: S50
+    sprint: 3
+    priority: 3
+    size: L
+    depends_on: [S50-01]
+    notes: "ADR 0107 story 4, amends ADR 0077 point 1"
