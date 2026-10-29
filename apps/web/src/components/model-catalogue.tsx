@@ -2,12 +2,13 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { Confirmation } from "@/components/geste-confirme";
 import { Alert, Badge, Button, Card, ErrorNote, EtatDeLecture, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import type { ModelCatalogue, ModelCatalogueEntry, ModelCuratePreview, ModelTiers } from "@/lib/types";
+import type { ModelCatalogue, ModelCatalogueEntry, ModelCuratePreview, ModelTiers, UsableModel } from "@/lib/types";
 
 /** The stage roles a model can be limited to (empty: every role). */
 export const STAGE_ROLES = ["triage", "refine", "plan", "implement", "verify", "review", "fix_ci", "address_review", "release_notes", "verify_prod", "custom"] as const;
@@ -37,6 +38,18 @@ export function ModelCataloguePanel() {
   const client = useQueryClient();
   const catalogue = useQuery({ queryKey: ["model-catalogue", org], queryFn: () => api.modelCatalogue(org), retry: false });
   const canEdit = (orgs ?? []).find((o) => o.slug === org)?.role === "org_admin";
+  // Whose gateway this is (S44-04): the organisation's own connector of kind `gateway`, else the deployment's.
+  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
+  const own = (connectors.data ?? []).find((c) => c.kind === "gateway");
+  // In `open` mode every model the gateway lists is usable, synced or not (S44-04): the page showed
+  // only the catalogue's rows, so a catalogue never synced read as "no model at all".
+  const open = catalogue.data?.mode === "open";
+  const usable = useQuery({
+    queryKey: ["usable-models", org, "page"],
+    queryFn: () => api.usableModels(org),
+    retry: false,
+    enabled: open,
+  });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ModelCuratePreview | null>(null);
@@ -76,9 +89,31 @@ export function ModelCataloguePanel() {
     <div className="space-y-6">
       <Card title="Gateway">
         <div className="space-y-2 text-sm" data-testid="gateway">
-          <p>
-            Models are routed by the <span className="font-mono">{data.gateway.type}</span> gateway.
+          <p data-testid="gateway-owner">
+            {own ? (
+              <>
+                Models are routed by your organisation&apos;s gateway{" "}
+                <span className="font-mono" data-donnee>
+                  {own.name}
+                </span>{" "}
+                (<span className="font-mono">{data.gateway.type}</span>): this catalogue and your agents&apos; runs use
+                it. <Link href="/admin/connectors">Manage it in Installed connectors</Link>.
+              </>
+            ) : (
+              <>
+                Models are routed by the deployment&apos;s <span className="font-mono">{data.gateway.type}</span> gateway,
+                shared by the organisations of this instance.
+              </>
+            )}
           </p>
+          {!own && canEdit && (
+            <p className="text-xs text-ink-muted">
+              <Link href="/admin/connectors?type=gateway/litellm#declare">Connect your organisation&apos;s gateway</Link>{" "}
+              — LiteLLM, or any OpenAI-compatible gateway (a company proxy, vLLM, Azure AI Foundry). Its models then fill
+              this catalogue and your agents&apos; runs call it; its host must be open on the{" "}
+              <Link href="/admin/egress">Network</Link> page.
+            </p>
+          )}
           <p className="flex flex-wrap gap-2">
             {(data.gateway.capabilities ?? []).length === 0 ? (
               <span className="text-ink-muted">This gateway declares no capability.</span>
@@ -233,7 +268,63 @@ export function ModelCataloguePanel() {
           {canEdit && <AddModel org={org} act={act} />}
         </div>
       </Card>
+
+      {open && <ListedByTheGateway usable={usable} entries={data.entries} canEdit={canEdit} />}
     </div>
+  );
+}
+
+/**
+ * What the gateway lists that the catalogue does not hold yet: usable now in `open` mode (S44-04).
+ * A sync brings them into the catalogue, where their roles, usages and price are set.
+ */
+function ListedByTheGateway({
+  usable,
+  entries,
+  canEdit,
+}: {
+  usable: { data: UsableModel[] | undefined; error: unknown; fetchStatus: string; refetch: () => unknown; isRefetching?: boolean };
+  entries: ModelCatalogueEntry[];
+  canEdit: boolean;
+}) {
+  const known = new Set(entries.map((e) => e.model_name));
+  const listed = (usable.data ?? []).filter((m) => !known.has(m.model_name));
+  if (usable.data && listed.length === 0 && entries.length > 0) return null;
+  return (
+    <Card title="Listed by the gateway">
+      <div className="space-y-3 text-sm">
+        <EtatDeLecture lecture={usable} quoi="the gateway's models" />
+        {usable.data && listed.length === 0 && (
+          <p className="text-ink-muted" data-testid="gateway-lists-nothing">
+            The gateway lists no model, or could not be reached.{" "}
+            {canEdit ? "Sync from gateway says why." : "An administrator can sync it to see why."}
+          </p>
+        )}
+        {listed.length > 0 && (
+          <>
+            <p className="text-ink-muted">
+              Usable now (the catalogue is open), not in the catalogue yet.
+              {canEdit ? " Sync from gateway to set their roles, usages and price." : ""}
+            </p>
+            <ul className="space-y-1" data-testid="gateway-listed">
+              {listed.map((m) => (
+                <li key={m.model_name} className="flex flex-wrap items-baseline gap-2">
+                  <span className="font-mono text-xs" data-donnee>
+                    {m.model_name}
+                  </span>
+                  {m.provider && <span className="text-xs text-ink-muted">via {m.provider}</span>}
+                  {m.input_cost_per_1k != null && m.output_cost_per_1k != null && (
+                    <span className="text-xs text-ink-muted">
+                      {m.input_cost_per_1k} / {m.output_cost_per_1k} per 1k
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }
 

@@ -14,7 +14,7 @@ from typing import Any
 
 from choregos_adapters import AdapterSet, charger_les_greffons
 from choregos_api.adaptateurs import brancher_memoire_lexicale
-from choregos_api.db.models import Connector, Organization, PolicyDef, Project, WorkItem
+from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
 from choregos_api.db.session import TOUT, session_scope
 from choregos_api.services import default_workflow, policy_model, workflow_model
 from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
@@ -57,6 +57,10 @@ class ProjectBundle:
     #: The organisation's policy ceiling, if it set one: its `network` section bounds the run's
     #: network (ADR 0070). `policy` above is already brought down to it.
     ceiling: PolicyCeiling | None = None
+    #: The URL the run's agent calls its models at when the gateway is a connector's (the project's,
+    #: else the organisation's own, ADR 0109) and names one; `None`: the deployment's `gateway_url`.
+    #: The key is minted on that gateway: the agent must call the same one.
+    gateway_url: str | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -117,6 +121,24 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         )
         for c in connectors
     }
+    specs: dict[str, dict[str, Any]] = {
+        # The `lexical` memory lives in the API's tables: it must say which organisation
+        # it reads from. The orchestrator is a platform process, it sees everything (`*`),
+        # like its own sessions (`db()`).
+        c.kind: {
+            "type": c.type,
+            "config": {**configs[c.kind], "org": TOUT} if c.kind == "memory" else configs[c.kind],
+            # REFERENCES (ADR 0034): `from_connectors` resolves them as it builds.
+            "secret_refs": c.secret_refs or {},
+            "secret_ref": c.secret_ref,
+            "resolved": sealed[c.kind],
+        }
+        for c in connectors
+    }
+    if "gateway" not in specs and (own := await org_gateway_spec(session, project.org_id)) is not None:
+        specs["gateway"] = own
+    # The key is minted on the gateway built here: the project's, else the organisation's (ADR 0109).
+    gateway_url = str((specs.get("gateway") or {}).get("config", {}).get("base_url") or "") or None
     return ProjectBundle(
         project=project,
         org_slug=org.slug if org else "",
@@ -127,23 +149,49 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         # The policy that runs: the project's, brought down to its organisation's ceiling (S27-05).
         policy=clamp(policy_model(policy_row), ceiling_of(org))[0],
         ceiling=ceiling_of(org),
-        adapters=AdapterSet.from_connectors(
-            {
-                # La mémoire `lexical` vit dans les tables de l'API : elle doit dire depuis
-                # quelle organisation elle lit. L'orchestrateur est un processus de la
-                # plateforme, il voit tout (`*`) — comme ses propres sessions (`db()`).
-                c.kind: {
-                    "type": c.type,
-                    "config": {**configs[c.kind], "org": TOUT} if c.kind == "memory" else configs[c.kind],
-                    # Des RÉFÉRENCES (ADR 0034) : `from_connectors` les résout en construisant.
-                    "secret_refs": c.secret_refs or {},
-                    "secret_ref": c.secret_ref,
-                    "resolved": sealed[c.kind],
-                }
-                for c in connectors
-            }
-        ),
+        adapters=AdapterSet.from_connectors(specs),
+        gateway_url=gateway_url,
     )
+
+
+async def org_gateway_spec(session: AsyncSession, org_id: str) -> dict[str, Any] | None:
+    """The organisation's own model gateway (S44-04), as `from_connectors` takes a connector.
+
+    A project that declares no gateway runs on its organisation's, when the organisation brings one:
+    the catalogue already listed that gateway's models (ADR 0060), and the run's key must come from
+    the gateway the agent calls. One per organisation (`createOrgConnector` refuses a second); the
+    first by name otherwise, as the API's `org_gateway` reads it.
+    """
+    from choregos_api.secret_store import resolve_store_fields
+    from choregos_core.secrets import SecretIntrouvable
+
+    connector = (
+        (
+            await session.execute(
+                select(OrgConnector)
+                .where(OrgConnector.org_id == org_id, OrgConnector.kind == "gateway")
+                .order_by(OrgConnector.name)
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if connector is None:
+        return None
+    try:
+        resolved = await resolve_store_fields(
+            session, org_id, "gateway", connector.type, connector.secret_refs
+        )
+    except SecretIntrouvable:
+        resolved = {}  # the build then fails on that reference, naming it
+    return {
+        "type": connector.type,
+        "config": dict(connector.config or {}),
+        "secret_refs": connector.secret_refs or {},
+        "secret_ref": None,
+        "resolved": resolved,
+    }
 
 
 async def _sealed_values(session: AsyncSession, org_id: str, connector: Connector) -> dict[str, str]:

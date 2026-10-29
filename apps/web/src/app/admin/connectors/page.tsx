@@ -25,7 +25,7 @@ import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/componen
 import { api } from "@/lib/api";
 import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
-import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
+import { libelleDeSorte, isOrgDeclarable } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorOperation, ConnectorSecretState, OperationPatch, OrgConnector } from "@/lib/types";
 import { Confirmation } from "@/components/geste-confirme";
 
@@ -621,10 +621,12 @@ function Declarer({ org }: { org: string }) {
   const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   // Les outils de livraison d'un projet se règlent dans le projet : ils ne se déclarent pas ici.
-  const candidats = (types.data ?? []).filter((t) => !estUneSorteDuProjet(t.kind));
+  // The organisation's own model gateway is the one exception (S44-04).
+  const candidats = (types.data ?? []).filter((t) => isOrgDeclarable(t.kind, t.type));
   const familles = [
-    { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp") },
+    { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp" && t.kind !== "gateway") },
     { titre: "MCP servers", types: candidats.filter((t) => t.kind === "mcp") },
+    { titre: "Model gateway (LLM)", types: candidats.filter((t) => t.kind === "gateway") },
   ].filter((famille) => famille.types.length > 0);
   const type = candidats.find((t) => `${t.kind}/${t.type}` === choix);
   const schema = (type?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
@@ -659,7 +661,7 @@ function Declarer({ org }: { org: string }) {
     }
   }
   return (
-    <Card title="Declare a connector">
+    <Card title="Declare a connector" id="declare">
       {candidats.length === 0 ? (
         <p className="text-sm text-ink-muted">
           No connector type exposes operations yet: a plugin (or the <code>mcp</code> type) brings them.

@@ -80,4 +80,12 @@ describe("administration overview, your roles", () => {
     expect(titles.indexOf("Organisation")).toBeLessThan(titles.indexOf("Session"));
     expect(await screen.findByLabelText("Display name")).toBeTruthy();
   });
+
+  it("keeps the network on its own page: no network card on the overview (S44-04)", async () => {
+    vi.mocked(api.edition).mockResolvedValue({ edition: "community", features: [] } as never);
+    wrap();
+    await screen.findByRole("heading", { name: "Session" });
+    for (const title of ["What agents may reach", "Network access", "Outbound proxy", "Network activity"])
+      expect(screen.queryByRole("heading", { name: title })).toBeNull();
+  });
 });
