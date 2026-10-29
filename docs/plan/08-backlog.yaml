@@ -3893,6 +3893,14 @@ stories:
     size: S
     depends_on: [S49-07]
     notes: "ADR 0111 §4 and ADR 0074: the DTO carries `can`, the console never guesses a right from a role."
+  - id: S49-14
+    title: "feat(plugins): the `brief` and `deliver` roles get their registry agents from the `requests` plugin (#1091)"
+    stream: S49
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: [S49-01]
+    notes: "ADR 0110 §1. choregos-agents publishes `requests` (brief-writer, assistant); the core locks it in plugins/offline/, installs it by default without pre-approval, and drops the test exemption."
   - id: S47-41
     title: "fix(web): a registered built-in agent keeps its playbook, and a state says how long items wait in it"
     stream: S47

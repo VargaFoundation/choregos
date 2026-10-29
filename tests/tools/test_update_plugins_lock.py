@@ -18,7 +18,7 @@ OFFLINE = ROOT / "plugins" / "offline"
 def test_the_archives_are_what_the_lock_says() -> None:
     assert problems(OFFLINE) == []
     _, locked = read(OFFLINE)
-    assert set(locked) == {"software-delivery", "netops", "authoring", "mcp-clients"}
+    assert set(locked) == {"software-delivery", "netops", "authoring", "mcp-clients", "requests"}
     for entry in locked.values():
         assert entry.source == f"ghcr.io/vargafoundation/choregos-agents/{entry.name}:{entry.version}"
 

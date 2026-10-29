@@ -47,6 +47,7 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
         "authoring": ["1.0.0"],
         "mcp-clients": ["1.0.0"],
         "netops": ["1.0.0"],
+        "requests": ["1.0.1"],
         "software-delivery": ["1.0.0"],
     }
 
@@ -130,6 +131,24 @@ async def test_a_preapproved_default_is_installed_and_the_configuration_is_the_a
     architect = (await client.get(f"{ORG}/agents/architect")).json()
     assert architect["versions"][0]["created_by"] == "plugin:software-delivery/architect@2"
     assert (await client.get(f"{ORG}/plugin-approvals")).json()["items"] == []
+
+
+async def test_requests_is_installed_without_a_second_administrator(
+    client: AsyncClient, admin: str, deployment: Any
+) -> None:
+    """The agents of `default-request` (ADR 0110, #1091): the chart lists `requests` without
+    `preapproved`, so the gate must find nothing in it for a second administrator."""
+    from choregos_api.services import plugin_defaults
+
+    fake = deployment([{"source": "varga", "name": "requests", "version": "^1.0"}])
+    outcomes = await plugin_defaults.reconcile_all()
+    assert [(o.plugin, o.outcome) for o in outcomes] == [("requests", "installed")]
+    assert fake.calls == [], "taken from the offline directory: no network at start-up"
+    assert (await _rows())["requests"].version == "1.0.1"
+    assert await _audit("plugin.default.preapproved") == []
+    for slug in ("brief-writer", "assistant"):
+        agent = (await client.get(f"{ORG}/agents/{slug}")).json()
+        assert agent["versions"][0]["created_by"] == f"plugin:requests/{slug}@1", agent
 
 
 async def test_the_api_never_takes_a_preapproval(client: AsyncClient, admin: str, deployment: Any) -> None:

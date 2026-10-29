@@ -354,12 +354,15 @@ global:
     # directory below; a default of another source is taken from it when it holds a version in range
     # (no network at start-up), and upgraded from its source later.
     # The built-in agents (S43-09): `software-delivery` brings the MADR 4 skill, which links to
-    # adr.github.io and is rated high risk, hence `preapproved`. Set `defaultPlugins: []` to install none.
+    # adr.github.io and is rated high risk, hence `preapproved`. `requests` carries the agents of the
+    # `default-request` workflow (ADR 0110); nothing in it goes to a second administrator. Set
+    # `defaultPlugins: []` to install none.
     defaultPlugins:
       - { source: varga, name: software-delivery, version: "^1.0", preapproved: true }
       - { source: varga, name: netops, version: "^1.0", preapproved: true }
       - { source: varga, name: authoring, version: "^1.0", preapproved: true }
       - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
+      - { source: varga, name: requests, version: "^1.0" }
     # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none. The API
     # image ships the built-in agents' plugins there, pinned by its `plugins.lock`.
     offline: /opt/choregos/plugins

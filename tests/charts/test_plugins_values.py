@@ -67,7 +67,16 @@ def _config_map(docs: list[dict[str, Any]]) -> dict[str, Any] | None:
     )
 
 
-BUILT_IN = ["software-delivery", "netops", "authoring", "mcp-clients"]
+#: The built-in agents' plugins and whether the chart pre-approves them: `software-delivery`'s skill
+#: `madr-4` is rated high risk, so the four former core plugins are; `requests` needs no second
+#: administrator.
+BUILT_IN = [
+    ("software-delivery", True),
+    ("netops", True),
+    ("authoring", True),
+    ("mcp-clients", True),
+    ("requests", False),
+]
 NONE: dict[str, Any] = {"sources": [], "defaultPlugins": [], "offline": ""}
 
 
@@ -81,7 +90,7 @@ def test_by_default_the_built_in_agents_are_installed_pre_approved(tmp_path: pat
     assert config_map is not None
     config = parse_config(yaml.safe_load(config_map["data"]["plugins.yaml"]))
     assert [(d.source, d.name, d.version, d.preapproved) for d in config.default_plugins] == [
-        ("varga", name, "^1.0", True) for name in BUILT_IN
+        ("varga", name, "^1.0", preapproved) for name, preapproved in BUILT_IN
     ]
     (varga,) = config.sources
     assert varga.index == "oci://ghcr.io/vargafoundation/choregos-agents/index:latest"
