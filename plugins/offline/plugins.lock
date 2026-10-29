@@ -10,25 +10,32 @@ plugins:
     source: ghcr.io/vargafoundation/choregos-agents/authoring:1.0.0
     artifact: sha256:f0a936a34ccc42b54de34aaa071297d1b8edfb56242faad4c7321591026b7898
     file: authoring-1.0.0.tar.gz
-    signature: not verified (--no-verify)
+    signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   mcp-clients:
     version: 1.0.0
     digest: sha256:2470e930c1433d783aa3afe664884c22c6a0e907992988071a553551bbd3bdc5
     source: ghcr.io/vargafoundation/choregos-agents/mcp-clients:1.0.0
     artifact: sha256:1bc3946cd5795b75f36c2a8ded7e3a9b36d157ba089f0d4295fcc7abab017b69
     file: mcp-clients-1.0.0.tar.gz
-    signature: not verified (--no-verify)
+    signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   netops:
     version: 1.0.0
     digest: sha256:999a3452510f45cbc14d299d1e9c23c709c7b19a436a2207511c74b44e4fbe52
     source: ghcr.io/vargafoundation/choregos-agents/netops:1.0.0
     artifact: sha256:6de9f1fbf2c2eb7a16759eebb4b10c3ef68a6961c29066668fdc10186085370e
     file: netops-1.0.0.tar.gz
-    signature: not verified (--no-verify)
+    signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
+  requests:
+    version: 1.0.1
+    digest: sha256:6fce95eed261b21f0ba07dc9f66a2eab41eb96a6ee67cb40ef616fefec9429b5
+    source: ghcr.io/vargafoundation/choregos-agents/requests:1.0.1
+    artifact: sha256:d44715a5373a11c34171703f96aaa367050c89a8f4a9394e5b9e41c93a449454
+    file: requests-1.0.1.tar.gz
+    signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   software-delivery:
     version: 1.0.0
     digest: sha256:b6b21c798588eafd298380e6c36222e7e4c748f4619f234ad9c72048895aa7b3
     source: ghcr.io/vargafoundation/choregos-agents/software-delivery:1.0.0
     artifact: sha256:9c009550f2835f5516508c9b4a275e566f69134b4c4ba61bc4e1b18a0619de43
     file: software-delivery-1.0.0.tar.gz
-    signature: not verified (--no-verify)
+    signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
