@@ -247,8 +247,8 @@ jobs:
       # (`lock_budget_scopes`, S27-11) only exists on PostgreSQL: SQLite stands in with an in-process
       # lock. Both suites drop and recreate the `public` schema for each test, so they take the
       # database one after the other, the API's first: its fixture recreates the `vector` extension
-      # that a schema reset removes. The schema is built by `create_all` as the service's superuser:
-      # this step does not prove the orchestrator under RLS.
+      # that a schema reset removes. The schema is built by the Alembic migrations and the suite runs as
+      # the non-superuser application role, so forced RLS applies (S47-27).
       - name: orchestrator suite on PostgreSQL
         run: uv run pytest apps/orchestrator/tests -q
         env:
