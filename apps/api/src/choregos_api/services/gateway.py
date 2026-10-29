@@ -14,18 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import OrgConnector
 
 
-async def org_gateway(session: AsyncSession, org_id: str) -> GatewayAdapter:
-    """The organisation's gateway adapter (see `org_gateway_and_type`)."""
-    return (await org_gateway_and_type(session, org_id))[1]
-
-
-async def org_gateway_and_type(session: AsyncSession, org_id: str) -> tuple[str, GatewayAdapter]:
-    """The gateway whose models the organisation's catalogue describes.
-
-    An organisation connector of kind `gateway` wins (an organisation that brings its own
-    gateway); otherwise the deployment's default (`CHOREGOS_GATEWAY_TYPE`, LiteLLM when unset).
-    """
-    connector = (
+async def _org_connector(session: AsyncSession, org_id: str) -> OrgConnector | None:
+    """The organisation's own gateway connector, if it brings one (the first by name: one is allowed)."""
+    return (
         (
             await session.execute(
                 select(OrgConnector)
@@ -37,6 +28,29 @@ async def org_gateway_and_type(session: AsyncSession, org_id: str) -> tuple[str,
         .scalars()
         .first()
     )
+
+
+async def org_gateway_url(session: AsyncSession, org_id: str) -> str | None:
+    """Where the models of the organisation's own gateway are called (ADR 0109), or `None`: the
+    deployment's `gateway_url`. A key minted on that gateway is only good there."""
+    connector = await _org_connector(session, org_id)
+    if connector is None:
+        return None
+    return str((connector.config or {}).get("base_url") or "") or None
+
+
+async def org_gateway(session: AsyncSession, org_id: str) -> GatewayAdapter:
+    """The organisation's gateway adapter (see `org_gateway_and_type`)."""
+    return (await org_gateway_and_type(session, org_id))[1]
+
+
+async def org_gateway_and_type(session: AsyncSession, org_id: str) -> tuple[str, GatewayAdapter]:
+    """The gateway whose models the organisation's catalogue describes.
+
+    An organisation connector of kind `gateway` wins (an organisation that brings its own
+    gateway); otherwise the deployment's default (`CHOREGOS_GATEWAY_TYPE`, LiteLLM when unset).
+    """
+    connector = await _org_connector(session, org_id)
     gateway: Any
     if connector is None:
         kind = default_gateway_type()
