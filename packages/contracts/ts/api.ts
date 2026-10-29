@@ -567,6 +567,8 @@ export type McpCatalogueEntry = {
   enablement?: Array<ConnectorEnablement>;
   /** the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067) */
   procedure?: string | null;
+  /** how THIS organisation can install the entry: direct (Choregos holds the credential) and/or gateway (through its MCP gateway, ADR 0105) */
+  install_routes?: Array<"direct" | "gateway">;
 };
 
 export type McpCatalogueInstall = {
@@ -586,6 +588,10 @@ export type McpCatalogueInstall = {
   availability?: ConnectorAvailability;
   /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
   allow_egress?: boolean;
+  /** absent: gateway when the organisation's gateway is required, or when the entry cannot be installed directly and a gateway is available; else direct (ADR 0105) */
+  route?: "direct" | "gateway" | null;
+  /** the server's name at the gateway; defaults to the entry id */
+  gateway_server?: string | null;
 };
 
 export type SkillCatalogueInstall = {
@@ -2824,6 +2830,102 @@ export type OutboundProxyTest = {
   target: string;
 };
 
+/** How Choregos authenticates to the organisation's MCP gateway (ADR 0105). The credential itself is `McpGatewayPut.secret`, sealed and never returned. */
+export type McpGatewayAuth = {
+  type: "bearer" | "header" | "oauth_client_credentials" | "jwt_assertion";
+  /** for `header`: the header that carries the secret */
+  header_name?: string | null;
+  /** for `oauth_client_credentials`: the token endpoint */
+  token_url?: string | null;
+  client_id?: string | null;
+  scope?: string | null;
+  /** RFC 8707 resource indicator asked of the token endpoint */
+  resource?: string | null;
+  /** audience asked of the token endpoint */
+  token_audience?: string | null;
+};
+
+/** The organisation's MCP gateway as stored (ADR 0105). The secret is never returned, only `secret_set`. */
+export type McpGateway = {
+  /** off: the gateway is kept but unused. available: a connector may go through it. required: new direct `mcp` connectors are refused and existing ones are not called, except a plugin's server (an organisation connector the platform runs, ADR 0096), which is never behind the gateway */
+  mode: "off" | "available" | "required";
+  /** `{server}` is replaced by the server's name at the gateway; no credentials, query or fragment */
+  endpoint: string;
+  /** how the server is named to the gateway: in the path, or in `server_header` */
+  routing: "path" | "header";
+  server_header: string | null;
+  auth: McpGatewayAuth;
+  /** audience of the signed assertion the gateway receives */
+  audience: string | null;
+  /** the header that carries the signed assertion of the caller's identity */
+  identity_header: string | null;
+  timeout_s: number;
+  secret_set: boolean;
+};
+
+export type McpGatewayAssertionKey = {
+  kid: string;
+  created_at: string;
+  /** the key that signs; the others stay published until they are retired */
+  current: boolean;
+};
+
+/** The organisation's assertion keys: public data only (ADR 0105). */
+export type McpGatewayAssertion = {
+  issuer: string;
+  jwks_url: string;
+  keys: Array<McpGatewayAssertionKey>;
+};
+
+export type McpGatewayState = {
+  gateway: McpGateway | null;
+  updated_by: string | null;
+  updated_at: string | null;
+  assertion: McpGatewayAssertion;
+};
+
+export type McpGatewayPut = {
+  mode: "off" | "available" | "required";
+  /** `{server}` is replaced by the server's name at the gateway; no credentials, query or fragment */
+  endpoint: string;
+  routing: "path" | "header";
+  server_header?: string | null;
+  auth: McpGatewayAuth;
+  audience?: string | null;
+  identity_header?: string | null;
+  timeout_s?: number;
+  /** the gateway credential, sealed (ADR 0058) and never returned; absent keeps the stored one */
+  secret?: string;
+  /** open the gateway's host in the organisation's egress allowlist, in the same call; needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
+};
+
+export type McpGatewayTestRequest = {
+  /** the server's name at the gateway */
+  server: string;
+};
+
+export type McpGatewayTest = {
+  ok: boolean;
+  server: string;
+  protocol_version: string | null;
+  server_info: {
+    [key: string]: unknown;
+  } | null;
+  /** how many tools the server lists */
+  tools: number | null;
+  elapsed_ms: number;
+  /** names the gateway; never a credential */
+  error: string | null;
+};
+
+/** A JSON Web Key Set (RFC 7517): public keys only. */
+export type JsonWebKeySet = {
+  keys: Array<{
+    [key: string]: unknown;
+  }>;
+};
+
 /** What an installed plugin brought, by the identifier each item has in the organisation. */
 export type PluginContents = {
   /** agent slugs */
@@ -3721,7 +3823,7 @@ export type EgressRule = {
   used_by: Array<"api" | "workers" | "runners">;
   status: "requested" | "allowed" | "refused" | "revoked";
   reason?: string;
-  /** `mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `manual`, `migration` */
+  /** `mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `mcp-gateway`, `manual`, `migration` */
   origin?: string;
   requested_by?: string | null;
   requested_at?: string | null;
@@ -3801,6 +3903,17 @@ export type EgressRequired = {
   detail?: string;
   code?: "egress_required";
   verdicts?: Array<EgressVerdict>;
+};
+
+/** The 409 body of an organisation's MCP gateway refusals (ADR 0105, docs/adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md): an RFC 9457 problem with a `code`. `gateway_in_use`: the gateway cannot be removed while connectors go through it (`connectors` names them). `gateway_required`: the gateway is required and a direct connector is refused. `gateway_not_configured`: a connector asks for the gateway and none is set. `gateway_assertion_key_missing`: the gateway authenticates with a signed assertion and the organisation has no assertion key yet. */
+export type McpGatewayConflict = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  code: "gateway_in_use" | "gateway_required" | "gateway_not_configured" | "gateway_assertion_key_missing";
+  /** the connectors that go through the gateway (`gateway_in_use`) */
+  connectors?: Array<string>;
 };
 
 export type EgressRuleCreate = {
@@ -4129,6 +4242,7 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
+  deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
@@ -4182,6 +4296,8 @@ export interface Operations {
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
+  getMcpGateway: { method: "GET"; path: "/orgs/{org}/mcp-gateway"; body: never; response: McpGatewayState };
+  getMcpGatewayJwks: { method: "GET"; path: "/orgs/{org}/mcp-gateway/jwks.json"; body: never; response: JsonWebKeySet };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}"; body: never; response: MemoryStore };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
@@ -4445,6 +4561,7 @@ export interface Operations {
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
+  putMcpGateway: { method: "PUT"; path: "/orgs/{org}/mcp-gateway"; body: McpGatewayPut; response: McpGatewayState };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putOutboundProxy: { method: "PUT"; path: "/orgs/{org}/outbound-proxy"; body: OutboundProxyPut; response: OutboundProxyState };
@@ -4476,6 +4593,7 @@ export interface Operations {
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
+  rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
@@ -4497,6 +4615,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   testConnector: { method: "POST"; path: "/projects/{id}/connectors/{kind}/test"; body: never; response: ConnectorTestResult };
+  testMcpGateway: { method: "POST"; path: "/orgs/{org}/mcp-gateway/test"; body: McpGatewayTestRequest; response: McpGatewayTest };
   testOutboundProxy: { method: "POST"; path: "/orgs/{org}/outbound-proxy/test"; body: never; response: OutboundProxyTest };
   theme: { method: "GET"; path: "/theme"; body: never; response: Theme };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };

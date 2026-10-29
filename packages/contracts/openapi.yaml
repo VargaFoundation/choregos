@@ -403,7 +403,9 @@ paths:
       responses:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/EgressRequired" }
+        "409":
+          description: "State conflict: a host to open (egress_required) or the organisation's MCP gateway (gateway_required, gateway_not_configured)"
+          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/EgressRequired" }, { $ref: "#/components/schemas/McpGatewayConflict" }] } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors/{name}:
     parameters:
@@ -467,10 +469,16 @@ paths:
     post:
       tags: [connectors]
       operationId: discoverConnectorOperations
-      description: Ask the MCP server for its tools and derive the diff — a new tool starts closed (forbidden), a drifting schema closes the operation again, a removed tool disappears (ADR 0034).
+      description: >-
+        Ask the MCP server for its tools and derive the diff — a new tool starts closed (forbidden), a drifting schema
+        closes the operation again, a removed tool disappears (ADR 0034). A connector that goes through the
+        organisation's MCP gateway is asked through it (ADR 0105); a gateway refusal (409 `gateway_required`,
+        `gateway_not_configured` or `gateway_assertion_key_missing`) does not mark the connector in error, and never
+        concerns a plugin's server (ADR 0096).
       responses:
         "200": { description: The diff, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorDiscovery" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/McpGatewayConflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The server did not answer, or refused the connector's key" }
   /orgs/{org}/mcp-catalogue:
@@ -501,7 +509,9 @@ paths:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/EgressRequired" }
+        "409":
+          description: "State conflict: a host to open (egress_required) or the organisation's MCP gateway (gateway_required, gateway_not_configured)"
+          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/EgressRequired" }, { $ref: "#/components/schemas/McpGatewayConflict" }] } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connector-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -1875,6 +1885,84 @@ paths:
       responses:
         "200": { description: The result of the test, content: { application/json: { schema: { $ref: "#/components/schemas/OutboundProxyTest" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/mcp-gateway:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getMcpGateway
+      description: >-
+        The organisation's MCP gateway (ADR 0105), or `gateway: null` when none is set, and its assertion keys
+        (public data only). The secret is never returned, only `secret_set`. `org_admin`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [admin]
+      operationId: putMcpGateway
+      description: >-
+        Sets the organisation's one MCP gateway (ADR 0105; `org_admin`, audited, the secret never in the audit row).
+        `secret` is sealed (ADR 0058) and never returned; absent, the stored one is kept. A 409 without `verdicts`
+        means the deployment has no secrets key; with `verdicts`, the gateway's host is not in the egress allowlist.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [admin]
+      operationId: deleteMcpGateway
+      description: >-
+        Removes the setting and its sealed secret (ADR 0105; `org_admin`, audited). Refused with 409 `gateway_in_use`
+        while connectors go through it; `connectors` names them.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/McpGatewayConflict" }
+  /orgs/{org}/mcp-gateway/test:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [admin]
+      operationId: testMcpGateway
+      description: >-
+        Opens an MCP session with one server through the stored gateway and lists its tools (ADR 0105). A gateway
+        that fails is a 200 with `ok: false` and `error`, not an HTTP error. `org_admin`, audited. 404 when no
+        gateway is set.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayTestRequest" } } }
+      responses:
+        "200": { description: The result of the test, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayTest" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/mcp-gateway/assertion-key:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [admin]
+      operationId: rotateMcpGatewayAssertionKey
+      description: >-
+        Creates the organisation's signing key for the identity assertions sent to its gateway, or rotates it (ADR 0105):
+        the new key signs, the previous one stays published. `org_admin`, audited. 409 when the deployment has no
+        secrets key.
+      responses:
+        "200": { description: The organisation's assertion keys, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayAssertion" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/mcp-gateway/jwks.json:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getMcpGatewayJwks
+      security: []
+      description: >-
+        The public keys of the organisation's assertion (ADR 0105), for the gateway to verify what Choregos sends.
+        Public keys only, unauthenticated, cacheable for 300 s. The same 404 answers an unknown organisation and an
+        organisation without an assertion key.
+      responses:
+        "200": { description: The JSON Web Key Set, content: { application/json: { schema: { $ref: "#/components/schemas/JsonWebKeySet" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/network-activity:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -4052,6 +4140,9 @@ components:
     EgressRequired:
       description: "State conflict. When `code` is `egress_required`, a host the call needs is not yet in the organisation's egress allowlist: `verdicts` says where each stands, and the console opens its network-access modal (S39-22)."
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/EgressRequired" } } }
+    McpGatewayConflict:
+      description: "State conflict on the organisation's MCP gateway (ADR 0105): `code` is `gateway_in_use` (with `connectors`), `gateway_required`, `gateway_not_configured` or `gateway_assertion_key_missing`."
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/McpGatewayConflict" } } }
     ValidationError:
       description: Unprocessable entity
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
@@ -4597,6 +4688,7 @@ components:
         cannot_reason: { type: [string, "null"], description: "why the entry cannot be installed by the caller: the server's sentence" }
         enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" }, description: "one per installed instance of this entry" }
         procedure: { type: [string, "null"], description: "the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067)" }
+        install_routes: { type: array, uniqueItems: true, items: { type: string, enum: [direct, gateway] }, description: "how THIS organisation can install the entry: direct (Choregos holds the credential) and/or gateway (through its MCP gateway, ADR 0105)" }
     McpCatalogueInstall:
       type: object
       properties:
@@ -4606,6 +4698,8 @@ components:
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
         availability: { $ref: "#/components/schemas/ConnectorAvailability", description: "defaults to all_projects through the API; the console proposes selected_projects (ADR 0074)" }
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
+        route: { type: [string, "null"], enum: [direct, gateway, null], description: "absent: gateway when the organisation's gateway is required, or when the entry cannot be installed directly and a gateway is available; else direct (ADR 0105)" }
+        gateway_server: { type: [string, "null"], pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", description: "the server's name at the gateway; defaults to the entry id" }
     SkillCatalogueInstall:
       type: object
       properties:
@@ -6759,6 +6853,102 @@ components:
         error: { type: [string, "null"], description: "names the proxy; never the password" }
         elapsed_ms: { type: integer, minimum: 0 }
         target: { type: string, description: "the echo endpoint that was fetched" }
+    McpGatewayAuth:
+      type: object
+      additionalProperties: false
+      description: "How Choregos authenticates to the organisation's MCP gateway (ADR 0105). The credential itself is `McpGatewayPut.secret`, sealed and never returned."
+      required: [type]
+      properties:
+        type: { type: string, enum: [bearer, header, oauth_client_credentials, jwt_assertion] }
+        header_name: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$", description: "for `header`: the header that carries the secret" }
+        token_url: { type: [string, "null"], maxLength: 2000, description: "for `oauth_client_credentials`: the token endpoint" }
+        client_id: { type: [string, "null"], maxLength: 256 }
+        scope: { type: [string, "null"], maxLength: 1024 }
+        resource: { type: [string, "null"], maxLength: 2000, description: "RFC 8707 resource indicator asked of the token endpoint" }
+        token_audience: { type: [string, "null"], maxLength: 512, description: "audience asked of the token endpoint" }
+    McpGateway:
+      type: object
+      additionalProperties: false
+      description: "The organisation's MCP gateway as stored (ADR 0105). The secret is never returned, only `secret_set`."
+      required: [mode, endpoint, routing, server_header, auth, audience, identity_header, timeout_s, secret_set]
+      properties:
+        mode:
+          type: string
+          enum: ["off", available, required]
+          description: "off: the gateway is kept but unused. available: a connector may go through it. required: new direct `mcp` connectors are refused and existing ones are not called, except a plugin's server (an organisation connector the platform runs, ADR 0096), which is never behind the gateway"
+        endpoint: { type: string, maxLength: 2000, pattern: "^https?://[^\\s@?#]+$", description: "`{server}` is replaced by the server's name at the gateway; no credentials, query or fragment" }
+        routing: { type: string, enum: [path, header], description: "how the server is named to the gateway: in the path, or in `server_header`" }
+        server_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$" }
+        auth: { $ref: "#/components/schemas/McpGatewayAuth" }
+        audience: { type: [string, "null"], maxLength: 512, description: "audience of the signed assertion the gateway receives" }
+        identity_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$", description: "the header that carries the signed assertion of the caller's identity" }
+        timeout_s: { type: number, minimum: 1, maximum: 120 }
+        secret_set: { type: boolean }
+    McpGatewayAssertionKey:
+      type: object
+      additionalProperties: false
+      required: [kid, created_at, current]
+      properties:
+        kid: { type: string }
+        created_at: { type: string, format: date-time }
+        current: { type: boolean, description: "the key that signs; the others stay published until they are retired" }
+    McpGatewayAssertion:
+      type: object
+      additionalProperties: false
+      description: "The organisation's assertion keys: public data only (ADR 0105)."
+      required: [issuer, jwks_url, keys]
+      properties:
+        issuer: { type: string }
+        jwks_url: { type: string }
+        keys: { type: array, items: { $ref: "#/components/schemas/McpGatewayAssertionKey" } }
+    McpGatewayState:
+      type: object
+      additionalProperties: false
+      required: [gateway, updated_by, updated_at, assertion]
+      properties:
+        gateway: { oneOf: [{ $ref: "#/components/schemas/McpGateway" }, { type: "null" }] }
+        updated_by: { type: [string, "null"] }
+        updated_at: { type: [string, "null"] }
+        assertion: { $ref: "#/components/schemas/McpGatewayAssertion" }
+    McpGatewayPut:
+      type: object
+      additionalProperties: false
+      required: [mode, endpoint, routing, auth]
+      properties:
+        mode: { type: string, enum: ["off", available, required] }
+        endpoint: { type: string, maxLength: 2000, pattern: "^https?://[^\\s@?#]+$", description: "`{server}` is replaced by the server's name at the gateway; no credentials, query or fragment" }
+        routing: { type: string, enum: [path, header] }
+        server_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$" }
+        auth: { $ref: "#/components/schemas/McpGatewayAuth" }
+        audience: { type: [string, "null"], maxLength: 512 }
+        identity_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$" }
+        timeout_s: { type: number, minimum: 1, maximum: 120, default: 30 }
+        secret: { type: string, minLength: 1, maxLength: 4096, writeOnly: true, description: "the gateway credential, sealed (ADR 0058) and never returned; absent keeps the stored one" }
+        allow_egress: { type: boolean, default: false, description: "open the gateway's host in the organisation's egress allowlist, in the same call; needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
+    McpGatewayTestRequest:
+      type: object
+      additionalProperties: false
+      required: [server]
+      properties:
+        server: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", description: "the server's name at the gateway" }
+    McpGatewayTest:
+      type: object
+      additionalProperties: false
+      required: [ok, server, protocol_version, server_info, tools, elapsed_ms, error]
+      properties:
+        ok: { type: boolean }
+        server: { type: string }
+        protocol_version: { type: [string, "null"] }
+        server_info: { type: [object, "null"], additionalProperties: true }
+        tools: { type: [integer, "null"], description: "how many tools the server lists" }
+        elapsed_ms: { type: integer, minimum: 0 }
+        error: { type: [string, "null"], description: "names the gateway; never a credential" }
+    JsonWebKeySet:
+      type: object
+      description: "A JSON Web Key Set (RFC 7517): public keys only."
+      required: [keys]
+      properties:
+        keys: { type: array, items: { type: object, additionalProperties: true } }
     PluginContents:
       type: object
       additionalProperties: false
@@ -7744,7 +7934,7 @@ components:
         used_by: { type: array, items: { type: string, enum: [api, workers, runners] }, description: the pod families that make the call }
         status: { type: string, enum: [requested, allowed, refused, revoked] }
         reason: { type: string, maxLength: 500 }
-        origin: { type: string, description: "`mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `manual`, `migration`" }
+        origin: { type: string, description: "`mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `mcp-gateway`, `manual`, `migration`" }
         requested_by: { type: [string, "null"] }
         requested_at: { type: [string, "null"], format: date-time }
         decided_by: { type: [string, "null"] }
@@ -7821,6 +8011,24 @@ components:
         detail: { type: string }
         code: { type: string, enum: [egress_required] }
         verdicts: { type: array, items: { $ref: "#/components/schemas/EgressVerdict" } }
+    McpGatewayConflict:
+      type: object
+      description: >-
+        The 409 body of an organisation's MCP gateway refusals (ADR 0105, docs/adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md):
+        an RFC 9457 problem with a `code`. `gateway_in_use`: the gateway cannot be removed while connectors go
+        through it (`connectors` names them). `gateway_required`: the gateway is required and a direct connector is
+        refused. `gateway_not_configured`: a connector asks for the gateway and none is set.
+        `gateway_assertion_key_missing`: the gateway authenticates with a signed assertion and the organisation has
+        no assertion key yet.
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string, enum: [gateway_in_use, gateway_required, gateway_not_configured, gateway_assertion_key_missing] }
+        connectors: { type: array, items: { type: string }, description: "the connectors that go through the gateway (`gateway_in_use`)" }
     EgressRuleCreate:
       type: object
       required: [host]
