@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { Badge, Tabs, tabClasses } from "@/components/ui";
@@ -47,7 +48,7 @@ export default function WorkflowLayout({
             v{definition.data.version}
           </span>
         )}
-        {definition.data?.is_default && <Badge tone="accent">Default</Badge>}
+        {definition.data?.is_default && <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>Default</Badge>}
       </div>
       <Tabs aria-label={`Views of ${name}`}>
         {VUES.map((vue) => {

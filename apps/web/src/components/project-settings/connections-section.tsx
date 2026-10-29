@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { Connecteurs } from "@/components/connecteurs";
+import { ReceivedEvents } from "@/components/project-settings/received-events";
 import { SettingsSection } from "@/components/project-settings/section";
 
 /** What the project is connected to: a card per system, an icon, a state a person can read. */
@@ -24,6 +25,9 @@ export function ConnectionsSection({ slug }: { slug: string }) {
       }
     >
       <Connecteurs slug={slug} />
+      <div className="mt-4">
+        <ReceivedEvents slug={slug} />
+      </div>
     </SettingsSection>
   );
 }

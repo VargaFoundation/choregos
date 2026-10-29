@@ -2,7 +2,7 @@
 
 # Use Jira Cloud as the board
 
-For a project owner. Procedure `connector.tracker.jira`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For a project owner. Procedure `connector.tracker.jira`, version 2, reviewed 2026-10-28 against the vendor's own pages.
 
 ## Before you start
 
@@ -37,7 +37,9 @@ use a classic token unless you have tested it.
 
 1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.
 2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the
-   key.
+   key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the
+   project's slug; two projects holding the same key are told apart by the Jira site, and a key held
+   twice on the same site routes nothing.
 3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are
    `Cost (€)`, `Size`, `Risk` and `Run`.
 4. `api_token`: the token, in the password field (sealed, shown once).

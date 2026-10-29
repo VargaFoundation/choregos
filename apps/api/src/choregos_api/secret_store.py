@@ -389,10 +389,13 @@ async def secret_states(
     store: SecretStore | None = None,
 ) -> list[ConnectorSecretState]:
     """One state per configured secret field, for the DTO: no value, ever."""
+    from choregos_adapters.registry import slot_of
+
     names = store_names(references)
     metas = await (store or get_secret_store()).meta(session, org_id, list(names.values())) if names else {}
     states: list[ConnectorSecretState] = []
-    for field in sorted(references):
+    # `api_key`, `api_key.2` … `api_key.10` in slot order, not in text order (ADR 0089).
+    for field in sorted(references, key=slot_of):
         if field in names:
             meta = metas.get(names[field])
             states.append(
@@ -444,7 +447,7 @@ async def resolved_configuration(
     """The configuration with its secrets RESOLVED — `store:` through the store, the rest through
     the core's resolvers. To build an adapter, never to save or return. Every resolved value is
     remembered by the redaction, so that a log line or an error text cannot carry it out."""
-    from choregos_adapters.registry import configuration_resolue, references_de_secret
+    from choregos_adapters.registry import configuration_resolue, references_de_secret, slot_of
 
     from .services.github_app import pin_installation
 
@@ -454,10 +457,11 @@ async def resolved_configuration(
     resolved = configuration_resolue(
         kind, type_name, config, dict(secret_refs or {}), secret_ref, preresolved=preresolved
     )
-    for field in references_de_secret(kind, type_name, dict(secret_refs or {}), secret_ref):
-        value = resolved.get(field)
-        if isinstance(value, str):
-            remember_secret(value)
+    for name in references_de_secret(kind, type_name, dict(secret_refs or {}), secret_ref):
+        value = resolved.get(slot_of(name)[0])
+        for one in value if isinstance(value, list) else [value]:
+            if isinstance(one, str):
+                remember_secret(one)
     return resolved
 
 

@@ -172,9 +172,10 @@ def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance
     finally:
         get_settings.cache_clear()
 
-    assert rows["reviewer"].created_by == f"catalogue:reviewer@{reviewer.version}"
+    # Up to head: the S43-09 migration then names their plugin (ADR 0093 §6), the mark kept.
+    assert rows["reviewer"].created_by == f"plugin:software-delivery/reviewer@{reviewer.version}"
     assert rows["reviewer"].scope == "platform"
-    assert rows["triager"].created_by == f"catalogue:triager@{triager.version}!diverged"
+    assert rows["triager"].created_by == f"plugin:software-delivery/triager@{triager.version}!diverged"
     assert rows["triager"].scope == "platform"
     assert (rows["my-own"].created_by, rows["my-own"].scope) == ("template:x@1", "org")
     assert (rows["developer"].created_by, rows["developer"].scope) == ("alice@varga.dev", "org")

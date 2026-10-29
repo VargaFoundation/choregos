@@ -30,6 +30,8 @@ x-platform-env: &platform-env
   CHOREGOS_GATEWAY_MASTER_KEY: sk-local-install-only
   CHOREGOS_MEMORY_URL: http://ecphoria:8432
   CHOREGOS_LOG_JSON: ${CHOREGOS_LOG_JSON:-false}
+  # The plugins the image ships (ADR 0093 §6): the built-in agents, offline.
+  CHOREGOS_PLUGINS_OFFLINE: /opt/choregos/plugins
 
 # The run-token key is generated once per install (service `keys`) and read from a shared
 # volume: the workers sign run tokens, the API verifies them, so both need the same key.

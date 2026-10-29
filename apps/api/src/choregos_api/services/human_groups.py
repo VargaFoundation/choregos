@@ -106,3 +106,32 @@ def unknown_group_warnings(workflow: Any, known: set[str]) -> list[dict[str, Any
                 }
             )
     return issues
+
+
+async def members_of_group(
+    session: AsyncSession, org_id: str, org_slug: str, project_id: str, group: str
+) -> list[tuple[User, bool]]:
+    """The organisation's members who carry `group` (as of their last sign-in), each with whether they
+    may answer a step of this project: the group is necessary, not sufficient — `item:decide` comes
+    from a role in the organisation or on the project (ADR 0044)."""
+    from ..rbac import ROLE_PERMISSIONS, Permission
+
+    rows = (
+        await session.execute(
+            select(User, Membership)
+            .join(Membership, Membership.user_id == User.id)
+            .where(Membership.org_id == org_id)
+            .order_by(User.email)
+        )
+    ).all()
+    found: dict[str, tuple[User, bool]] = {}
+    for user, membership in rows:
+        if group not in groups_for_org(user.groups, org_slug):
+            continue
+        reaches = membership.project_id in (None, project_id)
+        decides = reaches and Permission.ITEM_DECIDE in ROLE_PERMISSIONS.get(
+            Role(membership.role), frozenset()
+        )
+        _, before = found.get(user.id, (user, False))
+        found[user.id] = (user, before or decides)
+    return list(found.values())

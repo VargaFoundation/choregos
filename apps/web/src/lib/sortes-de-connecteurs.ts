@@ -54,3 +54,13 @@ export const SORTES_DU_PROJET = ["tracker", "scm", "ci", "cd", "runtime", "gatew
 export function estUneSorteDuProjet(kind: string): boolean {
   return (SORTES_DU_PROJET as readonly string[]).includes(kind);
 }
+
+/**
+ * A kind an ORGANISATION may declare (S44-04): every kind but a project's delivery tools, except the
+ * model gateway — an organisation that brings its own LLM gateway declares it once, and its model
+ * catalogue and its runs use it (ADR 0060). The `direct` gateway measures no cost: never offered here.
+ */
+export function isOrgDeclarable(kind: string, type?: string): boolean {
+  if (kind === "gateway") return type !== "direct";
+  return !estUneSorteDuProjet(kind);
+}

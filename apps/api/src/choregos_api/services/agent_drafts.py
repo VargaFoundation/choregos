@@ -205,12 +205,16 @@ def get_drafter(settings: Settings | None = None) -> AgentDrafter:
 
 
 async def instructions_for_drafter(session: AsyncSession, org_id: str) -> str:
-    """The organisation's `agent-drafter` (latest version) if installed, else the catalogue's."""
-    from choregos_core.catalogue_d_agents import entree
+    """The organisation's `agent-drafter` (latest version) if installed, else the catalogue's (the plugin
+    `authoring`, ADR 0093 §6)."""
+    from .catalogue_d_agents import catalogue_instructions
 
     own = await production_spec_of(session, org_id, AGENT, active_only=True)
     # Not rendered: the drafter's text quotes the template variables it teaches, as plain words.
-    return str((own or {}).get("instructions") or entree(AGENT).document["spec"]["instructions"])  # type: ignore[union-attr]
+    text = (own or {}).get("instructions") or await catalogue_instructions(session, org_id, AGENT)
+    if not text:
+        raise DraftingError(f"no `{AGENT}` agent: install the plugin `authoring`, which ships it")
+    return str(text)
 
 
 def slug_from_name(name: str) -> str:

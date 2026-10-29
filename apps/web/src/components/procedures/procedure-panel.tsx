@@ -89,12 +89,15 @@ export function ProcedurePanel({
     markSeen(loadedId);
     setActive(key);
   }, [autoOpen, loadedId, key]);
-  // The page makes room for the panel on wide screens (see `globals.css`), and gives it back on close.
+  // The panel lies over the page and never reflows it: opening help must not move the form being
+  // filled in. Escape closes it, as it would a drawer.
   useEffect(() => {
-    if (!open) return;
-    if (inline) return;
-    document.body.classList.add("procedure-open");
-    return () => document.body.classList.remove("procedure-open");
+    if (!open || inline) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActive(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, inline]);
   useEffect(() => () => setActiveIfMine(key), [key]);
   if (!detail.data) return null;
@@ -135,7 +138,7 @@ function Panel({ procedure, onClose, inline }: { procedure: Procedure; onClose: 
       className={
         inline
           ? "mt-3 basis-full border border-line p-3 text-sm"
-          : "raised fixed inset-x-0 bottom-0 z-40 max-h-[75dvh] overflow-y-auto border-t border-line p-4 text-sm xl:inset-y-0 xl:left-auto xl:right-0 xl:max-h-none xl:w-[26rem] xl:border-l xl:border-t-0"
+          : "raised fixed inset-x-0 bottom-0 z-40 max-h-[75dvh] overflow-y-auto border-t border-line p-4 text-sm shadow-raised xl:inset-y-0 xl:left-auto xl:right-0 xl:max-h-none xl:w-[26rem] xl:border-l xl:border-t-0"
       }
     >
       <div className="space-y-4 break-words">
