@@ -6,6 +6,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 import { MemoryReimport } from "@/components/memory-reimport";
 import { Button, Card, Drawer, Empty, ErrorNote, EtatDeLecture, Input, LEGENDE, Select } from "@/components/ui";
+import { OrganisationMemoryStore, ProjectMemoryStore } from "@/components/memory-store";
 import { api, type MemoryChoice } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { IMPLICIT, reachLabel } from "@/lib/memories";
@@ -123,6 +124,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
         {canWrite && <MemoryReimport slug={slug} />}
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
+      {isGlobal ? <OrganisationMemoryStore org={org} /> : <ProjectMemoryStore slug={slug} />}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Search">
           <form

@@ -8,11 +8,13 @@
 Variables:
     CHOREGOS_DEV_URL         the tenant's console (e.g. `https://choregos.example`)
     CHOREGOS_DEV_TOKEN_FILE  a file holding an administrator's API token (`chg_…`); never printed
-    CHOREGOS_DEV_ORG         (default varga)
+    CHOREGOS_DEV_ORG         (default diametral)
     CHOREGOS_DEV_PROJECT     (default research)
+    CHOREGOS_DEV_ALPHAVANTAGE_KEY_FILE  a file holding the organisation's Alpha Vantage key (optional)
 
-The Alpha Vantage key is not here: the tenant's pods read it from their secret, and the org
-connector names it (`env:CONNECTOR_ALPHAVANTAGE_API_KEY`).
+The key is the organisation's, not the platform's: `prepare` sends it as a value, which the API seals
+in the database (ADR 0058) and never returns. It never goes into the pods' environment (S39-06e).
+Without the file, an existing connector keeps the key it has.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from typing import Any
 import httpx
 
 URL = os.environ.get("CHOREGOS_DEV_URL", "").rstrip("/")
-ORG = os.environ.get("CHOREGOS_DEV_ORG", "varga")
+ORG = os.environ.get("CHOREGOS_DEV_ORG", "diametral")
 PROJECT = os.environ.get("CHOREGOS_DEV_PROJECT", "research")
 #: Twenty US products: broad, size, region, rates, commodities, sectors, and four single stocks.
 UNIVERSE = [
@@ -67,7 +69,14 @@ def _project(http: httpx.Client) -> dict[str, Any]:
     return dict(read(http.get(f"/projects/{ORG}:{PROJECT}"), 200))
 
 
+def _key(variable: str) -> str | None:
+    """The key in the file `variable` names, or None; never printed."""
+    path = os.environ.get(variable, "")
+    return pathlib.Path(path).read_text(encoding="utf-8").strip() if path else None
+
+
 def prepare() -> None:
+    alphavantage = _key("CHOREGOS_DEV_ALPHAVANTAGE_KEY_FILE")
     with client() as http:
         connectors = read(http.get(f"/orgs/{ORG}/connectors"), 200)
         names = {c["name"] for c in (connectors if isinstance(connectors, list) else connectors["items"])}
@@ -77,16 +86,26 @@ def prepare() -> None:
                 "kind": "marketdata",
                 "type": "composite",
                 # A free Alpha Vantage key refuses a multi-year series: in `compact` it checks the last
-                # 100 trading days of Yahoo's (S38-21).
+                # 100 trading days of Yahoo's (S38-21). Without a key, Yahoo alone: a source listed
+                # without its key would refuse the whole connector.
                 "config": {
-                    "sources": ["yahoo", "alphavantage"],
+                    "sources": ["yahoo", "alphavantage"] if alphavantage else ["yahoo"],
                     "source_configs": {"alphavantage": {"outputsize": "compact"}},
                     "cross_check": True,
                     "tolerance": 0.02,
                 },
-                "secret_refs": {"alphavantage_api_key": "env:CONNECTOR_ALPHAVANTAGE_API_KEY"},
+                "secret_values": {"alphavantage_api_key": alphavantage} if alphavantage else {},
             }
             read(http.post(f"/orgs/{ORG}/connectors", json=body), 201)
+        elif alphavantage:
+            # A replaced key is sealed again (a new version); the old reference, if any, is dropped.
+            read(
+                http.put(
+                    f"/orgs/{ORG}/connectors/marketdata/secrets/alphavantage_api_key",
+                    json={"value": alphavantage},
+                ),
+                200,
+            )
         projects = {p["slug"] for p in read(http.get(f"/orgs/{ORG}/projects"), 200)["items"]}
         if PROJECT not in projects:
             body = {

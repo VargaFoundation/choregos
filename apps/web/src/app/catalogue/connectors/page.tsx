@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { CatalogueCard, CatalogueGrid } from "@/components/catalogue/catalogue-grid";
+import { CataloguePurpose } from "@/components/catalogue/catalogue-purpose";
 import { EnablementDrawer } from "@/components/catalogue/enablement-drawer";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { ConnectorIcon } from "@/components/connector-icon";
@@ -50,6 +51,7 @@ export default function ConnectorCataloguePage() {
         </Link>
         .
       </p>
+      <CataloguePurpose kind="connectors" />
       <EtatDeLecture lecture={catalogue} quoi="the catalogue" />
       {catalogue.data && (
         <>

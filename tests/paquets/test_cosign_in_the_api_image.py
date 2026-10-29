@@ -22,15 +22,17 @@ FLOOR = (3, 1, 3)
 
 
 def _copied() -> tuple[str, str]:
+    """(release, sha256 of the amd64 binary): the `cosign` stage fetches the release binary and checks
+    it against a pinned checksum per architecture (S41-14c)."""
     text = DOCKERFILE.read_text(encoding="utf-8")
-    found = re.findall(
-        r"^COPY\s+--from=ghcr\.io/sigstore/cosign/cosign:(v[\d.]+)@(sha256:[0-9a-f]{64})\s+\\\s*\n"
-        r"\s*/ko-app/cosign\s+/usr/local/bin/cosign\s*$",
-        text,
-        re.M,
+    assert (
+        len(re.findall(r"^COPY\s+--from=cosign\s+/out/cosign\s+/usr/local/bin/cosign\s*$", text, re.M)) == 1
     )
-    assert len(found) == 1, "the api Dockerfile copies cosign once, by tag and digest"
-    return found[0]
+    (release,) = re.findall(r"^ARG COSIGN_VERSION=(v[\d.]+)$", text, re.M)
+    sums = dict(re.findall(r"^ARG COSIGN_SHA256_(AMD64|ARM64)=([0-9a-f]{64})$", text, re.M))
+    assert set(sums) == {"AMD64", "ARM64"}, "each architecture's binary has its checksum"
+    assert "sha256sum -c -" in text, "the binary is checked against it"
+    return release, sums["AMD64"]
 
 
 def test_the_api_image_copies_the_release_the_hosted_cosign_job_runs() -> None:

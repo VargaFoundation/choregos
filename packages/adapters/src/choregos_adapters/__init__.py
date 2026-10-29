@@ -24,6 +24,7 @@ from .base import (
     TrackerAdapter,
 )
 from .errors import ConfigurationError
+from .http.pool import strategy_of
 from .registry import (
     POLITIQUES,
     AdapterSet,
@@ -36,6 +37,7 @@ from .registry import (
     deployment_default_type,
     egress_hosts,
     fakes_enabled,
+    offered_connector_types,
     operation_spec,
     register,
     spec_of,
@@ -74,6 +76,7 @@ __all__ = [
     "deployment_default_type",
     "egress_hosts",
     "fakes_enabled",
+    "offered_connector_types",
     "operation_spec",
     "register",
     "spec_of",
@@ -106,6 +109,16 @@ def _firecrawl_check(config: dict[str, Any]) -> None:
     from .web_search.firecrawl import checked_base_url
 
     checked_base_url(config.get("base_url"))
+
+
+def _web_documents_check(config: dict[str, Any]) -> None:
+    from .documents.base import SourceRefusedError
+    from .documents.web import check_connector_config
+
+    try:
+        check_connector_config(config)
+    except SourceRefusedError as refused:
+        raise ConfigurationError(str(refused)) from refused
 
 
 def _github_client(config: dict[str, Any]) -> Any:
@@ -173,6 +186,15 @@ _TEXTE: dict[str, Any] = {"type": "string"}
 _ENTIER: dict[str, Any] = {"type": "integer"}
 
 #: What every `web_search` type configures beside its key (ADR 0083).
+#: The setting of a type that pools a secret field (ADR 0089): how its keys are used in turn.
+_KEY_ROTATION: dict[str, Any] = {
+    "key_rotation": {
+        "enum": ["failover", "round_robin"],
+        "default": "failover",
+        "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, "
+        "`round_robin` spreads the calls",
+    }
+}
 _WEB_SEARCH_CONFIG: dict[str, Any] = {
     "timeout_s": {"type": "number", "default": 20},
     "price_usd_per_query": {
@@ -481,6 +503,35 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("token", "private_key"),
     ),
+    # A web site behind a login as a knowledge source (S47-48): a bearer token, HTTP Basic or one named
+    # header, pinned to `host`.
+    ("documents", "web"): ConnectorTypeSpec(
+        "Web site behind a login (bearer, basic or header)",
+        ("documents",),
+        _objet(
+            {
+                "host": {
+                    "type": "string",
+                    "description": "the site's host; the credential is sent nowhere else",
+                },
+                "auth": {"type": "string", "enum": ["bearer", "basic", "header"], "default": "bearer"},
+                "username": {"type": "string", "description": "auth basic: the user name"},
+                "header_name": {
+                    "type": "string",
+                    "description": "auth header: the header the secret goes in (X-API-Key, Cookie)",
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "plain headers sent with every request, e.g. Accept-Language",
+                },
+            },
+            ("host",),
+        ),
+        ("secret",),
+        egress=lambda config: [(str(config.get("host") or ""), 443)] if config.get("host") else [],
+        check_config=_web_documents_check,
+    ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
         ("identity",),
@@ -511,6 +562,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["mdm"],
+        dev_only=True,
     ),
     ("shipping", "demo"): ConnectorTypeSpec(
         "demo carrier (in memory: demonstrations only, refused in staging and prod)",
@@ -518,6 +570,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["shipping"],
+        dev_only=True,
     ),
     ("access_control", "demo"): ConnectorTypeSpec(
         "demo badge readers (in memory: demonstrations only, refused in staging and prod)",
@@ -525,6 +578,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["access_control"],
+        dev_only=True,
     ),
     # The `marketdata` family (S38-03): prices from free sources, read by the platform for a run whose
     # sandbox has no egress. Keys stay API-side (`secret_refs`).
@@ -539,10 +593,12 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "description": 'ticker suffix -> Stooq market suffix, e.g. {"": ".us", ".L": ".uk"}',
                 },
                 "timeout_s": {"type": "number", "default": 20},
+                **_KEY_ROTATION,
             }
         ),
         ("api_key",),
         operations=_OPERATIONS_MARKETDATA,
+        pooled_fields=("api_key",),
     ),
     ("marketdata", "yahoo"): ConnectorTypeSpec(
         "Yahoo Finance chart (unofficial: personal use only, may break)",
@@ -561,8 +617,17 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "default": "auto",
                     "description": "`compact`: always the last 100 trading days (free key); cross-check only",
                 },
+                **_KEY_ROTATION,
             }
         ),
+        ("api_key",),
+        operations=_OPERATIONS_MARKETDATA,
+        pooled_fields=("api_key",),
+    ),
+    ("marketdata", "tiingo"): ConnectorTypeSpec(
+        "Tiingo (free key: 30+ years of daily history, internal and personal use only)",
+        ("marketdata",),
+        _objet({"timeout_s": {"type": "number", "default": 20}}),
         ("api_key",),
         operations=_OPERATIONS_MARKETDATA,
     ),
@@ -573,7 +638,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             {
                 "sources": {
                     "type": "array",
-                    "items": {"enum": ["stooq", "yahoo", "alphavantage"]},
+                    "items": {"enum": ["stooq", "yahoo", "alphavantage", "tiingo"]},
                     "minItems": 1,
                     "description": "provider types, in the order they are tried",
                 },
@@ -584,11 +649,13 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                 },
                 "cross_check": {"type": "boolean", "default": True},
                 "tolerance": {"type": "number", "default": 0.02, "minimum": 0},
+                **_KEY_ROTATION,
             },
             ("sources",),
         ),
-        ("stooq_api_key", "alphavantage_api_key"),
+        ("stooq_api_key", "alphavantage_api_key", "tiingo_api_key"),
         operations=_OPERATIONS_MARKETDATA,
+        pooled_fields=("stooq_api_key", "alphavantage_api_key"),
     ),
     # The `web_search` family (S40-01g, ADR 0083): called by the API's built-in `web_search`, never by a
     # runner. Each type declares what it does with the queries (`choregos_adapters.web_search`); the
@@ -596,16 +663,18 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("web_search", "brave"): ConnectorTypeSpec(
         "Brave Search API",
         ("web_search",),
-        _objet(_WEB_SEARCH_CONFIG),
+        _objet({**_WEB_SEARCH_CONFIG, **_KEY_ROTATION}),
         ("api_key",),
         egress=lambda _cfg: [("api.search.brave.com", 443)],
+        pooled_fields=("api_key",),
     ),
     ("web_search", "tavily"): ConnectorTypeSpec(
         "Tavily search (links and snippets only)",
         ("web_search",),
-        _objet(_WEB_SEARCH_CONFIG),
+        _objet({**_WEB_SEARCH_CONFIG, **_KEY_ROTATION}),
         ("api_key",),
         egress=lambda _cfg: [("api.tavily.com", 443)],
+        pooled_fields=("api_key",),
     ),
     ("web_search", "firecrawl"): ConnectorTypeSpec(
         "Firecrawl search, self-hosted only (no scraping)",
@@ -632,6 +701,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("cd",),
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
+        dev_only=True,
     ),
     # Netops (ADR 0052, S33-08): our own estate, read through the platform.
     ("firewall", "pfsense"): ConnectorTypeSpec(
@@ -960,14 +1030,16 @@ def _register_marketdata() -> None:
     """The `marketdata` family (S38-03): its free providers, their composite and its fake."""
     from .marketdata import PROVIDERS, CompositeProvider, MarketDataProvider
 
-    def _fournisseur(type_name: str, cfg: dict[str, Any], cle: str = "") -> MarketDataProvider:
+    def _fournisseur(type_name: str, cfg: dict[str, Any], cle: str | list[str] = "") -> MarketDataProvider:
         options: dict[str, Any] = {"timeout_s": float(cfg.get("timeout_s", 20))}
         if type_name == "stooq" and cfg.get("suffix_map"):
             options["suffix_map"] = dict(cfg["suffix_map"])
         if type_name == "alphavantage" and cfg.get("outputsize"):
             options["outputsize"] = str(cfg["outputsize"])
         if type_name != "yahoo":
-            options["api_key"] = str(cle or cfg.get("api_key", ""))
+            # A string, or a list when the field holds several keys (ADR 0089).
+            options["api_key"] = cle or cfg.get("api_key") or ""
+            options["key_rotation"] = strategy_of(cfg.get("key_rotation"))
         return PROVIDERS[type_name](**options)
 
     def _composite(cfg: dict[str, Any]) -> CompositeProvider:
@@ -981,7 +1053,14 @@ def _register_marketdata() -> None:
         configs = cfg.get("source_configs") or {}
         return CompositeProvider(
             [
-                (n, _fournisseur(n, dict(configs.get(n) or {}), str(cfg.get(f"{n}_api_key", ""))))
+                (
+                    n,
+                    _fournisseur(
+                        n,
+                        {"key_rotation": cfg.get("key_rotation"), **dict(configs.get(n) or {})},
+                        cfg.get(f"{n}_api_key") or "",
+                    ),
+                )
                 for n in noms
             ],
             cross_check=bool(cfg.get("cross_check", True)),
@@ -1004,7 +1083,9 @@ def _register_web_search() -> None:
     def _constructeur(nom: str) -> Callable[[dict[str, Any]], SearchBackend]:
         def construire(cfg: dict[str, Any]) -> SearchBackend:
             options: dict[str, Any] = {
-                "api_key": str(cfg.get("api_key", "")),
+                # A string, or a list when the field holds several keys (ADR 0089).
+                "api_key": cfg.get("api_key") or "",
+                "key_rotation": strategy_of(cfg.get("key_rotation")),
                 "timeout_s": float(cfg.get("timeout_s", 20)),
             }
             if nom == "firecrawl":
@@ -1260,6 +1341,9 @@ def _register_builtins() -> None:
     from .documents.git import GitDocumentsConnector
 
     register("documents", "git", _SPECS_LIVREES[("documents", "git")])(GitDocumentsConnector)
+    from .documents.web import WebDocumentsConnector
+
+    register("documents", "web", _SPECS_LIVREES[("documents", "web")])(WebDocumentsConnector)
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(

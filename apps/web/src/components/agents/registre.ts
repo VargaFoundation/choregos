@@ -78,8 +78,10 @@ export function slugDeLActeur(acteur: string): string {
  * La version qu'un acteur implicite devient : ce que le workflow disait de lui, rien de plus. Ses
  * instructions restent celles du playbook de son rôle, tant qu'une version n'en écrit pas.
  */
-export function versionDeLActeur(implicite: AgentImplicite): AgentSpec {
+export function versionDeLActeur(implicite: AgentImplicite, instructions?: string | null): AgentSpec {
   const spec: AgentSpec = {};
+  // The built-in agent's prompt (`instructions_template`): the registered agent starts from what it ran.
+  if (instructions) spec.instructions = instructions;
   if (implicite.model) spec.model = implicite.model;
   if (implicite.backend) spec.backend = implicite.backend;
   if (implicite.max_turns != null || implicite.max_minutes != null) {

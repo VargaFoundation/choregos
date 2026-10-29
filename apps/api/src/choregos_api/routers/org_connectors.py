@@ -12,11 +12,13 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
+from choregos_core.secrets import est_une_reference_du_magasin
 from fastapi import APIRouter, Path, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
+from ..config import get_settings
 from ..db.models import (
     ConnectorOperation,
     Organization,
@@ -24,7 +26,7 @@ from ..db.models import (
     OrgConnectorProject,
     ProjectOperationPolicy,
 )
-from ..deps import Db, Me, ProjectCtx
+from ..deps import Db, Me, ProjectCtx, is_instance_admin
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
 from ..schemas import (
@@ -56,9 +58,11 @@ from ..services.connecteurs import (
     declared_operation,
     plus_stricte,
     spec_du_type,
+    spec_to_declare,
     verifier_les_secrets,
 )
 from ..services.connector_secrets import (
+    SECRET_FIELD,
     drop_replaced_store_values,
     put_values,
     refs_with_values,
@@ -182,9 +186,37 @@ async def create_org_connector(
         if len(sortes) != 1:
             raise unprocessable(f"`{body.type}`: specify the capability (`kind`) among {sortes or 'none'}")
         kind = sortes[0]
+    if kind == "gateway":
+        await _check_org_gateway(session, organisation, body.type)
     return await declare_org_connector(
         session, principal, organisation, body.model_copy(update={"kind": kind})
     )
+
+
+async def _check_org_gateway(session: AsyncSession, organisation: Organization, type_name: str) -> None:
+    """An organisation brings at most ONE model gateway (S44-04), never the `direct` one in staging or prod.
+
+    Its catalogue and its runs read the organisation's gateway (ADR 0060): two would leave the choice to
+    the alphabetical order of their names. The `direct` gateway hands out the key it was given: no key
+    per run, no hard cap, no measured cost — refused here as it is for a project (`putConnector`).
+    """
+    if type_name == "direct" and get_settings().env in {"staging", "prod"}:
+        raise unprocessable(
+            "the `direct` gateway is refused in this environment: it measures no cost and "
+            "enforces no cap. Use `litellm` or `openai-compatible`."
+        )
+    existing = (
+        await session.execute(
+            select(OrgConnector.name).where(
+                OrgConnector.org_id == organisation.id, OrgConnector.kind == "gateway"
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise conflict(
+            f"{organisation.slug} already brings its model gateway `{existing}`: "
+            "remove it before declaring another"
+        )
 
 
 async def declare_org_connector(
@@ -203,7 +235,7 @@ async def declare_org_connector(
     assert body.kind is not None
     name, kind, type_name = body.name, body.kind, body.type
     config, secret_refs = body.config, body.secret_refs
-    spec = spec_du_type(kind, type_name)
+    spec = spec_to_declare(kind, type_name)
     check_type_config(kind, type_name, config)
     prefix = f"connector/{name}"
     verifier_les_secrets(
@@ -211,6 +243,7 @@ async def declare_org_connector(
         type_name,
         config,
         secret_refs,
+        may_reference=not secret_refs or await is_instance_admin(session, principal),
         secret_values=body.secret_values,
         store_prefix=prefix,
     )
@@ -320,7 +353,27 @@ async def update_org_connector(
             )
         await plugin_servers.check_egress(session, instance, config)
     refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
-    verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
+    # The connector keeps the references the body does not replace (a PATCH merges): moving one that
+    # reads the deployment to another host is the operator's too, or the key follows the new URL.
+    operator_refs = [
+        r for f, r in (instance.secret_refs or {}).items() if f not in refs_in and f not in values
+    ]
+    deployment_held = any(not est_une_reference_du_magasin(r) for r in [*refs_in.values(), *operator_refs])
+    may_reference = not deployment_held or await is_instance_admin(session, principal)
+    if body.config is not None and not may_reference:
+        raise unprocessable(
+            "this connector reads a key the deployment holds (`env:`): only a platform administrator "
+            "changes its configuration; type the organisation's own value to edit it yourself"
+        )
+    verifier_les_secrets(
+        spec,
+        instance.type,
+        config,
+        refs_in,
+        may_reference=may_reference,
+        secret_values=values,
+        store_prefix=prefix,
+    )
     store = require_store(values)
     await check_connector_declaration(session, organisation.id, config, name)
     if body.config is not None and server is None:
@@ -385,7 +438,7 @@ async def update_org_connector(
 async def set_org_connector_secret(
     org: str,
     name: Nom,
-    field: Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")],
+    field: Annotated[str, Path(pattern=SECRET_FIELD)],
     body: SecretValue,
     session: Db,
     principal: Me,
@@ -424,7 +477,7 @@ async def set_org_connector_secret(
 async def clear_org_connector_secret(
     org: str,
     name: Nom,
-    field: Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")],
+    field: Annotated[str, Path(pattern=SECRET_FIELD)],
     session: Db,
     principal: Me,
 ) -> OrgConnectorDto:

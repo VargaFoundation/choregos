@@ -60,7 +60,7 @@ and nothing listed the AI clients that can act through the MCP gate.
   knowledge base; axe when the project can run it) and `qa` (edge cases and mutation testing — mutmut
   and Stryker are in the runner image). `architect` challenges a request against the knowledge bases
   attached to it, citations mandatory. `netops` is its own entry (S33-08).
-- **Every internal entry has an eval** (`catalogue_d_agents/eval_cases/`, ADR 0020): deterministic
+- **Every internal entry has an eval** (now the `evals/` of its plugin, ADR 0093 §6; ADR 0020): deterministic
   assertions on its rendered instructions, run by `make evals` and the nightly job, and proved to turn
   red when the instructions are emptied (`packages/core/tests/test_catalogue_evals.py`). An agent with
   no eval does not enter the catalogue.
@@ -77,3 +77,15 @@ and nothing listed the AI clients that can act through the MCP gate.
 A catalogue entry's `agent:` document carries `tags` (labels, ADR-free metadata outside the version).
 Installing sets them; an upgrade **adds** the tags the agent lacks, even when the spec did not change,
 and **never removes** one: an organisation's own tags are not silently rewritten, the rule of §4.
+
+## Amended — 2026-10-28 (S43-09, ADR 0093 §6)
+
+The catalogue is no longer a directory of the core: its entries ship as the plugins `software-delivery`,
+`netops`, `authoring` and `mcp-clients` of `VargaFoundation/choregos-agents`, and the catalogue is the
+view of the deployment's offline plugins, each replaced by the version an organisation installed. The
+rules above are unchanged — installing writes version 1 and never rewrites, an upgrade publishes the next
+version only when the text changed, an agent the organisation changed (`!diverged`, or a version a person
+wrote) is offered the update and never overwritten, an organisation's own agent of the same name is never
+touched. Only the author changes: `plugin:<plugin>/<slug>@<version>` instead of `catalogue:<slug>@<version>`,
+rewritten for existing agents by the migration `b8d0f2a4c6e1`. A template still names an entry
+`catalogue:<slug>`; it resolves through the plugins.

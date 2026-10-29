@@ -1,7 +1,8 @@
 """The catalogue's agents and their evals (S33-06, ADR 0020).
 
 "Each agent has an eval that turns red when its instructions are emptied": proved here for every case,
-by running it against a copy of the agent whose instructions are reduced to the ticket's context.
+by running it against a copy of the agent whose instructions are reduced to the ticket's context. The
+agents and their cases are the offline plugins' since S43-09 (ADR 0093 §6).
 """
 
 from __future__ import annotations
@@ -11,12 +12,17 @@ from dataclasses import replace
 
 import pytest
 from choregos_core.catalogue_d_agents import DOSSIER, entree, entrees
-from choregos_core.catalogue_d_agents.evals import case_paths, evaluate, load_case
+from choregos_core.catalogue_d_agents.evals import cases, evaluate
 
 INTERNAL = [e for e in entrees() if e.genre == "internal"]
-CASES = {path.stem: load_case(path) for path in case_paths()}
+CASES = {c.name: c.case for c in cases()}
 #: The specialists of S33-06: each states its output contract and the tools it needs.
 SPECIALISTS = ("secops", "compliance", "devops", "docs-writer", "ux-designer", "qa", "architect")
+
+
+def test_the_offline_plugins_carry_every_case() -> None:
+    """The 25 cases the core held moved with their agents: none was lost on the way."""
+    assert len(CASES) == 25
 
 
 def test_every_internal_agent_has_an_eval() -> None:

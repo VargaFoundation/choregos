@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
@@ -12,12 +12,20 @@ import { Glossaire } from "@/components/glossaire";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { dataHandlingProblems } from "@/lib/data-handling";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
-import { EMPTY_DRAFT, SecretField, bodyOfDrafts, problemOfDraft, type SecretDraft } from "@/components/secret-field";
+import {
+  AddKey,
+  EMPTY_DRAFT,
+  SecretField,
+  bodyOfDrafts,
+  inSlotOrder,
+  problemOfDraft,
+  type SecretDraft,
+} from "@/components/secret-field";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
-import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
+import { libelleDeSorte, isOrgDeclarable } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorOperation, ConnectorSecretState, OperationPatch, OrgConnector } from "@/lib/types";
 import { Confirmation } from "@/components/geste-confirme";
 
@@ -100,7 +108,10 @@ export default function OrgConnectorsPage() {
           (metier.length === 0 ? (
             <Empty title="No business system yet">Declare one below.</Empty>
           ) : (
-            metier.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
+            metier.map((instance) => (
+              // A source's link (`?connector=`) marks a business system too, without opening its settings.
+              <Instance key={instance.name} org={org} instance={instance} highlighted={instance.name === focus} />
+            ))
           ))}
       </section>
       <section className="space-y-3" aria-labelledby="mcp" data-testid="section-mcp">
@@ -185,6 +196,11 @@ function Instance({
   const client = useQueryClient();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const type = (types.data ?? []).find((t) => t.kind === instance.kind && t.type === instance.type);
+  const anchor = `connector-card-${instance.name}`;
+  // The card a link points to is brought into view: the page lists every connector of the organisation.
+  useEffect(() => {
+    if (highlighted) document.getElementById(anchor)?.scrollIntoView?.({ block: "start" });
+  }, [highlighted, anchor]);
   const [diff, setDiff] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   async function decouvrir() {
@@ -214,6 +230,7 @@ function Instance({
       action={action}
       className={highlighted ? "border-accent" : undefined}
       aria-current={highlighted ? "true" : undefined}
+      id={anchor}
       data-testid={`connector-${instance.name}`}
     >
       <Availability org={org} instance={instance} />
@@ -237,6 +254,7 @@ function Instance({
         org={org}
         instance={instance}
         fields={instance.server?.secret_fields ?? type?.secret_fields ?? []}
+        pooled={type?.pooled_fields ?? []}
         schema={instance.server?.config_schema ?? type?.config_schema}
         open={open}
       />
@@ -280,12 +298,14 @@ function Secrets({
   org,
   instance,
   fields,
+  pooled = [],
   schema,
   open = false,
 }: {
   org: string;
   instance: OrgConnector;
   fields: string[];
+  pooled?: string[];
   schema?: unknown;
   open?: boolean;
 }) {
@@ -297,8 +317,12 @@ function Secrets({
   const editing = toggled ?? open;
   const [config, setConfig] = useState<Record<string, unknown>>(instance.config ?? {});
   const [erreur, setErreur] = useState<string | null>(null);
+  // Slots being added (`api_key.2`, ADR 0089): shown as "not set" until their first value is typed.
+  const [adding, setAdding] = useState<string[]>([]);
   // A field starting with `_` is the platform's (a plugin server's `_server_token`): no route sets it.
-  const names = [...new Set([...fields, ...(instance.secrets ?? []).map((s) => s.field)])].filter((f) => !f.startsWith("_"));
+  const names = inSlotOrder([...fields, ...(instance.secrets ?? []).map((s) => s.field), ...adding]).filter(
+    (f) => !f.startsWith("_"),
+  );
   const refresh = () => client.invalidateQueries({ queryKey: ["org-connectors", org] });
   const jsonSchema = (schema ?? { type: "object", properties: {} }) as JsonSchema;
   if (names.length === 0 && Object.keys(jsonSchema.properties ?? {}).length === 0) return null;
@@ -356,6 +380,9 @@ function Secrets({
           <ExistingOrNew key={field} org={org} instance={instance} field={field} state={state} onDone={refresh} />
         );
       })}
+      {pooled.map((field) => (
+        <AddKey key={`add-${field}`} field={field} taken={names} onAdd={(slot) => setAdding([...adding, slot])} />
+      ))}
     </div>
   );
 }
@@ -582,6 +609,9 @@ function ResultCap({
   );
 }
 
+/** The API's rule for a connector's name (`OrgConnectorCreate.name`): checked here, so it is said, not a bare 422. */
+const CONNECTOR_NAME = /^[a-z][a-z0-9-]{1,62}$/;
+
 /** Déclarer une instance : son type (ceux qui exposent des opérations d'abord), sa configuration, ses secrets. */
 function Declarer({ org }: { org: string }) {
   const client = useQueryClient();
@@ -594,14 +624,17 @@ function Declarer({ org }: { org: string }) {
   const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   // Les outils de livraison d'un projet se règlent dans le projet : ils ne se déclarent pas ici.
-  const candidats = (types.data ?? []).filter((t) => !estUneSorteDuProjet(t.kind));
+  // The organisation's own model gateway is the one exception (S44-04).
+  const candidats = (types.data ?? []).filter((t) => isOrgDeclarable(t.kind, t.type));
   const familles = [
-    { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp") },
+    { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp" && t.kind !== "gateway") },
     { titre: "MCP servers", types: candidats.filter((t) => t.kind === "mcp") },
+    { titre: "Model gateway (LLM)", types: candidats.filter((t) => t.kind === "gateway") },
   ].filter((famille) => famille.types.length > 0);
   const type = candidats.find((t) => `${t.kind}/${t.type}` === choix);
   const schema = (type?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
   const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
+  const nameInvalid = nom !== "" && !CONNECTOR_NAME.test(nom);
   async function declarer() {
     if (!type) return;
     setErreur(null);
@@ -632,7 +665,7 @@ function Declarer({ org }: { org: string }) {
     }
   }
   return (
-    <Card title="Declare a connector">
+    <Card title="Declare a connector" id="declare">
       {candidats.length === 0 ? (
         <p className="text-sm text-ink-muted">
           No connector type exposes operations yet: a plugin (or the <code>mcp</code> type) brings them.
@@ -653,7 +686,15 @@ function Declarer({ org }: { org: string }) {
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
                 placeholder="entra-acme"
+                aria-invalid={nameInvalid}
+                aria-describedby="declare-connector-name-rule"
               />
+              <span
+                id="declare-connector-name-rule"
+                className={nameInvalid ? "text-xs text-danger" : "text-xs text-ink-muted"}
+              >
+                Lowercase letters, digits and dashes, starting with a letter (2 to 63 characters).
+              </span>
             </label>
             <label className="space-y-1">
               <span className="text-xs text-ink-muted">Type</span>
@@ -709,6 +750,7 @@ function Declarer({ org }: { org: string }) {
             tone="accent"
             disabled={
               !nom ||
+              nameInvalid ||
               !type ||
               champsManquants(schema, config).length > 0 ||
               illisibles.length > 0 ||

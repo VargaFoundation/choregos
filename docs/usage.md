@@ -34,7 +34,7 @@ choregos projects list
 
 `--template <name>@<version>` on `create` also provisions the project: repository, board,
 GitOps manifests and scaffolding. Without it, the project is created empty and you attach
-its connectors yourself, from the UI (*Settings → connectors*: type and configuration, secrets referenced never typed) or the API (`PUT /projects/{id}/connectors/{kind}`).
+its connectors yourself, from the UI (*Settings → connectors*: type and configuration; a secret is typed once and sealed, or given by reference) or the API (`PUT /projects/{id}/connectors/{kind}`).
 
 A project needs, at minimum: a **tracker** (where humans look), a **workflow** and a
 **policy**. Everything else has a default or can be added later.
@@ -83,8 +83,10 @@ presses *Allow and install*: the hosts are opened and the connector created in o
 sees who the administrators are and presses *Ask an administrator*; the request waits in the
 administrators' inbox and the person retries once it is approved. When the cluster's network also
 needs a change, the modal shows it (a snippet to copy, and a prefilled issue when the deployment
-configures one): Choregos cannot apply it. `/admin/egress` lists the rules, the requests and the
-ceiling. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
+configures one): Choregos cannot apply it. `/admin/egress` (**Administration → Network**) is the
+organisation's network in one page (S44-04): what its agents may reach (the ceiling's `network`
+section), the hosts Choregos calls (rules, requests, the deployment's ceiling, what the platform must
+still open) and, for an `org_admin`, the outbound proxy and the network activity. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
 The list is one half of the organisation's network policy; the other half is its **bounds**, the
 `network` section of its policy ceiling (see *The ceiling's `network` section* below, [ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
 a host the ceiling denies, or that lies outside its allowed set, is refused before any opening is
@@ -146,6 +148,17 @@ operator who prefers a vault can instead give a **reference** (`env:NAME`, or a 
 holds no secrets key, typing a value answers 409 and says so ([deployment](deployment.md#secrets)).
 An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
 
+**Several keys for one field** ([ADR 0089](adr/0089-a-secret-field-holds-several-keys.md)). A type
+that pools a field (the market-data providers and their composite, Brave, Tavily) takes extra keys
+in slots `api_key.2` … `api_key.10`, each typed and cleared like a field (`PUT|DELETE
+…/secrets/api_key.2`). The adapter uses them in turn: `config.key_rotation` is `failover` (the first
+that answers, the default) or `round_robin` (spread the calls). A 429 rests a key for its
+`Retry-After` (60 s without one) and the call moves to the next at once; a 401/403 benches it for
+10 minutes and the error names its position (`key 2 of 3`), never the value; when every key rests,
+the call is a rate limit, never a call without a key. The rest is per process (API, worker). To
+replace a key without a gap: type the new one in a free slot, test, clear the old one. Whether a
+vendor allows several keys is yours to check: the free market-data sources allow one per person.
+
 **GitHub: no installation id.** A GitHub connector asks for a repository, not for an installation
 ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). The Choregos GitHub App is
 installed from the console (*Install on GitHub*, which returns to the settings page); the platform
@@ -167,8 +180,10 @@ under the error. No screen asks for an installation id.
 Until a project can run, its overview opens on a **getting started** list, which is the project's
 readiness (below): one list, computed by the API, that the settings page, the CLI and the MCP door share.
 
-A secret is never written in `config` — a secret field there is refused (`422`). It is named by
-**reference**, field by field, and resolved when the adapter is built, in the process that uses it:
+A secret is never written in `config` — a secret field there is refused (`422`). A key the
+organisation owns is **typed** (`secret_values`, sealed, above). A key the operator keeps in a vault
+is named by **reference**, field by field, and resolved when the adapter is built, in the process that
+uses it:
 
 ```bash
 curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
@@ -183,9 +198,10 @@ connector test with its name — never a silent fallback to a default value.
 `env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
 `^CONNECTOR_[A-Z0-9_]+$`, chart value `global.secrets.envPattern`); the platform's own variables
 (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
-pattern. A name outside it is a `422` at write and a connector in error at use. Only the
-organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
-refused. **Breaking:** a reference written before this rule that is outside the pattern stops
+pattern. A name outside it is a `422` at write and a connector in error at use. Only a platform
+administrator writes a reference (ADR 0088) — on a single-organisation install, that organisation's
+administrator; with several, an organisation's administrator and a project owner type the value, and
+an organisation connector that holds a reference is reconfigured by a platform administrator only. **Breaking:** a reference written before this rule that is outside the pattern stops
 resolving; rename the variable (or widen the pattern) and rewrite the reference.
 
 **Every type has its procedure**, in the app and here. Choosing a type in a form opens a side panel with
@@ -315,7 +331,8 @@ it) are declared like a directory, with `kind` and the key by reference (`api_ke
 refused, named: a device enrolled for someone else, a reference already taken by another parcel, a
 badge the readers do not know — a mistyped UID would leave the real badge opening doors. These
 families have **no real type yet**: type `demo` keeps them in memory, each process its own — a
-demonstration, refused in staging and prod. Where the API and the orchestrator are several
+demonstration, refused in staging and prod: there the console does not offer it, and declaring one
+is a 422. Where the API and the orchestrator are several
 processes, give the `demo` connector a `url`: it then reaches the fakes served by **one** pod
 (`demoFakes.enabled` in the chart, `python -m choregos_adapters.fakes.serveur`), which also serves a
 fake Microsoft Graph for an `entra` connector whose `graph_url` and `login_url` point to it, and a
@@ -682,11 +699,36 @@ In the console, the **Process** tab shows this as a card per step: the agent's n
 `/agents/<slug>`) with a chip, "v1 · pinned", "v3 · latest", "not installed: installs when this
 workflow is published", "unknown agent" or "unavailable: …"; a person's group and SLA; a job's
 command; **Reads** with the source of each document ("from *Tested* (`t-test`)", "a person's
-rejection reason", "a work item field", or "nothing produces it" as a warning); **Produces**, with
+rejection reason", "a work item field", or "nothing produces it" as a warning, with what follows:
+the step reads it empty, and a step reading `allowed_paths` that nothing produces may change any
+file — the stage gives it `**` unless the work item was filed with paths of its own); **Produces**, with
 "changes on the work item's branch" for a step that writes code. On the **Map**, each box carries
 one line, "→ spec_markdown, allowed_paths" or "→ branch", and an **Artifacts** table under the
 diagram lists each document with its type, its producers and its readers; hovering or focusing a
 row outlines those boxes. Choosing a box shows the same card above its editor.
+
+The map also says what the shape alone did not:
+
+- a platform box lists what it **waits for** ("waits for: ci green, review approved") rather than
+  empty boxes, and every dashed arc carries its reason ("if rejected", "on failure");
+- each state's label starts with how many open work items wait there ("2 open · Ready"), and the
+  step card says how long they have waited — since the longest-waiting one last entered that state
+  ("2 work items wait in “Spec to approve”, the longest for 3 d.") — and what the step's runs did over
+  30 days: count, successes, failures, cost, median duration
+  (`GET /projects/{id}/workflows/{name}/activity`, `states[].waiting_since`);
+- a person step lists who carries its group and strikes those whose role cannot answer in the
+  project; a group nobody carries is said, since the step then waits for an organisation
+  administrator (`GET /projects/{id}/groups/{group}/members`, needs `member:read`);
+- the transition editor names what each actor is ("owner — person · product-owners", "dev —
+  built-in agent · implement"), says each guarantee in words with its threshold — the platform's
+  defaults when the workflow sets none, e.g. `diff_size_max`: at most 60 files and 100000 lines —
+  (the process view's `gates[].detail` and `gates[].asynchronous`), and says in one sentence how
+  long the step waits: a person's group is reminded at the SLA (24 h when none is set) and, with no
+  decision by `timeout_hours` (else three times the SLA), the item goes to `on_reject` as if
+  rejected, else to the workflow's `on_timeout`, else stays where it was; a guarantee that waits for
+  the CI or a review waits up to `timeout_hours` (24 h by default), a release train 72 h;
+- the "Default" chip is neutral: the project's default workflow is the one a work item runs unless
+  it names another or a routing rule sends it elsewhere.
 
 `graph.artifacts` is the artifact flow: one entry per document with `produced_by`, `read_by`,
 `origin`, `context` (given to every agent stage) and `in_pull_request`.
@@ -1283,11 +1325,24 @@ version started from the latest — where skills are attached or removed, each e
 version (read at every run) or pinned to one — and, for an external agent, the clients acting as it. **skills**
 is the library: import a zip or a repository (preview, pick, import at the resolved commit), each version's risk badge, scan findings and files, the approve button for a version waiting for review, an update check for a skill from git, and which agents carry it. A project's
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
-without naming one, which you can register, then name in the workflow (`agent: <slug>`).
+without naming one, which you can register, then name in the workflow (`agent: <slug>`). Each one
+folds out what it runs — the same card the workflow map opens under **This step** when you click an
+agent step that names no registry agent: the role's built-in prompt (with `<placeholders>` for what a
+run fills in), the model each work item size resolves to (`profile:by_size`: S and M → `standard`,
+L → `strong`, XL → `strong` with 1.5× the turns, then the model behind the alias), the backend, the
+turn and minute limits, the memory, and the MCP servers with their tools
+(`GET /projects/{id}/builtin-agent`). **Register** gives the new registry agent that prompt as its
+instructions (`instructions_template`: the role's prompt with its shared fragment written in, the
+output contract and invariants left to the frame every registry agent gets), so its page starts from
+what it ran. The tab opens with **Agents this
+project runs**: one row per `agent` actor of an active workflow, with the registry agent it names
+and the version a run loads ("v3 · pinned"), a name the registry lacks, or its built-in agent
+(`GET /projects/{id}/workflow-agents`).
 
 ### Platform
 
 `/admin/platform` (**Administration → Platform**) shows what the deployment can run, in two cards.
+How people sign in to the instance is on **Administration → Identity** (below).
 
 - **Coding agents (backends).** A backend is the coding agent CLI that the runner image ships and
   that executes an agent stage ([Actor](concepts.md#actor)). Per backend the page shows its
@@ -1302,16 +1357,40 @@ without naming one, which you can register, then name in the workflow (`agent: <
   deployment (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
   `allowedBackends`) and by the project's policy. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
-- **Executors (where agent stages run).** Read-only: `agent_sandbox`, `k8s_job`, `tekton`, `aca`,
-  `local_docker`, each with a one-line explanation and its set-up procedure. The list is the
+- **Executors (where agent stages run).** Read-only. The card opens with the executor(s) this
+  deployment runs ("Agent stages run on `k8s_job` in this deployment"), listed first as *In use*; the
+  others follow as *Not turned on here*, with what each needs (`agent_sandbox`: the
+  kubernetes-sigs/agent-sandbox operator on the cluster; `tekton`: Tekton Pipelines), a one-line
+  explanation and its set-up procedure. The list is the
   deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
   chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
   was removed (S42-07b), only the `GET` remains.
 
+### Identity
+
+`/admin/identity` (**Administration → Identity**, S44-04) is the one page about who people are and how
+they sign in: the read-only card *How people sign in to this instance* (platform administrators), then
+every identity section a plugin declares (an `icon` of `fingerprint` or `log-in`: single sign-on,
+directory provisioning), drawn on this page instead of as entries of their own. A plugin block that
+reads `/platform/identity` again is not drawn a second time; an old `/admin/x/<section>` link to such
+a section opens this page.
+
 ### Models
 
 `/admin/models` (the **Models** page of the administration) is the organisation's model catalogue
-([ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)), whatever the gateway is. **Sync from
+([ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)), whatever the gateway is.
+
+- **Whose gateway** ([ADR 0109](adr/0109-an-organisation-brings-its-own-model-gateway.md)): the Gateway
+  card says whether models are routed by the deployment's gateway, shared by the organisations of the
+  instance, or by the organisation's own. An `org_admin` connects the organisation's own gateway with
+  *Connect your organisation's gateway*: a connector of kind `gateway` (`litellm` or
+  `openai-compatible`; `direct` is refused) declared in **Installed connectors**, one per
+  organisation. Its secret is typed once and sealed. The catalogue then lists and syncs that gateway,
+  and every run of a project that does not declare a gateway of its own, and every agent session,
+  gets its key from it and calls its `base_url`. Its host must be open (**Administration → Network**).
+- **Listed by the gateway**: in `open` mode the page also lists what the gateway offers that the
+  catalogue does not hold yet (usable now; *Sync from gateway* brings them in to set their roles,
+  usages and price), or says that the gateway lists nothing or could not be reached. **Sync from
 the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
 list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
 the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price per 1k tokens that
@@ -1928,12 +2007,12 @@ wall: see [security](security.md).
 
 **Where each network setting lives in the console.**
 
-- *The organisation's* — **Administration → Network access** (an `org_admin` writes it, a member reads it):
+- *The organisation's* — **Administration → Network**, card *What agents may reach* (an `org_admin` writes it, a member reads it):
   the allowed hosts (**No cap**, **Any public host**, or **Only these hosts**, one per line), the denied
   hosts, the requests per minute per host and per run, the built-in web tools (inherit, allow, deny) and
   the contact written into the User-Agent. It is the `network` section of the policy ceiling: saving
-  reads the whole ceiling again and replaces only that section, so the **Policy ceiling** card below
-  it and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
+  reads the whole ceiling again and replaces only that section, so the **Policy ceiling** card (on the
+  administration's overview) and this card never erase each other. A bad pattern (a scheme, a path, a port, an IP address) is
   flagged before anything is sent.
 - *The agent's* — the **Network access** section of the agent builder (new agent, new version): **Same as
   the project's policy**, **No internet** or **Only these hosts**, the politeness, and the built-in web

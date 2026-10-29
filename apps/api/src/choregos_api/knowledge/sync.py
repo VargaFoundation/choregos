@@ -48,12 +48,13 @@ KINDS = ("sharepoint", "confluence", "web", "git")
 #: kinds opened through an organisation `documents` connector, which holds the credentials
 CONNECTED_KINDS = frozenset({"sharepoint", "confluence"})
 #: kinds that read public material without a connector, and a private one with it
-OPTIONALLY_CONNECTED = frozenset({"git"})
+OPTIONALLY_CONNECTED = frozenset({"git", "web"})
 #: the connector types a connected source kind may be served by
 SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {
     "sharepoint": frozenset({"sharepoint"}),
     "confluence": frozenset({"confluence"}),
     "git": frozenset({"git"}),
+    "web": frozenset({"web"}),
 }
 
 
@@ -64,24 +65,11 @@ class SourceUnavailableError(RuntimeError):
 async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     """The adapter of a source: under `CHOREGOS_FAKES`, its scripted fake."""
     config = source.config or {}
-    if source.kind in CONNECTED_KINDS or (source.kind in OPTIONALLY_CONNECTED and source.connector):
-        connector = (
-            await session.execute(
-                select(OrgConnector).where(
-                    OrgConnector.org_id == source.org_id,
-                    OrgConnector.name == source.connector,
-                    OrgConnector.kind == "documents",
-                )
-            )
-        ).scalar_one_or_none()
-        if connector is None:
-            raise SourceUnavailableError(f"the `documents` connector `{source.connector}` does not exist")
-        allowed = SOURCE_CONNECTOR_TYPES.get(source.kind, frozenset())
-        if connector.type not in allowed:
-            raise SourceUnavailableError(
-                f"the connector `{source.connector}` is a documents/{connector.type} connector: "
-                f"a {source.kind} source needs {' or '.join(sorted(allowed))}"
-            )
+    # A git or web source's connector is opened below, once the network policy has been read: a private
+    # repository or a walled site obeys the ceiling at every sync like a public one, and keeps the
+    # organisation's user agent.
+    if source.kind in CONNECTED_KINDS:
+        connector = await _source_connector(session, source)
         resolved = await resolved_configuration(
             session, source.org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
@@ -104,14 +92,24 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
                     PlatformNetworkRefused(host, reason, f"knowledge source `{source.name}`").message()
                 )
         agent, per_host = await user_agent(session, source.org_id), (net.per_host_per_minute if net else None)
+    # A connector gone or of another type fails the sync, under the fakes too.
+    named = await _source_connector(session, source) if source.connector else None
     if fakes_enabled():
         from choregos_adapters.fakes.documents import fake_source
 
         return fake_source(source.id)
     if source.kind == "web":
-        from choregos_adapters.documents.web import WebCrawlSource
+        from choregos_adapters.documents.web import WebCrawlSource, WebDocumentsConnector, plain_headers
 
+        if named is not None:
+            resolved = await resolved_configuration(
+                session, source.org_id, named.kind, named.type, named.config, named.secret_refs
+            )
+            return WebDocumentsConnector(resolved).source(
+                dict(config), key=source.id, user_agent=agent, per_host_per_minute=per_host
+            )
         return WebCrawlSource(
+            headers=plain_headers(dict(config.get("headers") or {})),
             url=str(config["url"]),
             max_depth=int(config.get("max_depth", 2)),
             max_pages=int(config.get("max_pages", 50)),
@@ -121,8 +119,13 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             per_host_per_minute=per_host,
         )
     if source.kind == "git":
-        from choregos_adapters.documents.git import GitSource
+        from choregos_adapters.documents.git import GitDocumentsConnector, GitSource
 
+        if named is not None:
+            resolved = await resolved_configuration(
+                session, source.org_id, named.kind, named.type, named.config, named.secret_refs
+            )
+            return GitDocumentsConnector(resolved).source(dict(config), key=source.id, user_agent=agent)
         return GitSource(
             url=str(config["url"]),
             ref=str(config.get("ref", "main")),
@@ -130,6 +133,28 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             user_agent=agent,
         )
     raise SourceUnavailableError(f"unknown source kind `{source.kind}`")
+
+
+async def _source_connector(session: Any, source: KnowledgeSource) -> OrgConnector:
+    """The `documents` connector a source names, of a type that may serve its kind."""
+    connector = (
+        await session.execute(
+            select(OrgConnector).where(
+                OrgConnector.org_id == source.org_id,
+                OrgConnector.name == source.connector,
+                OrgConnector.kind == "documents",
+            )
+        )
+    ).scalar_one_or_none()
+    if connector is None:
+        raise SourceUnavailableError(f"the `documents` connector `{source.connector}` does not exist")
+    allowed = SOURCE_CONNECTOR_TYPES.get(source.kind, frozenset())
+    if connector.type not in allowed:
+        raise SourceUnavailableError(
+            f"the connector `{source.connector}` is a documents/{connector.type} connector: "
+            f"a {source.kind} source needs {' or '.join(sorted(allowed))}"
+        )
+    return connector  # type: ignore[no-any-return]
 
 
 def _summary() -> dict[str, Any]:

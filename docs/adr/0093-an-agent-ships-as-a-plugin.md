@@ -134,3 +134,41 @@ Found by the first real plugin (`servicenow`, choregos-agents PR #2):
   plugin:<plugin>/<server>` (`template.schema.json`), checked at validation against a server of the same
   plugin that declares `implements: [tracker]`. The adapter that runs it is S43-07 (ADR 0096, "The
   tracker half").
+
+## Status of §6 (S43-09, 2026-10-28): done
+
+- **The core holds no agent.** `catalogue_d_agents/` keeps the loader and `_contexte.md` — the work
+  item's context is the core's contract with its own runtime, prepended by `entry_of` to an internal
+  agent's instructions, so a plugin author writes the task, not the plumbing — and nothing else. The 22
+  agents, 6 MCP clients, 25 eval cases and `madr-4` are the plugins `software-delivery`, `netops`,
+  `authoring` and `mcp-clients` 1.0.0 of `VargaFoundation/choregos-agents`, byte for byte (the
+  fingerprints match `MIGRATION-FROM-CORE.md` of that repository).
+- **The catalogue is a view over plugins**: the offline directory's plugins, each replaced by the version
+  an organisation installed (the installer now keeps a plugin's agent and skill files, and an external
+  client's `client` and `reach`). `/orgs/{org}/agent-catalogue` keeps its contract on top of it; what it
+  installs carries `plugin:<plugin>/<slug>@<version>`, so the plugin's own install and upgrade recognise
+  it. A template's `catalogue:<slug>` resolves through the same view.
+- **Offline.** `plugins/offline/` holds the published archives, byte for byte the signed OCI artifacts,
+  pinned by `plugins.lock` (name, version, content digest, OCI reference, manifest digest);
+  `make plugins-lock` refreshes them from the source (network, maintainers), `make plugins-check` and
+  `tests/tools/test_update_plugins_lock.py` check them offline. The API image copies them to
+  `/opt/choregos/plugins`, which the chart's `global.plugins.offline` names by default.
+- **Default values.** The chart declares the `varga` source (keyless identity
+  `https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main`,
+  issuer `https://token.actions.githubusercontent.com`) and the four plugins as `defaultPlugins`. A
+  default of another source is taken from the offline directory when it holds a version inside the
+  requested range — no network at start-up — and recorded under its declared source, which serves its
+  upgrades.
+- **`preapproved`.** `madr-4` links to adr.github.io and the gate rates it high risk, so
+  `software-delivery` would wait for a second administrator in every organisation, forever. A
+  `defaultPlugins` entry the operator lists with `preapproved: true` is an operator decision taken
+  through the deployment's own review: the reconcile installs it and records
+  `plugin.default.preapproved` with the gate's reasons, approved by the deployment configuration. The API
+  takes no such flag; without it, a default plugin waits as before.
+- **Migration** `b8d0f2a4c6e1`: `catalogue:<slug>@<rest>` → `plugin:<plugin>/<slug>@<rest>` (the
+  `!diverged` mark kept, so ADR 0040's rule holds: a diverged agent is offered, never overwritten), the
+  catalogue-installed skills become the plugin's, and an `org_plugins` row (source `varga`, 1.0.0)
+  records each plugin an organisation held agents of.
+- **Not proved here**: the plugins' `core` range is `>=0.21.0`; the tree reports 0.20.6 until the
+  release that bumps it, so a deployment built from main between this merge and 0.21.0 logs the four
+  defaults as refused by the `core` check (the catalogue routes still read the offline directory).

@@ -126,7 +126,7 @@ describe("the procedure at the gestures of the batch-4 types (S39-23e)", () => {
     fireEvent.click(await within(drawer).findByRole("button", { name: "How to set this up" }));
     // In the drawer's own flow, not a second panel on top of a modal.
     expect(within(drawer).getByTestId("procedure-panel")).toHaveTextContent("Connect an MCP server");
-    expect(document.body.classList.contains("procedure-open")).toBe(false);
+    expect(document.body.className).toBe("");
   });
 });
 

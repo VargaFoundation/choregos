@@ -73,7 +73,8 @@ def load_case(path: Path) -> dict[str, Any]:
 
 
 def catalogue_instructions(slug: str) -> str | None:
-    """The instructions the catalogue ships for `slug` — `None` when the catalogue is unreachable."""
+    """The instructions the catalogue (the offline plugins, ADR 0093 §6) ships for `slug` — `None` when
+    the catalogue is unreachable or no plugin ships it."""
     try:
         from choregos_core.catalogue_d_agents import entree
     except ImportError:

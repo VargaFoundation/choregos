@@ -199,11 +199,14 @@ RefreshMode = Literal["interval", "cron", "manual"]
 class KnowledgeSourceCreate(Dto):
     kind: SourceKind
     name: str = Field(min_length=1, max_length=200)
-    #: `sharepoint`, `confluence`: the organisation connector (capability `documents`) holding the credentials
+    #: `sharepoint`, `confluence`: the organisation connector (capability `documents`) holding the
+    #: credentials;
+    #: `git`, `web`: optional, for a private repository or a site behind a login (`documents/web`)
     connector: str | None = None
     #: `sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional
     #: `page_id` (that page and its descendants), `include_root`, `include_attachments`, `labels`;
-    #: `web`: `url`, `max_depth`, `max_pages`; `git`: `url`, `ref`, `paths`
+    #: `web`: `url`, `max_depth`, `max_pages`, `exclude`, `include_documents`, `headers` (plain ones, never a
+    #: credential); `git`: `url`, `ref`, `paths`
     config: dict[str, Any] = Field(default_factory=dict)
     interval_minutes: int = Field(default=60, ge=5, le=7 * 24 * 60)
     refresh_mode: RefreshMode = "interval"
