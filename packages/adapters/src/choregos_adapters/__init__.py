@@ -108,26 +108,32 @@ def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
 #: The `mcp-gateway` connector type: a server the organisation's MCP gateway names (ADR 0105).
 MCP_GATEWAY_TYPE = "mcp-gateway"
 GATEWAY_SERVER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
-_GATEWAY_DIRECT_KEYS = ("url", "token", "auth_header", "auth_scheme", "username")
+#: The only keys a stored `mcp-gateway` configuration may hold; every other key is the platform's.
+_GATEWAY_STORED_KEYS = ("server", "timeout_s")
 _GATEWAY_ONLY_PLATFORM = (
     "an `mcp-gateway` connector is reached through its organisation's MCP gateway, which only the "
     "platform supplies: it cannot be built from its configuration alone"
 )
 
 
-def _mcp_gateway_check(config: dict[str, Any]) -> None:
-    server = config.get("server")
-    if not isinstance(server, str) or not re.match(GATEWAY_SERVER_PATTERN, server):
+def _gateway_server_check(server: Any) -> None:
+    if not isinstance(server, str) or not re.fullmatch(GATEWAY_SERVER_PATTERN, server):
         raise AdapterError(
             "`server` is the server's name at the organisation's MCP gateway: letters, digits, "
             "'.', '_' or '-', 128 at most"
         )
-    for key in _GATEWAY_DIRECT_KEYS:
-        if key in config:
-            raise AdapterError(
-                f"`{key}` has no place in an `mcp-gateway` connector: the organisation's MCP gateway "
-                "holds the server's address and credential"
-            )
+
+
+def _mcp_gateway_check(config: dict[str, Any]) -> None:
+    """A stored configuration: the server's name and a timeout, nothing else."""
+    _gateway_server_check(config.get("server"))
+    extra = sorted(str(key) for key in config if key not in _GATEWAY_STORED_KEYS)
+    if extra:
+        raise AdapterError(
+            f"{', '.join(f'`{key}`' for key in extra)} has no place in an `mcp-gateway` connector: "
+            "it stores only `server` and `timeout_s`; the organisation's MCP gateway holds the "
+            "server's address and credential, and the platform supplies the rest"
+        )
 
 
 def _firecrawl_check(config: dict[str, Any]) -> None:
@@ -899,8 +905,11 @@ def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
     from .mcp import McpClient
 
     if cfg.get("route") == "gateway":
+        _gateway_server_check(cfg.get("server"))
+        if not cfg.get("gateway_url"):
+            raise AdapterError(_GATEWAY_ONLY_PLATFORM)
         return _gateway_client(cfg, transport=fake_mcp_gateway().transport())
-    if "server" in cfg and not cfg.get("url"):
+    if "server" in cfg:
         raise AdapterError(_GATEWAY_ONLY_PLATFORM)
     return McpClient(
         cfg.get("url", "http://fake-mcp.test/mcp"),
@@ -928,7 +937,7 @@ def _mcp_client(cfg: dict[str, Any]) -> Any:
 
 
 def _mcp_gateway_client(cfg: dict[str, Any]) -> Any:
-    _mcp_gateway_check({"server": cfg.get("server", "")})
+    _gateway_server_check(cfg.get("server"))
     if cfg.get("route") != "gateway" or not cfg.get("gateway_url"):
         raise AdapterError(_GATEWAY_ONLY_PLATFORM)
     return _gateway_client(cfg, transport=cfg.get("transport"))

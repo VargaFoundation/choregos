@@ -64,6 +64,23 @@ def test_the_type_is_declared_without_secret_or_host() -> None:
         {"server": "ok", "url": "https://x.test"},
         {"server": "ok", "token": "t"},
         {"server": "ok", "auth_header": "X-Key"},
+        {"server": "ok", "auth_scheme": "basic"},
+        {"server": "ok", "username": "u"},
+        {"server": "github\n"},
+        {"server": "a" * 129},
+        {"server": "x", "route": "gateway", "gateway_url": "https://attacker.example/mcp"},
+        {
+            "server": "x",
+            "route": "gateway",
+            "gateway_url": "https://attacker.example/mcp",
+            "gateway_headers": {"Authorization": "Bearer stolen"},
+        },
+        {"server": "x", "route": "gateway"},
+        {"server": "x", "gateway_url": "https://attacker.example/mcp"},
+        {"server": "x", "gateway_headers": {"X": "y"}},
+        {"server": "x", "headers_provider": "p"},
+        {"server": "x", "transport": "t"},
+        {"server": "x", "user_agent": "ua"},
     ],
 )
 def test_a_bad_server_name_or_a_direct_field_is_refused(config: dict[str, Any]) -> None:
@@ -73,6 +90,12 @@ def test_a_bad_server_name_or_a_direct_field_is_refused(config: dict[str, Any]) 
 
 def test_a_good_server_name_passes() -> None:
     validate_config("mcp", "mcp-gateway", {"server": "github.mcp"})
+    validate_config("mcp", "mcp-gateway", {"server": "a" * 128, "timeout_s": 5})
+
+
+def test_a_stored_extra_key_is_named_in_the_refusal() -> None:
+    with pytest.raises(AdapterError, match="`gateway_url`, `route`"):
+        validate_config("mcp", "mcp-gateway", {"server": "x", "route": "g", "gateway_url": "u"})
 
 
 def test_the_real_factory_fails_closed_without_the_platform(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -93,13 +116,24 @@ async def test_the_real_factory_uses_what_the_platform_injects(monkeypatch: pyte
     async def provider(force: bool) -> Mapping[str, str]:
         return {"X-Caller": "alice"}
 
-    client = build("mcp", "mcp-gateway", _injected(headers_provider=provider, transport=gateway.transport()))
+    client = build(
+        "mcp",
+        "mcp-gateway",
+        _injected(
+            headers_provider=provider,
+            transport=gateway.transport(),
+            timeout_s=7,
+            user_agent="choregos-test/1",
+        ),
+    )
+    assert client._timeout == 7.0
     assert await _names(client) == ["read_file"]
     assert gateway.calls
     for call in gateway.calls:
         assert call.server == "x"
         assert call.headers["x-mcp-server"] == "x"
         assert call.headers["x-caller"] == "alice"
+        assert call.headers["user-agent"] == "choregos-test/1"
 
 
 async def test_fakes_route_a_gateway_connector_to_the_fake_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -109,6 +143,8 @@ async def test_fakes_route_a_gateway_connector_to_the_fake_gateway(monkeypatch: 
     client = build("mcp", "mcp-gateway", _injected())
     assert await _names(client) == ["read_file"]
     assert gateway.calls, "the request went through the gateway"
+    assert all(call.server == "x" for call in gateway.calls)
+    assert all(call.headers["x-mcp-server"] == "x" for call in gateway.calls)
     through_gateway = len(gateway.calls)
     direct = _server(OTHER_TOOLS)
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", direct)
@@ -121,6 +157,18 @@ def test_fakes_refuse_a_gateway_connector_without_the_platform(monkeypatch: pyte
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
     with pytest.raises(AdapterError, match="only the platform supplies"):
         build("mcp", "mcp-gateway", {"server": "x"})
+
+
+def test_fakes_check_a_gateway_connector_like_the_real_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    with pytest.raises(AdapterError, match="name at the organisation's MCP gateway"):
+        build("mcp", "mcp-gateway", _injected(server="../x"))
+    with pytest.raises(AdapterError, match="name at the organisation's MCP gateway"):
+        build("mcp", "mcp-gateway", _injected(server="x\n"))
+    with pytest.raises(AdapterError, match="only the platform supplies"):
+        build("mcp", "mcp-gateway", {"server": "x", "route": "gateway"})
+    with pytest.raises(AdapterError, match="only the platform supplies"):
+        build("mcp", "mcp-gateway", {"server": "x", "url": "https://s.test/mcp"})
 
 
 async def test_the_fake_gateway_follows_the_current_fake_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
