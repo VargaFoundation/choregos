@@ -19,7 +19,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // knowledge sources, rights and distillation, organisation branding) land on top of S41's agent forms.
 // 2026-10-28 (S47-39, S47-40): 1950 -> 1975 kB. Main at 6fd7eac measures 1939 kB; the built-in agent card,
 // the map's timing, group and activity lines and the project's agents table bring 1956.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1975);
+// 2026-10-29 (S47-17): 1975 -> 2000 kB. On main at 87ea1831, the cross-backend review card and the memory
+// re-import action bring the build to 1982 kB.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2000);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {
