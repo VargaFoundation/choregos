@@ -129,6 +129,7 @@ import type {
   WorkItemCreate,
   DiffSummary,
   RunEventDto,
+  RunChain,
   RunLogs,
   TimelineEntry,
   ConnectorDto,
@@ -711,6 +712,7 @@ export const api = {
       refusals: number;
       tool_cost_eur?: number;
       acces: { nature: string; target: string; requests: number; refusals: number; motifs?: string[] }[];
+      chain?: RunChain;
     }>(`/runs/${id}/access`),
   projectTools: (id: string) =>
     request<{

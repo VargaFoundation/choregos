@@ -24,6 +24,7 @@ import { finDeclaree } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
 import type { RunEventDto } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
+import { RunIdentity } from "@/components/who-writes";
 
 export default function RunPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params);
@@ -158,6 +159,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           <p className="mt-2 text-xs">{run.data.result?.diagnostics?.permission_denials ?? 0} permission(s) refused</p>
         </Card>
       </div>
+
+      <RunIdentity run={run.data} chain={acces.data?.chain} />
 
       {remote && <RemoteTaskCard task={remote} />}
 

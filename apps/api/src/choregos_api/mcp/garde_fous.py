@@ -41,4 +41,5 @@ async def ecritures_du_jour(session: AsyncSession, user_id: str) -> int:
             )
         )
     ).scalars()
-    return sum(1 for payload in lignes if (payload or {}).get("ecriture"))
+    keys = ("write", "ecriture")  # lang: fr-ok — the audit key persisted before S45-39 (ADR 0098 §4)
+    return sum(1 for payload in lignes if any((payload or {}).get(key) for key in keys))

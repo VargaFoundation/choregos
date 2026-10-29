@@ -11,6 +11,7 @@ from typing import Annotated, Any
 
 from choregos_contracts import StageRole
 from choregos_core import aware, utcnow
+from choregos_core.cross_review import Arm, StageRun, cross_backend_arms, cross_backend_verdict
 from fastapi import APIRouter, Query, Response
 from sqlalchemy import func, or_, select
 
@@ -385,8 +386,6 @@ async def project_dora(
 
 # ───────────────────── revue croisée : le multi-backend paie-t-il ? ─────────────────────
 
-MIN_REVIEWS_PAR_BRAS = 5
-
 
 @router.get(
     "/projects/{id}/metrics/cross-backend",
@@ -398,44 +397,45 @@ async def project_cross_backend(
     session: Db,
     since: Annotated[date | None, Query()] = None,
 ) -> CrossBackendReport:
-    """Compare les revues faites par un autre backend à celles faites par le même (S13-03).
+    """Compare the reviews made by another backend with those made by the same one (S13-03).
 
-    « Un relecteur qui n'est pas l'implémenteur » est une politique ; savoir si elle sert à
-    quelque chose demande une mesure. On compte, par bras, les revues qui ont trouvé
-    quelque chose — un finding déposé, ou un résultat autre que `done`.
+    "A reviewer that is not the implementer" is a policy; knowing whether it is worth anything takes
+    a measure. Per arm, it counts the reviews that found something: a finding filed, or a result
+    other than `done`. What counts as a cross review, who the implementer was when the review was
+    made and the verdict are defined once in `choregos_core.cross_review`, the same definitions the
+    orchestrator's reviewer swap uses.
     """
     start = datetime.combine(since, datetime.min.time(), tzinfo=UTC) if since else _default_since()
-    runs = (
+    reviews = (
         (
             await session.execute(
-                select(Run).where(
+                select(
+                    Run.id, Run.work_item_id, Run.stage_role, Run.backend, Run.created_at, Run.result
+                ).where(
                     Run.project_id == ctx.id,
-                    Run.stage_role.in_([str(StageRole.REVIEW), str(StageRole.VERIFY)]),
+                    Run.stage_role == str(StageRole.REVIEW),
                     Run.created_at >= start,
                 )
             )
         )
-        .scalars()
+        .tuples()
         .all()
     )
-    implementers: dict[str, str] = {}
-    for row in (
+    # Every implement run, not only those since `start`: a review at the start of the window
+    # compares with the implementer who came before it.
+    implements = (
         (
             await session.execute(
-                select(Run.work_item_id, Run.backend)
-                .where(
+                select(Run.id, Run.work_item_id, Run.stage_role, Run.backend, Run.created_at).where(
                     Run.project_id == ctx.id,
                     Run.stage_role == str(StageRole.IMPLEMENT),
                     Run.backend.is_not(None),
                 )
-                .order_by(Run.created_at)
             )
         )
         .tuples()
         .all()
-    ):
-        implementers[str(row[0])] = str(row[1])
-
+    )
     with_findings = set(
         (
             await session.execute(
@@ -448,59 +448,40 @@ async def project_cross_backend(
         .all()
     )
 
-    arms: dict[str, dict[str, Any]] = {
-        "same": {"reviews": 0, "caught": 0, "backends": set()},
-        "other": {"reviews": 0, "caught": 0, "backends": set()},
-    }
-    for run in runs:
-        implementer = implementers.get(run.work_item_id)
-        if not implementer or not run.backend:
-            continue  # sans implémenteur connu, la comparaison n'a pas de sens
-        arm = arms["same" if run.backend == implementer else "other"]
-        arm["reviews"] += 1
-        arm["backends"].add(run.backend)
-        caught = run.id in with_findings or (run.result or {}).get("status") not in {None, "done"}
-        if caught:
-            arm["caught"] += 1
+    stage_runs = [
+        StageRun(
+            run_id=run_id,
+            work_item_id=str(work_item_id),
+            role=role,
+            backend=backend,
+            created_at=created_at,
+            caught=run_id in with_findings or (result or {}).get("status") not in {None, "done"},
+        )
+        for run_id, work_item_id, role, backend, created_at, result in reviews
+    ]
+    stage_runs += [
+        StageRun(
+            run_id=run_id, work_item_id=str(work_item_id), role=role, backend=backend, created_at=created_at
+        )
+        for run_id, work_item_id, role, backend, created_at in implements
+    ]
+    same, other = cross_backend_arms(stage_runs)
 
-    def to_arm(raw: dict[str, Any]) -> CrossBackendArm:
-        rate = round(raw["caught"] / raw["reviews"], 4) if raw["reviews"] else None
+    def to_arm(arm: Arm) -> CrossBackendArm:
         return CrossBackendArm(
-            reviews=raw["reviews"],
-            caught=raw["caught"],
-            catch_rate=rate,
-            backends=sorted(raw["backends"]),
+            reviews=arm.reviews,
+            caught=arm.caught,
+            catch_rate=arm.catch_rate,
+            backends=sorted(arm.backends),
         )
 
-    same, other = to_arm(arms["same"]), to_arm(arms["other"])
     policy = await effective_policy(session, ctx.id)
-    verdict, detail = _cross_backend_verdict(same, other)
+    verdict, detail = cross_backend_verdict(same, other)
     return CrossBackendReport(
         since=start,
         cross_backend_required=policy.review.cross_backend,
-        same_backend=same,
-        other_backend=other,
+        same_backend=to_arm(same),
+        other_backend=to_arm(other),
         verdict=verdict,
         detail=detail,
     )
-
-
-def _cross_backend_verdict(same: CrossBackendArm, other: CrossBackendArm) -> tuple[str, str]:
-    if same.reviews < MIN_REVIEWS_PAR_BRAS or other.reviews < MIN_REVIEWS_PAR_BRAS:
-        return (
-            "not enough data",
-            f"{other.reviews} review(s) by another backend, {same.reviews} by the same one: "
-            f"{MIN_REVIEWS_PAR_BRAS} are needed on each side to compare.",
-        )
-    if same.catch_rate is None or other.catch_rate is None:
-        return ("not enough data", "one of the two arms has no measurable rate.")
-    delta = other.catch_rate - same.catch_rate
-    detail = (
-        f"another backend finds something in {other.catch_rate:.0%} of the reviews, "
-        f"the same one in {same.catch_rate:.0%} ({delta:+.1%})."
-    )
-    if delta > 0.05:
-        return ("cross review catches more", detail)
-    if delta < -0.05:
-        return ("cross review catches less", detail)
-    return ("no clear difference", detail)

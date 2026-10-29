@@ -49,8 +49,14 @@ TERMINAL = frozenset({REJECTED, SUCCEEDED, FAILED})
 ORIGIN = "ontology"
 EFFECT = "ontology.effet"  # lang: fr-ok - persisted effect kind
 EVIDENCE = "ontology.preuve"  # lang: fr-ok - persisted effect kind
+#: Their English spellings (S45-03, ADR 0098 §4): declared for the same executors with the same
+#: policy, so that a row written either way resolves. The writers still write the values above.
+EFFECT_EN = "ontology.effect"
+EVIDENCE_EN = "ontology.evidence"
 #: The key of a core action's `params` where the ontology keeps what it knows of the action (persisted).
 PARAMS_KEY = "ontologie"  # lang: fr-ok - persisted key
+#: Its English spelling, read first (S45-03); nothing writes it yet.
+PARAMS_KEY_EN = "ontology"
 
 #: In the trial, every run proposes under the agent identity `platform` (agent identities,
 #: R-SOC-MCP-03, do not exist yet).
@@ -235,7 +241,8 @@ def _policy_rule(ir: dict[str, Any], action: dict[str, Any]) -> tuple[dict[str, 
 
 def _meta(action: Any) -> dict[str, Any]:
     """What the ontology knows of one of its actions: its version, its type, its targets, its params."""
-    return dict((action.params or {}).get(PARAMS_KEY) or {})
+    params = action.params or {}
+    return dict(params.get(PARAMS_KEY_EN) or params.get(PARAMS_KEY) or {})
 
 
 def describe(action: Any) -> dict[str, Any]:

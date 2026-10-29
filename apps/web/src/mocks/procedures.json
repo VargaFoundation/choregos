@@ -1798,6 +1798,64 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.mcp.mcp-gateway",
+    "title": "Connect an MCP server through your organisation's MCP gateway",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "mcp/mcp-gateway"
+    },
+    "link": null,
+    "reviewed": "2026-10-27",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- Your organisation runs an **MCP gateway**, and an administrator has set it in Choregos (the\n  gateway's address and how Choregos signs in to it). Without that, this connector cannot be used.\n- The server is already registered at the gateway, under a name. Ask the gateway's owner for it.\n- An organisation administrator declares the connector. What an agent may then call is decided tool by\n  tool, below."
+      },
+      {
+        "key": "at",
+        "title": "At your MCP gateway",
+        "markdown": "Register the server there under a name, and give the gateway the server's credential or OAuth setup.\n**Choregos never holds that credential**: it asks the gateway for the server by its name, and the\ngateway reaches the server with its own access. Prefer an account whose rights are exactly what the\nagents should have."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The connector's tools act with the permissions the **gateway** grants for that server, nothing in\n  Choregos can widen them.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server through the\n   organisation's MCP gateway**, a lowercase name.\n2. `server`: the name your MCP gateway gives the server. There is no URL and no token to give.\n3. `timeout_s`: optional; leave it empty to use the gateway's timeout.\n4. Press **Discover**, then open the operations the agents need, one by one."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "**Discover** asks the server, through the gateway, for its tools. A list of tools proves the gateway\nsetting, Choregos's sign-in to the gateway and the server's name."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `409 gateway_not_configured`: no gateway is set for the organisation. An administrator sets it first.\n- `409 gateway_assertion_key_missing`: the gateway is set, but the key Choregos signs its requests\n  with is not. An administrator finishes the gateway setting.\n- `401` from the gateway: the gateway refused Choregos's sign-in, or the caller is not allowed to use\n  that server. Check the gateway's own logs.\n- `404` for an unknown server name: the name is not registered at the gateway; check the spelling\n  against the gateway's list.\n- \"No tools\", or only a few: discovery has not run, or the gateway's access to the server is too\n  narrow to list more."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "none of its own: the MCP gateway's host, opened when the gateway is set"
+    ],
+    "fields": {
+      "server": "the name your MCP gateway gives the server",
+      "timeout_s": "seconds before a call is abandoned; empty uses the gateway's timeout"
+    },
+    "vendor_docs": [
+      {
+        "title": "MCP specification: transports (Streamable HTTP)",
+        "url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.mcp.mcp.atlassian-rovo",
     "title": "Connect Atlassian's Rovo MCP Server",
     "version": 2,
@@ -2608,7 +2666,7 @@
   {
     "id": "connector.tracker.github-issues",
     "title": "Use GitHub Issues and Projects v2 as the board",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/github-issues"
@@ -2629,7 +2687,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push."
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitHub's REST API, as the Choregos GitHub App (`<app>[bot]` on GitHub): the board column and labels,\nthe status comment, the questions to a person, the close-out. The connector card names the account\nwhose installation it goes through, and each line of a work item's timeline that wrote to GitHub says\n\"via GitHub Issues\". An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
       },
       {
         "key": "in_choregos",
@@ -2678,7 +2736,7 @@
   {
     "id": "connector.tracker.gitlab-issues",
     "title": "Use GitLab Issues as the board",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/gitlab-issues"
@@ -2699,7 +2757,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The token needs the `api` scope and the Developer role: it reads issues, creates issues and comments,\n  and changes labels. A narrower scope cannot write.\n- The token is project-scoped: it cannot touch another project."
+        "markdown": "- The token needs the `api` scope and the Developer role: it reads issues, creates issues and comments,\n  and changes labels. A narrower scope cannot write.\n- The token is project-scoped: it cannot touch another project.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitLab's REST API, as the account that owns the token (a project access token writes as its bot user):\nthe labels, the status comment, the questions to a person, the close-out. Each line of a work item's\ntimeline that wrote to GitLab says \"via GitLab Issues\". An agent's own actions do not go through this\nconnector: they go through the MCP tools its version names, under each tool connector's account,\nlisted on its run."
       },
       {
         "key": "in_choregos",
@@ -2792,7 +2850,7 @@
   {
     "id": "connector.tracker.jira",
     "title": "Use Jira Cloud as the board",
-    "version": 2,
+    "version": 3,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/jira"
@@ -2813,7 +2871,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,\n**Transition issues**, **Add comments**.\n\nA classic API token carries all of the account's rights. A scoped API token works only through\n`https://api.atlassian.com/ex/jira/<cloudId>` as the `base_url`; that variant is **not proven** here, so\nuse a classic token unless you have tested it."
+        "markdown": "On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,\n**Transition issues**, **Add comments**.\n\nA classic API token carries all of the account's rights. A scoped API token works only through\n`https://api.atlassian.com/ex/jira/<cloudId>` as the `base_url`; that variant is **not proven** here, so\nuse a classic token unless you have tested it.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nJira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,\n`Risk` and `Run` fields, the questions to a person, the close-out. The connector card says\n\"Choregos writes as\" that email, and each line of a work item's timeline that wrote to Jira says\n\"via Jira as\" it. An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
       },
       {
         "key": "in_choregos",
@@ -2860,7 +2918,7 @@
   {
     "id": "connector.tracker.plugin",
     "title": "Use a plugin's server as the board",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/plugin"
@@ -2881,7 +2939,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "The account the plugin's server uses is the one its procedure asks for. Choregos itself needs nothing\nmore: it reaches the server inside the cluster with the server's own token, never with a key of yours."
+        "markdown": "The account the plugin's server uses is the one its procedure asks for. Choregos itself needs nothing\nmore: it reaches the server inside the cluster with the server's own token, never with a key of yours.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through the plugin's server,\nunder the account that server uses: the state, the status comment, the questions to a person, the\nclose-out. The connector card and each line of a work item's timeline that wrote to the tracker name\nthe server, `<plugin>/<server>`. An agent's own actions go through the MCP tools its version names,\nlisted on its run."
       },
       {
         "key": "in_choregos",

@@ -2,7 +2,7 @@
 
 # Use Jira Cloud as the board
 
-For a project owner. Procedure `connector.tracker.jira`, version 2, reviewed 2026-10-28 against the vendor's own pages.
+For a project owner. Procedure `connector.tracker.jira`, version 3, reviewed 2026-10-28 against the vendor's own pages.
 
 ## Before you start
 
@@ -32,6 +32,13 @@ On the project, for the dedicated account: **Browse projects**, **Create issues*
 A classic API token carries all of the account's rights. A scoped API token works only through
 `https://api.atlassian.com/ex/jira/<cloudId>` as the `base_url`; that variant is **not proven** here, so
 use a classic token unless you have tested it.
+
+**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
+Jira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,
+`Risk` and `Run` fields, the questions to a person, the close-out. The connector card says
+"Choregos writes as" that email, and each line of a work item's timeline that wrote to Jira says
+"via Jira as" it. An agent's own actions do not go through this connector: they go through the MCP
+tools its version names, under each tool connector's account, listed on its run.
 
 ## In Choregos
 

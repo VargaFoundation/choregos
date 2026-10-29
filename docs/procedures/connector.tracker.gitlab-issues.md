@@ -2,7 +2,7 @@
 
 # Use GitLab Issues as the board
 
-For a project owner. Procedure `connector.tracker.gitlab-issues`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For a project owner. Procedure `connector.tracker.gitlab-issues`, version 2, reviewed 2026-10-16 against the vendor's own pages.
 
 ## Before you start
 
@@ -24,6 +24,13 @@ For a project owner. Procedure `connector.tracker.gitlab-issues`, version 1, rev
 - The token needs the `api` scope and the Developer role: it reads issues, creates issues and comments,
   and changes labels. A narrower scope cannot write.
 - The token is project-scoped: it cannot touch another project.
+
+**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
+GitLab's REST API, as the account that owns the token (a project access token writes as its bot user):
+the labels, the status comment, the questions to a person, the close-out. Each line of a work item's
+timeline that wrote to GitLab says "via GitLab Issues". An agent's own actions do not go through this
+connector: they go through the MCP tools its version names, under each tool connector's account,
+listed on its run.
 
 ## In Choregos
 
