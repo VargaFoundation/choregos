@@ -23,7 +23,7 @@ from .base import (
     ScmAdapter,
     TrackerAdapter,
 )
-from .errors import ConfigurationError
+from .errors import AdapterError, ConfigurationError
 from .http.pool import strategy_of
 from .registry import (
     POLITIQUES,
@@ -103,6 +103,31 @@ def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
 
     found = host_port_of(config.get("base_url"))
     return [found] if found else []
+
+
+#: The `mcp-gateway` connector type: a server the organisation's MCP gateway names (ADR 0105).
+MCP_GATEWAY_TYPE = "mcp-gateway"
+GATEWAY_SERVER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+_GATEWAY_DIRECT_KEYS = ("url", "token", "auth_header", "auth_scheme", "username")
+_GATEWAY_ONLY_PLATFORM = (
+    "an `mcp-gateway` connector is reached through its organisation's MCP gateway, which only the "
+    "platform supplies: it cannot be built from its configuration alone"
+)
+
+
+def _mcp_gateway_check(config: dict[str, Any]) -> None:
+    server = config.get("server")
+    if not isinstance(server, str) or not re.match(GATEWAY_SERVER_PATTERN, server):
+        raise AdapterError(
+            "`server` is the server's name at the organisation's MCP gateway: letters, digits, "
+            "'.', '_' or '-', 128 at most"
+        )
+    for key in _GATEWAY_DIRECT_KEYS:
+        if key in config:
+            raise AdapterError(
+                f"`{key}` has no place in an `mcp-gateway` connector: the organisation's MCP gateway "
+                "holds the server's address and credential"
+            )
 
 
 def _firecrawl_check(config: dict[str, Any]) -> None:
@@ -798,6 +823,29 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("token",),
     ),
+    ("mcp", "mcp-gateway"): ConnectorTypeSpec(
+        "MCP server through the organisation's MCP gateway",
+        ("mcp",),
+        _objet(
+            {
+                "server": {
+                    "type": "string",
+                    "pattern": GATEWAY_SERVER_PATTERN,
+                    "description": "the server's name at the organisation's MCP gateway",
+                },
+                "timeout_s": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 120,
+                    "description": "seconds before a call is abandoned; absent: the gateway's timeout",
+                },
+            },
+            ("server",),
+        ),
+        (),
+        egress=lambda config: [],
+        check_config=_mcp_gateway_check,
+    ),
     ("notify", "slack"): ConnectorTypeSpec(
         "Slack",
         ("notify",),
@@ -811,20 +859,56 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
 FAKE_MCP: Any = None
 
 
-def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
+def _current_fake_mcp() -> Any:
     from .fakes.mcp import FakeMcpServer
-    from .mcp import McpClient
 
     global FAKE_MCP  # noqa: PLW0603 - a shared fake, like the platform's other fakes
     if FAKE_MCP is None:
         FAKE_MCP = FakeMcpServer()
+    return FAKE_MCP
+
+
+#: The fake MCP gateway of CHOREGOS_FAKES=1: one, whose fallback is always the CURRENT `FAKE_MCP`.
+FAKE_MCP_GATEWAY: Any = None
+
+
+def fake_mcp_gateway() -> Any:
+    from .fakes.mcp_gateway import FakeMcpGateway
+
+    global FAKE_MCP_GATEWAY  # noqa: PLW0603 - a shared fake, like the platform's other fakes
+    if FAKE_MCP_GATEWAY is None:
+        # The function itself, not its result: tests replace `FAKE_MCP`, and the gateway follows.
+        FAKE_MCP_GATEWAY = FakeMcpGateway(auth="none", fallback=_current_fake_mcp)
+    return FAKE_MCP_GATEWAY
+
+
+def _gateway_client(cfg: dict[str, Any], *, transport: Any) -> Any:
+    from .mcp import McpClient
+
+    return McpClient(
+        str(cfg["gateway_url"]),
+        headers=dict(cfg.get("gateway_headers") or {}),
+        headers_provider=cfg.get("headers_provider"),
+        timeout_s=float(cfg.get("timeout_s", 30)),
+        transport=transport,
+        user_agent=str(cfg.get("user_agent", "")),
+    )
+
+
+def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
+    from .mcp import McpClient
+
+    if cfg.get("route") == "gateway":
+        return _gateway_client(cfg, transport=fake_mcp_gateway().transport())
+    if "server" in cfg and not cfg.get("url"):
+        raise AdapterError(_GATEWAY_ONLY_PLATFORM)
     return McpClient(
         cfg.get("url", "http://fake-mcp.test/mcp"),
         token=cfg.get("token", ""),
         auth_scheme=cfg.get("auth_scheme", "bearer"),
         username=cfg.get("username", ""),
         auth_header=cfg.get("auth_header", "Authorization"),
-        transport=FAKE_MCP.transport(),
+        transport=_current_fake_mcp().transport(),
         user_agent=str(cfg.get("user_agent", "")),
     )
 
@@ -841,6 +925,13 @@ def _mcp_client(cfg: dict[str, Any]) -> Any:
         timeout_s=float(cfg.get("timeout_s", 30)),
         user_agent=str(cfg.get("user_agent", "")),
     )
+
+
+def _mcp_gateway_client(cfg: dict[str, Any]) -> Any:
+    _mcp_gateway_check({"server": cfg.get("server", "")})
+    if cfg.get("route") != "gateway" or not cfg.get("gateway_url"):
+        raise AdapterError(_GATEWAY_ONLY_PLATFORM)
+    return _gateway_client(cfg, transport=cfg.get("transport"))
 
 
 #: Le Graph des faux : un seul, que les tests et la démo scriptent.
@@ -1371,6 +1462,7 @@ def _register_builtins() -> None:
     _register_web_search()
     # A real MCP server (ADR 0034): its operations are DISCOVERED, and are born closed.
     register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(_mcp_client)
+    register("mcp", MCP_GATEWAY_TYPE, _SPECS_LIVREES[("mcp", MCP_GATEWAY_TYPE)])(_mcp_gateway_client)
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(
         lambda cfg: SlackNotifier(
             webhook_url=cfg.get("webhook_url", _env("CHOREGOS_SLACK_WEBHOOK", "")),
