@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from choregos_adapters import AdapterSet, charger_les_greffons
+from choregos_adapters import AdapterSet, account_of, charger_les_greffons
 from choregos_api.adaptateurs import brancher_memoire_lexicale
 from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
 from choregos_api.db.session import TOUT, session_scope
@@ -61,6 +61,9 @@ class ProjectBundle:
     #: else the organisation's own, ADR 0109) and names one; `None`: the deployment's `gateway_url`.
     #: The key is minted on that gateway: the agent must call the same one.
     gateway_url: str | None = None
+    #: The tracker the workflow's bookkeeping writes to, and the account it writes under (ADR 0107
+    #: point 4): `{"type", "account"}`, recorded on each tracker event; `None` for an internal tracker.
+    tracker_via: dict[str, Any] | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -151,7 +154,17 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         ceiling=ceiling_of(org),
         adapters=AdapterSet.from_connectors(specs),
         gateway_url=gateway_url,
+        tracker_via=tracker_via_of(connectors),
     )
+
+
+def tracker_via_of(connectors: Any) -> dict[str, Any] | None:
+    """The project's tracker connector type and the account it writes under, from its STORED
+    configuration (never the one pinned for the runtime, which may carry an injected token)."""
+    tracker = next((c for c in connectors if c.kind == "tracker"), None)
+    if tracker is None or tracker.type == "internal":
+        return None
+    return {"type": tracker.type, "account": account_of("tracker", tracker.type, dict(tracker.config or {}))}
 
 
 async def org_gateway_spec(session: AsyncSession, org_id: str) -> dict[str, Any] | None:

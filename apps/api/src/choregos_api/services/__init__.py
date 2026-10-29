@@ -64,6 +64,7 @@ from .tickets import (
     release_dto,
     run_dto,
     run_summary,
+    tool_connectors_of,
     totals_from,
     work_item_dto,
 )
@@ -109,6 +110,7 @@ __all__ = [
     "run_dto",
     "run_summary",
     "signaler_ce_que_la_politique_n_applique_pas",
+    "tool_connectors_of",
     "totals_from",
     "work_item_dto",
     "workflow_actif",

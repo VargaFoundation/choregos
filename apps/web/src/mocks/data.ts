@@ -479,6 +479,11 @@ function run(id: string, role: string, status: string, cost: number, summary: st
       runs: 1,
     },
     allowed_paths: ["src/orders/**", "tests/orders/**"],
+    // Who it runs as and what it may call (ADR 0107): resolved by the API, never a secret.
+    agent_slug: "developer",
+    agent_version: 3,
+    initiated_by: "person:augustin@varga.dev",
+    tool_connectors: [{ name: "atlassian", type: "mcp", auth_scheme: "basic", account: "svc-choregos@varga.dev" }],
     result: {
       schema: "choregos/StageResult/v1",
       status: status === "running" ? "done" : "done",

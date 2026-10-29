@@ -3,7 +3,7 @@ id: connector.tracker.plugin
 title: Use a plugin's server as the board
 applies_to: {connector: tracker/plugin}
 audience: project_owner
-version: 1
+version: 2
 reviewed: 2026-10-28
 vendor_docs:
   - {title: "Writing a plugin: the tracker profile", url: "https://github.com/VargaFoundation/choregos/blob/main/docs/plugins.md"}
@@ -30,6 +30,12 @@ the system posts to.
 
 The account the plugin's server uses is the one its procedure asks for. Choregos itself needs nothing
 more: it reaches the server inside the cluster with the server's own token, never with a key of yours.
+
+**What Choregos writes, and as whom.** The workflow's bookkeeping goes through the plugin's server,
+under the account that server uses: the state, the status comment, the questions to a person, the
+close-out. The connector card and each line of a work item's timeline that wrote to the tracker name
+the server, `<plugin>/<server>`. An agent's own actions go through the MCP tools its version names,
+listed on its run.
 
 ## In Choregos
 

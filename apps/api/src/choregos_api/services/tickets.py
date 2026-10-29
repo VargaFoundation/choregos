@@ -36,7 +36,9 @@ from ..schemas import (
     RunDto,
     RunSummary,
     TimelineEntry,
+    ToolConnector,
     Totals,
+    TrackerWrite,
     WorkflowFailure,
     WorkItemCreate,
     WorkItemDto,
@@ -79,7 +81,9 @@ def run_summary(run: Run) -> RunSummary:
     )
 
 
-def run_dto(run: Run, project_slug: str) -> RunDto:
+def run_dto(run: Run, project_slug: str, tool_connectors: list[ToolConnector] | None = None) -> RunDto:
+    """A run as the API serves it; `tool_connectors` is filled by the routes that resolve them
+    (`tool_connectors_of`), which a list of runs does not do for each one."""
     from choregos_contracts import StageResult
 
     return RunDto(
@@ -105,7 +109,36 @@ def run_dto(run: Run, project_slug: str) -> RunDto:
         context_pack_url=run.context_pack_url,
         playbook_checksum=run.playbook_checksum,
         allowed_paths=list(run.allowed_paths or []),
+        agent_slug=run.agent_slug,
+        agent_version=run.agent_version,
+        initiated_by=run.initiated_by,
+        tool_connectors=list(tool_connectors or []),
     )
+
+
+async def tool_connectors_of(session: AsyncSession, run: Run, project: Project) -> list[ToolConnector]:
+    """The organisation connectors this run's agent may call through the broker, and the account each
+    one calls as (ADR 0107): the broker's own selection, resolved here so that a project member who
+    cannot read the organisation's connectors still sees them. Never a secret."""
+    from choregos_adapters import account_of
+
+    from .broker import broker_tools
+
+    seen: dict[str, ToolConnector] = {}
+    for tool in (await broker_tools(session, run, project)).values():
+        connector = tool.connector
+        if connector.name in seen:
+            continue
+        config = dict(connector.config or {})
+        # An MCP connector sends its token as a Bearer unless it says `basic` (S39-10e).
+        scheme = (config.get("auth_scheme") or "bearer") if connector.kind == "mcp" else None
+        seen[connector.name] = ToolConnector(
+            name=connector.name,
+            type=connector.type,
+            auth_scheme=str(scheme) if scheme else None,
+            account=account_of(connector.kind, connector.type, config),
+        )
+    return sorted(seen.values(), key=lambda c: c.name)
 
 
 def human_request_dto(row: HumanRequest) -> HumanRequestDto:
@@ -183,6 +216,7 @@ async def work_item_dto(
         totals=totals,
         budget_usd=item.budget_usd,
         estimate=await estimate_cost(session, project.id, item),
+        initiated_by=item.initiated_by,
         created_at=item.created_at,
         closed_at=item.closed_at,
     )
@@ -461,6 +495,14 @@ async def _classer_dans_le_tracker(
         return key, None
 
 
+def _via(value: Any) -> TrackerWrite | None:
+    """A recorded tracker write (`{"type", "account"}`), or nothing for an event from before S42-06g."""
+    if not isinstance(value, dict) or not value.get("type"):
+        return None
+    account = value.get("account")
+    return TrackerWrite(type=str(value["type"]), account=str(account) if account else None)
+
+
 async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]:
     """États, runs, décisions, findings : l'histoire complète d'un ticket, dans l'ordre."""
     entries: list[TimelineEntry] = []
@@ -494,6 +536,17 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
         .scalars()
         .all()
     )
+    events = (
+        (await session.execute(select(Event).where(Event.work_item_id == item.id).order_by(Event.ts)))
+        .scalars()
+        .all()
+    )
+    # The tracker write behind a request (ADR 0107 point 4): its question went out as a comment.
+    via_of_request = {
+        str(e.payload.get("request_id")): e.payload.get("via")
+        for e in events
+        if e.type == str(EventType.WORKITEM_HUMAN_REQUESTED) and e.payload.get("via")
+    }
     for req in requests:
         entries.append(
             TimelineEntry(
@@ -504,6 +557,7 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
                 actor=req.decided_by,
                 actor_kind="user",
                 ref_id=req.id,
+                via=_via(via_of_request.get(req.id)),
             )
         )
         if req.decided_at:
@@ -518,11 +572,6 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
                     ref_id=req.id,
                 )
             )
-    events = (
-        (await session.execute(select(Event).where(Event.work_item_id == item.id).order_by(Event.ts)))
-        .scalars()
-        .all()
-    )
     for event in events:
         if event.type == str(EventType.WORKITEM_STATE_CHANGED):
             entries.append(
@@ -533,6 +582,7 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
                     detail=str(event.payload.get("reason") or ""),
                     actor=str(event.payload.get("by") or "orchestrateur"),
                     actor_kind="system",
+                    via=_via(event.payload.get("via")),
                 )
             )
     findings = (
