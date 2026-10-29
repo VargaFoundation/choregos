@@ -42,7 +42,7 @@ streams:
   S37: "Fewer tokens per run: rtk and headroom, measured, switchable at every level (ADR 0055)"
   S38: "Investment research: deterministic steps, market data, gates on measured numbers, a campaign template (plan 2026-10-14)"
   S45: "English everywhere, finished (plan 2026-10-27, ADR 0098)"
-  S46: "Consuming an external MCP gateway (plan 2026-10-27, ADR 0097)"
+  S46: "Consuming an external MCP gateway (plan 2026-10-27, ADR 0105)"
   S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
   S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0110-0112)"
   S50: "An agent acts under an identity: assigned, own, on behalf of a person; child agents (ADR 0107)"

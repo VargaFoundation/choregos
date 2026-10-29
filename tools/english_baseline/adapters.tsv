@@ -1,5 +1,5 @@
 # adapters: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
-packages/adapters/src/choregos_adapters/__init__.py	81
+packages/adapters/src/choregos_adapters/__init__.py	76
 packages/adapters/src/choregos_adapters/base.py	29
 packages/adapters/src/choregos_adapters/cd/__init__.py	1
 packages/adapters/src/choregos_adapters/cd/argocd.py	18
@@ -42,8 +42,6 @@ packages/adapters/src/choregos_adapters/marketdata/base.py	6
 packages/adapters/src/choregos_adapters/marketdata/composite.py	5
 packages/adapters/src/choregos_adapters/marketdata/stooq.py	8
 packages/adapters/src/choregos_adapters/marketdata/yahoo.py	10
-packages/adapters/src/choregos_adapters/mcp/__init__.py	1
-packages/adapters/src/choregos_adapters/mcp/client.py	38
 packages/adapters/src/choregos_adapters/memory/__init__.py	1
 packages/adapters/src/choregos_adapters/memory/ecphoria.py	19
 packages/adapters/src/choregos_adapters/memory/lexicale.py	33
