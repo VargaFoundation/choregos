@@ -28,4 +28,8 @@ regexes = [
   # branch (`fetch-depth: 0`), so one such sentence on one branch turned the `secrets` job red on
   # main and on every open pull request (2026-10-27).
   '''run-token key, `aud=choregos-relay`''',
+  # A work item's key (`work_item_key: "DESK-incident.42"`, a tracker's ticket id) is an identifier, not
+  # a secret: `generic-api-key` reads `key: ` followed by a quoted word of enough entropy as a key. One
+  # test on one branch turned the `secrets` job red on main and on every open pull request (2026-10-29).
+  '''work_item_key: ["'][A-Za-z][A-Za-z0-9_-]*[-#][A-Za-z0-9_.#-]+["']''',
 ]
