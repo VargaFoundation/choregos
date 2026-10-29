@@ -18,19 +18,30 @@ plugin they obtain, whatever the supply (`plugin_sources.assess_plugin`).
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 import yaml
-from choregos_core.plugins import MANIFEST, Plugin, opened
+from choregos_core.plugins import MANIFEST, Plugin, PluginError, opened
 from choregos_core.plugins.sources import SourceError
 
 from ..config import Settings
 
 OFFLINE = "offline"
 _SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
+
+
+@dataclass(frozen=True)
+class Shipped:
+    """A plugin of a source that ships an agent."""
+
+    source: str
+    name: str
+    version: str
 
 
 class PluginNotFoundError(LookupError):
@@ -51,6 +62,11 @@ class PluginSupply(Protocol):
 
     async def latest(self, source: str, name: str) -> str | None:
         """The newest version `source` offers for `name`, or `None`."""
+        ...
+
+    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+        """For each slug some source's newest plugin ships as an agent, that plugin (ADR 0111 §2).
+        Never raises: a source that cannot be read says nothing."""
         ...
 
 
@@ -117,6 +133,26 @@ class OfflineDirectory:
             return None
         return max(versions, key=semver_key) if versions else None
 
+    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+        newest: dict[str, tuple[str, Path]] = {}
+        for manifest in sorted([*self.root.glob(f"*/{MANIFEST}"), *self.root.glob(f"*/*/{MANIFEST}")]):
+            try:
+                metadata = (yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}).get("metadata") or {}
+            except (yaml.YAMLError, UnicodeDecodeError, AttributeError, OSError):
+                continue
+            name, version = str(metadata.get("name") or ""), str(metadata.get("version") or "")
+            if name and version and (name not in newest or semver_key(version) > semver_key(newest[name][0])):
+                newest[name] = (version, manifest.parent)
+        found: dict[str, Shipped] = {}
+        for name, (version, folder) in sorted(newest.items()):
+            try:
+                with opened(folder) as plugin:
+                    for slug in slugs & set(plugin.agents):
+                        found.setdefault(slug, Shipped(self.source, name, version))
+            except PluginError:
+                continue
+        return found
+
 
 class _Nothing:
     """No source configured: every request is answered `PluginNotFoundError`."""
@@ -131,6 +167,14 @@ class _Nothing:
 
     async def latest(self, source: str, name: str) -> str | None:
         return None
+
+    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+        return {}
+
+
+#: What the sources' indexes say each plugin ships, kept a minute: a catalogue listing reads it.
+_SHIPPING_TTL_SECONDS = 60.0
+_shipping_cache: dict[str, tuple[float, dict[str, Shipped]]] = {}
 
 
 class SourcesSupply:
@@ -159,6 +203,38 @@ class SourcesSupply:
             return resolve(index, name, "*", core_version()).version
         except SourceError:
             return None
+
+    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+        cached = _shipping_cache.get("sources")
+        if cached is None or time.monotonic() - cached[0] > _SHIPPING_TTL_SECONDS:
+            cached = _shipping_cache["sources"] = (time.monotonic(), await self._every_agent())
+        return {slug: shipped for slug, shipped in cached[1].items() if slug in slugs}
+
+    async def _every_agent(self) -> dict[str, Shipped]:
+        """Each agent slug the newest admissible release of each plugin ships, by its index."""
+        from choregos_core.plugins.sources import resolve
+        from choregos_core.plugins.versions import core_version
+
+        from .plugin_sources import plugins_config, read_index
+
+        found: dict[str, Shipped] = {}
+        try:
+            config = plugins_config()
+        except SourceError:
+            return found
+        for source in config.all_sources():
+            try:
+                index = await read_index(source, config)
+            except SourceError:
+                continue
+            for name in sorted(index.releases):
+                try:
+                    release = resolve(index, name, "*", core_version())
+                except SourceError:
+                    continue
+                for slug in release.agents:
+                    found.setdefault(slug, Shipped(source.name, name, release.version))
+        return found
 
 
 _override: PluginSupply | None = None

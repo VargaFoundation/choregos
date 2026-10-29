@@ -674,6 +674,48 @@ paths:
       summary: The project's workflows — one active per name, the default one marked (ADR 0031)
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowSummary" } } } } }
+  /orgs/{org}/workflow-catalogue:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [workflows]
+      operationId: listWorkflowCatalogue
+      description: >-
+        The workflows this organisation can adopt (ADR 0111): the core's, the deployment's templates', its installed
+        plugins' and the ones it shared from its projects. For each, the capabilities it requires (computed by the
+        engine, never declared), the human groups it declares and where each agent it names resolves. Any member.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueEntry" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [workflows]
+      operationId: shareWorkflow
+      description: >-
+        Shares a version of a project's workflow to the organisation's catalogue (ADR 0111 §4): the entry is a copy,
+        later edits in the project do not reach it until shared again. Organisation administrators only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowShare" } } }
+      responses:
+        "201": { description: Shared, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowCatalogueEntry" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/workflow-adoptions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [workflows]
+      operationId: adoptWorkflow
+      description: >-
+        Publishes a catalogue entry as a new workflow of the project (ADR 0111 §3), `source: catalogue` and its
+        `origin` recorded, and installs the catalogue agents it names. Never installs a plugin: an agent that resolves
+        nowhere → 422 naming it. A name already taken → 409; `version` other than the entry's current one → 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowAdopt" } } }
+      responses:
+        "201": { description: Adopted, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/workflows/{name}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -4821,7 +4863,8 @@ components:
         id: { type: string }
         name: { type: string }
         version: { type: integer }
-        source: { type: string, enum: [repo, platform, template] }
+        source: { type: string, enum: [repo, platform, template, catalogue] }
+        origin: { type: [string, "null"], description: "For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0111)." }
         yaml: { type: string }
         json: { $ref: "./schemas/workflow.schema.json" }
         checksum: { type: string }
@@ -4829,6 +4872,71 @@ components:
         is_default: { type: boolean }
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
+    WorkflowCatalogueEntry:
+      type: object
+      additionalProperties: false
+      required: [source, name, version, title, summary, tags, requires, needs_repository, groups, agents, yaml]
+      description: A workflow the organisation can adopt (ADR 0111).
+      properties:
+        source:
+          type: string
+          pattern: "^(core|org|template:[a-z0-9-]+|plugin:[a-z0-9-]+)$"
+          description: "`core`, `template:<name>`, `plugin:<name>` (an installed plugin, the external catalogues) or `org`"
+        name: { type: string }
+        version: { type: integer, minimum: 1, description: "`metadata.version`; for an `org` entry, the number of the share" }
+        title: { type: string, description: "`metadata.catalogue.title`, else the name" }
+        summary: { type: string, description: "`metadata.catalogue.summary`, else `metadata.description`" }
+        tags: { type: array, items: { type: string } }
+        requires: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueRequirement" } }
+        needs_repository: { type: boolean, description: "it requires an `scm`: a project without a repository cannot run it" }
+        groups: { type: array, items: { type: string }, description: "the human groups its actors name (ADR 0044)" }
+        agents: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueAgent" } }
+        yaml: { type: string }
+        shared_by: { type: [string, "null"], description: "for an `org` entry" }
+        shared_from: { type: [string, "null"], description: "for an `org` entry: `<project>/<workflow>@<version>`" }
+        shared_at: { type: [string, "null"], format: date-time }
+    WorkflowCatalogueRequirement:
+      type: object
+      additionalProperties: false
+      required: [capability, reasons]
+      properties:
+        capability: { type: string }
+        reasons: { type: array, items: { type: string } }
+    WorkflowCatalogueAgent:
+      type: object
+      additionalProperties: false
+      required: [actor, slug, resolution]
+      description: An agent the workflow names, and where it resolves in this organisation (ADR 0111 §2).
+      properties:
+        actor: { type: string }
+        slug: { type: string }
+        version: { type: [integer, "null"], description: "the `@N` the workflow pins, if any" }
+        resolution:
+          type: string
+          enum: [org, plugin, remote, catalogue, unresolved]
+          description: >-
+            `org`: the organisation's own agent; `plugin`: installed by a plugin; `remote`: an A2A agent;
+            `catalogue`: absent but in the platform's catalogue, installed on adoption; `unresolved`: nowhere, adoption is refused
+        plugin: { type: [string, "null"], description: "for `plugin`, the plugin that installed it; for `unresolved`, a plugin of a configured source that ships it (`<name> <version> (<source>)`), when one does" }
+        display_name: { type: [string, "null"] }
+    WorkflowAdopt:
+      type: object
+      additionalProperties: false
+      required: [source, name]
+      properties:
+        source: { type: string }
+        name: { type: string }
+        version: { type: [integer, "null"], description: "the version read; another current version → 409" }
+        as: { type: [string, "null"], pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the name in the project; `metadata.name` is rewritten" }
+        make_default: { type: boolean, default: false }
+    WorkflowShare:
+      type: object
+      additionalProperties: false
+      required: [project, name]
+      properties:
+        project: { type: string, description: "the project's slug or id" }
+        name: { type: string }
+        version: { type: [integer, "null"], description: "default: the active version" }
     WorkflowPut:
       type: object
       required: [yaml]
@@ -4849,6 +4957,7 @@ components:
         open_items: { type: integer, description: "Open tickets pinned to one of its versions." }
         created_by: { type: [string, "null"] }
         updated_at: { type: [string, "null"], format: date-time }
+        can_share: { type: boolean, default: false, description: "the caller may share it to the organisation's catalogue (ADR 0111 §4, ADR 0074: the server decides)" }
     WorkflowRouting:
       type: object
       required: [default, rules]
@@ -4881,6 +4990,7 @@ components:
         warnings: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" } }
         graph: { $ref: "#/components/schemas/WorkflowGraph" }
         process: { type: array, items: { $ref: "#/components/schemas/ProcessStep" } }
+        document: { $ref: "./schemas/workflow.schema.json", description: "the workflow as the engine read it (ADR 0112)" }
     ProcessStep:
       type: object
       description: A transition in plain words — the process view (ADR 0031).
@@ -4926,12 +5036,16 @@ components:
       description: >-
         A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`,
         `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`,
-        `index`).
+        `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`,
+        `metadata.catalogue` and `initial` (ADR 0112). `style: block` writes a collection value as
+        indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones.
       properties:
         op:
           type: string
           enum: [add_state, remove_state, rename_state, set_state, add_transition, remove_transition,
-                 set_transition, add_gate, remove_gate, add_actor, remove_actor, set_actor]
+                 set_transition, add_gate, remove_gate, add_actor, remove_actor, set_actor, set_workflow]
+        style: { type: string, enum: [flow, block], default: flow }
+        swap: { type: boolean, default: false }
       additionalProperties: true
     WorkflowEditRequest:
       type: object

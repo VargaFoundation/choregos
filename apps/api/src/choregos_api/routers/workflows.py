@@ -94,6 +94,7 @@ async def validate(body: WorkflowValidateRequest) -> WorkflowValidation:
         warnings=[WorkflowIssue(**issue.to_dict()) for issue in report.warnings],
         graph=to_graph(workflow),
         process=to_process(workflow),
+        document=workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
     )
 
 
@@ -157,12 +158,13 @@ async def edit(body: WorkflowEditRequest) -> WorkflowEditResult:
     )
 
 
-def _dto(row: WorkflowDef, project: Project) -> WorkflowDefDto:
+def workflow_dto(row: WorkflowDef, project: Project) -> WorkflowDefDto:
     return WorkflowDefDto(
         id=row.id,
         name=row.name,
         version=row.version,
         source=row.source,
+        origin=row.origin,
         yaml=row.yaml,
         json_doc=row.json_doc,
         checksum=row.checksum,
@@ -179,7 +181,7 @@ async def get_workflow(ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
     row = await default_workflow(session, ctx.id)
     if row is None:
         row, _ = await ensure_defaults(session, ctx.project)
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 @router.put("/projects/{id}/workflow", response_model=WorkflowDefDto, operation_id="putWorkflow")
@@ -196,7 +198,7 @@ async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> Workf
         base_version=body.base_version,
         devient_le_defaut=True,
     )
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 @router.get("/projects/{id}/workflows", response_model=list[WorkflowSummaryDto], operation_id="listWorkflows")
@@ -216,6 +218,9 @@ async def list_workflows(ctx: ProjectCtx, session: Db) -> list[WorkflowSummaryDt
         .group_by(WorkflowDef.name)
     )
     ouverts: dict[str, int] = {str(nom): int(n) for nom, n in comptes.tuples()}
+    from ..services.agent_governance import is_admin
+
+    can_share = is_admin(ctx.principal, ctx.org_slug)
     return [
         WorkflowSummaryDto(
             name=row.name,
@@ -225,6 +230,7 @@ async def list_workflows(ctx: ProjectCtx, session: Db) -> list[WorkflowSummaryDt
             open_items=int(ouverts.get(row.name, 0)),
             created_by=row.created_by,
             updated_at=row.created_at,
+            can_share=can_share,
         )
         for row in actifs
     ]
@@ -239,7 +245,7 @@ async def _actif(session: Any, ctx: Any, name: str) -> WorkflowDef:
 
 @router.get("/projects/{id}/workflows/{name}", response_model=WorkflowDefDto, operation_id="getNamedWorkflow")
 async def get_named_workflow(name: str, ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
-    return _dto(await _actif(session, ctx, name), ctx.project)
+    return workflow_dto(await _actif(session, ctx, name), ctx.project)
 
 
 @router.put("/projects/{id}/workflows/{name}", response_model=WorkflowDefDto, operation_id="putNamedWorkflow")
@@ -257,7 +263,7 @@ async def put_named_workflow(name: str, ctx: ProjectCtx, body: WorkflowPut, sess
         nom_attendu=name,
         creation_seule=body.create_only,
     )
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 def _cibles_du_routage(project: Project) -> set[str]:
@@ -303,7 +309,7 @@ async def list_versions(name: str, ctx: ProjectCtx, session: Db) -> list[Workflo
             .order_by(WorkflowDef.version.desc())
         )
     ).scalars()
-    return [_dto(row, ctx.project) for row in rows]
+    return [workflow_dto(row, ctx.project) for row in rows]
 
 
 @router.get(
@@ -419,7 +425,7 @@ async def restore_version(name: str, version: int, ctx: ProjectCtx, session: Db)
     row = await publier_workflow(
         session, ctx.principal, ctx.project, ancienne.yaml, source=ancienne.source, nom_attendu=name
     )
-    return _dto(row, ctx.project)
+    return workflow_dto(row, ctx.project)
 
 
 @router.get(

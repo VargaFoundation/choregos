@@ -618,6 +618,39 @@ The longest matching prefix wins; each area is one baseline file.
 5. `git checkout -- tools/english_baseline` before committing; the pull request body gives the
    totals before and after.
 
+### Compatibility aliases
+
+A renamed name that only gets imported keeps a typed alias in the module that defines it,
+`Old = New  # lang: fr-ok alias:internal` (ADR 0098 §3 (b)). A plain alias does not forward a patch:
+`monkeypatch.setattr(module, "Old", fake)` rebinds `Old` and leaves `New`, which the module's own
+code reads. A module whose former names tests patch keeps the typed alias and calls
+`choregos_core.compat.alias_names` once, at its end:
+
+```python
+from choregos_core.compat import alias_names
+
+LIMITER = Limiter(CALLS_PER_MINUTE)
+
+LIMITEUR = LIMITER  # lang: fr-ok alias:internal
+alias_names(__name__, {"LIMITEUR": "LIMITER"})  # lang: fr-ok alias:internal
+```
+
+The module's class becomes a `ModuleType` subclass with one property per former name, which
+reads, writes and deletes the English name: `module.LIMITEUR`, `from module import LIMITEUR`,
+`monkeypatch.setattr(module, "LIMITEUR", fake)` and its undo all reach `LIMITER`, and a patch of
+`LIMITER` is seen through `LIMITEUR`. A second call on the same module extends the same class, so
+several stories can add their pairs. A former name that another repository or an operator uses
+(`alias:external`, ADR 0098 §3 (f)) passes `removed_in=EXTERNAL_ALIAS_REMOVAL` (`0.22.0`) and
+warns with a `DeprecationWarning` each time it is read; the test suite ignores those warnings.
+A renamed module leaves a shim at its former path that ends with
+`replace_module(__name__, sys.modules["package.new_module"])`, so `import package.former` and
+`from package import former` give the new module.
+
+Never a module `__getattr__`: strict mypy types what it returns as `Any`, and the former name
+loses its type. Never `alias_names` or `replace_module` in a module under
+`apps/orchestrator/src/choregos_orchestrator/workflows/`: the Temporal sandbox re-imports those
+modules, and they keep plain typed aliases.
+
 ## Layering: what may import what
 
 The API is a dependency that only shrinks ([ADR 0099](adr/0099-the-api-is-a-dependency-that-only-shrinks.md)).

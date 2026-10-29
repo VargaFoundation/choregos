@@ -198,6 +198,130 @@
         "transition": "t-implement",
         "name": "scope_respected"
       }
+    },
+    {
+      "geste": "addActor",
+      "args": [
+        "reviewer",
+        {
+          "type": "human",
+          "group": "reviewers",
+          "sla_hours": 8
+        }
+      ],
+      "operation": {
+        "op": "add_actor",
+        "name": "reviewer",
+        "spec": {
+          "type": "human",
+          "group": "reviewers",
+          "sla_hours": 8
+        }
+      }
+    },
+    {
+      "geste": "removeActor",
+      "args": [
+        "owner"
+      ],
+      "operation": {
+        "op": "remove_actor",
+        "name": "owner"
+      }
+    },
+    {
+      "geste": "transitionField",
+      "args": [
+        "t-implement",
+        "task",
+        {
+          "title": "Hand over the badge",
+          "form": {
+            "type": "object",
+            "properties": {
+              "badge": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "task",
+        "value": {
+          "title": "Hand over the badge",
+          "form": {
+            "type": "object",
+            "properties": {
+              "badge": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "style": "block"
+      }
+    },
+    {
+      "geste": "transitionField",
+      "args": [
+        "t-refine",
+        "outputs",
+        [
+          "spec_markdown"
+        ]
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-refine",
+        "field": "outputs",
+        "value": [
+          "spec_markdown"
+        ],
+        "style": "flow"
+      }
+    },
+    {
+      "geste": "transitionField",
+      "args": [
+        "t-implement",
+        "timeout_hours",
+        null
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "timeout_hours",
+        "unset": true
+      }
+    },
+    {
+      "geste": "workflowField",
+      "args": [
+        "description",
+        "Requests of the HR desk."
+      ],
+      "operation": {
+        "op": "set_workflow",
+        "field": "description",
+        "value": "Requests of the HR desk.",
+        "style": "flow"
+      }
+    },
+    {
+      "geste": "workflowField",
+      "args": [
+        "initial",
+        "inbox"
+      ],
+      "operation": {
+        "op": "set_workflow",
+        "field": "initial",
+        "value": "inbox",
+        "style": "flow"
+      }
     }
   ]
 }

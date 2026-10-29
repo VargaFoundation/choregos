@@ -27,7 +27,25 @@ export const operations = {
       : { op: "set_transition", id: transition, field: "timeout_hours", value: heures },
   ajouterUneGarantie: (transition: string, garantie: string): WorkflowOperation => ({ op: "add_gate", transition, gate: garantie }),
   retirerUneGarantie: (transition: string, garantie: string): WorkflowOperation => ({ op: "remove_gate", transition, name: garantie }),
+  // ADR 0112: actors, every transition field, the workflow's own fields.
+  addActor: (name: string, spec: Record<string, unknown>): WorkflowOperation => ({ op: "add_actor", name, spec }),
+  removeActor: (name: string): WorkflowOperation => ({ op: "remove_actor", name }),
+  /** A transition field; a nested value (a task, an action, a fan-out) is written as indented lines. */
+  transitionField: (id: string, field: string, value: unknown): WorkflowOperation =>
+    value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)
+      ? { op: "set_transition", id, field, unset: true }
+      : { op: "set_transition", id, field, value, style: nested(value) ? "block" : "flow" },
+  workflowField: (field: "description" | "inputs" | "catalogue" | "initial", value: unknown): WorkflowOperation =>
+    value === null || value === undefined || value === ""
+      ? { op: "set_workflow", field, unset: true }
+      : { op: "set_workflow", field, value, style: nested(value) ? "block" : "flow" },
 };
+
+/** An object, or a list holding one: written as indented lines; a list of names stays on one line. */
+function nested(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some((v) => v !== null && typeof v === "object");
+  return value !== null && typeof value === "object";
+}
 
 /** Des suggestions, pas une liste fermée : l'API valide, et dit une garantie inconnue. */
 export const GARANTIES_COURANTES = [

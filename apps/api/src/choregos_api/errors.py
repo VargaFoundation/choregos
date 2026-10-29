@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -13,6 +14,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 PROBLEM_JSON = "application/problem+json"
+#: A client `X-Request-Id` is used only when it is a short token; anything else is replaced.
+REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")
 
 
 def former_code(code: str) -> dict[str, str]:
@@ -95,9 +98,12 @@ def upstream(service: str, detail: str, retry_after: int | None = None) -> ApiEr
 
 
 def correlation_id(request: Request) -> str:
-    """The id that ties an answer to its log lines: the one the logging middleware set, or the caller's."""
-    known = getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
-    return str(known or uuid.uuid4().hex[:16])
+    """The id that ties an answer to its log lines: the one the logging middleware set, or a short token."""
+    known = getattr(request.state, "request_id", None)
+    if known:
+        return str(known)
+    supplied = request.headers.get("x-request-id", "")
+    return supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid.uuid4().hex[:16]
 
 
 def internal_error(request: Request, correlation: str) -> JSONResponse:

@@ -20,6 +20,7 @@ from temporalio import activity
 from temporalio.exceptions import ActivityError, ApplicationError
 
 from ..train_client import signal_release_train
+from ..wire_names import read_key, require_key
 from .base import db, load_work_item, project_bundle
 from .bilan import close_run_spend
 from .execution import abandon_queued_runs
@@ -202,12 +203,14 @@ async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
-        cle = str(payload["cle"])
+        # The key and the refusal are read under both spellings (S45-03), in the payload and in the
+        # events already persisted; the event still persists `cle`.
+        cle = str(require_key(payload, "key"))
         types = (str(EventType.WORKITEM_MIGRATED), str(EventType.WORKITEM_MIGRATION_REFUSED))
         consignes = (
             await session.execute(select(Event).where(Event.work_item_id == item.id, Event.type.in_(types)))
         ).scalars()
-        if any((e.payload or {}).get("cle") == cle for e in consignes):
+        if any(read_key(e.payload or {}, "key") == cle for e in consignes):
             return {"recorded": False}
         commun = {
             "project_id": bundle.project.id,
@@ -217,10 +220,9 @@ async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
             "cle": cle,
             "from_state": payload.get("from_state"),
         }
-        if payload.get("refus"):
-            await persist_event(
-                session, EventType.WORKITEM_MIGRATION_REFUSED, **commun, reason=str(payload["refus"])
-            )
+        refusal = read_key(payload, "refusal")
+        if refusal:
+            await persist_event(session, EventType.WORKITEM_MIGRATION_REFUSED, **commun, reason=str(refusal))
             return {"recorded": True, "pinned": False}
         cible = await session.get(WorkflowDef, str(payload.get("workflow_def_id") or ""))
         if cible is not None and cible.project_id == bundle.project.id:

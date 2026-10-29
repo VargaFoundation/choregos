@@ -47,6 +47,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
   const client = useQueryClient();
   const workflows = useQuery({ queryKey: ["workflows", slug], queryFn: () => api.workflows(slug) });
   const routing = useQuery({ queryKey: ["workflow-routing", slug], queryFn: () => api.workflowRouting(slug) });
+  const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
 
   async function relire() {
     await client.invalidateQueries({ queryKey: ["workflow-routing", slug] });
@@ -62,9 +63,14 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
           Each workflow is a process of its own. A request is born in one — the one it names, else the first routing
           rule it matches, else the default — and stays pinned to that version until it ends.
         </p>
-        <Link href={`/p/${slug}/workflows/new`} className={buttonClasses("secondary", "sm")}>
-          New workflow
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/p/${slug}/workflows/catalogue`} className={buttonClasses("secondary", "sm")}>
+            Browse the catalogue
+          </Link>
+          <Link href={`/p/${slug}/workflows/new`} className={buttonClasses("secondary", "sm")}>
+            New workflow
+          </Link>
+        </div>
       </div>
 
       {workflows.data?.length === 0 && <Empty title="No workflow">Publish one from a template.</Empty>}
@@ -73,6 +79,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
           <li key={workflow.name}>
             <CarteDeWorkflow
               slug={slug}
+              org={project.data?.org ?? ""}
               workflow={workflow}
               routing={routing.data}
               routed={rules.filter((rule) => rule.workflow === workflow.name)}
@@ -103,12 +110,14 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
 
 function CarteDeWorkflow({
   slug,
+  org,
   workflow,
   routing,
   routed,
   onChange,
 }: {
   slug: string;
+  org: string;
   workflow: WorkflowSummary;
   routing: WorkflowRouting | undefined;
   routed: Regle[];
@@ -183,6 +192,21 @@ function CarteDeWorkflow({
               Deactivate
             </GesteConfirme>
           )}
+        </div>
+      )}
+      {workflow.can_share && org && (
+        // Shown only when the server says so (ADR 0074); sharing copies this version (ADR 0111 §4).
+        <div className="mt-3 border-t border-line pt-3">
+          <GesteConfirme
+            question={`Share ${nom} v${workflow.version} to the organisation's catalogue? Every project of ${org} can then adopt a copy; later changes here reach the catalogue only when shared again.`}
+            confirmer={`Share ${nom}`}
+            action={async () => {
+              await api.shareWorkflow(org, { project: slug, name: nom });
+              await onChange();
+            }}
+          >
+            Share to the catalogue
+          </GesteConfirme>
         </div>
       )}
     </Card>

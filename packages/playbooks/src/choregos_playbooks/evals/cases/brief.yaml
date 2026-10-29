@@ -1,0 +1,19 @@
+role: brief
+description: >-
+  The brief playbook asks for a brief a person approves — the need, the deliverable, how it is accepted —
+  with no deliverable and no repository, and a stop when a decision is the requester's.
+must_contain:
+  - "Expected deliverable"
+  - "Acceptance criteria"
+  - "Out of scope"
+  - "you need no repository"
+  - "ask_human"
+  - "spec_markdown"
+must_not_contain:
+  - "allowed_paths"
+rubric:
+  - criterion: "asks for checkable acceptance criteria"
+    weight: 2
+  - criterion: "keeps the brief apart from the deliverable"
+    weight: 1
+min_score: 0.8

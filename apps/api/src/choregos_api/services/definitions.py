@@ -158,6 +158,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     nom_attendu: str | None = None,
     devient_le_defaut: bool = False,
     creation_seule: bool = False,
+    origin: str | None = None,
 ) -> WorkflowDef:
     """Le SEUL chemin d'écriture d'un workflow (ADR 0031) : l'alias, le PUT par nom, la restauration.
 
@@ -210,6 +211,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         name=nom,
         version=version,
         source=source,
+        origin=origin,
         yaml=source_yaml,
         json_doc=workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
         checksum=checksum(workflow),
@@ -275,7 +277,11 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
     policy = await active_policy(session, project.id)
     livree = None
     if workflow is None or policy is None:
-        livree = livraison(*await manifeste_du_gabarit(session, project.template_ref, project.org_id))
+        repo = (project.config or {}).get("repo") or {}
+        livree = livraison(
+            *await manifeste_du_gabarit(session, project.template_ref, project.org_id),
+            has_repository=bool(repo.get("url")),
+        )
     if workflow is None:
         assert livree is not None
         workflow = await _publier_ce_que_livre_le_gabarit(session, project, livree)

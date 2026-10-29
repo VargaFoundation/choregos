@@ -15,7 +15,8 @@ Several layers import code that sits above them or beside them. Measured with `a
 - `packages/*/src` has 22, all in five files under `choregos_ontology/service/`;
 - one service imports a router (`services/readiness.py`);
 - 7 `ImportFrom` statements import a private name from another router;
-- 12 routers each carry their own module-level organisation lookup (`_organisation`, `_org`).
+- 13 routers each carry their own module-level organisation lookup (`_organisation`, `_org`): 12 when
+  this record was written, plus `routers/workflow_catalogue.py` (S49), which landed before the ratchet.
 
 Stories that remove these couplings run in parallel tracks. A guard that asserts equality would
 turn another track's CI red on every removal, and a guard that baselines module names would break

@@ -60,7 +60,8 @@ devices and access alike. The product owner chose to widen the scope further.
    and every tool call has a budget and a line in the cost ledger. Everything runs inside the
    customer's perimeter, whatever the agent.
 4. **Still plugged into, not built**: the identity provider, the sandbox runtime (ADR 0016),
-   observability (ADR 0018). There is **no general-purpose MCP gateway**: the platform brokers tools
+   observability (ADR 0018). There is **no general-purpose MCP gateway**; Choregos consumes an
+   organisation's gateway through public interfaces only ([ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)): the platform brokers tools
    for the runs it governs and for the clients it authenticates, nothing else.
 5. **Invariants**:
    - no secret enters an agent's pod;
@@ -107,6 +108,7 @@ devices and access alike. The product owner chose to widen the scope further.
 - **Governed change of any system of record** — the recommendation of the 2026-10-05 analysis. It
   covers the HR case as changes to accounts, devices and access, but keeps agents and MCP in the
   background; declined for that reason.
-- **Building an identity provider or a general MCP gateway** — still discarded, for the reasons
+- **Building an identity provider or a general MCP gateway** — still discarded (being one stays
+  discarded; consuming one: [ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)), for the reasons
   ADR 0028 gave: that fight is about capital, and it is already absorbed by identity, network and
   data vendors.

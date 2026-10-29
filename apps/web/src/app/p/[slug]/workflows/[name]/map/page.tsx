@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { CarteEnSerpentin } from "@/components/parcours/carte-du-parcours";
@@ -21,6 +22,9 @@ import { FormulaireDEtape, PanneauDEtat, PanneauDeTransition } from "@/component
 import { ArtifactFlowCard, type Highlight } from "@/components/workflows/artifact-flow";
 import { StepDetails } from "@/components/workflows/step-details";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
+import { ActorsPanel } from "@/components/workflows/actors-panel";
+import { WorkflowSettingsPanel } from "@/components/workflows/workflow-settings";
+import { api } from "@/lib/api";
 import { useAgentResolution } from "@/components/workflows/use-agent-resolution";
 import { BuiltinAgentOfActor, type AgentActorFields } from "@/components/agents/builtin-agent";
 
@@ -46,14 +50,18 @@ export default function MapPage() {
   const vue = params.get("vue") === "list" ? "list" : "diagram";
   const [choix, setChoix] = useState<{ kind: "node" | "edge"; id: string } | null>(null);
   const [flux, setFlux] = useState<Highlight | null>(null);
+  const [drawn, setDrawn] = useState<{ from: string; to: string } | null>(null);
   const { slug, name } = useParams<{ slug: string; name: string }>();
   const resolutions = useAgentResolution(slug, brouillon.process);
   const activity = useWorkflowActivity(slug, name);
+  const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
+  const workflows = useQuery({ queryKey: ["workflows", slug], queryFn: () => api.workflows(slug) });
   if (brouillon.definition.error) return <ErrorNote>{String(brouillon.definition.error)}</ErrorNote>;
   const graph = brouillon.graph;
   if (!graph) return <Empty>The map appears once the workflow is read…</Empty>;
   const noeuds = graph.nodes as NoeudDuGraphe[];
-  const definition = (brouillon.definition.data?.json ?? {}) as Definition;
+  // The draft's actors, not the published version's: an actor added on the map can carry a step at once.
+  const definition = (brouillon.document ?? brouillon.definition.data?.json ?? {}) as Definition;
   const acteurs = Object.keys(definition.actors ?? {});
   const noeud = choix?.kind === "node" ? noeuds.find((n) => n.id === choix.id) : undefined;
   const arete = choix?.kind === "edge" ? areteDeLaCarte(graph, choix.id) : undefined;
@@ -107,6 +115,10 @@ export default function MapPage() {
               initial={definition.initial}
               acteurs={definition.actors}
               onSelect={(kind, id) => setChoix({ kind, id })}
+              onDraw={(from, to) => {
+                setChoix(null);
+                setDrawn({ from, to });
+              }}
             />
           )}
         </div>
@@ -114,6 +126,21 @@ export default function MapPage() {
       {vue === "diagram" && <ArtifactFlowCard artifacts={graph.artifacts} steps={etapes} onHighlight={setFlux} />}
       </div>
       <div className="space-y-4 self-start lg:sticky lg:top-16" data-testid="panneaux-de-la-carte">
+        {drawn && (
+          <Card title={`New transition from ${drawn.from} to ${drawn.to}`}>
+            <FormulaireDEtape
+              key={`${drawn.from}-${drawn.to}`}
+              depart={drawn.from}
+              initialTarget={drawn.to}
+              etats={noeuds}
+              acteurs={acteurs}
+              onDone={() => setDrawn(null)}
+            />
+            <button type="button" className="mt-2 text-xs underline" onClick={() => setDrawn(null)}>
+              Cancel
+            </button>
+          </Card>
+        )}
         {noeud && <PanneauDEtat key={`n-${noeud.id}`} noeud={noeud} etats={noeuds} acteurs={acteurs} />}
         {arete && etapeChoisie && (
           <Card title="This step">
@@ -151,9 +178,11 @@ export default function MapPage() {
             definitions={definition.actors}
             gates={etapeChoisie?.gates}
             timing={timing}
+            states={noeuds.map((n) => n.id)}
+            workflows={(workflows.data ?? []).map((w) => w.name)}
           />
         )}
-        {!noeud && !arete && (
+        {!noeud && !arete && !drawn && (
           <>
             <Empty title="Edit the workflow">
               Choose a step on the diagram, or a state in the list view (click, or Tab then Enter).
@@ -163,6 +192,8 @@ export default function MapPage() {
             <Card title="Add a step">
               <FormulaireDEtape etats={noeuds} acteurs={acteurs} />
             </Card>
+            <ActorsPanel org={project.data?.org ?? ""} />
+            <WorkflowSettingsPanel />
           </>
         )}
       </div>

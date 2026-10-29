@@ -623,6 +623,40 @@ curl         $API/projects/acme:hr/workflows                                    
   `workitem.migrated`; if its state changed in between, the migration is refused
   (`workitem.migration_refused`) and the item carries on, on its own version.
 
+### The workflow catalogue
+
+A project can adopt a workflow instead of writing one ([ADR 0111](adr/0111-a-workflow-catalogue.md)).
+The catalogue lists, for an organisation, the platform's workflows (`core`, including
+`default-request`, which needs no repository — [ADR 0110](adr/0110-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md)),
+every workflow of the deployment's templates (`template:<name>`), those of the templates its installed
+plugins brought (`plugin:<name>`, the external catalogues) and the ones it shared from its projects
+(`org`).
+
+```bash
+curl $API/orgs/acme/workflow-catalogue                    # any member
+curl -X POST $API/projects/acme:hr/workflow-adoptions \
+  -d '{"source": "template:joiners-leavers", "name": "onboarding", "as": "joiners", "make_default": true}'
+curl -X POST $API/orgs/acme/workflow-catalogue \
+  -d '{"project": "hr", "name": "joiners"}'               # org_admin: shares the active version
+```
+
+- Each entry says what it **requires** (computed by the engine, never declared), whether it
+  **needs a repository**, the human groups it declares, and where each agent it names resolves:
+  `org` (the organisation's own), `plugin` (installed by a plugin), `remote` (A2A), `catalogue`
+  (the platform's catalogue: installed on adoption) or `unresolved`.
+- **Adopting** publishes the entry as a workflow of the project with `source: catalogue` and its
+  `origin` (`template:joiners-leavers/onboarding@1`); `as` renames it, every other byte of the YAML
+  kept. A name taken by another workflow is a `409`; adopting the same entry again publishes the next
+  version. An agent that resolves nowhere is a `422` naming it: adopting **never installs a plugin**,
+  an organisation administrator installs it first.
+- **Sharing** copies one version: later edits in the project do not reach the catalogue until it is
+  shared again, and each share of a name is the entry's next version.
+- An adopted workflow whose entry has a newer version (or is gone) turns the readiness item
+  **Adopted workflows up to date** to *check*; nothing is applied on its own.
+- In the console: **Browse the catalogue** on the project's workflows page (a project without a
+  repository opens on the workflows that need none, and each card previews what the project would
+  still need), and a **Workflow** choice in the project wizard when no template is chosen.
+
 ### Bringing a project to a newer template version
 
 A project receives its template's workflows once, when it is born; a newer template version does
@@ -660,6 +694,13 @@ curl -X POST $API/workflows/edit -d '{"yaml": "...", "operations": [
 | `add_transition`, `remove_transition`, `set_transition` | transitions, by `id` |
 | `add_gate`, `remove_gate` | a transition's guarantees |
 | `add_actor`, `remove_actor`, `set_actor` | actors |
+| `set_workflow` | `metadata.description`, `metadata.inputs` (the work item's fields), `metadata.catalogue`, `initial` |
+
+`style: "block"` on a `set_*` writes a nested value (a human `task`, an `action`, a `spawn`, the
+fields) as indented lines, so the diff reads one field per line; a value already written in block style
+is replaced whole, and the inverse puts its exact lines back
+([ADR 0112](adr/0112-the-map-edits-a-whole-workflow.md)). The last state, actor or transition of a
+workflow cannot be removed: add another first.
 
 The answer carries the edited `yaml`, its unified `diff`, the validation and the graph, and the
 `inverse` operations, which give back the original bytes. Nothing is saved: the console saves
@@ -679,6 +720,24 @@ read: if someone published meanwhile, the console says so (`409`) instead of ove
 **add a step**, at the end of the process view and beside the map, adds a transition from any
 state to an existing or a new one without choosing a state first. The draft survives a detour
 through another page of the console (it is kept for the browser tab), and **discard** asks first.
+
+Since [ADR 0112](adr/0112-the-map-edits-a-whole-workflow.md), nothing needs the YAML tab:
+
+- **Actors**, beside the map: add an agent picked from the organisation's agents and the platform's
+  catalogue (one not installed yet is installed when the workflow is published), people of a group with
+  their delay, a job (a command, no model) or the platform; remove one no transition uses.
+- **A transition's other fields**, in its panel: what it reads and writes, where a failure or a
+  person's refusal goes, what the platform does (open or merge a pull request), a release train, a
+  **task a person does** (title, instructions, the fields they fill — declared as the work item's fields in
+  the same gesture — and what they attest), a governed action (its effects as JSON), a fan-out into
+  child work items.
+- **Workflow**, beside the map: its description, the state a request starts in, and the fields a
+  request carries, as rows (a field this editor cannot describe is kept as written).
+- **Drawing a transition**: in the list view, drag a state onto another; the add-transition form opens
+  with both ends filled, and nothing is written until it is confirmed. The "add a step" form does the same
+  from the keyboard.
+- **A workflow born on the map**: **new workflow** offers `blank` (one person, to do → done) beside the
+  platform's workflows, and opens the map; adopting from the catalogue opens it too.
 
 ### What each step shows
 

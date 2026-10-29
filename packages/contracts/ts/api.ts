@@ -831,7 +831,9 @@ export type WorkflowDef = {
   id?: string;
   name: string;
   version: number;
-  source: "repo" | "platform" | "template";
+  source: "repo" | "platform" | "template" | "catalogue";
+  /** For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0111). */
+  origin?: string | null;
   yaml: string;
   json?: S.Workflow;
   checksum: string;
@@ -839,6 +841,68 @@ export type WorkflowDef = {
   is_default?: boolean;
   created_by?: string | null;
   created_at?: string | null;
+};
+
+/** A workflow the organisation can adopt (ADR 0111). */
+export type WorkflowCatalogueEntry = {
+  /** `core`, `template:<name>`, `plugin:<name>` (an installed plugin, the external catalogues) or `org` */
+  source: string;
+  name: string;
+  /** `metadata.version`; for an `org` entry, the number of the share */
+  version: number;
+  /** `metadata.catalogue.title`, else the name */
+  title: string;
+  /** `metadata.catalogue.summary`, else `metadata.description` */
+  summary: string;
+  tags: Array<string>;
+  requires: Array<WorkflowCatalogueRequirement>;
+  /** it requires an `scm`: a project without a repository cannot run it */
+  needs_repository: boolean;
+  /** the human groups its actors name (ADR 0044) */
+  groups: Array<string>;
+  agents: Array<WorkflowCatalogueAgent>;
+  yaml: string;
+  /** for an `org` entry */
+  shared_by?: string | null;
+  /** for an `org` entry: `<project>/<workflow>@<version>` */
+  shared_from?: string | null;
+  shared_at?: string | null;
+};
+
+export type WorkflowCatalogueRequirement = {
+  capability: string;
+  reasons: Array<string>;
+};
+
+/** An agent the workflow names, and where it resolves in this organisation (ADR 0111 §2). */
+export type WorkflowCatalogueAgent = {
+  actor: string;
+  slug: string;
+  /** the `@N` the workflow pins, if any */
+  version?: number | null;
+  /** `org`: the organisation's own agent; `plugin`: installed by a plugin; `remote`: an A2A agent; `catalogue`: absent but in the platform's catalogue, installed on adoption; `unresolved`: nowhere, adoption is refused */
+  resolution: "org" | "plugin" | "remote" | "catalogue" | "unresolved";
+  /** for `plugin`, the plugin that installed it; for `unresolved`, a plugin of a configured source that ships it (`<name> <version> (<source>)`), when one does */
+  plugin?: string | null;
+  display_name?: string | null;
+};
+
+export type WorkflowAdopt = {
+  source: string;
+  name: string;
+  /** the version read; another current version → 409 */
+  version?: number | null;
+  /** the name in the project; `metadata.name` is rewritten */
+  as?: string | null;
+  make_default?: boolean;
+};
+
+export type WorkflowShare = {
+  /** the project's slug or id */
+  project: string;
+  name: string;
+  /** default: the active version */
+  version?: number | null;
 };
 
 export type WorkflowPut = {
@@ -860,6 +924,8 @@ export type WorkflowSummary = {
   open_items: number;
   created_by?: string | null;
   updated_at?: string | null;
+  /** the caller may share it to the organisation's catalogue (ADR 0111 §4, ADR 0074: the server decides) */
+  can_share?: boolean;
 };
 
 export type WorkflowRouting = {
@@ -887,6 +953,8 @@ export type WorkflowValidation = {
   warnings: Array<WorkflowIssue>;
   graph?: WorkflowGraph;
   process?: Array<ProcessStep>;
+  /** the workflow as the engine read it (ADR 0112) */
+  document?: S.Workflow;
 };
 
 /** A transition in plain words — the process view (ADR 0031). */
@@ -940,9 +1008,11 @@ export type ProcessStep = {
   writes_branch?: boolean;
 };
 
-/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
+/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`, `metadata.catalogue` and `initial` (ADR 0112). `style: block` writes a collection value as indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones. */
 export type WorkflowOperation = {
-  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor";
+  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor" | "set_workflow";
+  style?: "flow" | "block";
+  swap?: boolean;
   [key: string]: unknown;
 };
 
@@ -4071,6 +4141,7 @@ export interface Operations {
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
   addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
+  adoptWorkflow: { method: "POST"; path: "/projects/{id}/workflow-adoptions"; body: WorkflowAdopt; response: WorkflowDef };
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -4400,6 +4471,7 @@ export interface Operations {
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
   listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: Array<WorkflowAgent> };
+  listWorkflowCatalogue: { method: "GET"; path: "/orgs/{org}/workflow-catalogue"; body: never; response: Array<WorkflowCatalogueEntry> };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
@@ -4486,6 +4558,7 @@ export interface Operations {
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
+  shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };

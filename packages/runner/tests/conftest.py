@@ -7,8 +7,10 @@ import os
 import socket
 import subprocess
 import sys
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 from choregos_contracts import (
@@ -236,16 +238,31 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def loopback_ports() -> tuple[int, int, int]:
-    """Three distinct loopback ports nobody listens on, for a runner's model, MCP and CONNECT
-    proxies. Asked one at a time, the kernel may hand the same just-closed port back twice, and the
-    loopback then fails with 'address in use' before the step starts: every socket stays open until
-    all three are drawn."""
-    sockets = [socket.socket() for _ in range(3)]
+def port_of(url: str) -> int:
+    """The port `url` names: `runner_settings.tools_url`'s is the tools server's."""
+    port = urlsplit(url).port
+    assert port is not None, f"no port in {url}"
+    return port
+
+
+def loopback_ports(*, avoid: Collection[int] = ()) -> tuple[int, int, int]:
+    """Three distinct loopback ports nobody listens on, none of them in `avoid`, for a runner's
+    model, MCP and CONNECT proxies. Asked one at a time, the kernel may hand a just-closed port back:
+    the same one twice, or one drawn earlier and released, such as the tools server's
+    (`runner_settings`), which the runner binds before its loopback. The loopback then fails with
+    'address in use' before the step starts. So every socket stays open, an avoided port's too,
+    until three acceptable ports are drawn: at most `len(avoid) + 3` sockets."""
+    sockets: list[socket.socket] = []
+    ports: list[int] = []
     try:
-        for s in sockets:
+        while len(ports) < 3:
+            s = socket.socket()
+            sockets.append(s)
             s.bind(("127.0.0.1", 0))
-        model, mcp, connect = (int(s.getsockname()[1]) for s in sockets)
+            port = int(s.getsockname()[1])
+            if port not in avoid:
+                ports.append(port)
+        model, mcp, connect = ports
         return model, mcp, connect
     finally:
         for s in sockets:

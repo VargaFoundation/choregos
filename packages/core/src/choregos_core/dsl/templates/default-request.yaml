@@ -1,0 +1,71 @@
+# The default workflow of a project without a repository (ADR 0110): a brief a person approves, then a
+# deliverable the same people accept. It needs no repository, no CI and no CD — a core test pins its
+# requirements to tracker, runtime and gateway, so a step that would need one turns the suite red.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: default-request
+  version: 1
+  description: Brief → human approval → deliverable → human acceptance. Needs no repository.
+actors:
+  writer: { type: agent, role: brief, model: "profile:standard" }
+  owner: { type: human, group: product-owners, sla_hours: 24 }
+  assistant: { type: agent, role: deliver, model: "profile:by_size" }
+states:
+  inbox: { display: To triage, kind: wait, tracker: { status: Todo, label: "choregos:inbox" } }
+  refining: { display: Refining, tracker: { status: Refining } }
+  awaiting_brief_approval: { display: Brief to approve, kind: wait, tracker: { status: Needs review } }
+  ready: { display: Ready, tracker: { status: Ready } }
+  awaiting_acceptance: { display: Deliverable to accept, kind: wait, tracker: { status: In review } }
+  done: { display: Done, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-brief
+    from: inbox
+    to: awaiting_brief_approval
+    by: writer
+    outputs: [spec_markdown, size, risk]
+    gates: [outputs_present]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-brief
+    from: awaiting_brief_approval
+    to: ready
+    by: owner
+    on_reject: refining
+    timeout_hours: 72
+  - id: t-brief-again
+    from: refining
+    to: awaiting_brief_approval
+    by: writer
+    inputs: [human_feedback]
+    outputs: [spec_markdown, size, risk]
+    gates: [outputs_present]
+    on_fail: { to: refining, max_attempts: 2, escalate_to: needs_human }
+  - id: t-deliver
+    from: ready
+    to: awaiting_acceptance
+    by: assistant
+    inputs: [spec_markdown, human_feedback]
+    outputs: [deliverable_markdown]
+    gates: [outputs_present]
+    on_fail: { to: ready, max_attempts: 2, escalate_to: needs_human }
+  - id: t-accept
+    from: awaiting_acceptance
+    to: done
+    by: owner
+    on_reject: ready
+    timeout_hours: 72
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: owner
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

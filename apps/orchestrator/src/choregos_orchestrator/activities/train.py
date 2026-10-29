@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from temporalio import activity
 
 from ..config import get_settings
+from ..wire_names import read_key
 from .base import db, project_bundle, send_courtesy
 
 logger = get_logger("choregos.train")
@@ -421,7 +422,7 @@ async def confirm_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
         prevenir = _destinataires(bundle.slug, await _tickets(session, bundle, list(payload["items"])))
     if all(etat == "Healthy" for etat in etats.values()):
         type_, ok = "cd.rollout.completed", True
-    elif any(etat == "Degraded" for etat in etats.values()) or payload.get("conclure"):
+    elif any(etat == "Degraded" for etat in etats.values()) or read_key(payload, "conclude"):
         type_, ok = "cd.rollout.aborted", False
     else:
         return {"ok": None, "etats": etats}

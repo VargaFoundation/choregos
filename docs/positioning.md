@@ -10,7 +10,8 @@ business process — software delivery, IT operations, joiners and leavers, a da
 by agents and people through workflows whose gates refuse, whose evidence the platform measures,
 and whose writes to third-party systems wait for a re-authenticated approval. It runs inside the
 customer's perimeter, whatever the agent. It is not a coding agent, not a sandbox runtime, not an
-identity provider and not a general-purpose MCP gateway.
+identity provider and not a general-purpose MCP gateway: it consumes the one an organisation runs,
+through MCP and standard authentication only ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)).
 
 ## What changed on 2026-10-05
 
@@ -81,6 +82,12 @@ result file. See [agents written in code](code-agents.md#why-no-choregos-framewo
 
 Reading: breadth is theirs. A federated catalogue (P3) would take entries *from* them, into
 a PR a human merges.
+
+A gateway is also something the table does not show: a hosting and credential layer. It runs the servers
+that speak stdio, holds their upstream credentials and OAuth grants, and applies the network rules of the
+servers' side. Choregos can sit behind the one an organisation already runs: its broker calls the gateway's
+servers with the same approvals, ledger and journal as for any other connector, and Choregos holds none of
+the credentials of the servers it serves. It never replaces a gateway and never becomes one ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)).
 
 ## Standards
 
