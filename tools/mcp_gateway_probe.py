@@ -42,6 +42,9 @@ async def probe(
     """Initialize against `server` behind the gateway and list its tools. Errors propagate."""
     if routing not in {"path", "header"}:
         raise ValueError(f"unknown routing `{routing}`: `path` or `header`")
+    if not token.isprintable():
+        # No value in the message: HTTP libraries echo an illegal header value, token included.
+        raise ValueError("the token holds a control character")
     url = endpoint.replace("{server}", server) if routing == "path" else endpoint
     headers = {server_header: server} if routing == "header" else {}
     parts = urlsplit(url)
@@ -58,6 +61,14 @@ async def probe(
     }
 
 
+def _scrub(text: str, token: str) -> str:
+    """`text` without the token, nor the escaped form of it that an error message may carry."""
+    for secret in (token, repr(token)[1:-1]):
+        if secret:
+            text = text.replace(secret, "[redacted]")
+    return text
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Probe an MCP gateway: initialize and tools/list.")
     parser.add_argument("endpoint", help="the gateway URL; `{server}` is replaced with --server")
@@ -67,20 +78,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--server-header", default="X-MCP-Server")
     parser.add_argument("--auth-header", default="Authorization")
     args = parser.parse_args(argv)
+    token = os.environ.get(args.token_env, "")
     try:
         result = asyncio.run(
             probe(
                 args.endpoint,
                 server=args.server,
-                token=os.environ.get(args.token_env, ""),
+                token=token,
                 routing=args.routing,
                 server_header=args.server_header,
                 auth_header=args.auth_header,
             )
         )
     except Exception as error:
-        # Only the type and the message of the error: the token is never part of either.
-        print(json.dumps({"error": type(error).__name__, "detail": str(error)}), file=sys.stderr)
+        # The type and the message of the error, with the token (and its repr form) scrubbed out.
+        report = {"error": type(error).__name__, "detail": _scrub(str(error), token)}
+        print(json.dumps(report), file=sys.stderr)
         return 1
     print(json.dumps(result))
     return 0
