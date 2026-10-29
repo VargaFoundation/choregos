@@ -93,7 +93,14 @@ describe("the step card (S39-13)", () => {
     const manquant = { name: "ghost", produced_by: [], read_by: ["t-test"], origin: "missing" } as ArtifactFlow;
     render(<StepDetails step={job} flow={[manquant]} stepsById={parId} />);
     expect(screen.getByText("python run.py")).toBeInTheDocument();
-    expect(screen.getByTestId("manque-ghost")).toHaveTextContent("nothing produces it");
+    expect(screen.getByTestId("manque-ghost")).toHaveTextContent("nothing produces it — the step reads it empty");
+  });
+
+  it("says that a step reading no allowed paths may change any file", () => {
+    const dev = { ...step("t-implement"), inputs: ["allowed_paths"] } as ProcessStep;
+    const manquant = { name: "allowed_paths", produced_by: [], read_by: ["t-implement"], origin: "missing" } as ArtifactFlow;
+    render(<StepDetails step={dev} flow={[manquant]} stepsById={parId} />);
+    expect(screen.getByTestId("manque-allowed_paths")).toHaveTextContent("may change any file of the repository (`**`)");
   });
 
   it("types an output and names who reads it", () => {

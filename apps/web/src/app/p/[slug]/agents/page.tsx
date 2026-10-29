@@ -12,11 +12,28 @@ import {
   type AgentImplicite,
 } from "@/components/agents/registre";
 import { ScopeBadge } from "@/components/agents/governance";
-import { Badge, Button, Card, Empty, ErrorNote, Input, Select, buttonClasses } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Disclosure,
+  Empty,
+  ErrorNote,
+  Input,
+  Select,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  Table,
+  buttonClasses,
+} from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import type { Agent, ProjectAgent } from "@/lib/types";
+import type { Agent, ProjectAgent, WorkflowAgent } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
+import { BuiltinAgentOfActor } from "@/components/agents/builtin-agent";
 
 /**
  * Les agents d'un projet : ceux qu'il épingle — une version du registre, que ses surcharges ne
@@ -27,6 +44,7 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
   const { org } = useSession();
   const epingles = useQuery({ queryKey: ["project-agents", slug], queryFn: () => api.projectAgents(slug) });
   const registre = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
+  const implicites = useQuery({ queryKey: ["implicit-agents", slug], queryFn: () => api.implicitAgents(slug) });
   // A project's own agents come first; a personal agent, or another project's, cannot be pinned here (ADR 0061).
   const own = (registre.data ?? []).filter((a) => a.scope === "project" && a.project === slug);
   const pinnable = (registre.data ?? []).filter(
@@ -34,6 +52,7 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
   );
   return (
     <div className="space-y-6">
+      <AgentsThisProjectRuns projet={slug} />
       <ProjectChannel projet={slug} />
       <Card title="Project agents">
         <div className="space-y-3">
@@ -43,6 +62,17 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
           {own.length === 0 ? (
             <p className="text-sm text-ink-muted" data-testid="project-owned-none">
               None yet. Fork a common agent into this project, or write one.
+              {(implicites.data ?? []).length > 0 && (
+                <>
+                  {" "}
+                  Its workflows still run {(implicites.data ?? []).length} built-in agent
+                  {(implicites.data ?? []).length > 1 ? "s" : ""}:{" "}
+                  <a href="#implicit-agents" className="underline">
+                    see Implicit agents
+                  </a>
+                  .
+                </>
+              )}
             </p>
           ) : (
             <ul className="space-y-2" data-testid="project-owned">
@@ -277,18 +307,25 @@ function Implicites({ projet, org, registre }: { projet: string; org: string; re
   const lecture = useQuery({ queryKey: ["implicit-agents", projet], queryFn: () => api.implicitAgents(projet) });
   const implicites = implicitFromApi(lecture.data ?? []);
   return (
-    <Card title="Implicit agents">
+    <Card title="Implicit agents" id="implicit-agents">
       <div className="space-y-3">
         <p className="text-sm text-ink-muted">
-          Workflow actors that run as agents without naming one: no editable instructions, no versions, no costs of
-          their own. Register one, then name it in the workflow (<code>agent: its-slug</code>).
+          Workflow actors that run as agents without naming one: each runs the platform&apos;s built-in playbook for its
+          role — open one to see its prompt, model and tools. No editable instructions, no versions, no costs of their
+          own. Register one, then name it in the workflow (<code>agent: its-slug</code>).
         </p>
         {implicites.length === 0 ? (
           <p className="text-sm text-ink-muted">None: every agent of this project&apos;s workflows is in the registry.</p>
         ) : (
           <ul className="space-y-2" data-testid="implicites">
             {implicites.map((implicite) => (
-              <Implicite key={`${implicite.workflow}/${implicite.acteur}`} org={org} implicite={implicite} pris={registre} />
+              <Implicite
+                key={`${implicite.workflow}/${implicite.acteur}`}
+                projet={projet}
+                org={org}
+                implicite={implicite}
+                pris={registre}
+              />
             ))}
           </ul>
         )}
@@ -297,7 +334,17 @@ function Implicites({ projet, org, registre }: { projet: string; org: string; re
   );
 }
 
-function Implicite({ org, implicite, pris }: { org: string; implicite: AgentImplicite; pris: Agent[] }) {
+function Implicite({
+  projet,
+  org,
+  implicite,
+  pris,
+}: {
+  projet: string;
+  org: string;
+  implicite: AgentImplicite;
+  pris: Agent[];
+}) {
   const client = useQueryClient();
   const [fait, setFait] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -348,6 +395,96 @@ function Implicite({ org, implicite, pris }: { org: string; implicite: AgentImpl
         )}
       </span>
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
+      <Disclosure title="What it runs" summary="prompt, model, tools" className="w-full">
+        <BuiltinAgentOfActor projectSlug={projet} actor={implicite} linkToAgents={false} />
+      </Disclosure>
     </li>
+  );
+}
+
+/**
+ * Every agent the project's workflows run, in one table (S47-39): the page had four cards — project,
+ * pinned, implicit agents, the channel — and none said which agent carries which step. Each row is an
+ * `agent` actor of an active workflow: the registry agent it names and the version a run loads, or the
+ * built-in agent of its role.
+ */
+function AgentsThisProjectRuns({ projet }: { projet: string }) {
+  const lu = useQuery({ queryKey: ["workflow-agents", projet], queryFn: () => api.workflowAgents(projet), retry: false });
+  const refs = [...new Set((lu.data ?? []).map((a) => a.agent).filter((r): r is string => Boolean(r)))].sort();
+  const resolu = useQuery({
+    queryKey: ["agent-resolution", projet, refs],
+    queryFn: () => api.resolveProjectAgents(projet, refs),
+    enabled: refs.length > 0,
+    retry: false,
+  });
+  const parRef = new Map((resolu.data ?? []).map((r) => [r.ref, r]));
+  if (lu.error || !lu.data) return null;
+  return (
+    <Card title="Agents this project runs">
+      {lu.data.length === 0 ? (
+        <p className="text-sm text-ink-muted">No active workflow of this project has an agent step.</p>
+      ) : (
+        <Table data-testid="agents-du-projet">
+          <THead>
+            <TR>
+              <TH>Actor</TH>
+              <TH>Workflow</TH>
+              <TH>What runs</TH>
+              <TH>Model</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {lu.data.map((a: WorkflowAgent) => {
+              const slug = a.agent?.split("@")[0];
+              const resolution = a.agent ? parRef.get(a.agent) : undefined;
+              return (
+                <TR key={`${a.workflow}/${a.actor}`}>
+                  <TD className="font-medium">{a.actor}</TD>
+                  <TD>
+                    <Link href={`/p/${projet}/workflows/${a.workflow}/map`} className="hover:underline">
+                      {a.workflow}
+                    </Link>
+                  </TD>
+                  <TD>
+                    {slug && a.registered ? (
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <Link href={`/agents/${slug}`} className="hover:underline">
+                          {resolution?.display_name ?? slug}
+                        </Link>
+                        {resolution?.status === "resolved" && (
+                          <Badge tone="neutral">
+                            v{resolution.version}
+                            {resolution.pinned ? " · pinned" : ""}
+                          </Badge>
+                        )}
+                        {resolution && resolution.status !== "resolved" && (
+                          <Badge tone="failed" variant="soft">
+                            {resolution.reason ?? resolution.status}
+                          </Badge>
+                        )}
+                      </span>
+                    ) : slug ? (
+                      <Badge tone="failed" variant="soft">
+                        names {slug}, which is not in the registry
+                      </Badge>
+                    ) : (
+                      <span className="text-ink-muted">
+                        built-in agent{a.role ? ` · ${a.role} playbook` : ""} —{" "}
+                        <a href="#implicit-agents" className="underline">
+                          see what it runs
+                        </a>
+                      </span>
+                    )}
+                  </TD>
+                  <TD>
+                    <code className="text-xs">{slug && a.registered ? "the agent's own" : (a.model ?? "profile:by_size")}</code>
+                  </TD>
+                </TR>
+              );
+            })}
+          </TBody>
+        </Table>
+      )}
+    </Card>
   );
 }

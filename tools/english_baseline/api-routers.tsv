@@ -2,7 +2,7 @@
 apps/api/src/choregos_api/routers/__init__.py	1
 apps/api/src/choregos_api/routers/actions.py	9
 apps/api/src/choregos_api/routers/admin.py	26
-apps/api/src/choregos_api/routers/agents.py	61
+apps/api/src/choregos_api/routers/agents.py	60
 apps/api/src/choregos_api/routers/auth.py	89
 apps/api/src/choregos_api/routers/connectors.py	12
 apps/api/src/choregos_api/routers/costs.py	21
