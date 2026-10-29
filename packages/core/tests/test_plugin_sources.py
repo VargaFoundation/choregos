@@ -124,6 +124,23 @@ def test_a_default_plugin_names_a_declared_source() -> None:
         parse_config({"defaultPlugins": [{"source": "nowhere", "name": "x", "version": "1"}]})
 
 
+def test_a_default_plugin_is_preapproved_only_when_the_operator_says_so() -> None:
+    """S43-09: `preapproved` is the operator's approval in the deployment's configuration, off by default."""
+    config = parse_config(
+        {
+            "defaultPlugins": [
+                {"source": "offline", "name": "a", "version": "1", "preapproved": True},
+                {"source": "offline", "name": "b", "version": "1"},
+            ]
+        }
+    )
+    assert [(d.name, d.preapproved) for d in config.default_plugins] == [("a", True), ("b", False)]
+    for wrong in ({"preapproved": "yes"}, {"approved": True}):
+        with pytest.raises(SourceError) as caught:
+            parse_config({"defaultPlugins": [{"source": "offline", "name": "a", "version": "1", **wrong}]})
+        assert _check(caught) == "config"
+
+
 # -- indexes and resolution ------------------------------------------------------------------------------
 
 
@@ -264,3 +281,15 @@ def test_a_link_in_a_git_tarball_refuses_the_plugin(tmp_path: Path) -> None:
     with pytest.raises(SourceError) as caught:
         extract_git_path(tarball, "hello", tmp_path)
     assert _check(caught) == "content"
+
+
+def test_an_index_says_which_agents_a_release_ships(offline: Path) -> None:
+    """ADR 0111 §2: a catalogue names the plugin of a missing agent without fetching it."""
+    index = parse_index(_index(**{"1.0.0": {**_oci(D1, ">=0.20.0"), "agents": ["greeter", "farewell"]}}))
+    assert index.releases["hello"]["1.0.0"].agents == ("greeter", "farewell")
+    assert parse_index(_index(**{"1.0.0": _oci(D1, ">=0.20.0")})).releases["hello"]["1.0.0"].agents == ()
+    with pytest.raises(SourceError):
+        parse_index(_index(**{"1.0.0": {**_oci(D1, ">=0.20.0"), "agents": ["Not A Slug"]}}))
+    assert offline_index(offline).releases["hello"]["1.0.0"].agents == ("greeter",), (
+        "read from the plugin itself"
+    )

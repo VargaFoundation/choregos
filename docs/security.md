@@ -38,10 +38,12 @@ organisations must assume **a member of one will try to read another**.
 | a plugin running code in the console | a plugin's screens are **data** — forms, tables, actions, secrets shown once — rendered by the console's own blocks; the CSP stays `script-src 'self'`; a section naming a path no route serves stops start-up | `greffons.py`, `routers/ui.py`, `main.py`, ADR 0032 |
 | an organisation left without an administrator | the last `org_admin` of an organisation cannot be removed (409) | `routers/admin.py` |
 | logging in without an identity | OIDC with discovery, PKCE and a signed single-use `state`; development login off by default and refused in staging/prod | `routers/auth.py`, `config.py` |
+| a page on another site acting with your console session | Origin guard on cookie-authenticated mutations: the `Origin` must be the console's or a listed CORS origin (compared lower-cased, without `:443`/`:80`), `null` is refused, an empty `Origin` counts as absent, only an `Authorization: Bearer` header exempts the request (any other scheme still falls back to the cookie), a cross-site or same-site fetch without `Origin` is refused; `SameSite=Lax` cookies; explicit CORS methods and headers, never `*` | `origin_guard.py`, `tests/test_request_edge.py` |
 | an outside agent driving a workflow, or deciding in a person's place | the A2A door (ADR 0078) serves only the workflows that opted in (`a2a:`), to a token with the `a2a` scope (a `*` token is refused, and an `a2a` token is refused by the REST API); the caller acts with its person's rights, a resent message is the same work item (id derived from organisation, client and `messageId`), a waiting decision is answered `input-required` with the console's `decision_url` and a reply to a task is refused; every call is audited (`a2a.call`), rate-limited per token, counted in the daily write budget shared with the MCP door, and a message is capped (20 parts, 100,000 characters; file parts within the project's `a2a.max_file_bytes`, 10 MiB by default, each and together, in a media type the skill lists, never fetched by `uri`, stored as input artefacts before the work item exists and audited as `workitem.input_file`; the body the door reads is bounded by the organisation's largest project limit) | `a2a/door.py`, `mcp/appelant.py`, `tests/test_a2a_inbound.py` |
 
 ## What is *not* a wall, and is said so
 
+- **The origin guard is a browser's wall only.** A request without `Origin` and `Sec-Fetch-Site` (a CLI) passes, and bearer tokens are not cookie-bound.
 - **The runner's guardrails are a net by default, a wall on request.** Claude Code's ACP
   does not send `kind`, so the nature of a request is *inferred* from the title and
   arguments, and the access card counts how many decisions were inferred. A request whose
@@ -178,6 +180,22 @@ administrator accepts it. Publishing a version that binds a global memory needs 
 caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
 Facts carry their organisation and sit under forced row-level security.
 
+## A customer's own identity provider
+
+When an edition lets each organisation sign in with its own provider
+([ADR 0108](adr/0108-each-organisation-signs-in-with-its-own-identity-provider.md)), that provider is run
+by the customer, not by the operator, so the core does not trust it as it trusts the instance's:
+
+- it signs in only addresses whose domain the edition's resolver gives to the same organisation; a
+  domain no tenant owns is signed in by the instance's provider only;
+- the roles it grants land on its own organisation, whatever its groups name;
+- its subjects are stored as `tenant:<org id>:<sub>`, never mixed with another provider's;
+- a discovery document that cannot be read fails the sign-in instead of being guessed, and an address it
+  marks unverified is refused.
+
+An edition proving another protocol (SAML) finishes its sign-in with `terminer_la_connexion(org=…)` to
+get the same confinement. The resolver must map a domain only to an organisation that proved it owns it.
+
 ## Decisions that need a fresh sign-in
 
 Some gestures are too consequential to be made from a browser left open: the session must have been
@@ -235,17 +253,49 @@ partitioned: `GET /internal/runs/{id}/ticket` still gives every step the spec an
 step still runs with the platform's identity; acting on behalf of the initiator (token exchange,
 ADR 0077 §3) is not implemented (#756).
 
+## Tracker writes: who they act as
+
+Two kinds of writes reach a tracker, under two different accounts ([ADR
+0107](adr/0107-an-agent-acts-under-an-identity.md) point 4):
+
+- **The bookkeeping** — the state, the status comment, the Cost, Size, Risk and Run fields, the
+  questions to a person, the close-out — is written by the platform, through the project's tracker
+  connector and the vendor's REST API, under that connector's account: the Jira connector's `email`,
+  the Choregos GitHub App, the owner of the GitLab token, a plugin's server. The tracker connector's
+  card says "Choregos writes as …"; each state change and question it wrote is recorded with `via:
+  {type, account}` and shown on the work item's timeline.
+- **An agent's own actions** go through the MCP tools its version names. The broker calls them with
+  each organisation connector's credential, which never reaches the agent's pod; a run lists them,
+  with the account each calls as (a `basic` username, else "the connector's key"), as `tool_connectors`.
+
+`account` is read from the connector's stored configuration and is never a secret: an email, a
+username, a plugin's server; `null` when the configuration names none. Not yet: acting as the person
+who started the work (on-behalf-of, ADR 0107 stories 2 and 3, #756); every write above is the
+connector's account.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
+- **Whose secret decides where it lives** (S39-06e). The platform's own secrets (session key, run-token
+  keys, gateway master key, database password, the KEK itself) come from the deployment's vault through
+  External Secrets. A connector's key belongs to the organisation that configures the connector (a
+  market-data key, a Jira token, an MCP server's token): it is **typed in the console and sealed**
+  (below), never put in the deployment's vault nor in the pods' environment, where every organisation's
+  connector could name it and only an operator could rotate it. `env:` stays for a key the operator
+  owns and manages, or a vault a plugin reads.
 - A connector's `env:NAME` reference is an allowlist, not a free read of the process environment: the
   API and the orchestrator also hold the platform's own secrets (session key, gateway master key,
   database password), so a name must match `CHOREGOS_SECRET_ENV_PATTERN` (default
   `^CONNECTOR_[A-Z0-9_]+$`) and `CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`,
   `TEMPORAL_*` are refused whatever the pattern. It is checked when the reference is written and
-  again when it is resolved. Only the organisation's administrator writes a reference; a project
-  owner cannot. Before this rule, a role allowed to write a connector could point a secret field at
-  a platform variable and have it sent to a host of its choosing.
+  again when it is resolved. Only a **platform** administrator writes a reference
+  ([ADR 0088](adr/0088-a-deployment-reference-is-the-operator-s.md)): the pods that resolve it serve
+  every organisation, so with two organisations one's administrator could otherwise name the
+  other's `CONNECTOR_*` key and send it to a host of its choosing (#983). An organisation types its
+  keys; a connector that holds a deployment reference is reconfigured by a platform administrator
+  only, or the key would follow a new URL. On a single-organisation
+  install its administrator is the platform administrator, so nothing changes there. Before S39-06b,
+  a role allowed to write a connector could point a secret field at a platform variable.
 - External Secrets Operator ↔ the provider's vault; one hand-made `ClusterSecretStore`.
 - Git token minted **per run**, repository scope, 1 h TTL, injected in memory.
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while

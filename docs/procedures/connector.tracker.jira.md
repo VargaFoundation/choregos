@@ -2,7 +2,7 @@
 
 # Use Jira Cloud as the board
 
-For a project owner. Procedure `connector.tracker.jira`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For a project owner. Procedure `connector.tracker.jira`, version 3, reviewed 2026-10-28 against the vendor's own pages.
 
 ## Before you start
 
@@ -33,11 +33,20 @@ A classic API token carries all of the account's rights. A scoped API token work
 `https://api.atlassian.com/ex/jira/<cloudId>` as the `base_url`; that variant is **not proven** here, so
 use a classic token unless you have tested it.
 
+**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
+Jira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,
+`Risk` and `Run` fields, the questions to a person, the close-out. The connector card says
+"Choregos writes as" that email, and each line of a work item's timeline that wrote to Jira says
+"via Jira as" it. An agent's own actions do not go through this connector: they go through the MCP
+tools its version names, under each tool connector's account, listed on its run.
+
 ## In Choregos
 
 1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.
 2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the
-   key.
+   key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the
+   project's slug; two projects holding the same key are told apart by the Jira site, and a key held
+   twice on the same site routes nothing.
 3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are
    `Cost (€)`, `Size`, `Risk` and `Run`.
 4. `api_token`: the token, in the password field (sealed, shown once).

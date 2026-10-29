@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+from . import pg_kit
+
 os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 
@@ -25,35 +27,24 @@ class Fixture:
 
 
 #: `CHOREGOS_TEST_ORCH_ON_POSTGRES=1` (with `CHOREGOS_TEST_DATABASE_URL`) runs the orchestrator
-#: suite's `setup` on a real PostgreSQL, schema recreated for each test (S27-11: the reservation lock
-#: is an advisory lock there, which SQLite cannot exercise).
+#: suite's `setup` on a real PostgreSQL (S27-11: the reservation lock is an advisory lock there, which
+#: SQLite cannot exercise). The schema is migrated by Alembic and the suite connects as a non-superuser
+#: role, so RLS applies (S47-27).
 ON_POSTGRES = os.environ.get("CHOREGOS_TEST_ORCH_ON_POSTGRES") == "1"
 PG_URL = os.environ.get("CHOREGOS_TEST_DATABASE_URL", "")
 
 
-async def _reset_postgres_schema() -> None:
-    import asyncpg
-
-    connection = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
-    try:
-        await connection.execute("DROP SCHEMA public CASCADE")
-        await connection.execute("CREATE SCHEMA public")
-    finally:
-        await connection.close()
-
-
 @pytest.fixture
-async def setup(tmp_path: Any) -> AsyncIterator[Fixture]:
+async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Fixture]:
     if ON_POSTGRES:
-        await _reset_postgres_schema()
-        os.environ["CHOREGOS_DATABASE_URL"] = PG_URL
+        await pg_kit.prepare(PG_URL)
+        os.environ["CHOREGOS_DATABASE_URL"] = pg_kit.app_url(PG_URL)
     else:
         os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/orch.db"
     from choregos_adapters import AdapterSet
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
     from choregos_api.db.models import Organization, Project, WorkItem
-    from choregos_api.db.session import create_all, session_scope
     from choregos_api.services import ensure_defaults
     from choregos_orchestrator.activities.base import set_adapters_override
     from choregos_orchestrator.config import reset_settings_cache as reset_orchestrator_cache
@@ -62,13 +53,29 @@ async def setup(tmp_path: Any) -> AsyncIterator[Fixture]:
     reset_settings_cache()
     reset_orchestrator_cache()
     await db_session.dispose_engine()
-    await create_all()
+    if ON_POSTGRES:
+        await pg_kit.migrate()
+        # In the TESTS, an unscoped `session_scope()` is a shortcut for "as the platform" (setting a
+        # scene). Product code never calls it unscoped, as `test_postgres_mode_runs_under_rls.py`
+        # proves: translating it here hides no product defect. An explicit scope is forwarded untouched.
+        original = db_session.session_scope
+
+        def as_platform(org_slug: str | None = None, *, orgs: Any = None) -> Any:
+            if org_slug is None and orgs is None:
+                return original(orgs="*")
+            return original(org_slug, orgs=orgs)
+
+        monkeypatch.setattr(db_session, "session_scope", as_platform)
+    else:
+        from choregos_api.db.session import create_all
+
+        await create_all()
     clear_fake_signals()
 
     adapters = AdapterSet.fakes()
     set_adapters_override(adapters)
 
-    async with session_scope() as session:
+    async with db_session.session_scope() as session:
         org = Organization(slug="varga", name="Varga Foundation")
         session.add(org)
         await session.flush()

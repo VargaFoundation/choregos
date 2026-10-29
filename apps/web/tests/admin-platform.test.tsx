@@ -111,4 +111,22 @@ describe("the Platform page", () => {
     }
     expect(screen.getByText(/Change it in the deployment/)).toBeInTheDocument();
   });
+
+  it("says which executor this deployment runs, lists it first, and what the others need (S44-04)", async () => {
+    vi.mocked(api.executors).mockResolvedValue(kinds.map((kind) => ({ kind, enabled: kind === "k8s_job" })));
+    show();
+    expect(await screen.findByTestId("executors-running")).toHaveTextContent("Agent stages run on k8s_job in this deployment.");
+    const rows = screen.getAllByTestId(/^executor-/).map((row) => row.getAttribute("data-testid"));
+    expect(rows[0]).toBe("executor-k8s_job");
+    expect(within(screen.getByTestId("executor-k8s_job")).getByText("In use")).toBeInTheDocument();
+    const sandbox = screen.getByTestId("executor-agent_sandbox");
+    expect(within(sandbox).getByText("Not turned on here")).toBeInTheDocument();
+    expect(sandbox).toHaveTextContent("Needs the kubernetes-sigs/agent-sandbox operator on the cluster.");
+  });
+
+  it("no longer carries the instance's sign-in: it is on the Identity page", async () => {
+    show();
+    await screen.findByTestId("executors-running");
+    expect(screen.queryByText("How people sign in to this instance")).toBeNull();
+  });
 });

@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { useWorkflow } from "@/components/workflows/use-workflow";
 import { ApiError, api } from "@/lib/api";
 import type { WorkflowEditResult, WorkflowOperation, WorkflowValidation } from "@/lib/types";
+import type { WorkflowDocument } from "@/components/workflows/document";
 
 /** Un geste à défaire : une opération typée (son inverse, rejoué par l'API) ou une session de frappe (le texte d'avant). */
 type Geste = { inverse: WorkflowOperation[] } | { texteAvant: string };
@@ -314,6 +315,8 @@ function useBrouillonInterne(slug: string, name: string) {
     repris: Boolean(etat && repris && etat.yaml === repris.yaml),
     graph: affiche?.graph ?? undefined,
     process: affiche?.process ?? undefined,
+    /** The draft as the engine read it (ADR 0112): its actors and transitions, before publishing. */
+    document: (affiche?.document ?? definition.data?.json ?? undefined) as WorkflowDocument | undefined,
     /** Vrai quand la carte montre le dernier texte valide, pas le texte courant. */
     grapheObsolete: Boolean(etat) && !lisible && Boolean(dernierValide),
     valide,

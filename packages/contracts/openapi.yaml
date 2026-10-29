@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.20.6
+  version: 0.21.0
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -80,10 +80,18 @@ paths:
       operationId: authLogin
       security: []
       summary: Redirect to the OIDC IdP
+      description: >-
+        `org` (a sign-in link per organisation) and `login_hint` (the address typed on the sign-in
+        page) pick the organisation's own identity provider when an extension declared one
+        (ADR 0108), else the instance's; `login_hint` is passed on to the provider.
       parameters:
         - { name: redirect_to, in: query, schema: { type: string } }
+        - { name: org, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: login_hint, in: query, schema: { type: string, maxLength: 320 } }
       responses:
-        "307": { description: Redirect to the IdP }
+        "307": { description: Redirect to the IdP, or to an extension's sign-in route }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502": { description: The organisation's identity provider publishes no readable discovery document }
   /auth/callback:
     get:
       tags: [session]
@@ -252,7 +260,7 @@ paths:
     parameters:
       - { $ref: "#/components/parameters/Id" }
       - { $ref: "#/components/parameters/ConnectorKind" }
-      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+      - { name: field, in: path, required: true, description: "a secret field of the type, or a slot of a field the type pools (`api_key.2` … `api_key.10`, ADR 0089)", schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}(\\.([2-9]|10))?$" } }
     put:
       tags: [connectors]
       operationId: setConnectorSecret
@@ -395,7 +403,9 @@ paths:
       responses:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/EgressRequired" }
+        "409":
+          description: "State conflict: a host to open (egress_required) or the organisation's MCP gateway (gateway_required, gateway_not_configured)"
+          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/EgressRequired" }, { $ref: "#/components/schemas/McpGatewayConflict" }] } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors/{name}:
     parameters:
@@ -430,7 +440,7 @@ paths:
     parameters:
       - { $ref: "#/components/parameters/Org" }
       - { name: name, in: path, required: true, schema: { type: string } }
-      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+      - { name: field, in: path, required: true, description: "a secret field of the type, or a slot of a field the type pools (`api_key.2` … `api_key.10`, ADR 0089)", schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}(\\.([2-9]|10))?$" } }
     put:
       tags: [connectors]
       operationId: setOrgConnectorSecret
@@ -459,10 +469,16 @@ paths:
     post:
       tags: [connectors]
       operationId: discoverConnectorOperations
-      description: Ask the MCP server for its tools and derive the diff — a new tool starts closed (forbidden), a drifting schema closes the operation again, a removed tool disappears (ADR 0034).
+      description: >-
+        Ask the MCP server for its tools and derive the diff — a new tool starts closed (forbidden), a drifting schema
+        closes the operation again, a removed tool disappears (ADR 0034). A connector that goes through the
+        organisation's MCP gateway is asked through it (ADR 0105); a gateway refusal (409 `gateway_required`,
+        `gateway_not_configured` or `gateway_assertion_key_missing`) does not mark the connector in error, and never
+        concerns a plugin's server (ADR 0096).
       responses:
         "200": { description: The diff, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorDiscovery" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/McpGatewayConflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The server did not answer, or refused the connector's key" }
   /orgs/{org}/mcp-catalogue:
@@ -493,7 +509,9 @@ paths:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/EgressRequired" }
+        "409":
+          description: "State conflict: a host to open (egress_required) or the organisation's MCP gateway (gateway_required, gateway_not_configured)"
+          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/EgressRequired" }, { $ref: "#/components/schemas/McpGatewayConflict" }] } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connector-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -666,6 +684,48 @@ paths:
       summary: The project's workflows — one active per name, the default one marked (ADR 0031)
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowSummary" } } } } }
+  /orgs/{org}/workflow-catalogue:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [workflows]
+      operationId: listWorkflowCatalogue
+      description: >-
+        The workflows this organisation can adopt (ADR 0111): the core's, the deployment's templates', its installed
+        plugins' and the ones it shared from its projects. For each, the capabilities it requires (computed by the
+        engine, never declared), the human groups it declares and where each agent it names resolves. Any member.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueEntry" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [workflows]
+      operationId: shareWorkflow
+      description: >-
+        Shares a version of a project's workflow to the organisation's catalogue (ADR 0111 §4): the entry is a copy,
+        later edits in the project do not reach it until shared again. Organisation administrators only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowShare" } } }
+      responses:
+        "201": { description: Shared, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowCatalogueEntry" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/workflow-adoptions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [workflows]
+      operationId: adoptWorkflow
+      description: >-
+        Publishes a catalogue entry as a new workflow of the project (ADR 0111 §3), `source: catalogue` and its
+        `origin` recorded, and installs the catalogue agents it names. Never installs a plugin: an agent that resolves
+        nowhere → 422 naming it. A name already taken → 409; `version` other than the entry's current one → 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowAdopt" } } }
+      responses:
+        "201": { description: Adopted, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/workflows/{name}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -700,6 +760,20 @@ paths:
         "204": { description: Deactivated }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /projects/{id}/workflows/{name}/activity:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { name: name, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [workflows]
+      operationId: getWorkflowActivity
+      description: >-
+        Where a workflow's open work items wait, by state, and what each transition's runs did over the
+        last `days` days (count, outcome, cost, median duration). Every version of the workflow counts.
+        Read only (S47-39).
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
+      responses:
+        "200": { description: The workflow's activity, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowActivity" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/workflows/{name}/versions:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -974,6 +1048,25 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { description: Unknown workflow, invalid fields or a budget wider than allowed }
         "502": { description: The project's tracker refused or did not answer; nothing was created }
+  /projects/{id}/received-events:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: listReceivedEvents
+      summary: The webhook events the project received, newest first
+      description: >-
+        One entry per event of a verified delivery that reached this project (S42-06f): what it was,
+        and what the platform did with it (created or started a work item, signalled its workflow,
+        boarded a train, updated its labels) or why it did nothing. A delivery that names no project,
+        fails its signature or repeats one already seen is not listed. Never a payload, a header, a
+        comment or an email: a summary built from typed fields.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReceivedEventPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /work-items/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1834,6 +1927,84 @@ paths:
       responses:
         "200": { description: The result of the test, content: { application/json: { schema: { $ref: "#/components/schemas/OutboundProxyTest" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/mcp-gateway:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getMcpGateway
+      description: >-
+        The organisation's MCP gateway (ADR 0105), or `gateway: null` when none is set, and its assertion keys
+        (public data only). The secret is never returned, only `secret_set`. `org_admin`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [admin]
+      operationId: putMcpGateway
+      description: >-
+        Sets the organisation's one MCP gateway (ADR 0105; `org_admin`, audited, the secret never in the audit row).
+        `secret` is sealed (ADR 0058) and never returned; absent, the stored one is kept. A 409 without `verdicts`
+        means the deployment has no secrets key; with `verdicts`, the gateway's host is not in the egress allowlist.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/EgressRequired" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [admin]
+      operationId: deleteMcpGateway
+      description: >-
+        Removes the setting and its sealed secret (ADR 0105; `org_admin`, audited). Refused with 409 `gateway_in_use`
+        while connectors go through it; `connectors` names them.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/McpGatewayConflict" }
+  /orgs/{org}/mcp-gateway/test:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [admin]
+      operationId: testMcpGateway
+      description: >-
+        Opens an MCP session with one server through the stored gateway and lists its tools (ADR 0105). A gateway
+        that fails is a 200 with `ok: false` and `error`, not an HTTP error. `org_admin`, audited. 404 when no
+        gateway is set.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayTestRequest" } } }
+      responses:
+        "200": { description: The result of the test, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayTest" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/mcp-gateway/assertion-key:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [admin]
+      operationId: rotateMcpGatewayAssertionKey
+      description: >-
+        Creates the organisation's signing key for the identity assertions sent to its gateway, or rotates it (ADR 0105):
+        the new key signs, the previous one stays published. `org_admin`, audited. 409 when the deployment has no
+        secrets key.
+      responses:
+        "200": { description: The organisation's assertion keys, content: { application/json: { schema: { $ref: "#/components/schemas/McpGatewayAssertion" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/mcp-gateway/jwks.json:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getMcpGatewayJwks
+      security: []
+      description: >-
+        The public keys of the organisation's assertion (ADR 0105), for the gateway to verify what Choregos sends.
+        Public keys only, unauthenticated, cacheable for 300 s. The same 404 answers an unknown organisation and an
+        organisation without an assertion key.
+      responses:
+        "200": { description: The JSON Web Key Set, content: { application/json: { schema: { $ref: "#/components/schemas/JsonWebKeySet" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/network-activity:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -3147,6 +3318,51 @@ paths:
       description: The `agent` actors of the project's active workflows that name no agent of the registry — computed by the API, not by one read per workflow (S30-04).
       responses:
         "200": { description: The implicit agents, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ImplicitAgent" } } } } }
+  /projects/{id}/builtin-agent:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [agents]
+      operationId: describeBuiltinAgent
+      description: >-
+        What an `agent` actor that names no registry agent runs in this project: the role's playbook
+        (the prompt as a run receives it, with what only a run knows as `<placeholders>`), the model
+        each work item size resolves to through the runtime's resolver, the backend, the limits, the
+        memory and the MCP servers. The console passes a step's own fields, so a draft is described too.
+        Read only.
+      parameters:
+        - { name: role, in: query, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" } }
+        - { name: playbook, in: query, schema: { type: [string, "null"], pattern: "^[a-z][a-z0-9_]{0,62}$" } }
+        - { name: model, in: query, schema: { type: string, minLength: 1, maxLength: 200, default: "profile:by_size" } }
+        - { name: backend, in: query, schema: { type: [string, "null"], maxLength: 64 } }
+        - { name: max_turns, in: query, schema: { type: [integer, "null"], minimum: 1, maximum: 1000 } }
+        - { name: max_minutes, in: query, schema: { type: [integer, "null"], minimum: 1, maximum: 480 } }
+      responses:
+        "200": { description: The built-in agent, content: { application/json: { schema: { $ref: "#/components/schemas/BuiltinAgent" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/groups/{group}/members:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: group, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+    get:
+      tags: [agents]
+      operationId: listGroupMembers
+      description: >-
+        Who a person step addressed to `group` waits for: the organisation's members carrying that
+        identity-provider group (as of their last sign-in), and whether each may answer in this project
+        (`item:decide`, ADR 0044). Empty means the step waits for an organisation administrator. Needs
+        `member:read` on the project.
+      responses:
+        "200": { description: The group's members, content: { application/json: { schema: { $ref: "#/components/schemas/GroupMembers" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/workflow-agents:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [agents]
+      operationId: listWorkflowAgents
+      description: Every `agent` actor of the project's active workflows, the registry agent it names or none, so the console lists the agents a project runs in one table (S47-39).
+      responses:
+        "200": { description: The workflows' agents, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowAgent" } } } } }
   /projects/{id}/agent-resolution:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3966,6 +4182,9 @@ components:
     EgressRequired:
       description: "State conflict. When `code` is `egress_required`, a host the call needs is not yet in the organisation's egress allowlist: `verdicts` says where each stands, and the console opens its network-access modal (S39-22)."
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/EgressRequired" } } }
+    McpGatewayConflict:
+      description: "State conflict on the organisation's MCP gateway (ADR 0105): `code` is `gateway_in_use` (with `connectors`), `gateway_required`, `gateway_not_configured` or `gateway_assertion_key_missing`."
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/McpGatewayConflict" } } }
     ValidationError:
       description: Unprocessable entity
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
@@ -4270,7 +4489,7 @@ components:
         config: { type: object, additionalProperties: true, description: "no secret field: a plaintext secret gets 422" }
         secret_ref: { type: [string, "null"] }
         secret_refs: { type: object, additionalProperties: { type: string } }
-        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058)." }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089)." }
     ConnectorTestResult:
       type: object
       required: [ok, checks]
@@ -4350,6 +4569,7 @@ components:
         config_schema: { type: object, additionalProperties: true }
         capabilities: { type: array, items: { type: string }, description: "what the type can do: tracker, scm, identity, mcp…" }
         secret_fields: { type: array, items: { type: string }, description: the configuration keys that are secrets }
+        pooled_fields: { type: array, items: { type: string }, default: [], description: "the secret fields that take several keys, one per slot (`api_key.2` … `api_key.10`, ADR 0089)" }
     ConnectorOperation:
       type: object
       required: [name, access, policy]
@@ -4389,6 +4609,22 @@ components:
         operations: { type: array, items: { $ref: "#/components/schemas/ConnectorOperation" } }
         availability: { $ref: "#/components/schemas/ConnectorAvailability" }
         enabled_projects: { type: array, items: { type: string }, description: "the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074)" }
+        server:
+          description: "the plugin server this connector runs (ADR 0096): its configuration is the server's `config_schema` and `secret_fields`, not the `mcp` type's; null for any other connector (contract-change S43-08)"
+          oneOf:
+            - $ref: "#/components/schemas/OrgConnectorServer"
+            - { type: "null" }
+    OrgConnectorServer:
+      type: object
+      additionalProperties: false
+      description: What the console needs to configure a plugin's server, read from its declaration (ADR 0096).
+      required: [plugin, version, server, config_schema, secret_fields]
+      properties:
+        plugin: { type: string }
+        version: { type: string }
+        server: { type: string }
+        config_schema: { type: object, additionalProperties: true, description: "a JSON Schema" }
+        secret_fields: { type: array, items: { type: string } }
     ConnectorAvailability:
       type: string
       enum: [all_projects, selected_projects]
@@ -4419,6 +4655,7 @@ components:
         scope: { type: string, enum: [organisation, project], description: "an organisation connector is installed by the administrator; a project connector is configured in the project's settings" }
         capabilities: { type: array, items: { type: string } }
         secret_fields: { type: array, items: { type: string }, description: "field names only, never values" }
+        pooled_fields: { type: array, items: { type: string }, default: [], description: "the secret fields that take several keys, one per slot (ADR 0089)" }
         operations: { type: integer, description: "operations the type declares; an MCP server discovers its own (0)" }
         installed_as: { type: array, items: { type: string }, description: "names of the organisation connectors of this type" }
         configured_in: { type: array, items: { type: string }, description: "slugs of the projects, among those the caller sees, that configure this type" }
@@ -4493,6 +4730,7 @@ components:
         cannot_reason: { type: [string, "null"], description: "why the entry cannot be installed by the caller: the server's sentence" }
         enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" }, description: "one per installed instance of this entry" }
         procedure: { type: [string, "null"], description: "the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067)" }
+        install_routes: { type: array, uniqueItems: true, items: { type: string, enum: [direct, gateway] }, description: "how THIS organisation can install the entry: direct (Choregos holds the credential) and/or gateway (through its MCP gateway, ADR 0105)" }
     McpCatalogueInstall:
       type: object
       properties:
@@ -4502,6 +4740,8 @@ components:
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
         availability: { $ref: "#/components/schemas/ConnectorAvailability", description: "defaults to all_projects through the API; the console proposes selected_projects (ADR 0074)" }
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
+        route: { type: [string, "null"], enum: [direct, gateway, null], description: "absent: gateway when the organisation's gateway is required, or when the entry cannot be installed directly and a gateway is available; else direct (ADR 0105)" }
+        gateway_server: { type: [string, "null"], pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", description: "the server's name at the gateway; defaults to the entry id" }
     SkillCatalogueInstall:
       type: object
       properties:
@@ -4552,7 +4792,7 @@ components:
         kind: { type: [string, "null"] }
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
-        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058)" }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089)." }
         availability: { $ref: "#/components/schemas/ConnectorAvailability" }
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
     OrgConnectorUpdate:
@@ -4717,7 +4957,8 @@ components:
         id: { type: string }
         name: { type: string }
         version: { type: integer }
-        source: { type: string, enum: [repo, platform, template] }
+        source: { type: string, enum: [repo, platform, template, catalogue] }
+        origin: { type: [string, "null"], description: "For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0111)." }
         yaml: { type: string }
         json: { $ref: "./schemas/workflow.schema.json" }
         checksum: { type: string }
@@ -4725,6 +4966,71 @@ components:
         is_default: { type: boolean }
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
+    WorkflowCatalogueEntry:
+      type: object
+      additionalProperties: false
+      required: [source, name, version, title, summary, tags, requires, needs_repository, groups, agents, yaml]
+      description: A workflow the organisation can adopt (ADR 0111).
+      properties:
+        source:
+          type: string
+          pattern: "^(core|org|template:[a-z0-9-]+|plugin:[a-z0-9-]+)$"
+          description: "`core`, `template:<name>`, `plugin:<name>` (an installed plugin, the external catalogues) or `org`"
+        name: { type: string }
+        version: { type: integer, minimum: 1, description: "`metadata.version`; for an `org` entry, the number of the share" }
+        title: { type: string, description: "`metadata.catalogue.title`, else the name" }
+        summary: { type: string, description: "`metadata.catalogue.summary`, else `metadata.description`" }
+        tags: { type: array, items: { type: string } }
+        requires: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueRequirement" } }
+        needs_repository: { type: boolean, description: "it requires an `scm`: a project without a repository cannot run it" }
+        groups: { type: array, items: { type: string }, description: "the human groups its actors name (ADR 0044)" }
+        agents: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueAgent" } }
+        yaml: { type: string }
+        shared_by: { type: [string, "null"], description: "for an `org` entry" }
+        shared_from: { type: [string, "null"], description: "for an `org` entry: `<project>/<workflow>@<version>`" }
+        shared_at: { type: [string, "null"], format: date-time }
+    WorkflowCatalogueRequirement:
+      type: object
+      additionalProperties: false
+      required: [capability, reasons]
+      properties:
+        capability: { type: string }
+        reasons: { type: array, items: { type: string } }
+    WorkflowCatalogueAgent:
+      type: object
+      additionalProperties: false
+      required: [actor, slug, resolution]
+      description: An agent the workflow names, and where it resolves in this organisation (ADR 0111 §2).
+      properties:
+        actor: { type: string }
+        slug: { type: string }
+        version: { type: [integer, "null"], description: "the `@N` the workflow pins, if any" }
+        resolution:
+          type: string
+          enum: [org, plugin, remote, catalogue, unresolved]
+          description: >-
+            `org`: the organisation's own agent; `plugin`: installed by a plugin; `remote`: an A2A agent;
+            `catalogue`: absent but in the platform's catalogue, installed on adoption; `unresolved`: nowhere, adoption is refused
+        plugin: { type: [string, "null"], description: "for `plugin`, the plugin that installed it; for `unresolved`, a plugin of a configured source that ships it (`<name> <version> (<source>)`), when one does" }
+        display_name: { type: [string, "null"] }
+    WorkflowAdopt:
+      type: object
+      additionalProperties: false
+      required: [source, name]
+      properties:
+        source: { type: string }
+        name: { type: string }
+        version: { type: [integer, "null"], description: "the version read; another current version → 409" }
+        as: { type: [string, "null"], pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the name in the project; `metadata.name` is rewritten" }
+        make_default: { type: boolean, default: false }
+    WorkflowShare:
+      type: object
+      additionalProperties: false
+      required: [project, name]
+      properties:
+        project: { type: string, description: "the project's slug or id" }
+        name: { type: string }
+        version: { type: [integer, "null"], description: "default: the active version" }
     WorkflowPut:
       type: object
       required: [yaml]
@@ -4745,6 +5051,7 @@ components:
         open_items: { type: integer, description: "Open tickets pinned to one of its versions." }
         created_by: { type: [string, "null"] }
         updated_at: { type: [string, "null"], format: date-time }
+        can_share: { type: boolean, default: false, description: "the caller may share it to the organisation's catalogue (ADR 0111 §4, ADR 0074: the server decides)" }
     WorkflowRouting:
       type: object
       required: [default, rules]
@@ -4777,6 +5084,7 @@ components:
         warnings: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" } }
         graph: { $ref: "#/components/schemas/WorkflowGraph" }
         process: { type: array, items: { $ref: "#/components/schemas/ProcessStep" } }
+        document: { $ref: "./schemas/workflow.schema.json", description: "the workflow as the engine read it (ADR 0112)" }
     ProcessStep:
       type: object
       description: A transition in plain words — the process view (ADR 0031).
@@ -4791,7 +5099,15 @@ components:
         actor_type: { type: string, enum: [agent, human, system, job, release_train] }
         who: { type: string }
         outputs: { type: array, items: { type: string } }
-        gates: { type: array, items: { type: object, properties: { name: { type: string }, summary: { type: string } } } }
+        gates:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              summary: { type: string }
+              detail: { type: [string, "null"], description: "The thresholds the guarantee applies (the platform's defaults when the workflow sets none), and how long an asynchronous one waits." }
+              asynchronous: { type: boolean, description: "True for a guarantee that waits for an outside event (CI, review, scans) up to the transition's `timeout_hours`." }
         on_fail: { type: [string, "null"] }
         on_reject: { type: [string, "null"] }
         timeout_hours: { type: [integer, "null"] }
@@ -4814,12 +5130,16 @@ components:
       description: >-
         A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`,
         `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`,
-        `index`).
+        `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`,
+        `metadata.catalogue` and `initial` (ADR 0112). `style: block` writes a collection value as
+        indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones.
       properties:
         op:
           type: string
           enum: [add_state, remove_state, rename_state, set_state, add_transition, remove_transition,
-                 set_transition, add_gate, remove_gate, add_actor, remove_actor, set_actor]
+                 set_transition, add_gate, remove_gate, add_actor, remove_actor, set_actor, set_workflow]
+        style: { type: string, enum: [flow, block], default: flow }
+        swap: { type: boolean, default: false }
       additionalProperties: true
     WorkflowEditRequest:
       type: object
@@ -5872,6 +6192,96 @@ components:
         backend: { type: [string, "null"] }
         max_turns: { type: [integer, "null"] }
         max_minutes: { type: [integer, "null"] }
+    WorkflowAgent:
+      type: object
+      description: An `agent` actor of an active workflow, and the registry agent it names, if any.
+      required: [workflow, actor]
+      properties:
+        workflow: { type: string }
+        actor: { type: string }
+        role: { type: [string, "null"] }
+        model: { type: [string, "null"] }
+        backend: { type: [string, "null"] }
+        max_turns: { type: [integer, "null"] }
+        max_minutes: { type: [integer, "null"] }
+        agent: { type: [string, "null"], description: "`slug` or `slug@N` as the workflow writes it; null for a built-in agent." }
+        registered: { type: boolean, description: Whether the agent it names exists in the organisation's registry. }
+    GroupMember:
+      type: object
+      required: [email, can_decide]
+      properties:
+        email: { type: string }
+        display_name: { type: string }
+        can_decide: { type: boolean, description: "Whether their role lets them answer a step of this project (`item:decide`)." }
+    GroupMembers:
+      type: object
+      required: [group]
+      properties:
+        group: { type: string }
+        members: { type: array, items: { $ref: "#/components/schemas/GroupMember" } }
+    StateActivity:
+      type: object
+      required: [state, open_items]
+      properties:
+        state: { type: string }
+        open_items: { type: integer }
+        waiting_since: { type: [string, "null"], format: date-time, description: "When the longest-waiting open item entered this state: its last `state_changed` event into it, else its filing." }
+    StepActivity:
+      type: object
+      required: [transition, runs, succeeded, failed, cost_usd]
+      properties:
+        transition: { type: string }
+        runs: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        cost_usd: { type: number }
+        median_minutes: { type: [number, "null"] }
+    WorkflowActivity:
+      type: object
+      required: [workflow, days]
+      properties:
+        workflow: { type: string }
+        days: { type: integer }
+        states: { type: array, items: { $ref: "#/components/schemas/StateActivity" } }
+        steps: { type: array, items: { $ref: "#/components/schemas/StepActivity" } }
+    BuiltinModelChoice:
+      type: object
+      description: The model a built-in agent runs for one work item size (`size` absent when the size does not matter), or why a run would be refused.
+      properties:
+        size: { type: [string, "null"] }
+        profile: { type: [string, "null"] }
+        litellm_model: { type: [string, "null"] }
+        provider_model: { type: [string, "null"] }
+        turns_factor: { type: number }
+        error: { type: [string, "null"] }
+        warnings: { type: array, items: { type: string } }
+    BuiltinMcpServer:
+      type: object
+      required: [name, description]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        tools: { type: array, items: { type: string } }
+    BuiltinAgent:
+      type: object
+      description: What a workflow actor that names no registry agent runs.
+      required: [role, playbook, model, backend, backend_source, max_turns, max_minutes, limits_source]
+      properties:
+        role: { type: string }
+        playbook: { type: string }
+        playbook_origin: { type: [string, "null"], description: "`package` or `deployment` (`CHOREGOS_PLAYBOOKS_DIR`)." }
+        instructions: { type: [string, "null"] }
+        instructions_error: { type: [string, "null"] }
+        instructions_template: { type: [string, "null"], description: "The prompt as a registry agent's instructions (rendered in the sandbox, framed after): what registering the agent gives it." }
+        model: { type: string }
+        models: { type: array, items: { $ref: "#/components/schemas/BuiltinModelChoice" } }
+        backend: { type: string }
+        backend_source: { type: string, enum: [actor, project] }
+        max_turns: { type: integer }
+        max_minutes: { type: integer }
+        limits_source: { type: string, enum: [actor, policy] }
+        memory: { type: array, items: { type: string } }
+        mcp_servers: { type: array, items: { $ref: "#/components/schemas/BuiltinMcpServer" } }
     AgentCredentialCreate:
       type: object
       required: [kind]
@@ -6557,6 +6967,102 @@ components:
         error: { type: [string, "null"], description: "names the proxy; never the password" }
         elapsed_ms: { type: integer, minimum: 0 }
         target: { type: string, description: "the echo endpoint that was fetched" }
+    McpGatewayAuth:
+      type: object
+      additionalProperties: false
+      description: "How Choregos authenticates to the organisation's MCP gateway (ADR 0105). The credential itself is `McpGatewayPut.secret`, sealed and never returned."
+      required: [type]
+      properties:
+        type: { type: string, enum: [bearer, header, oauth_client_credentials, jwt_assertion] }
+        header_name: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$", description: "for `header`: the header that carries the secret" }
+        token_url: { type: [string, "null"], maxLength: 2000, description: "for `oauth_client_credentials`: the token endpoint" }
+        client_id: { type: [string, "null"], maxLength: 256 }
+        scope: { type: [string, "null"], maxLength: 1024 }
+        resource: { type: [string, "null"], maxLength: 2000, description: "RFC 8707 resource indicator asked of the token endpoint" }
+        token_audience: { type: [string, "null"], maxLength: 512, description: "audience asked of the token endpoint" }
+    McpGateway:
+      type: object
+      additionalProperties: false
+      description: "The organisation's MCP gateway as stored (ADR 0105). The secret is never returned, only `secret_set`."
+      required: [mode, endpoint, routing, server_header, auth, audience, identity_header, timeout_s, secret_set]
+      properties:
+        mode:
+          type: string
+          enum: ["off", available, required]
+          description: "off: the gateway is kept but unused. available: a connector may go through it. required: new direct `mcp` connectors are refused and existing ones are not called, except a plugin's server (an organisation connector the platform runs, ADR 0096), which is never behind the gateway"
+        endpoint: { type: string, maxLength: 2000, pattern: "^https?://[^\\s@?#]+$", description: "`{server}` is replaced by the server's name at the gateway; no credentials, query or fragment" }
+        routing: { type: string, enum: [path, header], description: "how the server is named to the gateway: in the path, or in `server_header`" }
+        server_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$" }
+        auth: { $ref: "#/components/schemas/McpGatewayAuth" }
+        audience: { type: [string, "null"], maxLength: 512, description: "audience of the signed assertion the gateway receives" }
+        identity_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$", description: "the header that carries the signed assertion of the caller's identity" }
+        timeout_s: { type: number, minimum: 1, maximum: 120 }
+        secret_set: { type: boolean }
+    McpGatewayAssertionKey:
+      type: object
+      additionalProperties: false
+      required: [kid, created_at, current]
+      properties:
+        kid: { type: string }
+        created_at: { type: string, format: date-time }
+        current: { type: boolean, description: "the key that signs; the others stay published until they are retired" }
+    McpGatewayAssertion:
+      type: object
+      additionalProperties: false
+      description: "The organisation's assertion keys: public data only (ADR 0105)."
+      required: [issuer, jwks_url, keys]
+      properties:
+        issuer: { type: string }
+        jwks_url: { type: string }
+        keys: { type: array, items: { $ref: "#/components/schemas/McpGatewayAssertionKey" } }
+    McpGatewayState:
+      type: object
+      additionalProperties: false
+      required: [gateway, updated_by, updated_at, assertion]
+      properties:
+        gateway: { oneOf: [{ $ref: "#/components/schemas/McpGateway" }, { type: "null" }] }
+        updated_by: { type: [string, "null"] }
+        updated_at: { type: [string, "null"] }
+        assertion: { $ref: "#/components/schemas/McpGatewayAssertion" }
+    McpGatewayPut:
+      type: object
+      additionalProperties: false
+      required: [mode, endpoint, routing, auth]
+      properties:
+        mode: { type: string, enum: ["off", available, required] }
+        endpoint: { type: string, maxLength: 2000, pattern: "^https?://[^\\s@?#]+$", description: "`{server}` is replaced by the server's name at the gateway; no credentials, query or fragment" }
+        routing: { type: string, enum: [path, header] }
+        server_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$" }
+        auth: { $ref: "#/components/schemas/McpGatewayAuth" }
+        audience: { type: [string, "null"], maxLength: 512 }
+        identity_header: { type: [string, "null"], pattern: "^[A-Za-z0-9-]{1,64}$" }
+        timeout_s: { type: number, minimum: 1, maximum: 120, default: 30 }
+        secret: { type: string, minLength: 1, maxLength: 4096, writeOnly: true, description: "the gateway credential, sealed (ADR 0058) and never returned; absent keeps the stored one" }
+        allow_egress: { type: boolean, default: false, description: "open the gateway's host in the organisation's egress allowlist, in the same call; needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
+    McpGatewayTestRequest:
+      type: object
+      additionalProperties: false
+      required: [server]
+      properties:
+        server: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", description: "the server's name at the gateway" }
+    McpGatewayTest:
+      type: object
+      additionalProperties: false
+      required: [ok, server, protocol_version, server_info, tools, elapsed_ms, error]
+      properties:
+        ok: { type: boolean }
+        server: { type: string }
+        protocol_version: { type: [string, "null"] }
+        server_info: { type: [object, "null"], additionalProperties: true }
+        tools: { type: [integer, "null"], description: "how many tools the server lists" }
+        elapsed_ms: { type: integer, minimum: 0 }
+        error: { type: [string, "null"], description: "names the gateway; never a credential" }
+    JsonWebKeySet:
+      type: object
+      description: "A JSON Web Key Set (RFC 7517): public keys only."
+      required: [keys]
+      properties:
+        keys: { type: array, items: { type: object, additionalProperties: true } }
     PluginContents:
       type: object
       additionalProperties: false
@@ -7104,6 +7610,11 @@ components:
         totals: { $ref: "#/components/schemas/Totals" }
         budget_usd: { type: [number, "null"], description: "The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise." }
         estimate: { oneOf: [{ $ref: "#/components/schemas/CostEstimate" }, { type: "null" }] }
+        initiated_by:
+          type: [string, "null"]
+          description: >-
+            Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>`
+            for a webhook, `schedule:<name>`… Null for a work item from before S40-22.
         created_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
     Totals:
@@ -7126,6 +7637,28 @@ components:
         p80_usd: { type: [number, "null"] }
         sample_size: { type: integer, default: 0 }
         over_p80: { type: boolean, default: false }
+    ReceivedEvent:
+      type: object
+      description: A webhook event a project received, and what the platform did with it (S42-06f).
+      required: [id, received_at, source, event_type, outcome, summary]
+      properties:
+        id: { type: string }
+        received_at: { type: string, format: date-time }
+        source: { type: string, description: "jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>" }
+        event_type: { type: string }
+        delivery_id: { type: [string, "null"] }
+        outcome:
+          type: string
+          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready]
+        work_item_key: { type: [string, "null"] }
+        work_item_id: { type: [string, "null"] }
+        summary: { type: string, description: "Built from typed fields only: key, label, from → to, PR number, conclusion." }
+    ReceivedEventPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReceivedEvent" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     WorkItemPage:
       type: object
       required: [items, meta]
@@ -7163,6 +7696,17 @@ components:
         actor_kind: { type: string, enum: [user, agent, system], default: system }
         ref_id: { type: [string, "null"] }
         cost_usd: { type: [number, "null"] }
+        via: { oneOf: [{ $ref: "#/components/schemas/TrackerWrite" }, { type: "null" }] }
+    TrackerWrite:
+      type: object
+      description: >-
+        The tracker write behind a timeline entry (ADR 0107 point 4): the project's tracker connector
+        type and the account it wrote under. `account` is null when the connector names none (a GitHub
+        App installation, a GitLab token).
+      required: [type]
+      properties:
+        type: { type: string, description: "The tracker connector's type: jira, github-issues, gitlab-issues, plugin…" }
+        account: { type: [string, "null"] }
     GitToken:
       type: object
       required: [token]
@@ -7299,6 +7843,24 @@ components:
             context_pack_url: { type: [string, "null"] }
             playbook_checksum: { type: [string, "null"] }
             allowed_paths: { type: array, items: { type: string } }
+            agent_slug: { type: [string, "null"], description: "The agent whose version ran the step." }
+            agent_version: { type: [integer, "null"] }
+            initiated_by: { type: [string, "null"], description: "The work item's initiator, copied at stage start (ADR 0077)." }
+            tool_connectors:
+              type: array
+              description: >-
+                The organisation connectors this run's agent may call through the broker, and the
+                account each one calls with (ADR 0107): resolved by the API, so a member who cannot
+                read the organisation's connectors still sees them.
+              items: { $ref: "#/components/schemas/ToolConnector" }
+    ToolConnector:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        auth_scheme: { type: [string, "null"], description: "bearer or basic, for an `mcp` connector" }
+        account: { type: [string, "null"], description: "The account the connector calls as, when its configuration names one (a `basic` username)." }
     RunEvent:
       type: object
       required: [seq, type, ts]
@@ -7486,7 +8048,7 @@ components:
         used_by: { type: array, items: { type: string, enum: [api, workers, runners] }, description: the pod families that make the call }
         status: { type: string, enum: [requested, allowed, refused, revoked] }
         reason: { type: string, maxLength: 500 }
-        origin: { type: string, description: "`mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `manual`, `migration`" }
+        origin: { type: string, description: "`mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `mcp-gateway`, `manual`, `migration`" }
         requested_by: { type: [string, "null"] }
         requested_at: { type: [string, "null"], format: date-time }
         decided_by: { type: [string, "null"] }
@@ -7563,6 +8125,38 @@ components:
         detail: { type: string }
         code: { type: string, enum: [egress_required] }
         verdicts: { type: array, items: { $ref: "#/components/schemas/EgressVerdict" } }
+    McpGatewayConflict:
+      type: object
+      description: >-
+        The 409 body of an organisation's MCP gateway refusals (ADR 0105, docs/adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md):
+        an RFC 9457 problem with a `code`. `gateway_in_use`: the gateway cannot be removed while connectors go
+        through it (`connectors` names them). `gateway_required`: the gateway is required and a direct connector is
+        refused. `gateway_not_configured`: a connector asks for the gateway and none is set.
+        `gateway_assertion_key_missing`: the gateway authenticates with a signed assertion and the organisation has
+        no assertion key yet.
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string, description: "the request path, as the API always sets it on a problem" }
+        errors:
+          type: array
+          description: "the problem's `errors` list, as on `Problem` (an API refusal may carry it)"
+          items:
+            type: object
+            properties:
+              loc: { type: array, items: { type: string } }
+              msg: { type: string }
+              code: { type: string }
+              deprecated_code: { type: string, deprecated: true }
+              line: { type: integer }
+              column: { type: integer }
+        retry_after: { type: integer }
+        code: { type: string, enum: [gateway_in_use, gateway_required, gateway_not_configured, gateway_assertion_key_missing] }
+        connectors: { type: array, items: { type: string }, description: "the connectors that go through the gateway (`gateway_in_use`)" }
     EgressRuleCreate:
       type: object
       required: [host]

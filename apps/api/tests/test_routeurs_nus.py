@@ -656,6 +656,12 @@ async def test_la_timeline_raconte_runs_decisions_etats_et_findings(
     assert next(e for e in timeline if e["kind"] == "state_change")["title"] == "demande → sourcing"
 
 
+async def test_a_project_with_a_repository_still_receives_default_simple(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    assert project["workflow_name"] == "default-simple", "D14 is unchanged for a software project"
+
+
 async def test_le_provisioning_demarre_un_workflow_et_expose_son_etat(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
@@ -676,6 +682,31 @@ async def test_le_provisioning_demarre_un_workflow_et_expose_son_etat(
     etat = (await client.get(f"/api/v1/projects/{project['id']}/provision")).json()
     assert etat["status"] == "running" and etat["workflow_id"] == workflow_id
     assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "provisioning"
+
+
+async def test_a_project_without_template_or_repository_is_activated_without_a_workflow(
+    client: AsyncClient, admin: str
+) -> None:
+    from choregos_api.temporal import get_temporal
+
+    created = await client.post(
+        "/api/v1/orgs/varga/projects",
+        json={"slug": "hr-desk", "name": "HR desk", "config": {"slug": "hr-desk", "org": "varga"}},
+    )
+    assert created.status_code == 201, created.text
+    project = created.json()
+    assert project["status"] == "draft"
+    assert project["workflow_name"] == "default-request", "no repository: a workflow that delivers no code"
+    readiness = (await client.get(f"/api/v1/projects/{project['id']}/readiness")).json()
+    ids = {item["id"] for item in readiness["items"]}
+    assert not ids & {"repository", "connector-scm", "connector-cd"}, ids
+    dry = await client.post(f"/api/v1/projects/{project['id']}/provision", json={"dry_run": True})
+    assert dry.status_code == 202 and dry.json()["status"] == "pending"
+    assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "draft"
+    done = await client.post(f"/api/v1/projects/{project['id']}/provision", json={})
+    assert done.status_code == 202 and done.json()["status"] == "succeeded"
+    assert not get_temporal().started, "no GitHub · Tekton · Argo steps for a project with no repository"
+    assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "active"
 
 
 async def test_l_api_interne_sert_l_agent_avec_son_jeton_de_run(

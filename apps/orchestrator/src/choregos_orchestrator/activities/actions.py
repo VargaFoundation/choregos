@@ -25,6 +25,7 @@ from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
+from ..wire_names import read_key, require_key
 from .base import db
 
 logger = get_logger("choregos.actions")
@@ -58,7 +59,7 @@ async def _faits(session: Any, action_id: str, avant: int) -> list[dict[str, Any
     return [dict(ligne.result or {}) for ligne in lignes]
 
 
-@activity.defn
+@activity.defn(name="load_action")
 async def load_action(action_id: str) -> dict[str, Any]:
     async with db() as session:
         if await session.get(Action, action_id) is None:
@@ -80,7 +81,7 @@ async def load_action(action_id: str) -> dict[str, Any]:
         return {"effets": len(action.effects or []), "statut": action.status}
 
 
-@activity.defn
+@activity.defn(name="execute_effect")
 async def execute_effect(entree: dict[str, Any]) -> dict[str, Any]:
     action_id, position = str(entree["action_id"]), int(entree["position"])
     cle = f"{action_id}:{position}"
@@ -149,7 +150,7 @@ async def _noter_l_echec(cle: str, erreur: str) -> None:
             ligne.error = erreur[:2000]
 
 
-@activity.defn
+@activity.defn(name="compensate_effect")
 async def compensate_effect(entree: dict[str, Any]) -> dict[str, Any]:
     """Défait un effet fait, avec ce que l'action a déclaré pour lui. Ne lève jamais : ce qu'elle
     n'a pas pu défaire, elle le dit, et le workflow compense les suivants quand même."""
@@ -191,7 +192,7 @@ async def compensate_effect(entree: dict[str, Any]) -> dict[str, Any]:
         return {"key": cle, "undone": True}
 
 
-@activity.defn
+@activity.defn(name="close_action")
 async def close_action(entree: dict[str, Any]) -> dict[str, Any]:
     action_id, statut = str(entree["action_id"]), str(entree["status"])
     ticket: str | None = None
@@ -245,7 +246,7 @@ async def _prevenir(workflow_id: str, action_id: str, statut: str) -> None:
         logger.warning("ticket non prévenu", workflow_id=workflow_id, action=action_id, erreur=str(erreur))
 
 
-@activity.defn
+@activity.defn(name="propose_transition_action")
 async def propose_transition_action(entree: dict[str, Any]) -> dict[str, Any]:
     """L'action d'une transition système (S20-05), proposée une fois par tentative. Née approuvée —
     chaque opération est permise à ce projet —, elle part aussitôt dans son `ActionWorkflow`.
@@ -294,7 +295,7 @@ async def _demarrer(action_id: str) -> None:
         )
 
 
-@activity.defn
+@activity.defn(name="mark_awaiting_evidence")
 async def mark_awaiting_evidence(entree: dict[str, Any]) -> dict[str, Any]:
     """L'action attend la preuve d'un de ses effets (S20-08) — `awaiting_evidence`, avec l'effet et
     l'échéance —, ou ne l'attend plus. Ce que l'on montre ; l'attente elle-même est au workflow."""
@@ -302,18 +303,20 @@ async def mark_awaiting_evidence(entree: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         action, _projet = await _charger(session, action_id)
         resultat = dict(action.result or {})
-        if entree.get("en_attente"):
+        # The workflow's keys are read under both spellings (S45-03); what is persisted is unchanged.
+        if read_key(entree, "waiting"):
             action.status = ActionStatus.AWAITING_EVIDENCE.value
-            resultat["attente"] = {"position": entree["position"], "jusqu_a": entree["jusqu_a"]}
+            until = require_key(entree, "until")
+            resultat["attente"] = {"position": entree["position"], "jusqu_a": until}  # lang: fr-ok
         else:
             action.status = ActionStatus.RUNNING.value
             resultat.pop("attente", None)
-            resultat.setdefault("preuves", []).append(dict(entree.get("preuve") or {}))
+            resultat.setdefault("preuves", []).append(dict(read_key(entree, "evidence") or {}))
         action.result = resultat
     return {"action_id": action_id, "status": action.status}
 
 
-@activity.defn
+@activity.defn(name="action_state")
 async def action_state(action_id: str) -> dict[str, Any]:
     """Relu en base : le filet quand un signal `action_settled` se perd."""
     async with db() as session:
@@ -340,35 +343,35 @@ ENGLISH_TO_FRENCH: dict[str, str] = {  # lang: fr-ok
 
 
 @activity.defn(name="charger_l_action")  # lang: fr-ok
-async def charger_l_action(action_id: str) -> dict[str, Any]:
+async def charger_l_action(action_id: str) -> dict[str, Any]:  # lang: fr-ok
     return await load_action(action_id)
 
 
 @activity.defn(name="executer_l_effet")  # lang: fr-ok
-async def executer_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
+async def executer_l_effet(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
     return await execute_effect(entree)
 
 
 @activity.defn(name="compenser_l_effet")  # lang: fr-ok
-async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
+async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
     return await compensate_effect(entree)
 
 
 @activity.defn(name="cloturer_l_action")  # lang: fr-ok
-async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:
+async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
     return await close_action(entree)
 
 
 @activity.defn(name="proposer_l_action_de_transition")  # lang: fr-ok
-async def proposer_l_action_de_transition(entree: dict[str, Any]) -> dict[str, Any]:
+async def proposer_l_action_de_transition(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
     return await propose_transition_action(entree)
 
 
 @activity.defn(name="marquer_l_attente")  # lang: fr-ok
-async def marquer_l_attente(entree: dict[str, Any]) -> dict[str, Any]:
+async def marquer_l_attente(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
     return await mark_awaiting_evidence(entree)
 
 
 @activity.defn(name="etat_de_l_action")  # lang: fr-ok
-async def etat_de_l_action(action_id: str) -> dict[str, Any]:
+async def etat_de_l_action(action_id: str) -> dict[str, Any]:  # lang: fr-ok
     return await action_state(action_id)

@@ -144,14 +144,16 @@ it, `env:` references keep working, the API logs `secrets.key_missing` at start-
 secret answers 409. Keep it in the vault: **losing it loses every sealed value**. To rotate, put the
 new key first, redeploy, then run `choregos admin secrets rewrap` (see
 [the runbook](runbooks/rotation-secrets.md#connector-secrets-key-secrets-keks)) before dropping the
-old key. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
+old key, and drop it only once no database backup older than the rewrap can still be restored. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
 (turn it on once the key exists in the store: a missing remote property fails the whole object).
 
 `global.devSecrets: true` makes the chart generate all of the above itself, the secrets key
 included (drawn once, then re-read). It exists for a
 bench and says so; never use it in production.
 
-**Connector secrets by `env:NAME`.** A secret a connector references (`secret_refs: {api_token:
+**Connector secrets by `env:NAME`.** Only for a key the operator owns: an organisation's own key (a
+market-data key, a tracker token) is typed in the console and sealed under `secrets-keks`, never mapped
+into the pods here, where any organisation's connector could name it (S39-06e). A secret a connector references (`secret_refs: {api_token:
 env:CONNECTOR_JIRA_TOKEN}`) must be mapped into the API and worker pods (`global.extraEnv` with
 `valueFrom: {secretKeyRef: …}`, from a Secret) under a name matching `global.secrets.envPattern` —
 by default `^CONNECTOR_[A-Z0-9_]+$`, set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CHOREGOS_*`,
@@ -666,23 +668,31 @@ where plugins come from, which ones every organisation gets, and which ones are 
 ```yaml
 global:
   plugins:
-    sources:
+    sources:                      # the chart's default: the platform's own agents
       - name: varga
-        index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable   # or https://…/index.yaml
+        index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest   # or https://…/index.yaml
         trust:                    # a keyless cosign signer (regular expressions, matched whole)…
-          identity: https://github.com/VargaFoundation/choregos-agents/.*
-          issuer: https://token.actions.githubusercontent.com
+          identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+          issuer: https://token\.actions\.githubusercontent\.com
           # key: /etc/choregos/plugins-keys/acme.pub   # …or a public key, mounted with api.extraVolumes
         egress: []                # hosts its fetches may reach beyond the index's own
-    defaultPlugins:
-      - { source: varga, name: servicenow, version: "^0.1" }
+    defaultPlugins:               # the chart's default: the built-in agents (ADR 0093 §6)
+      - { source: varga, name: software-delivery, version: "^1.0", preapproved: true }
+      - { source: varga, name: netops, version: "^1.0", preapproved: true }
+      - { source: varga, name: authoring, version: "^1.0", preapproved: true }
+      - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
+      - { source: varga, name: requests, version: "^1.0" }
     offline: /opt/choregos/plugins   # plugins baked into the image: air-gapped, demo, CI
 ```
 
 The chart renders these values into the ConfigMap `choregos-plugins`, mounted read-only in the API at
-`/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. All three are empty by
-default: nothing is rendered and no plugin is installed. A source without `trust` refuses to render;
-there is no unsigned source.
+`/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. By default they install the
+platform's own agents — `software-delivery`, `netops`, `authoring`, `mcp-clients` and `requests` of
+[`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents) — from the image's
+offline directory, where the API image ships them pinned by `plugins.lock`: no network is needed at
+start-up. `defaultPlugins: []` installs none (the agent catalogue still offers them, one by one);
+`sources: []`, `defaultPlugins: []` and `offline: ""` render nothing at all. A source without `trust`
+refuses to render; there is no unsigned source.
 
 **At start-up**, the API reads the file before it serves anything. A file it cannot read, an invalid
 source, a default plugin naming an undeclared source, an `offline` directory that does not exist in the
@@ -701,10 +711,25 @@ later, at its creation:
 - every fetch passes the same checks as an administrator's install (index, signature, pinned commit,
   digest, `plugins.lock`, contents, core range). A plugin that fails is logged
   (`plugin.default.failed`) and the others go on;
-- a default plugin that brings an MCP server is **not** installed by the platform: it waits for an
-  administrator's approval, like any plugin with a server. It is logged
-  (`plugin.default.pending_approval`) and listed by `GET /api/v1/orgs/{org}/plugin-approvals` with
-  `default: true`; any administrator of the organisation approves it there.
+- a default plugin the gate sends to a second administrator (one that brings an MCP server, or a
+  high-risk skill) is **not** installed by the platform: it waits for an administrator's approval. It is
+  logged (`plugin.default.pending_approval`) and listed by `GET /api/v1/orgs/{org}/plugin-approvals`
+  with `default: true`; any administrator of the organisation approves it there;
+- **unless the entry says `preapproved: true`**: listing it so is your approval, given through the
+  review of this deployment's values. The plugin is installed and the audit trail records
+  `plugin.default.preapproved` with the gate's reasons and `approved_by: deployment configuration`. The
+  API offers no such flag. The default `software-delivery` needs it: its `madr-4` skill links to
+  adr.github.io and is rated high risk;
+- a default of a declared source is taken from the offline directory when it holds a version inside the
+  requested range (`from_offline` in `plugin.default.installed`), and recorded under its source, which
+  serves later upgrades.
+
+**Upgrading from 0.20.** The built-in agents left the core: the migration `b8d0f2a4c6e1` rewrites
+their provenance (`catalogue:<slug>@<v>` → `plugin:<plugin>/<slug>@<v>`) and records an `org_plugins`
+row (source `varga`) for each plugin an organisation held agents of, so upgrades keep reaching them; an
+agent the organisation changed is still offered updates, never overwritten. A deployment that keeps
+`defaultPlugins: []` and no `varga` source still lists the agents in the catalogue; upgrading those rows
+then needs the `varga` source declared.
 
 What the reconcile installed is listed with `default: true` and `installed_by: null`. The summary of
 each pass is the log line `plugin.default.reconciled` (installed, waiting, failed).
@@ -921,7 +946,7 @@ it nothing breaks: the index serves full-text only and the knowledge page says s
 database: `CREATE EXTENSION vector;` as a superuser, then `ALTER TABLE knowledge_chunks ADD COLUMN
 embedding_vec vector;` as the owner of the schema, then **reindex** each index base.
 
-**Checking the sign-in configuration from the console.** *Admin → Platform* shows a read-only card,
+**Checking the sign-in configuration from the console.** *Admin → Identity* shows a read-only card,
 "How people sign in to this instance", for the platform administrator: the OIDC issuer, client id and
 discovery URL, whether the client secret is set (never its value), the redirect URI to register at the
 identity provider (`<apiUrl>/api/v1/auth/callback`), the MCP door's OAuth issuer, audience and registered
@@ -930,6 +955,14 @@ number of bootstrap administrators (never their e-mails). It is the answer of
 `GET /api/v1/platform/identity`. Nothing is editable there: the values come from the chart
 (`global.oidc`, `global.mcp.oauth`), and a row marked `default` was not set by the deployment. When
 `oidc.issuer` reads "not configured", the instance still runs on the built-in development issuer.
+
+**An organisation with its own identity provider** ([ADR 0108](adr/0108-each-organisation-signs-in-with-its-own-identity-provider.md)).
+The settings above are the instance's provider. A tenant that brings its own (OIDC or SAML) is configured
+in the edition that declares a sign-in resolver, not in the chart; the card's row "Organisations' own
+identity providers" says whether one is declared. Its members sign in from the console's sign-in page by
+typing their work address (its domain picks the provider) or through the link `/login?org=<slug>`. The
+tenant registers the same redirect URI, `<apiUrl>/api/v1/auth/callback`. A tenant's provider signs in only
+addresses on the domains its tenant owns, and grants roles on that tenant only.
 
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
@@ -1271,6 +1304,65 @@ hosts directly, identically for every project and agent, so the Choregos proxy i
 (1) gives the `choregos-egress` pods an FQDN egress rule for the hosts the instance allows and (2) removes
 the runner entry's direct FQDNs. Until then a `502 unreachable` also appears if the proxy pod itself has no
 FQDN rule. The deploy repository sets `global.egress.enabled` and `runner.egressProxy` only after that.
+
+### Rate limits on sign-in and webhooks
+
+The routes without a principal are rate-limited: sign-in (`/api/v1/auth/*`) and every webhook under
+`/api/v1/webhooks/` (GitHub, Tekton, Argo CD, Alertmanager, Jira, GitLab, and the plugin tracker route
+`POST /api/v1/webhooks/plugins/{org}/{plugin}/{server}`, whose deliveries come from outside providers
+through the ingress). Past `CHOREGOS_RATE_LIMIT_PER_MINUTE` requests (600 by default; 0 switches it
+off) in a sliding minute from one client, the API answers `429` with `Retry-After`. Authenticated routes
+are bounded by their principal, not here.
+
+**Per replica.** Each API replica counts in its own memory: with N replicas a client gets up to
+N × `CHOREGOS_RATE_LIMIT_PER_MINUTE` (the chart runs 2 to 8). There is no shared store, by decision:
+the stack has no Redis, and the limit is there to stop one address scanning sign-in or flooding a
+webhook, not a distributed attack, which belongs to the ingress or a WAF. Each replica holds at most
+10 000 client keys and evicts the least recently seen beyond that.
+
+**Keyed on the address the nearest trusted proxy saw.** The key is never the left-most
+`X-Forwarded-For` entry, which the client writes: rotating that header buys no new window. A client
+outside the trusted networks cannot spend someone else's budget by forging their address (a provider's
+webhook address, say); a client inside them can (see below). An IPv6 client is keyed by its /64.
+
+| Setting | Chart value | Default | What it does |
+| :-- | :-- | :-- | :-- |
+| `CHOREGOS_TRUSTED_PROXY_CIDRS` | `choregos-api.trustedProxyCidrs` | code: `[]`; chart: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` | a JSON list of the proxies' networks. A peer outside them is the client; otherwise `X-Forwarded-For` is read right to left and the first entry outside them is the client. Empty: the TCP peer is the client and the header is ignored |
+| `CHOREGOS_TRUSTED_PROXY_HOPS` | `choregos-api.trustedProxyHops` | `0` | only without CIDRs: the number of proxies that each append one entry; the client is the entry the farthest of them appended |
+
+The API refuses to start on a value of `CHOREGOS_TRUSTED_PROXY_CIDRS` that is not a network, and when
+both settings are set. The chart owns both names: `global.extraEnv` naming either fails at render.
+
+The chart trusts the private ranges because every in-cluster hop (the gateway, the console's Next
+server) has a private address. The cost is that any other client inside a trusted range that can reach
+the API can write `X-Forwarded-For` entries the API will believe:
+
+- **Runner pods, on any cluster with a private pod network, cloud or on-prem.** They run agent code,
+  their pod address is inside the default ranges, and `choregos-runner-egress` lets them call the API
+  directly. Agent code can send webhook requests that carry a provider's address (GitHub's, say) and
+  spend that provider's budget on every replica the Service reaches. The provider's real deliveries then get `429` until the minute
+  passes, and GitHub does not redeliver on its own. An invalid signature does not help: the limiter
+  counts before the route checks it.
+- **On-prem clients** with private addresses, in the same way.
+
+**Narrow the list** to the networks of the ingress controller (or gateway) pods and the console pods
+where the pod network allows it, i.e. where those pods draw from an IP pool that runners do not use (a
+dedicated node pool's pod range, a CNI IP pool per namespace). With every hop's address known, list
+only those (`--set-json 'choregos-api.trustedProxyCidrs=["10.42.0.0/16"]'`). On a flat pod network,
+where every pod shares one pod CIDR, the default leaves the runner case open. #1061 tracks trusting
+proxies by identity rather than by range.
+
+**Widen the list** when a load balancer, CDN or WAF in front of the API has public proxy addresses: add
+every address it connects from or writes into `X-Forwarded-For` to `choregos-api.trustedProxyCidrs`
+(Google Cloud load balancers: `35.191.0.0/16`, `130.211.0.0/22` and the forwarding rule's own address,
+which they append after the client's; a CDN: its edge ranges). `--set-json` replaces the whole list, so
+keep the private ranges in it. Otherwise the API takes that proxy's address for the client, and every
+client behind it shares one window.
+
+The console's Next server is a trusted hop: it proxies `/api/v1` to the API, so the browser's address
+must reach the API in `X-Forwarded-For`. **If every console sign-in shares one window** (one user's
+retries throttle everyone), the web hop is not forwarding `X-Forwarded-For`, and the key has become the
+web pod's address.
 
 ## Gateways and what each can do
 

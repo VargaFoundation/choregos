@@ -47,13 +47,13 @@ from choregos_contracts import (
     WorkItemRef,
 )
 from choregos_core import (
-    KNOWN_BACKEND_NAMES,
     ModelResolutionError,
     ModelResolver,
     backend_enabled,
     telemetry,
     utcnow,
 )
+from choregos_core.cross_review import reviewer_candidates
 from choregos_core.memory_bindings import Binding, legacy_scope, merge_context_packs
 from choregos_core.redaction import REDACTED
 from sqlalchemy import select
@@ -202,7 +202,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # The organisation's model catalogue (ADR 0060): a model it disabled after the agent was
         # published stops the stage here, before any key is minted.
         resolver = ModelResolver(
-            gateway_url=settings.gateway_url,
+            # The gateway the key is minted on (ADR 0109): a connector's, else the deployment's.
+            gateway_url=getattr(bundle, "gateway_url", None) or settings.gateway_url,
             gateway_models=await _gateway_catalogue(bundle),
             catalogue=await load_policy(session, bundle.project.org_id),
         )
@@ -1318,10 +1319,7 @@ async def _reviewer_backend(
     ).scalar_one_or_none()
     if not implementer or implementer != wanted:
         return wanted
-    allowed = list(bundle.config.agent.allowed_backends) or list(KNOWN_BACKEND_NAMES)
-    for candidate in allowed:
-        if candidate == implementer:
-            continue
+    for candidate in reviewer_candidates(implementer, list(bundle.config.agent.allowed_backends)):
         stored = await _backend_row(session, candidate)
         if not backend_enabled(candidate, stored.enabled if stored else None):
             continue  # S42-07c: a backend the platform disabled is not a reviewer

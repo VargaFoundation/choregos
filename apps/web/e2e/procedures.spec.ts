@@ -4,18 +4,19 @@ import { expect, test } from "@playwright/test";
  * The setup procedure beside every "add" form (S39-23b, ADR 0067), on the console's mock API,
  * which serves the real procedure files rendered with an example address. Not the live API.
  */
-test("declaring a SharePoint connector opens its procedure beside the form, at the first section", async ({ page }) => {
+test("declaring a SharePoint connector opens its procedure over the page, at the first section", async ({ page }) => {
   await page.goto("/admin/connectors");
-  await page.locator("label:has(span:text-is('Type')) select").selectOption("documents/sharepoint");
+  const type = page.locator("label:has(span:text-is('Type')) select");
+  const before = await type.boundingBox();
+  await type.selectOption("documents/sharepoint");
   const panel = page.getByTestId("procedure-panel");
   await expect(panel.getByRole("heading", { level: 2 })).toHaveText("Connect SharePoint and OneDrive");
   await expect(panel.getByRole("heading", { level: 3 }).first()).toHaveText("Before you start");
   await expect(panel.getByTestId("procedure-section-permissions")).toContainText("Sites.Selected");
-  // The form is still usable while the panel is open: the page made room for it.
+  // The panel lies over the page: opening it never reflows the form being filled in.
+  const after = await type.boundingBox();
+  expect(before && after && after.x === before.x && after.width === before.width).toBe(true);
   await expect(page.getByRole("button", { name: "Declare" })).toBeVisible();
-  const box = await page.getByRole("button", { name: "Declare" }).boundingBox();
-  const side = await panel.boundingBox();
-  expect(box && side && box.x + box.width <= side.x + 1).toBe(true);
   // Close, and reopen from the button.
   await panel.getByTestId("procedure-close").click();
   await expect(panel).toHaveCount(0);

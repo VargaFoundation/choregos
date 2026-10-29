@@ -43,6 +43,7 @@ import type {
   AgentCredential,
   AgentMetrics,
   AgentMetricsSummary,
+  BuiltinAgent,
   ImplicitAgent,
   ApiToken,
   ProjectAgent,
@@ -54,6 +55,7 @@ import type {
   SkillGitPreview,
   SkillVersion,
   CostReport,
+  CrossBackendReport,
   DoraReport,
   FindingPage,
   MeDto,
@@ -82,12 +84,13 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
-import type { OutboundProxyPut, OutboundProxyState } from "@/lib/types";
+import type { OutboundProxyPut, OutboundProxyState, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
+import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
 
@@ -477,6 +480,11 @@ function run(id: string, role: string, status: string, cost: number, summary: st
       runs: 1,
     },
     allowed_paths: ["src/orders/**", "tests/orders/**"],
+    // Who it runs as and what it may call (ADR 0107): resolved by the API, never a secret.
+    agent_slug: "developer",
+    agent_version: 3,
+    initiated_by: "person:augustin@varga.dev",
+    tool_connectors: [{ name: "atlassian", type: "mcp", auth_scheme: "basic", account: "svc-choregos@varga.dev" }],
     result: {
       schema: "choregos/StageResult/v1",
       status: status === "running" ? "done" : "done",
@@ -1083,6 +1091,16 @@ export const dora: DoraReport = {
   time_to_restore: { value: 1.6, unit: "hours (median)", level: "high", sample: 2 },
 };
 
+/** The cross-backend review of billing-api (S47-17): enough reviews on each side for a verdict. */
+export const crossBackend: CrossBackendReport = {
+  since: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
+  cross_backend_required: true,
+  same_backend: { reviews: 8, caught: 2, catch_rate: 0.25, backends: ["claude-code"] },
+  other_backend: { reviews: 12, caught: 6, catch_rate: 0.5, backends: ["codex"] },
+  verdict: "cross review catches more",
+  detail: "another backend finds something in 50% of the reviews, the same one in 25% (+25.0%).",
+};
+
 export const workflow: WorkflowDef = {
   name: "default-simple",
   version: 1,
@@ -1183,6 +1201,72 @@ export const workflowRouting: WorkflowRouting = {
   default: "default-simple",
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
 };
+
+const requirement = (capability: string, reason: string) => ({ capability, reasons: [reason] });
+
+/** The workflow catalogue (ADR 0111): core, a template's, a plugin's with an agent nobody provides, a shared one. */
+export const workflowCatalogue: WorkflowCatalogueEntry[] = [
+  {
+    source: "core",
+    name: "default-request",
+    version: 1,
+    title: "default-request",
+    summary: "Brief → human approval → deliverable → human acceptance. Needs no repository.",
+    tags: [],
+    requires: [
+      requirement("tracker", "work items live in a tracker: the internal one unless you connect another"),
+      requirement("runtime", "default-request: the agent assistant runs somewhere"),
+      requirement("gateway", "default-request: the agent assistant calls models"),
+    ],
+    needs_repository: false,
+    groups: ["product-owners"],
+    agents: [],
+    yaml: workflow.yaml,
+  },
+  {
+    source: "core",
+    name: "default-simple",
+    version: 1,
+    title: "default-simple",
+    summary: "Refinement → human approval → implementation → verification → PR → merge → release train.",
+    tags: [],
+    requires: [
+      requirement("tracker", "work items live in a tracker: the internal one unless you connect another"),
+      requirement("scm", "default-simple: the agent dev (implement) works in a repository"),
+      requirement("cd", "default-simple: the state deployed_prod is production"),
+    ],
+    needs_repository: true,
+    groups: ["product-owners", "release-captains"],
+    agents: [],
+    yaml: workflow.yaml,
+  },
+  {
+    source: "template:joiners-leavers",
+    name: "onboarding",
+    version: 1,
+    title: "Onboarding",
+    summary: "A joiner's accounts, equipment and access, planned by an agent and approved by HR.",
+    tags: ["hr"],
+    requires: [requirement("tracker", "work items live in a tracker: the internal one unless you connect another")],
+    needs_repository: false,
+    groups: ["hr"],
+    agents: [{ actor: "coordinator", slug: "onboarding-coordinator", version: null, resolution: "org", plugin: null, display_name: "Onboarding coordinator" }],
+    yaml: workflow.yaml,
+  },
+  {
+    source: "plugin:servicenow",
+    name: "incident-intake",
+    version: 1,
+    title: "Incident intake",
+    summary: "An incident from ServiceNow, triaged by an agent, routed to its team.",
+    tags: ["itsm"],
+    requires: [requirement("tracker", "work items live in a tracker: the internal one unless you connect another")],
+    needs_repository: false,
+    groups: ["service-desk"],
+    agents: [{ actor: "triager", slug: "snow-triager", version: null, resolution: "unresolved", plugin: null, display_name: null }],
+    yaml: workflow.yaml,
+  },
+];
 
 /** Le flux d'incident : ses demandes portent des champs, que le formulaire déduit de `inputs`. */
 export const hotfix: WorkflowDef = {
@@ -1307,6 +1391,50 @@ function resolutionDemo(path: string): unknown[] {
       ? { ref, slug, status: "resolved", version: Number(ref.split("@")[1] ?? 1), pinned: false, display_name: titre, lifecycle: "active", in_catalogue: true, reason: null }
       : { ref, slug, status: "not_installed", version: null, pinned: false, display_name: null, lifecycle: null, in_catalogue: true, reason: `agent \`${slug}\` does not exist in the project's organisation` };
   });
+}
+
+/** `GET /projects/{id}/builtin-agent`: what the role's built-in agent runs, as the API would say it. */
+export function builtinAgentDemo(path: string): BuiltinAgent {
+  const query = new URLSearchParams(path.split("?")[1] ?? "");
+  const role = query.get("role") ?? "implement";
+  const model = query.get("model") ?? "profile:by_size";
+  const playbook = query.get("playbook") ?? role;
+  const choice = (size: string | null, profile: string, factor = 1) => ({
+    size,
+    profile,
+    litellm_model: `platform/${profile}`,
+    provider_model: profile === "strong" ? "anthropic/claude-opus-5-5" : "anthropic/claude-sonnet-5-5",
+    turns_factor: factor,
+    error: null,
+    warnings: [],
+  });
+  return {
+    role,
+    playbook,
+    playbook_origin: "package",
+    instructions: `You carry the ${role} role.\n\n## Work item\n**<work item key>** — <work item title>\n\n## Invariants\n- Write \`.choregos/result.json\`.`,
+    instructions_error: null,
+    instructions_template: `You carry the ${role} role.\n\n## Work item\n**{{ ticket.get('key', '') }}** — {{ ticket.get('title', '') }}\n`,
+    model,
+    models:
+      model === "profile:by_size"
+        ? [choice("S", "standard"), choice("M", "standard"), choice("L", "strong"), choice("XL", "strong", 1.5)]
+        : [choice(null, model.replace(/^profile:/, ""))],
+    backend: query.get("backend") ?? "claude-code",
+    backend_source: query.get("backend") ? "actor" : "project",
+    max_turns: Number(query.get("max_turns") ?? 80),
+    max_minutes: Number(query.get("max_minutes") ?? 60),
+    limits_source: query.get("max_turns") || query.get("max_minutes") ? "actor" : "policy",
+    memory: ["project:shared (write)"],
+    mcp_servers: [
+      {
+        name: "choregos",
+        description: "The platform's tools; every write goes through the internal API",
+        tools: ["validate_result", "report_finding", "request_scope_change", "ask_human", "get_ticket", "search_memory"],
+      },
+      { name: "memory", description: "The project's shared memory (Ecphoria)", tools: [] },
+    ],
+  };
 }
 
 const releaseFull: WorkflowDef = {
@@ -2293,6 +2421,9 @@ orgConnectors.push({
   ],
 });
 
+// The server of the default plugin `servicenow` (S43-08): an organisation connector named after it, not configured yet.
+orgConnectors.push(serverConnectorOf("servicenow", "0.1.0", "servicenow"));
+
 export const projectOperations: ProjectOperation[] = [
   { connector: "entra-acme", operation: "read_user", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
   { connector: "entra-acme", operation: "create_account", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
@@ -2668,6 +2799,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (channels !== undefined) return structuredClone(channels) as T;
   const network = egressApi(method, path.split("?")[0] ?? path, body);
   if (network !== undefined) return network as T;
+  const plugins = pluginsApi(method, bare, body, orgConnectors);
+  if (plugins !== undefined) return plugins as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
@@ -2829,6 +2962,25 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     workflowRouting.rules = corps.rules;
     for (const w of workflowSummaries) w.is_default = w.name === corps.default;
     return workflowRouting as T;
+  }
+  if (method === "POST" && /^\/projects\/[^/]+\/workflow-adoptions$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as WorkflowAdopt;
+    const entry = workflowCatalogue.find((e) => e.source === corps.source && e.name === corps.name);
+    if (!entry) throw new ApiError(404, { detail: `Catalogue workflow ${corps.source}/${corps.name} not found` });
+    const missing = entry.agents.filter((a) => a.resolution === "unresolved").map((a) => `\`${a.slug}\``);
+    if (missing.length)
+      throw new ApiError(422, {
+        detail: `\`${entry.name}\` names agents this organisation does not have and no catalogue provides: ${missing.join(", ")}. An organisation administrator installs the plugin that ships them first; adopting never installs one.`,
+      });
+    const name = corps.as || entry.name;
+    if (workflowSummaries.some((w) => w.name === name))
+      throw new ApiError(409, { detail: `\`${name}\` already exists: open it to publish its next version, or choose another name` });
+    workflowSummaries.push({ name, version: 1, is_default: false, open_items: 0, created_by: "you", updated_at: new Date().toISOString() });
+    if (corps.make_default) {
+      workflowRouting.default = name;
+      for (const w of workflowSummaries) w.is_default = w.name === name;
+    }
+    return { ...workflow, name, version: 1, source: "catalogue", origin: `${entry.source}/${entry.name}@${entry.version}`, is_default: !!corps.make_default } as T;
   }
   const desactive = /^\/projects\/[^/]+\/workflows\/([^/]+)\/deactivate$/.exec(chemin ?? "");
   if (method === "POST" && desactive) {
@@ -3250,6 +3402,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (at >= 0) proposedToGlobal.splice(at, 1);
     return { status: "accepted" } as T;
   }
+  // The re-import is scheduled, as the API's 202 says (S47-17): no body.
+  if (method === "POST" && /^\/projects\/[^/]+\/memory\/reimport$/.test(path.split("?")[0] ?? path)) return undefined as T;
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   if (/^\/orgs\/[^/]+\/models$/.test(route ?? "")) return modelCatalogue as T;
@@ -3321,7 +3475,27 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   // The runs of an agent, newest first (S30-05).
   if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
   if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
+  if (/^\/projects\/[^/]+\/workflow-agents$/.test(route ?? ""))
+    return implicitAgents().map((a) => ({ ...a, agent: null, registered: false })) as T;
   if (/^\/projects\/[^/]+\/agent-resolution$/.test(route ?? "")) return resolutionDemo(path) as T;
+  if (/^\/projects\/[^/]+\/builtin-agent$/.test(route ?? "")) return builtinAgentDemo(path) as T;
+  const groupMatch = /^\/projects\/[^/]+\/groups\/([^/]+)\/members$/.exec(route ?? "");
+  if (groupMatch)
+    return {
+      group: decodeURIComponent(groupMatch[1]!),
+      members: [
+        { email: "lea@acme.dev", display_name: "Léa", can_decide: true },
+        { email: "max@acme.dev", display_name: "Max", can_decide: false },
+      ],
+    } as T;
+  const activityMatch = /^\/projects\/[^/]+\/workflows\/([^/]+)\/activity$/.exec(route ?? "");
+  if (activityMatch)
+    return {
+      workflow: decodeURIComponent(activityMatch[1]!),
+      days: 30,
+      states: [{ state: "ready", open_items: 2, waiting_since: new Date(Date.now() - 3 * 86_400_000).toISOString() }],
+      steps: [{ transition: "t-implement", runs: 4, succeeded: 3, failed: 1, cost_usd: 6.4, median_minutes: 18 }],
+    } as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   if (method === "GET" && /^\/(orgs|projects)\/[^/]+\/costs$/.test(chemin ?? "") && path.includes("group_by=")) {
@@ -3432,6 +3606,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/trains\/staging$/, trains.staging],
     [/^\/projects\/[^/]+\/costs$/, costs],
     [/^\/projects\/[^/]+\/metrics\/dora$/, dora],
+    [/^\/projects\/[^/]+\/metrics\/cross-backend$/, crossBackend],
     [/^\/projects\/[^/]+\/workflow$/, workflow],
     [/^\/projects\/[^/]+\/workflows$/, workflowSummaries],
     [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
@@ -3441,6 +3616,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
+    [/^\/orgs\/[^/]+\/workflow-catalogue$/, workflowCatalogue],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],

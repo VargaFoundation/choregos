@@ -63,7 +63,14 @@ def register() -> None:
     )
 
     from choregos_ontology.service import store  # noqa: F401 - adds the tables to the core's Base
-    from choregos_ontology.service.actions import EFFECT, EVIDENCE, ontology_effect, ontology_evidence
+    from choregos_ontology.service.actions import (
+        EFFECT,
+        EFFECT_EN,
+        EVIDENCE,
+        EVIDENCE_EN,
+        ontology_effect,
+        ontology_evidence,
+    )
     from choregos_ontology.service.api import install_from_template, router
     from choregos_ontology.service.tools import (
         call_tool,
@@ -79,6 +86,9 @@ def register() -> None:
     # in the worker that executes. Their policy is the ontology's, decided at proposal time.
     declarer_un_effet(EFFECT, ontology_effect, politique="approval")
     declarer_un_effet(EVIDENCE, ontology_evidence, politique="approval")
+    # The same two under their English kinds (S45-03, ADR 0098 §4): a row that names either resolves.
+    declarer_un_effet(EFFECT_EN, ontology_effect, politique="approval")
+    declarer_un_effet(EVIDENCE_EN, ontology_evidence, politique="approval")
     # The gate of external MCP clients (ADR 0030): the same ontology, with the person's rights.
     declarer_des_outils_pour_les_humains(
         NAME, list_tools_for_a_person, call_tool_for_a_person, pending_for_a_person

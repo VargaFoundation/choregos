@@ -392,7 +392,7 @@ the session with its transcript and close it.
 gateway's realtime socket (`ws(s)://<gateway>/realtime?model=…`), with the session's key.
 
 - **Before the socket is accepted**: a browser's `Origin` must be the console's, the API's or one of
-  `CHOREGOS_CORS_ORIGINS` (no `Origin` — a CLI, a server — passes); the caller signs in with the session
+  `choregos-api.corsOrigins` (`CHOREGOS_CORS_ORIGINS`, rendered by the chart; no `Origin` — a CLI, a server — passes); the caller signs in with the session
   cookie or an API token and needs `item.control`, as for `/responses`; the organisation's gateway
   must declare the `realtime` capability; the session is opened (one key, the same reservation) and
   the upstream socket connected. Any refusal closes with 1008 and its reason, and no key outlives it.
@@ -510,7 +510,7 @@ One key, one pod, each response priced once.
 
 ### Signatures, by cosign (S41-14)
 
-Publication asks the `cosign` binary the API image carries (v3.1.3) about the **pinned** reference,
+Publication asks the `cosign` binary the API image carries (v3.1.4) about the **pinned** reference,
 `ref@sha256:…`, never a tag: `cosign verify --output json`, by the operator's signer.
 
 - **By key**: `global.images.hostedCosignKeySecret` names a Secret of the release's namespace holding

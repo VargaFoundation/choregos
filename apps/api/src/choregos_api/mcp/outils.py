@@ -607,7 +607,7 @@ async def _outils_des_greffons(ctx: Contexte) -> list[Outil]:
                     str(annonce.get("title") or nom),
                     str(annonce.get("description") or ""),
                     annonce.get("inputSchema") or {"type": "object"},
-                    bool(annonce.get("ecriture")),
+                    bool(annonce.get("write", annonce.get("ecriture"))),  # lang: fr-ok alias:external
                     _executeur_de_greffon(fournisseur, nom),
                 )
             )

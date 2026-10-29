@@ -2,7 +2,7 @@
 apps/orchestrator/src/choregos_orchestrator/__init__.py	3
 apps/orchestrator/src/choregos_orchestrator/activities/__init__.py	2
 apps/orchestrator/src/choregos_orchestrator/activities/actions.py	47
-apps/orchestrator/src/choregos_orchestrator/activities/base.py	26
+apps/orchestrator/src/choregos_orchestrator/activities/base.py	22
 apps/orchestrator/src/choregos_orchestrator/activities/bilan.py	13
 apps/orchestrator/src/choregos_orchestrator/activities/evals.py	23
 apps/orchestrator/src/choregos_orchestrator/activities/execution.py	56

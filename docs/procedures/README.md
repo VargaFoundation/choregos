@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-56 procedures.
+59 procedures.
 
 ## Connectors
 
@@ -17,17 +17,20 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect Confluence Cloud](connector.documents.confluence.md) | an organisation administrator | `documents/confluence` | 2026-10-16 |
 | [Connect a private git repository as a documents source](connector.documents.git.md) | an organisation administrator | `documents/git` | 2026-10-16 |
 | [Connect SharePoint and OneDrive](connector.documents.sharepoint.md) | an organisation administrator | `documents/sharepoint` | 2026-10-16 |
+| [Connect a web site behind a login as a documents source](connector.documents.web.md) | an organisation administrator | `documents/web` | 2026-10-28 |
 | [Connect a pfSense firewall](connector.firewall.pfsense.md) | an organisation administrator | `firewall/pfsense` | 2026-10-16 |
 | [Use the direct gateway (development only)](connector.gateway.direct.md) | the person who operates the platform | `gateway/direct` | 2026-10-16 |
 | [Connect a LiteLLM gateway](connector.gateway.litellm.md) | the person who operates the platform | `gateway/litellm` | 2026-10-16 |
 | [Connect an OpenAI-compatible gateway](connector.gateway.openai-compatible.md) | the person who operates the platform | `gateway/openai-compatible` | 2026-10-16 |
 | [Connect Microsoft Entra ID for joiners and leavers](connector.identity.entra.md) | an organisation administrator | `identity/entra` | 2026-10-16 |
 | [Use Alpha Vantage for daily market data](connector.marketdata.alphavantage.md) | a project owner | `marketdata/alphavantage` | 2026-10-25 |
-| [Combine several market data sources](connector.marketdata.composite.md) | a project owner | `marketdata/composite` | 2026-10-25 |
+| [Combine several market data sources](connector.marketdata.composite.md) | a project owner | `marketdata/composite` | 2026-10-26 |
 | [Use Stooq for daily market data](connector.marketdata.stooq.md) | a project owner | `marketdata/stooq` | 2026-10-16 |
+| [Use Tiingo for daily market data](connector.marketdata.tiingo.md) | a project owner | `marketdata/tiingo` | 2026-10-26 |
 | [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
 | [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-10-16 |
-| [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-16 |
+| [Connect an MCP server through your organisation's MCP gateway](connector.mcp.mcp-gateway.md) | an organisation administrator | `mcp/mcp-gateway` | 2026-10-27 |
+| [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-28 |
 | [The demo device management (demonstration only)](connector.mdm.demo.md) | anyone | `mdm/demo` | 2026-10-16 |
 | [Connect Ecphoria, the platform's memory](connector.memory.ecphoria.md) | the person who operates the platform | `memory/ecphoria` | 2026-10-16 |
 | [Use the built-in lexical memory](connector.memory.lexical.md) | the person who operates the platform | `memory/lexical` | 2026-10-16 |
@@ -44,7 +47,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-10-19 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
-| [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-16 |
+| [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-10-28 |
 | [Use a plugin's server as the board](connector.tracker.plugin.md) | a project owner | `tracker/plugin` | 2026-10-28 |
 | [Search the web through Brave Search API](connector.web_search.brave.md) | an organisation administrator | `web_search/brave` | 2026-10-20 |
 | [Search the web through a self-hosted Firecrawl](connector.web_search.firecrawl.md) | an organisation administrator | `web_search/firecrawl` | 2026-10-23 |
@@ -58,7 +61,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Add a Confluence space or page tree to a knowledge base](source.confluence.md) | an organisation administrator | `confluence` | 2026-10-16 |
 | [Add a git repository's documentation to a knowledge base](source.git.md) | a project owner | `git` | 2026-10-16 |
 | [Add a SharePoint or OneDrive source to a knowledge base](source.sharepoint.md) | an organisation administrator | `sharepoint` | 2026-10-16 |
-| [Add a web site to a knowledge base](source.web.md) | a project owner | `web` | 2026-10-16 |
+| [Add a web site to a knowledge base](source.web.md) | a project owner | `web` | 2026-10-28 |
 
 ## Clients of the MCP door
 

@@ -618,6 +618,68 @@ The longest matching prefix wins; each area is one baseline file.
 5. `git checkout -- tools/english_baseline` before committing; the pull request body gives the
    totals before and after.
 
+### Compatibility aliases
+
+A renamed name that only gets imported keeps a typed alias in the module that defines it,
+`Old = New  # lang: fr-ok alias:internal` (ADR 0098 §3 (b)). A plain alias does not forward a patch:
+`monkeypatch.setattr(module, "Old", fake)` rebinds `Old` and leaves `New`, which the module's own
+code reads. A module whose former names tests patch keeps the typed alias and calls
+`choregos_core.compat.alias_names` once, at its end:
+
+```python
+from choregos_core.compat import alias_names
+
+LIMITER = Limiter(CALLS_PER_MINUTE)
+
+LIMITEUR = LIMITER  # lang: fr-ok alias:internal
+alias_names(__name__, {"LIMITEUR": "LIMITER"})  # lang: fr-ok alias:internal
+```
+
+The module's class becomes a `ModuleType` subclass with one property per former name, which
+reads, writes and deletes the English name: `module.LIMITEUR`, `from module import LIMITEUR`,
+`monkeypatch.setattr(module, "LIMITEUR", fake)` and its undo all reach `LIMITER`, and a patch of
+`LIMITER` is seen through `LIMITEUR`. A second call on the same module extends the same class, so
+several stories can add their pairs. A former name that another repository or an operator uses
+(`alias:external`, ADR 0098 §3 (f)) passes `removed_in=EXTERNAL_ALIAS_REMOVAL` (`0.22.0`) and
+warns with a `DeprecationWarning` each time it is read; the test suite ignores those warnings.
+A renamed module leaves a shim at its former path that ends with
+`replace_module(__name__, sys.modules["package.new_module"])`, so `import package.former` and
+`from package import former` give the new module.
+
+Never a module `__getattr__`: strict mypy types what it returns as `Any`, and the former name
+loses its type. Never `alias_names` or `replace_module` in a module under
+`apps/orchestrator/src/choregos_orchestrator/workflows/`: the Temporal sandbox re-imports those
+modules, and they keep plain typed aliases.
+
+## Layering: what may import what
+
+The API is a dependency that only shrinks ([ADR 0099](adr/0099-the-api-is-a-dependency-that-only-shrinks.md)).
+
+- The orchestrator and extensions (entry-point packages such as `choregos_ontology`) may import the
+  API's persistence and services, never its HTTP layer (`routers`, `deps`, `main`, `mcp`, `a2a`,
+  `fastapi`).
+- Services never import routers. One import remains (`services/readiness.py`), ratcheted and
+  removed by S47-08.
+- Routers share helpers through services, not by importing each other's private names. An import
+  inside one router package (`routers/agents/`) is allowed.
+- There will be one organisation lookup, `services.organisations.organisation_by_slug`. It does
+  not exist yet: S47-09 creates it.
+
+Five guards count the crossings that exist today and refuse a new one. Each asserts
+`count <= CEILING`, so a removal never turns it red:
+
+| Guard | Counts |
+|---|---|
+| `tests/architecture/test_orchestrator_imports_of_the_api.py` | `choregos_api` imports in `apps/orchestrator/src` |
+| `tests/architecture/test_packages_imports_of_the_api.py` | `choregos_api` imports in `packages/*/src` (only `choregos_ontology/service`) |
+| `apps/api/tests/test_layering_services_do_not_import_routers.py` | modules outside `routers/` that import a router |
+| `apps/api/tests/test_layering_router_private_imports.py` | private names imported between router units |
+| `apps/api/tests/test_one_organisation_lookup.py` | module-level `_organisation` / `_org` helpers in routers |
+
+Hand-off rule: a PR from any track that removes a counted import lowers that guard's `CEILING` in
+the same PR. A PR that adds one is refused, unless it is a mechanical rename that splits a
+statement (raise `CEILING` by that number and say so in the PR body) or ADR 0099 is amended.
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test

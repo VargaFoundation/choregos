@@ -32,7 +32,7 @@ from choregos_runner.exits import Exit
 from choregos_runner.loopback.connect import ConnectProxy
 from choregos_runner.runner import Runner
 
-from .conftest import FakeInternalClient, loopback_ports
+from .conftest import FakeInternalClient, loopback_ports, port_of
 
 pytestmark = pytest.mark.asyncio
 
@@ -75,7 +75,8 @@ async def _run(
     """Runs the step with `agent` as its container, its environment the one the executor gives it."""
     client = FakeInternalClient(stage_input)
     runner = Runner(settings, client)  # type: ignore[arg-type]
-    runner.loopback_ports = loopback_ports()
+    # The runner binds its tools server before the loopback: no loopback port may be that one.
+    runner.loopback_ports = loopback_ports(avoid=[port_of(settings.tools_url)])
     runner.readiness_interval = 0.05
     runner.hosted_transport = agent.transport()
     runner.model_transport = (model or FakeModelServer(key=KEY)).transport()
@@ -208,7 +209,7 @@ async def test_the_loopback_model_accepts_the_loopback_key_only(
     stage = _hosted(stage_input)
     client = FakeInternalClient(stage)
     runner = Runner(runner_settings, client)  # type: ignore[arg-type]
-    runner.loopback_ports = loopback_ports()
+    runner.loopback_ports = loopback_ports(avoid=[port_of(runner_settings.tools_url)])
     runner.hosted_transport = agent.transport()
     runner.model_transport = model.transport()
     assert stage.hosted is not None

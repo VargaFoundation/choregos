@@ -41,6 +41,11 @@ ALREADY_FIXED_MARKER = "<!-- choregos:already-fixed -->"
 STARTED_REASON = "started"
 
 
+def _via(bundle: Any) -> dict[str, Any]:
+    """The tracker write an event stands for (ADR 0107 point 4): its connector type and account."""
+    return {"via": bundle.tracker_via} if bundle.tracker_via else {}
+
+
 @activity.defn(name="mirror_state")
 async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
     """Mirrors the workflow state in the tracker: the board column and the scoped label.
@@ -86,6 +91,7 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
                 project_slug=bundle.slug,
                 subject=item.tracker_key,
                 **{"from": previous, "to": state_name, "reason": payload.get("reason", ""), **parked},
+                **_via(bundle),
             )
         return {"state": state_name, "display": state.display if state else state_name}
 
@@ -296,6 +302,7 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             kind=payload["kind"],
             request_id=row.id,
             notified=notifiee,
+            **_via(bundle),
         )
         return {"request_id": row.id, "reused": False, "notified": notifiee}
 

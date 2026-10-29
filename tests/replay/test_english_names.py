@@ -8,6 +8,7 @@ histories are NEVER renamed: a patch id that changes is a marker the replayer no
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -16,7 +17,8 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS = ROOT / "apps" / "orchestrator" / "src" / "choregos_orchestrator" / "workflows"
+ORCHESTRATOR = ROOT / "apps" / "orchestrator" / "src"
+WORKFLOWS = ORCHESTRATOR / "choregos_orchestrator" / "workflows"
 HISTORIES = Path(__file__).parent / "histories"
 
 #: English → French, the eight activities renamed by S34-02.
@@ -60,6 +62,35 @@ def test_the_worker_answers_to_both_names() -> None:
     names = {nom_de_l_activite(activity) for activity in ALL_ACTIVITIES}
     missing = sorted(n for pair in RENAMED.items() for n in pair if n not in names)
     assert not missing, f"not registered on the worker: {missing}"
+
+
+def _is_activity_defn(node: ast.expr) -> bool:
+    target = node.func if isinstance(node, ast.Call) else node
+    return (
+        isinstance(target, ast.Attribute)
+        and target.attr == "defn"
+        and ast.unparse(target.value) == "activity"
+    )
+
+
+def test_every_activity_names_itself() -> None:
+    """An activity's wire name is the `name=` of its decorator, never its Python function name: a
+    rename of the function (S45) then leaves every recorded history and every workflow in flight
+    scheduling a name the worker still answers to (S45-03)."""
+    seen, bare = 0, []
+    for path in sorted(ORCHESTRATOR.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for decorator in node.decorator_list:
+                if not _is_activity_defn(decorator):
+                    continue
+                seen += 1
+                named = isinstance(decorator, ast.Call) and any(k.arg == "name" for k in decorator.keywords)
+                if not named:
+                    bare.append(f"{path.relative_to(ROOT)}:{decorator.lineno} {node.name}")
+    assert seen, "no `@activity.defn` found: the scan reads nothing"
+    assert not bare, f"`@activity.defn` without `name=`: {bare}"
 
 
 def test_the_workflow_takes_both_signals() -> None:

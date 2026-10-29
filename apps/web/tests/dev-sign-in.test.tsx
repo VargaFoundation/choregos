@@ -54,3 +54,31 @@ describe("development sign-in on the local install", () => {
     expect(screen.queryByLabelText("Development e-mail")).toBeNull();
   });
 });
+
+describe("sign-in with the organisation's own identity provider (ADR 0108)", () => {
+  function continued(): URL {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(assign).toHaveBeenCalledOnce();
+    return new URL(String(assign.mock.calls[0]?.[0]), "http://localhost:3000");
+  }
+
+  it("sends the typed address as the login hint, so its domain picks the provider", async () => {
+    query = new URLSearchParams({ next: "/inbox" });
+    await open({});
+    fireEvent.change(screen.getByLabelText("Work e-mail"), { target: { value: " bob@acme.example " } });
+    const url = continued();
+    expect(url.pathname).toBe("/api/v1/auth/login");
+    expect(url.searchParams.get("login_hint")).toBe("bob@acme.example");
+    expect(url.searchParams.get("redirect_to")).toBe("/inbox");
+  });
+
+  it("keeps the organisation of a sign-in link on both ways in", async () => {
+    query = new URLSearchParams({ org: "acme" });
+    await open({});
+    const link = screen.getByRole("link", { name: "Continue with the identity provider" });
+    expect(new URL(link.getAttribute("href") ?? "", "http://localhost:3000").searchParams.get("org")).toBe("acme");
+    expect(continued().searchParams.get("org")).toBe("acme");
+  });
+});

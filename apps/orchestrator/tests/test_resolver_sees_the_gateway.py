@@ -55,3 +55,25 @@ async def test_a_gateway_that_cannot_list_its_models_does_not_stop_the_stage(
     monkeypatch.setattr(setup.adapters.gateway, "list_models", unreachable)
     prepared = await _prepare(setup)
     assert prepared["stage_input"]["model"]["litellm_model"].startswith("platform/")
+
+
+async def test_the_agent_calls_the_organisations_own_gateway(setup: Fixture) -> None:
+    """S44-04: the key of a project without a gateway is minted on its organisation's own gateway, so
+    the agent must call that gateway, not the deployment's `gateway_url`."""
+    from choregos_api.db.models import OrgConnector, Project
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        session.add(
+            OrgConnector(
+                org_id=project.org_id,
+                name="acme-llm",
+                kind="gateway",
+                type="fake",
+                config={"base_url": "https://llm.acme.example/v1"},
+            )
+        )
+    prepared = await _prepare(setup)
+    assert prepared["stage_input"]["model"]["base_url"] == "https://llm.acme.example/v1"

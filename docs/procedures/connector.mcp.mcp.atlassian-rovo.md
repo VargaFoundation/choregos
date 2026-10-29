@@ -2,7 +2,7 @@
 
 # Connect Atlassian's Rovo MCP Server
 
-For an organisation administrator. Procedure `connector.mcp.mcp.atlassian-rovo`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For an organisation administrator. Procedure `connector.mcp.mcp.atlassian-rovo`, version 2, reviewed 2026-10-28 against the vendor's own pages.
 
 ## Before you start
 
@@ -19,10 +19,8 @@ For an organisation administrator. Procedure `connector.mcp.mcp.atlassian-rovo`,
    - a **personal API token with scopes** (id.atlassian.com, Security, API tokens), sent as **Basic**
      with the account's email;
    - a **service account API key** (Directory, Service accounts), sent as **Bearer**.
-3. The server's endpoint is `https://mcp.atlassian.com/v1/mcp`. The older `/v1/sse` endpoint stopped on
-   30 June 2026. The MCP server catalogue may list a newer `/v2/mcp` address that signs in with OAuth
-   instead: this procedure is the API-token route on `/v1/mcp`; check Atlassian's documentation for the
-   address your site supports.
+3. The server's endpoint is `https://mcp.atlassian.com/v2/mcp`, for OAuth and API tokens alike
+   (Atlassian's API token page, 2026-10-28). The older `/v1/sse` endpoint stopped on 30 June 2026.
 
 ## Permissions
 
@@ -34,13 +32,13 @@ For an organisation administrator. Procedure `connector.mcp.mcp.atlassian-rovo`,
 
 ## In Choregos
 
-1. Install it from the MCP catalogue ("Atlassian Rovo MCP"), or Administration, **Connectors**,
-   **Declare**: capability **MCP**, type **MCP server**.
-2. `url`: `https://mcp.atlassian.com/v1/mcp`.
-3. Personal token: `auth_scheme` `basic`, `username` the account's email. Service account key:
-   `auth_scheme` `bearer`. A personal token sent as Bearer fails.
-4. `token`: the token or key, in the password field.
-5. **Discover**, then open the tools the agents need.
+1. A service account key: install it from the MCP catalogue ("Atlassian Rovo"), with the key as its
+   credential. The install sends it as Bearer to `https://mcp.atlassian.com/v2/mcp`.
+2. A personal token: Administration, **Connectors**, **Declare**: type **MCP server**, `url`
+   `https://mcp.atlassian.com/v2/mcp`, `auth_scheme` `basic`, `username` the account's email. A
+   personal token sent as Bearer fails, so the catalogue install does not fit it.
+3. `token`: the token or key, in the password field.
+4. **Discover**, then open the tools the agents need.
 
 ## Test it
 
@@ -61,7 +59,7 @@ Press **Discover**. The list should include Jira and Confluence tools, not only 
 | :-- | :-- |
 | `auth_scheme` | basic for a personal API token, bearer for a service account API key |
 | `token` | the API token or key, typed once |
-| `url` | https://mcp.atlassian.com/v1/mcp |
+| `url` | https://mcp.atlassian.com/v2/mcp |
 | `username` | the account's email, for basic |
 
 ## Network egress

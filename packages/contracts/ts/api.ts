@@ -299,7 +299,7 @@ export type ConnectorUpsert = {
   secret_refs?: {
     [key: string]: string;
   };
-  /** secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). */
+  /** secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089). */
   secret_values?: {
     [key: string]: string;
   };
@@ -376,6 +376,8 @@ export type ConnectorType = {
   capabilities?: Array<string>;
   /** the configuration keys that are secrets */
   secret_fields?: Array<string>;
+  /** the secret fields that take several keys, one per slot (`api_key.2` … `api_key.10`, ADR 0089) */
+  pooled_fields?: Array<string>;
 };
 
 export type ConnectorOperation = {
@@ -425,6 +427,20 @@ export type OrgConnector = {
   availability?: ConnectorAvailability;
   /** the projects it is on for, among those the caller sees; empty with all_projects (ADR 0074) */
   enabled_projects?: Array<string>;
+  /** the plugin server this connector runs (ADR 0096): its configuration is the server's `config_schema` and `secret_fields`, not the `mcp` type's; null for any other connector (contract-change S43-08) */
+  server?: OrgConnectorServer | null;
+};
+
+/** What the console needs to configure a plugin's server, read from its declaration (ADR 0096). */
+export type OrgConnectorServer = {
+  plugin: string;
+  version: string;
+  server: string;
+  /** a JSON Schema */
+  config_schema: {
+    [key: string]: unknown;
+  };
+  secret_fields: Array<string>;
 };
 
 /** `all_projects`: every project whose groups match reaches it (the default). `selected_projects`: only the projects it is enabled for (ADR 0074). */
@@ -458,6 +474,8 @@ export type ConnectorCatalogueEntry = {
   capabilities: Array<string>;
   /** field names only, never values */
   secret_fields: Array<string>;
+  /** the secret fields that take several keys, one per slot (ADR 0089) */
+  pooled_fields?: Array<string>;
   /** operations the type declares; an MCP server discovers its own (0) */
   operations: number;
   /** names of the organisation connectors of this type */
@@ -549,6 +567,8 @@ export type McpCatalogueEntry = {
   enablement?: Array<ConnectorEnablement>;
   /** the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067) */
   procedure?: string | null;
+  /** how THIS organisation can install the entry: direct (Choregos holds the credential) and/or gateway (through its MCP gateway, ADR 0105) */
+  install_routes?: Array<"direct" | "gateway">;
 };
 
 export type McpCatalogueInstall = {
@@ -568,6 +588,10 @@ export type McpCatalogueInstall = {
   availability?: ConnectorAvailability;
   /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
   allow_egress?: boolean;
+  /** absent: gateway when the organisation's gateway is required, or when the entry cannot be installed directly and a gateway is available; else direct (ADR 0105) */
+  route?: "direct" | "gateway" | null;
+  /** the server's name at the gateway; defaults to the entry id */
+  gateway_server?: string | null;
 };
 
 export type SkillCatalogueInstall = {
@@ -627,7 +651,7 @@ export type OrgConnectorCreate = {
   secret_refs?: {
     [key: string]: string;
   };
-  /** secret values typed in the console, field -> value: sealed, never returned (ADR 0058) */
+  /** secret values typed in the console, field -> value: sealed, never returned (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089). */
   secret_values?: {
     [key: string]: string;
   };
@@ -813,7 +837,9 @@ export type WorkflowDef = {
   id?: string;
   name: string;
   version: number;
-  source: "repo" | "platform" | "template";
+  source: "repo" | "platform" | "template" | "catalogue";
+  /** For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0111). */
+  origin?: string | null;
   yaml: string;
   json?: S.Workflow;
   checksum: string;
@@ -821,6 +847,68 @@ export type WorkflowDef = {
   is_default?: boolean;
   created_by?: string | null;
   created_at?: string | null;
+};
+
+/** A workflow the organisation can adopt (ADR 0111). */
+export type WorkflowCatalogueEntry = {
+  /** `core`, `template:<name>`, `plugin:<name>` (an installed plugin, the external catalogues) or `org` */
+  source: string;
+  name: string;
+  /** `metadata.version`; for an `org` entry, the number of the share */
+  version: number;
+  /** `metadata.catalogue.title`, else the name */
+  title: string;
+  /** `metadata.catalogue.summary`, else `metadata.description` */
+  summary: string;
+  tags: Array<string>;
+  requires: Array<WorkflowCatalogueRequirement>;
+  /** it requires an `scm`: a project without a repository cannot run it */
+  needs_repository: boolean;
+  /** the human groups its actors name (ADR 0044) */
+  groups: Array<string>;
+  agents: Array<WorkflowCatalogueAgent>;
+  yaml: string;
+  /** for an `org` entry */
+  shared_by?: string | null;
+  /** for an `org` entry: `<project>/<workflow>@<version>` */
+  shared_from?: string | null;
+  shared_at?: string | null;
+};
+
+export type WorkflowCatalogueRequirement = {
+  capability: string;
+  reasons: Array<string>;
+};
+
+/** An agent the workflow names, and where it resolves in this organisation (ADR 0111 §2). */
+export type WorkflowCatalogueAgent = {
+  actor: string;
+  slug: string;
+  /** the `@N` the workflow pins, if any */
+  version?: number | null;
+  /** `org`: the organisation's own agent; `plugin`: installed by a plugin; `remote`: an A2A agent; `catalogue`: absent but in the platform's catalogue, installed on adoption; `unresolved`: nowhere, adoption is refused */
+  resolution: "org" | "plugin" | "remote" | "catalogue" | "unresolved";
+  /** for `plugin`, the plugin that installed it; for `unresolved`, a plugin of a configured source that ships it (`<name> <version> (<source>)`), when one does */
+  plugin?: string | null;
+  display_name?: string | null;
+};
+
+export type WorkflowAdopt = {
+  source: string;
+  name: string;
+  /** the version read; another current version → 409 */
+  version?: number | null;
+  /** the name in the project; `metadata.name` is rewritten */
+  as?: string | null;
+  make_default?: boolean;
+};
+
+export type WorkflowShare = {
+  /** the project's slug or id */
+  project: string;
+  name: string;
+  /** default: the active version */
+  version?: number | null;
 };
 
 export type WorkflowPut = {
@@ -842,6 +930,8 @@ export type WorkflowSummary = {
   open_items: number;
   created_by?: string | null;
   updated_at?: string | null;
+  /** the caller may share it to the organisation's catalogue (ADR 0111 §4, ADR 0074: the server decides) */
+  can_share?: boolean;
 };
 
 export type WorkflowRouting = {
@@ -869,6 +959,8 @@ export type WorkflowValidation = {
   warnings: Array<WorkflowIssue>;
   graph?: WorkflowGraph;
   process?: Array<ProcessStep>;
+  /** the workflow as the engine read it (ADR 0112) */
+  document?: S.Workflow;
 };
 
 /** A transition in plain words — the process view (ADR 0031). */
@@ -885,6 +977,10 @@ export type ProcessStep = {
   gates?: Array<{
     name?: string;
     summary?: string;
+    /** The thresholds the guarantee applies (the platform's defaults when the workflow sets none), and how long an asynchronous one waits. */
+    detail?: string | null;
+    /** True for a guarantee that waits for an outside event (CI, review, scans) up to the transition's `timeout_hours`. */
+    asynchronous?: boolean;
   }>;
   on_fail?: string | null;
   on_reject?: string | null;
@@ -918,9 +1014,11 @@ export type ProcessStep = {
   writes_branch?: boolean;
 };
 
-/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
+/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`, `metadata.catalogue` and `initial` (ADR 0112). `style: block` writes a collection value as indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones. */
 export type WorkflowOperation = {
-  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor";
+  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor" | "set_workflow";
+  style?: "flow" | "block";
+  swap?: boolean;
   [key: string]: unknown;
 };
 
@@ -2018,6 +2116,94 @@ export type ImplicitAgent = {
   max_minutes?: number | null;
 };
 
+/** An `agent` actor of an active workflow, and the registry agent it names, if any. */
+export type WorkflowAgent = {
+  workflow: string;
+  actor: string;
+  role?: string | null;
+  model?: string | null;
+  backend?: string | null;
+  max_turns?: number | null;
+  max_minutes?: number | null;
+  /** `slug` or `slug@N` as the workflow writes it; null for a built-in agent. */
+  agent?: string | null;
+  /** Whether the agent it names exists in the organisation's registry. */
+  registered?: boolean;
+};
+
+export type GroupMember = {
+  email: string;
+  display_name?: string;
+  /** Whether their role lets them answer a step of this project (`item:decide`). */
+  can_decide: boolean;
+};
+
+export type GroupMembers = {
+  group: string;
+  members?: Array<GroupMember>;
+};
+
+export type StateActivity = {
+  state: string;
+  open_items: number;
+  /** When the longest-waiting open item entered this state: its last `state_changed` event into it, else its filing. */
+  waiting_since?: string | null;
+};
+
+export type StepActivity = {
+  transition: string;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  cost_usd: number;
+  median_minutes?: number | null;
+};
+
+export type WorkflowActivity = {
+  workflow: string;
+  days: number;
+  states?: Array<StateActivity>;
+  steps?: Array<StepActivity>;
+};
+
+/** The model a built-in agent runs for one work item size (`size` absent when the size does not matter), or why a run would be refused. */
+export type BuiltinModelChoice = {
+  size?: string | null;
+  profile?: string | null;
+  litellm_model?: string | null;
+  provider_model?: string | null;
+  turns_factor?: number;
+  error?: string | null;
+  warnings?: Array<string>;
+};
+
+export type BuiltinMcpServer = {
+  name: string;
+  description: string;
+  tools?: Array<string>;
+};
+
+/** What a workflow actor that names no registry agent runs. */
+export type BuiltinAgent = {
+  role: string;
+  playbook: string;
+  /** `package` or `deployment` (`CHOREGOS_PLAYBOOKS_DIR`). */
+  playbook_origin?: string | null;
+  instructions?: string | null;
+  instructions_error?: string | null;
+  /** The prompt as a registry agent's instructions (rendered in the sandbox, framed after): what registering the agent gives it. */
+  instructions_template?: string | null;
+  model: string;
+  models?: Array<BuiltinModelChoice>;
+  backend: string;
+  backend_source: "actor" | "project";
+  max_turns: number;
+  max_minutes: number;
+  limits_source: "actor" | "policy";
+  memory?: Array<string>;
+  mcp_servers?: Array<BuiltinMcpServer>;
+};
+
 export type AgentCredentialCreate = {
   kind: "token" | "oauth_client";
   token_id?: string | null;
@@ -2714,6 +2900,102 @@ export type OutboundProxyTest = {
   target: string;
 };
 
+/** How Choregos authenticates to the organisation's MCP gateway (ADR 0105). The credential itself is `McpGatewayPut.secret`, sealed and never returned. */
+export type McpGatewayAuth = {
+  type: "bearer" | "header" | "oauth_client_credentials" | "jwt_assertion";
+  /** for `header`: the header that carries the secret */
+  header_name?: string | null;
+  /** for `oauth_client_credentials`: the token endpoint */
+  token_url?: string | null;
+  client_id?: string | null;
+  scope?: string | null;
+  /** RFC 8707 resource indicator asked of the token endpoint */
+  resource?: string | null;
+  /** audience asked of the token endpoint */
+  token_audience?: string | null;
+};
+
+/** The organisation's MCP gateway as stored (ADR 0105). The secret is never returned, only `secret_set`. */
+export type McpGateway = {
+  /** off: the gateway is kept but unused. available: a connector may go through it. required: new direct `mcp` connectors are refused and existing ones are not called, except a plugin's server (an organisation connector the platform runs, ADR 0096), which is never behind the gateway */
+  mode: "off" | "available" | "required";
+  /** `{server}` is replaced by the server's name at the gateway; no credentials, query or fragment */
+  endpoint: string;
+  /** how the server is named to the gateway: in the path, or in `server_header` */
+  routing: "path" | "header";
+  server_header: string | null;
+  auth: McpGatewayAuth;
+  /** audience of the signed assertion the gateway receives */
+  audience: string | null;
+  /** the header that carries the signed assertion of the caller's identity */
+  identity_header: string | null;
+  timeout_s: number;
+  secret_set: boolean;
+};
+
+export type McpGatewayAssertionKey = {
+  kid: string;
+  created_at: string;
+  /** the key that signs; the others stay published until they are retired */
+  current: boolean;
+};
+
+/** The organisation's assertion keys: public data only (ADR 0105). */
+export type McpGatewayAssertion = {
+  issuer: string;
+  jwks_url: string;
+  keys: Array<McpGatewayAssertionKey>;
+};
+
+export type McpGatewayState = {
+  gateway: McpGateway | null;
+  updated_by: string | null;
+  updated_at: string | null;
+  assertion: McpGatewayAssertion;
+};
+
+export type McpGatewayPut = {
+  mode: "off" | "available" | "required";
+  /** `{server}` is replaced by the server's name at the gateway; no credentials, query or fragment */
+  endpoint: string;
+  routing: "path" | "header";
+  server_header?: string | null;
+  auth: McpGatewayAuth;
+  audience?: string | null;
+  identity_header?: string | null;
+  timeout_s?: number;
+  /** the gateway credential, sealed (ADR 0058) and never returned; absent keeps the stored one */
+  secret?: string;
+  /** open the gateway's host in the organisation's egress allowlist, in the same call; needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
+};
+
+export type McpGatewayTestRequest = {
+  /** the server's name at the gateway */
+  server: string;
+};
+
+export type McpGatewayTest = {
+  ok: boolean;
+  server: string;
+  protocol_version: string | null;
+  server_info: {
+    [key: string]: unknown;
+  } | null;
+  /** how many tools the server lists */
+  tools: number | null;
+  elapsed_ms: number;
+  /** names the gateway; never a credential */
+  error: string | null;
+};
+
+/** A JSON Web Key Set (RFC 7517): public keys only. */
+export type JsonWebKeySet = {
+  keys: Array<{
+    [key: string]: unknown;
+  }>;
+};
+
 /** What an installed plugin brought, by the identifier each item has in the organisation. */
 export type PluginContents = {
   /** agent slugs */
@@ -3205,6 +3487,8 @@ export type WorkItem = {
   /** The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise. */
   budget_usd?: number | null;
   estimate?: CostEstimate | null;
+  /** Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>` for a webhook, `schedule:<name>`… Null for a work item from before S40-22. */
+  initiated_by?: string | null;
   created_at?: string;
   closed_at?: string | null;
 };
@@ -3229,6 +3513,26 @@ export type CostEstimate = {
   p80_usd?: number | null;
   sample_size?: number;
   over_p80?: boolean;
+};
+
+/** A webhook event a project received, and what the platform did with it (S42-06f). */
+export type ReceivedEvent = {
+  id: string;
+  received_at: string;
+  /** jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server> */
+  source: string;
+  event_type: string;
+  delivery_id?: string | null;
+  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready";
+  work_item_key?: string | null;
+  work_item_id?: string | null;
+  /** Built from typed fields only: key, label, from → to, PR number, conclusion. */
+  summary: string;
+};
+
+export type ReceivedEventPage = {
+  items: Array<ReceivedEvent>;
+  meta: PageMeta;
 };
 
 export type WorkItemPage = {
@@ -3265,6 +3569,14 @@ export type TimelineEntry = {
   actor_kind?: "user" | "agent" | "system";
   ref_id?: string | null;
   cost_usd?: number | null;
+  via?: TrackerWrite | null;
+};
+
+/** The tracker write behind a timeline entry (ADR 0107 point 4): the project's tracker connector type and the account it wrote under. `account` is null when the connector names none (a GitHub App installation, a GitLab token). */
+export type TrackerWrite = {
+  /** The tracker connector's type: jira, github-issues, gitlab-issues, plugin… */
+  type: string;
+  account?: string | null;
 };
 
 export type GitToken = {
@@ -3395,6 +3707,22 @@ export type Run = RunSummary & {
   context_pack_url?: string | null;
   playbook_checksum?: string | null;
   allowed_paths?: Array<string>;
+  /** The agent whose version ran the step. */
+  agent_slug?: string | null;
+  agent_version?: number | null;
+  /** The work item's initiator, copied at stage start (ADR 0077). */
+  initiated_by?: string | null;
+  /** The organisation connectors this run's agent may call through the broker, and the account each one calls with (ADR 0107): resolved by the API, so a member who cannot read the organisation's connectors still sees them. */
+  tool_connectors?: Array<ToolConnector>;
+};
+
+export type ToolConnector = {
+  name: string;
+  type: string;
+  /** bearer or basic, for an `mcp` connector */
+  auth_scheme?: string | null;
+  /** The account the connector calls as, when its configuration names one (a `basic` username). */
+  account?: string | null;
 };
 
 export type RunEvent = {
@@ -3565,7 +3893,7 @@ export type EgressRule = {
   used_by: Array<"api" | "workers" | "runners">;
   status: "requested" | "allowed" | "refused" | "revoked";
   reason?: string;
-  /** `mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `manual`, `migration` */
+  /** `mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `mcp-gateway`, `manual`, `migration` */
   origin?: string;
   requested_by?: string | null;
   requested_at?: string | null;
@@ -3645,6 +3973,30 @@ export type EgressRequired = {
   detail?: string;
   code?: "egress_required";
   verdicts?: Array<EgressVerdict>;
+};
+
+/** The 409 body of an organisation's MCP gateway refusals (ADR 0105, docs/adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md): an RFC 9457 problem with a `code`. `gateway_in_use`: the gateway cannot be removed while connectors go through it (`connectors` names them). `gateway_required`: the gateway is required and a direct connector is refused. `gateway_not_configured`: a connector asks for the gateway and none is set. `gateway_assertion_key_missing`: the gateway authenticates with a signed assertion and the organisation has no assertion key yet. */
+export type McpGatewayConflict = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  /** the request path, as the API always sets it on a problem */
+  instance?: string;
+  /** the problem's `errors` list, as on `Problem` (an API refusal may carry it) */
+  errors?: Array<{
+    loc?: Array<string>;
+    msg?: string;
+    code?: string;
+    /** @deprecated */
+    deprecated_code?: string;
+    line?: number;
+    column?: number;
+  }>;
+  retry_after?: number;
+  code: "gateway_in_use" | "gateway_required" | "gateway_not_configured" | "gateway_assertion_key_missing";
+  /** the connectors that go through the gateway (`gateway_in_use`) */
+  connectors?: Array<string>;
 };
 
 export type EgressRuleCreate = {
@@ -3915,6 +4267,7 @@ export interface Operations {
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
   addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
+  adoptWorkflow: { method: "POST"; path: "/projects/{id}/workflow-adoptions"; body: WorkflowAdopt; response: WorkflowDef };
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -3973,11 +4326,13 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
+  deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
+  describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
@@ -4025,6 +4380,8 @@ export interface Operations {
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
+  getMcpGateway: { method: "GET"; path: "/orgs/{org}/mcp-gateway"; body: never; response: McpGatewayState };
+  getMcpGatewayJwks: { method: "GET"; path: "/orgs/{org}/mcp-gateway/jwks.json"; body: never; response: JsonWebKeySet };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}"; body: never; response: MemoryStore };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
@@ -4166,6 +4523,7 @@ export interface Operations {
   getWorkItemJourney: { method: "GET"; path: "/work-items/{id}/journey"; body: never; response: WorkItemJourney };
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
+  getWorkflowActivity: { method: "GET"; path: "/projects/{id}/workflows/{name}/activity"; body: never; response: WorkflowActivity };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
   githubAppSetup: { method: "GET"; path: "/github/setup"; body: never; response: void };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
@@ -4206,6 +4564,7 @@ export interface Operations {
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
+  listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
@@ -4230,6 +4589,7 @@ export interface Operations {
   listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: Array<ProjectOrgConnector> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
+  listReceivedEvents: { method: "GET"; path: "/projects/{id}/received-events"; body: never; response: ReceivedEventPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
@@ -4239,6 +4599,8 @@ export interface Operations {
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
+  listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: Array<WorkflowAgent> };
+  listWorkflowCatalogue: { method: "GET"; path: "/orgs/{org}/workflow-catalogue"; body: never; response: Array<WorkflowCatalogueEntry> };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
@@ -4284,6 +4646,7 @@ export interface Operations {
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
+  putMcpGateway: { method: "PUT"; path: "/orgs/{org}/mcp-gateway"; body: McpGatewayPut; response: McpGatewayState };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putOutboundProxy: { method: "PUT"; path: "/orgs/{org}/outbound-proxy"; body: OutboundProxyPut; response: OutboundProxyState };
@@ -4315,6 +4678,7 @@ export interface Operations {
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
+  rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
@@ -4325,6 +4689,7 @@ export interface Operations {
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
+  shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
@@ -4336,6 +4701,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   testConnector: { method: "POST"; path: "/projects/{id}/connectors/{kind}/test"; body: never; response: ConnectorTestResult };
+  testMcpGateway: { method: "POST"; path: "/orgs/{org}/mcp-gateway/test"; body: McpGatewayTestRequest; response: McpGatewayTest };
   testOutboundProxy: { method: "POST"; path: "/orgs/{org}/outbound-proxy/test"; body: never; response: OutboundProxyTest };
   theme: { method: "GET"; path: "/theme"; body: never; response: Theme };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };

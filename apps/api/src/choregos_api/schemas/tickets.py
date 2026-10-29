@@ -124,6 +124,8 @@ class WorkItemDto(Dto):
     #: The budget given at launch (or by the workflow), if any; the policy's applies otherwise.
     budget_usd: float | None = None
     estimate: CostEstimate | None = None
+    #: Who started the work item (ADR 0077): `person:<email>`, `tracker:<source>`…
+    initiated_by: str | None = None
     created_at: datetime
     closed_at: datetime | None = None
 
@@ -131,6 +133,32 @@ class WorkItemDto(Dto):
 class WorkItemPage(Dto):
     items: list[WorkItemDto]
     meta: PageMeta
+
+
+class ReceivedEventDto(Dto):
+    """A webhook event the project received, and what the platform did with it (S42-06f)."""
+
+    id: str
+    received_at: datetime
+    source: str
+    event_type: str
+    delivery_id: str | None = None
+    outcome: str
+    work_item_key: str | None = None
+    work_item_id: str | None = None
+    summary: str
+
+
+class ReceivedEventPage(Dto):
+    items: list[ReceivedEventDto]
+    meta: PageMeta
+
+
+class TrackerWrite(Dto):
+    """The tracker write behind a timeline entry (ADR 0107 point 4)."""
+
+    type: str
+    account: str | None = None
 
 
 class TimelineEntry(Dto):
@@ -142,6 +170,7 @@ class TimelineEntry(Dto):
     actor_kind: str = "system"
     ref_id: str | None = None
     cost_usd: float | None = None
+    via: TrackerWrite | None = None
 
 
 class HandOffEvent(Dto):
@@ -251,6 +280,15 @@ class WorkItemAction(Dto):
     top_up_usd: float | None = Field(default=None, gt=0)
 
 
+class ToolConnector(Dto):
+    """An organisation connector a run's agent may call, and the account it calls as (ADR 0107)."""
+
+    name: str
+    type: str
+    auth_scheme: str | None = None
+    account: str | None = None
+
+
 class RunDto(RunSummary):
     work_item_id: str
     project_slug: str
@@ -266,6 +304,10 @@ class RunDto(RunSummary):
     context_pack_url: str | None = None
     playbook_checksum: str | None = None
     allowed_paths: list[str] = Field(default_factory=list)
+    agent_slug: str | None = None
+    agent_version: int | None = None
+    initiated_by: str | None = None
+    tool_connectors: list[ToolConnector] = Field(default_factory=list)
 
 
 class RunEventDto(Dto):

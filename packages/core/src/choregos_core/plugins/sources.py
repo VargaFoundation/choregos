@@ -20,6 +20,7 @@ sources:
     egress: [pkg-containers.githubusercontent.com]   # hosts beyond the index's own
 defaultPlugins:
   - {source: varga, name: servicenow, version: "^0.1"}
+  - {source: varga, name: software-delivery, version: "^1.0", preapproved: true}
 offline: /opt/choregos/plugins   # CHOREGOS_PLUGINS_OFFLINE wins over it
 ```
 
@@ -137,6 +138,9 @@ class DefaultPlugin:
     source: str
     name: str
     version: str
+    #: The operator approved it in the deployment's configuration (S43-09): what the gate would send to a
+    #: second administrator is installed, recorded as approved by the configuration. Never via the API.
+    preapproved: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +224,14 @@ def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
                 raise SourceError("config", f"default plugin `{raw['name']}`: {exc}") from exc
         if raw["source"] not in {*names, OFFLINE}:
             raise SourceError("config", f"default plugin `{raw['name']}`: no source `{raw['source']}`")
-        defaults.append(DefaultPlugin(raw["source"], raw["name"], version))
+        if set(raw) - {"source", "name", "version", "preapproved"}:
+            raise SourceError(
+                "config", f"default plugin `{raw['name']}`: source, name, version and preapproved"
+            )
+        preapproved = raw.get("preapproved", False)
+        if not isinstance(preapproved, bool):
+            raise SourceError("config", f"default plugin `{raw['name']}`: `preapproved` is true or false")
+        defaults.append(DefaultPlugin(raw["source"], raw["name"], version, preapproved))
     directory = offline or doc.get("offline") or None
     return PluginsConfig(sources, tuple(defaults), Path(str(directory)) if directory else None)
 
@@ -257,6 +268,8 @@ class Release:
     git: GitRelease | None = None
     #: the offline directory's plugin (a directory or a `.tar.gz`)
     path: Path | None = None
+    #: the agents it ships, when the index says so (ADR 0111): read without fetching the plugin
+    agents: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,6 +311,7 @@ def parse_index(raw: bytes | str | dict[str, Any], *, trusted: bool = False) -> 
                 description=rel.get("description"),
                 oci=rel.get("oci"),
                 git=GitRelease(git["url"], git["commit"], git.get("path", "")) if git else None,
+                agents=tuple(rel.get("agents") or ()),
             )
     return Index(releases, trusted)
 
@@ -420,13 +434,14 @@ def offline_index(directory: Path) -> Index:
                 name, version, plugin_digest = plugin.name, plugin.version, plugin.digest
                 core = plugin.core
                 description = str(plugin.manifest["metadata"].get("description") or "") or None
+                agents = tuple(sorted(plugin.agents))
         except PluginError as exc:
             raise SourceError("content", f"{candidate.name}: {exc}") from exc
         check_lock(lock, name, version, plugin_digest)
         if version in releases.get(name, {}):
             raise SourceError("index", f"`{name}` {version} is twice in the offline directory")
         releases.setdefault(name, {})[version] = Release(
-            name, version, plugin_digest, core, description, path=candidate
+            name, version, plugin_digest, core, description, path=candidate, agents=agents
         )
     return Index(releases, trusted=True)
 

@@ -4,7 +4,8 @@
 Design choice: the registry builds ONE adapter from ONE connector's config and secrets; it cannot
 wire a connector on top of other connectors of the organisation. So the composite lists provider
 TYPES (`sources: ["stooq", "yahoo"]`), each with its own sub-config in `source_configs`, and takes
-their secrets as flat fields named `<type>_api_key` (`stooq_api_key`, `alphavantage_api_key`) —
+their secrets as flat fields named `<type>_api_key` (`stooq_api_key`, `alphavantage_api_key`,
+`tiingo_api_key`) —
 resolved API-side like any secret reference, never stored in the config.
 
 `get_bars` tries the sources in order, falling back on an error or an empty answer. The first

@@ -7,6 +7,7 @@ import { use } from "react";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import { hasReleaseTrain } from "@/lib/release-train";
+import { CrossBackendCard } from "@/components/cross-backend-card";
 import { GrapheDesCouts } from "@/components/graphe-des-couts";
 import type { DoraMetric } from "@/lib/types";
 import { MiseEnRoute } from "@/components/mise-en-route";
@@ -150,6 +151,8 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           </div>
         )}
       </Card>
+
+      <CrossBackendCard slug={slug} />
 
       <Card eyebrow="Tickets" title="Most recent" padding="none" className="overflow-hidden">
         <div className="px-6 pb-2">

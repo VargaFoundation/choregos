@@ -20,6 +20,7 @@ kubectl -n choregos-data exec -it choregos-pg-1 -- psql choregos -c "
 | `cost_ledger` | indefinite | accounting |
 | reports, context packs (object store) | 180 days (lifecycle) | evidence of a run |
 | `audit_log` | indefinite | audit requirement |
+| `received_events` | 90 days | what a project's webhooks brought; no payload |
 
 ## Purge
 
@@ -32,6 +33,9 @@ DELETE FROM events WHERE ts < now() - interval '180 days';
 
 -- Webhook deliveries (dedup) older than 30 days
 DELETE FROM webhook_deliveries WHERE ts < now() - interval '30 days';
+
+-- Received webhook events (a project's "Received events", S42-06f) older than 90 days
+DELETE FROM received_events WHERE received_at < now() - interval '90 days';
 ```
 
 Then `VACUUM (ANALYZE)` on the purged tables.

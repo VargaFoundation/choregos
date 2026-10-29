@@ -28,6 +28,10 @@
   "type": "sharepoint"
  },
  {
+  "kind": "documents",
+  "type": "web"
+ },
+ {
   "kind": "firewall",
   "type": "pfsense"
  },
@@ -61,11 +65,19 @@
  },
  {
   "kind": "marketdata",
+  "type": "tiingo"
+ },
+ {
+  "kind": "marketdata",
   "type": "yahoo"
  },
  {
   "kind": "mcp",
   "type": "mcp"
+ },
+ {
+  "kind": "mcp",
+  "type": "mcp-gateway"
  },
  {
   "kind": "mdm",

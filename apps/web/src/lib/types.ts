@@ -43,6 +43,8 @@ export type {
   EgressVerdict,
   PlatformChange,
   CostReport,
+  CrossBackendArm,
+  CrossBackendReport,
   DiffSummary,
   DoraMetric,
   DoraReport,
@@ -81,6 +83,8 @@ export type {
   RunLogs,
   RunSummary,
   TimelineEntry,
+  ToolConnector,
+  TrackerWrite,
   TrainStatus,
   ProcessStep,
   WorkflowDef,
@@ -91,8 +95,14 @@ export type {
   WorkflowSummary,
   WorkflowTemplate,
   WorkflowValidation,
+  WorkflowAdopt,
+  WorkflowCatalogueAgent,
+  WorkflowCatalogueEntry,
+  WorkflowShare,
   WorkItem as WorkItemDto,
   WorkItemPage,
+  ReceivedEvent,
+  ReceivedEventPage,
   WorkItemJourney,
   JourneyMove,
   JourneyStep,
@@ -122,6 +132,7 @@ export type {
   OperationPatch,
   OrgConnector,
   OrgConnectorCreate,
+  OrgConnectorServer,
   OrgConnectorUpdate,
   ProjectOperation,
   ProjectOrgConnector,
@@ -182,7 +193,11 @@ export type {
   AgentVersionRestore,
   AgentResolution,
   ArtifactFlow,
+  BuiltinAgent,
+  GroupMembers,
+  WorkflowActivity,
   ImplicitAgent,
+  WorkflowAgent,
   ProjectAgent,
   ProjectAgentPut,
   Skill,
@@ -253,3 +268,25 @@ export type {
 
 /** L'édition qui tourne et ce qu'elle s'autorise (ADR 0024) : la réponse de `GET /edition`. */
 export type Edition = Operations["edition"]["response"];
+
+/** Who started a run's work item and which earlier runs it read (ADR 0077 §2), from `GET /runs/{id}/access`. */
+export type RunChain = NonNullable<Operations["getRunAccess"]["response"]["chain"]>;
+
+/** Plugins (ADR 0093): what a deployment's sources offer, what an organisation installed, the second approvals. */
+export type {
+  InstalledPlugin,
+  PluginApproval,
+  PluginApprovalList,
+  PluginContents,
+  PluginInstall,
+  PluginInstallPending,
+  PluginKept,
+  PluginList,
+  PluginSource,
+  PluginSourceEntry,
+  PluginSources,
+  PluginTrust,
+  PluginUninstallResult,
+  PluginUpgrade,
+  PluginUpgradeResult,
+} from "@choregos/contracts/api";

@@ -19,6 +19,16 @@ import type {
   OrgConnector,
   OrgConnectorCreate,
   OrgConnectorUpdate,
+  InstalledPlugin,
+  PluginApproval,
+  PluginApprovalList,
+  PluginInstall,
+  PluginInstallPending,
+  PluginList,
+  PluginSources,
+  PluginUninstallResult,
+  PluginUpgrade,
+  PluginUpgradeResult,
   ProjectOperation,
   ProjectRequirement,
   AgentCatalogueConnection,
@@ -48,8 +58,12 @@ import type {
   AgentTrialCreate,
   AgentMetricsSummary,
   AgentResolution,
+  BuiltinAgent,
+  GroupMembers,
+  WorkflowActivity,
   HostedSource,
   ImplicitAgent,
+  WorkflowAgent,
   AgentPatch,
   AgentSpec,
   AgentVersion,
@@ -115,6 +129,7 @@ import type {
   WorkItemCreate,
   DiffSummary,
   RunEventDto,
+  RunChain,
   RunLogs,
   TimelineEntry,
   ConnectorDto,
@@ -129,6 +144,7 @@ import type {
   EgressRuleCreate,
   EgressVerdict,
   CostReport,
+  CrossBackendReport,
   DoraReport,
   Edition,
   Integrations,
@@ -164,9 +180,13 @@ import type {
   WorkflowSummary,
   WorkflowTemplate,
   WorkflowValidation,
+  WorkflowAdopt,
+  WorkflowCatalogueEntry,
+  WorkflowShare,
   WorkItemDto,
   WorkItemJourney,
   WorkItemPage,
+  ReceivedEventPage,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -344,11 +364,14 @@ export const api = {
   },
   getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
-  loginUrl: (next?: string, as?: string, reauth = false) => {
+  /** `tenant` picks the organisation's own identity provider, by sign-in link or by address (ADR 0108). */
+  loginUrl: (next?: string, as?: string, reauth = false, tenant: { org?: string; loginHint?: string } = {}) => {
     const params = new URLSearchParams();
     if (next) params.set("redirect_to", next);
     if (as) params.set("as", as);
     if (reauth) params.set("reauth", "1");
+    if (tenant.org) params.set("org", tenant.org);
+    if (tenant.loginHint) params.set("login_hint", tenant.loginHint);
     const q = params.toString();
     return `${API_BASE}/auth/login${q ? `?${q}` : ""}`;
   },
@@ -485,6 +508,21 @@ export const api = {
   agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
   /** A project's implicit agents, computed by the API (S30-04). */
   implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
+  /** Every agent the project's active workflows run, named or built in (S47-39). */
+  workflowAgents: (id: string) => request<WorkflowAgent[]>(`/projects/${qualify(id)}/workflow-agents`),
+  /** Who a person step addressed to a group waits for, and who of them may answer in the project. */
+  groupMembers: (id: string, group: string) =>
+    request<GroupMembers>(`/projects/${qualify(id)}/groups/${encodeURIComponent(group)}/members`),
+  /** Where a workflow's open work items wait, and what each step's runs did over `days` days. */
+  workflowActivity: (id: string, name: string, days = 30) =>
+    request<WorkflowActivity>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/activity?days=${days}`),
+  /** What an `agent` actor that names no registry agent runs: its prompt, model, backend, limits and tools. */
+  describeBuiltinAgent: (id: string, actor: BuiltinAgentQuery) =>
+    request<BuiltinAgent>(
+      `/projects/${qualify(id)}/builtin-agent?${new URLSearchParams(
+        Object.entries(actor).flatMap(([key, value]) => (value == null || value === "" ? [] : [[key, String(value)]])),
+      )}`,
+    ),
   /** Which agent version a run would load for each reference, through the runtime's resolver (S39-13). */
   resolveProjectAgents: (id: string, refs: string[]) =>
     request<AgentResolution[]>(
@@ -675,6 +713,7 @@ export const api = {
       refusals: number;
       tool_cost_eur?: number;
       acces: { nature: string; target: string; requests: number; refusals: number; motifs?: string[] }[];
+      chain?: RunChain;
     }>(`/runs/${id}/access`),
   projectTools: (id: string) =>
     request<{
@@ -731,6 +770,33 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** The plugins installed in the organisation (ADR 0093): any member reads them. */
+  plugins: (org: string) => request<PluginList>(`/orgs/${org}/plugins`),
+  /** The deployment's plugin sources, each with its trust policy and what its index offers. */
+  pluginSources: (org: string) => request<PluginSources>(`/orgs/${org}/plugin-sources`),
+  /**
+   * Installs a plugin: 201 with the installed plugin, or 202 `pending_approval` when it brings a server or
+   * a high-risk skill (ADR 0050) — the two bodies are told apart by `status` (see `isPending`).
+   */
+  installPlugin: (org: string, body: PluginInstall) =>
+    request<InstalledPlugin | PluginInstallPending>(`/orgs/${org}/plugins/install`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Moves an installed plugin to another version: 200 with what changed, or 202 as for an install. */
+  upgradePlugin: (org: string, name: string, body: PluginUpgrade = {}) =>
+    request<PluginUpgradeResult | PluginInstallPending>(`/orgs/${org}/plugins/${encodeURIComponent(name)}/upgrade`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Uninstalls a plugin; the answer says what was removed and what stayed as the organisation's own. */
+  uninstallPlugin: (org: string, name: string) =>
+    request<PluginUninstallResult>(`/orgs/${org}/plugins/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  /** The installs and upgrades that wait, or waited, for a second administrator. */
+  pluginApprovals: (org: string) => request<PluginApprovalList>(`/orgs/${org}/plugin-approvals`),
+  /** Another administrator than the one who asked approves: 403 for the same one. */
+  approvePlugin: (org: string, id: string) =>
+    request<PluginApproval>(`/orgs/${org}/plugin-approvals/${encodeURIComponent(id)}/approve`, { method: "POST" }),
   /** The connector types of the registry, by family, with the caller's rights (ADR 0074). */
   connectorCatalogue: (org: string) => request<ConnectorCatalogue>(`/orgs/${org}/connector-catalogue`),
   /** The organisation's connectors as one project sees them: on or off, and may the caller switch. */
@@ -813,6 +879,14 @@ export const api = {
   deactivateWorkflow: (id: string, name: string) =>
     request<void>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/deactivate`, { method: "POST" }),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
+  /** What the organisation can adopt, with what each needs and where its agents resolve (ADR 0111). */
+  workflowCatalogue: (org: string) => request<WorkflowCatalogueEntry[]>(`/orgs/${org}/workflow-catalogue`),
+  /** Copies a catalogue entry into the project; an unresolved agent is a 422, a taken name a 409. */
+  adoptWorkflow: (id: string, body: WorkflowAdopt) =>
+    request<WorkflowDef>(`/projects/${qualify(id)}/workflow-adoptions`, { method: "POST", body: JSON.stringify(body) }),
+  /** An organisation administrator shares a project's workflow version to the catalogue. */
+  shareWorkflow: (org: string, body: WorkflowShare) =>
+    request<WorkflowCatalogueEntry>(`/orgs/${org}/workflow-catalogue`, { method: "POST", body: JSON.stringify(body) }),
   /** Des opérations typées, greffées dans le texte ; rien n'est enregistré (S16-11). */
   editWorkflow: (yaml: string, operations: WorkflowOperation[]) =>
     request<WorkflowEditResult>("/workflows/edit", { method: "POST", body: JSON.stringify({ yaml, operations }) }),
@@ -842,6 +916,9 @@ export const api = {
   workItems: (id: string, params?: Record<string, string>) =>
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),
   workItem: (id: string) => request<WorkItemDto>(`/work-items/${id}`),
+  /** The webhook events a project received and what the platform did with each (S42-06f), newest first. */
+  receivedEvents: (id: string, params?: Record<string, string>) =>
+    request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),
   timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
   /** Les reçus de passage d'un ticket (S25-04) : qui a produit, qui a lu, sous quelle empreinte. */
   handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),
@@ -886,6 +963,16 @@ export const api = {
     request<unknown>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`, {
       method: "POST",
       body: JSON.stringify({ id: memoryId, action }),
+    }),
+  /**
+   * Asks the project's memory ingestion to read its sources again (`memory:write`). The API answers
+   * 202 with no documented body: the import is scheduled, its facts arrive as the ingestion runs.
+   * Without `sources`, the API's defaults (README, docs, ADRs, closed issues).
+   */
+  reimportMemory: (id: string, sources?: string[]) =>
+    request<void>(`/projects/${qualify(id)}/memory/reimport`, {
+      method: "POST",
+      body: JSON.stringify(sources ? { sources } : {}),
     }),
   /** Named memories (S40-11, ADR 0075): the organisation's, global and project, with who uses each. */
   memories: (org: string, filter: { scope?: "global" | "project"; project?: string } = {}) =>
@@ -937,6 +1024,9 @@ export const api = {
   orgCostsCsvUrl: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     `${API_BASE}/orgs/${org}/costs.csv${query({ group_by: groupBy, ...compact(filtre) })}`,
   dora: (id: string, env = "prod") => request<DoraReport>(`/projects/${qualify(id)}/metrics/dora${query({ env })}`),
+  /** Reviews by another backend than the implementer's versus by the same one; `since` is YYYY-MM-DD. */
+  crossBackend: (id: string, since?: string) =>
+    request<CrossBackendReport>(`/projects/${qualify(id)}/metrics/cross-backend${query(since ? { since } : undefined)}`),
   /** Lien de téléchargement direct : le navigateur l'ouvre, le CSV arrive avec sa session. */
   /** Qualifié comme toute route de projet : deux organisations peuvent avoir un projet de même nom. */
   costsCsvUrl: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
@@ -946,6 +1036,16 @@ export const api = {
     const filtres = Object.entries(params ?? {}).filter(([, valeur]) => valeur !== undefined && valeur !== "");
     return request<AuditPage>(`/audit${filtres.length ? `?${new URLSearchParams(filtres.map(([k, v]) => [k, String(v)]))}` : ""}`);
   },
+};
+
+/** The fields of an `agent` actor that decide what its built-in agent runs (`GET /projects/{id}/builtin-agent`). */
+export type BuiltinAgentQuery = {
+  role: string;
+  playbook?: string | null;
+  model?: string | null;
+  backend?: string | null;
+  max_turns?: number | null;
+  max_minutes?: number | null;
 };
 
 export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" | "distill" };

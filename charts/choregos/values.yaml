@@ -8,7 +8,7 @@ global:
   publicUrl: ""
   apiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
-  imageTag: "0.20.6"
+  imageTag: "0.21.0"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -46,12 +46,6 @@ global:
     # What the API lets a project choose as its `runtime` connector. Empty: only `executor`.
     # Add `k8s_job` for the steps that name their own image.
     allowedExecutors: []
-  # Secrets by reference (ADR 0034). A connector's `env:NAME` reference reads only the variables
-  # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
-  # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are
-  # refused whatever the pattern says. Given to the API and to each worker.
-  secrets:
-    envPattern: ""
   # Additional environment variables, given to the API, to each worker and to the migration Job
   # (through `choregos.commonEnv`). To enable a setting the chart does not know
   # yet — for example a plugin shipped inactive (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — without forking the
@@ -178,7 +172,7 @@ global:
   buildkitd:
     enabled: true
     # The image's `buildctl` is the one the worker image copies (docker/api.Dockerfile): bump both.
-    image: moby/buildkit:v0.33.1-rootless@sha256:f8a833b2de9d68e27f0815e4a737abdfaf8a2e4c615650557df11025101557b4
+    image: moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89
     port: 1234
     # A `kubernetes.io/dockerconfigjson` Secret: the push credential of `buildRegistry`, the only
     # credential the builder holds. Empty: the registry takes anonymous pushes (a bench).
@@ -342,20 +336,36 @@ global:
   # `choregos-plugins` (`CHOREGOS_PLUGINS_CONFIG`); an unusable configuration stops the API at start-up.
   plugins:
     # Each source: an index (`oci://…` or `https://…/index.yaml`) and a trust policy, a keyless cosign
-    # identity and issuer, or `key:` a public key file mounted in the API (`api.extraVolumes`). Never
-    # unsigned. `egress`: hosts its fetches may reach beyond the index's own.
-    #   - name: varga
-    #     index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable
-    #     trust:
-    #       identity: https://github.com/VargaFoundation/choregos-agents/.*
-    #       issuer: https://token.actions.githubusercontent.com
-    sources: []
-    # Installed in every organisation at start-up and at its creation, idempotently. One that brings a
-    # server waits for an administrator's approval. The source `offline` is the directory below.
-    #   - { source: varga, name: servicenow, version: "^0.1" }
-    defaultPlugins: []
-    # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none.
-    offline: ""
+    # identity and issuer (regular expressions, matched whole), or `key:` a public key file mounted in
+    # the API (`api.extraVolumes`). Never unsigned. `egress`: hosts its fetches may reach beyond the
+    # index's own. `varga` is where the platform's own agents are published (ADR 0093 §6): signed by
+    # the publish workflow of VargaFoundation/choregos-agents on main, and nothing else.
+    sources:
+      - name: varga
+        index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest
+        trust:
+          identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+          issuer: https://token\.actions\.githubusercontent\.com
+    # Installed in every organisation at start-up and at its creation, idempotently. One the gate sends
+    # to a second administrator (a server, a high-risk skill) waits for that approval, unless the entry
+    # says `preapproved: true`: listing it here is then the operator's approval, taken through the
+    # review of this deployment's values, and the audit trail records it as such
+    # (`plugin.default.preapproved`). The API never offers that flag. The source `offline` is the
+    # directory below; a default of another source is taken from it when it holds a version in range
+    # (no network at start-up), and upgraded from its source later.
+    # The built-in agents (S43-09): `software-delivery` brings the MADR 4 skill, which links to
+    # adr.github.io and is rated high risk, hence `preapproved`. `requests` carries the agents of the
+    # `default-request` workflow (ADR 0110); nothing in it goes to a second administrator. Set
+    # `defaultPlugins: []` to install none.
+    defaultPlugins:
+      - { source: varga, name: software-delivery, version: "^1.0", preapproved: true }
+      - { source: varga, name: netops, version: "^1.0", preapproved: true }
+      - { source: varga, name: authoring, version: "^1.0", preapproved: true }
+      - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
+      - { source: varga, name: requests, version: "^1.0" }
+    # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none. The API
+    # image ships the built-in agents' plugins there, pinned by its `plugins.lock`.
+    offline: /opt/choregos/plugins
     # Plugin servers (ADR 0096): the MCP servers plugins bring, run by the API as a Deployment, a
     # Service, a NetworkPolicy and a Secret per organisation and server, in their own namespace. Off: a
     # plugin that brings a server is refused. On: the chart grants the API a Role in that namespace only.
@@ -402,6 +412,12 @@ global:
   # and typing a secret answers 409 naming the missing key. Generate one with
   # `python -c "import os,base64;print('k1:'+base64.b64encode(os.urandom(32)).decode())"`.
   secrets:
+    # Secrets by reference (ADR 0034): a connector's `env:NAME` reference reads only the variables
+    # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
+    # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are
+    # refused whatever the pattern says. Given to the API and to each worker. One `secrets:` block:
+    # a second one silently replaced this setting (S39-06e).
+    envPattern: ""
     # The Secret that carries the key; empty: `apiSecretRef` (the key is then one more entry of it).
     keksSecretRef: ""
     # Its entry. Optional in the pod spec: absent, the feature is off, the pod still starts.

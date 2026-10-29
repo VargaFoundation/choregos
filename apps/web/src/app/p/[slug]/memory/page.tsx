@@ -4,7 +4,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
+import { MemoryReimport } from "@/components/memory-reimport";
 import { Button, Card, Drawer, Empty, ErrorNote, EtatDeLecture, Input, LEGENDE, Select } from "@/components/ui";
+import { OrganisationMemoryStore, ProjectMemoryStore } from "@/components/memory-store";
 import { api, type MemoryChoice } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { IMPLICIT, reachLabel } from "@/lib/memories";
@@ -30,7 +32,9 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ slug: "", name: "", description: "" });
 
-  const canCreate = (me?.memberships ?? []).some(
+  // An org_admin, or this project's owner: they hold `project:write` and `memory:write` here, so they
+  // create project memories and re-import the memory.
+  const canWrite = (me?.memberships ?? []).some(
     (m) => m.org === org && ((!m.project_slug && m.role === "org_admin") || (m.project_slug === slug && m.role === "project_owner")),
   );
   const named = (memories.data ?? []).filter((m) => m.scope === "project" && !m.implicit);
@@ -114,11 +118,13 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
             </Select>
           </label>
         )}
-        {canCreate && (
+        {canWrite && (
           <Button onClick={() => setOpen(true)}>New project memory</Button>
         )}
+        {canWrite && <MemoryReimport slug={slug} />}
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
+      {isGlobal ? <OrganisationMemoryStore org={org} /> : <ProjectMemoryStore slug={slug} />}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Search">
           <form

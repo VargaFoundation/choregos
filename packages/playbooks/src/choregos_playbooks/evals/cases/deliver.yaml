@@ -1,0 +1,19 @@
+role: deliver
+description: >-
+  The deliver playbook produces the deliverable of the approved brief, cites every fact, claims nothing
+  beyond its tools, checks each acceptance criterion and answers a person's reason first.
+must_contain:
+  - "approved brief"
+  - "cite every fact"
+  - "Never claim you did something outside your tools"
+  - "acceptance check"
+  - "human_feedback"
+  - "deliverable_markdown"
+must_not_contain:
+  - "allowed_paths"
+rubric:
+  - criterion: "cites its sources and removes what it cannot cite"
+    weight: 2
+  - criterion: "checks the deliverable against the brief's criteria"
+    weight: 1
+min_score: 0.8

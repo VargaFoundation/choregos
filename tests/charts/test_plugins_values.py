@@ -1,7 +1,8 @@
 """`global.plugins` renders the ConfigMap `choregos-plugins` the API reads (ADR 0093 §5, S43-05).
 
-Defaults are empty: nothing is rendered or mounted. With values, the file is the one
-`choregos_core.plugins.sources.parse_config` accepts, mounted read-only and named by
+By default (S43-09) the built-in agents' four plugins are installed from the `varga` source, pre-approved,
+taken from the image's offline directory; emptied, nothing is rendered or mounted. With values, the file
+is the one `choregos_core.plugins.sources.parse_config` accepts, mounted read-only and named by
 `CHOREGOS_PLUGINS_CONFIG`; a source without a trust policy refuses to render.
 """
 
@@ -66,8 +67,46 @@ def _config_map(docs: list[dict[str, Any]]) -> dict[str, Any] | None:
     )
 
 
-def test_by_default_there_is_no_plugin_configuration(tmp_path: pathlib.Path) -> None:
+#: The built-in agents' plugins and whether the chart pre-approves them: `software-delivery`'s skill
+#: `madr-4` is rated high risk, so the four former core plugins are; `requests` needs no second
+#: administrator.
+BUILT_IN = [
+    ("software-delivery", True),
+    ("netops", True),
+    ("authoring", True),
+    ("mcp-clients", True),
+    ("requests", False),
+]
+NONE: dict[str, Any] = {"sources": [], "defaultPlugins": [], "offline": ""}
+
+
+def test_by_default_the_built_in_agents_are_installed_pre_approved(tmp_path: pathlib.Path) -> None:
+    import re
+
+    from choregos_core.plugins.sources import parse_config
+
     docs = _docs(None, tmp_path)
+    config_map = _config_map(docs)
+    assert config_map is not None
+    config = parse_config(yaml.safe_load(config_map["data"]["plugins.yaml"]))
+    assert [(d.source, d.name, d.version, d.preapproved) for d in config.default_plugins] == [
+        ("varga", name, "^1.0", preapproved) for name, preapproved in BUILT_IN
+    ]
+    (varga,) = config.sources
+    assert varga.index == "oci://ghcr.io/vargafoundation/choregos-agents/index:latest"
+    publish = (
+        "https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main"
+    )
+    assert re.fullmatch(varga.trust.identity, publish)
+    assert not re.fullmatch(varga.trust.identity, publish.replace("refs/heads/main", "refs/heads/evil"))
+    assert re.fullmatch(varga.trust.issuer, "https://token.actions.githubusercontent.com")
+    assert config.offline == pathlib.Path("/opt/choregos/plugins")
+    dockerfile = (ROOT / "docker" / "api.Dockerfile").read_text(encoding="utf-8")
+    assert "COPY plugins/offline /opt/choregos/plugins" in dockerfile, "the image ships what the chart names"
+
+
+def test_emptied_there_is_no_plugin_configuration(tmp_path: pathlib.Path) -> None:
+    docs = _docs({"global": {"plugins": NONE}}, tmp_path)
     spec = _api(docs)
     assert _config_map(docs) is None
     assert "CHOREGOS_PLUGINS_CONFIG" not in {e["name"] for e in spec["containers"][0]["env"]}
@@ -101,7 +140,7 @@ def test_the_values_become_the_file_the_api_reads(tmp_path: pathlib.Path) -> Non
 
 
 def test_an_offline_directory_alone_is_enough(tmp_path: pathlib.Path) -> None:
-    docs = _docs({"global": {"plugins": {"offline": "/opt/choregos/plugins"}}}, tmp_path)
+    docs = _docs({"global": {"plugins": {**NONE, "offline": "/opt/choregos/plugins"}}}, tmp_path)
     config_map = _config_map(docs)
     assert config_map is not None
     assert yaml.safe_load(config_map["data"]["plugins.yaml"]) == {
@@ -113,6 +152,6 @@ def test_an_offline_directory_alone_is_enough(tmp_path: pathlib.Path) -> None:
 
 def test_a_source_without_a_trust_policy_does_not_render(tmp_path: pathlib.Path) -> None:
     unsigned = {"name": "acme", "index": "https://acme.example/index.yaml"}
-    result = _render({"global": {"plugins": {"sources": [unsigned]}}}, tmp_path)
+    result = _render({"global": {"plugins": {**NONE, "sources": [unsigned]}}}, tmp_path)
     assert result.returncode != 0
     assert "acme" in result.stderr and "trust" in result.stderr

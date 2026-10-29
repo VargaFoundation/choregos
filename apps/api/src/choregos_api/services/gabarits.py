@@ -24,6 +24,8 @@ from ..db.models import Template
 from ..errors import unprocessable
 
 WORKFLOW_SANS_GABARIT = "template:default-simple@1"
+#: Without a template and without a repository: a workflow that delivers no code (ADR 0110).
+WORKFLOW_WITHOUT_REPOSITORY = "template:default-request@1"
 POLITIQUE_SANS_GABARIT = "preset:solo"
 
 
@@ -84,12 +86,15 @@ async def manifeste_du_gabarit(
     return dict(yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}), dossier
 
 
-def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
-    """Les sources que livre un manifeste ; sans gabarit, `default-simple` et `solo`."""
+def livraison(manifeste: dict[str, Any], dossier: Path | None, *, has_repository: bool = True) -> Livraison:
+    """The sources a manifest ships; without a template, `solo` and `default-simple` — or
+    `default-request` for a project that names no repository (ADR 0110). A template's own workflows
+    always win."""
     defauts = manifeste.get("defaults") or {}
     refs = list(defauts.get("workflows") or ([defauts["workflow"]] if defauts.get("workflow") else []))
+    fallback = WORKFLOW_SANS_GABARIT if has_repository else WORKFLOW_WITHOUT_REPOSITORY
     return Livraison(
-        workflows=[_source_du_workflow(ref, dossier) for ref in refs or [WORKFLOW_SANS_GABARIT]],
+        workflows=[_source_du_workflow(ref, dossier) for ref in refs or [fallback]],
         politique=_source_de_la_politique(str(defauts.get("policy") or POLITIQUE_SANS_GABARIT), dossier),
         defaut=defauts.get("default_workflow"),
         routage=list(defauts.get("routing") or []),
@@ -124,25 +129,30 @@ def _chemin_du_gabarit(ref: str, dossier: Path | None) -> Path:
 
 
 #: Un gabarit nomme un agent ou une skill du catalogue de la plateforme par `catalogue:<nom>` (ADR 0040).
+#: The catalogue is the plugins' since S43-09 (ADR 0093 §6): the name resolves through them.
 PREFIXE_CATALOGUE = "catalogue:"
 
 
 def _agents_du_catalogue(refs: list[Any]) -> dict[str, str]:
-    from choregos_core.catalogue_d_agents import entree
+    """slug -> `plugin:<plugin>/<slug>@<version>`: the provenance a direct install would write."""
+    from .catalogue_d_agents import offline_catalogue
 
+    view = offline_catalogue()
     provenances: dict[str, str] = {}
     for ref in map(str, refs):
-        trouve = entree(ref.removeprefix(PREFIXE_CATALOGUE)) if ref.startswith(PREFIXE_CATALOGUE) else None
+        trouve = (
+            view.entry(ref.removeprefix(PREFIXE_CATALOGUE)) if ref.startswith(PREFIXE_CATALOGUE) else None
+        )
         if trouve is not None:
-            provenances[trouve.slug] = f"{PREFIXE_CATALOGUE}{trouve.slug}@{trouve.version}"
+            provenances[trouve.slug] = trouve.provenance
     return provenances
 
 
 def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:
     if ref.startswith(PREFIXE_CATALOGUE):
-        from choregos_core.catalogue_d_agents import entree
+        from .catalogue_d_agents import offline_catalogue
 
-        trouve = entree(ref.removeprefix(PREFIXE_CATALOGUE))
+        trouve = offline_catalogue().entry(ref.removeprefix(PREFIXE_CATALOGUE))
         if trouve is None:
             raise unprocessable(f"`{ref}`: the platform's catalogue has no such agent")
         return trouve.document
@@ -157,12 +167,12 @@ def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:
 
 def _fichiers_de_la_skill(ref: str, dossier: Path | None) -> dict[str, str]:
     if ref.startswith(PREFIXE_CATALOGUE):
-        from choregos_core.catalogue_d_agents import fichiers_de_la_skill
+        from .catalogue_d_agents import offline_catalogue
 
-        try:
-            return fichiers_de_la_skill(ref.removeprefix(PREFIXE_CATALOGUE))
-        except KeyError as erreur:
-            raise unprocessable(f"`{ref}`: the platform's catalogue has no such skill") from erreur
+        skill = offline_catalogue().skills.get(ref.removeprefix(PREFIXE_CATALOGUE))
+        if skill is None:
+            raise unprocessable(f"`{ref}`: the platform's catalogue has no such skill")
+        return dict(skill.files)
     return _fichiers_du_dossier(ref, dossier, "skill")
 
 

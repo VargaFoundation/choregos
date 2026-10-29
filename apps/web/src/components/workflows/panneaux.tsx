@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { GARANTIES_COURANTES, operations } from "@/components/workflows/operations";
+import { TransitionFields } from "@/components/workflows/transition-fields";
 
 type Noeud = { id: string; display: string; terminal?: boolean; kind?: string };
 type Arete = {
@@ -74,10 +75,23 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
  * Une étape de plus : d'un état, vers un état existant ou nouveau, portée par un acteur. L'état et la
  * transition partent ensemble et s'annulent ensemble. Sans `depart`, on choisit d'où l'on part.
  */
-export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; etats: Noeud[]; acteurs: string[] }) {
+export function FormulaireDEtape({
+  depart,
+  etats,
+  acteurs,
+  initialTarget,
+  onDone,
+}: {
+  depart?: string;
+  etats: Noeud[];
+  acteurs: string[];
+  /** The state a drawn arrow points at (ADR 0112 §4). */
+  initialTarget?: string;
+  onDone?: () => void;
+}) {
   const brouillon = useBrouillon();
   const [de, setDe] = useState(depart ?? "");
-  const [vers, setVers] = useState("");
+  const [vers, setVers] = useState(initialTarget ?? "");
   const [nouveau, setNouveau] = useState("");
   const [par, setPar] = useState(acteurs[0] ?? "");
   const origine = depart ?? de;
@@ -94,6 +108,7 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
           if (!ok) return;
           setVers("");
           setNouveau("");
+          onDone?.();
         });
       }}
     >
@@ -149,8 +164,43 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
   );
 }
 
-/** Une transition : qui la porte, ses garanties, son délai ; la retirer. */
-export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs: string[] }) {
+/** What a guarantee holds the step to, from the process view: its sentence and its thresholds. */
+export type GateWords = { name?: string; summary?: string; detail?: string | null };
+
+/** An actor in the "who moves it" list: its id, and what it is ("person · product-owners"). */
+export function actorLabel(id: string, definition?: { type?: string; group?: string; role?: string; agent?: string }): string {
+  if (!definition?.type) return id;
+  if (definition.type === "human") return `${id} — person${definition.group ? ` · ${definition.group}` : ""}`;
+  if (definition.type === "agent")
+    return `${id} — ${definition.agent ? `agent ${definition.agent}` : "built-in agent"}${definition.role ? ` · ${definition.role}` : ""}`;
+  if (definition.type === "job") return `${id} — job${definition.role ? ` · ${definition.role}` : ""}`;
+  if (definition.type === "system") return `${id} — the platform`;
+  return `${id} — ${definition.type}`;
+}
+
+/** A transition: who moves it, its guarantees, its time limit, every other field (ADR 0112); removing it. */
+export function PanneauDeTransition({
+  arete,
+  acteurs,
+  definitions,
+  gates,
+  timing,
+  states = [],
+  workflows = [],
+}: {
+  arete: Arete;
+  acteurs: string[];
+  /** The actors as the definition writes them, so the list says what each one is. */
+  definitions?: Record<string, { type?: string; group?: string; role?: string; agent?: string }>;
+  /** The guarantees in words, by name (the process view's), when the step is known. */
+  gates?: GateWords[];
+  /** How long the step waits and what happens then (`timingSentence`). */
+  timing?: string | null;
+  /** The workflow's states and the project's workflows, for the transition's other fields (ADR 0112). */
+  states?: string[];
+  workflows?: string[];
+}) {
+  const gatesByName = new Map((gates ?? []).map((g) => [g.name, g]));
   const brouillon = useBrouillon();
   const [par, setPar] = useState(arete.actor ?? "");
   const [garantie, setGarantie] = useState("");
@@ -178,7 +228,7 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
             <Select value={par} onChange={(event) => setPar(event.target.value)}>
               {acteurs.map((acteur) => (
                 <option key={acteur} value={acteur}>
-                  {acteur}
+                  {actorLabel(acteur, definitions?.[acteur])}
                 </option>
               ))}
             </Select>
@@ -189,10 +239,16 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
         </form>
         <div className="space-y-1">
           <p className="text-xs text-ink-muted">Only if</p>
-          <ul className="flex flex-wrap gap-2">
+          <ul className="space-y-1.5" data-testid="garanties-de-la-transition">
             {(arete.gates ?? []).map((nom) => (
-              <li key={nom} className="inline-flex items-center gap-1 rounded border border-line px-2 py-0.5 text-xs">
-                <code>{nom}</code>
+              <li key={nom} className="flex items-start gap-2 rounded border border-line px-2 py-1 text-xs">
+                <span className="min-w-0 flex-1">
+                  <code>{nom}</code>
+                  {gatesByName.get(nom)?.summary && gatesByName.get(nom)?.summary !== nom && (
+                    <span className="text-ink"> — {gatesByName.get(nom)?.summary}</span>
+                  )}
+                  {gatesByName.get(nom)?.detail && <span className="block text-ink-muted">{gatesByName.get(nom)?.detail}</span>}
+                </span>
                 <button
                   type="button"
                   aria-label={`Remove the guarantee ${nom}`}
@@ -235,13 +291,19 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
           }}
         >
           <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">At most (hours, empty: no limit)</span>
+            <span className="text-xs text-ink-muted">At most (hours, empty: the default)</span>
             <Input type="number" min={1} value={heures} onChange={(event) => setHeures(event.target.value)} />
           </label>
           <Button size="sm" type="submit">
             Set
           </Button>
         </form>
+        {timing && (
+          <p className="text-xs text-ink-muted" data-testid="delai-en-clair">
+            {timing}
+          </p>
+        )}
+        <TransitionFields id={id} states={states} actors={acteurs} workflows={workflows} />
         <Button size="sm" tone="danger" onClick={() => void brouillon.appliquer(operations.retirerLaTransition(id))}>
           Remove this transition
         </Button>

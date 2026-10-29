@@ -58,7 +58,8 @@ def test_aucun_agent_du_catalogue_ne_fixe_de_runtime_ni_de_modele() -> None:
 def test_chaque_role_du_paquet_a_son_agent_au_catalogue() -> None:
     playbooks = pytest.importorskip("choregos_playbooks")
     roles = {e.role for e in INTERNES}
-    assert set(playbooks.KNOWN_ROLES) <= roles, set(playbooks.KNOWN_ROLES) - roles
+    expected = set(playbooks.KNOWN_ROLES)
+    assert expected <= roles, expected - roles
 
 
 def test_les_skills_nommees_par_un_agent_sont_au_catalogue() -> None:

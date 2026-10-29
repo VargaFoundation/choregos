@@ -8,6 +8,7 @@ utilisé par les tests, le mode démo du front et `make demo`.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,6 +25,7 @@ from .base import (
     ScmAdapter,
     TrackerAdapter,
 )
+from .errors import ConfigurationError
 
 Factory = Callable[[dict[str, Any]], Any]
 
@@ -105,6 +107,23 @@ class ConnectorTypeSpec:
     #: A check the configuration must pass to be saved (S40-01k): raises an `AdapterError` naming the
     #: refusal. The adapter repeats it when built, so a row written behind the API fails closed too.
     check_config: Callable[[dict[str, Any]], None] | None = None
+    #: The secret fields that may hold several keys, one per slot (`api_key`, `api_key.2` …
+    #: `api_key.10`, ADR 0089): the adapter receives them as a list, used in turn.
+    pooled_fields: tuple[str, ...] = ()
+    #: A demonstration held in memory: its factory refuses to build in staging and prod, so it is
+    #: neither offered nor declarable there (`offered_connector_types`).
+    dev_only: bool = False
+
+
+#: A slot of a pooled field: `api_key.2` … `api_key.10` (ADR 0089). The first slot is the field.
+SLOTS = range(2, 11)
+_SLOT = re.compile(r"^(?P<field>[a-z][a-z0-9_]{0,63})\.(?P<n>[2-9]|10)$")
+
+
+def slot_of(name: str) -> tuple[str, int]:
+    """`api_key.3` -> (`api_key`, 3); `api_key` -> (`api_key`, 1)."""
+    m = _SLOT.match(name)
+    return (m.group("field"), int(m.group("n"))) if m else (name, 1)
 
 
 _REGISTRY: dict[tuple[str, str], Factory] = {}
@@ -153,6 +172,33 @@ def connector_types() -> list[tuple[str, str, ConnectorTypeSpec]]:
     return sorted((k, t, spec) for (k, t), spec in _SPECS.items() if t != "fake" and not spec.deprecated)
 
 
+def account_of(kind: str, type_name: str, config: dict[str, Any] | None) -> str | None:
+    """The account a connector writes under, when its configuration names one (ADR 0107 point 4).
+
+    Never a secret: a Jira email, an MCP `basic` username, a plugin's server. `None` when the
+    configuration names none (a GitHub App installation, a GitLab or a bearer token): the console
+    then says which credential it is instead."""
+    cfg = config or {}
+    if type_name in {"jira", "confluence"}:
+        return str(cfg.get("email") or "") or None
+    if kind == "mcp" and cfg.get("auth_scheme") == "basic":
+        return str(cfg.get("username") or "") or None
+    if type_name == "plugin" and cfg.get("plugin") and cfg.get("server"):
+        return f"{cfg['plugin']}/{cfg['server']}"
+    return None
+
+
+#: The environments where a `dev_only` type is refused.
+ENVIRONMENTS_WITHOUT_DEMOS = frozenset({"staging", "prod"})
+
+
+def offered_connector_types(environment: str) -> list[tuple[str, str, ConnectorTypeSpec]]:
+    """The types a person may declare in this environment: `connector_types()` without the
+    demonstrations where they would be refused."""
+    demos_refused = environment in ENVIRONMENTS_WITHOUT_DEMOS
+    return [(k, t, spec) for k, t, spec in connector_types() if not (demos_refused and spec.dev_only)]
+
+
 def references_de_secret(
     kind: str, type_name: str, secret_refs: dict[str, str] | None, secret_ref: str | None = None
 ) -> dict[str, str]:
@@ -185,7 +231,27 @@ def configuration_resolue(
     deja = dict(preresolved or {})
     for champ, reference in references_de_secret(kind, type_name, secret_refs, secret_ref).items():
         resolue[champ] = deja[champ] if champ in deja else resoudre(reference)
-    return resolue
+    return pooled(kind, type_name, resolue)
+
+
+def pooled(kind: str, type_name: str, resolved: dict[str, Any]) -> dict[str, Any]:
+    """The slots of each pooled field gathered under the field, in slot order (ADR 0089): a list
+    when there are several keys, the one string otherwise — a type that pools nothing sees no change.
+    A slot of a field its type does not pool is dropped: no adapter reads `api_key.2`."""
+    spec = spec_of(kind, type_name)
+    fields = set(spec.pooled_fields) if spec else set()
+    slots: dict[str, list[tuple[int, Any]]] = {}
+    out: dict[str, Any] = {}
+    for name, value in resolved.items():
+        field, n = slot_of(name)
+        if field in fields and (n > 1 or name == field):
+            slots.setdefault(field, []).append((n, value))
+        elif n == 1:
+            out[name] = value
+    for field, found in slots.items():
+        values = [v for _, v in sorted(found, key=lambda s: s[0]) if v]
+        out[field] = values if len(values) > 1 else (values[0] if values else "")
+    return out
 
 
 def default_gateway_type() -> str:
@@ -365,6 +431,11 @@ class AdapterSet:
 def validate_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
     """Run the type's own configuration check, if it declares one; raises an `AdapterError`."""
     spec = _SPECS.get((kind, type_name))
+    rotation = config.get("key_rotation")
+    if rotation is not None and (spec is None or not spec.pooled_fields):
+        raise ConfigurationError(f"`{type_name}` holds one key per field: `key_rotation` does not apply")
+    if rotation is not None and rotation not in ("failover", "round_robin"):
+        raise ConfigurationError("`key_rotation` is `failover` or `round_robin`")
     if spec is not None and spec.check_config is not None:
         spec.check_config(config)
 

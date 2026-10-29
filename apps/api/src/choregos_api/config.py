@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -320,6 +321,14 @@ class Settings(BaseSettings):
     #: Requêtes par minute et par adresse sur les routes sans principal (`/auth/*`,
     #: `/webhooks/*`), par réplique. 0 désactive. Voir `limiteur.py`.
     rate_limit_per_minute: int = 600
+    #: The networks of the proxies in front of the API, as a JSON list
+    #: (`CHOREGOS_TRUSTED_PROXY_CIDRS='["10.0.0.0/8"]'`): the rate limit keys on the address the
+    #: nearest trusted proxy saw, the right-most `X-Forwarded-For` entry outside them. Empty: the TCP
+    #: peer is the client and `X-Forwarded-For` is ignored.
+    trusted_proxy_cidrs: list[str] = Field(default_factory=list)
+    #: Used only without `trusted_proxy_cidrs`: the number of proxies in front of the API that each
+    #: append one `X-Forwarded-For` entry. 0: the TCP peer is the client.
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
     #: Période de recalcul des métriques Prometheus depuis la base (voir `metriques.py`).
     metrics_refresh_seconds: float = 15.0
     #: Seconds between two passes of the approved-actions relay, in every replica (ADR 0085).
@@ -361,6 +370,21 @@ class Settings(BaseSettings):
                 "CHOREGOS_DEV_LOGIN_ENABLED=true en staging/prod : la connexion de développement "
                 "ouvre l'API à quiconque atteint /auth/callback. Refusé."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _trusted_proxies_are_networks(self) -> Settings:
+        """A typo in a trusted network would silently key every client on the proxy: refused.
+
+        Safe in every process: the worker processes do not set these variables.
+        """
+        for entry in self.trusted_proxy_cidrs:
+            try:
+                ipaddress.ip_network(entry, strict=False)
+            except ValueError:
+                raise ValueError(f"CHOREGOS_TRUSTED_PROXY_CIDRS: `{entry}` is not a network") from None
+        if self.trusted_proxy_cidrs and self.trusted_proxy_hops > 0:
+            raise ValueError("set CHOREGOS_TRUSTED_PROXY_CIDRS or CHOREGOS_TRUSTED_PROXY_HOPS, not both")
         return self
 
     @model_validator(mode="after")

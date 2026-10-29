@@ -26,6 +26,7 @@ import {
   LayoutDashboard,
   Globe,
   Plug,
+  Puzzle,
   ScrollText,
   Server,
   Settings,
@@ -62,6 +63,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/memories", label: "Memories", icone: Brain },
   { href: "/catalogue/mcp-servers", label: "MCP servers", icone: ServerCog },
   { href: "/catalogue/connectors", label: "Connector types", icone: Cable },
+  { href: "/catalogue/plugins", label: "Plugins", icone: Puzzle },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "Integrations", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
@@ -75,7 +77,7 @@ export function entreeActive(href: string, pathname: string): boolean {
 /** The entries, grouped: the work, what agents use, the organisation (S40-08). */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
   { titre: "Work", entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/memories", "/catalogue/mcp-servers", "/catalogue/connectors"] },
+  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/memories", "/catalogue/mcp-servers", "/catalogue/connectors", "/catalogue/plugins"] },
   { titre: "Organisation", entrees: ["/integrations", "/costs", "/admin"] },
 ];
 
@@ -209,6 +211,18 @@ export function sectionIcon(name: string | undefined): LucideIcon {
   return (name && SECTION_ICONS[name as keyof typeof SECTION_ICONS]) || Settings;
 }
 
+/**
+ * The icons that say a plugin's section is about identity (who people are, how they sign in). Such a
+ * section is drawn inside the core's Identity page rather than as an entry of its own (S44-04):
+ * a plugin could declare two identity sections next to the Platform page's own sign-in card: three
+ * places for one subject, two of them showing the same rows.
+ */
+export const IDENTITY_ICONS: readonly NonNullable<AdminSection["icon"]>[] = ["fingerprint", "log-in"];
+
+export function isIdentitySection(section: { icon?: AdminSection["icon"] }): boolean {
+  return !!section.icon && IDENTITY_ICONS.includes(section.icon);
+}
+
 /** The administration's sections: the core's screens, then one per section a plugin declares (ADR 0032). */
 export function adminGroups(
   pluginSections: { id: string; title: string; icon?: AdminSection["icon"] }[] = [],
@@ -228,11 +242,14 @@ export function adminGroups(
         page("/admin/connectors", "Installed connectors", Plug),
         page("/admin/models", "Models", Cpu),
         page("/admin/remote-agents", "Remote agents", Bot),
-        page("/admin/egress", "Network access", Globe),
+        page("/admin/egress", "Network", Globe),
+        page("/admin/identity", "Identity", Fingerprint),
         page("/admin/audit", "Audit", ScrollText),
         page("/admin/platform", "Platform", Server),
         page("/admin/edition", "Edition", BadgeCheck),
-        ...pluginSections.map((s) => page(`/admin/x/${s.id}`, s.title, sectionIcon(s.icon))),
+        ...pluginSections
+          .filter((s) => !isIdentitySection(s))
+          .map((s) => page(`/admin/x/${s.id}`, s.title, sectionIcon(s.icon))),
       ],
     },
   ];

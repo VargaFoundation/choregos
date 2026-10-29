@@ -63,6 +63,16 @@
               "description": "the plugin's directory in the repository"
             }
           }
+        },
+        "agents": {
+          "type": "array",
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          },
+          "description": "the agents this release ships (ADR 0111): a workflow catalogue names the plugin of a missing agent without fetching it"
         }
       },
       "if": {
