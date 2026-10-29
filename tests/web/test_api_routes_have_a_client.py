@@ -82,8 +82,6 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
 NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/memory/ab-report": "console screen: S47-18",
-    "/platform/gateway/keys": "console screen: S47-18",
     "/orgs/{org}/mcp-gateway": "contract only until S46-08 serves it; console card: S46-13",
     "/orgs/{org}/mcp-gateway/test": "contract only until S46-08 serves it; console card: S46-13",
     "/orgs/{org}/mcp-gateway/assertion-key": "contract only until S46-07 serves it; console card: S46-13",

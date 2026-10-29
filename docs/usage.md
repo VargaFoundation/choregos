@@ -1400,7 +1400,7 @@ and the version a run loads ("v3 · pinned"), a name the registry lacks, or its 
 
 ### Platform
 
-`/admin/platform` (**Administration → Platform**) shows what the deployment can run, in two cards.
+`/admin/platform` (**Administration → Platform**) shows what the deployment can run, in two cards, then lists the gateway keys.
 How people sign in to the instance is on **Administration → Identity** (below).
 
 - **Coding agents (backends).** A backend is the coding agent CLI that the runner image ships and
@@ -1424,6 +1424,7 @@ How people sign in to the instance is on **Administration → Identity** (below)
   deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
   chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
   was removed (S42-07b), only the `GET` remains.
+- **Gateway keys.** A table of the keys the model gateway minted for runs (key id, run, project, spent over budget, expiry, state, creation date), for platform administrators; a key's secret is never shown (`GET /platform/gateway/keys`).
 
 ### Identity
 
@@ -1507,6 +1508,8 @@ A **memory** holds facts learned from work: proposed by agents, accepted by peop
 `shared` (the project's) and `own` (one agent's within the project). On top of them you create
 **global** memories (an organisation administrator, `agent:manage`), each with a reach (`org`, or the
 listed `projects`), and **project** memories (a project owner, `project:write`), read by that project's
+
+The **Memories** page (`/memories`) ends with a **Does memory help?** card: the organisation's tickets of the last 4, 12 or 26 weeks, with and without a memory (tickets, first-pass merge rate, cost per ticket) and the report's verdict (`GET /orgs/{org}/memory/ab-report`).
 runs only.
 
 ```bash
