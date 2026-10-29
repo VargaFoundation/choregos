@@ -17,7 +17,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // takes main and S41-22 to 1879 kB; the S41 agent forms (S41-12) bring 1883.
 // 2026-10-22 (S42 batch, on main after S41): 1925 -> 1950 kB. The S42 panels (About, instance identity,
 // knowledge sources, rights and distillation, organisation branding) land on top of S41's agent forms.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 1950);
+// 2026-10-29 (S49: the workflow catalogue, the map's actors, workflow and transition-field panels): 1950 ->
+// 2000 kB. Main at 615fcdfa measures 1939 kB; with S49, 1968 kB.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2000);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {

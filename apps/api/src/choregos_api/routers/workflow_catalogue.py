@@ -51,9 +51,10 @@ async def _organisation(session: AsyncSession, slug: str) -> Organization:
     operation_id="listWorkflowCatalogue",
 )
 async def list_workflow_catalogue(org: str, session: Db, principal: Me) -> list[WorkflowCatalogueEntryDto]:
-    organisation = await _organisation(session, org)
+    # The right first: under RLS a non-member does not see the organisation, and would get a 404.
     if not is_member(principal, org):
         raise forbidden(f"reading the workflow catalogue of {org} requires being a member of it")
+    organisation = await _organisation(session, org)
     return await entries(session, organisation.id)
 
 
@@ -144,9 +145,9 @@ async def _project_of(session: AsyncSession, organisation: Organization, identif
 async def share_workflow(
     org: str, body: WorkflowShare, session: Db, principal: Me
 ) -> WorkflowCatalogueEntryDto:
-    organisation = await _organisation(session, org)
     if not is_admin(principal, org):
         raise forbidden(f"sharing a workflow to the catalogue of {org} needs the org_admin role")
+    organisation = await _organisation(session, org)
     project = await _project_of(session, organisation, body.project)
     query = select(WorkflowDef).where(WorkflowDef.project_id == project.id, WorkflowDef.name == body.name)
     query = (
