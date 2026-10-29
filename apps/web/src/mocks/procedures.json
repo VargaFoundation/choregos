@@ -1084,6 +1084,68 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.documents.web",
+    "title": "Connect a web site behind a login as a documents source",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "documents/web"
+    },
+    "link": null,
+    "reviewed": "2026-10-28",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A web site whose pages a knowledge base should read, but that answers only to a signed-in reader: an\n  intranet published on the internet, a documentation portal, a wiki with an API token. A public site\n  needs no connector: a web source reads it anonymously.\n- This is an organisation connector: an organisation administrator declares it once. The credential is\n  **pinned to its host**: a source whose address is on another host is refused, and a crawl never leaves\n  its start address's scheme and host, so the credential is never sent elsewhere. Declare one connector\n  per host.\n- The host must still resolve to a public address: a site on a private network is refused whatever the\n  credential."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Ask the site's owner for a credential **made for an automated reader**, with read access only:\n\n- **Bearer**: an API or access token the site accepts as `Authorization: Bearer <token>`.\n- **Basic**: a service account's user name and password, sent as HTTP Basic.\n- **Header**: a secret the site expects in a header of its own, `X-API-Key: <key>`, or a long-lived\n  session cookie (`Cookie: name=value`). A session cookie expires: note when, and plan its renewal.\n\nA login form that needs a browser, a second factor or a single sign-on redirect cannot be crawled this\nway: ask for a token, or use the site's repository or another connector."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- Read access to the pages to index, nothing else. The crawl only sends GET requests.\n- The secret is kept in the platform's secret store and resolved when the crawl starts; it is never shown\n  again, written in a log line or returned by the API."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Web site behind a login**.\n2. `host`: the site's host name, without `https://`.\n3. `auth`: `bearer`, `basic` (then `username`) or `header` (then `header_name`). Paste the token, password\n   or header value in `secret`.\n4. Optionally `headers`: plain headers sent with every request, such as `Accept-Language`.\n5. **Knowledge**, a base, **Add source**, kind **Web**, open **Advanced: authentication and HTTP headers**\n   and pick this connector under **Authentication**."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Add the source: the platform asks for the start address with the credential and refuses a start that\nredirects elsewhere (usually to a login page). Then press **Sync now** and open the documents that were\nadded."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- \"is not on `<host>`\": the source's address is on another host than the connector's `host`, by design.\n- \"redirects to … start there\": the site sent the request to its login page; the credential is wrong,\n  expired, or not the kind the site accepts.\n- Nothing indexed: `robots.txt` disallows the paths, or the pages answer `401`/`403` to this credential.\n- \"resolves to a private address\": not crawled, whatever the credential."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the site's host"
+    ],
+    "fields": {
+      "host": "the site's host name, docs.example.com; the credential is sent to no other host",
+      "auth": "bearer for a token, basic for a user name and password, header for a secret in a header of its own",
+      "username": "auth basic: the user name",
+      "header_name": "auth header: the header the secret goes in, X-API-Key or Cookie",
+      "headers": "plain headers sent with every request, Accept-Language for example; never a credential",
+      "secret": "the token, the password or the header's value, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "HTTP authentication (MDN)",
+        "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.firewall.pfsense",
     "title": "Connect a pfSense firewall",
     "version": 1,
@@ -1447,18 +1509,18 @@
   {
     "id": "connector.marketdata.composite",
     "title": "Combine several market data sources",
-    "version": 2,
+    "version": 3,
     "audience": "project_owner",
     "applies_to": {
       "connector": "marketdata/composite"
     },
     "link": null,
-    "reviewed": "2026-10-25",
+    "reviewed": "2026-10-26",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- Decide which sources to combine: `stooq`, `yahoo` and `alphavantage`. Each has its own limits and terms:\n  see their procedures. The composite tries them **in order** and falls back to the next when one fails.\n- With `cross_check` on, the closes of two sources are compared and a difference above `tolerance` (2 % by\n  default) is reported, which catches a broken or unadjusted source."
+        "markdown": "- Decide which sources to combine: `stooq`, `yahoo`, `alphavantage` and `tiingo`. Each has its own limits and terms:\n  see their procedures. The composite tries them **in order** and falls back to the next when one fails.\n- With `cross_check` on, the closes of two sources are compared and a difference above `tolerance` (2 % by\n  default) is reported, which catches a broken or unadjusted source."
       },
       {
         "key": "at",
@@ -1473,7 +1535,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "Connectors, **Market data**, type **composite**. `sources`: for example `[\"stooq\", \"alphavantage\"]`.\n`source_configs`: a sub-configuration per provider, for example `{\"stooq\": {\"suffix_map\": {}}}`.\n`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`."
+        "markdown": "Connectors, **Market data**, type **composite**. `sources`: for example `[\"stooq\", \"alphavantage\"]`.\n`source_configs`: a sub-configuration per provider, for example `{\"stooq\": {\"suffix_map\": {}}}`.\n`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`, `tiingo_api_key`.\nTo cross-check a range of years, put a full-history source second: `[\"yahoo\", \"tiingo\"]`."
       },
       {
         "key": "test",
@@ -1491,12 +1553,13 @@
       "the hosts of the sources it combines"
     ],
     "fields": {
-      "sources": "the providers, in the order they are tried: stooq, yahoo, alphavantage",
+      "sources": "the providers, in the order they are tried: stooq, yahoo, alphavantage, tiingo",
       "source_configs": "the configuration of each provider, by name",
       "cross_check": "true to compare the closes of two sources",
       "tolerance": "the largest relative difference of two closes before they disagree, 0.02 by default",
       "stooq_api_key": "Stooq's key, if any, typed once",
-      "alphavantage_api_key": "Alpha Vantage's key, typed once"
+      "alphavantage_api_key": "Alpha Vantage's key, typed once",
+      "tiingo_api_key": "Tiingo's token, typed once"
     },
     "vendor_docs": [],
     "origin": "shipped"
@@ -1556,6 +1619,68 @@
       {
         "title": "Stooq",
         "url": "https://stooq.com/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.marketdata.tiingo",
+    "title": "Use Tiingo for daily market data",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "marketdata/tiingo"
+    },
+    "link": null,
+    "reviewed": "2026-10-26",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A free Tiingo account and its API token. The free plan gives **30+ years** of daily history, 50 requests an\n  hour, 1,000 a day and 500 distinct symbols a month: a 20-symbol campaign takes 20 requests.\n- Its licence is **internal and personal use only**: the data may not be shown or passed to anyone else. Keep\n  the connector to your own research; a project whose results are shared needs a commercial licence from Tiingo."
+      },
+      {
+        "key": "at",
+        "title": "At the vendor",
+        "markdown": "Sign up at tiingo.com, then copy the token from your account's API page. One account, one token: do not open\nseveral free accounts to add up their limits."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The token only reads market data. It is yours: do not share one token between organisations."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "Connectors, **Market data**, type **Tiingo**. `api_key` in the password field (sealed, shown once). In a\n**composite**, list it after the primary source, for example `[\"yahoo\", \"tiingo\"]`, with the token in\n`tiingo_api_key`: it then cross-checks the whole range, not only the recent days."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** (it reads SPY's metadata, one request), then call `get_bars` for a known ticker."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- \"the key was refused\": the token is wrong or revoked.\n- A message about the hourly or daily allocation: the free limits are reached; wait for the next hour or day.\n- An unknown symbol: Tiingo writes share classes with a dash (`BRK-B`)."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "api.tiingo.com"
+    ],
+    "fields": {
+      "api_key": "your Tiingo API token, typed once",
+      "timeout_s": "request timeout in seconds"
+    },
+    "vendor_docs": [
+      {
+        "title": "Tiingo: pricing and limits",
+        "url": "https://www.tiingo.com/about/pricing"
+      },
+      {
+        "title": "Tiingo: end-of-day API",
+        "url": "https://www.tiingo.com/documentation/end-of-day"
       }
     ],
     "origin": "shipped"
@@ -1675,14 +1800,14 @@
   {
     "id": "connector.mcp.mcp.atlassian-rovo",
     "title": "Connect Atlassian's Rovo MCP Server",
-    "version": 1,
+    "version": 2,
     "audience": "org_admin",
     "applies_to": {
       "connector": "mcp/mcp",
       "preset": "atlassian-rovo"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-28",
     "sections": [
       {
         "key": "before",
@@ -1692,7 +1817,7 @@
       {
         "key": "at",
         "title": "At Atlassian",
-        "markdown": "1. Atlassian Administration: enable **API token authentication** for the Rovo MCP Server.\n2. Create the credential. Two kinds exist and they are sent differently:\n   - a **personal API token with scopes** (id.atlassian.com, Security, API tokens), sent as **Basic**\n     with the account's email;\n   - a **service account API key** (Directory, Service accounts), sent as **Bearer**.\n3. The server's endpoint is `https://mcp.atlassian.com/v1/mcp`. The older `/v1/sse` endpoint stopped on\n   30 June 2026. The MCP server catalogue may list a newer `/v2/mcp` address that signs in with OAuth\n   instead: this procedure is the API-token route on `/v1/mcp`; check Atlassian's documentation for the\n   address your site supports."
+        "markdown": "1. Atlassian Administration: enable **API token authentication** for the Rovo MCP Server.\n2. Create the credential. Two kinds exist and they are sent differently:\n   - a **personal API token with scopes** (id.atlassian.com, Security, API tokens), sent as **Basic**\n     with the account's email;\n   - a **service account API key** (Directory, Service accounts), sent as **Bearer**.\n3. The server's endpoint is `https://mcp.atlassian.com/v2/mcp`, for OAuth and API tokens alike\n   (Atlassian's API token page, 2026-10-28). The older `/v1/sse` endpoint stopped on 30 June 2026."
       },
       {
         "key": "permissions",
@@ -1702,7 +1827,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Install it from the MCP catalogue (\"Atlassian Rovo MCP\"), or Administration, **Connectors**,\n   **Declare**: capability **MCP**, type **MCP server**.\n2. `url`: `https://mcp.atlassian.com/v1/mcp`.\n3. Personal token: `auth_scheme` `basic`, `username` the account's email. Service account key:\n   `auth_scheme` `bearer`. A personal token sent as Bearer fails.\n4. `token`: the token or key, in the password field.\n5. **Discover**, then open the tools the agents need."
+        "markdown": "1. A service account key: install it from the MCP catalogue (\"Atlassian Rovo\"), with the key as its\n   credential. The install sends it as Bearer to `https://mcp.atlassian.com/v2/mcp`.\n2. A personal token: Administration, **Connectors**, **Declare**: type **MCP server**, `url`\n   `https://mcp.atlassian.com/v2/mcp`, `auth_scheme` `basic`, `username` the account's email. A\n   personal token sent as Bearer fails, so the catalogue install does not fit it.\n3. `token`: the token or key, in the password field.\n4. **Discover**, then open the tools the agents need."
       },
       {
         "key": "test",
@@ -1720,7 +1845,7 @@
       "mcp.atlassian.com"
     ],
     "fields": {
-      "url": "https://mcp.atlassian.com/v1/mcp",
+      "url": "https://mcp.atlassian.com/v2/mcp",
       "auth_scheme": "basic for a personal API token, bearer for a service account API key",
       "username": "the account's email, for basic",
       "token": "the API token or key, typed once"
@@ -2667,13 +2792,13 @@
   {
     "id": "connector.tracker.jira",
     "title": "Use Jira Cloud as the board",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/jira"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-28",
     "sections": [
       {
         "key": "before",
@@ -2693,7 +2818,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the\n   key.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the\n   key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
       },
       {
         "key": "test",
@@ -3221,33 +3346,33 @@
   {
     "id": "source.web",
     "title": "Add a web site to a knowledge base",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "source": "web"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-28",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- The https address of the pages to index. The crawl stays on the **same scheme and host**, under the start\n  address's path, obeys the site's `robots.txt`, follows at most 5 levels and reads at most 500 pages.\n- A host that resolves to a private, loopback or link-local address is **refused**: a knowledge base is not\n  a way into the platform's network. For an internal site, use a git repository or a connector.\n- Read the site's terms: you are copying its content into your knowledge base."
+        "markdown": "- The https address of the pages to index. The crawl stays on the **same scheme and host**, under the start\n  address's path, obeys the site's `robots.txt`, follows at most 5 levels and reads at most 500 pages.\n- A host that resolves to a private, loopback or link-local address is **refused**: a knowledge base is not\n  a way into the platform's network. For an internal site, use a git repository or a connector.\n- A site behind a login needs a `documents/web` connector, declared once by an organisation administrator:\n  it holds the credential (a bearer token, HTTP Basic or a named header) as a secret.\n- Read the site's terms: you are copying its content into your knowledge base."
       },
       {
         "key": "at",
         "title": "At the vendor",
-        "markdown": "Nothing to create. If the site blocks automated readers, ask its owner, or use their feed or repository."
+        "markdown": "Nothing to create for a public site. If the site blocks automated readers, ask its owner, or use their feed\nor repository. For a site behind a login, ask its owner for a read-only credential made for an automated\nreader (see the `documents/web` connector's procedure)."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "The crawl is anonymous: it reads only what any visitor reads."
+        "markdown": "Without a connector the crawl is anonymous: it reads only what any visitor reads. With one, it reads what\nthe connector's credential reads, and the credential is sent only to the connector's host."
       },
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Web**.\n2. `url`, `max_depth` and `max_pages`. For a single page tick **This page only** (depth 0, one page). Tick **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files linked from the pages, on the same host (at most 5 MiB each).\n3. Choose the refresh. Web content changes: an interval of a day or a cron expression is usual.\n4. The API must be allowed to reach the site: the network egress allowlist must open its host."
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **Web**.\n2. `url`, `max_depth` and `max_pages`. For a single page tick **This page only** (depth 0, one page). Tick **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files linked from the pages, on the same host (at most 5 MiB each).\n3. For a site behind a login, open **Advanced: authentication and HTTP headers** and pick the login\n   connector. Plain headers (`Accept-Language: fr`) go in **Extra HTTP headers**, one per line; a header\n   that carries a credential is refused there.\n4. Choose the refresh: every few hours, every day or every weekday at a time, chosen days of the week, once\n   a month, a cron expression of your own, or manually. Web content changes: once a day is usual.\n5. The API must be allowed to reach the site: the network egress allowlist must open its host."
       },
       {
         "key": "test",
@@ -3257,7 +3382,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- \"resolves to a private address\": not crawled, by design.\n- Nothing indexed: `robots.txt` disallows the paths, or the start page links nowhere under its path.\n- A redirect to another host: the crawl does not follow it, and the base is not emptied.\n- A timeout: the egress allowlist does not open the site."
+        "markdown": "- \"resolves to a private address\": not crawled, by design.\n- Nothing indexed: `robots.txt` disallows the paths, or the start page links nowhere under its path.\n- A redirect to another host: the crawl does not follow it, and the base is not emptied.\n- A redirect to a login page when the source is added: the site needs a login connector, or the\n  connector's credential is wrong or expired.\n- A timeout: the egress allowlist does not open the site."
       }
     ],
     "values": {},
@@ -3269,7 +3394,9 @@
       "max_depth": "how many links deep to follow, at most 5",
       "max_pages": "how many pages to read, at most 500",
       "exclude": "path globs, each starting with /, that are neither fetched nor followed",
-      "include_documents": "also read the PDF, Word, PowerPoint and Excel files the pages link to (same host)"
+      "include_documents": "also read the PDF, Word, PowerPoint and Excel files the pages link to (same host)",
+      "connector": "optional: a documents/web connector holding the credential of a site behind a login",
+      "headers": "optional plain headers sent with every request, Accept-Language for example; never a credential"
     },
     "vendor_docs": [],
     "origin": "shipped"

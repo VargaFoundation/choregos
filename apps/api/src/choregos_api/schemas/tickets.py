@@ -133,6 +133,25 @@ class WorkItemPage(Dto):
     meta: PageMeta
 
 
+class ReceivedEventDto(Dto):
+    """A webhook event the project received, and what the platform did with it (S42-06f)."""
+
+    id: str
+    received_at: datetime
+    source: str
+    event_type: str
+    delivery_id: str | None = None
+    outcome: str
+    work_item_key: str | None = None
+    work_item_id: str | None = None
+    summary: str
+
+
+class ReceivedEventPage(Dto):
+    items: list[ReceivedEventDto]
+    meta: PageMeta
+
+
 class TimelineEntry(Dto):
     ts: datetime
     kind: str

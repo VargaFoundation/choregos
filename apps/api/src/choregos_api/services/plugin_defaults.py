@@ -8,9 +8,18 @@ The chart's `plugins.defaultPlugins` (source, name, version range) reach the API
   waiting for its second approval; running it twice changes nothing. Upgrading stays an administrator's
   gesture (ADR 0040);
 - **under the same gate as a person's install**: every supply-chain check runs (S43-03), and a default
-  plugin that brings a server is NOT installed: it is recorded as a request waiting for an
-  administrator's approval (`requested_by` empty, `default` true), logged as
-  `plugin.default.pending_approval` and listed by `GET /orgs/{org}/plugin-approvals`;
+  plugin the gate sends to a second administrator (a server, a high-risk skill) is NOT installed: it is
+  recorded as a request waiting for an administrator's approval (`requested_by` empty, `default` true),
+  logged as `plugin.default.pending_approval` and listed by `GET /orgs/{org}/plugin-approvals`;
+- **unless the operator pre-approved it** (`preapproved: true` on the entry, S43-09): listing a plugin in
+  the deployment's configuration is a decision taken through the deployment's own review, so the gate's
+  reasons are recorded in the audit trail (`plugin.default.preapproved`, approved by the deployment
+  configuration) and the plugin is installed. The API offers no such flag: a person's install always
+  waits for the second administrator;
+- **offline first**: a default whose source is not the offline directory is taken from it when it holds a
+  version inside the requested range (the image's baked `plugins.lock`, S43-09) — no network at start-up,
+  the same content digest the source publishes — and recorded under its declared source, which serves its
+  upgrades;
 - **one organisation at a time, one plugin at a time**: a plugin that fails (an unreachable source, a
   refused signature) is logged and the others go on; each plugin's writes are a savepoint;
 - **safe on every replica**: each organisation is reconciled under a PostgreSQL advisory transaction
@@ -32,18 +41,27 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from choregos_core.plugins import PluginError
-from choregos_core.plugins.sources import PluginsConfig, SourceError
+from choregos_core.plugins.sources import DefaultPlugin, PluginsConfig, SourceError
+from choregos_core.plugins.versions import VersionError, admits
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import record
 from ..config import Settings, get_settings
 from ..db.models import Organization
 from ..errors import ApiError
 from ..logging import get_logger
+from ..rbac import SYSTEM
 from . import plugin_approvals as approvals
 from . import plugin_installer as installer
 from .plugin_sources import assess_plugin, plugins_config
-from .plugin_supply import PluginNotFoundError, PluginVersionUnsupportedError, plugin_supply
+from .plugin_supply import (
+    OFFLINE,
+    PluginNotFoundError,
+    PluginSupply,
+    PluginVersionUnsupportedError,
+    plugin_supply,
+)
 
 log = get_logger(__name__)
 
@@ -98,6 +116,23 @@ class Outcome:
     detail: str = ""
 
 
+async def _offline_version(supply: PluginSupply, config: PluginsConfig, wanted: DefaultPlugin) -> str | None:
+    """The offline directory's version of `wanted`, when its source is another one and that version is
+    inside the requested range; `None` otherwise (the declared source serves it)."""
+    if wanted.source == OFFLINE or config.offline is None:
+        return None
+    try:
+        version = await supply.latest(OFFLINE, wanted.name)
+    except (SourceError, PluginNotFoundError):
+        return None
+    if version is None:
+        return None
+    try:
+        return version if wanted.version == "*" or admits(wanted.version, version) else None
+    except VersionError:
+        return None
+
+
 def _lock_number(org_id: str) -> int:
     return int.from_bytes(
         hashlib.sha256(f"plugin-defaults:{org_id}".encode()).digest()[:8], "big", signed=True
@@ -130,10 +165,28 @@ async def reconcile_org(
             outcomes.append(Outcome(slug, wanted.name, PENDING, "already waiting"))
             continue
         try:
-            async with supply.obtain(wanted.source, wanted.name, wanted.version) as plugin:
+            offline = await _offline_version(supply, config, wanted)
+            obtained = (
+                supply.obtain(OFFLINE, wanted.name, offline)
+                if offline is not None
+                else supply.obtain(wanted.source, wanted.name, wanted.version)
+            )
+            async with obtained as plugin:
                 gate = assess_plugin(plugin)
                 async with session.begin_nested():
-                    if gate.needs_second_approval:
+                    if gate.needs_second_approval and wanted.preapproved:
+                        await record(session, SYSTEM, "plugin.default.preapproved", org_id=org_id,
+                                     target_type="plugin", target_id=plugin.name, version=plugin.version,
+                                     digest=plugin.digest, reasons=list(gate.reasons),
+                                     approved_by="deployment configuration")  # fmt: skip
+                        log.warning(
+                            "plugin.default.preapproved",
+                            org=slug,
+                            plugin=plugin.name,
+                            version=plugin.version,
+                            reasons=list(gate.reasons),
+                        )
+                    elif gate.needs_second_approval:
                         await installer.check(session, org_id, plugin, settings, replacing=None)
                         row, _ = await approvals.request(
                             session, org_id, approvals.INSTALL, wanted.source, plugin, gate.reasons, None,
@@ -152,7 +205,14 @@ async def reconcile_org(
                     await installer.install(
                         session, org_id, plugin, wanted.source, settings, None, default=True
                     )
-            log.info("plugin.default.installed", org=slug, plugin=plugin.name, version=plugin.version)
+            log.info(
+                "plugin.default.installed",
+                org=slug,
+                plugin=plugin.name,
+                version=plugin.version,
+                from_offline=offline is not None,
+                preapproved=gate.needs_second_approval,
+            )
             outcomes.append(Outcome(slug, wanted.name, INSTALLED, plugin.version))
         except (
             SourceError,

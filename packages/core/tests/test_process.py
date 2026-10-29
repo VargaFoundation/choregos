@@ -46,3 +46,27 @@ def test_ce_que_fait_la_plateforme_se_dit_en_clair() -> None:
     etapes = {e["to"]: str(e["sentence"]) for e in to_process(workflow)}
     assert "the platform, which opens the pull request" in etapes["pr_open"]
     assert "the platform, which merges the pull request" in etapes["merged"]
+
+
+def test_a_guarantee_says_its_thresholds_and_how_long_it_waits() -> None:
+    """The map listed `diff_size_max` and `ci_green` as bare names: what the limit is, and that the
+    step waits for the CI, were not said anywhere."""
+    from choregos_core.dsl.process import gate_detail
+
+    assert (
+        gate_detail("diff_size_max", {})
+        == "at most 60 files and 100000 lines changed (the platform's defaults)"
+    )
+    assert (
+        gate_detail("diff_size_max", {"files": 10, "lines": 400}) == "at most 10 files and 400 lines changed"
+    )
+    assert "with none declared, anything passes" in str(gate_detail("scope_respected", {}))
+    assert gate_detail("ci_green", {}, 72) == "waits for it up to 72 h"
+    assert gate_detail("ci_green", {}) == "waits for it up to 24 h"
+    assert gate_detail("no_secrets", {}) is None
+
+
+def test_each_step_s_guarantees_carry_their_detail() -> None:
+    for step in _staffing():
+        for guarantee in step["gates"]:  # type: ignore[attr-defined]
+            assert set(guarantee) == {"name", "summary", "detail", "asynchronous"}

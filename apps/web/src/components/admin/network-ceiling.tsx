@@ -85,7 +85,7 @@ export function NetworkCeilingCard({ org, canEdit }: { org: string; canEdit: boo
 
   const readOnly = !canEdit;
   return (
-    <Card title="Network access">
+    <Card title="What agents may reach">
       <div className="space-y-3 text-sm">
         <p className="text-ink-muted">
           What the agents of {org} may reach on the internet. A project and an agent can only narrow it. A host name covers its

@@ -287,12 +287,16 @@ platform's per-operation policy and approvals; it does not invoke the Rovo agent
    agents should have, and an API token with granular scopes, for example `read:jira-work`,
    `write:jira-work` (only if writes are wanted), `read:page:confluence`, `search:confluence`,
    `search:rovo:mcp`. Without the search scopes only some tools appear.
-3. Declare the connector. The token is sent as `Authorization: Basic base64(email:token)`, which
-   is what the server expects for an API token (Bearer is refused):
+3. Declare the connector on `https://mcp.atlassian.com/v2/mcp` (Atlassian's API token page,
+   2026-10-28). The credential decides how it is sent:
+   - a **service account API key** travels as `Authorization: Bearer <key>`: install "Atlassian
+     Rovo" from the MCP catalogue, with the key as its credential;
+   - a **personal API token** travels as `Authorization: Basic base64(email:token)` (as Bearer it is
+     refused): declare it by hand.
 
 ```bash
 curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "rovo", "type": "mcp",
-  "config": {"url": "https://mcp.atlassian.com/v1/mcp", "auth_scheme": "basic",
+  "config": {"url": "https://mcp.atlassian.com/v2/mcp", "auth_scheme": "basic",
              "username": "choregos-bot@example.com"},
   "secret_refs": {"token": "env:CONNECTOR_ROVO_API_TOKEN"}}'
 ```
@@ -331,7 +335,7 @@ What Rovo exposes, and what it does not (checked on 2026-10-15):
 - No cost or token figure comes back; Rovo usage counts against the Atlassian subscription.
 
 Two different things, both useful: Rovo's **tools** (search, create and update issues and pages) reach
-your governed agents through an `mcp` connector on `https://mcp.atlassian.com/v1/mcp` and are live
+your governed agents through an `mcp` connector on `https://mcp.atlassian.com/v2/mcp` and are live
 queries under per-operation policy; the **A2A agent** below is Rovo itself, answering as a person.
 Neither is a knowledge source: a Confluence knowledge base ingests documents, this asks questions.
 

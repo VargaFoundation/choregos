@@ -242,3 +242,17 @@ API's event loop. Since S39-26:
     also shrinks the corpus. Speaker notes and table or chart text of a deck survive MarkItDown 0.1.8
     (regression test), so decks are unchanged.
 
+
+## Update 2026-10-28 — a web site behind a login (S47-48)
+
+27. **A web source reads a site behind a login through a `documents/web` connector**, as a git source
+    reads a private repository (decision 23). The connector holds one credential as its secret field
+    `secret`: a bearer token, HTTP Basic (`username` plus the password) or the value of one named header
+    (`header_name`: an `X-API-Key`, a session `Cookie`). It is pinned to the connector's `host`: a source
+    on another host is refused when it is added and again when the crawl is built, and every request of a
+    crawl (robots, pages, redirects, documents) stays on its start origin, refused otherwise. The check of
+    the start address (S39-28) is made with the credential, so a login redirect is reported when the source is
+    added. A source keeps **plain** headers of its own (`config.headers`, at most 20, one line each);
+    a name that looks like a credential (`auth`, `cookie`, `token`, `key`, `secret`, `session`,
+    `password`, `signature`) is refused there, because a source's configuration is stored in the clear.
+    A login that needs a browser, a second factor or single sign-on is out of reach by design.

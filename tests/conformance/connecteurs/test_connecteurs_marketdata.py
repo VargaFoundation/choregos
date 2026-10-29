@@ -58,11 +58,26 @@ YAHOO = {
 }
 
 
+TIINGO = [
+    {"date": "2024-01-02T00:00:00.000Z", "open": 187.15, "high": 188.44, "low": 183.89, "close": 185.64,
+     "volume": 82488674, "adjClose": 184.73, "splitFactor": 1.0, "divCash": 0.0},
+    {"date": "2024-01-03T00:00:00.000Z", "open": 184.22, "high": 185.88, "low": 183.43, "close": 184.25,
+     "volume": 58414460, "adjClose": 183.35, "splitFactor": 1.0, "divCash": 0.0},
+]  # fmt: skip
+
+
 def serveur(cle_attendue: str) -> httpx.MockTransport:
-    """A stand-in for the three providers: answers by host, and refuses a wrong key where one is used."""
+    """A stand-in for the four providers: answers by host, and refuses a wrong key where one is used."""
 
     def handler(requete: httpx.Request) -> httpx.Response:
         cle = requete.url.params.get("apikey")
+        if requete.url.host == "api.tiingo.com":
+            # Tiingo's token is a header (S38-22): a wrong one is a 401, as Tiingo answers.
+            if requete.headers.get("Authorization") != f"Token {cle_attendue}":
+                return httpx.Response(401, json={"detail": "Invalid token."})
+            if requete.url.path.endswith("/prices"):
+                return httpx.Response(200, json=TIINGO)
+            return httpx.Response(200, json={"ticker": "aapl", "name": "Apple Inc", "exchangeCode": "NASDAQ"})
         if requete.url.host in {"stooq.com", "www.alphavantage.co"} and cle != cle_attendue:
             return httpx.Response(403, text="forbidden")
         if requete.url.host == "stooq.com":
@@ -75,27 +90,37 @@ def serveur(cle_attendue: str) -> httpx.MockTransport:
 
 
 def ouvrir(nom: str, cle: str = SECRET) -> MarketDataProvider:
-    sources = {"stooq": {"api_key": cle}, "alphavantage": {"api_key": cle}, "yahoo": {}, "fake": {}}
+    sources = {
+        "stooq": {"api_key": cle},
+        "alphavantage": {"api_key": cle},
+        "tiingo": {"api_key": cle},
+        "yahoo": {},
+        "fake": {},
+    }
     if nom == "composite":
         fournisseur = build(
             "marketdata",
             "composite",
             {
-                "sources": ["stooq", "alphavantage"],
+                "sources": ["stooq", "alphavantage", "tiingo"],
                 "stooq_api_key": cle,
                 "alphavantage_api_key": cle,
+                "tiingo_api_key": cle,
             },
         )
         for _, source in fournisseur._sources:
-            source._client = httpx.AsyncClient(transport=serveur(SECRET))
+            # The provider's own headers (Tiingo's token) stay: only the network is replaced.
+            source._client = httpx.AsyncClient(transport=serveur(SECRET), headers=source._client.headers)
         return fournisseur  # type: ignore[no-any-return]
     fournisseur = build("marketdata", nom, sources[nom])
     if nom != "fake":
-        fournisseur._client = httpx.AsyncClient(transport=serveur(SECRET))
+        fournisseur._client = httpx.AsyncClient(
+            transport=serveur(SECRET), headers=fournisseur._client.headers
+        )
     return fournisseur  # type: ignore[no-any-return]
 
 
-TYPES = ["stooq", "yahoo", "alphavantage", "composite"]
+TYPES = ["stooq", "yahoo", "alphavantage", "tiingo", "composite"]
 
 
 def exemple(nom: str, schema: dict[str, Any]) -> Any:
@@ -133,7 +158,7 @@ async def test_each_operation_declares_a_closed_schema_the_implementation_follow
             assert resultat["type"] in {"stock", "etf", "unknown"}
 
 
-@pytest.mark.parametrize("nom", ["stooq", "alphavantage", "composite"])
+@pytest.mark.parametrize("nom", ["stooq", "alphavantage", "tiingo", "composite"])
 async def test_the_key_serves_and_appears_nowhere(nom: str, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG)
     with structlog.testing.capture_logs() as evenements:

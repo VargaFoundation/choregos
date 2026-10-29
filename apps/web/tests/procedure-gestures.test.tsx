@@ -87,7 +87,7 @@ describe("the procedure at every add gesture (S39-23b)", () => {
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "mcp/mcp" } });
     const first = await screen.findByTestId("procedure-panel");
     expect(first).toHaveTextContent("Connect an MCP server");
-    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://mcp.atlassian.com/v1/mcp" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://mcp.atlassian.com/v2/mcp" } });
     await waitFor(() => expect(screen.getByRole("button", { name: "How to set this up" })).toBeInTheDocument());
     fireEvent.click(screen.getByTestId("procedure-close"));
     fireEvent.click(await screen.findByRole("button", { name: "How to set this up" }));

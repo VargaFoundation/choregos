@@ -160,6 +160,8 @@ class ConnectorType(Dto):
     capabilities: list[str] = Field(default_factory=list)
     #: Les clefs de configuration qui sont des secrets : elles s'écrivent dans `secret_refs`.
     secret_fields: list[str] = Field(default_factory=list)
+    #: The secret fields that take several keys, one per slot (`api_key.2` …, ADR 0089).
+    pooled_fields: list[str] = Field(default_factory=list)
 
 
 class ProjectRequirement(Dto):
@@ -213,6 +215,16 @@ class OperationDto(Dto):
     result_max_bytes: int | None = None
 
 
+class OrgConnectorServer(Dto):
+    """What the console needs to configure a plugin's server (ADR 0096, contract-change S43-08)."""
+
+    plugin: str
+    version: str
+    server: str
+    config_schema: dict[str, Any] = Field(default_factory=dict)
+    secret_fields: list[str] = Field(default_factory=list)
+
+
 class OrgConnectorDto(Dto):
     name: str
     kind: str
@@ -229,6 +241,8 @@ class OrgConnectorDto(Dto):
     availability: Literal["all_projects", "selected_projects"] = "all_projects"
     #: the projects it is on for, among those the caller sees; empty with `all_projects`
     enabled_projects: list[str] = Field(default_factory=list)
+    #: the plugin server it runs: its configuration is the server's schema, not the `mcp` type's
+    server: OrgConnectorServer | None = None
 
     @field_validator("secret_refs", mode="before")
     @classmethod

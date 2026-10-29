@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 import pytest
 from httpx import AsyncClient
 
@@ -751,3 +752,98 @@ async def test_a_web_source_config_accepts_one_page_and_refuses_a_bad_flag(
         },
     )
     assert bad.status_code == 422 and "include_documents" in bad.json()["detail"]
+
+
+async def _web_connector(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, host: str = "intranet.example.com"
+) -> None:
+    monkeypatch.setenv("CONNECTOR_KB_WEB_TOKEN", "t" + "0k")
+    created = await client.post(
+        "/api/v1/orgs/varga/connectors",
+        json={"name": "intranet", "kind": "documents", "type": "web",
+              "config": {"host": host, "auth": "bearer"},
+              "secret_refs": {"secret": "env:CONNECTOR_KB_WEB_TOKEN"}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+
+
+async def test_a_web_source_behind_a_login_names_a_web_connector_pinned_to_its_host(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S47-48: the credential lives in a `documents/web` connector; the source keeps plain headers only."""
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    await _web_connector(client, monkeypatch)
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "web", "name": "Intranet", "connector": "intranet",
+              "config": {"url": "https://intranet.example.com/docs/", "headers": {"Accept-Language": "fr"}}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+    assert created.json()["connector"] == "intranet"
+    assert created.json()["config"]["headers"] == {"Accept-Language": "fr"}
+    elsewhere = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "web", "name": "Other", "connector": "intranet",
+              "config": {"url": "https://other.example.com/"}},
+    )  # fmt: skip
+    assert elsewhere.status_code == 422 and "never sent to another host" in elsewhere.json()["detail"]
+    in_clear = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "web", "name": "Leaky",
+              "config": {"url": "https://docs.example.com/", "headers": {"Authorization": "Bearer x"}}},
+    )  # fmt: skip
+    assert in_clear.status_code == 422 and "looks like a credential" in in_clear.json()["detail"]
+    missing = await client.post(
+        f"{BASE}/framework/sources",
+        json={
+            "kind": "web",
+            "name": "Bad",
+            "connector": "nope",
+            "config": {"url": "https://docs.example.com/"},
+        },
+    )
+    assert missing.status_code == 422 and "no `documents` connector" in missing.json()["detail"]
+
+
+async def test_a_web_source_behind_a_login_is_checked_and_crawled_with_the_connector_credential(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import respx
+    from choregos_adapters.documents import web
+    from choregos_api.db.models import KnowledgeSource
+    from choregos_api.db.session import session_scope
+    from choregos_api.knowledge.sync import open_source
+
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+
+    async def public(host: str) -> list[str]:
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(web, "resolve", public)
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    await _web_connector(client, monkeypatch)
+    url = "https://intranet.example.com/docs/"
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(url)
+        # Anonymous, the site sends its login page; with the token, its documentation.
+        route.side_effect = lambda request: (
+            httpx.Response(200, text="docs")
+            if request.headers.get("authorization") == "Bearer t0k"
+            else httpx.Response(302, headers={"location": "https://login.example.com/"})
+        )
+        anonymous = await client.post(
+            f"{BASE}/framework/sources", json={"kind": "web", "name": "a", "config": {"url": url}}
+        )
+        signed_in = await client.post(
+            f"{BASE}/framework/sources",
+            json={"kind": "web", "name": "b", "connector": "intranet", "config": {"url": url}},
+        )
+    assert anonymous.status_code == 422 and "redirects to" in anonymous.json()["detail"]
+    assert signed_in.status_code == 201, signed_in.text
+    async with session_scope() as session:
+        row = await session.get(KnowledgeSource, signed_in.json()["id"])
+        assert row is not None
+        crawl = await open_source(session, row)
+    assert isinstance(crawl, web.WebCrawlSource)
+    assert crawl._http.headers["authorization"] == "Bearer t0k"
+    await crawl.aclose()

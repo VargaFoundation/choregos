@@ -228,7 +228,7 @@ spec:
             {{- end }}
             {{- /* A name this chart sets for the API must not also come from global.extraEnv.
                    S47-02/03/04 add their names to this dict. */}}
-            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" }}
+            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" }}
             {{- range ($.Values.global.extraEnv | default list) }}
             {{- if hasKey $apiOwned .name }}
             {{- fail (printf "global.extraEnv: %s is set by the choregos-api chart; use %s instead (two values for one name: Kubernetes keeps the last one without saying so)" .name (get $apiOwned .name)) }}
@@ -261,6 +261,11 @@ spec:
               value: {{ .Values.global.devLogin.enabled | default false | quote }}
             - name: CHOREGOS_DEV_ADMIN_EMAILS
               value: {{ .Values.global.devLogin.adminEmails | default "" | quote }}
+            # The proxies whose X-Forwarded-For entries the sign-in and webhook rate limit believes.
+            - name: CHOREGOS_TRUSTED_PROXY_CIDRS
+              value: {{ toJson (.Values.trustedProxyCidrs | default list) | quote }}
+            - name: CHOREGOS_TRUSTED_PROXY_HOPS
+              value: {{ .Values.trustedProxyHops | default 0 | quote }}
             # STRUCTURAL, never optional: an API that starts without a session
             # secret signs cookies with an empty value, and a missing run-token key
             # sends every process back to an ephemeral pair — the agent then receives
