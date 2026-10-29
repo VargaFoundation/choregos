@@ -3,7 +3,7 @@ id: connector.tracker.github-issues
 title: Use GitHub Issues and Projects v2 as the board
 applies_to: {connector: tracker/github-issues}
 audience: project_owner
-version: 1
+version: 2
 reviewed: 2026-10-19
 vendor_docs:
   - {title: "Registering a GitHub App", url: "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app"}
@@ -56,6 +56,13 @@ Subscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_
 
 Add `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub
 refuses such a push.
+
+**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
+GitHub's REST API, as the Choregos GitHub App (`<app>[bot]` on GitHub): the board column and labels,
+the status comment, the questions to a person, the close-out. The connector card names the account
+whose installation it goes through, and each line of a work item's timeline that wrote to GitHub says
+"via GitHub Issues". An agent's own actions do not go through this connector: they go through the MCP
+tools its version names, under each tool connector's account, listed on its run.
 
 ## In Choregos
 

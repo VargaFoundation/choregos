@@ -17,7 +17,7 @@ from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
 from ..rbac import Permission
 from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto, RunLogsDto
-from ..services import run_dto
+from ..services import run_dto, tool_connectors_of
 
 router = APIRouter(tags=["runs"])
 
@@ -59,7 +59,7 @@ async def list_runs(id: str, session: Db, principal: Me) -> list[RunDto]:
 @router.get("/runs/{id}", response_model=RunDto, operation_id="getRun")
 async def get_run(id: str, session: Db, principal: Me) -> RunDto:
     run, project = await _run(session, id, principal)
-    return run_dto(run, project.slug)
+    return run_dto(run, project.slug, await tool_connectors_of(session, run, project))
 
 
 @router.get("/runs/{id}/events", operation_id="getRunEvents")

@@ -440,6 +440,48 @@ def _provision_status(project: Project) -> ProvisionStatus:
     )
 
 
+def _nothing_to_provision(project: Project) -> bool:
+    """No template and no repository: there is no repository to wire, no pipeline to create.
+
+    The orchestrator falls back to the GitHub · Tekton · Argo steps when a project names no template;
+    a project that has no repository would only fail them, and stayed a draft nobody could activate."""
+    repo = (project.config or {}).get("repo") or {}
+    return not project.template_ref and not repo.get("url")
+
+
+async def _activate_without_steps(ctx: ProjectCtx, session: Db, *, dry_run: bool) -> ProvisionStatus:
+    if dry_run:
+        return ProvisionStatus(project_id=ctx.id, status="pending")
+    now = utcnow().isoformat()
+    ctx.project.status = "active"
+    ctx.project.provision_state = {
+        **(ctx.project.provision_state or {}),
+        "status": "succeeded",
+        "workflow_id": None,
+        "current_step": None,
+        "steps": [],
+        "started_at": now,
+    }
+    await persist_event(
+        session,
+        EventType.PROVISIONING_COMPLETED,
+        project_id=ctx.id,
+        project_slug=ctx.slug,
+        subject=ctx.slug,
+        failed=[],
+    )
+    await record(
+        session,
+        ctx.principal,
+        "project.provision",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+        steps=0,
+    )
+    return _provision_status(ctx.project)
+
+
 @router.post(
     "/projects/{id}/provision",
     response_model=ProvisionStatus,
@@ -448,6 +490,8 @@ def _provision_status(project: Project) -> ProvisionStatus:
 )
 async def provision(ctx: ProjectCtx, body: ProvisionRequest, session: Db) -> ProvisionStatus:
     ctx.require(Permission.PROJECT_WRITE)
+    if _nothing_to_provision(ctx.project):
+        return await _activate_without_steps(ctx, session, dry_run=body.dry_run)
     workflow_id = provisioning_id(ctx.slug)
     payload = {
         "project_id": ctx.id,

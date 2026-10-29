@@ -3,7 +3,7 @@
 > **Amended by [ADR 0093](0093-an-agent-ships-as-a-plugin.md)**: a catalogue entry may come from a
 > plugin, whose source and content digest are its recorded source.
 
-- **Status**: accepted, 2026-10-15; amended by [ADR 0074](0074-catalogue-rights.md) (rights, per-project enablement)
+- **Status**: accepted, 2026-10-15; amended by [ADR 0074](0074-catalogue-rights.md) (rights, per-project enablement); amended by [ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md) (gateways are consumed, never catalogued)
 - **Concerns**: `packages/core` (`choregos_core.catalogues`, `mcp_catalogue/`, `skill_catalogue/`),
   `tools/catalogues/`, the routes `GET /orgs/{org}/mcp-catalogue` and
   `GET /orgs/{org}/skill-catalogue` with their `install` verbs, the console (`components/catalogue/`);
@@ -87,7 +87,8 @@ relays and proxies), awesome lists, skills.sh install counts. None is a curated 
 
 - **Proxy the registry live in the console**: 42,000 mostly unvetted entries, tunnels and relays, a
   preview API.
-- **A runtime MCP gateway** (aggregators): re-opens the discovery ADR 0022 refuses.
+- **A runtime MCP gateway** (aggregators): re-opens the discovery ADR 0022 refuses. An organisation's own
+  gateway is consumed as its MCP gateway ([ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)), not listed.
 - **Auto-enable "safe" servers or seed every organisation with skills**: contradicts ADR 0014 and
   the opt-in library of ADR 0033.
 - **A hand-written list without generator**: it rots.

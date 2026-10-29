@@ -30,6 +30,7 @@ from choregos_api.services.readiness import (
     item_stale_tests,
     item_tools,
     item_workflow,
+    item_workflow_catalogue,
     item_workflow_template,
     runtime_fact,
 )
@@ -79,6 +80,13 @@ def test_a_draft_project_is_to_do_and_names_the_failing_step() -> None:
     assert item.state == "todo" and "argocd.wait_synced: timeout" in item.detail
     assert item_provisioned(facts())[0].state == "done"
     assert item_provisioned(facts(status="provisioning"))[0].state == "todo"
+
+
+def test_an_inactive_project_points_at_the_gesture_that_activates_it() -> None:
+    (draft,) = item_provisioned(facts(status="draft"))
+    assert draft.fix.href == "/p/dev/settings#general" and "activate it" in draft.detail
+    (suspended,) = item_provisioned(facts(status="suspended"))
+    assert "resume it" in suspended.detail
 
 
 def test_no_active_workflow_is_to_do_and_no_default_is_to_check() -> None:
@@ -183,6 +191,27 @@ def test_no_test_command_is_to_check() -> None:
     )
     assert states(item_repository(facts(requirements=required)))["repository"] == "todo", "no URL"
     assert item_repository(facts()) == [], "no scm required: nothing to say about a repository"
+
+
+def test_without_a_repository_the_workflow_that_asks_for_one_is_named_and_can_be_changed() -> None:
+    required = (
+        ("scm", ("default-simple: the agent dev (implement) works in a repository",)),
+        ("cd", ("default-simple: the state deployed_prod is production",)),
+    )
+    (repository,) = item_repository(facts(requirements=required))
+    assert repository.state == "todo" and "default-simple: the agent dev" in repository.detail
+    assert "a workflow that does not deliver code" in repository.detail
+    scm, cd = item_connectors(facts(requirements=required))
+    assert scm.state == cd.state == "todo"
+    gesture = "/p/dev/workflows/new?template=default-request&default=1"
+    assert scm.fix.href == cd.fix.href == repository.fix.href == gesture, "the way out is another workflow"
+    published = facts(requirements=required, workflows=("default-simple", "default-request"))
+    assert item_repository(published)[0].fix.href == "/p/dev/workflows", "published: make it the default"
+    with_repo = ProjectConfig.model_validate(
+        {"slug": "dev", "org": "varga", "repo": {"url": "https://github.com/varga/dev.git"}}
+    )
+    (scm,) = item_connectors(facts(requirements=required[:1], config=with_repo))
+    assert scm.fix.href == "/p/dev/settings#connections", "a project with a repository connects it"
 
 
 def test_the_dod_facts_count_as_measured_checks() -> None:
@@ -424,3 +453,14 @@ def test_a_workflow_equal_to_what_its_template_ships_is_done() -> None:
 def test_no_template_or_no_workflow_it_still_ships_asks_nothing() -> None:
     assert item_workflow_template(facts()) == []
     assert item_workflow_template(facts(template="investment-research")) == []
+
+
+def test_an_adopted_workflow_behind_its_catalogue_entry_is_to_check() -> None:
+    assert item_workflow_catalogue(facts()) == [], "nothing adopted: nothing said"
+    (current,) = item_workflow_catalogue(facts(adopted=(("requests", "core/default-request@1", 1),)))
+    assert current.state == "done"
+    (behind,) = item_workflow_catalogue(facts(adopted=(("requests", "core/default-request@1", 2),)))
+    assert behind.state == "check" and "version 2 is offered" in behind.detail
+    assert behind.fix.href == "/p/dev/workflows/catalogue"
+    (gone,) = item_workflow_catalogue(facts(adopted=(("ghostly", "org/ghostly@1", None),)))
+    assert gone.state == "check" and "no longer offers" in gone.detail

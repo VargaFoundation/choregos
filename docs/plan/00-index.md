@@ -44,7 +44,7 @@ Décision de travail : **Choregos**. Vocabulaire optionnel pour la communication
 | D11 | Auth | OIDC (Keycloak en dev, IdP de l'organisation en prod) ; RBAC 5 rôles |
 | D12 | Observabilité | OpenTelemetry → Prometheus / Loki / Tempo / Grafana (kube-prometheus-stack) ; Azure Monitor en option d'export ; Langfuse **optionnel** (phase 2) |
 | D13 | Instructions dépôt | `AGENTS.md` (standard) ; `CLAUDE.md` = lien symbolique |
-| D14 | Workflow par défaut | `default-simple` ; prod toujours via release train |
+| D14 | Default workflow | `default-simple` for a project with a repository, `default-request` without one (ADR 0110); production always through the release train |
 | D15 | Monorepo | `VargaFoundation/choregos` ; infra GitOps dans `VargaFoundation/choregos-infra` ; Ecphoria reste dans son dépôt |
 
 ## 0.4 Carte du document

@@ -20,6 +20,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
         .mockRejectedValueOnce(new Error("tracker unreachable"))
         .mockResolvedValue({}),
       provision: vi.fn(),
+      workflowCatalogue: vi.fn().mockResolvedValue([
+        { source: "core", name: "default-request", version: 1, title: "default-request", needs_repository: false, agents: [] },
+        { source: "core", name: "default-simple", version: 1, title: "default-simple", needs_repository: true, agents: [] },
+        { source: "template:joiners-leavers", name: "onboarding", version: 1, title: "Onboarding", needs_repository: false, agents: [] },
+      ]),
+      adoptWorkflow: vi.fn().mockResolvedValue({}),
     },
   };
 });
@@ -72,5 +78,28 @@ describe("l'assistant de création d'un projet (S23-06)", () => {
     await waitFor(() => expect(pousser).toHaveBeenCalledWith("/p/people-ops"));
     expect(api.createProject).toHaveBeenCalledTimes(1);
     expect(api.putConnector).toHaveBeenCalledTimes(2);
+  });
+
+  it("without a repository, offers only workflows that need none, and adopts the chosen one as the default", async () => {
+    ouvrir();
+    fireEvent.click(screen.getByLabelText(/no code repository/));
+    const choice = screen.getByLabelText("Workflow");
+    await screen.findByRole("option", { name: /Onboarding/ });
+    expect(screen.queryByRole("option", { name: /^default-simple/ })).toBeNull();
+    fireEvent.change(choice, { target: { value: "template:joiners-leavers/onboarding" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText("Identifier (slug)"), { target: { value: "people-ops" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByTestId("recapitulatif")).toHaveTextContent("Onboarding (template:joiners-leavers)");
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() =>
+      expect(api.adoptWorkflow).toHaveBeenCalledWith("p1", {
+        source: "template:joiners-leavers",
+        name: "onboarding",
+        version: 1,
+        make_default: true,
+      }),
+    );
   });
 });

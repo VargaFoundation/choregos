@@ -129,6 +129,7 @@ import type {
   WorkItemCreate,
   DiffSummary,
   RunEventDto,
+  RunChain,
   RunLogs,
   TimelineEntry,
   ConnectorDto,
@@ -179,6 +180,9 @@ import type {
   WorkflowSummary,
   WorkflowTemplate,
   WorkflowValidation,
+  WorkflowAdopt,
+  WorkflowCatalogueEntry,
+  WorkflowShare,
   WorkItemDto,
   WorkItemJourney,
   WorkItemPage,
@@ -709,6 +713,7 @@ export const api = {
       refusals: number;
       tool_cost_eur?: number;
       acces: { nature: string; target: string; requests: number; refusals: number; motifs?: string[] }[];
+      chain?: RunChain;
     }>(`/runs/${id}/access`),
   projectTools: (id: string) =>
     request<{
@@ -874,6 +879,14 @@ export const api = {
   deactivateWorkflow: (id: string, name: string) =>
     request<void>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/deactivate`, { method: "POST" }),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
+  /** What the organisation can adopt, with what each needs and where its agents resolve (ADR 0111). */
+  workflowCatalogue: (org: string) => request<WorkflowCatalogueEntry[]>(`/orgs/${org}/workflow-catalogue`),
+  /** Copies a catalogue entry into the project; an unresolved agent is a 422, a taken name a 409. */
+  adoptWorkflow: (id: string, body: WorkflowAdopt) =>
+    request<WorkflowDef>(`/projects/${qualify(id)}/workflow-adoptions`, { method: "POST", body: JSON.stringify(body) }),
+  /** An organisation administrator shares a project's workflow version to the catalogue. */
+  shareWorkflow: (org: string, body: WorkflowShare) =>
+    request<WorkflowCatalogueEntry>(`/orgs/${org}/workflow-catalogue`, { method: "POST", body: JSON.stringify(body) }),
   /** Des opérations typées, greffées dans le texte ; rien n'est enregistré (S16-11). */
   editWorkflow: (yaml: string, operations: WorkflowOperation[]) =>
     request<WorkflowEditResult>("/workflows/edit", { method: "POST", body: JSON.stringify({ yaml, operations }) }),

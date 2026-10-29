@@ -45,6 +45,31 @@
         "inputs": {
           "type": "object",
           "description": "JSON Schema of the fields of a work item of this workflow (ADR 0031)."
+        },
+        "catalogue": {
+          "type": "object",
+          "description": "How the workflow catalogue presents it (ADR 0111); the engine ignores it.",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "summary": {
+              "type": "string",
+              "maxLength": 400
+            },
+            "tags": {
+              "type": "array",
+              "maxItems": 12,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+              }
+            }
+          }
         }
       }
     },

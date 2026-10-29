@@ -37,18 +37,24 @@ const GARANTIES_NOMMEES = 3;
  * transition nominale, Début/Fin les extrémités, Entrée ouvre le panneau. L'état sous le curseur est
  * décrit sous la carte (`aria-live`).
  */
+/** What a dragged state carries: its name, nothing a page outside the map would understand. */
+const DRAG_TYPE = "application/x-choregos-state";
+
 export function CarteDuWorkflow({
   graph,
   process,
   initial,
   acteurs = {},
   onSelect,
+  onDraw,
 }: {
   graph: Graphe;
   process?: ProcessStep[];
   initial?: string | null;
   acteurs?: Acteurs;
   onSelect?: Choix;
+  /** Dropping a state on another (ADR 0112 §4): the caller opens the add-transition form, nothing is written. */
+  onDraw?: (from: string, to: string) => void;
 }) {
   const disposition = useMemo(() => disposerLaCarte(graph, initial), [graph, initial]);
   const nav = useMemo(() => navigation(graph, initial), [graph, initial]);
@@ -117,6 +123,18 @@ export function CarteDuWorkflow({
           onKeyDown={auClavier}
           onBlur={() => setFocus(null)}
           onClick={() => onSelect?.("node", id)}
+          draggable={!!onDraw && !noeud.terminal}
+          onDragStart={(event) => event.dataTransfer.setData(DRAG_TYPE, id)}
+          onDragOver={(event) => {
+            if (onDraw && event.dataTransfer.types.includes(DRAG_TYPE)) event.preventDefault();
+          }}
+          onDrop={(event) => {
+            const from = event.dataTransfer.getData(DRAG_TYPE);
+            if (onDraw && from && from !== id) {
+              event.preventDefault();
+              onDraw(from, id);
+            }
+          }}
         >
           <span className="flex items-baseline justify-between gap-2 text-xs">
             <span className={cn(LEGENDE, "font-medium")} style={{ color: couleur.texte }}>

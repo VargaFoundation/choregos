@@ -142,17 +142,27 @@ class TrainInput:
     frozen: bool = False
     #: `None` : le seuil du code (`SEUIL_DE_RELAIS`, et celui d'avant pour les runs d'avant). Un seuil
     #: donné vaut pour le relais au repos, d'avant comme d'après S22-27.
-    seuil_de_relais: int | None = None
+    seuil_de_relais: int | None = None  # lang: fr-ok — a recorded continue-as-new input (ADR 0098)
+    #: The English name of `seuil_de_relais` (S45-03): read first, the former one after. Continue-as-new
+    #: inputs recorded before S45-03 carry only the former name; S45-39 writes this one.
+    relay_threshold: int | None = None
     #: An express departure held by the schedule (`skip_schedule: false`) when the train relayed.
     express: bool = False
 
-    def seuil(self) -> int:
-        """Le seuil de relais de ce train."""
-        return SEUIL_DE_RELAIS if self.seuil_de_relais is None else self.seuil_de_relais
+    def threshold(self) -> int:
+        """This train's relay threshold: the one its input gives, under either name, else the code's."""
+        if self.relay_threshold is not None:
+            return self.relay_threshold
+        if self.seuil_de_relais is not None:
+            return self.seuil_de_relais
+        return SEUIL_DE_RELAIS
+
+    seuil = threshold  # lang: fr-ok alias:internal
 
     def seuil_au_repos_d_avant(self) -> int:
         """Le seuil du relais au repos tel que S22-24 le lisait (un run qui n'a pas pris S22-27)."""
-        return SEUIL_DE_RELAIS_D_AVANT if self.seuil_de_relais is None else self.seuil_de_relais
+        given = self.seuil_de_relais if self.relay_threshold is None else self.relay_threshold
+        return SEUIL_DE_RELAIS_D_AVANT if given is None else given
 
 
 @workflow.defn(name="ReleaseTrain", sandboxed=False)

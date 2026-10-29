@@ -76,6 +76,10 @@
   "type": "mcp"
  },
  {
+  "kind": "mcp",
+  "type": "mcp-gateway"
+ },
+ {
   "kind": "mdm",
   "type": "demo"
  },

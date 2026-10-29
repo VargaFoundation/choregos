@@ -1,7 +1,7 @@
 # 0022 — A federable catalogue: proposals from registries, merged by a human
 
 - **Status**: proposed, 2026-09-25 — not implemented
-- **Concerns**: `choregos_core.catalogue`, `choregos-admin`, the GitOps repository of a project
+- **Concerns**: `choregos_core.catalogue`, `choregos-admin`, the GitOps repository of a project, amended by [ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)
 
 ## Context
 
@@ -51,6 +51,7 @@ list because a registry said so is a supply-chain path into every run.
 
 - **A runtime MCP gateway** (Obot, Docker MCP Gateway) in front of the sidecar: brokers give
   the agent the real server names and the discovery we refuse; they solve the wrong problem
-  for a governed run.
+  for a governed run. Still rejected. Consuming an organisation's own gateway behind the broker is
+  another thing ([ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)).
 - **Trusting a registry's signature** as sufficient for exposure: a signed entry proves who
   published it, not that this project should let an agent call it.

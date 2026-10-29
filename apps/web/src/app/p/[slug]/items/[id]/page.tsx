@@ -15,6 +15,8 @@ import { GesteConfirme } from "@/components/geste-confirme";
 import { Artifacts } from "@/components/artifacts";
 import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
+import { TrackerCard } from "@/components/who-writes";
+import { viaInWords } from "@/lib/who-writes";
 
 /** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
 function enMouvement(journey: WorkItemJourney | undefined): boolean {
@@ -33,6 +35,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   // Les reçus de passage (S25-04) : qui a produit chaque sortie d'étape, qui l'a lue, sous quelle empreinte.
   const passages = useQuery({ queryKey: ["hand-offs", id], queryFn: () => api.handOffs(id) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
+  // The tracker connector the bookkeeping writes through (ADR 0107 point 4).
+  const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   // What the steps left, typed, stored, digest-checked (ADR 0049).
   const artifacts = useQuery({ queryKey: ["artifacts", id], queryFn: () => api.artifacts(id) });
   const journey = useQuery({
@@ -205,12 +209,24 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                   {relative(entry.ts)}
                   {entry.cost_usd ? ` · ${usd(entry.cost_usd)}` : ""}
                 </p>
+                {entry.via && (
+                  <p className="text-xs text-ink-muted" data-testid="timeline-via">
+                    {viaInWords(entry.via)}
+                  </p>
+                )}
               </li>
             ))}
           </ol>
           {timeline.data?.length === 0 && <Empty>Nothing to show</Empty>}
         </Card>
       </div>
+
+      <TrackerCard
+        slug={slug}
+        tracker={(connectors.data ?? []).find((connector) => connector.kind === "tracker")}
+        initiatedBy={data.initiated_by}
+        url={data.url}
+      />
 
       <Card title="Artifacts" action={<Provenance de="observed" />}>
         {artifacts.error ? (
