@@ -77,7 +77,7 @@ async def list_connector_types() -> list[ConnectorType]:
     """Les types que le REGISTRE connaît — ceux du cœur et ceux des greffons (ADR 0034). La liste
     vivait ici, en double du registre et en désaccord avec lui : jira y était « indisponible »
     alors qu'il est enregistré, et un type ajouté par un greffon n'y apparaissait jamais."""
-    from choregos_adapters import connector_types
+    from choregos_adapters import offered_connector_types
 
     return [
         ConnectorType(
@@ -89,7 +89,7 @@ async def list_connector_types() -> list[ConnectorType]:
             secret_fields=list(spec.secret_fields),
             pooled_fields=list(spec.pooled_fields),
         )
-        for kind, type_name, spec in connector_types()
+        for kind, type_name, spec in offered_connector_types(get_settings().env)
     ]
 
 
@@ -130,6 +130,7 @@ async def put_connector(
         check_runtime_allowed,
         check_type_config,
         spec_du_type,
+        spec_to_declare,
         verifier_les_secrets,
     )
     from ..services.github_app import checked_config
@@ -152,7 +153,7 @@ async def put_connector(
     )
     prefix = _prefix(ctx, kind)
     verifier_les_secrets(
-        spec_du_type(kind, body.type),
+        spec_to_declare(kind, body.type),
         body.type,
         body.config,
         body.secret_refs,
