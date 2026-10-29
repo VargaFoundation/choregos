@@ -93,6 +93,8 @@ export type {
   WorkflowValidation,
   WorkItem as WorkItemDto,
   WorkItemPage,
+  ReceivedEvent,
+  ReceivedEventPage,
   WorkItemJourney,
   JourneyMove,
   JourneyStep,
