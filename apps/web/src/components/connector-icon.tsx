@@ -19,6 +19,7 @@ import {
   DoorClosedLocked,
   FlaskConical,
   GitBranch,
+  Globe,
   IdCard,
   Laptop,
   Library,
@@ -64,6 +65,8 @@ const LUCIDE_OF_TYPE: Record<string, LucideIcon> = {
   aca: Cloud,
   slack: MessageSquare,
   sharepoint: Library,
+  // A site behind a login: no product of its own, the web.
+  web: Globe,
   entra: IdCard,
 };
 

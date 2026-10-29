@@ -105,10 +105,25 @@ export function pageIdsOf(text: string): string[] {
   return found;
 }
 
+/** `Accept-Language: fr` lines → `{"Accept-Language": "fr"}`; a line without `:` is ignored, the last of a name wins. */
+export function headersOf(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const at = line.indexOf(":");
+    if (at <= 0) continue;
+    const name = line.slice(0, at).trim();
+    if (name) out[name] = line.slice(at + 1).trim();
+  }
+  return out;
+}
+
+/** The names a credential travels under: the API refuses them as plain headers (a connector holds them). */
+export const CREDENTIAL_HEADER = /auth|cookie|token|key|secret|session|password|signature/i;
+
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
   kind: "sharepoint" | "confluence" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean },
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean; headers?: string },
 ): Record<string, unknown> {
   if (kind === "confluence") {
     const ids = pageIdsOf(fields.pageId ?? "");
@@ -136,6 +151,7 @@ export function sourceConfig(
       max_pages: pageOnly ? 1 : bounded(fields.maxPages, 50, 1, 500),
       ...(exclude.length ? { exclude } : {}),
       ...(fields.documents ? { include_documents: true } : {}),
+      ...(Object.keys(headersOf(fields.headers ?? "")).length ? { headers: headersOf(fields.headers ?? "") } : {}),
     };
   }
   return {
@@ -186,12 +202,68 @@ export function distillationLabel(d: Record<string, unknown> | null | undefined)
   return `${String(d.skill)} v${String(d.version)}: ${String(d.principles)} principles, waiting for review${dropped ? ` (${dropped} dropped: no source)` : ""}`;
 }
 
-/** How a source refreshes, in words: `every 60 min`, `cron 0 6 * * 1-5 (Europe/Paris)` or `manual`. */
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+/** The days of a weekly refresh, in the console's order (Monday first); cron numbers them from Sunday = 0. */
+export const WEEK: { day: number; short: string }[] = [1, 2, 3, 4, 5, 6, 0].map((day) => ({ day, short: WEEKDAYS[day]!.slice(0, 3) }));
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** A cron the console offers as a choice, read back from its five fields; anything else stays a cron. */
+function presetOf(cron: string): Pick<RefreshDraft, "mode" | "time" | "days" | "dayOfMonth"> | null {
+  const match = cron.trim().split(/\s+/);
+  if (match.length !== 5) return null;
+  const [minute, hour, dom, month, dow] = match as [string, string, string, string, string];
+  if (!/^\d{1,2}$/.test(minute) || !/^\d{1,2}$/.test(hour) || month !== "*") return null;
+  const m = Number(minute);
+  const h = Number(hour);
+  if (m > 59 || h > 23) return null;
+  const time = `${pad(h)}:${pad(m)}`;
+  const base = { time, days: [1], dayOfMonth: "1" };
+  if (dom === "*" && dow === "*") return { ...base, mode: "daily" };
+  if (dom === "*" && dow === "1-5") return { ...base, mode: "weekdays" };
+  if (dom === "*" && /^[0-6](,[0-6])*$/.test(dow)) return { ...base, mode: "weekly", days: [...new Set(dow.split(",").map(Number))] };
+  if (/^\d{1,2}$/.test(dom) && Number(dom) >= 1 && Number(dom) <= 28 && dow === "*") return { ...base, mode: "monthly", dayOfMonth: dom };
+  return null;
+}
+
+/** `every 2 hours`, `every day at 06:00`, `every Monday and Thursday at 18:30`: a refresh, said in words. */
+export function describeRefresh(draft: RefreshDraft): string {
+  const at = ` at ${draft.time || "00:00"}`;
+  switch (draft.mode) {
+    case "manual":
+      return "only when someone presses sync now";
+    case "minutes":
+      return `every ${Number(draft.interval) || 60} minutes`;
+    case "hours": {
+      const n = Number(draft.hours) || 1;
+      return n === 1 ? "every hour" : `every ${n} hours`;
+    }
+    case "daily":
+      return `every day${at}`;
+    case "weekdays":
+      return `every weekday (Monday to Friday)${at}`;
+    case "weekly": {
+      const names = WEEK.filter((w) => draft.days.includes(w.day)).map((w) => WEEKDAYS[w.day]!);
+      const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0] ?? "Monday";
+      return `every ${list}${at}`;
+    }
+    case "monthly":
+      return `on day ${Number(draft.dayOfMonth) || 1} of every month${at}`;
+    default:
+      return `on the cron ${draft.cron.trim() || "…"}`;
+  }
+}
+
+/** How a source refreshes, in words: `every 60 min`, `every weekday … at 06:00 (Europe/Paris)`, `cron …` or `manual`. */
 export function refreshLabel(
   source: Pick<KnowledgeSource, "refresh_mode" | "refresh_cron" | "refresh_timezone" | "interval_minutes">,
 ): string {
   if (source.refresh_mode === "manual") return "manual";
-  if (source.refresh_mode === "cron") return `cron ${source.refresh_cron} (${source.refresh_timezone ?? "UTC"})`;
+  if (source.refresh_mode === "cron") {
+    const zone = source.refresh_timezone ?? "UTC";
+    const preset = presetOf(source.refresh_cron ?? "");
+    return preset ? `${describeRefresh({ ...draftOf(), ...preset })} (${zone})` : `cron ${source.refresh_cron} (${zone})`;
+  }
   return `every ${source.interval_minutes} min`;
 }
 
@@ -201,10 +273,23 @@ export function nextSyncLabel(source: Pick<KnowledgeSource, "refresh_mode" | "ne
   return source.next_sync_at ? `next ${relative(source.next_sync_at)}` : "due now";
 }
 
-/** The refresh as the console edits it. */
+/**
+ * The refresh as the console edits it: a choice a person reads (every N hours, every weekday at 06:00…)
+ * that the API stores as one of its three modes — an interval, a cron in a time zone, or manual.
+ */
 export type RefreshDraft = {
-  mode: "interval" | "cron" | "manual";
+  mode: "minutes" | "hours" | "daily" | "weekdays" | "weekly" | "monthly" | "cron" | "manual";
+  /** `minutes`: every N minutes, at least 5. */
   interval: string;
+  /** `hours`: every N hours. */
+  hours: string;
+  /** `daily`, `weekdays`, `weekly`, `monthly`: the time of day, `HH:MM`. */
+  time: string;
+  /** `weekly`: the days, cron numbers (Sunday = 0). */
+  days: number[];
+  /** `monthly`: the day of the month, 1 to 28 (every month has it). */
+  dayOfMonth: string;
+  /** `cron`: five fields, as typed. */
   cron: string;
   timezone: string;
 };
@@ -217,13 +302,29 @@ export function browserTimezone(): string {
   }
 }
 
+/** Whether a mode is a time of day, read in a time zone (the cron-backed choices). */
+export function inTimezone(mode: RefreshDraft["mode"]): boolean {
+  return mode !== "minutes" && mode !== "hours" && mode !== "manual";
+}
+
 export function draftOf(source?: Partial<KnowledgeSource>): RefreshDraft {
-  return {
-    mode: source?.refresh_mode ?? "interval",
-    interval: String(source?.interval_minutes ?? 60),
+  const minutes = source?.interval_minutes ?? 60;
+  const draft: RefreshDraft = {
+    mode: minutes % 60 === 0 ? "hours" : "minutes",
+    interval: String(minutes),
+    hours: String(minutes % 60 === 0 ? minutes / 60 : 1),
+    time: "06:00",
+    days: [1],
+    dayOfMonth: "1",
     cron: source?.refresh_cron ?? "",
     timezone: source?.refresh_timezone && source.refresh_timezone !== "UTC" ? source.refresh_timezone : browserTimezone(),
   };
+  if (source?.refresh_mode === "manual") return { ...draft, mode: "manual" };
+  if (source?.refresh_mode === "cron") {
+    const preset = presetOf(source.refresh_cron ?? "");
+    return { ...draft, ...(preset ?? { mode: "cron" }) };
+  }
+  return draft;
 }
 
 export type RefreshBody = {
@@ -233,11 +334,27 @@ export type RefreshBody = {
   refresh_timezone?: string;
 };
 
+/** The five cron fields of a choice made by time of day. */
+function cronOf(draft: RefreshDraft): string {
+  const [h, m] = (draft.time || "00:00").split(":").map((part) => Number.parseInt(part, 10));
+  const minute = Number.isFinite(m) ? m : 0;
+  const hour = Number.isFinite(h) ? h : 0;
+  if (draft.mode === "daily") return `${minute} ${hour} * * *`;
+  if (draft.mode === "weekdays") return `${minute} ${hour} * * 1-5`;
+  if (draft.mode === "weekly") {
+    const days = [...new Set(draft.days)].sort((a, b) => a - b);
+    return `${minute} ${hour} * * ${days.length ? days.join(",") : "1"}`;
+  }
+  if (draft.mode === "monthly") return `${minute} ${hour} ${Math.max(1, Math.min(28, Number(draft.dayOfMonth) || 1))} * *`;
+  return draft.cron.trim();
+}
+
 /** The body of a create or a patch: only the fields the mode uses. */
 export function refreshBody(draft: RefreshDraft): RefreshBody {
-  if (draft.mode === "cron") return { refresh_mode: "cron", refresh_cron: draft.cron.trim(), refresh_timezone: draft.timezone };
   if (draft.mode === "manual") return { refresh_mode: "manual" };
-  return { refresh_mode: "interval", interval_minutes: Number(draft.interval) || 60 };
+  if (draft.mode === "minutes") return { refresh_mode: "interval", interval_minutes: Number(draft.interval) || 60 };
+  if (draft.mode === "hours") return { refresh_mode: "interval", interval_minutes: (Number(draft.hours) || 1) * 60 };
+  return { refresh_mode: "cron", refresh_cron: cronOf(draft), refresh_timezone: draft.timezone };
 }
 
 const EVERYTHING: KnowledgePermissions = { edit: true, distill: true, share: true, archive: true, widen: true };

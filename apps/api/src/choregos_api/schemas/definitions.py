@@ -315,3 +315,34 @@ class UsableModel(Dto):
     output_cost_per_1k: float | None = None
     priced_by: Literal["gateway", "override", "none"] = "none"
     tiers: list[str] = Field(default_factory=list)
+
+
+class StateActivity(Dto):
+    """How many open work items of a workflow sit in one state, and since when the oldest one."""
+
+    state: str
+    open_items: int
+    #: When the oldest of them was filed (the platform keeps no per-state entry time).
+    oldest_created_at: datetime | None = None
+
+
+class StepActivity(Dto):
+    """What one transition's runs did over the period: how many, how they ended, what they cost."""
+
+    transition: str
+    runs: int
+    succeeded: int
+    failed: int
+    cost_usd: float
+    #: The median wall time of the runs that ended, in minutes.
+    median_minutes: float | None = None
+
+
+class WorkflowActivity(Dto):
+    """A workflow's live picture (S47-39): where its open work items wait, and what each step's runs
+    did over the last `days` days. All versions of the workflow count."""
+
+    workflow: str
+    days: int
+    states: list[StateActivity] = Field(default_factory=list)
+    steps: list[StepActivity] = Field(default_factory=list)
