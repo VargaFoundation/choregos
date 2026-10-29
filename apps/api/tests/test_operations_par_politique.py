@@ -158,7 +158,8 @@ async def test_une_autre_organisation_n_existe_pas(client: AsyncClient, admin: s
         session.add(
             OrgConnector(org_id=autre.id, name="secret-d-autre", kind="identity", type="annuaire", config={})
         )
-    assert (await _declarer(client)).status_code == 201
+    # Two organisations: varga's administrator no longer writes an `env:` reference (ADR 0088).
+    assert (await _declarer(client, secret_refs={})).status_code == 201
     noms = [c["name"] for c in (await client.get("/api/v1/orgs/varga/connectors")).json()]
     assert noms == ["annuaire-acme"]
     assert (await client.get("/api/v1/orgs/autre/connectors")).status_code == 403

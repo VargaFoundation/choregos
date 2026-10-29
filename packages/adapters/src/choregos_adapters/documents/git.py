@@ -221,7 +221,7 @@ class GitDocumentsConnector:
 
         return mint
 
-    def source(self, config: dict[str, Any], *, key: str) -> GitSource:
+    def source(self, config: dict[str, Any], *, key: str, user_agent: str = "") -> GitSource:
         url = str(config["url"])
         return GitSource(
             url=url,
@@ -229,4 +229,5 @@ class GitDocumentsConnector:
             paths=config.get("paths"),
             credential=self._credential(url),
             host=self.host,
+            user_agent=user_agent,
         )

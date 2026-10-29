@@ -9,6 +9,7 @@ import { FormulaireDEtape, PanneauDeTransition } from "@/components/workflows/pa
 import { StepDetails } from "@/components/workflows/step-details";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
 import { useAgentResolution } from "@/components/workflows/use-agent-resolution";
+import { timingOfStep } from "@/components/workflows/timing";
 
 /**
  * La vue processus : chaque transition dite en clair (S16-08) — qui fait passer un ticket d'un
@@ -25,6 +26,9 @@ export default function ProcessPage() {
   // Le brouillon : les gestes pas encore publiés se lisent ici aussi (S16-12).
   const etapes = brouillon.process;
   const acteurs = Object.keys(brouillon.definition.data?.json?.actors ?? {});
+  const definitions = brouillon.definition.data?.json?.actors as
+    | Record<string, { type?: string; group?: string; role?: string; agent?: string }>
+    | undefined;
   const parId = new Map((etapes ?? []).map((e) => [e.id, e]));
   if (!etapes) return <Empty>Reading the workflow…</Empty>;
   const ajouter = (
@@ -118,6 +122,14 @@ export default function ProcessPage() {
                       timeout_hours: etape.timeout_hours,
                     }}
                     acteurs={acteurs}
+                    definitions={definitions}
+                    gates={etape.gates}
+                    timing={timingOfStep(etape, {
+                      timeoutHours: etape.timeout_hours,
+                      graph: brouillon.graph,
+                      onTimeout: (brouillon.definition.data?.json as { defaults?: { on_timeout?: string } } | undefined)
+                        ?.defaults?.on_timeout,
+                    })}
                   />
                 )}
               </div>
