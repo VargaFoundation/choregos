@@ -24,11 +24,14 @@ async def test_the_suite_connects_as_a_role_that_is_not_superuser(setup: Fixture
     from choregos_api.migrer import configuration
 
     async with db_session.session_scope() as session:
-        rolsuper = (
-            await session.execute(text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user"))
-        ).scalar()
+        role = (
+            await session.execute(
+                text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+            )
+        ).one()
         versions = {row[0] for row in await session.execute(text("SELECT version_num FROM alembic_version"))}
-    assert rolsuper is False
+    assert role.rolsuper is False
+    assert role.rolbypassrls is False
     assert versions == set(ScriptDirectory.from_config(configuration()).get_heads())
 
 
