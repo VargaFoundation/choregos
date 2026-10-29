@@ -7,6 +7,7 @@ import { hasInstallationOn, InstallOnGitHub, ownerOf, useGitHubStatus } from "@/
 import { ConnectorForm, type ConnectorBody } from "@/components/project-settings/connector-form";
 import type { SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Drawer } from "@/components/ui";
+import { WritesAs } from "@/components/who-writes";
 import { connectorState } from "@/lib/connector-state";
 import { titreDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ConnectorType, ProjectRequirement } from "@/lib/types";
@@ -108,6 +109,8 @@ export function ConnectorCard({
           {actuel && GITHUB_TYPES.has(actuel.type) && typeof actuel.config?.repo === "string" && (
             <GitHubVia repo={actuel.config.repo} />
           )}
+          {/* Who the bookkeeping's writes act as (ADR 0107 point 4). */}
+          {actuel && sorte === "tracker" && <WritesAs type={actuel.type} config={actuel.config} />}
         </div>
       </div>
       {etat && (

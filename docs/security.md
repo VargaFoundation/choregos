@@ -251,6 +251,26 @@ partitioned: `GET /internal/runs/{id}/ticket` still gives every step the spec an
 step still runs with the platform's identity; acting on behalf of the initiator (token exchange,
 ADR 0077 §3) is not implemented (#756).
 
+## Tracker writes: who they act as
+
+Two kinds of writes reach a tracker, under two different accounts ([ADR
+0107](adr/0107-an-agent-acts-under-an-identity.md) point 4):
+
+- **The bookkeeping** — the state, the status comment, the Cost, Size, Risk and Run fields, the
+  questions to a person, the close-out — is written by the platform, through the project's tracker
+  connector and the vendor's REST API, under that connector's account: the Jira connector's `email`,
+  the Choregos GitHub App, the owner of the GitLab token, a plugin's server. The tracker connector's
+  card says "Choregos writes as …"; each state change and question it wrote is recorded with `via:
+  {type, account}` and shown on the work item's timeline.
+- **An agent's own actions** go through the MCP tools its version names. The broker calls them with
+  each organisation connector's credential, which never reaches the agent's pod; a run lists them,
+  with the account each calls as (a `basic` username, else "the connector's key"), as `tool_connectors`.
+
+`account` is read from the connector's stored configuration and is never a secret: an email, a
+username, a plugin's server; `null` when the configuration names none. Not yet: acting as the person
+who started the work (on-behalf-of, ADR 0107 stories 2 and 3, #756); every write above is the
+connector's account.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
