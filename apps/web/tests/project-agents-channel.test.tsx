@@ -17,6 +17,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       projectAgents: vi.fn().mockResolvedValue([]),
       agents: vi.fn(),
       implicitAgents: vi.fn().mockResolvedValue([]),
+      workflowAgents: vi.fn().mockResolvedValue([]),
       projectAgentChannel: vi.fn(),
       setProjectAgentChannel: vi.fn(),
       pinProjectAgent: vi.fn().mockResolvedValue({}),

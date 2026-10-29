@@ -698,11 +698,34 @@ In the console, the **Process** tab shows this as a card per step: the agent's n
 `/agents/<slug>`) with a chip, "v1 · pinned", "v3 · latest", "not installed: installs when this
 workflow is published", "unknown agent" or "unavailable: …"; a person's group and SLA; a job's
 command; **Reads** with the source of each document ("from *Tested* (`t-test`)", "a person's
-rejection reason", "a work item field", or "nothing produces it" as a warning); **Produces**, with
+rejection reason", "a work item field", or "nothing produces it" as a warning, with what follows:
+the step reads it empty, and a step reading `allowed_paths` that nothing produces may change any
+file — the stage gives it `**` unless the work item was filed with paths of its own); **Produces**, with
 "changes on the work item's branch" for a step that writes code. On the **Map**, each box carries
 one line, "→ spec_markdown, allowed_paths" or "→ branch", and an **Artifacts** table under the
 diagram lists each document with its type, its producers and its readers; hovering or focusing a
 row outlines those boxes. Choosing a box shows the same card above its editor.
+
+The map also says what the shape alone did not:
+
+- a platform box lists what it **waits for** ("waits for: ci green, review approved") rather than
+  empty boxes, and every dashed arc carries its reason ("if rejected", "on failure");
+- each state's label starts with how many open work items wait there ("2 open · Ready"), and the
+  step card adds what the step's runs did over 30 days — count, successes, failures, cost, median
+  duration (`GET /projects/{id}/workflows/{name}/activity`);
+- a person step lists who carries its group and strikes those whose role cannot answer in the
+  project; a group nobody carries is said, since the step then waits for an organisation
+  administrator (`GET /projects/{id}/groups/{group}/members`, needs `member:read`);
+- the transition editor names what each actor is ("owner — person · product-owners", "dev —
+  built-in agent · implement"), says each guarantee in words with its threshold — the platform's
+  defaults when the workflow sets none, e.g. `diff_size_max`: at most 60 files and 100000 lines —
+  (the process view's `gates[].detail` and `gates[].asynchronous`), and says in one sentence how
+  long the step waits: a person's group is reminded at the SLA (24 h when none is set) and, with no
+  decision by `timeout_hours` (else three times the SLA), the item goes to `on_reject` as if
+  rejected, else to the workflow's `on_timeout`, else stays where it was; a guarantee that waits for
+  the CI or a review waits up to `timeout_hours` (24 h by default), a release train 72 h;
+- the "Default" chip is neutral: the project's default workflow is the one a work item runs unless
+  it names another or a routing rule sends it elsewhere.
 
 `graph.artifacts` is the artifact flow: one entry per document with `produced_by`, `read_by`,
 `origin`, `context` (given to every agent stage) and `in_pull_request`.
@@ -1299,7 +1322,16 @@ version started from the latest — where skills are attached or removed, each e
 version (read at every run) or pinned to one — and, for an external agent, the clients acting as it. **skills**
 is the library: import a zip or a repository (preview, pick, import at the resolved commit), each version's risk badge, scan findings and files, the approve button for a version waiting for review, an update check for a skill from git, and which agents carry it. A project's
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
-without naming one, which you can register, then name in the workflow (`agent: <slug>`).
+without naming one, which you can register, then name in the workflow (`agent: <slug>`). Each one
+folds out what it runs — the same card the workflow map opens under **This step** when you click an
+agent step that names no registry agent: the role's built-in prompt (with `<placeholders>` for what a
+run fills in), the model each work item size resolves to (`profile:by_size`: S and M → `standard`,
+L → `strong`, XL → `strong` with 1.5× the turns, then the model behind the alias), the backend, the
+turn and minute limits, the memory, and the MCP servers with their tools
+(`GET /projects/{id}/builtin-agent`). The tab opens with **Agents this
+project runs**: one row per `agent` actor of an active workflow, with the registry agent it names
+and the version a run loads ("v3 · pinned"), a name the registry lacks, or its built-in agent
+(`GET /projects/{id}/workflow-agents`).
 
 ### Platform
 

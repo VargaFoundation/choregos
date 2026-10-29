@@ -272,10 +272,10 @@ test("workflows : la vue processus ouvre le panneau d'une étape, son délai pr�
   const panneau = page.getByTestId("panneau-transition");
   await expect(panneau).toBeVisible();
   // Le délai lu est prérempli : t-implement en a un, t-refine non.
-  await expect(panneau.getByLabel("At most (hours, empty: no limit)")).toHaveValue("");
+  await expect(panneau.getByLabel("At most (hours, empty: the default)")).toHaveValue("");
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Edit t-implement" }).click();
-  await expect(page.getByTestId("panneau-transition").getByLabel("At most (hours, empty: no limit)")).toHaveValue("72");
+  await expect(page.getByTestId("panneau-transition").getByLabel("At most (hours, empty: the default)")).toHaveValue("72");
 });
 
 test("l'ancienne page du workflow mène à la liste", async ({ page }) => {
