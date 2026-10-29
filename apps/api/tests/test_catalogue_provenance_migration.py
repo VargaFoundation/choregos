@@ -162,4 +162,8 @@ def test_the_mapping_is_the_offline_plugins() -> None:
 
     locked = read_lock(pathlib.Path(__file__).resolve().parents[3] / "plugins" / "offline")
     assert locked is not None
-    assert {n: (v, d) for n, (v, d, *_) in module.PLUGINS.items()} == locked
+    # The migration names the plugins the core's own agents moved to; a plugin locked later (`requests`,
+    # #1091) held no agent of the core's, so the migration has nothing to say about it.
+    assert {n: (v, d) for n, (v, d, *_) in module.PLUGINS.items()} == {
+        n: locked[n] for n in locked if n != "requests"
+    }

@@ -24,7 +24,10 @@ PLUGINS = {
     "netops": 1,
     "authoring": 2,
     "mcp-clients": 6,
+    "requests": 2,
 }
+#: The plugin version the offline directory holds, when it is not 1.0.0.
+PLUGIN_VERSIONS = {"requests": "1.0.1"}
 
 #: The fingerprints the core's own YAML had at 3156d12e (choregos-agents' MIGRATION-FROM-CORE.md): the
 #: plugins carry the same documents, so an installed agent's checksum does not move.
@@ -51,7 +54,7 @@ def test_every_agent_comes_from_its_plugin() -> None:
     counted: dict[str, int] = {}
     for entry in entrees():
         counted[entry.plugin] = counted.get(entry.plugin, 0) + 1
-        assert entry.plugin_version == "1.0.0"
+        assert entry.plugin_version == PLUGIN_VERSIONS.get(entry.plugin, "1.0.0")
         expected = 2 if entry.slug in VERSION_TWO else 1
         assert entry.provenance == f"plugin:{entry.plugin}/{entry.slug}@{expected}"
     assert counted == PLUGINS

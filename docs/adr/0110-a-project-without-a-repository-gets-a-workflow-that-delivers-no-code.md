@@ -45,8 +45,9 @@ neutral one.
    each with its eval, as `default-simple`'s agents run theirs. `refine` is not reused: it reads code and
    writes `allowed_paths`, which a request without a repository does not have; both evals refuse
    `allowed_paths`. (First written as two catalogue entries, `brief-writer` and `assistant`: since
-   S43-09 the agent catalogue is the `choregos-agents` plugins, so they move there in
-   VargaFoundation/choregos#1091, and the workflow may then name them with `agent:`.) The
+   S43-09 the agent catalogue is the `choregos-agents` plugins, so they moved there: the plugin
+   `requests`, installed by default (VargaFoundation/choregos#1091, S49-14). The workflow keeps
+   running the playbooks; a project may name the agents with `agent:` for per-agent metrics and budgets.) The
    deliverable is a declared text output (`deliverable_markdown`), not a file: the workflow then needs
    no object store either.
 2. **The guard is mechanical**: a core test asserts that `exigences(default-request)` is exactly

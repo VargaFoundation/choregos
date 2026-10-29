@@ -681,12 +681,13 @@ global:
       - { source: varga, name: netops, version: "^1.0", preapproved: true }
       - { source: varga, name: authoring, version: "^1.0", preapproved: true }
       - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
+      - { source: varga, name: requests, version: "^1.0" }
     offline: /opt/choregos/plugins   # plugins baked into the image: air-gapped, demo, CI
 ```
 
 The chart renders these values into the ConfigMap `choregos-plugins`, mounted read-only in the API at
 `/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. By default they install the
-platform's own agents — `software-delivery`, `netops`, `authoring` and `mcp-clients` of
+platform's own agents — `software-delivery`, `netops`, `authoring`, `mcp-clients` and `requests` of
 [`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents) — from the image's
 offline directory, where the API image ships them pinned by `plugins.lock`: no network is needed at
 start-up. `defaultPlugins: []` installs none (the agent catalogue still offers them, one by one);

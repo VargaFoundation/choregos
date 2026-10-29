@@ -21,8 +21,12 @@ SPECIALISTS = ("secops", "compliance", "devops", "docs-writer", "ux-designer", "
 
 
 def test_the_offline_plugins_carry_every_case() -> None:
-    """The 25 cases the core held moved with their agents: none was lost on the way."""
-    assert len(CASES) == 25
+    """The 25 cases the core held moved with their agents: none was lost on the way. `requests`
+    (ADR 0110, #1091) adds its own three."""
+    requests = ("brief-writer", "assistant")
+    from_the_core = {name for name, case in CASES.items() if case["agent"] not in requests}
+    assert len(from_the_core) == 25
+    assert len(CASES) == 28
 
 
 def test_every_internal_agent_has_an_eval() -> None:

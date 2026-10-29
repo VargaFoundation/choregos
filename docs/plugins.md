@@ -366,13 +366,14 @@ The platform's own agents left the core (ADR 0093 §6, S43-09) for the open-sour
 | `netops` | `netops`, through the organisation's pfSense, Cilium and nginx connectors |
 | `authoring` | `agent-drafter` (the agent draft of the console) and `knowledge-distiller` |
 | `mcp-clients` | the six MCP clients of the Integrations page (ChatGPT, Claude, Copilot, Cursor) |
+| `requests` | `brief-writer` (role `brief`) and `assistant` (role `deliver`), the agents of `default-request` (ADR 0110) |
 
 They are published, signed, to `ghcr.io/vargafoundation/choregos-agents/<plugin>:<version>` with the
 index `oci://ghcr.io/vargafoundation/choregos-agents/index:latest`. The core ships their archives
 offline in `plugins/offline/`, pinned by `plugins.lock` (`make plugins-lock` refreshes them, with the
 network; `make plugins-check` checks them without), and the API image copies them to
-`/opt/choregos/plugins`. The chart installs all four by default, pre-approved (`madr-4` links to
-adr.github.io and is rated high risk).
+`/opt/choregos/plugins`. The chart installs all five by default; the first four pre-approved (`madr-4` links to
+adr.github.io and is rated high risk), `requests` needing no second administrator.
 
 The **agent catalogue** (`/orgs/{org}/agent-catalogue`, the console's catalogue page) is a view over
 plugins: the offline directory's, each replaced by the version the organisation installed. Installing an
