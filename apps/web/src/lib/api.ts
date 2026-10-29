@@ -184,6 +184,7 @@ import type {
   WorkItemDto,
   WorkItemJourney,
   WorkItemPage,
+  ReceivedEventPage,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -912,6 +913,9 @@ export const api = {
   workItems: (id: string, params?: Record<string, string>) =>
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),
   workItem: (id: string) => request<WorkItemDto>(`/work-items/${id}`),
+  /** The webhook events a project received and what the platform did with each (S42-06f), newest first. */
+  receivedEvents: (id: string, params?: Record<string, string>) =>
+    request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),
   timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
   /** Les reçus de passage d'un ticket (S25-04) : qui a produit, qui a lu, sous quelle empreinte. */
   handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),

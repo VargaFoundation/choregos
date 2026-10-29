@@ -62,6 +62,7 @@ from .routers import (
     procedures,
     projects,
     readiness,
+    received_events,
     remote_credentials,
     runs,
     skill_catalogue,
@@ -369,6 +370,7 @@ def create_app() -> FastAPI:
         plugin_sources.router,
         knowledge.router,
         webhooks.router,
+        received_events.router,
         internal.router,
     )
     for router in routeurs_du_coeur:

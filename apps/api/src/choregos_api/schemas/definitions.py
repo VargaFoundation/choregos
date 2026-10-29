@@ -380,8 +380,9 @@ class StateActivity(Dto):
 
     state: str
     open_items: int
-    #: When the oldest of them was filed (the platform keeps no per-state entry time).
-    oldest_created_at: datetime | None = None
+    #: When the longest-waiting of them entered this state (its last `state_changed` event into it,
+    #: else its filing).
+    waiting_since: datetime | None = None
 
 
 class StepActivity(Dto):

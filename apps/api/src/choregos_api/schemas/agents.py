@@ -1277,6 +1277,9 @@ class BuiltinAgent(Dto):
     instructions: str | None = None
     #: Why the playbook could not be read (an unknown role or playbook).
     instructions_error: str | None = None
+    #: The prompt as a registry agent's instructions (rendered in the sandbox, framed after): what
+    #: "register" gives the agent, so it starts from what it ran.
+    instructions_template: str | None = None
     model: str
     models: list[BuiltinModelChoice] = Field(default_factory=list)
     backend: str

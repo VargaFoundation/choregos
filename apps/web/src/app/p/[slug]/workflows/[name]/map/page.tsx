@@ -16,6 +16,7 @@ import {
   openItemsByState,
   stepActivitySentence,
   useWorkflowActivity,
+  waitingSentence,
 } from "@/components/workflows/step-activity";
 import { FormulaireDEtape, PanneauDEtat, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { ArtifactFlowCard, type Highlight } from "@/components/workflows/artifact-flow";
@@ -151,6 +152,11 @@ export default function MapPage() {
             />
             {etapeChoisie.actor_type === "human" && etapeChoisie.group && (
               <GroupMembersLine projectSlug={slug} group={etapeChoisie.group} />
+            )}
+            {waitingSentence(activity.data, etapeChoisie.from, etapeChoisie.from_display ?? etapeChoisie.from) && (
+              <p className="mt-2 text-xs text-ink-muted" data-testid="attente-de-l-etape">
+                {waitingSentence(activity.data, etapeChoisie.from, etapeChoisie.from_display ?? etapeChoisie.from)}
+              </p>
             )}
             {stepActivitySentence(activity.data, etapeChoisie.id) && (
               <p className="mt-2 text-xs text-ink-muted" data-testid="activite-de-l-etape">

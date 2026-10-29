@@ -1398,6 +1398,7 @@ export function builtinAgentDemo(path: string): BuiltinAgent {
     playbook_origin: "package",
     instructions: `You carry the ${role} role.\n\n## Work item\n**<work item key>** — <work item title>\n\n## Invariants\n- Write \`.choregos/result.json\`.`,
     instructions_error: null,
+    instructions_template: `You carry the ${role} role.\n\n## Work item\n**{{ ticket.get('key', '') }}** — {{ ticket.get('title', '') }}\n`,
     model,
     models:
       model === "profile:by_size"
@@ -3474,7 +3475,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return {
       workflow: decodeURIComponent(activityMatch[1]!),
       days: 30,
-      states: [{ state: "ready", open_items: 2, oldest_created_at: null }],
+      states: [{ state: "ready", open_items: 2, waiting_since: new Date(Date.now() - 3 * 86_400_000).toISOString() }],
       steps: [{ transition: "t-implement", runs: 4, succeeded: 3, failed: 1, cost_usd: 6.4, median_minutes: 18 }],
     } as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");

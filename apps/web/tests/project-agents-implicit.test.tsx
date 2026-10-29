@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectAgentsPage from "@/app/p/[slug]/agents/page";
@@ -25,6 +25,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       describeBuiltinAgent: vi.fn(),
       workflowAgents: vi.fn(),
       resolveProjectAgents: vi.fn(),
+      createAgent: vi.fn().mockResolvedValue({}),
     },
   };
 });
@@ -85,5 +86,24 @@ describe("the project's built-in agents", () => {
     expect(rows[0]).toContain("built-in agent · implement playbook");
     expect(rows[1]).toContain("Reviewer");
     expect(rows[2]).toContain("names ghost, which is not in the registry");
+  });
+
+  it("registers a built-in agent with its playbook as instructions, so there is something to edit", async () => {
+    await act(async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Suspense fallback="…">
+            <ProjectAgentsPage params={Promise.resolve({ slug: "foundation" })} />
+          </Suspense>
+        </QueryClientProvider>,
+      );
+    });
+    const list = await screen.findByTestId("implicites");
+    fireEvent.click(within(list).getAllByRole("button", { name: "Register" })[0]!);
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
+    const [, body] = vi.mocked(api.createAgent).mock.calls[0]!;
+    expect(body.spec?.instructions).toContain("You carry the implement role");
+    expect(body.spec?.model).toBe("profile:by_size");
+    expect(await within(list).findByRole("status")).toHaveTextContent("with the implement playbook as its instructions");
   });
 });

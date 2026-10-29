@@ -604,6 +604,33 @@ class WebhookDelivery(Base, PkMixin):
     payload_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
 
+class ReceivedEvent(Base, PkMixin):
+    """A webhook event a project received, and what the platform did with it (S42-06f).
+
+    One row per event of a verified delivery that reached a project — never the payload, a header, a
+    comment or an email: the summary is built from typed fields. `webhook_deliveries` stays the
+    deduplication table (one row per delivery, written before the outcome is known)."""
+
+    __tablename__ = "received_events"
+    __table_args__ = (Index("ix_received_events_project_received", "project_id", "received_at"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    work_item_id: Mapped[str | None] = mapped_column(
+        ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True
+    )
+    work_item_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: `jira`, `github`, `gitlab`, `tekton`, `argocd`, `alertmanager`, `plugin:<plugin>/<server>`
+    source: Mapped[str] = mapped_column(String(160))
+    event_type: Mapped[str] = mapped_column(String(80))
+    delivery_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: `created_work_item`, `started`, `signalled`, `boarded`, `labels_updated`,
+    #: `ignored_no_item_key` or `ignored_not_agent_ready`
+    outcome: Mapped[str] = mapped_column(String(32))
+    summary: Mapped[str] = mapped_column(String(300), default="")
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class BackendRegistryRow(Base, PkMixin, TimestampMixin):
     """État des backends ACP : activés, résultats de conformité (S2-11)."""
 

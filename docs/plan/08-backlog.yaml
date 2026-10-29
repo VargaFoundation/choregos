@@ -3893,3 +3893,11 @@ stories:
     size: S
     depends_on: [S49-07]
     notes: "ADR 0111 §4 and ADR 0074: the DTO carries `can`, the console never guesses a right from a role."
+  - id: S47-41
+    title: "fix(web): a registered built-in agent keeps its playbook, and a state says how long items wait in it"
+    stream: S47
+    sprint: 15
+    priority: 2
+    size: S
+    depends_on: [S47-40]
+    notes: "The two gaps the S47-39/S47-40 STATUS rows named; STATUS says what it proves"
