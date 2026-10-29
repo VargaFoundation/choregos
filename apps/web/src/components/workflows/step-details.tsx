@@ -42,6 +42,17 @@ function Statut({ resolution }: { resolution: AgentResolution | undefined }) {
   );
 }
 
+/**
+ * What a step gets when nothing in the workflow produces what it reads (the runtime's own fallbacks):
+ * an input is read empty, and a run with no allowed paths may write anywhere — the stage gives it `**`
+ * unless the work item was filed with paths of its own.
+ */
+export function consequenceOfAMissingInput(nom: string): string {
+  if (nom === "allowed_paths")
+    return "unless the work item was filed with allowed paths, the agent may change any file of the repository (`**`), and `scope_respected` has nothing to hold it to";
+  return "the step reads it empty";
+}
+
 /** Where a document an input reads comes from, in words. */
 function Source({ nom, flow, parId }: { nom: string; flow: ArtifactFlow | undefined; parId: Map<string, ProcessStep> }) {
   if (!flow) return null;
@@ -50,7 +61,7 @@ function Source({ nom, flow, parId }: { nom: string; flow: ArtifactFlow | undefi
   if (flow.origin === "missing")
     return (
       <span className="text-retrying-ink" data-testid={`manque-${nom}`}>
-        nothing produces it
+        nothing produces it — {consequenceOfAMissingInput(nom)}
       </span>
     );
   return (
@@ -105,7 +116,7 @@ export function StepDetails({
         ) : step.actor_type === "agent" ? (
           <>
             <ActorIcon kind="agent" name={enClair(step.actor)} />
-            <span className="text-ink-muted">built-in playbook, not a registry agent</span>
+            <span className="text-ink-muted">built-in agent, not in the registry</span>
           </>
         ) : step.actor_type === "human" ? (
           <>

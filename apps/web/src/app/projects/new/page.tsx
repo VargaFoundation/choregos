@@ -30,7 +30,7 @@ export default function NewProjectPage() {
   const router = useRouter();
   const { org } = useSession();
   const templates = useQuery({ queryKey: ["templates"], queryFn: () => api.templates() });
-  // Without a template, the project may start from a catalogue workflow (ADR 0108 §7).
+  // Without a template, the project may start from a catalogue workflow (ADR 0111 §7).
   const catalogue = useQuery({ queryKey: ["workflow-catalogue", org], queryFn: () => api.workflowCatalogue(org) });
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);

@@ -78,7 +78,7 @@ class _SetField(_Op):
     text: str | None = None
     index: int | None = None
     #: `block` writes a collection value as indented lines — a `task`, an `action`, a `spawn` — so that
-    #: the diff a reviewer reads is one field per line (ADR 0109 §3); `flow` keeps it on one line.
+    #: the diff a reviewer reads is one field per line (ADR 0112 §3); `flow` keeps it on one line.
     style: Literal["flow", "block"] = "flow"
     #: With `text`: put this exact block back IN PLACE of the key's current one — the inverse of a
     #: write that replaced a value written in block style.
@@ -143,7 +143,7 @@ class SetActor(_SetField):
 
 
 class SetWorkflow(_SetField):
-    """The workflow's own fields (ADR 0109 §3): `metadata.description`, `metadata.inputs` (the work item's
+    """The workflow's own fields (ADR 0112 §3): `metadata.description`, `metadata.inputs` (the work item's
     fields), `metadata.catalogue`, and `initial`. The name and the version are not edited here: the name
     is the route's, the version is the publication's."""
 

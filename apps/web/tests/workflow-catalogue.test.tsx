@@ -57,7 +57,7 @@ async function show() {
   });
 }
 
-describe("the workflow catalogue (S49-08, ADR 0108)", () => {
+describe("the workflow catalogue (S49-08, ADR 0111)", () => {
   it("filters and previews from what the console knows", () => {
     expect(filterEntries(workflowCatalogue, "", "without").map((e) => e.name)).toEqual([
       "default-request",

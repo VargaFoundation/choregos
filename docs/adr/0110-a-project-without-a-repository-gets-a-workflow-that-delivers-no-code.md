@@ -65,7 +65,7 @@ neutral one.
    the switch is the same gesture a person would make. The readiness items that ask such a project for
    a repository link to `/p/<slug>/workflows/new?template=default-request&default=1`, which publishes
    `default-request` and makes it the default in one confirmation (the routing rules are kept); once it
-   is published, they link to Workflows. From ADR 0108 on, the catalogue offers the same adoption.
+   is published, they link to Workflows. From ADR 0111 on, the catalogue offers the same adoption.
 5. **D14 is amended**, not superseded: `docs/plan/00-index.md` reads "`default-simple` for a project
    with a repository, `default-request` without one; production always through the release train".
 
@@ -75,7 +75,7 @@ neutral one.
   repository, SCM or CD item, because its workflow asks for none.
 - `TEMPLATE_NAMES` gains `default-request`, so the "new workflow" page offers it to every project.
 - The `deliver` playbook is generic on purpose; a trade that needs more (HR, finance, legal) brings its
-  own workflow through a template or a plugin (ADR 0093), and the catalogue of ADR 0108 lists it.
+  own workflow through a template or a plugin (ADR 0093), and the catalogue of ADR 0111 lists it.
 - Stories S49-01 to S49-03 in `docs/plan/08-backlog.yaml`.
 
 ## Alternatives discarded
@@ -85,6 +85,6 @@ neutral one.
 - **One workflow whose repository steps switch off when the project has no repository.** A workflow
   whose meaning depends on the project's configuration cannot be read, replayed or reviewed on its own;
   the YAML must say what happens (ADR 0037).
-- **No default at all: the wizard must ask.** The wizard will ask (ADR 0108), but the API, the CLI and
+- **No default at all: the wizard must ask.** The wizard will ask (ADR 0111), but the API, the CLI and
   the MCP door create projects too, and a project with no workflow receives nothing.
 - **Pick the workflow from the tracker type.** A tracker says where requests live, not what the work is.

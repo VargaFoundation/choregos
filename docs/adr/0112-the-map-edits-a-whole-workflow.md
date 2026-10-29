@@ -1,11 +1,11 @@
-# 0109 — The map edits a whole workflow: actors from the registry, every transition field, a workflow born on the map
+# 0112 — The map edits a whole workflow: actors from the registry, every transition field, a workflow born on the map
 
 - **Status**: accepted, 2026-10-28, by the product owner ("we must be able to edit workflows
   graphically")
 - **Concerns**: `choregos_core/dsl/edition.py` (new typed operations), `POST /workflows/edit`, the
   console's map and process view (`components/workflows/`), `/p/<slug>/workflows/new`; amends
   [ADR 0023](0023-a-visual-workflow-builder.md) §3 and continues
-  [ADR 0031](0031-several-workflows-per-project.md) §6; uses [ADR 0108](0108-a-workflow-catalogue.md)
+  [ADR 0031](0031-several-workflows-per-project.md) §6; uses [ADR 0111](0111-a-workflow-catalogue.md)
 
 ## Context
 
@@ -42,7 +42,7 @@ So "editable graphically" is true for the shape and false for most of the conten
    every core, template and demo workflow, a validator case, and a console test. No intent ships that a
    reviewer could not read as a diff.
 2. **Actors from the registry.** The map gets an *Actors* panel built on the existing operations:
-   - *add an agent*: a picker lists what ADR 0108 §2 resolves — the organisation's agents, installed
+   - *add an agent*: a picker lists what ADR 0111 §2 resolves — the organisation's agents, installed
      plugins' agents, remote agents — with their role and version; choosing one writes
      `{type: agent, role: <its role>, agent: <slug>}` (pinned `@N` only on request). An agent that is not
      installed is shown with the gesture that installs it, never installed silently;
@@ -60,7 +60,7 @@ So "editable graphically" is true for the shape and false for most of the conten
    one state to another opens the add-transition form with both ends filled; nothing is written until
    the form is confirmed, and what is written is the `add_transition` operation. Node positions are
    still computed, never saved: there is no layout to drift from the YAML.
-5. **A workflow can be born on the map.** "New workflow" starts from a catalogue entry (ADR 0108) or
+5. **A workflow can be born on the map.** "New workflow" starts from a catalogue entry (ADR 0111) or
    from a **blank** skeleton — one human actor, `inbox` → `done` — that the validator accepts, and opens
    the map, not the YAML page. The YAML editor stays one tab away and is never the only way.
 6. **Every gesture has a keyboard and form equivalent**, as the map's existing panels do (S16-12): the

@@ -832,7 +832,7 @@ export type WorkflowDef = {
   name: string;
   version: number;
   source: "repo" | "platform" | "template" | "catalogue";
-  /** For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0108). */
+  /** For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0111). */
   origin?: string | null;
   yaml: string;
   json?: S.Workflow;
@@ -843,7 +843,7 @@ export type WorkflowDef = {
   created_at?: string | null;
 };
 
-/** A workflow the organisation can adopt (ADR 0108). */
+/** A workflow the organisation can adopt (ADR 0111). */
 export type WorkflowCatalogueEntry = {
   /** `core`, `template:<name>`, `plugin:<name>` (an installed plugin, the external catalogues) or `org` */
   source: string;
@@ -874,7 +874,7 @@ export type WorkflowCatalogueRequirement = {
   reasons: Array<string>;
 };
 
-/** An agent the workflow names, and where it resolves in this organisation (ADR 0108 §2). */
+/** An agent the workflow names, and where it resolves in this organisation (ADR 0111 §2). */
 export type WorkflowCatalogueAgent = {
   actor: string;
   slug: string;
@@ -924,7 +924,7 @@ export type WorkflowSummary = {
   open_items: number;
   created_by?: string | null;
   updated_at?: string | null;
-  /** the caller may share it to the organisation's catalogue (ADR 0108 §4, ADR 0074: the server decides) */
+  /** the caller may share it to the organisation's catalogue (ADR 0111 §4, ADR 0074: the server decides) */
   can_share?: boolean;
 };
 
@@ -953,7 +953,7 @@ export type WorkflowValidation = {
   warnings: Array<WorkflowIssue>;
   graph?: WorkflowGraph;
   process?: Array<ProcessStep>;
-  /** the workflow as the engine read it (ADR 0109) */
+  /** the workflow as the engine read it (ADR 0112) */
   document?: S.Workflow;
 };
 
@@ -971,6 +971,10 @@ export type ProcessStep = {
   gates?: Array<{
     name?: string;
     summary?: string;
+    /** The thresholds the guarantee applies (the platform's defaults when the workflow sets none), and how long an asynchronous one waits. */
+    detail?: string | null;
+    /** True for a guarantee that waits for an outside event (CI, review, scans) up to the transition's `timeout_hours`. */
+    asynchronous?: boolean;
   }>;
   on_fail?: string | null;
   on_reject?: string | null;
@@ -1004,7 +1008,7 @@ export type ProcessStep = {
   writes_branch?: boolean;
 };
 
-/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`, `metadata.catalogue` and `initial` (ADR 0109). `style: block` writes a collection value as indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones. */
+/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`, `metadata.catalogue` and `initial` (ADR 0112). `style: block` writes a collection value as indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones. */
 export type WorkflowOperation = {
   op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor" | "set_workflow";
   style?: "flow" | "block";
@@ -2104,6 +2108,92 @@ export type ImplicitAgent = {
   backend?: string | null;
   max_turns?: number | null;
   max_minutes?: number | null;
+};
+
+/** An `agent` actor of an active workflow, and the registry agent it names, if any. */
+export type WorkflowAgent = {
+  workflow: string;
+  actor: string;
+  role?: string | null;
+  model?: string | null;
+  backend?: string | null;
+  max_turns?: number | null;
+  max_minutes?: number | null;
+  /** `slug` or `slug@N` as the workflow writes it; null for a built-in agent. */
+  agent?: string | null;
+  /** Whether the agent it names exists in the organisation's registry. */
+  registered?: boolean;
+};
+
+export type GroupMember = {
+  email: string;
+  display_name?: string;
+  /** Whether their role lets them answer a step of this project (`item:decide`). */
+  can_decide: boolean;
+};
+
+export type GroupMembers = {
+  group: string;
+  members?: Array<GroupMember>;
+};
+
+export type StateActivity = {
+  state: string;
+  open_items: number;
+  /** When the oldest open item in this state was filed. */
+  oldest_created_at?: string | null;
+};
+
+export type StepActivity = {
+  transition: string;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  cost_usd: number;
+  median_minutes?: number | null;
+};
+
+export type WorkflowActivity = {
+  workflow: string;
+  days: number;
+  states?: Array<StateActivity>;
+  steps?: Array<StepActivity>;
+};
+
+/** The model a built-in agent runs for one work item size (`size` absent when the size does not matter), or why a run would be refused. */
+export type BuiltinModelChoice = {
+  size?: string | null;
+  profile?: string | null;
+  litellm_model?: string | null;
+  provider_model?: string | null;
+  turns_factor?: number;
+  error?: string | null;
+  warnings?: Array<string>;
+};
+
+export type BuiltinMcpServer = {
+  name: string;
+  description: string;
+  tools?: Array<string>;
+};
+
+/** What a workflow actor that names no registry agent runs. */
+export type BuiltinAgent = {
+  role: string;
+  playbook: string;
+  /** `package` or `deployment` (`CHOREGOS_PLAYBOOKS_DIR`). */
+  playbook_origin?: string | null;
+  instructions?: string | null;
+  instructions_error?: string | null;
+  model: string;
+  models?: Array<BuiltinModelChoice>;
+  backend: string;
+  backend_source: "actor" | "project";
+  max_turns: number;
+  max_minutes: number;
+  limits_source: "actor" | "policy";
+  memory?: Array<string>;
+  mcp_servers?: Array<BuiltinMcpServer>;
 };
 
 export type AgentCredentialCreate = {
@@ -3293,6 +3383,8 @@ export type WorkItem = {
   /** The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise. */
   budget_usd?: number | null;
   estimate?: CostEstimate | null;
+  /** Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>` for a webhook, `schedule:<name>`… Null for a work item from before S40-22. */
+  initiated_by?: string | null;
   created_at?: string;
   closed_at?: string | null;
 };
@@ -3317,6 +3409,26 @@ export type CostEstimate = {
   p80_usd?: number | null;
   sample_size?: number;
   over_p80?: boolean;
+};
+
+/** A webhook event a project received, and what the platform did with it (S42-06f). */
+export type ReceivedEvent = {
+  id: string;
+  received_at: string;
+  /** jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server> */
+  source: string;
+  event_type: string;
+  delivery_id?: string | null;
+  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready";
+  work_item_key?: string | null;
+  work_item_id?: string | null;
+  /** Built from typed fields only: key, label, from → to, PR number, conclusion. */
+  summary: string;
+};
+
+export type ReceivedEventPage = {
+  items: Array<ReceivedEvent>;
+  meta: PageMeta;
 };
 
 export type WorkItemPage = {
@@ -3353,6 +3465,14 @@ export type TimelineEntry = {
   actor_kind?: "user" | "agent" | "system";
   ref_id?: string | null;
   cost_usd?: number | null;
+  via?: TrackerWrite | null;
+};
+
+/** The tracker write behind a timeline entry (ADR 0107 point 4): the project's tracker connector type and the account it wrote under. `account` is null when the connector names none (a GitHub App installation, a GitLab token). */
+export type TrackerWrite = {
+  /** The tracker connector's type: jira, github-issues, gitlab-issues, plugin… */
+  type: string;
+  account?: string | null;
 };
 
 export type GitToken = {
@@ -3483,6 +3603,22 @@ export type Run = RunSummary & {
   context_pack_url?: string | null;
   playbook_checksum?: string | null;
   allowed_paths?: Array<string>;
+  /** The agent whose version ran the step. */
+  agent_slug?: string | null;
+  agent_version?: number | null;
+  /** The work item's initiator, copied at stage start (ADR 0077). */
+  initiated_by?: string | null;
+  /** The organisation connectors this run's agent may call through the broker, and the account each one calls with (ADR 0107): resolved by the API, so a member who cannot read the organisation's connectors still sees them. */
+  tool_connectors?: Array<ToolConnector>;
+};
+
+export type ToolConnector = {
+  name: string;
+  type: string;
+  /** bearer or basic, for an `mcp` connector */
+  auth_scheme?: string | null;
+  /** The account the connector calls as, when its configuration names one (a `basic` username). */
+  account?: string | null;
 };
 
 export type RunEvent = {
@@ -4067,6 +4203,7 @@ export interface Operations {
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
+  describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
@@ -4255,6 +4392,7 @@ export interface Operations {
   getWorkItemJourney: { method: "GET"; path: "/work-items/{id}/journey"; body: never; response: WorkItemJourney };
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
+  getWorkflowActivity: { method: "GET"; path: "/projects/{id}/workflows/{name}/activity"; body: never; response: WorkflowActivity };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
   githubAppSetup: { method: "GET"; path: "/github/setup"; body: never; response: void };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
@@ -4295,6 +4433,7 @@ export interface Operations {
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
+  listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
@@ -4319,6 +4458,7 @@ export interface Operations {
   listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: Array<ProjectOrgConnector> };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
+  listReceivedEvents: { method: "GET"; path: "/projects/{id}/received-events"; body: never; response: ReceivedEventPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
@@ -4328,6 +4468,7 @@ export interface Operations {
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
+  listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: Array<WorkflowAgent> };
   listWorkflowCatalogue: { method: "GET"; path: "/orgs/{org}/workflow-catalogue"; body: never; response: Array<WorkflowCatalogueEntry> };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The workflow catalogue (ADR 0108): list it, adopt an entry into a project, share a project's workflow.
+"""The workflow catalogue (ADR 0111): list it, adopt an entry into a project, share a project's workflow.
 
 Listing is any member's; adopting is a project gesture (`workflow:write`); sharing to the organisation's
 catalogue is an organisation administrator's. Adopting installs the catalogue agents a workflow names
@@ -62,7 +62,7 @@ async def _adopted_from_same_entry(
     session: AsyncSession, project: Project, name: str, source: str, entry: str
 ) -> bool:
     """The project's active workflow of that name was adopted from this very entry: adopting again
-    publishes its next version (an update, ADR 0108 §5) instead of refusing a taken name."""
+    publishes its next version (an update, ADR 0111 §5) instead of refusing a taken name."""
     active = await workflow_actif(session, project.id, name)
     parts = parse_origin(active.origin or "") if active is not None and active.source == "catalogue" else None
     return parts is not None and parts[0] == source and parts[1] == entry

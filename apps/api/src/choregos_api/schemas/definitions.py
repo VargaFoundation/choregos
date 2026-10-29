@@ -16,7 +16,7 @@ class WorkflowDefDto(Dto):
     name: str
     version: int
     source: str
-    #: For `source: catalogue`, the entry it was adopted from (ADR 0108).
+    #: For `source: catalogue`, the entry it was adopted from (ADR 0111).
     origin: str | None = None
     yaml: str
     json_doc: dict[str, Any] | None = Field(default=None, alias="json")
@@ -44,7 +44,7 @@ class WorkflowCatalogueAgentDto(Dto):
 
 
 class WorkflowCatalogueEntryDto(Dto):
-    """A workflow the organisation can adopt (ADR 0108)."""
+    """A workflow the organisation can adopt (ADR 0111)."""
 
     source: str
     name: str
@@ -98,7 +98,7 @@ class WorkflowSummaryDto(Dto):
     open_items: int = 0
     created_by: str | None = None
     updated_at: datetime | None = None
-    #: The caller may share it to the organisation's catalogue (ADR 0108 §4): the server decides.
+    #: The caller may share it to the organisation's catalogue (ADR 0111 §4): the server decides.
     can_share: bool = False
 
 
@@ -143,7 +143,7 @@ class WorkflowValidation(Dto):
     #: La vue « processus » : chaque transition dite en clair (ADR 0031).
     process: list[dict[str, Any]] = Field(default_factory=list)
     #: The workflow as JSON, as the engine read it: the map's panels show the draft's actors and
-    #: transitions from it, not the published version's (ADR 0109).
+    #: transitions from it, not the published version's (ADR 0112).
     document: dict[str, Any] | None = None
 
 
@@ -373,3 +373,34 @@ class UsableModel(Dto):
     output_cost_per_1k: float | None = None
     priced_by: Literal["gateway", "override", "none"] = "none"
     tiers: list[str] = Field(default_factory=list)
+
+
+class StateActivity(Dto):
+    """How many open work items of a workflow sit in one state, and since when the oldest one."""
+
+    state: str
+    open_items: int
+    #: When the oldest of them was filed (the platform keeps no per-state entry time).
+    oldest_created_at: datetime | None = None
+
+
+class StepActivity(Dto):
+    """What one transition's runs did over the period: how many, how they ended, what they cost."""
+
+    transition: str
+    runs: int
+    succeeded: int
+    failed: int
+    cost_usd: float
+    #: The median wall time of the runs that ended, in minutes.
+    median_minutes: float | None = None
+
+
+class WorkflowActivity(Dto):
+    """A workflow's live picture (S47-39): where its open work items wait, and what each step's runs
+    did over the last `days` days. All versions of the workflow count."""
+
+    workflow: str
+    days: int
+    states: list[StateActivity] = Field(default_factory=list)
+    steps: list[StepActivity] = Field(default_factory=list)

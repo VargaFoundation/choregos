@@ -83,7 +83,7 @@ beforeEach(() => {
   ] as AgentCatalogueEntry[]);
 });
 
-describe("what the map offers (ADR 0109)", () => {
+describe("what the map offers (ADR 0112)", () => {
   it("offers the organisation's shareable agents, then the catalogue's to install, with their role", () => {
     const offered = offeredAgents(
       [
@@ -126,7 +126,7 @@ describe("what the map offers (ADR 0109)", () => {
   });
 });
 
-describe("editing on the map (ADR 0109)", () => {
+describe("editing on the map (ADR 0112)", () => {
   it("adds an agent from the catalogue with its role, as one typed operation", async () => {
     await underDraft(<ActorsPanel org="acme" />);
     const panel = screen.getByTestId("actors-panel");
@@ -200,7 +200,7 @@ describe("editing on the map (ADR 0109)", () => {
   });
 });
 
-describe("drawing a transition (ADR 0109 §4)", () => {
+describe("drawing a transition (ADR 0112 §4)", () => {
   it("dropping a state on another hands both ends to the caller, nothing else", () => {
     const onDraw = vi.fn();
     const g = {

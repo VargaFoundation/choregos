@@ -479,7 +479,7 @@ async def test_only_the_administrator_installs_and_members_read(
 async def test_a_plugin_s_template_workflows_join_the_workflow_catalogue(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    """ADR 0108 §1: an installed plugin is an external catalogue; its agents resolve as `plugin`."""
+    """ADR 0111 §1: an installed plugin is an external catalogue; its agents resolve as `plugin`."""
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
     from choregos_api.services.workflow_catalogue import resolutions
@@ -501,7 +501,7 @@ async def test_a_plugin_s_template_workflows_join_the_workflow_catalogue(
 async def test_an_unresolved_agent_names_the_plugin_that_ships_it(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    """ADR 0108 §2-3 (S49-05b): not installed, `greeter` is unresolved, and the plugin is named."""
+    """ADR 0111 §2-3 (S49-05b): not installed, `greeter` is unresolved, and the plugin is named."""
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
     from choregos_api.services.workflow_catalogue import resolutions

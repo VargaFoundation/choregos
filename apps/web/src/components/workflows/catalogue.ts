@@ -28,7 +28,7 @@ export function filterEntries(entries: WorkflowCatalogueEntry[], query: string, 
 export type PreviewLine = { capability: string; state: "configured" | "provided" | "missing"; reason: string };
 
 /**
- * The project's readiness as it would be for this entry (ADR 0108 §3), from what the console knows: a
+ * The project's readiness as it would be for this entry (ADR 0111 §3), from what the console knows: a
  * connector of that kind, else what the deployment provides, else missing. A preview, not the verdict:
  * the readiness panel says the rest once the workflow is adopted.
  */

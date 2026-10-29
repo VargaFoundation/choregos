@@ -58,8 +58,12 @@ import type {
   AgentTrialCreate,
   AgentMetricsSummary,
   AgentResolution,
+  BuiltinAgent,
+  GroupMembers,
+  WorkflowActivity,
   HostedSource,
   ImplicitAgent,
+  WorkflowAgent,
   AgentPatch,
   AgentSpec,
   AgentVersion,
@@ -357,11 +361,14 @@ export const api = {
   },
   getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
-  loginUrl: (next?: string, as?: string, reauth = false) => {
+  /** `tenant` picks the organisation's own identity provider, by sign-in link or by address (ADR 0108). */
+  loginUrl: (next?: string, as?: string, reauth = false, tenant: { org?: string; loginHint?: string } = {}) => {
     const params = new URLSearchParams();
     if (next) params.set("redirect_to", next);
     if (as) params.set("as", as);
     if (reauth) params.set("reauth", "1");
+    if (tenant.org) params.set("org", tenant.org);
+    if (tenant.loginHint) params.set("login_hint", tenant.loginHint);
     const q = params.toString();
     return `${API_BASE}/auth/login${q ? `?${q}` : ""}`;
   },
@@ -498,6 +505,21 @@ export const api = {
   agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
   /** A project's implicit agents, computed by the API (S30-04). */
   implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
+  /** Every agent the project's active workflows run, named or built in (S47-39). */
+  workflowAgents: (id: string) => request<WorkflowAgent[]>(`/projects/${qualify(id)}/workflow-agents`),
+  /** Who a person step addressed to a group waits for, and who of them may answer in the project. */
+  groupMembers: (id: string, group: string) =>
+    request<GroupMembers>(`/projects/${qualify(id)}/groups/${encodeURIComponent(group)}/members`),
+  /** Where a workflow's open work items wait, and what each step's runs did over `days` days. */
+  workflowActivity: (id: string, name: string, days = 30) =>
+    request<WorkflowActivity>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/activity?days=${days}`),
+  /** What an `agent` actor that names no registry agent runs: its prompt, model, backend, limits and tools. */
+  describeBuiltinAgent: (id: string, actor: BuiltinAgentQuery) =>
+    request<BuiltinAgent>(
+      `/projects/${qualify(id)}/builtin-agent?${new URLSearchParams(
+        Object.entries(actor).flatMap(([key, value]) => (value == null || value === "" ? [] : [[key, String(value)]])),
+      )}`,
+    ),
   /** Which agent version a run would load for each reference, through the runtime's resolver (S39-13). */
   resolveProjectAgents: (id: string, refs: string[]) =>
     request<AgentResolution[]>(
@@ -853,7 +875,7 @@ export const api = {
   deactivateWorkflow: (id: string, name: string) =>
     request<void>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/deactivate`, { method: "POST" }),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
-  /** What the organisation can adopt, with what each needs and where its agents resolve (ADR 0108). */
+  /** What the organisation can adopt, with what each needs and where its agents resolve (ADR 0111). */
   workflowCatalogue: (org: string) => request<WorkflowCatalogueEntry[]>(`/orgs/${org}/workflow-catalogue`),
   /** Copies a catalogue entry into the project; an unresolved agent is a 422, a taken name a 409. */
   adoptWorkflow: (id: string, body: WorkflowAdopt) =>
@@ -994,6 +1016,16 @@ export const api = {
     const filtres = Object.entries(params ?? {}).filter(([, valeur]) => valeur !== undefined && valeur !== "");
     return request<AuditPage>(`/audit${filtres.length ? `?${new URLSearchParams(filtres.map(([k, v]) => [k, String(v)]))}` : ""}`);
   },
+};
+
+/** The fields of an `agent` actor that decide what its built-in agent runs (`GET /projects/{id}/builtin-agent`). */
+export type BuiltinAgentQuery = {
+  role: string;
+  playbook?: string | null;
+  model?: string | null;
+  backend?: string | null;
+  max_turns?: number | null;
+  max_minutes?: number | null;
 };
 
 export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" | "distill" };

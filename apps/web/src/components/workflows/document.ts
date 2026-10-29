@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Workflow, WorkflowActor } from "@choregos/contracts/schemas";
 
-/** The workflow as the engine read it (`document` of a validation, ADR 0109). */
+/** The workflow as the engine read it (`document` of a validation, ADR 0112). */
 export type WorkflowDocument = Workflow;
 export type { WorkflowActor };
 

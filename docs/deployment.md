@@ -945,7 +945,7 @@ it nothing breaks: the index serves full-text only and the knowledge page says s
 database: `CREATE EXTENSION vector;` as a superuser, then `ALTER TABLE knowledge_chunks ADD COLUMN
 embedding_vec vector;` as the owner of the schema, then **reindex** each index base.
 
-**Checking the sign-in configuration from the console.** *Admin → Platform* shows a read-only card,
+**Checking the sign-in configuration from the console.** *Admin → Identity* shows a read-only card,
 "How people sign in to this instance", for the platform administrator: the OIDC issuer, client id and
 discovery URL, whether the client secret is set (never its value), the redirect URI to register at the
 identity provider (`<apiUrl>/api/v1/auth/callback`), the MCP door's OAuth issuer, audience and registered
@@ -954,6 +954,14 @@ number of bootstrap administrators (never their e-mails). It is the answer of
 `GET /api/v1/platform/identity`. Nothing is editable there: the values come from the chart
 (`global.oidc`, `global.mcp.oauth`), and a row marked `default` was not set by the deployment. When
 `oidc.issuer` reads "not configured", the instance still runs on the built-in development issuer.
+
+**An organisation with its own identity provider** ([ADR 0108](adr/0108-each-organisation-signs-in-with-its-own-identity-provider.md)).
+The settings above are the instance's provider. A tenant that brings its own (OIDC or SAML) is configured
+in the edition that declares a sign-in resolver, not in the chart; the card's row "Organisations' own
+identity providers" says whether one is declared. Its members sign in from the console's sign-in page by
+typing their work address (its domain picks the provider) or through the link `/login?org=<slug>`. The
+tenant registers the same redirect URI, `<apiUrl>/api/v1/auth/callback`. A tenant's provider signs in only
+addresses on the domains its tenant owns, and grants roles on that tenant only.
 
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`

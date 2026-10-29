@@ -53,7 +53,7 @@ export function CarteDuWorkflow({
   initial?: string | null;
   acteurs?: Acteurs;
   onSelect?: Choix;
-  /** Dropping a state on another (ADR 0109 §4): the caller opens the add-transition form, nothing is written. */
+  /** Dropping a state on another (ADR 0112 §4): the caller opens the add-transition form, nothing is written. */
   onDraw?: (from: string, to: string) => void;
 }) {
   const disposition = useMemo(() => disposerLaCarte(graph, initial), [graph, initial]);

@@ -73,7 +73,7 @@ async def test_ce_qui_ne_s_applique_pas_recoit_422(client: AsyncClient, admin: s
 async def test_set_workflow_and_a_block_value_go_through_the_api_and_come_back(
     client: AsyncClient, admin: str
 ) -> None:
-    """ADR 0109 §3: the workflow's own fields, and a human task written as lines."""
+    """ADR 0112 §3: the workflow's own fields, and a human task written as lines."""
     texte = template_yaml("default-request")
     reponse = await _editer(
         client,

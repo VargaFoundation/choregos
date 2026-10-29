@@ -568,7 +568,7 @@ def build_index(
         release: dict[str, Any] = {"digest": plugin.digest, "core": plugin.core}
         release["description"] = str(plugin.manifest["metadata"]["description"])
         if plugin.agents:
-            # A workflow catalogue names the plugin of a missing agent from the index (ADR 0108 §2).
+            # A workflow catalogue names the plugin of a missing agent from the index (ADR 0111 §2).
             release["agents"] = sorted(plugin.agents)
         if oci_repository is not None:
             release["oci"] = f"{oci_repository.rstrip('/')}/{plugin.name}:{plugin.version}"

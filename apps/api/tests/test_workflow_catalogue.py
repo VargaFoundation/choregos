@@ -1,4 +1,4 @@
-"""The workflow catalogue (S49-05 to S49-07, ADR 0108): list, adopt, share."""
+"""The workflow catalogue (S49-05 to S49-07, ADR 0111): list, adopt, share."""
 
 from __future__ import annotations
 

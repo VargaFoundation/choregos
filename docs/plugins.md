@@ -134,7 +134,7 @@ same bytes every time. An index (`plugin-index.schema.json`) records, for each v
 `core` range, where to fetch it — an OCI reference, or a git repository pinned to a commit — and the
 `agents` it ships (written by `choregos plugin index`): the workflow catalogue reads it to name the plugin
 of an agent a workflow needs and the organisation lacks, without fetching any plugin
-([ADR 0108](adr/0108-a-workflow-catalogue.md)). A
+([ADR 0111](adr/0111-a-workflow-catalogue.md)). A
 branch or a tag is not accepted in place of a commit.
 
 ## Installing into an organisation

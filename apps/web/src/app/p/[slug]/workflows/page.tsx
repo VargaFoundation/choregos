@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { GesteConfirme } from "@/components/geste-confirme";
@@ -136,7 +137,7 @@ function CarteDeWorkflow({
           {nom}
         </Link>
       }
-      action={workflow.is_default ? <Badge tone="accent">Default</Badge> : undefined}
+      action={workflow.is_default ? <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>Default</Badge> : undefined}
     >
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" data-testid={`workflow-card-${nom}`}>
         <dt className="text-ink-muted">Active version</dt>
@@ -194,7 +195,7 @@ function CarteDeWorkflow({
         </div>
       )}
       {workflow.can_share && org && (
-        // Shown only when the server says so (ADR 0074); sharing copies this version (ADR 0108 §4).
+        // Shown only when the server says so (ADR 0074); sharing copies this version (ADR 0111 §4).
         <div className="mt-3 border-t border-line pt-3">
           <GesteConfirme
             question={`Share ${nom} v${workflow.version} to the organisation's catalogue? Every project of ${org} can then adopt a copy; later changes here reach the catalogue only when shared again.`}

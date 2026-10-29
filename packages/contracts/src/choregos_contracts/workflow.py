@@ -26,7 +26,7 @@ CatalogueTag = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")]
 
 
 class WorkflowCatalogueInfo(Strict):
-    """How the workflow catalogue presents a workflow (ADR 0108); the engine ignores it."""
+    """How the workflow catalogue presents a workflow (ADR 0111); the engine ignores it."""
 
     title: str | None = Field(default=None, min_length=1, max_length=80)
     summary: str | None = Field(default=None, max_length=400)

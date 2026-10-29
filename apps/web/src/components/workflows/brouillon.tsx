@@ -315,7 +315,7 @@ function useBrouillonInterne(slug: string, name: string) {
     repris: Boolean(etat && repris && etat.yaml === repris.yaml),
     graph: affiche?.graph ?? undefined,
     process: affiche?.process ?? undefined,
-    /** The draft as the engine read it (ADR 0109): its actors and transitions, before publishing. */
+    /** The draft as the engine read it (ADR 0112): its actors and transitions, before publishing. */
     document: (affiche?.document ?? definition.data?.json ?? undefined) as WorkflowDocument | undefined,
     /** Vrai quand la carte montre le dernier texte valide, pas le texte courant. */
     grapheObsolete: Boolean(etat) && !lisible && Boolean(dernierValide),

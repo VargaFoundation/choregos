@@ -10,6 +10,13 @@ import { cn } from "@/lib/cn";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { CarteDuWorkflow } from "@/components/workflows/carte/carte-du-workflow";
 import { areteDeLaCarte, type NoeudDuGraphe } from "@/components/workflows/carte/disposition";
+import { timingOfStep } from "@/components/workflows/timing";
+import {
+  GroupMembersLine,
+  openItemsByState,
+  stepActivitySentence,
+  useWorkflowActivity,
+} from "@/components/workflows/step-activity";
 import { FormulaireDEtape, PanneauDEtat, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { ArtifactFlowCard, type Highlight } from "@/components/workflows/artifact-flow";
 import { StepDetails } from "@/components/workflows/step-details";
@@ -18,8 +25,13 @@ import { ActorsPanel } from "@/components/workflows/actors-panel";
 import { WorkflowSettingsPanel } from "@/components/workflows/workflow-settings";
 import { api } from "@/lib/api";
 import { useAgentResolution } from "@/components/workflows/use-agent-resolution";
+import { BuiltinAgentOfActor, type AgentActorFields } from "@/components/agents/builtin-agent";
 
-type Definition = { initial?: string; actors?: Record<string, { type?: string; group?: string; sla_hours?: number }> };
+type Definition = {
+  initial?: string;
+  actors?: Record<string, { type?: string; group?: string; sla_hours?: number; agent?: string } & AgentActorFields>;
+  defaults?: { on_timeout?: string };
+};
 
 /**
  * La carte, et ce qu'on y modifie (S16-12) : un état ou une transition choisis ouvrent leur panneau ;
@@ -38,8 +50,9 @@ export default function MapPage() {
   const [choix, setChoix] = useState<{ kind: "node" | "edge"; id: string } | null>(null);
   const [flux, setFlux] = useState<Highlight | null>(null);
   const [drawn, setDrawn] = useState<{ from: string; to: string } | null>(null);
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, name } = useParams<{ slug: string; name: string }>();
   const resolutions = useAgentResolution(slug, brouillon.process);
+  const activity = useWorkflowActivity(slug, name);
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const workflows = useQuery({ queryKey: ["workflows", slug], queryFn: () => api.workflows(slug) });
   if (brouillon.definition.error) return <ErrorNote>{String(brouillon.definition.error)}</ErrorNote>;
@@ -53,6 +66,14 @@ export default function MapPage() {
   const arete = choix?.kind === "edge" ? areteDeLaCarte(graph, choix.id) : undefined;
   const etapes = brouillon.process ?? [];
   const etapeChoisie = arete ? etapes.find((e) => e.id === arete.id) : undefined;
+  // An agent step that names no registry agent: what it runs is said from the actor's own fields.
+  const builtinActor =
+    etapeChoisie?.actor_type === "agent" && !etapeChoisie.agent
+      ? { role: etapeChoisie.role ?? undefined, model: etapeChoisie.model ?? undefined, ...definition.actors?.[etapeChoisie.actor] }
+      : undefined;
+  const timing = etapeChoisie
+    ? timingOfStep(etapeChoisie, { timeoutHours: arete?.timeout_hours, graph, onTimeout: definition.defaults?.on_timeout })
+    : null;
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0 space-y-4">
@@ -84,6 +105,7 @@ export default function MapPage() {
               choix={choix?.kind === "edge" ? choix.id : null}
               onChoisir={(id) => setChoix({ kind: "edge", id })}
               highlight={flux}
+              openItems={openItemsByState(activity.data)}
             />
           ) : (
             <CarteDuWorkflow
@@ -127,6 +149,19 @@ export default function MapPage() {
               flow={graph.artifacts}
               stepsById={new Map(etapes.map((e) => [e.id, e]))}
             />
+            {etapeChoisie.actor_type === "human" && etapeChoisie.group && (
+              <GroupMembersLine projectSlug={slug} group={etapeChoisie.group} />
+            )}
+            {stepActivitySentence(activity.data, etapeChoisie.id) && (
+              <p className="mt-2 text-xs text-ink-muted" data-testid="activite-de-l-etape">
+                {stepActivitySentence(activity.data, etapeChoisie.id)}
+              </p>
+            )}
+          </Card>
+        )}
+        {builtinActor && (
+          <Card title="This agent">
+            <BuiltinAgentOfActor key={etapeChoisie?.actor} projectSlug={slug} actor={builtinActor} />
           </Card>
         )}
         {arete && (
@@ -134,6 +169,9 @@ export default function MapPage() {
             key={`e-${arete.id ?? arete.from}`}
             arete={arete}
             acteurs={acteurs}
+            definitions={definition.actors}
+            gates={etapeChoisie?.gates}
+            timing={timing}
             states={noeuds.map((n) => n.id)}
             workflows={(workflows.data ?? []).map((w) => w.name)}
           />

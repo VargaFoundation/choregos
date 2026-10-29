@@ -163,7 +163,7 @@ class Facts:
     #: empty when there is no template or it cannot be read any more (nothing is judged then)
     template: str | None = None
     template_workflows: tuple[TemplateWorkflowFact, ...] = ()
-    #: the active workflows adopted from the catalogue (ADR 0108): (name, origin, version it offers now,
+    #: the active workflows adopted from the catalogue (ADR 0111): (name, origin, version it offers now,
     #: None when the entry is gone)
     adopted: tuple[tuple[str, str, int | None], ...] = ()
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -686,7 +686,7 @@ def item_workflow_template(f: Facts) -> list[ReadinessItem]:
 
 
 def item_workflow_catalogue(f: Facts) -> list[ReadinessItem]:
-    """An adopted workflow whose catalogue entry has a newer version (ADR 0108 §5): offered, never applied."""
+    """An adopted workflow whose catalogue entry has a newer version (ADR 0111 §5): offered, never applied."""
     if not f.adopted:
         return []
     title = "Adopted workflows up to date"

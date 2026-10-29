@@ -1,4 +1,4 @@
-"""S49-04: the workflow catalogue's contract (ADR 0108)."""
+"""S49-04: the workflow catalogue's contract (ADR 0111)."""
 
 from __future__ import annotations
 

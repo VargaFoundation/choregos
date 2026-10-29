@@ -108,6 +108,31 @@ def render_playbook(role: str, **variables: Any) -> str:
     return template.render({**defaults, **variables})
 
 
+#: What a preview shows in place of what only a run knows: the console shows the prompt a role's
+#: built-in agent receives, with each part a run fills in named, not invented.
+PREVIEW_VARIABLES: dict[str, Any] = {
+    "ticket": {
+        "key": "<work item key>",
+        "title": "<work item title>",
+        "body": "<work item description>",
+    },
+    "spec": "<the approved specification, when the work item has one>",
+    "plan_markdown": "<the plan, when the work item has one>",
+    "allowed_paths": ["<the work item's allowed paths>"],
+    "production_indicators": ["<the production indicator sources the run can read>"],
+}
+
+
+def playbook_origin(role: str) -> str:
+    """`deployment` when `CHOREGOS_PLAYBOOKS_DIR` supplies the role's prompt, `package` otherwise."""
+    return "package" if playbook_path(role).is_relative_to(ROLES_DIR) else "deployment"
+
+
+def preview_playbook(role: str) -> str:
+    """A role's prompt as a run receives it, with what only a run knows shown as `<placeholders>`."""
+    return render_playbook(role, **PREVIEW_VARIABLES)
+
+
 def frame(instructions: str) -> str:
     """A registry agent's instructions, followed by the frame it cannot change (ADR 0033).
 
@@ -174,7 +199,9 @@ __all__ = [
     "OUTPUT_CONTRACT",
     "extra_roles_dirs",
     "frame",
+    "playbook_origin",
     "playbook_path",
     "playbook_source",
+    "preview_playbook",
     "render_playbook",
 ]

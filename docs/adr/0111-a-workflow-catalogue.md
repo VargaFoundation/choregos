@@ -1,4 +1,4 @@
-# 0108 — A workflow catalogue: entries from the core, templates, plugins and the organisation, whose agents resolve in the registry
+# 0111 — A workflow catalogue: entries from the core, templates, plugins and the organisation, whose agents resolve in the registry
 
 - **Status**: accepted, 2026-10-28, by the product owner ("a catalogue of workflows that reference
   agents from internal or external catalogues"; sharing to the organisation's catalogue is `org_admin`'s)

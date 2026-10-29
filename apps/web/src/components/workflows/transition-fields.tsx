@@ -34,7 +34,7 @@ function Labelled({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * Every field of a transition the map did not edit yet (ADR 0109 §3), each saved as one typed operation
+ * Every field of a transition the map did not edit yet (ADR 0112 §3), each saved as one typed operation
  * on the draft; a nested value — a task, an action, a fan-out — is written as indented lines, so the
  * diff a reviewer reads is one field per line. The validator still decides: a refusal shows in the draft bar.
  */

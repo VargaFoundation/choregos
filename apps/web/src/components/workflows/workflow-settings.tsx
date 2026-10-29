@@ -10,7 +10,7 @@ import { rowsToSchema, schemaToRows } from "@/components/workflows/fields-schema
 import { operations } from "@/components/workflows/operations";
 import type { WorkflowOperation } from "@/lib/types";
 
-/** The workflow's own fields (ADR 0109 §3): what it is for, where a request starts, what it carries. */
+/** The workflow's own fields (ADR 0112 §3): what it is for, where a request starts, what it carries. */
 export function WorkflowSettingsPanel() {
   const draft = useBrouillon();
   const document = draft.document;

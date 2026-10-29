@@ -48,7 +48,7 @@
         },
         "catalogue": {
           "type": "object",
-          "description": "How the workflow catalogue presents it (ADR 0108); the engine ignores it.",
+          "description": "How the workflow catalogue presents it (ADR 0111); the engine ignores it.",
           "additionalProperties": false,
           "properties": {
             "title": {

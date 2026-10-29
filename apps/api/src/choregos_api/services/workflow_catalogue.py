@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The workflow catalogue (ADR 0108): what an organisation can adopt, and adopting it.
+"""The workflow catalogue (ADR 0111): what an organisation can adopt, and adopting it.
 
 Four sources, listed together: the core's workflows (`core`), the workflows of the deployment's templates
 (`template:<name>`), those of the templates its installed plugins brought (`plugin:<name>`, the external

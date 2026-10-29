@@ -65,7 +65,7 @@ class PluginSupply(Protocol):
         ...
 
     async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
-        """For each slug some source's newest plugin ships as an agent, that plugin (ADR 0108 §2).
+        """For each slug some source's newest plugin ships as an agent, that plugin (ADR 0111 §2).
         Never raises: a source that cannot be read says nothing."""
         ...
 

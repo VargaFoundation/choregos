@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * A JSON Schema object as rows a person edits (ADR 0109 §3): the work item's fields (`metadata.inputs`)
+ * A JSON Schema object as rows a person edits (ADR 0112 §3): the work item's fields (`metadata.inputs`)
  * and a human task's form. A property this editor cannot describe (an array, a nested object, a
  * constraint it has no input for) is kept as it was, untouched, and shown as such.
  */

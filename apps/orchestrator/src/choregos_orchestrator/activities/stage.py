@@ -202,7 +202,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # The organisation's model catalogue (ADR 0060): a model it disabled after the agent was
         # published stops the stage here, before any key is minted.
         resolver = ModelResolver(
-            gateway_url=settings.gateway_url,
+            # The gateway the key is minted on (ADR 0109): a connector's, else the deployment's.
+            gateway_url=getattr(bundle, "gateway_url", None) or settings.gateway_url,
             gateway_models=await _gateway_catalogue(bundle),
             catalogue=await load_policy(session, bundle.project.org_id),
         )

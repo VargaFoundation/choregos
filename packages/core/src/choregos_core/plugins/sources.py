@@ -268,7 +268,7 @@ class Release:
     git: GitRelease | None = None
     #: the offline directory's plugin (a directory or a `.tar.gz`)
     path: Path | None = None
-    #: the agents it ships, when the index says so (ADR 0108): read without fetching the plugin
+    #: the agents it ships, when the index says so (ADR 0111): read without fetching the plugin
     agents: tuple[str, ...] = ()
 
 

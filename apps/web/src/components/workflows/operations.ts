@@ -27,7 +27,7 @@ export const operations = {
       : { op: "set_transition", id: transition, field: "timeout_hours", value: heures },
   ajouterUneGarantie: (transition: string, garantie: string): WorkflowOperation => ({ op: "add_gate", transition, gate: garantie }),
   retirerUneGarantie: (transition: string, garantie: string): WorkflowOperation => ({ op: "remove_gate", transition, name: garantie }),
-  // ADR 0109: actors, every transition field, the workflow's own fields.
+  // ADR 0112: actors, every transition field, the workflow's own fields.
   addActor: (name: string, spec: Record<string, unknown>): WorkflowOperation => ({ op: "add_actor", name, spec }),
   removeActor: (name: string): WorkflowOperation => ({ op: "remove_actor", name }),
   /** A transition field; a nested value (a task, an action, a fan-out) is written as indented lines. */

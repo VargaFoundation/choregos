@@ -13,7 +13,7 @@ import type { Agent, AgentCatalogueEntry } from "@/lib/types";
 const NAME = /^[a-z][a-z0-9_-]{0,62}$/;
 const ROLE = /^[a-z][a-z0-9_]{1,31}$/;
 
-/** An agent a workflow may name here (ADR 0108 §2): the organisation's, or the platform catalogue's. */
+/** An agent a workflow may name here (ADR 0111 §2): the organisation's, or the platform catalogue's. */
 export type OfferedAgent = { slug: string; display: string; role: string; installed: boolean };
 
 /**
@@ -34,7 +34,7 @@ export function offeredAgents(agents: Agent[], catalogue: AgentCatalogueEntry[])
   return [...ownAgents, ...fromCatalogue];
 }
 
-/** The workflow's actors (ADR 0109 §2): who acts in it, added and removed as typed operations. */
+/** The workflow's actors (ADR 0112 §2): who acts in it, added and removed as typed operations. */
 export function ActorsPanel({ org }: { org: string }) {
   const draft = useBrouillon();
   const actors = Object.entries(draft.document?.actors ?? {});

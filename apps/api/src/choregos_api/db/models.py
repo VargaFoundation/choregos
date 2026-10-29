@@ -149,7 +149,7 @@ class WorkflowDef(Base, PkMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(64))
     version: Mapped[int] = mapped_column(Integer, default=1)
     source: Mapped[str] = mapped_column(String(16), default="platform")
-    #: For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0108).
+    #: For `source: catalogue`, the entry it was adopted from: `<source>/<name>@<version>` (ADR 0111).
     origin: Mapped[str | None] = mapped_column(String(200), nullable=True)
     yaml: Mapped[str] = mapped_column(Text)
     json_doc: Mapped[dict[str, Any]] = mapped_column("json", Json, default=dict)
@@ -1566,7 +1566,7 @@ class OrgPlugin(Base, PkMixin, TimestampMixin):
 
 
 class OrgWorkflow(Base, PkMixin, TimestampMixin):
-    """A workflow an organisation shared to its catalogue (ADR 0108 §4): a copy of one version of a
+    """A workflow an organisation shared to its catalogue (ADR 0111 §4): a copy of one version of a
     project's workflow, so later edits in the project do not reach it until shared again. Each share of
     the same name is the next `version`; the catalogue offers the highest."""
 

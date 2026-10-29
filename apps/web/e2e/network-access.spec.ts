@@ -25,8 +25,9 @@ async function toTheBuilder(page: Page) {
 }
 
 test("the administrator's deny list is written to the ceiling and shows on a project's settings", async ({ page }) => {
-  await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "Network access" })).toBeVisible();
+  // The network has its own page in the administration (S44-04).
+  await page.goto("/admin/egress");
+  await expect(page.getByRole("heading", { name: "What agents may reach" })).toBeVisible();
   await page.getByRole("textbox", { name: "Denied hosts" }).fill("news.ycombinator.com\ngithub.com");
   await page.getByRole("button", { name: "Save network access" }).click();
   await expect(page.getByText("Network access saved")).toBeVisible();
@@ -51,7 +52,7 @@ test("the administrator's deny list is written to the ceiling and shows on a pro
 });
 
 test("network activity lists the refusals first", async ({ page }) => {
-  await page.goto("/admin");
+  await page.goto("/admin/egress");
   const table = page.getByRole("table").filter({ hasText: "api.stripe.com" });
   await expect(table).toBeVisible();
   await expect(table.getByText("Refused").first()).toBeVisible();
@@ -98,7 +99,7 @@ for (const theme of ["dark", "light"] as const) {
 for (const width of [360, 768, 1280]) {
   test(`the network cards and the builder's section do not scroll sideways at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    for (const path of ["/admin", "/p/billing-api/settings"]) {
+    for (const path of ["/admin/egress", "/p/billing-api/settings"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       expect(await page.evaluate(() => document.documentElement.scrollWidth), path).toBeLessThanOrEqual(width);
@@ -112,8 +113,8 @@ for (const width of [360, 768, 1280]) {
 }
 
 test("the headings of the network cards are in sentence case", async ({ page }) => {
-  await page.goto("/admin");
-  for (const name of ["Network access", "Network activity"]) {
+  await page.goto("/admin/egress");
+  for (const name of ["What agents may reach", "Outbound proxy", "Network activity"]) {
     await expect(page.getByRole("heading", { name })).toBeVisible();
     expect(name).not.toMatch(/[a-z] [A-Z]/);
   }

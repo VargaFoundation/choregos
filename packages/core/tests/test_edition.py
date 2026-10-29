@@ -68,7 +68,7 @@ DOCUMENTS = {
 }
 
 
-#: A human task's form (S20-06), the kind of nested value the map writes in block style (ADR 0109 §3).
+#: A human task's form (S20-06), the kind of nested value the map writes in block style (ADR 0112 §3).
 TASK = {
     "title": "Hand over the badge",
     "instructions": "Give the joiner their badge.",
@@ -437,7 +437,7 @@ def test_chaque_geste_de_la_console_se_greffe_et_se_defait(geste: dict[str, Any]
 
 
 def test_a_block_value_is_written_one_field_per_line_under_the_transition() -> None:
-    """ADR 0109 §3: a reviewer reads a human task as lines, not as one flow line."""
+    """ADR 0112 §3: a reviewer reads a human task as lines, not as one flow line."""
     texte = template_yaml("default-request")
     fields = {"type": "object", "properties": {"badge": {"type": "string"}}}
     edition = editer(
@@ -458,7 +458,7 @@ def test_a_block_value_is_written_one_field_per_line_under_the_transition() -> N
 
 
 def test_a_value_written_in_block_style_can_be_replaced() -> None:
-    """It was refused before ADR 0109: the whole key's lines are replaced, and the inverse puts them back."""
+    """It was refused before ADR 0112: the whole key's lines are replaced, and the inverse puts them back."""
     texte = template_yaml("default-request")
     with_task = editer(
         texte, [{"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"}]

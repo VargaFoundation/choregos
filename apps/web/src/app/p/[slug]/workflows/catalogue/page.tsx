@@ -20,7 +20,7 @@ import type { ConnectorDto, WorkflowCatalogueEntry } from "@/lib/types";
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 
 /**
- * The workflow catalogue (ADR 0108): what this project can adopt — the platform's workflows, the
+ * The workflow catalogue (ADR 0111): what this project can adopt — the platform's workflows, the
  * templates', the installed plugins' and the ones the organisation shared — with what each needs and
  * where its agents come from. Adopting copies the workflow into the project and installs the agents the
  * platform's catalogue provides; it never installs a plugin.

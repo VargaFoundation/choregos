@@ -37,6 +37,7 @@ from .registry import (
     deployment_default_type,
     egress_hosts,
     fakes_enabled,
+    offered_connector_types,
     operation_spec,
     register,
     spec_of,
@@ -75,6 +76,7 @@ __all__ = [
     "deployment_default_type",
     "egress_hosts",
     "fakes_enabled",
+    "offered_connector_types",
     "operation_spec",
     "register",
     "spec_of",
@@ -107,6 +109,16 @@ def _firecrawl_check(config: dict[str, Any]) -> None:
     from .web_search.firecrawl import checked_base_url
 
     checked_base_url(config.get("base_url"))
+
+
+def _web_documents_check(config: dict[str, Any]) -> None:
+    from .documents.base import SourceRefusedError
+    from .documents.web import check_connector_config
+
+    try:
+        check_connector_config(config)
+    except SourceRefusedError as refused:
+        raise ConfigurationError(str(refused)) from refused
 
 
 def _github_client(config: dict[str, Any]) -> Any:
@@ -491,6 +503,35 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("token", "private_key"),
     ),
+    # A web site behind a login as a knowledge source (S47-48): a bearer token, HTTP Basic or one named
+    # header, pinned to `host`.
+    ("documents", "web"): ConnectorTypeSpec(
+        "Web site behind a login (bearer, basic or header)",
+        ("documents",),
+        _objet(
+            {
+                "host": {
+                    "type": "string",
+                    "description": "the site's host; the credential is sent nowhere else",
+                },
+                "auth": {"type": "string", "enum": ["bearer", "basic", "header"], "default": "bearer"},
+                "username": {"type": "string", "description": "auth basic: the user name"},
+                "header_name": {
+                    "type": "string",
+                    "description": "auth header: the header the secret goes in (X-API-Key, Cookie)",
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "plain headers sent with every request, e.g. Accept-Language",
+                },
+            },
+            ("host",),
+        ),
+        ("secret",),
+        egress=lambda config: [(str(config.get("host") or ""), 443)] if config.get("host") else [],
+        check_config=_web_documents_check,
+    ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
         ("identity",),
@@ -521,6 +562,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["mdm"],
+        dev_only=True,
     ),
     ("shipping", "demo"): ConnectorTypeSpec(
         "demo carrier (in memory: demonstrations only, refused in staging and prod)",
@@ -528,6 +570,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["shipping"],
+        dev_only=True,
     ),
     ("access_control", "demo"): ConnectorTypeSpec(
         "demo badge readers (in memory: demonstrations only, refused in staging and prod)",
@@ -535,6 +578,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["access_control"],
+        dev_only=True,
     ),
     # The `marketdata` family (S38-03): prices from free sources, read by the platform for a run whose
     # sandbox has no egress. Keys stay API-side (`secret_refs`).
@@ -657,6 +701,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("cd",),
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
+        dev_only=True,
     ),
     # Netops (ADR 0052, S33-08): our own estate, read through the platform.
     ("firewall", "pfsense"): ConnectorTypeSpec(
@@ -1296,6 +1341,9 @@ def _register_builtins() -> None:
     from .documents.git import GitDocumentsConnector
 
     register("documents", "git", _SPECS_LIVREES[("documents", "git")])(GitDocumentsConnector)
+    from .documents.web import WebDocumentsConnector
+
+    register("documents", "web", _SPECS_LIVREES[("documents", "web")])(WebDocumentsConnector)
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(

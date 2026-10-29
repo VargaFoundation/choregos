@@ -25,7 +25,7 @@ import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/componen
 import { api } from "@/lib/api";
 import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
-import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
+import { libelleDeSorte, isOrgDeclarable } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorOperation, ConnectorSecretState, OperationPatch, OrgConnector } from "@/lib/types";
 import { Confirmation } from "@/components/geste-confirme";
 
@@ -609,6 +609,9 @@ function ResultCap({
   );
 }
 
+/** The API's rule for a connector's name (`OrgConnectorCreate.name`): checked here, so it is said, not a bare 422. */
+const CONNECTOR_NAME = /^[a-z][a-z0-9-]{1,62}$/;
+
 /** Déclarer une instance : son type (ceux qui exposent des opérations d'abord), sa configuration, ses secrets. */
 function Declarer({ org }: { org: string }) {
   const client = useQueryClient();
@@ -621,14 +624,17 @@ function Declarer({ org }: { org: string }) {
   const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   // Les outils de livraison d'un projet se règlent dans le projet : ils ne se déclarent pas ici.
-  const candidats = (types.data ?? []).filter((t) => !estUneSorteDuProjet(t.kind));
+  // The organisation's own model gateway is the one exception (S44-04).
+  const candidats = (types.data ?? []).filter((t) => isOrgDeclarable(t.kind, t.type));
   const familles = [
-    { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp") },
+    { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp" && t.kind !== "gateway") },
     { titre: "MCP servers", types: candidats.filter((t) => t.kind === "mcp") },
+    { titre: "Model gateway (LLM)", types: candidats.filter((t) => t.kind === "gateway") },
   ].filter((famille) => famille.types.length > 0);
   const type = candidats.find((t) => `${t.kind}/${t.type}` === choix);
   const schema = (type?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
   const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
+  const nameInvalid = nom !== "" && !CONNECTOR_NAME.test(nom);
   async function declarer() {
     if (!type) return;
     setErreur(null);
@@ -659,7 +665,7 @@ function Declarer({ org }: { org: string }) {
     }
   }
   return (
-    <Card title="Declare a connector">
+    <Card title="Declare a connector" id="declare">
       {candidats.length === 0 ? (
         <p className="text-sm text-ink-muted">
           No connector type exposes operations yet: a plugin (or the <code>mcp</code> type) brings them.
@@ -680,7 +686,15 @@ function Declarer({ org }: { org: string }) {
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
                 placeholder="entra-acme"
+                aria-invalid={nameInvalid}
+                aria-describedby="declare-connector-name-rule"
               />
+              <span
+                id="declare-connector-name-rule"
+                className={nameInvalid ? "text-xs text-danger" : "text-xs text-ink-muted"}
+              >
+                Lowercase letters, digits and dashes, starting with a letter (2 to 63 characters).
+              </span>
             </label>
             <label className="space-y-1">
               <span className="text-xs text-ink-muted">Type</span>
@@ -736,6 +750,7 @@ function Declarer({ org }: { org: string }) {
             tone="accent"
             disabled={
               !nom ||
+              nameInvalid ||
               !type ||
               champsManquants(schema, config).length > 0 ||
               illisibles.length > 0 ||

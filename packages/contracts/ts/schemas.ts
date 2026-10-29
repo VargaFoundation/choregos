@@ -174,7 +174,7 @@ export type PluginIndexRelease = {
     /** the plugin's directory in the repository */
     path?: string;
   };
-  /** the agents this release ships (ADR 0108): a workflow catalogue names the plugin of a missing agent without fetching it */
+  /** the agents this release ships (ADR 0111): a workflow catalogue names the plugin of a missing agent without fetching it */
   agents?: Array<string>;
 };
 
@@ -1331,7 +1331,7 @@ export type Workflow = {
     inputs?: {
       [key: string]: unknown;
     };
-    /** How the workflow catalogue presents it (ADR 0108); the engine ignores it. */
+    /** How the workflow catalogue presents it (ADR 0111); the engine ignores it. */
     catalogue?: {
       title?: string;
       summary?: string;

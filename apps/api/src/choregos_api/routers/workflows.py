@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import timedelta
+from typing import Annotated, Any
 
 from choregos_contracts import Role
 from choregos_core import parse_policy, parse_workflow, to_graph, to_process, utcnow
 from choregos_core.dsl import TEMPLATE_NAMES, load_template, template_yaml
 from choregos_core.policy_ceiling import PolicyCeiling, widenings
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,9 @@ from ..schemas import (
     PolicyCeilingPut,
     PolicyDto,
     PolicyPut,
+    StateActivity,
+    StepActivity,
+    WorkflowActivity,
     WorkflowDefDto,
     WorkflowEditRequest,
     WorkflowEditResult,
@@ -306,6 +310,79 @@ async def list_versions(name: str, ctx: ProjectCtx, session: Db) -> list[Workflo
         )
     ).scalars()
     return [workflow_dto(row, ctx.project) for row in rows]
+
+
+@router.get(
+    "/projects/{id}/workflows/{name}/activity",
+    response_model=WorkflowActivity,
+    operation_id="getWorkflowActivity",
+)
+async def workflow_activity(
+    name: str, ctx: ProjectCtx, session: Db, days: Annotated[int, Query(ge=1, le=365)] = 30
+) -> WorkflowActivity:
+    """Where a workflow's open work items wait, by state, and what each transition's runs did over the
+    last `days` days (count, outcome, cost, median duration): what the map shows on its states and
+    steps. Every version of the workflow counts. Read only."""
+    from statistics import median
+
+    from ..db.models import Run
+
+    await _actif(session, ctx, name)
+    versions = select(WorkflowDef.id).where(WorkflowDef.project_id == ctx.id, WorkflowDef.name == name)
+    open_rows = (
+        await session.execute(
+            select(WorkItem.state, func.count(), func.min(WorkItem.created_at))
+            .where(
+                WorkItem.project_id == ctx.id,
+                WorkItem.workflow_def_id.in_(versions),
+                WorkItem.closed_at.is_(None),
+            )
+            .group_by(WorkItem.state)
+            .order_by(WorkItem.state)
+        )
+    ).all()
+    since = utcnow() - timedelta(days=days)
+    runs = (
+        await session.execute(
+            select(Run.transition_id, Run.status, Run.cost_usd, Run.started_at, Run.ended_at)
+            .join(WorkItem, WorkItem.id == Run.work_item_id)
+            .where(
+                Run.project_id == ctx.id,
+                WorkItem.workflow_def_id.in_(versions),
+                Run.transition_id.is_not(None),
+                Run.created_at >= since,
+            )
+        )
+    ).all()
+    by_step: dict[str, list[Any]] = {}
+    for row in runs:
+        by_step.setdefault(str(row.transition_id), []).append(row)
+    steps = []
+    for transition, rows in sorted(by_step.items()):
+        durations = [
+            (row.ended_at - row.started_at).total_seconds() / 60
+            for row in rows
+            if row.started_at is not None and row.ended_at is not None
+        ]
+        steps.append(
+            StepActivity(
+                transition=transition,
+                runs=len(rows),
+                succeeded=sum(1 for row in rows if row.status == "succeeded"),
+                failed=sum(1 for row in rows if row.status in ("failed", "timed_out")),
+                cost_usd=round(sum(float(row.cost_usd or 0) for row in rows), 4),
+                median_minutes=round(median(durations), 1) if durations else None,
+            )
+        )
+    return WorkflowActivity(
+        workflow=name,
+        days=days,
+        states=[
+            StateActivity(state=state, open_items=count, oldest_created_at=oldest)
+            for state, count, oldest in open_rows
+        ],
+        steps=steps,
+    )
 
 
 @router.post(

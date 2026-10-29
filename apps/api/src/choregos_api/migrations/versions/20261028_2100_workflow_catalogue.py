@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The workflow catalogue (S49-05, ADR 0108): `org_workflows` and `workflow_defs.origin`
+"""The workflow catalogue (S49-05, ADR 0111): `org_workflows` and `workflow_defs.origin`
 
 `org_workflows` holds the workflows an organisation shared from its projects, one row per share, under
 forced RLS like every other table of an organisation. `workflow_defs.origin` records the catalogue entry
