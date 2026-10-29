@@ -63,6 +63,49 @@ RUN uv venv /opt/skillspector --python /usr/local/bin/python3.12 \
     "skillspector @ https://github.com/NVIDIA/SkillSpector/archive/${SKILLSPECTOR_COMMIT}.tar.gz" \
  && /opt/skillspector/bin/skillspector --version
 
+# The Hubble CLI, for the `cilium` connector's flows (ADR 0052): Relay speaks gRPC only, and
+# `hubble observe -o jsonpb` is the client the Cilium project maintains. Built from the release's
+# source, not taken as its binary: every published hubble up to v1.20.2 links a Go stdlib with
+# CVE-2026-56857 (CRITICAL, fixed in Go 1.26.9 and 1.27.2) that the image's Trivy gate refuses.
+# The tag is checked against its commit, the build is offline (`-mod=vendor`, the dependencies are
+# in the tag), and the Go image is pinned by digest. v1.19.4 and not v1.17.0: the latter carried
+# three CRITICAL CVEs (cilium, grpc, Go stdlib) that the same gate refused (#490). Any bump
+# re-checks the `observe` flags the connector uses. Cross-compiled on the build platform: Go needs
+# no emulation for arm64.
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS hubble
+ARG HUBBLE_VERSION=v1.19.4
+ARG HUBBLE_COMMIT=39037bdd6cb6acb02a241dde33b5ffcf0e8471e2
+ARG TARGETARCH
+WORKDIR /src
+RUN git clone --quiet --depth 1 --branch "${HUBBLE_VERSION}" https://github.com/cilium/hubble . \
+ && test "$(git rev-parse HEAD)" = "${HUBBLE_COMMIT}" \
+ && CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH:-amd64}" GOTOOLCHAIN=local GOFLAGS=-mod=vendor \
+    go build -trimpath -ldflags "-w -s \
+      -X 'github.com/cilium/cilium/hubble/pkg.GitBranch=${HUBBLE_VERSION}' \
+      -X 'github.com/cilium/cilium/hubble/pkg.GitHash=${HUBBLE_COMMIT}' \
+      -X 'github.com/cilium/cilium/hubble/pkg.Version=${HUBBLE_VERSION#v}'" \
+    -o /out/hubble .
+
+# `cosign`, the release binary checked against the release's checksums: the release's binaries are
+# built with Go 1.27.3, but the `ghcr.io/sigstore/cosign/cosign:v3.1.4` image is a separate build,
+# with Go 1.27.1, which links CVE-2026-56857 (measured with `go version`, S41-14c).
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS cosign
+ARG COSIGN_VERSION=v3.1.4
+ARG COSIGN_SHA256_AMD64=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+ARG COSIGN_SHA256_ARM64=ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2
+ARG TARGETARCH
+RUN set -eu; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) sum="${COSIGN_SHA256_AMD64}" ;; \
+      arm64) sum="${COSIGN_SHA256_ARM64}" ;; \
+      *) echo "no cosign for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p /out; \
+    curl -fsSL -o /out/cosign \
+      "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${TARGETARCH:-amd64}"; \
+    echo "${sum}  /out/cosign" | sha256sum -c -; \
+    chmod 0755 /out/cosign
+
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
 FROM python:3.12-slim-bookworm AS commun
 # `PIP_PYTHON` : l'image de l'édition entreprise est construite FROM celle-ci et y ajoute sa roue
@@ -78,19 +121,9 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --create-home --shell /usr/sbin/nologin choregos
-# The Hubble CLI, for the `cilium` connector's flows (ADR 0052): Relay speaks gRPC only, and
-# `hubble observe -o jsonpb` is the client the Cilium project maintains. Pinned, checked against
-# the release's checksum. The connector runs here (API and workers), never in the runner.
-# v1.19.4 and not v1.17.0: the latter carried three CRITICAL CVEs (cilium, grpc, Go stdlib) that
-# the image's Trivy gate refuses (#490). Any bump re-checks the `observe` flags the connector uses.
-ARG HUBBLE_VERSION=v1.19.4
-ARG TARGETARCH
-ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz /tmp/hubble.tar.gz
-ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz.sha256sum /tmp/hubble.sha256sum
-RUN cd /tmp && echo "$(cut -d' ' -f1 hubble.sha256sum)  hubble.tar.gz" | sha256sum -c - \
- && tar -xzf hubble.tar.gz -C /usr/local/bin hubble \
- && rm -f hubble.tar.gz hubble.sha256sum \
- && hubble version
+# The Hubble CLI, built above. The connector runs here (API and workers), never in the runner.
+COPY --from=hubble /out/hubble /usr/local/bin/hubble
+RUN hubble version
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
 # The plugins the platform ships (ADR 0093 §6, S43-09): the built-in agents left the core for
@@ -108,9 +141,8 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # --- Cible `api` : le service HTTP.
 FROM commun AS api
 # `cosign`: publication verifies a hosted agent's image signature on its digest (S41-14, ADR 0080
-# §8). The same release as the `hosted-cosign` CI job, pinned by digest.
-COPY --from=ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 \
-  /ko-app/cosign /usr/local/bin/cosign
+# §8). The same release as the `hosted-cosign` CI job, fetched and checked in the `cosign` stage above.
+COPY --from=cosign /out/cosign /usr/local/bin/cosign
 # SkillSpector (ADR 0095): the gate runs it on every version a person publishes.
 COPY --from=skillspector /opt/skillspector /opt/skillspector
 ENV CHOREGOS_SKILL_SCANNER=skillspector
@@ -143,7 +175,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 # 0080 §9). The client of the very image the chart deploys, pinned by digest: a client and a daemon
 # of two releases apart is a combination nobody tested. A bump moves both, and
 # `tests/paquets/test_buildctl_in_the_worker_image.py` refuses one without the other.
-COPY --from=moby/buildkit:v0.33.1-rootless@sha256:f8a833b2de9d68e27f0815e4a737abdfaf8a2e4c615650557df11025101557b4 /usr/bin/buildctl /usr/local/bin/buildctl
+COPY --from=moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89 /usr/bin/buildctl /usr/local/bin/buildctl
 USER 1000
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 
