@@ -29,7 +29,7 @@ def test_one_organisation_lookup() -> None:
     count = count_organisation_helpers(API_PACKAGE)
     assert count <= CEILING, (
         f"{count} organisation lookups in routers, the ceiling is {CEILING}: "
-        "use services.organisations.organisation_by_slug (S47-09)"
+        "share one lookup: S47-09 creates services.organisations.organisation_by_slug"
     )
 
 

@@ -28,13 +28,14 @@ on every rename.
    without the change. One guard per file, so parallel stories do not collide.
 2. **Hard bans on the HTTP layer.** The orchestrator never imports `choregos_api.routers`,
    `deps`, `main`, `mcp`, `a2a`, or `fastapi`. Only `choregos_ontology/service` may import the API
-   from `packages/*/src`. Services never import routers.
+   from `packages/*/src`. Services never import routers, with one exception that is a ratchet
+   (Decision 1) and not a ban: `services/readiness.py` still imports one, and S47-08 removes it.
 3. **Router scans are recursive.** They read `routers/**/*.py`, and an import between two modules of
    the same router package (`from ._router import router`) is exempt, so splitting `agents.py` or
    `knowledge.py` into packages stays covered.
 4. **The way down is extraction** to `packages/core`, or to a persistence package later, then
-   lowering the `CEILING`. Routers share helpers through services; there is one organisation lookup
-   (`services.organisations.organisation_by_slug`).
+   lowering the `CEILING`. Routers share helpers through services; there will be one organisation lookup
+   (`services.organisations.organisation_by_slug`, which does not exist yet: S47-09 creates it).
 5. **Hand-off rule.** A PR from any track that removes a counted import lowers that guard's
    `CEILING`. A PR that adds one is refused, unless it is a mechanical rename that splits one
    statement (raise the `CEILING` by that number and say so in the PR body) or this ADR is amended.

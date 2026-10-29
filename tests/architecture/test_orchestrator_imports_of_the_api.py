@@ -33,6 +33,8 @@ def imported_modules(root: Path) -> list[str]:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 modules.append(node.module)
+                if _is_api(node.module):
+                    modules.extend(f"{node.module}.{alias.name}" for alias in node.names)
             elif isinstance(node, ast.Import):
                 modules.extend(alias.name for alias in node.names)
     return modules
@@ -59,14 +61,19 @@ def test_the_orchestrator_imports_no_more_of_the_api() -> None:
     )
 
 
-def test_the_orchestrator_never_imports_the_http_layer() -> None:
-    offenders = sorted(
+def http_layer_imports(root: Path) -> list[str]:
+    """The HTTP-layer modules imported under `root`, `from choregos_api import deps` included."""
+    return sorted(
         {
             module
-            for module in imported_modules(ORCHESTRATOR_SRC)
+            for module in imported_modules(root)
             if any(module == banned or module.startswith(banned + ".") for banned in HTTP_LAYER)
         }
     )
+
+
+def test_the_orchestrator_never_imports_the_http_layer() -> None:
+    offenders = http_layer_imports(ORCHESTRATOR_SRC)
     assert not offenders, f"the orchestrator imports the HTTP layer: {offenders} (ADR 0099)"
 
 
@@ -75,3 +82,24 @@ def test_the_counter_sees_both_import_forms(tmp_path: Path) -> None:
         "from choregos_api.db import x\nimport choregos_api.config\nimport os\n", encoding="utf-8"
     )
     assert count_api_imports(tmp_path) == 2
+
+
+def test_the_http_layer_ban_sees_every_form(tmp_path: Path) -> None:
+    (tmp_path / "bad.py").write_text(
+        "from choregos_api.routers import a\nfrom choregos_api import deps, main\nimport fastapi\n",
+        encoding="utf-8",
+    )
+    assert http_layer_imports(tmp_path) == [
+        "choregos_api.deps",
+        "choregos_api.main",
+        "choregos_api.routers",
+        "choregos_api.routers.a",
+        "fastapi",
+    ]
+    clean = tmp_path / "clean"
+    clean.mkdir()
+    (clean / "ok.py").write_text(
+        "from choregos_api.db import x\nfrom choregos_api import config\nimport os\n",
+        encoding="utf-8",
+    )
+    assert http_layer_imports(clean) == []
