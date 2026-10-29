@@ -3772,3 +3772,11 @@ stories:
     size: L
     depends_on: [S47-39]
     notes: "Second pass on the 2026-10-28 screenshots; STATUS says what it proves"
+  - id: S47-41
+    title: "fix(web): a registered built-in agent keeps its playbook, and a state says how long items wait in it"
+    stream: S47
+    sprint: 15
+    priority: 2
+    size: S
+    depends_on: [S47-40]
+    notes: "The two gaps the S47-39/S47-40 STATUS rows named; STATUS says what it proves"

@@ -1,7 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { GroupMembersLine, openItemsByState, stepActivitySentence } from "@/components/workflows/step-activity";
+import {
+  GroupMembersLine,
+  openItemsByState,
+  stepActivitySentence,
+  waitInWords,
+  waitingSentence,
+} from "@/components/workflows/step-activity";
 import { actorLabel } from "@/components/workflows/panneaux";
 import { timingSentence } from "@/components/workflows/timing";
 import { api } from "@/lib/api";
@@ -62,6 +68,29 @@ describe("the workflow's activity", () => {
     );
     expect(stepActivitySentence(activity, "t-approve-spec")).toBe("No run in the last 30 days.");
     expect(stepActivitySentence(undefined, "t-implement")).toBeNull();
+  });
+});
+
+describe("how long work items wait for a step", () => {
+  const now = Date.parse("2026-10-29T12:00:00Z");
+  const activity: WorkflowActivity = {
+    workflow: "default-simple",
+    days: 30,
+    states: [{ state: "spec_review", open_items: 2, waiting_since: "2026-10-26T12:00:00Z" }],
+    steps: [],
+  };
+
+  it("counts the items in the state the step leaves and says the longest wait since it entered", () => {
+    expect(waitingSentence(activity, "spec_review", "Spec to approve", now)).toBe(
+      "2 work items wait in “Spec to approve”, the longest for 3 d.",
+    );
+    expect(waitingSentence(activity, "ready", "Ready", now)).toBeNull();
+  });
+
+  it("speaks in minutes, hours, then days", () => {
+    expect(waitInWords("2026-10-29T11:20:00Z", now)).toBe("40 min");
+    expect(waitInWords("2026-10-29T07:00:00Z", now)).toBe("5 h");
+    expect(waitInWords("2026-10-26T12:00:00Z", now)).toBe("3 d");
   });
 });
 

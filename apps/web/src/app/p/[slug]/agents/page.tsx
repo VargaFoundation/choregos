@@ -352,15 +352,30 @@ function Implicite({
   const deja = pris.some((a) => a.slug === slug);
   async function enregistrer() {
     setErreur(null);
+    // What the built-in agent ran, as instructions: without them the registered agent had nothing to edit.
+    const builtin = implicite.role
+      ? await api
+          .describeBuiltinAgent(projet, {
+            role: implicite.role,
+            model: implicite.model,
+            backend: implicite.backend,
+            max_turns: implicite.max_turns,
+            max_minutes: implicite.max_minutes,
+          })
+          .catch(() => null)
+      : null;
+    const instructions = builtin?.instructions_template ?? null;
     try {
       await api.createAgent(org, {
         slug,
         kind: "internal",
         display_name: implicite.acteur,
         description: `Registered from the ${implicite.workflow} workflow${implicite.role ? ` (role ${implicite.role})` : ""}`,
-        spec: versionDeLActeur(implicite),
+        spec: versionDeLActeur(implicite, instructions),
       });
-      setFait(`Registered: name it in ${implicite.workflow} — actors.${implicite.acteur}.agent: ${slug}`);
+      setFait(
+        `Registered${instructions ? ` with the ${implicite.role} playbook as its instructions` : " without instructions (the playbook could not be read)"}: name it in ${implicite.workflow} — actors.${implicite.acteur}.agent: ${slug}`,
+      );
       await client.invalidateQueries({ queryKey: ["agents", org] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "registration refused");

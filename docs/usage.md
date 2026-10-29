@@ -712,8 +712,10 @@ The map also says what the shape alone did not:
 - a platform box lists what it **waits for** ("waits for: ci green, review approved") rather than
   empty boxes, and every dashed arc carries its reason ("if rejected", "on failure");
 - each state's label starts with how many open work items wait there ("2 open · Ready"), and the
-  step card adds what the step's runs did over 30 days — count, successes, failures, cost, median
-  duration (`GET /projects/{id}/workflows/{name}/activity`);
+  step card says how long they have waited — since the longest-waiting one last entered that state
+  ("2 work items wait in “Spec to approve”, the longest for 3 d.") — and what the step's runs did over
+  30 days: count, successes, failures, cost, median duration
+  (`GET /projects/{id}/workflows/{name}/activity`, `states[].waiting_since`);
 - a person step lists who carries its group and strikes those whose role cannot answer in the
   project; a group nobody carries is said, since the step then waits for an organisation
   administrator (`GET /projects/{id}/groups/{group}/members`, needs `member:read`);
@@ -1329,7 +1331,10 @@ agent step that names no registry agent: the role's built-in prompt (with `<plac
 run fills in), the model each work item size resolves to (`profile:by_size`: S and M → `standard`,
 L → `strong`, XL → `strong` with 1.5× the turns, then the model behind the alias), the backend, the
 turn and minute limits, the memory, and the MCP servers with their tools
-(`GET /projects/{id}/builtin-agent`). The tab opens with **Agents this
+(`GET /projects/{id}/builtin-agent`). **Register** gives the new registry agent that prompt as its
+instructions (`instructions_template`: the role's prompt with its shared fragment written in, the
+output contract and invariants left to the frame every registry agent gets), so its page starts from
+what it ran. The tab opens with **Agents this
 project runs**: one row per `agent` actor of an active workflow, with the registry agent it names
 and the version a run loads ("v3 · pinned"), a name the registry lacks, or its built-in agent
 (`GET /projects/{id}/workflow-agents`).

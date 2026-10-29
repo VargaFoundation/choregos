@@ -2070,8 +2070,8 @@ export type GroupMembers = {
 export type StateActivity = {
   state: string;
   open_items: number;
-  /** When the oldest open item in this state was filed. */
-  oldest_created_at?: string | null;
+  /** When the longest-waiting open item entered this state: its last `state_changed` event into it, else its filing. */
+  waiting_since?: string | null;
 };
 
 export type StepActivity = {
@@ -2115,6 +2115,8 @@ export type BuiltinAgent = {
   playbook_origin?: string | null;
   instructions?: string | null;
   instructions_error?: string | null;
+  /** The prompt as a registry agent's instructions (rendered in the sandbox, framed after): what registering the agent gives it. */
+  instructions_template?: string | null;
   model: string;
   models?: Array<BuiltinModelChoice>;
   backend: string;

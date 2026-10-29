@@ -92,3 +92,21 @@ def test_a_preview_names_what_only_a_run_knows(role: str) -> None:
     assert "## Invariants" in preview
     assert "{{" not in preview and "{%" not in preview
     assert playbook_origin(role) == "package"
+
+
+@pytest.mark.parametrize("role", KNOWN_ROLES)
+def test_a_registered_built_in_agent_says_what_the_playbook_said(role: str) -> None:
+    """ "Register" on a built-in agent used to create an agent with empty instructions: the console
+    showed nothing to edit. Its instructions are now the role's prompt, which the sandbox renders and
+    the frame completes — and the result says what the playbook said, the frame's parts once."""
+    from choregos_core.instructions import rendre_les_instructions
+    from choregos_playbooks import INVARIANTS, frame, playbook_instructions
+
+    variables = {"ticket": {"key": "acme#1", "title": "Title", "body": "Body"}, "allowed_paths": ["src/**"]}
+    registered = frame(rendre_les_instructions(playbook_instructions(role), **variables))
+    played = render_playbook(role, **variables)
+    assert registered.count(INVARIANTS) == 1
+    assert "{% include" not in playbook_instructions(role)
+    for line in played.splitlines():
+        if line.strip() and line.strip() != "## Invariants":
+            assert line in registered, f"{role}: the registered agent lost {line!r}"
