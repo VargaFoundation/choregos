@@ -27,6 +27,9 @@ function Connexion() {
   // "enter" and the first sign-in lands on a project with a work item, not on an empty page.
   const next = params.get("next") || (devLogin && process.env.NEXT_PUBLIC_DEV_LOGIN_NEXT) || "/";
   const [email, setEmail] = useState(devLogin ? (process.env.NEXT_PUBLIC_DEV_LOGIN_EMAIL ?? "") : "");
+  // A sign-in link per organisation (`/login?org=acme`) goes to that organisation's own provider.
+  const org = params.get("org") ?? undefined;
+  const [workEmail, setWorkEmail] = useState("");
 
   return (
     <div className="mx-auto max-w-md space-y-8 py-12">
@@ -39,9 +42,32 @@ function Connexion() {
       {IS_MOCK ? (
         <p className="text-sm text-ink-muted">Demo mode: the session is simulated, nothing to do here.</p>
       ) : (
-        <a href={api.loginUrl(next)} className={buttonClasses("primary", "md")}>
-          Continue with the identity provider
-        </a>
+        <div className="space-y-4">
+          <form
+            className="space-y-2 text-sm"
+            onSubmit={(event) => {
+              event.preventDefault();
+              // The address's domain picks the organisation's own provider, if it has one (ADR 0108).
+              window.location.assign(api.loginUrl(next, undefined, false, { org, loginHint: workEmail.trim() }));
+            }}
+          >
+            <Input
+              aria-label="Work e-mail"
+              type="email"
+              autoComplete="username"
+              value={workEmail}
+              onChange={(event) => setWorkEmail(event.target.value)}
+              placeholder="you@company.com"
+              className="w-full"
+            />
+            <button type="submit" className={buttonClasses("primary", "md")}>
+              Continue
+            </button>
+          </form>
+          <a href={api.loginUrl(next, undefined, false, { org })} className={buttonClasses("secondary", "sm")}>
+            Continue with the identity provider
+          </a>
+        </div>
       )}
       {devLogin && !IS_MOCK && (
         <form
