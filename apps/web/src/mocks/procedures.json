@@ -537,13 +537,13 @@
   {
     "id": "agent.remote.a2a",
     "title": "Add a remote agent (A2A)",
-    "version": 1,
+    "version": 2,
     "audience": "org_admin",
     "applies_to": {
       "agent": "remote.a2a"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-10-29",
     "sections": [
       {
         "key": "before",
@@ -553,17 +553,17 @@
       {
         "key": "at",
         "title": "At the vendor",
-        "markdown": "1. In the vendor's administration, allow the agent to be called by other applications, if it asks for it.\n2. Note the card URL. If it uses OAuth and its card advertises **dynamic client registration**, you\n   register nothing. Otherwise register a client at the vendor with the redirect address below and keep\n   its client id and secret.\n3. Authentication is one of: OAuth 2.0 authorization code with PKCE; a bearer token; or none."
+        "markdown": "1. In the vendor's administration, allow the agent to be called by other applications, if it asks for it.\n2. Note the card URL. If it uses OAuth and its card advertises **dynamic client registration**, you\n   register nothing. Otherwise register a client at the vendor with the redirect address below and keep\n   its client id and secret.\n3. Authentication is one of: OAuth 2.0 authorization code with PKCE; a bearer token; an **API key** in\n   the request header the card names (ServiceNow's is `x-sn-apikey`); or none. A key the card wants in\n   a query string or a cookie is not supported: a query string ends up in every access log on the way."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The credential decides what the agent may do. Prefer a dedicated account holding only the access the\n  agent needs.\n- OAuth redirect (callback) address to register, when the vendor needs one: `https://choregos.example.com/api/v1/remote-credentials/oauth/callback`.\n- The refresh token is sealed in the platform's secret store and never shown again; reconnecting replaces\n  it."
+        "markdown": "- The credential decides what the agent may do. Prefer a dedicated account holding only the access the\n  agent needs.\n- OAuth redirect (callback) address to register, when the vendor needs one: `https://choregos.example.com/api/v1/remote-credentials/oauth/callback`.\n- The refresh token, a bearer token or an API key is sealed in the platform's secret store and never shown\n  again; reconnecting (or a new credential) replaces it. An API key's header is a name and is shown."
       },
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Administration, **Remote agents**, **Connect**: give the card URL, then sign in **as the account the\n   agent will act as** and accept. The credential shows `connected` and who it is authorised as.\n2. **Agents**, **New**, **Remote agent (A2A)**: paste the card URL, **Read the card**, pick the skill and\n   the credential, set the timeout and the **declared cost** (A2A reports none: it is declared, not\n   measured), then publish. Publication pins the card's digest.\n3. Allow the hosts: a project that uses it must allow the agent's host in `sandbox.network.allow_domains`,\n   and the runner pods, the API and the orchestrator must be allowed to reach the card, endpoint and\n   token hosts (see the network allowlist of your platform)."
+        "markdown": "1. Administration, **Remote agents**, **Connect**: give the card URL, then sign in **as the account the\n   agent will act as** and accept. The credential shows `connected` and who it is authorised as. For a\n   bearer token or an API key, **Add a credential** instead: type the token, or the key and the header\n   the card names, once.\n2. **Agents**, **New**, **Remote agent (A2A)**: paste the card URL, **Read the card**, pick the skill and\n   the credential, set the timeout and the **declared cost** (A2A reports none: it is declared, not\n   measured), then publish. Publication pins the card's digest.\n3. Allow the hosts: a project that uses it must allow the agent's host in `sandbox.network.allow_domains`,\n   and the runner pods, the API and the orchestrator must be allowed to reach the card, endpoint and\n   token hosts (see the network allowlist of your platform)."
       },
       {
         "key": "test",
@@ -573,7 +573,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `remote_card_changed`: the card changed since publication. Publish a new version to accept it.\n- `remote_auth_required`: the credential expired or was revoked. Reconnect it.\n- `remote_input_required`: the agent asked a question. It is shown; answering it from the console is not\n  supported yet.\n- `remote_timeout`: the remote task is cancelled; raise the timeout or narrow the task.\n- A cut at about 30 s on a synchronous call: Choregos streams, so a long task still works.\n- A refusal naming a host: it is not in the stage's allowed domains, or the platform's egress allowlist\n  does not open it."
+        "markdown": "- `remote_card_changed`: the card changed since publication. Publish a new version to accept it.\n- `remote_auth_required`: the credential expired or was revoked. Reconnect it.\n- Publication refused because the credential \"sends its key in\" another header than the card's: add a\n  credential with the header the card names (the card summary shows it).\n- `remote_input_required`: the agent asked a question. It is shown; answering it from the console is not\n  supported yet.\n- `remote_timeout`: the remote task is cancelled; raise the timeout or narrow the task.\n- A cut at about 30 s on a synchronous call: Choregos streams, so a long task still works.\n- A refusal naming a host: it is not in the stage's allowed domains, or the platform's egress allowlist\n  does not open it."
       }
     ],
     "values": {
