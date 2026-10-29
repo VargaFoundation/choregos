@@ -259,6 +259,46 @@ async def test_a_ceiling_tightened_after_creation_stops_the_next_sync(
     assert shown["status"] == "failed" and "denied:example.com" in shown["last_error"]
 
 
+async def test_a_private_git_source_obeys_a_tightened_ceiling_and_carries_the_user_agent(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A source read through a `documents/git` connector was opened before the ceiling was read: a
+    private repository kept syncing from a host the organisation had since denied (S47-49)."""
+    from choregos_adapters.documents.git import GitSource
+    from choregos_api.db.models import KnowledgeSource
+    from choregos_api.db.session import session_scope
+    from choregos_api.knowledge.sync import SourceUnavailableError, open_source, sync_source
+
+    monkeypatch.setenv("CONNECTOR_KB_GIT_TOKEN", "t" + "ok")
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    connector = await client.post(
+        "/api/v1/orgs/varga/connectors",
+        json={"name": "forge", "kind": "documents", "type": "git", "config": {"host": "github.com"},
+              "secret_refs": {"token": "env:CONNECTOR_KB_GIT_TOKEN"}},
+    )  # fmt: skip
+    assert connector.status_code == 201, connector.text
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "brand", "connector": "forge",
+              "config": {"url": "https://github.com/acme/private.git"}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    async with session_scope() as session:
+        row = await session.get(KnowledgeSource, created.json()["id"])
+        assert row is not None
+        opened = await open_source(session, row)
+    assert isinstance(opened, GitSource) and opened.user_agent, (
+        "the organisation's User-Agent, as a public one"
+    )
+    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    await _ceiling(client, {"deny_domains": ["github.com"]})
+    with pytest.raises(SourceUnavailableError, match=r"github\.com"):
+        await sync_source("varga", created.json()["id"])
+    shown = (await client.get(f"{BASE}/framework")).json()["sources"][0]
+    assert shown["status"] == "failed" and "denied:github.com" in shown["last_error"]
+
+
 # ───────────────────────────── git skill sources ─────────────────────────────
 
 
