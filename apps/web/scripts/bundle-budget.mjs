@@ -21,7 +21,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // the map's timing, group and activity lines and the project's agents table bring 1956.
 // 2026-10-29 (S49: the workflow catalogue, the map's actors, workflow and transition-field panels): 1975 ->
 // 2025 kB. Main with S47-39/40 measures 1956 kB; with S49 merged on it, 1998 kB.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2025);
+// 2026-10-29 (S47-17): 2025 -> 2050 kB. The cross-backend review card and the memory re-import action add
+// about 26 kB (1956 -> 1982 kB on main at 87ea1831), which would leave the S49 build under 1 kB of headroom.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2050);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {
