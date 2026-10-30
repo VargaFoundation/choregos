@@ -7,14 +7,13 @@ Before, nothing capped the agent stages a work item could run, and `attempts.def
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 from .test_budget_reservation import _plan
 from .test_interpreter import _runs, _wait_state, _wait_until, scripted, start
 
@@ -94,7 +93,7 @@ async def test_a_capped_ticket_goes_to_a_person_instead_of_retrying(
         await handle.result()
         history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-stage-cap-S27-08.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

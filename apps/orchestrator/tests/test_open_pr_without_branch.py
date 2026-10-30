@@ -13,15 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 
-from .conftest import Fixture, refine_result, stage_result
+from .conftest import Fixture, recording_history, refine_result, stage_result
+from .kits.escalation import requests_of
 from .test_interpreter import _wait_state, _wait_until, scripted, start
-from .test_reprise_apres_escalade import _demandes
 from .test_restarted_interpreter_resumes import _state_changes
 
 pytestmark = pytest.mark.asyncio
@@ -81,7 +80,7 @@ async def test_a_no_change_work_item_escalates_without_asking_for_a_pull_request
         assert description.status is not None and description.status.name == "RUNNING"
 
         # The reason is where a person looks: the request, and the state change.
-        asked = [d for d in await _demandes(setup) if (d.payload or {}).get("reason") == "no_branch"]
+        asked = [d for d in await requests_of(setup) if (d.payload or {}).get("reason") == "no_branch"]
         assert asked and NO_BRANCH in asked[0].payload["question"], asked
         arrival = [e.payload for e in await _state_changes(setup) if e.payload.get("to") == "needs_human"][-1]
         assert NO_BRANCH in arrival["reason"], arrival
@@ -92,7 +91,7 @@ async def test_a_no_change_work_item_escalates_without_asking_for_a_pull_request
         history = await handle.fetch_history()
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-open-pr-without-branch-S22-46.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

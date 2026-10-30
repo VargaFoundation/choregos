@@ -1,4 +1,4 @@
-"""Fixtures de l'orchestrateur : base éphémère, projet de démonstration, worker Temporal."""
+"""Orchestrator fixtures: an ephemeral database, a demo project, a Temporal worker."""
 
 from __future__ import annotations
 
@@ -15,9 +15,18 @@ os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 
 
+def recording_history() -> str | None:
+    """The value of the history-recording switch (`CHOREGOS_RECORD_HISTORY`), or None when off.
+
+    The English variable is read first; the former French name stays a working alias."""
+    return os.environ.get("CHOREGOS_RECORD_HISTORY") or os.environ.get(
+        "CHOREGOS_ARCHIVER_HISTORIQUE"  # lang: fr-ok alias:internal
+    )
+
+
 @dataclass
 class Fixture:
-    """Le décor d'un test : un projet, un ticket, les fakes partagés."""
+    """A test's scene: a project, a work item, the shared fakes."""
 
     project_id: str
     project_slug: str
@@ -103,8 +112,8 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
         item = WorkItem(
             project_id=project.id,
             tracker_key="varga/billing-api#123",
-            title="Les avoirs ne sont pas déduits du total",
-            body_snapshot="Quand une commande a un avoir, le total affiché ignore la remise.",
+            title="Les avoirs ne sont pas déduits du total",  # lang: fr-ok (asserted verbatim)
+            body_snapshot="Quand une commande a un avoir, le total affiché ignore la remise.",  # lang: fr-ok
             state="inbox",
             size="M",
             risk="low",
@@ -120,7 +129,7 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
             adapters=adapters,
         )
 
-    # le tracker fake connaît le même ticket, pour que le miroir d'état fonctionne
+    # the fake tracker knows the same work item, so the state mirror works
     adapters.tracker.items[fixture.tracker_key] = _fake_item(fixture.tracker_key, item.title)
     adapters.scm.set_diff(
         "varga/billing-api",
@@ -144,7 +153,7 @@ def _fake_item(key: str, title: str) -> Any:
 
 @pytest.fixture
 async def temporal_env() -> AsyncIterator[Any]:
-    """Serveur Temporal de test avec saut dans le temps (les timers sont instantanés)."""
+    """A test Temporal server with time skipping (timers are instant)."""
     from temporalio.testing import WorkflowEnvironment
 
     env = await WorkflowEnvironment.start_time_skipping()
@@ -156,13 +165,13 @@ async def temporal_env() -> AsyncIterator[Any]:
 
 @pytest.fixture
 def worker_factory(temporal_env: Any) -> Any:
-    """Les workers du test, **un par file**, comme le chart en déploie un par file.
+    """The test's workers, **one per queue**, as the chart deploys one per queue.
 
-    Un worker unique portant toutes les activités ne prouve rien de la répartition : il répond
-    quelle que soit la file demandée. Or les workflows planifient chaque activité sur sa file
-    déclarée (`workflows.planification`), et c'est exactement ce qui doit être éprouvé. Le
-    2026-09-27, sur le locataire dev, `start_run` tournait sur `orchestrator` alors que la
-    politique réseau n'ouvrait l'API Kubernetes qu'à `executor` : le Job n'était jamais créé.
+    A single worker carrying every activity proves nothing about the split: it answers whatever
+    queue is asked. The workflows schedule each activity on its declared queue
+    (`workflows.planification`), and that is exactly what must be exercised. On 2026-09-27, on the
+    dev tenant, `start_run` ran on `orchestrator` while the network policy opened the Kubernetes API
+    to `executor` only: the Job was never created.
     """
     from choregos_orchestrator.activities import ALL_ACTIVITIES
     from choregos_orchestrator.testing import workers_repartis
@@ -180,8 +189,8 @@ def worker_factory(temporal_env: Any) -> Any:
     return factory
 
 
-def stage_result(summary: str = "fait", **kwargs: Any) -> Any:
-    """Résultat d'étape crédible : preuves complètes, périmètre respecté."""
+def stage_result(summary: str = "done", **kwargs: Any) -> Any:
+    """A credible stage result: complete evidence, scope respected."""
     from choregos_contracts import Evidence, StageResult, StageStatus
 
     payload: dict[str, Any] = {

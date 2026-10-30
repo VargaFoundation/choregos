@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -13,7 +12,7 @@ from choregos_orchestrator.activities import schedules
 from choregos_orchestrator.activities import tracker as tracker_activities
 from choregos_orchestrator.train_client import clear_fake_signals, fake_starts
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 
 pytestmark = pytest.mark.asyncio
 
@@ -207,10 +206,10 @@ async def test_each_pass_fires_the_schedules_before_it_reconciles(temporal_env: 
         await handle.result()
         history = await handle.fetch_history()
 
-    # Archived for `tests/replay` (`CHOREGOS_ARCHIVER_HISTORIQUE=1`): a loop recorded with the
+    # Archived for `tests/replay` (`CHOREGOS_RECORD_HISTORY=1`): a loop recorded with the
     # schedules must keep replaying, like the ones recorded before them (`workflow.patched`).
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         histories = Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
         target = histories / "reconcile-schedules-S38-11.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")

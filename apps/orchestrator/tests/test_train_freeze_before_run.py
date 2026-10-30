@@ -9,12 +9,13 @@ deterministic: the freeze IS the start signal, so it is always handled before th
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from datetime import timedelta
 from typing import Any
 
 import pytest
+
+from .conftest import recording_history
 
 pytestmark = pytest.mark.asyncio
 
@@ -84,7 +85,7 @@ async def test_a_freeze_delivered_with_the_start_blocks_the_departure(
     from temporalio.worker import Replayer
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "train-freeze-before-run-S22-36b.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

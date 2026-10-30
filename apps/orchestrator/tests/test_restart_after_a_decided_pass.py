@@ -16,7 +16,8 @@ from typing import Any
 import pytest
 
 from .conftest import Fixture, stage_result
-from .test_gabarit_livraison_logicielle import DEPOT, _demarrer, _jusqu_a, _projet_dev, _ticket
+from .kits.software_delivery import REPOSITORY, create_dev_project, create_ticket, start_interpreter
+from .kits.train_and_work_item import wait_until_state
 
 pytestmark = pytest.mark.asyncio
 
@@ -81,9 +82,9 @@ async def test_a_restart_after_a_review_sent_the_work_item_back_plays_a_new_atte
 
     monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
     reset_settings_cache()
-    projet_id = await _projet_dev(setup)
-    item_id, cle = await _ticket(setup, projet_id, 8, "dev-simple")
-    setup.adapters.scm.set_diff(DEPOT, "main", "choregos/8", [("src/billing/total.py", 12, 3)])
+    projet_id = await create_dev_project(setup)
+    item_id, cle = await create_ticket(setup, projet_id, 8, "dev-simple")
+    setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/8", [("src/billing/total.py", 12, 3)])
     verdicts = iter(["request_changes", "approve"])
     played: list[str] = []
 
@@ -116,7 +117,7 @@ async def test_a_restart_after_a_review_sent_the_work_item_back_plays_a_new_atte
     executor.start = start_and_hold_the_responder
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            first = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
+            first = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
 
             async def responder_running() -> bool:
                 return any(
@@ -126,7 +127,7 @@ async def test_a_restart_after_a_review_sent_the_work_item_back_plays_a_new_atte
             await _until(responder_running, "the responder runs")
             # Paused now, the interpreter stops right after applying the responder's decision.
             await first.signal("control", {"action": "pause"})
-            await _jusqu_a(first, "status", lambda s: s["paused"])
+            await wait_until_state(first, "status", lambda s: s["paused"])
             responder = next(r for r, _, _ in await _runs(item_id) if r.endswith("-t-address-review-1"))
             executor.statuses[responder] = ExecStatus(
                 state="succeeded", exit_code=0, result_url=f"fake://runs/{responder}/result.json"
@@ -149,8 +150,10 @@ async def test_a_restart_after_a_review_sent_the_work_item_back_plays_a_new_atte
             assert await _moves_to(item_id, "addressing_review") == 1
             played.clear()
 
-            handle = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
-            settled = await _jusqu_a(handle, "status", lambda s: s["state"] in ("in_pr", "needs_human"))
+            handle = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            settled = await wait_until_state(
+                handle, "status", lambda s: s["state"] in ("in_pr", "needs_human")
+            )
             await handle.terminate(reason="the test ends at the pull request")
 
     assert settled["state"] == "in_pr", settled

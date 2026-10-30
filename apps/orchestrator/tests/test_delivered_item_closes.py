@@ -13,7 +13,12 @@ from typing import Any
 import pytest
 
 from .conftest import Fixture
-from .test_train_et_ticket import _jusqu_a, _jusqu_au_train, _politique_de_prod, _train
+from .kits.train_and_work_item import (
+    run_work_item_to_train,
+    set_prod_approval_policy,
+    start_prod_train,
+    wait_until_state,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -21,15 +26,15 @@ MARKER = "<!-- choregos:delivered -->"
 
 
 async def _deliver(setup: Fixture, temporal_env: Any, worker_factory: Any) -> dict[str, Any]:
-    await _politique_de_prod(setup, approbation=False)
+    await set_prod_approval_policy(setup, approval=False)
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket, boarding = await _jusqu_au_train(setup, temporal_env)
-            train = await _train(temporal_env, setup)
+            ticket, boarding = await run_work_item_to_train(setup, temporal_env)
+            train = await start_prod_train(temporal_env, setup)
             await train.signal("merged", boarding)
             await train.signal("depart_now", {"by": "augustin"})
-            await _jusqu_a(train, "status_query", lambda s: s["status"] == "awaiting_approval")
+            await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("approve", {"by": "marie"})
             result: dict[str, Any] = await asyncio.wait_for(ticket.result(), timeout=60)
             await train.signal("abort", {"by": "test"})
