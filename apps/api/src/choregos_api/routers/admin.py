@@ -11,6 +11,7 @@ from choregos_adapters.registry import allowed_executor_kinds
 from choregos_contracts import Role
 from choregos_core import backend_enabled, utcnow
 from choregos_core.images import is_digest_pinned
+from choregos_core.models import KNOWN_BACKEND_CAPABILITIES
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
 
@@ -46,14 +47,7 @@ from ..schemas.network import NetworkActivity, NetworkActivityRow
 
 router = APIRouter(tags=["admin"])
 
-KNOWN_BACKENDS = [
-    ("claude-code", ["acp", "mcp", "agents_md", "structured_output"]),
-    ("codex", ["acp", "mcp", "agents_md"]),
-    ("gemini-cli", ["acp", "mcp"]),
-    ("goose", ["acp", "mcp"]),
-    ("opencode", ["acp", "mcp"]),
-    ("copilot-cli", ["acp"]),
-]
+KNOWN_BACKENDS = [(name, list(capabilities)) for name, capabilities in KNOWN_BACKEND_CAPABILITIES]
 
 
 @router.post("/platform/secrets/rewrap", response_model=SecretsRewrap, operation_id="rewrapSecrets")
