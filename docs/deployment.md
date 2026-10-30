@@ -905,8 +905,27 @@ provider before switching, and keep the old one until the old host only redirect
 ## Identity: what the OIDC provider must give us
 
 Any OIDC issuer works: the API reads `<issuer>/.well-known/openid-configuration` and uses
-PKCE (S256) with a signed, single-use `state`. Register a confidential client with the
+PKCE (S256) with a signed, single-use `state` and a `nonce`. Register a confidential client with the
 redirect URI `<api_url>/api/v1/auth/callback` and the scopes `openid profile email groups`.
+
+Discovery is **required**, and the document's `issuer` must equal `global.oidc.issuer`. When it cannot be
+read, or names another issuer, the sign-in answers 503 and tries again on the next attempt (ADR 0100);
+there is no guess at a Keycloak layout any more. A provider that publishes no discovery document is
+configured with its three endpoints instead: `choregos-api.oidcEndpoints.authorization`, `.token` and
+`.userinfo` (all three or none; the render fails otherwise). A per-organisation provider (ADR 0108) follows
+the same rules with its own `issuer` and endpoints.
+
+The userinfo answer must give `sub` and `email`. A sign-in is bound to `sub`: a returning subject keeps its
+account even when its e-mail changed, and an existing account is linked by e-mail only while it is not bound
+to another subject. A provider that says `email_verified: false` never links an existing account by e-mail
+(`choregos-api.oidcRequireEmailVerified`, default `true`; a provider that omits the claim, such as Entra ID,
+is accepted); it also refuses a new account for such an address and keeps a returning account's stored
+address. An account bound to another subject is refused, except that a per-organisation provider re-links
+an address of its own domains (audited `user.relink`), so an organisation can move to its own provider.
+When you **migrate the instance's identity provider** (every subject changes), set
+`choregos-api.oidcRelinkVerifiedEmail: true` so accounts whose address the new provider asserts as
+`email_verified: true` are re-linked, then set it back to `false`. When the token endpoint returns an ID token, its `iss`, `aud` and `nonce` must match the
+sign-in and its `sub` must equal userinfo's; otherwise the sign-in is refused (401).
 
 Roles come from **groups**, and a group names its organisation:
 

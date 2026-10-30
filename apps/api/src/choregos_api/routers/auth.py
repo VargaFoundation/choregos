@@ -41,7 +41,7 @@ from ..db.models import ApiToken, Membership, Organization, Project, User
 from ..db.org_aliases import current_slugs, organisation_by_slug_or_alias
 from ..deps import Config, Db, DbPlateforme, Me, resolve_project
 from ..edition import mappeur_de_groupes
-from ..errors import ApiError, not_found, unauthorized, unprocessable, upstream
+from ..errors import ApiError, not_found, unauthorized, unprocessable
 from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
@@ -94,47 +94,64 @@ _endpoints: dict[str, dict[str, str]] = {}
 
 
 async def oidc_endpoints(settings: Settings) -> dict[str, str]:
-    """Les trois URL de l'IdP, lues une fois sur son document de découverte.
+    """The instance provider's three endpoints: the three it is configured with, else its discovery.
 
-    Si le document est injoignable, on retombe sur la disposition de Keycloak en le
-    disant : un IdP qui ne publie pas sa découverte est rare, un Keycloak dont le réseau
-    tousse au démarrage l'est moins.
+    Discovery is mandatory (ADR 0100): there is no guess at a provider's layout.
     """
-    return await _discover(settings.oidc_issuer, keycloak_fallback=True)
+    if settings.oidc_authorization_endpoint:
+        return {
+            "authorize": settings.oidc_authorization_endpoint,
+            "token": settings.oidc_token_endpoint,
+            "userinfo": settings.oidc_userinfo_endpoint,
+        }
+    return await _discover(settings.oidc_issuer)
 
 
-async def _discover(issuer: str, *, keycloak_fallback: bool) -> dict[str, str]:
-    """The discovery itself. Only the instance's provider falls back on the Keycloak layout: a
-    tenant's provider whose document cannot be read fails the sign-in (502), it is never guessed.
+async def _discover(issuer: str) -> dict[str, str]:
+    """Reads the provider's discovery document and checks it names this issuer.
+
+    A failure answers 503 and is never cached, so the next sign-in tries again. A success is
+    cached for the life of the process. Used for the instance's provider and for a tenant's.
     """
     issuer = issuer.rstrip("/")
     if issuer in _endpoints:
         return _endpoints[issuer]
     import httpx
 
-    keycloak = {
-        "authorize": f"{issuer}/protocol/openid-connect/auth",
-        "token": f"{issuer}/protocol/openid-connect/token",
-        "userinfo": f"{issuer}/protocol/openid-connect/userinfo",
-    }
+    url = f"{issuer}/.well-known/openid-configuration"
+    reason = ""
+    found: dict[str, str] = {}
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            document = (await client.get(f"{issuer}/.well-known/openid-configuration")).json()
-        found = {
-            "authorize": str(document["authorization_endpoint"]),
-            "token": str(document["token_endpoint"]),
-            "userinfo": str(document.get("userinfo_endpoint") or keycloak["userinfo"]),
-        }
-    except Exception as exc:
-        if not keycloak_fallback:
-            logger.warning("tenant OIDC discovery failed", issuer=issuer, error=str(exc))
-            raise upstream(
-                "oidc", f"the identity provider {issuer} publishes no readable discovery document"
-            ) from exc
-        logger.warning(
-            "découverte OIDC impossible, disposition Keycloak supposée", issuer=issuer, error=str(exc)
+            response = await client.get(url)
+        if response.status_code != status.HTTP_200_OK:
+            reason = f"HTTP {response.status_code}"
+        else:
+            document = response.json()
+            if not isinstance(document, dict):
+                reason = "the document is not a JSON object"
+            elif str(document.get("issuer", "")).rstrip("/") != issuer:
+                reason = f"the document names issuer {document.get('issuer')!r}, not {issuer!r}"
+            else:
+                found = {
+                    "authorize": str(document.get("authorization_endpoint") or ""),
+                    "token": str(document.get("token_endpoint") or ""),
+                    "userinfo": str(document.get("userinfo_endpoint") or ""),
+                }
+                missing = [name for name, value in found.items() if not value]
+                if missing:
+                    reason = f"the document has no {', '.join(missing)} endpoint"
+    except Exception as exc:  # whatever breaks the request is an unavailable provider
+        reason = f"{type(exc).__name__}: {exc}"
+    if reason:
+        logger.warning("OIDC discovery failed", issuer=issuer, reason=reason)
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Identity provider unavailable",
+            f"OIDC discovery at {url} failed: {reason}; set CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT, "
+            "CHOREGOS_OIDC_TOKEN_ENDPOINT and CHOREGOS_OIDC_USERINFO_ENDPOINT if the provider "
+            "publishes none",
         )
-        found = keycloak
     _endpoints[issuer] = found
     return found
 
@@ -147,7 +164,7 @@ async def _provider_endpoints(provider: OidcProvider) -> dict[str, str]:
             "token": provider.token_endpoint,
             "userinfo": provider.userinfo_endpoint,
         }
-    return await _discover(provider.issuer, keycloak_fallback=False)
+    return await _discover(provider.issuer)
 
 
 def oublier_la_decouverte() -> None:
@@ -176,11 +193,11 @@ def _pkce() -> tuple[str, str]:
 
 def _handshake(
     settings: Settings, redirect: str, *, reauth: bool = False, org: str | None = None
-) -> tuple[str, str, str]:
-    """Rend (state signé, cookie signé, code_challenge). Le nonce lie les deux.
+) -> tuple[str, str, str, str]:
+    """Return (signed state, signed cookie, code_challenge, nonce); the nonce binds the two, sent to the IdP.
 
-    `reauth` voyage dans le cookie signé : le retour de l'IdP doit savoir qu'une authentification
-    FRAÎCHE a été demandée, pour l'exiger (voir `callback`).
+    `reauth` travels in the signed cookie: the IdP's answer must know that a FRESH authentication
+    was asked for, so that it is required (see `callback`).
     """
     nonce = secrets.token_urlsafe(24)
     verifier, challenge = _pkce()
@@ -194,24 +211,46 @@ def _handshake(
     if reauth:
         poignee["a"] = 1
     cookie = sign_session(poignee, settings, purpose="oidc-handshake")
-    return state, cookie, challenge
+    return state, cookie, challenge, nonce
 
 
-def _auth_time(id_token: Any) -> int | None:
-    """La revendication `auth_time` de l'ID token : QUAND l'utilisateur s'est authentifié chez l'IdP.
+def _id_token_claims(id_token: Any) -> dict[str, Any] | None:
+    """The claims of the ID token, or None when there is no readable one.
 
-    Signature non vérifiée, et c'est permis : le jeton vient directement du point `token` de l'IdP,
-    en TLS, dans l'échange du code (OpenID Connect Core 1.0, §3.1.3.7). Rien d'autre n'en est lu.
+    Signature not verified, and that is allowed: the token comes straight from the provider's token
+    endpoint, over TLS, in the code exchange (OpenID Connect Core 1.0, §3.1.3.7; ADR 0100). The
+    callback checks `iss`, `aud`, `sub` and `nonce`.
     """
     if not isinstance(id_token, str) or id_token.count(".") != 2:
         return None
     try:
         charge = id_token.split(".")[1]
-        revendications = json.loads(base64.urlsafe_b64decode(charge + "=" * (-len(charge) % 4)))
+        claims = json.loads(base64.urlsafe_b64decode(charge + "=" * (-len(charge) % 4)))
     except (ValueError, UnicodeDecodeError):
         return None
-    valeur = revendications.get("auth_time") if isinstance(revendications, dict) else None
+    return claims if isinstance(claims, dict) else None
+
+
+def _auth_time(id_token: Any) -> int | None:
+    """The ID token's `auth_time` claim: WHEN the user authenticated at the IdP."""
+    claims = _id_token_claims(id_token)
+    valeur = claims.get("auth_time") if claims is not None else None
     return int(valeur) if isinstance(valeur, int | float) and not isinstance(valeur, bool) else None
+
+
+def _check_id_token_claims(claims: dict[str, Any], *, issuer: str, client_id: str, nonce: object) -> None:
+    """`iss`, `aud` and `nonce` of the ID token are the ones this sign-in expects (ADR 0100)."""
+    if str(claims.get("iss", "")).rstrip("/") != issuer.rstrip("/"):
+        raise unauthorized("the ID token was issued by another identity provider")
+    audience = claims.get("aud")
+    if isinstance(audience, str):
+        matches = audience == client_id
+    else:
+        matches = isinstance(audience, list) and client_id in audience
+    if not matches:
+        raise unauthorized("the ID token was not issued for this client")
+    if "nonce" in claims and claims["nonce"] != nonce:
+        raise unauthorized("the ID token nonce does not match this sign-in")
 
 
 def _poser_cookie_oidc(response: Response, cookie: str, settings: Settings) -> None:
@@ -260,7 +299,7 @@ async def login(
             url=f"{tenant.start_path}{joiner}{urlencode(forwarded)}",
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         )
-    state, cookie, challenge = _handshake(
+    state, cookie, challenge, nonce = _handshake(
         settings, target, reauth=reauth, org=tenant.org if tenant is not None else None
     )
     if as_user and settings.dev_login_enabled:
@@ -282,6 +321,7 @@ async def login(
         "scope": scopes,
         "redirect_uri": f"{settings.api_url}/api/v1/auth/callback",
         "state": state,
+        "nonce": nonce,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
@@ -306,6 +346,81 @@ async def _ensure_user(session: Any, email: str, display_name: str, sub: str | N
     user.last_login_at = utcnow()
     if sub and not user.oidc_sub:
         user.oidc_sub = sub
+    return user
+
+
+async def _ensure_oidc_user(
+    session: Any,
+    info: dict[str, Any],
+    settings: Settings,
+    *,
+    stored_sub: str | None = None,
+    tenant_org_id: str | None = None,
+) -> User:
+    """The console user for a provider's identity: bound to its `sub`, never to an e-mail alone.
+
+    `stored_sub` is the subject as stored (a tenant's is namespaced); it defaults to `info["sub"]`.
+    `tenant_org_id` is set by a tenant's provider, whose caller already proved the address domain is
+    the tenant's (ADR 0108).
+
+    - A returning subject keeps its account. Its e-mail follows the provider, unless the provider
+      calls the new address unverified.
+    - An account with that e-mail and no subject (or a development one) is linked, unless the
+      provider calls the address unverified.
+    - An account bound to ANOTHER subject is refused, except for a re-link: by a tenant's provider
+      (the domain is the tenant's), or on the instance when `oidc_relink_verified_email` is on and
+      the provider asserts `email_verified: true` (an identity provider migration). Audited.
+    - A new account is not created for an address the provider calls unverified.
+    (ADR 0100)
+    """
+    sub = stored_sub or str(info["sub"])
+    email = str(info["email"])
+    unverified = settings.oidc_require_email_verified and info.get("email_verified") is False
+    by_sub: User | None = (
+        await session.execute(select(User).where(User.oidc_sub == sub))
+    ).scalar_one_or_none()
+    if by_sub is not None:
+        by_sub.last_login_at = utcnow()
+        if by_sub.email != email and not unverified:
+            taken = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
+            if taken is None:
+                by_sub.email = email
+        return by_sub
+    by_email: User | None = (
+        await session.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
+    if by_email is not None:
+        if unverified:
+            raise unauthorized("the provider says this e-mail is not verified")
+        bound_elsewhere = bool(by_email.oidc_sub) and not str(by_email.oidc_sub).startswith("dev|")
+        if bound_elsewhere:
+            relink = tenant_org_id is not None or (
+                settings.oidc_relink_verified_email and info.get("email_verified") is True
+            )
+            if not relink:
+                raise unauthorized("this e-mail belongs to another identity at the provider")
+            await record(
+                session,
+                None,
+                "user.relink",
+                org_id=tenant_org_id,
+                target_type="user",
+                target_id=by_email.id,
+                previous_sub=by_email.oidc_sub,
+            )
+        by_email.oidc_sub = sub
+        by_email.last_login_at = utcnow()
+        return by_email
+    if unverified:
+        raise unauthorized("the provider says this e-mail is not verified")
+    user = User(
+        email=email,
+        display_name=str(info.get("name") or "") or email.split("@", maxsplit=1)[0],
+        oidc_sub=sub,
+        last_login_at=utcnow(),
+    )
+    session.add(user)
+    await session.flush()
     return user
 
 
@@ -396,7 +511,7 @@ async def _same_organisation(session: Any, first: str, second: str) -> bool:
     return a is not None and b is not None and a.id == b.id
 
 
-async def _tenant_user(
+async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-only
     session: Any,
     tenant_org: str,
     *,
@@ -405,8 +520,13 @@ async def _tenant_user(
     sub: str | None,
     groups: list[str],
     settings: Settings,
+    oidc: bool = False,
+    email_verified: bool | None = None,
 ) -> User:
     """A sign-in vouched for by a tenant's own provider, confined to that tenant (ADR 0108).
+
+    `oidc` is set by the OIDC callback only: the identity is then bound to the provider's subject
+    (ADR 0100). An extension's protocol (`terminer_la_connexion`) keeps its identity handling.
 
     The address must belong to a domain the resolver gives to this same tenant, or any tenant's
     provider could sign in a member of another one. The subject is namespaced by the tenant: two
@@ -423,7 +543,12 @@ async def _tenant_user(
             f"the address domain {domain!r} does not belong to organisation {org.slug!r}: "
             "its provider cannot sign it in"
         )
-    user = await _ensure_user(session, email, name, f"tenant:{org.id}:{sub}" if sub else None)
+    stored = f"tenant:{org.id}:{sub}" if sub else None
+    if oidc and sub:
+        info = {"sub": sub, "email": email, "name": name, "email_verified": email_verified}
+        user = await _ensure_oidc_user(session, info, settings, stored_sub=stored, tenant_org_id=org.id)
+    else:
+        user = await _ensure_user(session, email, name, stored)
     await _map_groups_to_roles(session, user, groups, settings, only_org=org)
     return user
 
@@ -479,9 +604,11 @@ async def callback(
             provider = tenant.oidc
             endpoints = await _provider_endpoints(provider)
             client_id, client_secret = provider.client_id, provider.client_secret
+            issuer = provider.issuer
         else:
             endpoints = await oidc_endpoints(settings)
             client_id, client_secret = settings.oidc_client_id, settings.oidc_client_secret
+            issuer = settings.oidc_issuer
         async with httpx.AsyncClient(timeout=10) as client:
             token_response = await client.post(
                 endpoints["token"],
@@ -498,6 +625,9 @@ async def callback(
                 raise unauthorized(f"OIDC exchange refused: {token_response.text[:200]}")
             jetons = token_response.json()
             access_token = jetons["access_token"]
+            claims = _id_token_claims(jetons.get("id_token"))
+            if claims is not None:
+                _check_id_token_claims(claims, issuer=issuer, client_id=client_id, nonce=poignee.get("n"))
             auth_time = _auth_time(jetons.get("id_token"))
             # `reauth=1` a demandé `prompt=login` et `max_age=0` : l'IdP DOIT alors rendre un
             # `auth_time` (OIDC Core §3.1.2.1). Sans lui, ou s'il date d'avant la poignée de main,
@@ -511,6 +641,11 @@ async def callback(
             info = (
                 await client.get(endpoints["userinfo"], headers={"Authorization": f"Bearer {access_token}"})
             ).json()
+        sub = info.get("sub")
+        if not isinstance(sub, str) or not sub:
+            raise unauthorized("the identity provider did not provide a subject (`sub`)")
+        if claims is not None and claims.get("sub") != sub:
+            raise unauthorized("the identity provider names two different subjects (ID token and userinfo)")
         if not info.get("email"):
             raise unauthorized("the IdP did not provide an e-mail: the `email` scope is missing")
         if provider is not None:
@@ -524,9 +659,13 @@ async def callback(
                 sub=info.get("sub"),
                 groups=provider.mapped_groups(info.get(provider.groups_claim)),
                 settings=settings,
+                oidc=True,
+                email_verified=info.get("email_verified"),
             )
         else:
-            user = await _ensure_user(session, info["email"], info.get("name", ""), info.get("sub"))
+            if sub.startswith(("dev|", "tenant:")):
+                raise unauthorized("the identity provider gave a subject reserved for another sign-in")
+            user = await _ensure_oidc_user(session, info, settings)
             await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 
     response = await ouvrir_la_session(session, user, target, settings, canal="oidc", auth_time=auth_time)
