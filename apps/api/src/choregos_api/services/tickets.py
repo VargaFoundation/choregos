@@ -11,6 +11,7 @@ import structlog
 from choregos_adapters.errors import AdapterError
 from choregos_contracts import EventType
 from choregos_core.domain import NewItem
+from choregos_core.restricted import RESTRICTED_TITLE, WITHHELD, mark
 from choregos_core.secrets import SecretIntrouvable
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -366,7 +367,7 @@ def ranger_les_sorties(item: WorkItem, outputs: Any, declarees: list[str] | None
     return documents
 
 
-async def creer_un_ticket(
+async def creer_un_ticket(  # noqa: PLR0913 - one creation path, the birth facts keyword-only
     session: AsyncSession,
     principal: Principal,
     project: Project,
@@ -376,6 +377,7 @@ async def creer_un_ticket(
     cle: str | None = None,
     initiated_by: str | None = None,
     item_id: str | None = None,
+    restricted_knowledge: list[str] | None = None,
 ) -> WorkItem:
     """Files a work item in Choregos, whatever the project's tracker (ADR 0059).
 
@@ -389,6 +391,9 @@ async def creer_un_ticket(
 
     `initiated_by` names who started it when the principal does not (a schedule, a parent work
     item); otherwise it is the principal through `canal` (ADR 0077 §2).
+
+    `restricted_knowledge` marks it at birth (ADR 0114): a fan-out child of a marked parent. An
+    external tracker then receives a neutral title and no body; the work item keeps its own.
     """
     row, adapter = await tracker_du_projet(session, project)
     url: str | None = None
@@ -412,7 +417,12 @@ async def creer_un_ticket(
         )
         assert row is not None
         # A schedule gives its own key, one per window (S38-11); an external tracker mints its own.
-        key, url = await _classer_dans_le_tracker(row.type, adapter, principal, demande)
+        outward = (
+            demande.model_copy(update={"title": RESTRICTED_TITLE, "body": WITHHELD})
+            if restricted_knowledge
+            else demande
+        )
+        key, url = await _classer_dans_le_tracker(row.type, adapter, principal, outward)
     item = await nouveau_ticket(
         session,
         project,
@@ -432,6 +442,7 @@ async def creer_un_ticket(
             item_id=item_id,
         ),
     )
+    mark(item, restricted_knowledge or [])
     await persist_event(
         session,
         EventType.WORKITEM_CREATED,

@@ -9,6 +9,7 @@ from typing import Any
 from choregos_api.db.models import Finding, Release, Run, WorkItem
 from choregos_core import Fact, Message, Provenance, memory_namespace, utcnow
 from choregos_core.memory_scope import parse_namespace
+from choregos_core.restricted import is_marked
 from sqlalchemy import select
 from temporalio import activity
 
@@ -72,6 +73,15 @@ async def _runs_by_id(session: Any, ids: list[str]) -> dict[str, Any]:
     return {run.id: run for run in lignes.scalars()}
 
 
+async def _marked_items(session: Any, ids: set[str | None]) -> set[str]:
+    """Which of these work items are marked by a restricted knowledge base (ADR 0114)."""
+    wanted = [i for i in ids if i]
+    if not wanted:
+        return set()
+    rows = await session.execute(select(WorkItem).where(WorkItem.id.in_(wanted)))
+    return {item.id for item in rows.scalars() if is_marked(item)}
+
+
 @activity.defn(name="ingest_sources")
 async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
     """Construit des faits depuis l'état de la plateforme et les pousse en upsert idempotent."""
@@ -97,7 +107,8 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 .scalars()
                 .all()
             )
-            for item in items:
+            # No shared memory from a marked work item (ADR 0114 §3): later runs would read it unchecked.
+            for item in [i for i in items if not is_marked(i)]:
                 cost = float((item.totals or {}).get("cost_usd", 0.0))
                 events.append(
                     {
@@ -119,7 +130,8 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 .scalars()
                 .all()
             )
-            for run in runs:
+            marked = await _marked_items(session, {run.work_item_id for run in runs})
+            for run in [r for r in runs if r.work_item_id not in marked]:
                 reason = (run.result or {}).get("reason") or "failed"
                 namespace, propose = _write_target(bundle.slug, run)
                 events.append(
@@ -176,7 +188,8 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 .all()
             )
             origines = await _runs_by_id(session, [f.origin_run_id for f in findings if f.origin_run_id])
-            for finding in findings:
+            marked = await _marked_items(session, {f.origin_work_item_id for f in findings})
+            for finding in [f for f in findings if f.origin_work_item_id not in marked]:
                 namespace, propose = _write_target(bundle.slug, origines.get(finding.origin_run_id or ""))
                 events.append(
                     {

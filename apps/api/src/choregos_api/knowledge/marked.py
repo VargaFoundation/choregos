@@ -87,10 +87,15 @@ LISTED = frozenset(
         "created_at",
         "closed_at",
         "restricted_knowledge",
+        "initiated_by",
     }
 )
 
 
 def listed_only(dto: WorkItemDto) -> WorkItemDto:
-    """The list entry of a work item the caller may not read: key, title, state, dates, the mark."""
-    return WorkItemDto(**{name: getattr(dto, name) for name in LISTED}, redacted=True)
+    """The list entry of a work item the caller may not read: key, title, state, dates, the mark. A
+    title an agent wrote (a fan-out child's, a finding's) is the run's content: it is not shown."""
+    entry = WorkItemDto(**{name: getattr(dto, name) for name in LISTED}, redacted=True)
+    if (dto.initiated_by or "").partition(":")[0] in ("work_item", "finding"):
+        entry.title = RESTRICTED_TITLE
+    return entry

@@ -190,3 +190,89 @@ def test_a_mark_is_only_ever_added_to(slugs: list[str]) -> None:
     item = WorkItem(restricted_knowledge=["legal"])
     assert mark(item, slugs) is (not set(slugs) <= {"legal"})
     assert item.restricted_knowledge == sorted({"legal", *slugs})
+
+
+async def test_a_finding_of_a_marked_work_item_is_listed_only_to_its_readers(
+    client: AsyncClient, admin: str, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import Finding
+    from choregos_api.db.session import session_scope
+
+    item = await _marked(client, project)
+    async with session_scope() as session:
+        row = Finding(
+            project_id=project["id"],
+            origin_work_item_id=item["id"],
+            title="Band E4 is underpaid",
+            type="docs",
+            severity="low",
+            evidence="the grid",
+            status="pending",
+        )
+        session.add(row)
+        await session.flush()
+        finding = row.id
+    url = f"/api/v1/projects/{project['id']}/findings"
+    async with _as(client, STRANGER, projects={"billing-api": "project_owner"}) as stranger:
+        assert (await stranger.get(url)).json()["items"] == []
+        acted = await stranger.post(f"/api/v1/findings/{finding}/actions", json={"action": "dismiss"})
+        assert acted.status_code == 404
+    async with _as(client, READER, **MEMBER) as reader:
+        assert [f["id"] for f in (await reader.get(url)).json()["items"]] == [finding]
+
+
+async def test_a_title_an_agent_wrote_is_not_listed(
+    client: AsyncClient, admin: str, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    item = await _marked(client, project)
+    async with session_scope() as session:
+        row = await session.get(WorkItem, item["id"])
+        assert row is not None
+        row.initiated_by = "work_item:BILLING-0"
+    async with _as(client, STRANGER, **MEMBER) as stranger:
+        (entry,) = (await stranger.get(f"/api/v1/projects/{project['id']}/work-items")).json()["items"]
+    assert entry["title"] == "Restricted work item"
+
+
+async def test_an_external_tracker_receives_a_neutral_issue_for_a_marked_child(
+    client: AsyncClient, admin: str, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_adapters.fakes.tracker import FakeTracker
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+    from choregos_api.knowledge.marked import WITHHELD
+    from choregos_api.rbac import SYSTEM
+    from choregos_api.schemas import WorkItemCreate
+    from choregos_api.services import tickets
+
+    fake = FakeTracker("billing-api")
+    real = tickets.tracker_du_projet
+
+    async def with_the_fake(session: Any, owner: Any) -> Any:
+        row, _ = await real(session, owner)
+        return row, fake
+
+    monkeypatch.setattr(tickets, "tracker_du_projet", with_the_fake)
+    connected = await client.put(
+        f"/api/v1/projects/{project['id']}/connectors/tracker",
+        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
+    )
+    assert connected.status_code == 200, connected.text
+    async with session_scope() as session:
+        owner = await session.get(Project, project["id"])
+        child = await tickets.creer_un_ticket(
+            session,
+            SYSTEM,
+            owner,
+            WorkItemCreate(title="Band E4 for Ana", body="91k", start=False),
+            canal="fan-out",
+            initiated_by="work_item:BILLING-1",
+            restricted_knowledge=["hr"],
+        )
+        assert (child.title, child.restricted_knowledge) == ("Band E4 for Ana", ["hr"])
+    (issue,) = fake.items.values()
+    assert issue.title == "Restricted work item" and WITHHELD in (issue.body or "")
+    assert "Ana" not in (issue.body or "")

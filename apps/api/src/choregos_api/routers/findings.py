@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from choregos_contracts import EventType
 from fastapi import APIRouter, Query
@@ -13,6 +13,7 @@ from ..audit import record
 from ..db.models import Finding, Project, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import forbidden, not_found
+from ..knowledge.marked import readable
 from ..rbac import Permission
 from ..schemas import FindingAction, FindingDto, FindingPage, PageMeta
 from ..services import persist_event
@@ -44,6 +45,11 @@ async def _dto(session: Db, row: Finding, project_slug: str) -> FindingDto:
     )
 
 
+async def _readable(session: Db, principal: Any, row: Finding, org_id: str) -> bool:
+    origin = await session.get(WorkItem, row.origin_work_item_id) if row.origin_work_item_id else None
+    return origin is None or await readable(session, principal, origin, org_id)
+
+
 @router.get("/projects/{id}/findings", response_model=FindingPage, operation_id="listFindings")
 async def list_findings(
     ctx: ProjectCtx,
@@ -58,6 +64,8 @@ async def list_findings(
     if severity:
         query = query.where(Finding.severity == severity)
     rows = (await session.execute(query.order_by(Finding.created_at.desc()))).scalars().all()
+    # A finding of a marked work item is the run's content: only that work item's readers see it (ADR 0114).
+    rows = [row for row in rows if await _readable(session, ctx.principal, row, ctx.project.org_id)]
     window, cursor, has_more = page.slice(list(rows))
     return FindingPage(
         items=[await _dto(session, row, ctx.slug) for row in window],
@@ -77,6 +85,8 @@ async def act(id: str, body: FindingAction, session: Db, principal: Me) -> Findi
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.FINDING_TRIAGE, org_slug, project.slug):
         raise forbidden()
+    if not await _readable(session, principal, row, project.org_id):
+        raise not_found("Finding", id)
 
     if body.action == "create_ticket":
         await get_temporal().signal(

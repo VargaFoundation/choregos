@@ -49,7 +49,8 @@ an artefact carries any visibility today (finding #1042).
   platform cannot check). Alternative: sent as today, the restriction holding inside the platform only.
 - **B. Lists.** Chosen: a project member who does not read the base still sees the marked work item in
   lists (key, title as typed by its author, state, a "restricted" badge) and nothing more; the detail
-  answers 404. Alternative: hidden from lists as well, at the cost of work items that "disappear".
+  answers 404. A title an agent wrote (a fan-out child's, a finding's) is the run's content: the list
+  shows "Restricted work item" instead (S42-11g). Alternative: hidden from lists as well, at the cost of work items that "disappear".
 - **C. Code.** Chosen: the branch is still pushed and the pull request opened (with the link as its
   body): the code is the deliverable, and attaching a restricted base to a coding agent is the project's
   choice. Alternative: a marked work item opens no pull request and stops before delivery.
