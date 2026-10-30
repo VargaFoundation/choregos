@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { ActorIcon, Button, Card, CostChip, Dot, Drawer, Empty, ErrorNote, Heading, LEGENDE, Select, tonDEtat } from "@/components/ui";
+import { ActorIcon, Badge, Button, Card, CostChip, Dot, Drawer, Empty, ErrorNote, Heading, LEGENDE, Select, tonDEtat } from "@/components/ui";
 import { columnsFromGraph, itemsOf } from "@/components/workflows/board";
 import { NewWorkItemForm } from "@/components/workflows/new-work-item";
 import { useWorkflow } from "@/components/workflows/use-workflow";
@@ -173,10 +173,21 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
               >
                 <Card className="p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/p/${slug}/items/${item.id}`} className="text-sm font-medium no-underline">
-                      {item.title}
-                    </Link>
-                    <CostChip costUsd={item.totals?.cost_usd} tokensIn={item.totals?.tokens_in} />
+                    {item.redacted ? (
+                      // Its runs read a restricted knowledge base you do not read (ADR 0114): listed, not opened.
+                      <span className="text-sm font-medium">{item.title}</span>
+                    ) : (
+                      <Link href={`/p/${slug}/items/${item.id}`} className="text-sm font-medium no-underline">
+                        {item.title}
+                      </Link>
+                    )}
+                    {item.redacted ? (
+                      <Badge tone="neutral" title={`Read by the readers of ${(item.restricted_knowledge ?? []).join(", ")}`}>
+                        Restricted
+                      </Badge>
+                    ) : (
+                      <CostChip costUsd={item.totals?.cost_usd} tokensIn={item.totals?.tokens_in} />
+                    )}
                   </div>
                   <p className="mt-1 font-mono text-xs text-ink-muted">{item.tracker_key}</p>
                   {item.current_run && (

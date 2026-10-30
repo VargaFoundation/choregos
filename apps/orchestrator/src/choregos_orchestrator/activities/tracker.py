@@ -13,6 +13,7 @@ from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
 from choregos_core.gates import ALREADY_FIXED_GATE
+from choregos_core.restricted import WITHHELD, is_marked
 from sqlalchemy import select, update
 from temporalio import activity
 
@@ -148,7 +149,9 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
                     else None
                 )
                 duration = elapsed_seconds(entry.started_at, entry.ended_at)
-                outcome = (entry.result or {}).get("summary", entry.status)
+                # A marked work item's run summaries stay in the console (ADR 0114 §6).
+                summary = (entry.result or {}).get("summary", entry.status)
+                outcome = entry.status if is_marked(item) else summary
                 lines.append(
                     StageLine(
                         index=index,
@@ -201,7 +204,7 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
             estimate_eur=estimate,
             over_estimate=bool(payload.get("over_estimate")),
             findings=finding_labels,
-            memory_note=payload.get("memory_note"),
+            memory_note=None if is_marked(item) else payload.get("memory_note"),
             lines=lines,
         )
         markdown = comment.render()
@@ -253,9 +256,13 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
         session.add(row)
         await session.flush()
 
-        markdown = render_human_request(
-            payload["kind"], payload.get("payload", {}), settings.public_url, item.tracker_key
+        # A marked work item's question is the run's content: the tracker gets the link (ADR 0114 §6).
+        outward = (
+            {"question": WITHHELD, "summary": WITHHELD, "justification": WITHHELD}
+            if is_marked(item)
+            else payload.get("payload", {})
         )
+        markdown = render_human_request(payload["kind"], outward, settings.public_url, item.tracker_key)
         await bundle.adapters.tracker.comment(item.tracker_key, markdown)
         channel = bundle.config.notify.slack_channel or "#choregos"
         # La notification est une COURTOISIE, pas la demande. La demande existe (en base) et se
@@ -277,7 +284,7 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
                 channel,
                 Message(
                     title=f"Choregos — {payload['kind']} on {item.tracker_key}",
-                    body=item.title,
+                    body=WITHHELD if is_marked(item) else item.title,
                     url=f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
                     severity="warning",
                     actions=[
@@ -387,7 +394,8 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
             state=item.state,
             cost_usd=float((item.totals or {}).get("cost_usd", 0.0)),
         )
-        if bundle.engine.memory_enabled():
+        # A marked work item writes no shared memory: later runs would read it unchecked (ADR 0114 §3).
+        if bundle.engine.memory_enabled() and not is_marked(item):
             from choregos_core import Fact, Provenance
 
             runs = (await session.execute(select(Run).where(Run.work_item_id == item.id))).scalars().all()

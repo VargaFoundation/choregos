@@ -12,6 +12,7 @@ from choregos_api.services import Naissance, nouveau_ticket, persist_event
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType
 from choregos_core import Message, NewItem, utcnow
+from choregos_core.restricted import RESTRICTED_TITLE, WITHHELD, is_marked, mark
 from sqlalchemy import select
 from temporalio import activity
 
@@ -85,10 +86,16 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                     else None
                 )
                 if origin is not None:
+                    source = (
+                        await session.get(WorkItem, row.origin_work_item_id)
+                        if row.origin_work_item_id
+                        else None
+                    )
+                    evidence = WITHHELD if is_marked(origin) or is_marked(source) else row.evidence
                     await bundle.adapters.tracker.comment(
                         origin.tracker_key,
                         f"<!-- choregos:finding-duplicate -->\nOne more occurrence "
-                        f"({candidate.occurrences}) reported by an agent: {row.evidence}",
+                        f"({candidate.occurrences}) reported by an agent: {evidence}",
                     )
                 await persist_event(
                     session,
@@ -102,13 +109,20 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 return {"status": "duplicate", "duplicate_of": candidate.id}
 
         origin = await session.get(WorkItem, row.origin_work_item_id) if row.origin_work_item_id else None
+        restricted = list(origin.restricted_knowledge or []) if origin is not None else []
         body = _ticket_body(row, origin, settings.public_url, bundle.slug)
         labels = ["finding", "source:agent", f"type:{row.type}", f"severity:{row.severity}", "needs-triage"]
         if origin is not None:
             labels.append(f"origin:{origin.tracker_key.rsplit('#', 1)[-1]}")
         titre = f"[{row.type}] {row.title}"
         if tracker_possede_les_tickets(bundle.adapters.tracker):
-            key = await bundle.adapters.tracker.create_item(NewItem(title=titre, body=body, labels=labels))
+            # A marked work item's finding is the run's content: the tracker gets none of it (ADR 0114).
+            outward = (
+                NewItem(title=f"[{row.type}] {RESTRICTED_TITLE}", body=WITHHELD, labels=labels)
+                if restricted
+                else NewItem(title=titre, body=body, labels=labels)
+            )
+            key = await bundle.adapters.tracker.create_item(outward)
         else:
             # La plateforme tient le ticket : elle lui donne sa clé. Le connecteur interne
             # rendait le titre, d'où des clés comme `[docs] Base de profils manquante`.
@@ -127,6 +141,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 initiated_by=initiator("finding", row.id),
             ),
         )
+        mark(created, restricted)
         row.created_work_item_id = created.id
         row.status = "created"
         await persist_event(
@@ -159,7 +174,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 activity.logger.warning("finding %s NOT linked to %s: %s", key, origin.tracker_key, exc)
                 linked = False
         notified: bool | None = None
-        if bundle.engine.notify_finding(row.severity):
+        if bundle.engine.notify_finding(row.severity) and not restricted:
             # A courtesy: raising here rolled back the finding after its ticket was created.
             notified = await send_courtesy(
                 bundle.adapters.notify,
@@ -172,7 +187,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 ),
             )
         remembered: bool | None = None
-        if bundle.engine.memory_enabled():
+        if bundle.engine.memory_enabled() and not restricted:
             from choregos_core import Fact, Provenance
 
             # A courtesy too (S22-35b): the ticket already exists. On the dev tenant, on 2026-10-18,

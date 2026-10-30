@@ -126,6 +126,10 @@ class WorkItemDto(Dto):
     estimate: CostEstimate | None = None
     #: Who started the work item (ADR 0077): `person:<email>`, `tracker:<source>`…
     initiated_by: str | None = None
+    #: The restricted knowledge bases its runs were served (ADR 0114).
+    restricted_knowledge: list[str] = Field(default_factory=list)
+    #: A list entry the caller may not read (ADR 0114, point B): only the listed fields are filled.
+    redacted: bool = False
     created_at: datetime
     closed_at: datetime | None = None
 

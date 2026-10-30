@@ -27,6 +27,7 @@ from ..db.models import HumanRequest, Organization, Project, Run, WorkItem
 from ..deps import resolve_project
 from ..errors import ApiError
 from ..greffons import fournisseurs_humains
+from ..knowledge.marked import readable
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
 from ..services import (
@@ -175,6 +176,9 @@ async def _ticket(ctx: Contexte, reference: object) -> tuple[WorkItem, Project, 
     projet, org = await resolve_project(ctx.session, item.project_id)
     if not ctx.appelant.principal.can(Permission.PROJECT_READ, org, projet.slug):
         raise OutilRefuse(f"work item `{reference}` not found")
+    # A work item marked by a restricted base (ADR 0114) does not exist for a caller who may not read it.
+    if not await readable(ctx.session, ctx.appelant.principal, item, projet.org_id):
+        raise OutilRefuse(f"work item `{reference}` not found")
     ctx.org_id_vise = projet.org_id
     return item, projet, org
 
@@ -314,6 +318,8 @@ async def _search_work_items(ctx: Contexte, arguments: dict[str, Any]) -> tuple[
                 "title": item.title,
                 "state": item.state,
                 "waiting_for_human": attente is not None,
+                # Listed, but its content is not served to this caller (ADR 0114, point B).
+                "restricted": not await readable(ctx.session, ctx.appelant.principal, item, projet.org_id),
                 "console_url": _url(ctx, projet, f"/items/{item.id}"),
             }
         )
@@ -383,6 +389,9 @@ async def _summarize_run(ctx: Contexte, arguments: dict[str, Any]) -> tuple[str,
     projet, org = await resolve_project(ctx.session, run.project_id)
     if not ctx.appelant.principal.can(Permission.PROJECT_READ, org, projet.slug):
         raise OutilRefuse(f"run `{reference}` not found")
+    item = await ctx.session.get(WorkItem, run.work_item_id)
+    if item is not None and not await readable(ctx.session, ctx.appelant.principal, item, projet.org_id):
+        raise OutilRefuse(f"run `{reference}` not found")
     ctx.org_id_vise = projet.org_id
     dto = run_dto(run, projet.slug)
     resume = (dto.result.summary if dto.result else None) or ""
@@ -419,6 +428,8 @@ async def _list_pending_decisions(ctx: Contexte, arguments: dict[str, Any]) -> t
             .order_by(HumanRequest.requested_at)
         )
         for demande, item in lignes.all():
+            if not await readable(ctx.session, principal, item, projet.org_id):
+                continue  # the question is the run's content (ADR 0114)
             attentes.append(
                 {
                     "project": _nom(org, projet),

@@ -1904,6 +1904,17 @@ person who reads it: the person who started the work item (a fan-out child acts 
 A scheduled or tracker-triggered work item names no person, so its runs stop at stage start with
 `KnowledgeRefused` ([ADR 0097](adr/0097-a-run-reads-a-restricted-base-on-behalf-of-its-initiator.md)).
 A grant revoked while a run is in flight holds at the run's next read.
+What the run writes then stays with the base's readers
+([ADR 0114](adr/0114-what-a-run-writes-after-reading-a-restricted-base-stays-restricted.md)): the work
+item records the base in `restricted_knowledge`, and its detail, runs (events, transcript, logs, diff,
+access chain), artefacts, receipts, journey and pending question answer 404 to a project member who
+does not read every base it names, in the console, the MCP door and the A2A door alike. Lists still show
+it, `redacted`: key, title, state and a "Restricted" badge on the board. Lifting `restricted` or granting
+the base opens it again. Nothing of its content leaves the platform: the tracker's status comment
+carries no run summary, a question is posted as a link to the console (on the tracker and in Slack), a
+pull request's body is the link (the code still ships), a finding is filed as "Restricted work item"
+with no evidence and no Slack message; the work item writes no shared memory, and its fan-out children
+and findings are born with the same mark.
 
 #### A knowledge base as code
 

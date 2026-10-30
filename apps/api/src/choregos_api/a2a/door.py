@@ -60,6 +60,7 @@ from ..db.session import session_scope
 from ..deps import Config, Db
 from ..errors import ApiError
 from ..events import get_bus
+from ..knowledge.marked import readable
 from ..logging import get_logger
 from ..mcp.appelant import SCOPES_A2A, Appelant, Refus, identifier
 from ..mcp.garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour
@@ -613,6 +614,9 @@ async def _task(door: Door, reference: Any) -> tuple[WorkItem, Project]:
         or (bound is not None and bound.id != project.id)
         or not door.caller.principal.can(Permission.PROJECT_READ, door.org.slug, project.slug)
     ):
+        raise Fault(TASK_NOT_FOUND, f"task not found: {reference}")
+    # A work item marked by a restricted base (ADR 0114) is not a task for a caller who may not read it.
+    if not await readable(door.session, door.caller.principal, item, project.org_id):
         raise Fault(TASK_NOT_FOUND, f"task not found: {reference}")
     return item, project
 
