@@ -468,9 +468,9 @@ async def test_la_fiche_d_acces_replie_le_journal(
     assert reponse.status_code == 200, reponse.text
     fiche = reponse.json()
     assert fiche["events"] == 4 and fiche["refusals"] == 1
-    assert fiche["access"][0]["target"] == "/workspace/.env", "le refus d'abord"
+    assert fiche["access"][0]["target"] == "/workspace/.env", "the refusal first"
     assert fiche["access"][0]["reasons"] == ["fichier sensible"]
-    assert fiche["access"][1]["requests"] == 2, "deux lectures du même fichier, regroupées"
+    assert fiche["access"][1]["requests"] == 2, "two reads of the same file, grouped"
     # La prose de l'agent n'y entre pas : la fiche redeviendrait illisible.
     assert all("je lis le ticket" not in a["target"] for a in fiche["access"])
 

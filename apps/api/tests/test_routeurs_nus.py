@@ -203,7 +203,7 @@ async def test_un_run_se_lit_avec_ses_evenements_son_diff_et_ses_acces(
 
     acces = (await client.get(f"/api/v1/runs/{run_id}/access")).json()
     assert acces["refusals"] == 1 and acces["tool_cost_eur"] == 0.002
-    assert any(a["nature"] == "tool" for a in acces["access"]), "l'appel au catalogue compte comme un accès"
+    assert any(a["nature"] == "tool" for a in acces["access"]), "the catalogue call counts as an access"
 
     diff = (await client.get(f"/api/v1/runs/{run_id}/diff")).json()
     assert {f["path"]: f["in_scope"] for f in diff["files"]} == {"src/a.py": True, "infra/main.tf": False}
