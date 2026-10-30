@@ -46,29 +46,29 @@ def seed_of(symbol: str) -> int:
 def synthetic_bars(symbol: str, start: date, end: date) -> list[dict[str, Any]]:
     """The bars of `symbol` between two dates: business days, a walk the window does not change."""
     rng = random.Random(seed_of(symbol))
-    cours = START_PRICE * (0.5 + rng.random())
+    price = START_PRICE * (0.5 + rng.random())
     bars: list[dict[str, Any]] = []
-    jour = ANCHOR
-    while jour <= end:
-        if jour.weekday() < 5:
-            ouverture = cours
-            cours = ouverture * math.exp(rng.gauss(DAILY_DRIFT, DAILY_VOL))
-            haut = max(ouverture, cours) * (1 + abs(rng.gauss(0, DAILY_VOL / 3)))
-            bas = min(ouverture, cours) * (1 - abs(rng.gauss(0, DAILY_VOL / 3)))
+    day = ANCHOR
+    while day <= end:
+        if day.weekday() < 5:
+            open_price = price
+            price = open_price * math.exp(rng.gauss(DAILY_DRIFT, DAILY_VOL))
+            high = max(open_price, price) * (1 + abs(rng.gauss(0, DAILY_VOL / 3)))
+            bas = min(open_price, price) * (1 - abs(rng.gauss(0, DAILY_VOL / 3)))
             volume = float(rng.randint(100_000, 5_000_000))
-            if jour >= start:
+            if day >= start:
                 bars.append(
                     {
-                        "date": jour.isoformat(),
-                        "open": round(ouverture, 4),
-                        "high": round(haut, 4),
+                        "date": day.isoformat(),
+                        "open": round(open_price, 4),
+                        "high": round(high, 4),
                         "low": round(bas, 4),
-                        "close": round(cours, 4),
-                        "adj_close": round(cours, 4),
+                        "close": round(price, 4),
+                        "adj_close": round(price, 4),
                         "volume": volume,
                     }
                 )
-        jour += timedelta(days=1)
+        day += timedelta(days=1)
     return bars
 
 
@@ -94,22 +94,22 @@ class FakeMarketData(MarketDataProvider):
     def _enter(self, operation: str, symbol: str, **arguments: Any) -> str:
         self.calls.append((operation, {"symbol": symbol, **arguments}))
         validate_symbol(symbol)
-        erreur = self.errors.get(symbol)
-        if erreur is not None:
-            raise erreur
+        error = self.errors.get(symbol)
+        if error is not None:
+            raise error
         return symbol
 
     async def get_bars(self, symbol: str, start: str, end: str) -> dict[str, Any]:
         self._enter("get_bars", symbol, start=start, end=end)
-        debut, fin = validate_range(start, end)
+        first_day, last_day = validate_range(start, end)
         if symbol in self.fixtures:
-            bars = finish_bars([dict(b) for b in self.fixtures[symbol]], debut, fin)
+            bars = finish_bars([dict(b) for b in self.fixtures[symbol]], first_day, last_day)
         else:
-            bars = synthetic_bars(symbol, debut, fin)
-        reponse = answer(symbol, self.name, bars, currency="USD", adjusted=True)
+            bars = synthetic_bars(symbol, first_day, last_day)
+        response = answer(symbol, self.name, bars, currency="USD", adjusted=True)
         if symbol in self.cross_checks:
-            reponse["cross_check"] = dict(self.cross_checks[symbol])
-        return reponse
+            response["cross_check"] = dict(self.cross_checks[symbol])
+        return response
 
     async def get_instrument(self, symbol: str) -> dict[str, Any]:
         self._enter("get_instrument", symbol)

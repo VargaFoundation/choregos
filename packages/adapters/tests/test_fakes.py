@@ -1,4 +1,4 @@
-"""Les fakes respectent les Protocol et se comportent comme les vrais adaptateurs."""
+"""The fakes honour the Protocols and behave like the real adapters."""
 
 from __future__ import annotations
 
@@ -35,9 +35,9 @@ def test_adapter_set_satisfies_protocols() -> None:
 
 async def test_tracker_lifecycle() -> None:
     tracker = AdapterSet.fakes().tracker
-    key = tracker.seed("Corriger les avoirs", "Le total ignore l'avoir", size=Size.M)  # type: ignore[attr-defined]
+    key = tracker.seed("Fix the credit notes", "The total ignores the credit note", size=Size.M)  # type: ignore[attr-defined]
     item = await tracker.fetch_item(key)
-    assert item.title == "Corriger les avoirs"
+    assert item.title == "Fix the credit notes"
 
     await tracker.set_state(key, TrackerStateMapping(status="In progress", label="choregos:in_progress"))
     item = await tracker.fetch_item(key)
@@ -48,13 +48,13 @@ async def test_tracker_lifecycle() -> None:
     await tracker.upsert_status_comment(key, "v1", marker)
     await tracker.upsert_status_comment(key, "v2", marker)
     item = await tracker.fetch_item(key)
-    assert len([c for c in item.comments if c.marker == marker]) == 1, "un seul commentaire de statut"
+    assert len([c for c in item.comments if c.marker == marker]) == 1, "a single status comment"
     assert tracker.status_comment(key) == "v2"  # type: ignore[attr-defined]
 
-    await tracker.set_fields(key, {"Coût (€)": 6.77, "Taille": "M"})
-    assert (await tracker.fetch_item(key)).fields["Coût (€)"] == 6.77
+    await tracker.set_fields(key, {"Cost (€)": 6.77, "Size": "M"})
+    assert (await tracker.fetch_item(key)).fields["Cost (€)"] == 6.77
 
-    child = await tracker.create_item(NewItem(title="Finding : N+1", body="…", labels=["finding"]))
+    child = await tracker.create_item(NewItem(title="Finding: N+1", body="…", labels=["finding"]))
     await tracker.link(child, key, "origin")
     assert (child, key, "origin") in tracker.links  # type: ignore[attr-defined]
 
@@ -74,8 +74,8 @@ async def test_tracker_webhook_and_move() -> None:
 async def test_scm_pr_flow() -> None:
     scm = AdapterSet.fakes().scm
     await scm.ensure_branch("acme/billing", "choregos/123", "main")
-    ref = await scm.open_pr("acme/billing", "choregos/123", "main", "fix: avoirs", "corps", True)
-    await scm.update_pr(ref, body="corps v2", draft=False)
+    ref = await scm.open_pr("acme/billing", "choregos/123", "main", "fix: credit notes", "body", True)
+    await scm.update_pr(ref, body="body v2", draft=False)
     scm.set_checks(ref, "success")  # type: ignore[attr-defined]
     scm.submit_review(ref, "marie", "approved")  # type: ignore[attr-defined]
     pr = await scm.get_pr(ref)
@@ -131,7 +131,7 @@ async def test_executor_is_idempotent_by_run_id() -> None:
     first = await executor.start(spec)
     second = await executor.start(spec)
     assert first.run_id == second.run_id
-    assert len(executor.started) == 1, "un seul démarrage réel pour un même run_id"  # type: ignore[attr-defined]
+    assert len(executor.started) == 1, "a single real start for one run_id"  # type: ignore[attr-defined]
     assert (await executor.status(first)).state == "succeeded"
     await executor.cancel(first)
     assert (await executor.status(first)).state == "cancelled"
@@ -141,11 +141,9 @@ async def test_executor_is_idempotent_by_run_id() -> None:
 
 async def test_memory_context_pack_respects_budget() -> None:
     memory = AdapterSet.fakes().memory
-    memory.seed(
-        "demo", "decision", "decision:billing:arrondis", "Les totaux sont arrondis à l'émission." * 20
-    )  # type: ignore[attr-defined]
-    memory.seed("demo", "incident", "incident:billing:2026-06", "Rollback sur les avoirs." * 20)  # type: ignore[attr-defined]
-    pack = await memory.context_pack("demo", "avoirs arrondis totaux", [], budget_tokens=200)
+    memory.seed("demo", "decision", "decision:billing:rounding", "Totals are rounded at issue." * 20)  # type: ignore[attr-defined]
+    memory.seed("demo", "incident", "incident:billing:2026-06", "Rollback on the credit notes." * 20)  # type: ignore[attr-defined]
+    pack = await memory.context_pack("demo", "credit notes rounding totals", [], budget_tokens=200)
     assert pack.tokens_estimated <= 200
     assert pack.truncated or pack.memories or pack.incidents
 
@@ -159,7 +157,7 @@ async def test_memory_supersession_and_pending() -> None:
 
     pending_id = await memory.propose_fact(
         "demo",
-        Fact(kind="convention", subject="convention:y", content="proposé"),
+        Fact(kind="convention", subject="convention:y", content="proposed"),
         Provenance(source="agent", run_id="run-1"),
     )
     assert memory.pending["demo"][0].id == pending_id  # type: ignore[attr-defined]
@@ -169,19 +167,19 @@ async def test_memory_supersession_and_pending() -> None:
 
 async def test_memory_ingest_is_idempotent() -> None:
     memory = AdapterSet.fakes().memory
-    event = {"external_id": "gh:123", "kind": "ticket_summary", "subject": "ticket:123", "content": "résumé"}
+    event = {"external_id": "gh:123", "kind": "ticket_summary", "subject": "ticket:123", "content": "summary"}
     await memory.ingest_events("demo", [event, event])
     assert len(memory.facts["demo"]) == 1  # type: ignore[attr-defined]
-    await memory.ingest_events("demo", [{**event, "content": "résumé v2"}])
+    await memory.ingest_events("demo", [{**event, "content": "summary v2"}])
     assert len([m for m in memory.facts["demo"] if m.status == "active"]) == 1  # type: ignore[attr-defined]
 
 
 async def test_memory_failure_returns_empty_pack() -> None:
     memory = AdapterSet.fakes().memory
-    memory.seed("demo", "decision", "d", "contenu")  # type: ignore[attr-defined]
+    memory.seed("demo", "decision", "d", "content")  # type: ignore[attr-defined]
     memory.fail = True  # type: ignore[attr-defined]
-    pack = await memory.context_pack("demo", "quoi que ce soit", [], 1000)
-    assert pack.is_empty(), "une panne mémoire ne doit jamais bloquer un stage"
+    pack = await memory.context_pack("demo", "whatever", [], 1000)
+    assert pack.is_empty(), "a memory outage must never block a stage"
 
 
 async def test_cd_promotion_and_rollback() -> None:
@@ -198,27 +196,27 @@ async def test_cd_promotion_and_rollback() -> None:
 
 async def test_ci_status_and_events() -> None:
     ci = AdapterSet.fakes().ci
-    ci.set_status("acme/billing", "sha1", "failure", logs="ligne1\nligne2\nERREUR")  # type: ignore[attr-defined]
+    ci.set_status("acme/billing", "sha1", "failure", logs="line1\nline2\nERROR")  # type: ignore[attr-defined]
     status = await ci.status_for("acme/billing", "sha1")
     assert status.state == "failure"
-    assert "ERREUR" in await ci.logs("acme/billing@sha1", tail=1)
+    assert "ERROR" in await ci.logs("acme/billing@sha1", tail=1)
     events = ci.parse_event({"ce-id": "x"}, json.dumps({"state": "failed"}).encode())
     assert events[0].type == "ci.run.failed"
 
 
 async def test_notifier() -> None:
     notifier = AdapterSet.fakes().notify
-    await notifier.send("#choregos", Message(title="Approbation requise", severity="warning"))
-    assert notifier.last().title == "Approbation requise"  # type: ignore[union-attr]
+    await notifier.send("#choregos", Message(title="Approval required", severity="warning"))
+    assert notifier.last().title == "Approval required"  # type: ignore[union-attr]
 
 
 async def test_scm_commit_files_and_pr_are_idempotent() -> None:
-    """Comme GitHub : un rejeu n'écrit aucun commit, et une PR ouverte sur la branche est réutilisée."""
+    """Like GitHub: a replay writes no commit, and a PR open on the branch is reused."""
     scm = AdapterSet.fakes().scm
     await scm.ensure_branch("acme/infra", "choregos/p-1", "main")
     await scm.commit_files("acme/infra", "choregos/p-1", {"platform/a.yaml": "v: 1\n"}, "fix")
     await scm.commit_files("acme/infra", "choregos/p-1", {"platform/a.yaml": "v: 1\n"}, "fix")
     assert len(scm.commits) == 1  # type: ignore[attr-defined]
-    premiere = await scm.open_pr("acme/infra", "choregos/p-1", "main", "fix", "corps", False)
-    seconde = await scm.open_pr("acme/infra", "choregos/p-1", "main", "fix", "corps", False)
-    assert seconde == premiere
+    first = await scm.open_pr("acme/infra", "choregos/p-1", "main", "fix", "body", False)
+    second = await scm.open_pr("acme/infra", "choregos/p-1", "main", "fix", "body", False)
+    assert second == first

@@ -2,5 +2,5 @@ apiVersion: v2
 name: choregos-litellm
 description: Choregos LLM gateway (LiteLLM) — virtual key per run, budget and cost per stage.
 type: application
-version: 0.21.0
-appVersion: "0.21.0"
+version: 0.21.1
+appVersion: "0.21.1"

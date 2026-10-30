@@ -179,6 +179,50 @@ def verify_relay_token(token: str, settings: Settings | None = None) -> str:
     return str(payload["sub"])
 
 
+# ───────────────────────────── egress tokens ─────────────────────────────
+
+#: Not the run token's audience: what the egress proxy reads a run's network with (ADR 0115). The
+#: agent inherits the proxy variables that carry it, so it opens those two routes and no other.
+EGRESS_TOKEN_AUDIENCE = "choregos-egress"
+
+
+def mint_egress_token(claims: RunClaims, settings: Settings | None = None) -> str:
+    """The egress token of the run `claims` names: same run, same expiry, `aud=choregos-egress`."""
+    settings = settings or get_settings()
+    private_key, _ = run_token_keys(settings)
+    payload = {
+        "iss": settings.run_token_issuer,
+        "aud": EGRESS_TOKEN_AUDIENCE,
+        "sub": claims.run_id,
+        "iat": int(time.time()),
+        "exp": claims.expires_at,
+        "project": claims.project_slug,
+        "work_item": claims.work_item_key,
+    }
+    return jwt.encode(payload, private_key, algorithm=RUN_TOKEN_ALGORITHM)
+
+
+def verify_egress_token(token: str, settings: Settings | None = None) -> RunClaims:
+    """The run an egress token is for. Raises `jwt.PyJWTError` when it is invalid, expired, or for
+    another audience (a run token is refused here, and an egress token by `verify_run_token`)."""
+    settings = settings or get_settings()
+    _, public_key = run_token_keys(settings)
+    payload: dict[str, Any] = jwt.decode(
+        token,
+        public_key,
+        algorithms=[RUN_TOKEN_ALGORITHM],
+        audience=EGRESS_TOKEN_AUDIENCE,
+        issuer=settings.run_token_issuer,
+        options={"require": ["exp", "sub", "aud", "iss"]},
+    )
+    return RunClaims(
+        run_id=str(payload["sub"]),
+        project_slug=str(payload.get("project", "")),
+        work_item_key=str(payload.get("work_item", "")),
+        expires_at=int(payload["exp"]),
+    )
+
+
 # ───────────────────────────── jetons d'API ─────────────────────────────
 
 

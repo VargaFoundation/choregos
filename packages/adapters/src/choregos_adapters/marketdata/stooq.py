@@ -60,67 +60,69 @@ class StooqProvider(MarketDataProvider):
     def __init__(self, *, suffix_map: dict[str, str] | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         # Keys compared case-insensitively; a configured map extends the default, it does not replace it.
-        fusion = {**DEFAULT_SUFFIX_MAP, **(suffix_map or {})}
-        self._suffixes = {cle.lower(): valeur.lower() for cle, valeur in fusion.items()}
+        merged = {**DEFAULT_SUFFIX_MAP, **(suffix_map or {})}
+        self._suffixes = {key.lower(): value.lower() for key, value in merged.items()}
 
     def stooq_symbol(self, symbol: str) -> str:
-        symbole = validate_symbol(symbol).lower()
-        if symbole.startswith("^"):
-            return symbole
-        if symbole.endswith("=x"):
-            return symbole[:-2]
-        if "." not in symbole:
-            return symbole + self._suffixes.get("", ".us")
-        base, _, fin = symbole.rpartition(".")
-        suffixe = "." + fin
-        if suffixe in self._suffixes:
-            return base + self._suffixes[suffixe]
-        if suffixe in _STOOQ_SUFFIXES:
-            return symbole
-        raise MarketDataError(f"stooq: no market for the suffix {suffixe} — add it to `suffix_map`")
+        clean_symbol = validate_symbol(symbol).lower()
+        if clean_symbol.startswith("^"):
+            return clean_symbol
+        if clean_symbol.endswith("=x"):
+            return clean_symbol[:-2]
+        if "." not in clean_symbol:
+            return clean_symbol + self._suffixes.get("", ".us")
+        base, _, last_day = clean_symbol.rpartition(".")
+        suffix = "." + last_day
+        if suffix in self._suffixes:
+            return base + self._suffixes[suffix]
+        if suffix in _STOOQ_SUFFIXES:
+            return clean_symbol
+        raise MarketDataError(f"stooq: no market for the suffix {suffix} — add it to `suffix_map`")
 
     async def get_bars(self, symbol: str, start: str, end: str) -> dict[str, Any]:
-        debut, fin = validate_range(start, end)
+        first_day, last_day = validate_range(start, end)
         stooq = self.stooq_symbol(symbol)
         params: dict[str, Any] = {
             "s": stooq,
-            "d1": debut.strftime("%Y%m%d"),
-            "d2": fin.strftime("%Y%m%d"),
+            "d1": first_day.strftime("%Y%m%d"),
+            "d2": last_day.strftime("%Y%m%d"),
             "i": "d",
         }
         if self._api_key:
             params["apikey"] = self._api_key
-        reponse = await self.fetch(URL, params)
-        if reponse.status_code != 200:
-            raise MarketDataError(f"stooq: HTTP {reponse.status_code}")
-        bars = self._parse(reponse.text, symbol)
-        return answer(symbol, self.name, finish_bars(bars, debut, fin), currency=None, adjusted=False)
+        response = await self.fetch(URL, params)
+        if response.status_code != 200:
+            raise MarketDataError(f"stooq: HTTP {response.status_code}")
+        bars = self._parse(response.text, symbol)
+        return answer(
+            symbol, self.name, finish_bars(bars, first_day, last_day), currency=None, adjusted=False
+        )
 
-    def _parse(self, texte: str, symbol: str) -> list[dict[str, Any]]:
-        corps = texte.strip()
-        minuscule = corps.lower()
-        if "exceeded the daily hits limit" in minuscule:
+    def _parse(self, text: str, symbol: str) -> list[dict[str, Any]]:
+        body = text.strip()
+        lowered = body.lower()
+        if "exceeded the daily hits limit" in lowered:
             raise RateLimited("stooq: daily hits limit exceeded")
-        if "apikey" in minuscule and not minuscule.startswith("date"):
+        if "apikey" in lowered and not lowered.startswith("date"):
             raise MarketDataError("stooq: an `api_key` is required for CSV downloads (see the module doc)")
-        if not corps or minuscule.startswith("no data"):
+        if not body or lowered.startswith("no data"):
             raise UnknownSymbol(f"stooq: no data for {symbol}")
-        if minuscule.startswith(("<!doctype", "<html")):
+        if lowered.startswith(("<!doctype", "<html")):
             # Seen on 2026-10-14: a JavaScript proof-of-work page in place of the CSV, for every
             # symbol. The source is down for a script, the symbol is not unknown: saying "unknown"
             # would let a composite drop its cross-check without a word.
             raise MarketDataError("stooq: an HTML page (browser check) in place of the CSV")
-        if not minuscule.startswith("date"):
-            raise MarketDataError(f"stooq: unreadable answer for {symbol}: {corps[:80]!r}")
+        if not lowered.startswith("date"):
+            raise MarketDataError(f"stooq: unreadable answer for {symbol}: {body[:80]!r}")
         bars = []
-        for ligne in csv.DictReader(io.StringIO(corps)):
+        for row in csv.DictReader(io.StringIO(body)):
             bar = make_bar(
-                (ligne.get("Date") or "").strip(),
-                ligne.get("Open"),
-                ligne.get("High"),
-                ligne.get("Low"),
-                ligne.get("Close"),
-                ligne.get("Volume"),
+                (row.get("Date") or "").strip(),
+                row.get("Open"),
+                row.get("High"),
+                row.get("Low"),
+                row.get("Close"),
+                row.get("Volume"),
             )
             if bar is not None:
                 bars.append(bar)
