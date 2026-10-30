@@ -695,6 +695,40 @@ export type Project = {
     /** The workflow of the work item; the project's routing when absent. */
     workflow?: string | null;
   }>;
+  /** HTTP doors that open a work item when another system calls them (S51-01, ADR 0113): `POST /webhooks/triggers/{org}/{project}/{name}` with the trigger's token. Needs the internal tracker. */
+  triggers?: Array<{
+    name: string;
+    /** The work item's title; `{/pointer}` becomes what the payload holds there. */
+    title: string;
+    /** The work item's description; `{/pointer}` placeholders as in `title`. */
+    body?: string;
+    /** A JSON pointer to the payload's own identifier: one work item per value, a second call finds the first. */
+    key?: string | null;
+    /** The work item's labels, which the project's routing reads, with `trigger:<name>`; `{/pointer}` placeholders; an empty one is dropped. */
+    labels?: Array<string>;
+    /** The work item's fields: a field name to a JSON pointer, whose value keeps its JSON type; validated by the workflow's `metadata.inputs`. */
+    fields?: {
+      [key: string]: string;
+    };
+    /** The workflow of the work item; the project's routing when absent. */
+    workflow?: string | null;
+    /** A JSON pointer to the text, or one of the texts, the payload must hold there (S51-05); a payload that does not match is acknowledged and recorded `ignored`. */
+    when?: {
+      [key: string]: string | Array<string>;
+    };
+    /** `token`: the bearer token; `signature`: `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>` keyed by the signing secret (S51-04). */
+    auth?: "token" | "signature";
+  }>;
+  /** Tracker items that start their work item without the `agent-ready` label (S51-03, ADR 0113): the first rule whose every condition holds starts an item the project does not hold yet. */
+  start_rules?: Array<{
+    labels_any: unknown;
+  } | {
+    labels_all: unknown;
+  } | {
+    item_type: string;
+  } | {
+    states: unknown;
+  }>;
   /** What the A2A door takes for this project's skills (ADR 0078 §6). */
   a2a?: {
     /** The file parts a message carries: each one, and all of them together, at most this many bytes once decoded. 10 MiB by default, 50 MiB at most. */

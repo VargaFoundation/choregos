@@ -182,6 +182,48 @@
       },
       "default": []
     },
+    "triggers": {
+      "description": "HTTP doors that open a work item when another system calls them (S51-01, ADR 0113): `POST /webhooks/triggers/{org}/{project}/{name}` with the trigger's token. Needs the internal tracker.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "title"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+          "title": { "description": "The work item's title; `{/pointer}` becomes what the payload holds there.", "type": "string", "minLength": 1, "maxLength": 500 },
+          "body": { "description": "The work item's description; `{/pointer}` placeholders as in `title`.", "type": "string", "maxLength": 2000, "default": "" },
+          "key": { "description": "A JSON pointer to the payload's own identifier: one work item per value, a second call finds the first.", "type": ["string", "null"], "pattern": "^(/([^~/]|~[01])*)+$", "default": null },
+          "labels": { "description": "The work item's labels, which the project's routing reads, with `trigger:<name>`; `{/pointer}` placeholders; an empty one is dropped.", "type": "array", "items": { "type": "string" }, "maxItems": 20, "default": [] },
+          "fields": { "description": "The work item's fields: a field name to a JSON pointer, whose value keeps its JSON type; validated by the workflow's `metadata.inputs`.", "type": "object", "additionalProperties": { "type": "string", "pattern": "^(/([^~/]|~[01])*)+$" }, "default": {} },
+          "workflow": { "description": "The workflow of the work item; the project's routing when absent.", "type": ["string", "null"], "default": null },
+          "when": { "description": "A JSON pointer to the text, or one of the texts, the payload must hold there (S51-05); a payload that does not match is acknowledged and recorded `ignored`.", "type": "object", "propertyNames": { "pattern": "^(/([^~/]|~[01])*)+$" }, "additionalProperties": { "oneOf": [ { "type": "string" }, { "type": "array", "items": { "type": "string" }, "minItems": 1 } ] }, "default": {} },
+          "auth": { "description": "`token`: the bearer token; `signature`: `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>` keyed by the signing secret (S51-04).", "enum": ["token", "signature"], "default": "token" }
+        }
+      },
+      "default": []
+    },
+    "start_rules": {
+      "description": "Tracker items that start their work item without the `agent-ready` label (S51-03, ADR 0113): the first rule whose every condition holds starts an item the project does not hold yet.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "anyOf": [
+          { "required": ["labels_any"], "properties": { "labels_any": { "minItems": 1 } } },
+          { "required": ["labels_all"], "properties": { "labels_all": { "minItems": 1 } } },
+          { "required": ["item_type"], "properties": { "item_type": { "type": "string" } } },
+          { "required": ["states"], "properties": { "states": { "minItems": 1 } } }
+        ],
+        "properties": {
+          "labels_any": { "type": "array", "items": { "type": "string" }, "default": [] },
+          "labels_all": { "type": "array", "items": { "type": "string" }, "default": [] },
+          "item_type": { "description": "The item's type in its tracker (Jira `issuetype`, a ServiceNow table).", "type": ["string", "null"], "default": null },
+          "states": { "description": "The item's state in its tracker.", "type": "array", "items": { "type": "string" }, "default": [] }
+        }
+      },
+      "default": []
+    },
     "a2a": {
       "description": "What the A2A door takes for this project's skills (ADR 0078 §6).",
       "type": "object",

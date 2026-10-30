@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from choregos_contracts import InboundEvent, ProjectConfig, Risk, Size
+from choregos_contracts import InboundEvent, ProjectConfig, Risk, Size, StartRule
 from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItemData
 
 from ..errors import ConfigurationError
@@ -98,10 +98,13 @@ class JiraTracker:
         )
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
-        """Polling de secours (S3-06) : les issues ouvertes étiquetées `agent-ready`."""
+        """Backup polling (S3-06): the open issues labelled `agent-ready`, or matching
+        one of the project's start rules (S51-03), each rule a JQL clause."""
+        wanted = " OR ".join(
+            [f"labels = {_jql(self.agent_ready_label)}", *(f"({_rule_jql(r)})" for r in project.start_rules)]
+        )
         jql = (
-            f'project = "{self.project_key}" AND labels = "{self.agent_ready_label}" '
-            "AND statusCategory != Done ORDER BY updated DESC"
+            f'project = "{self.project_key}" AND ({wanted}) AND statusCategory != Done ORDER BY updated DESC'
         )
         payload = await self.client.request(
             "GET", "/rest/api/3/search/jql", params={"jql": jql, "maxResults": 100, "fields": "key"}
@@ -301,3 +304,21 @@ def _parse_enum(enum: Any, fields: dict[str, Any], name: str) -> Any:
         return enum(str(raw).upper() if enum is Size else str(raw).lower())
     except ValueError:
         return None
+
+
+def _jql(value: str) -> str:
+    """A JQL string literal: quotes and backslashes escaped, so a label cannot end the clause."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _rule_jql(rule: StartRule) -> str:
+    """A start rule (S51-03) as a JQL clause: every condition, joined by AND."""
+    parts: list[str] = []
+    if rule.labels_any:
+        parts.append(f"labels in ({', '.join(_jql(label) for label in rule.labels_any)})")
+    parts.extend(f"labels = {_jql(label)}" for label in rule.labels_all)
+    if rule.item_type:
+        parts.append(f"issuetype = {_jql(rule.item_type)}")
+    if rule.states:
+        parts.append(f"status in ({', '.join(_jql(state) for state in rule.states)})")
+    return " AND ".join(parts)

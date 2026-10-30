@@ -835,6 +835,29 @@ async def test_received_events_stay_in_their_organisation(deux_organisations: di
         assert (await session.execute(select(ReceivedEvent))).scalars().all() == [], "no scope, nothing"
 
 
+async def test_trigger_tokens_stay_in_their_organisation(deux_organisations: dict[str, str]) -> None:
+    """HTTP trigger tokens (S51-01): org `a` reads none of `b`'s digests, writes none into it, and a
+    session with no scope reads nothing."""
+    from choregos_api.db.models import Organization, TriggerToken
+    from choregos_api.db.session import session_scope
+    from sqlalchemy.exc import DBAPIError
+
+    def row(org_id: str, project_id: str, name: str) -> TriggerToken:
+        return TriggerToken(org_id=org_id, project_id=project_id, name=name, token_sha256="0" * 64)
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for slug in ("a", "b"):
+            session.add(row(ids[slug], deux_organisations[slug], f"incident-{slug}"))
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(TriggerToken.name))).scalars().all() == ["incident-a"]
+    with pytest.raises(DBAPIError):  # a write INTO b from a's session is refused by the policy
+        async with session_scope(orgs=["a"]) as session:
+            session.add(row(ids["b"], deux_organisations["b"], "stolen"))
+    async with session_scope() as session:
+        assert (await session.execute(select(TriggerToken))).scalars().all() == [], "no scope, nothing"
+
+
 async def test_org_egress_rules_are_isolated(deux_organisations: dict[str, str]) -> None:
     """The egress allowlist (S39-22): org `a` reads none of `b`'s rules, writes none into it, and a
     session without a scope sees nothing."""

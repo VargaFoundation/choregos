@@ -46,6 +46,7 @@ streams:
   S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
   S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0110-0112)"
   S50: "An agent acts under an identity: assigned, own, on behalf of a person; child agents (ADR 0107)"
+  S51: "A workflow starts from a trigger: tracker, HTTP, schedule or a person, one audit (ADR 0113)"
 
 stories:
 
@@ -3937,3 +3938,45 @@ stories:
     size: L
     depends_on: [S50-01]
     notes: "ADR 0107 story 4, amends ADR 0077 point 1"
+
+  # ───────────── S51 — A workflow starts from a trigger (ADR 0113) ─────────────
+  - id: S51-01
+    title: "contract(schemas): HTTP triggers open a work item in a workflow or by routing; triggers and schedules are received events"
+    stream: S51
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "ADR 0113 §1-7, contract-change PR (ADR 0001). Acceptance: a wrong token, a missing key, a refused workflow and an external tracker each refused and recorded; one work item per key; a refusal keeps no dedup row; the routing reads `trigger:<name>`."
+  - id: S51-02
+    title: "feat(web): a project's triggers — URL, token minted once, fire with a sample payload"
+    stream: S51
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S51-01]
+    notes: "ADR 0113 §3, §5."
+  - id: S51-03
+    title: "feat(api): a tracker event starts on a project rule, not only on `agent-ready`"
+    stream: S51
+    sprint: 2
+    priority: 2
+    size: M
+    depends_on: [S51-01]
+    notes: "ADR 0113, ServiceNow two-way. Acceptance: a ServiceNow incident matching the rule starts without a label; an item matching none is recorded `ignored_not_agent_ready` as today."
+  - id: S51-04
+    title: "feat(api): HMAC-signed trigger deliveries"
+    stream: S51
+    sprint: 2
+    priority: 3
+    size: S
+    depends_on: [S51-01]
+    notes: "ADR 0113 Consequences."
+  - id: S51-05
+    title: "contract(schemas): a trigger's `when` filter and the `ignored` outcome"
+    stream: S51
+    sprint: 2
+    priority: 3
+    size: S
+    depends_on: [S51-01]
+    notes: "ADR 0113 Consequences, contract-change PR."

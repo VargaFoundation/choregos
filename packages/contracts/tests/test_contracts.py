@@ -624,3 +624,67 @@ def test_an_organisation_lists_the_slugs_it_had_and_an_alias_can_be_released() -
     release = spec["paths"]["/orgs/{org}/aliases/{alias}"]["delete"]
     assert release["operationId"] == "releaseOrgAlias"
     assert set(release["responses"]) == {"204", "403", "404"}
+
+
+def test_a_trigger_maps_a_payload_by_json_pointers() -> None:
+    """S51-01 (ADR 0113): the schema and the model refuse the same triggers."""
+    from choregos_contracts import TriggerConfig
+
+    gaps: list[str] = []
+    node = contracts.load_schema("project.schema.json")["properties"]["triggers"]["items"]
+    _comparer("project.triggers", node, TriggerConfig, gaps)
+    assert not gaps, "\n".join(gaps)
+
+    validator = _validator("project.schema.json")
+    base = _load("project.example.json")
+    assert [t.name for t in ProjectConfig.model_validate(base).triggers] == ["incident"]
+    good = {"name": "alert", "title": "{/alert/name}", "key": "/id", "fields": {"host": "/alert/host"}}
+    assert not list(validator.iter_errors(base | {"triggers": [good]}))
+    for bad in (
+        good | {"key": "id"},
+        good | {"fields": {"host": "alert.host"}},
+        good | {"name": "Alert"},
+        good | {"secret": "s3cret"},
+        {"name": "alert"},
+    ):
+        assert list(validator.iter_errors(base | {"triggers": [bad]})), bad
+        with pytest.raises(ValueError):
+            ProjectConfig.model_validate(base | {"triggers": [bad]})
+    with pytest.raises(ValueError, match="two triggers named `alert`"):
+        ProjectConfig.model_validate(base | {"triggers": [good, good]})
+    with pytest.raises(ValueError, match="not a JSON pointer placeholder"):
+        TriggerConfig(name="alert", title="{/a~9}")
+
+
+def test_a_trigger_filters_and_signs_and_a_start_rule_needs_a_condition() -> None:
+    """S51-03 to S51-05 (ADR 0113): the schema and the model refuse the same configurations."""
+    from choregos_contracts import StartRule
+
+    gaps: list[str] = []
+    _comparer(
+        "project.start_rules",
+        contracts.load_schema("project.schema.json")["properties"]["start_rules"]["items"],
+        StartRule,
+        gaps,
+    )
+    assert not gaps, "\n".join(gaps)
+    validator = _validator("project.schema.json")
+    base = _load("project.example.json")
+    trigger = {"name": "alert", "title": "t"}
+    good = base | {
+        "triggers": [trigger | {"when": {"/state": ["1", "2"], "/kind": "outage"}, "auth": "signature"}],
+        "start_rules": [{"item_type": "incident", "states": ["New"]}],
+    }
+    assert not list(validator.iter_errors(good))
+    ProjectConfig.model_validate(good)
+    for bad in (
+        base | {"triggers": [trigger | {"when": {"state": "1"}}]},
+        base | {"triggers": [trigger | {"when": {"/state": []}}]},
+        base | {"triggers": [trigger | {"auth": "basic"}]},
+        base | {"start_rules": [{}]},
+        base | {"start_rules": [{"labels_any": []}]},
+        base | {"start_rules": [{"status": "New"}]},
+    ):
+        assert list(validator.iter_errors(bad)), bad
+        with pytest.raises(ValueError):
+            ProjectConfig.model_validate(bad)

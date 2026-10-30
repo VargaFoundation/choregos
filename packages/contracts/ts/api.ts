@@ -3523,15 +3523,54 @@ export type CostEstimate = {
 export type ReceivedEvent = {
   id: string;
   received_at: string;
-  /** jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server> */
+  /** jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>, trigger:<name>, schedule:<name> */
   source: string;
   event_type: string;
   delivery_id?: string | null;
-  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready";
+  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready" | "already_open" | "refused" | "ignored";
   work_item_key?: string | null;
   work_item_id?: string | null;
   /** Built from typed fields only: key, label, from → to, PR number, conclusion. */
   summary: string;
+};
+
+/** A project's HTTP trigger (S51-01, ADR 0113); its token is never listed. */
+export type Trigger = {
+  name: string;
+  url: string;
+  workflow?: string | null;
+  title: string;
+  key?: string | null;
+  labels?: Array<string>;
+  fields?: {
+    [key: string]: string;
+  };
+  /** A JSON pointer to the text, or texts, a payload must hold (S51-05). */
+  when?: {
+    [key: string]: unknown;
+  };
+  auth?: "token" | "signature";
+  has_token: boolean;
+  token_created_at?: string | null;
+};
+
+/** A trigger's new token and the signing secret derived from it (S51-04), shown once. */
+export type TriggerToken = {
+  name: string;
+  url: string;
+  token: string;
+  /** The HMAC-SHA256 key of `X-Choregos-Signature`; it changes with the token. */
+  signing_secret: string;
+};
+
+/** What a trigger call did; `outcome` is the received event's, absent on a replayed delivery. */
+export type TriggerAck = {
+  accepted: boolean;
+  duplicate?: boolean;
+  outcome?: "created_work_item" | "already_open" | "ignored" | null;
+  work_item_id?: string | null;
+  work_item_key?: string | null;
+  workflow?: string | null;
 };
 
 export type ReceivedEventPage = {
@@ -4373,6 +4412,9 @@ export interface Operations {
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
+  fireTrigger: { method: "POST"; path: "/projects/{id}/triggers/{name}/fire"; body: {
+  [key: string]: unknown;
+}; response: TriggerAck };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
@@ -4606,6 +4648,7 @@ export interface Operations {
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
+  listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
@@ -4690,6 +4733,7 @@ export interface Operations {
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
+  rotateTriggerToken: { method: "POST"; path: "/projects/{id}/triggers/{name}/token"; body: never; response: TriggerToken };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
@@ -4717,6 +4761,9 @@ export interface Operations {
   theme: { method: "GET"; path: "/theme"; body: never; response: Theme };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
   transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };
+  triggerWebhook: { method: "POST"; path: "/webhooks/triggers/{org}/{project}/{name}"; body: {
+  [key: string]: unknown;
+}; response: TriggerAck };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
   uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
