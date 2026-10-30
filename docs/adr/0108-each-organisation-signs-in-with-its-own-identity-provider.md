@@ -51,7 +51,7 @@ may grant is a security property the core must hold whatever the edition does.
    dropped.
 5. **A tenant's subject is namespaced**: stored as `tenant:<org id>:<sub>`, because two providers may
    issue the same `sub` (the unique `users.oidc_sub` turned that into a 500).
-6. **A tenant's OIDC provider is never guessed.** A discovery document that cannot be read answers 502;
+6. **A tenant's OIDC provider is never guessed.** A discovery document that cannot be read answers 503 (amended by ADR 0100);
    only the instance's provider keeps its Keycloak fallback (S47-04 removes that one too). An address the
    provider marks `email_verified: false` is refused when `require_email_verified` (the default; Entra ID
    omits the claim and is accepted).

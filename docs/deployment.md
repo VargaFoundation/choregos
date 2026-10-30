@@ -919,7 +919,12 @@ The userinfo answer must give `sub` and `email`. A sign-in is bound to `sub`: a 
 account even when its e-mail changed, and an existing account is linked by e-mail only while it is not bound
 to another subject. A provider that says `email_verified: false` never links an existing account by e-mail
 (`choregos-api.oidcRequireEmailVerified`, default `true`; a provider that omits the claim, such as Entra ID,
-is accepted). When the token endpoint returns an ID token, its `iss`, `aud` and `nonce` must match the
+is accepted); it also refuses a new account for such an address and keeps a returning account's stored
+address. An account bound to another subject is refused, except that a per-organisation provider re-links
+an address of its own domains (audited `user.relink`), so an organisation can move to its own provider.
+When you **migrate the instance's identity provider** (every subject changes), set
+`choregos-api.oidcRelinkVerifiedEmail: true` so accounts whose address the new provider asserts as
+`email_verified: true` are re-linked, then set it back to `false`. When the token endpoint returns an ID token, its `iss`, `aud` and `nonce` must match the
 sign-in and its `sub` must equal userinfo's; otherwise the sign-in is refused (401).
 
 Roles come from **groups**, and a group names its organisation:

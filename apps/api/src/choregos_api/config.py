@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     #: An existing account is linked by e-mail only when the provider does not say
     #: `email_verified: false` (Entra omits the claim, so only an explicit false refuses).
     oidc_require_email_verified: bool = True
+    #: Temporary switch for an identity provider MIGRATION (ADR 0100): an account bound to another
+    #: subject is re-linked when the provider asserts `email_verified: true`. Off: it is refused.
+    oidc_relink_verified_email: bool = False
     #: La porte MCP accepte aussi les jetons OAuth émis par l'IdP (ADR 0030, RFC 9728) : claude.ai et
     #: les clients hébergés ne savent pas présenter un jeton `chg_`. Éteint par défaut.
     mcp_oauth_enabled: bool = False

@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 import respx
 from choregos_api.config import reset_settings_cache
-from choregos_api.db.models import User
+from choregos_api.db.models import AuditLog, User
 from choregos_api.db.session import session_scope
 from choregos_api.routers.auth import oublier_la_decouverte
 from httpx import AsyncClient, Response
@@ -50,18 +50,23 @@ async def _sign_in(
     client: AsyncClient,
     userinfo: dict[str, Any],
     *,
-    id_token: str | None = None,
-    nonce: str | None = None,
+    token_claims: dict[str, Any] | None = None,
+    id_token: bool = True,
 ) -> Response:
-    """A whole sign-in: the login redirect, then the callback. `nonce` overrides the ID token's."""
+    """A whole sign-in: the login redirect, then the callback.
+
+    The ID token carries the real nonce of the redirect and the userinfo's `sub`, so only what a test
+    overrides in `token_claims` can make the callback refuse. `id_token=False`: the provider returns none.
+    """
     with respx.mock(assert_all_called=False) as mock:
         mock.get(DISCOVERY_URL).mock(return_value=Response(200, json=DISCOVERY))
         start = await client.get("/api/v1/auth/login")
         params = parse_qs(urlparse(start.headers["location"]).query)
-        token = id_token or _id_token(nonce=nonce or params["nonce"][0])
-        mock.post(f"{ISSUER}/token").mock(
-            return_value=Response(200, json={"access_token": "at", "id_token": token})
-        )
+        tokens: dict[str, Any] = {"access_token": "at"}
+        if id_token:
+            claims = {"sub": userinfo.get("sub"), "nonce": params["nonce"][0]} | (token_claims or {})
+            tokens["id_token"] = _id_token(**claims)
+        mock.post(f"{ISSUER}/token").mock(return_value=Response(200, json=tokens))
         mock.get(f"{ISSUER}/userinfo").mock(return_value=Response(200, json=userinfo))
         return await client.get("/api/v1/auth/callback", params={"code": "c", "state": params["state"][0]})
 
@@ -115,11 +120,10 @@ async def test_an_unverified_email_does_not_take_over_an_account(client: AsyncCl
     async with session_scope(orgs="*") as session:
         session.add(User(email="victim@varga.dev", display_name="Victim", oidc_sub=None))
     response = await _sign_in(
-        client,
-        {"sub": "attacker-sub", "email": "victim@varga.dev", "email_verified": False},
-        id_token=_id_token(sub="attacker-sub", nonce="ignored"),
+        client, {"sub": "attacker-sub", "email": "victim@varga.dev", "email_verified": False}
     )
     assert response.status_code == 401, response.text
+    assert "not verified" in response.text
     (victim,) = [u for u in await _users() if u.email == "victim@varga.dev"]
     assert victim.oidc_sub is None
 
@@ -128,18 +132,18 @@ async def test_an_email_bound_to_another_subject_is_refused(client: AsyncClient,
     async with session_scope(orgs="*") as session:
         session.add(User(email="victim@varga.dev", display_name="Victim", oidc_sub="victim-sub"))
     response = await _sign_in(
-        client,
-        {"sub": "attacker-sub", "email": "victim@varga.dev", "email_verified": True},
-        id_token=_id_token(sub="attacker-sub", nonce="ignored"),
+        client, {"sub": "attacker-sub", "email": "victim@varga.dev", "email_verified": True}
     )
     assert response.status_code == 401, response.text
+    assert "belongs to another identity" in response.text
+    (victim,) = await _users()
+    assert victim.oidc_sub == "victim-sub"
 
 
 async def test_the_id_token_and_userinfo_must_name_the_same_subject(client: AsyncClient, org: str) -> None:
-    response = await _sign_in(
-        client, {"sub": "u-1", "email": "jo@varga.dev"}, id_token=_id_token(sub="x", nonce="ignored")
-    )
+    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims={"sub": "x"})
     assert response.status_code == 401, response.text
+    assert "two different subjects" in response.text
 
 
 async def test_the_nonce_is_sent_and_a_wrong_one_is_refused(client: AsyncClient, org: str) -> None:
@@ -147,16 +151,35 @@ async def test_the_nonce_is_sent_and_a_wrong_one_is_refused(client: AsyncClient,
         mock.get(DISCOVERY_URL).mock(return_value=Response(200, json=DISCOVERY))
         start = await client.get("/api/v1/auth/login")
     assert parse_qs(urlparse(start.headers["location"]).query)["nonce"][0]
-    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev"}, nonce="another-nonce")
+    response = await _sign_in(
+        client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims={"nonce": "another-nonce"}
+    )
     assert response.status_code == 401, response.text
+    assert "nonce" in response.text
 
 
-async def test_an_id_token_for_another_audience_or_issuer_is_refused(client: AsyncClient, org: str) -> None:
-    userinfo = {"sub": "u-1", "email": "jo@varga.dev"}
-    wrong_aud = await _sign_in(client, userinfo, id_token=_id_token(aud="someone-else", nonce="n"))
-    wrong_iss = await _sign_in(client, userinfo, id_token=_id_token(iss="https://other.example", nonce="n"))
-    assert wrong_aud.status_code == 401
-    assert wrong_iss.status_code == 401
+@pytest.mark.parametrize(
+    ("claims", "detail"),
+    [
+        ({"aud": "someone-else"}, "not issued for this client"),
+        ({"aud": ["a", "b"]}, "not issued for this client"),
+        ({"aud": 7}, "not issued for this client"),
+        ({"iss": "https://other.example"}, "another identity provider"),
+    ],
+)
+async def test_an_id_token_for_another_audience_or_issuer_is_refused(
+    client: AsyncClient, org: str, claims: dict[str, Any], detail: str
+) -> None:
+    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims=claims)
+    assert response.status_code == 401, response.text
+    assert detail in response.text
+
+
+async def test_an_audience_list_naming_the_client_is_accepted(client: AsyncClient, org: str) -> None:
+    response = await _sign_in(
+        client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims={"aud": ["x", "choregos"]}
+    )
+    assert response.status_code == 307, response.text
 
 
 async def test_a_returning_subject_keeps_its_account_after_an_email_change(
@@ -170,6 +193,22 @@ async def test_a_returning_subject_keeps_its_account_after_an_email_change(
     assert (user.oidc_sub, user.email) == ("u-1", "new@varga.dev")
 
 
+async def test_a_returning_subject_does_not_adopt_an_unverified_email(client: AsyncClient, org: str) -> None:
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="old@varga.dev", display_name="Jo", oidc_sub="u-1"))
+    response = await _sign_in(client, {"sub": "u-1", "email": "ceo@varga.dev", "email_verified": False})
+    assert response.status_code == 307, response.text
+    (user,) = await _users()
+    assert user.email == "old@varga.dev"
+
+
+async def test_a_new_account_is_not_created_for_an_unverified_email(client: AsyncClient, org: str) -> None:
+    response = await _sign_in(client, {"sub": "u-9", "email": "new@varga.dev", "email_verified": False})
+    assert response.status_code == 401, response.text
+    assert "not verified" in response.text
+    assert await _users() == []
+
+
 async def test_a_verified_email_links_an_unbound_account(client: AsyncClient, org: str) -> None:
     async with session_scope(orgs="*") as session:
         session.add(User(email="jo@varga.dev", display_name="Jo", oidc_sub=None))
@@ -177,3 +216,43 @@ async def test_a_verified_email_links_an_unbound_account(client: AsyncClient, or
     assert response.status_code == 307, response.text
     (user,) = await _users()
     assert user.oidc_sub == "u-1"
+
+
+@pytest.mark.parametrize("sub", ["dev|jo@varga.dev", "tenant:some-org:u-1"])
+async def test_the_instance_provider_cannot_issue_a_reserved_subject(
+    client: AsyncClient, org: str, sub: str
+) -> None:
+    response = await _sign_in(client, {"sub": sub, "email": "jo@varga.dev"})
+    assert response.status_code == 401, response.text
+    assert "reserved" in response.text
+
+
+async def test_an_idp_migration_relinks_a_verified_email_only_when_switched_on(
+    client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="jo@varga.dev", display_name="Jo", oidc_sub="old-idp-sub"))
+    verified = {"sub": "new-idp-sub", "email": "jo@varga.dev", "email_verified": True}
+    refused = await _sign_in(client, verified)
+    assert refused.status_code == 401, "the default must refuse a re-link"
+    monkeypatch.setenv("CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL", "true")
+    reset_settings_cache()
+    # The switch is no way round `email_verified`: a provider that omits the claim is still refused.
+    omitted = await _sign_in(client, {"sub": "new-idp-sub", "email": "jo@varga.dev"})
+    assert omitted.status_code == 401
+    relinked = await _sign_in(client, verified)
+    assert relinked.status_code == 307, relinked.text
+    (user,) = await _users()
+    assert user.oidc_sub == "new-idp-sub"
+    async with session_scope(orgs="*") as session:
+        actions = [row.action for row in (await session.execute(select(AuditLog))).scalars()]
+    assert "user.relink" in actions
+
+
+async def test_an_unreachable_discovery_url_is_a_503_not_a_500(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", "https://idp.example:not-a-port/realm")
+    reset_settings_cache()
+    response = await client.get("/api/v1/auth/login")
+    assert response.status_code == 503, response.text

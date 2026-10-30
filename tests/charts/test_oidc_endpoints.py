@@ -67,7 +67,15 @@ def test_by_default_no_endpoint_variable_is_rendered() -> None:
 
 
 def test_an_extra_env_cannot_set_them_a_second_time() -> None:
-    for name in (*ENDPOINTS, "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED"):
+    for name in (*ENDPOINTS, "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED", "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL"):
         rendered = _render(f'global.extraEnv=[{{"name":"{name}","value":"x"}}]')
         assert rendered.returncode != 0, name
         assert "choregos-api.oidc" in rendered.stderr
+
+
+def test_the_two_switches_render_true_or_false_only() -> None:
+    off = _api_env("choregos-api.oidcRequireEmailVerified=false")
+    assert off["CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED"]["value"] == "false"
+    assert _api_env()["CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL"]["value"] == "false"
+    on = _api_env("choregos-api.oidcRelinkVerifiedEmail=true")
+    assert on["CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL"]["value"] == "true"

@@ -141,7 +141,7 @@ async def _discover(issuer: str) -> dict[str, str]:
                 missing = [name for name, value in found.items() if not value]
                 if missing:
                     reason = f"the document has no {', '.join(missing)} endpoint"
-    except (httpx.HTTPError, ValueError) as exc:
+    except Exception as exc:  # whatever breaks the request is an unavailable provider
         reason = f"{type(exc).__name__}: {exc}"
     if reason:
         logger.warning("OIDC discovery failed", issuer=issuer, reason=reason)
@@ -243,7 +243,11 @@ def _check_id_token_claims(claims: dict[str, Any], *, issuer: str, client_id: st
     if str(claims.get("iss", "")).rstrip("/") != issuer.rstrip("/"):
         raise unauthorized("the ID token was issued by another identity provider")
     audience = claims.get("aud")
-    if not (audience == client_id if isinstance(audience, str) else client_id in (audience or [])):
+    if isinstance(audience, str):
+        matches = audience == client_id
+    else:
+        matches = isinstance(audience, list) and client_id in audience
+    if not matches:
         raise unauthorized("the ID token was not issued for this client")
     if "nonce" in claims and claims["nonce"] != nonce:
         raise unauthorized("the ID token nonce does not match this sign-in")
@@ -346,23 +350,38 @@ async def _ensure_user(session: Any, email: str, display_name: str, sub: str | N
 
 
 async def _ensure_oidc_user(
-    session: Any, info: dict[str, Any], settings: Settings, *, stored_sub: str | None = None
+    session: Any,
+    info: dict[str, Any],
+    settings: Settings,
+    *,
+    stored_sub: str | None = None,
+    tenant_org_id: str | None = None,
 ) -> User:
     """The console user for a provider's identity: bound to its `sub`, never to an e-mail alone.
 
     `stored_sub` is the subject as stored (a tenant's is namespaced); it defaults to `info["sub"]`.
-    A returning subject keeps its account, whatever its e-mail became. An existing account with that
-    e-mail is linked only while it is unbound, and not when the provider calls the address
-    unverified (ADR 0100).
+    `tenant_org_id` is set by a tenant's provider, whose caller already proved the address domain is
+    the tenant's (ADR 0108).
+
+    - A returning subject keeps its account. Its e-mail follows the provider, unless the provider
+      calls the new address unverified.
+    - An account with that e-mail and no subject (or a development one) is linked, unless the
+      provider calls the address unverified.
+    - An account bound to ANOTHER subject is refused, except for a re-link: by a tenant's provider
+      (the domain is the tenant's), or on the instance when `oidc_relink_verified_email` is on and
+      the provider asserts `email_verified: true` (an identity provider migration). Audited.
+    - A new account is not created for an address the provider calls unverified.
+    (ADR 0100)
     """
     sub = stored_sub or str(info["sub"])
     email = str(info["email"])
+    unverified = settings.oidc_require_email_verified and info.get("email_verified") is False
     by_sub: User | None = (
         await session.execute(select(User).where(User.oidc_sub == sub))
     ).scalar_one_or_none()
     if by_sub is not None:
         by_sub.last_login_at = utcnow()
-        if by_sub.email != email:
+        if by_sub.email != email and not unverified:
             taken = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
             if taken is None:
                 by_sub.email = email
@@ -371,13 +390,29 @@ async def _ensure_oidc_user(
         await session.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
     if by_email is not None:
-        if by_email.oidc_sub and not by_email.oidc_sub.startswith("dev|"):
-            raise unauthorized("this e-mail belongs to another identity at the provider")
-        if settings.oidc_require_email_verified and info.get("email_verified") is False:
+        if unverified:
             raise unauthorized("the provider says this e-mail is not verified")
+        bound_elsewhere = bool(by_email.oidc_sub) and not str(by_email.oidc_sub).startswith("dev|")
+        if bound_elsewhere:
+            relink = tenant_org_id is not None or (
+                settings.oidc_relink_verified_email and info.get("email_verified") is True
+            )
+            if not relink:
+                raise unauthorized("this e-mail belongs to another identity at the provider")
+            await record(
+                session,
+                None,
+                "user.relink",
+                org_id=tenant_org_id,
+                target_type="user",
+                target_id=by_email.id,
+                previous_sub=by_email.oidc_sub,
+            )
         by_email.oidc_sub = sub
         by_email.last_login_at = utcnow()
         return by_email
+    if unverified:
+        raise unauthorized("the provider says this e-mail is not verified")
     user = User(
         email=email,
         display_name=str(info.get("name") or "") or email.split("@", maxsplit=1)[0],
@@ -476,7 +511,7 @@ async def _same_organisation(session: Any, first: str, second: str) -> bool:
     return a is not None and b is not None and a.id == b.id
 
 
-async def _tenant_user(
+async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-only
     session: Any,
     tenant_org: str,
     *,
@@ -485,8 +520,13 @@ async def _tenant_user(
     sub: str | None,
     groups: list[str],
     settings: Settings,
+    oidc: bool = False,
+    email_verified: bool | None = None,
 ) -> User:
     """A sign-in vouched for by a tenant's own provider, confined to that tenant (ADR 0108).
+
+    `oidc` is set by the OIDC callback only: the identity is then bound to the provider's subject
+    (ADR 0100). An extension's protocol (`terminer_la_connexion`) keeps its identity handling.
 
     The address must belong to a domain the resolver gives to this same tenant, or any tenant's
     provider could sign in a member of another one. The subject is namespaced by the tenant: two
@@ -503,12 +543,12 @@ async def _tenant_user(
             f"the address domain {domain!r} does not belong to organisation {org.slug!r}: "
             "its provider cannot sign it in"
         )
-    if sub:
-        info = {"sub": sub, "email": email, "name": name}
-        user = await _ensure_oidc_user(session, info, settings, stored_sub=f"tenant:{org.id}:{sub}")
+    stored = f"tenant:{org.id}:{sub}" if sub else None
+    if oidc and sub:
+        info = {"sub": sub, "email": email, "name": name, "email_verified": email_verified}
+        user = await _ensure_oidc_user(session, info, settings, stored_sub=stored, tenant_org_id=org.id)
     else:
-        # An extension's protocol that carries no subject (`terminer_la_connexion`): unchanged.
-        user = await _ensure_user(session, email, name, None)
+        user = await _ensure_user(session, email, name, stored)
     await _map_groups_to_roles(session, user, groups, settings, only_org=org)
     return user
 
@@ -619,8 +659,12 @@ async def callback(
                 sub=info.get("sub"),
                 groups=provider.mapped_groups(info.get(provider.groups_claim)),
                 settings=settings,
+                oidc=True,
+                email_verified=info.get("email_verified"),
             )
         else:
+            if sub.startswith(("dev|", "tenant:")):
+                raise unauthorized("the identity provider gave a subject reserved for another sign-in")
             user = await _ensure_oidc_user(session, info, settings)
             await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 

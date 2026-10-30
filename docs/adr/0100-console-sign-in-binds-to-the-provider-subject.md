@@ -32,11 +32,22 @@ Findings on `origin/main` before this change:
    endpoints set explicitly (all three or none), for a provider that publishes no discovery document. No
    Keycloak layout is guessed.
 2. **Identity is `sub`.** A user with that subject is the account, whatever its e-mail became (the e-mail
-   follows unless another account holds it). Otherwise an account with that e-mail is linked only if it is
-   unbound (a development `dev|` subject counts as unbound) and the provider does not say
-   `email_verified: false` (`require_email_verified`, default true; only an explicit false refuses, since
-   Entra omits the claim). Otherwise a new account is created. An account bound to another subject is never
-   attached to. A tenant's subject is namespaced `tenant:<org id>:<sub>` (ADR 0108).
+   follows unless another account holds it, or the provider calls the new address unverified). Otherwise an
+   account with that e-mail is linked only if it is unbound (a development `dev|` subject counts as unbound)
+   and the provider does not say `email_verified: false` (`require_email_verified`, default true; only an
+   explicit false refuses, since Entra omits the claim). Otherwise a new account is created, never for an
+   address the provider calls unverified. A tenant's subject is namespaced `tenant:<org id>:<sub>`
+   (ADR 0108), and the instance provider cannot issue a subject starting `dev|` or `tenant:`.
+   **Re-link.** An account bound to another subject is refused, with two exceptions, both audited as
+   `user.relink`:
+   - a **tenant's** OIDC provider may re-link an address whose domain belongs to that tenant (the proof
+     ADR 0108 §3 already requires): an organisation that switches to its own provider keeps its members;
+   - on the **instance**, `oidc_relink_verified_email` (`CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL`, chart
+     `choregos-api.oidcRelinkVerifiedEmail`, default false) lets the provider re-link an account whose
+     address it asserts with `email_verified: true`. It is a temporary switch for an identity provider
+     migration (every account's subject changes): turn it on, let people sign in, turn it off. A provider
+     that omits the claim is not enough.
+   The extension path (`terminer_la_connexion`) keeps its previous identity handling and never re-binds.
 3. **The ID token's claims are checked, its signature is not.** `iss` equals the issuer, `aud` contains the
    client id, `nonce` (sent in the login redirect) equals the handshake's when present, and its `sub` equals
    userinfo's. The token comes straight from the token endpoint over TLS in the code exchange, which OpenID
@@ -50,6 +61,10 @@ Findings on `origin/main` before this change:
 - A tenant's discovery failure answers 503 instead of 502.
 - The development login and `terminer_la_connexion` (an extension's protocol that carries its own subject)
   keep their identity handling.
+
+- **Caveat: rows that already exist.** Accounts created before this change carry whatever `oidc_sub` the
+  old code stored. Nothing is migrated: an instance whose provider issues the same subjects keeps working;
+  one whose subjects changed needs the migration switch above (or its users are refused).
 
 ## Rejected
 
