@@ -81,11 +81,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/mcp-gateway": "contract only until S46-08 serves it; console card: S46-13",
-    "/orgs/{org}/mcp-gateway/test": "contract only until S46-08 serves it; console card: S46-13",
-    "/orgs/{org}/mcp-gateway/assertion-key": "contract only until S46-07 serves it; console card: S46-13",
-}
+NO_CLIENT_YET: dict[str, str] = {}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

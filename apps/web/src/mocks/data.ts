@@ -84,7 +84,7 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
-import type { OutboundProxyPut, OutboundProxyState, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
+import type { McpGatewayPut, McpGatewayState, OutboundProxyPut, OutboundProxyState, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
@@ -2684,6 +2684,75 @@ function outboundProxyApi(method: string, bare: string, body: unknown): unknown 
   return structuredClone(mockOutboundProxy);
 }
 
+/** The organisation's MCP gateway (ADR 0105), kept for the time of the page; the secret is never stored here, as in the API. */
+let mockMcpGateway: McpGatewayState = {
+  gateway: null,
+  updated_by: null,
+  updated_at: null,
+  assertion: {
+    issuer: "https://choregos.example.com/orgs/acme",
+    jwks_url: "https://choregos.example.com/api/v1/orgs/acme/mcp-gateway/jwks.json",
+    keys: [],
+  },
+};
+let mockGatewaySecret = false;
+
+function mockAssertionKey(): void {
+  const keys = mockMcpGateway.assertion.keys.map((k) => ({ ...k, current: false }));
+  keys.push({ kid: `key-${keys.length + 1}`, created_at: new Date().toISOString(), current: true });
+  mockMcpGateway = { ...mockMcpGateway, assertion: { ...mockMcpGateway.assertion, keys } };
+}
+
+/** The five MCP-gateway routes, as the API answers them. */
+function mcpGatewayApi(method: string, bare: string, body: unknown): unknown {
+  if (!/^\/orgs\/[^/]+\/mcp-gateway(\/test|\/assertion-key)?$/.test(bare)) return undefined;
+  if (bare.endsWith("/assertion-key")) {
+    mockAssertionKey();
+    return structuredClone(mockMcpGateway.assertion);
+  }
+  if (bare.endsWith("/test")) {
+    if (!mockMcpGateway.gateway) throw new ApiError(404, { title: "Not Found", detail: "no MCP gateway is set" });
+    const { server } = body as { server: string };
+    if (server.includes("fail"))
+      return { ok: false, server, protocol_version: null, server_info: null, tools: null, elapsed_ms: 212, error: "the gateway answered 502 Bad Gateway" };
+    return { ok: true, server, protocol_version: "2025-06-18", server_info: { name: server, version: "1.0.0" }, tools: 3, elapsed_ms: 320, error: null };
+  }
+  if (method === "PUT") {
+    const put = body as McpGatewayPut;
+    if (put.auth.type !== "jwt_assertion" && put.secret === undefined && !mockGatewaySecret)
+      throw new ApiError(422, { title: "Unprocessable Entity", detail: "a secret is required the first time" });
+    if (put.auth.type === "jwt_assertion" && !put.audience)
+      throw new ApiError(422, { title: "Unprocessable Entity", detail: "an audience is required for a signed assertion" });
+    if (put.secret !== undefined) mockGatewaySecret = true;
+    mockMcpGateway = {
+      ...mockMcpGateway,
+      gateway: {
+        mode: put.mode,
+        endpoint: put.endpoint,
+        routing: put.routing,
+        server_header: put.server_header ?? null,
+        auth: put.auth,
+        audience: put.audience ?? null,
+        identity_header: put.identity_header ?? null,
+        timeout_s: put.timeout_s ?? 30,
+        secret_set: mockGatewaySecret,
+      },
+      updated_by: me.email,
+      updated_at: new Date().toISOString(),
+    };
+    if (put.auth.type === "jwt_assertion" && mockMcpGateway.assertion.keys.length === 0) mockAssertionKey();
+  }
+  if (method === "DELETE") {
+    const using = orgConnectors.filter((c) => c.type === "mcp-gateway").map((c) => c.name);
+    if (using.length > 0)
+      throw new ApiError(409, { title: "Conflict", detail: "connectors still go through the gateway", code: "gateway_in_use", connectors: using });
+    mockMcpGateway = { ...mockMcpGateway, gateway: null, updated_by: null, updated_at: null };
+    mockGatewaySecret = false;
+    return undefined;
+  }
+  return structuredClone(mockMcpGateway);
+}
+
 /** The demo organisation, kept for the time of the page: the Organisation card on /admin renames it (S40-24). */
 const mockOrg: { slug: string; name: string; role: string; currency: string } = {
   slug: "acme",
@@ -2784,6 +2853,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return structuredClone(mockOrg) as T;
   }
   if (/^\/orgs\/[^/]+\/outbound-proxy/.test(bare)) return outboundProxyApi(method, bare, body) as T;
+  if (/^\/orgs\/[^/]+\/mcp-gateway/.test(bare)) return mcpGatewayApi(method, bare, body) as T;
   if (method === "GET" && /^\/orgs\/[^/]+\/memory\/ab-report$/.test(bare)) {
     const weeks = Number(new URLSearchParams(path.split("?")[1] ?? "").get("weeks") ?? "4");
     return {

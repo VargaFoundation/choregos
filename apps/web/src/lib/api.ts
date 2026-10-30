@@ -162,6 +162,11 @@ import type {
   ModelMatrix,
   PolicyDef,
   PolicyCeilingState,
+  McpGatewayAssertion,
+  McpGatewayPut,
+  McpGatewayState,
+  McpGatewayTest,
+  McpGatewayTestRequest,
   OutboundProxyPut,
   OutboundProxyState,
   OutboundProxyTest,
@@ -234,6 +239,8 @@ export type Problem = {
   latest_version?: number;
   latest_author?: string | null;
   verdicts?: EgressVerdict[];
+  /** `gateway_in_use` (ADR 0105): the connectors that still go through the MCP gateway. */
+  connectors?: string[];
 };
 
 export class ApiError extends Error {
@@ -908,6 +915,19 @@ export const api = {
   deleteOutboundProxy: (org: string) => request<void>(`/orgs/${org}/outbound-proxy`, { method: "DELETE" }),
   /** Fetches the fixed echo endpoint through the stored proxy; a failing proxy is a 200 with `ok: false`. */
   testOutboundProxy: (org: string) => request<OutboundProxyTest>(`/orgs/${org}/outbound-proxy/test`, { method: "POST" }),
+
+  /** The organisation's MCP gateway (ADR 0105): the secret is write-only, only `secret_set` comes back; a PUT can answer 409 `egress_required`. */
+  mcpGateway: (org: string) => request<McpGatewayState>(`/orgs/${org}/mcp-gateway`),
+  putMcpGateway: (org: string, body: McpGatewayPut) =>
+    request<McpGatewayState>(`/orgs/${org}/mcp-gateway`, { method: "PUT", body: JSON.stringify(body) }),
+  /** A 409 `gateway_in_use` names the connectors that still go through it. */
+  deleteMcpGateway: (org: string) => request<void>(`/orgs/${org}/mcp-gateway`, { method: "DELETE" }),
+  /** Lists the tools of one server through the stored gateway; a failing gateway is a 200 with `ok: false`. */
+  testMcpGateway: (org: string, body: McpGatewayTestRequest) =>
+    request<McpGatewayTest>(`/orgs/${org}/mcp-gateway/test`, { method: "POST", body: JSON.stringify(body) }),
+  /** Creates the assertion key the first time, then rotates it; the old key stays published until retired. */
+  rotateMcpGatewayAssertionKey: (org: string) =>
+    request<McpGatewayAssertion>(`/orgs/${org}/mcp-gateway/assertion-key`, { method: "POST" }),
 
   /** What a project's runs really get (ADR 0070): its policy under the organisation's ceiling, and what was clamped. */
   projectNetwork: (id: string) => request<ProjectNetwork>(`/projects/${qualify(id)}/network`),
