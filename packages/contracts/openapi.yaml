@@ -3893,7 +3893,7 @@ paths:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [internal]
-      security: [{ runToken: [] }]
+      security: [{ runToken: [] }, { egressToken: [] }]
       operationId: getRunNetwork
       description: >-
         The network THIS run may use (ADR 0070): the agent's hosts narrowed by the project's and the organisation's,
@@ -3907,7 +3907,7 @@ paths:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
       tags: [internal]
-      security: [{ runToken: [] }]
+      security: [{ runToken: [] }, { egressToken: [] }]
       operationId: postRunNetworkDecisions
       description: >-
         What the egress proxy or the runner let through or refused for this run. Counters are CUMULATIVE per
@@ -4009,6 +4009,21 @@ paths:
       parameters: [{ name: tail, in: query, schema: { type: integer, default: 500, maximum: 5000 } }]
       responses:
         "200": { description: Logs, content: { application/json: { schema: { type: object, properties: { logs: { type: string }, ref: { type: string } } } } } }
+  /internal/runs/{id}/egress-token:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunEgressToken
+      description: >-
+        The credential THIS run gives the egress proxy (ADR 0115), in exchange for its run token: a JWT for the same
+        run, `aud=choregos-egress`, expiring with the run token. The proxy reads the run's network with it and reports
+        its decisions; every other internal route refuses it. The runner puts it in the proxy variables the agent
+        inherits, so the agent never holds the run token.
+      responses:
+        "200": { description: The token, content: { application/json: { schema: { $ref: "#/components/schemas/EgressToken" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /internal/runs/{id}/git-token:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -4153,6 +4168,7 @@ components:
     bearer: { type: http, scheme: bearer, bearerFormat: choregos-api-token }
     runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Run JWT signed with ES256, aud=internal" }
     relayToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Relay JWT signed with ES256, aud=choregos-relay, sub=the organisation's slug, expiring (ADR 0091)" }
+    egressToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Egress JWT signed with ES256, aud=choregos-egress, sub=the run, expiring with its run token (ADR 0115)" }
   parameters:
     Id: { name: id, in: path, required: true, schema: { type: string } }
     Org: { name: org, in: path, required: true, schema: { type: string } }
@@ -7722,6 +7738,12 @@ components:
       properties:
         type: { type: string, description: "The tracker connector's type: jira, github-issues, gitlab-issues, plugin…" }
         account: { type: [string, "null"] }
+    EgressToken:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token: { type: string, description: "Accepted by `getRunNetwork` and `postRunNetworkDecisions` only." }
+        expires_at: { type: string, format: date-time }
     GitToken:
       type: object
       required: [token]

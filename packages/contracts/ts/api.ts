@@ -3583,6 +3583,12 @@ export type TrackerWrite = {
   account?: string | null;
 };
 
+export type EgressToken = {
+  /** Accepted by `getRunNetwork` and `postRunNetworkDecisions` only. */
+  token: string;
+  expires_at: string;
+};
+
 export type GitToken = {
   token: string | null;
   expires_at?: string | null;
@@ -4621,6 +4627,7 @@ export interface Operations {
 } };
   postDecision: { method: "POST"; path: "/work-items/{id}/decisions"; body: DecisionRequest; response: HumanRequest };
   postFindingAction: { method: "POST"; path: "/findings/{id}/actions"; body: FindingAction; response: FindingRecord };
+  postRunEgressToken: { method: "POST"; path: "/internal/runs/{id}/egress-token"; body: never; response: EgressToken };
   postRunEvents: { method: "POST"; path: "/internal/runs/{id}/events"; body: {
   events: Array<RunEventIn>;
 }; response: void };
