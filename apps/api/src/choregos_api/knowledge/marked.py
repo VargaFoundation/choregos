@@ -13,9 +13,9 @@ to everyone but administrators.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Any
 
+from choregos_core.restricted import RESTRICTED_TITLE, WITHHELD, is_marked, mark
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,15 +25,7 @@ from ..rbac import Principal
 from ..schemas import WorkItemDto
 from .access import can_manage, visible_to
 
-
-def mark(item: WorkItem, slugs: Iterable[str]) -> bool:
-    """Adds these bases to the work item's mark; whether anything was added."""
-    before = set(item.restricted_knowledge or [])
-    after = before | set(slugs)
-    if after == before:
-        return False
-    item.restricted_knowledge = sorted(after)
-    return True
+__all__ = ["RESTRICTED_TITLE", "WITHHELD", "is_marked", "listed_only", "mark", "readable", "require_readable"]
 
 
 async def unread_bases(

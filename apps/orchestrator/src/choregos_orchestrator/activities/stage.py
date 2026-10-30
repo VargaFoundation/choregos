@@ -1087,9 +1087,9 @@ async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any, item: Any) 
     started the work item (ADR 0097), stops the run: it would answer without its reference."""
     if agent is None or not agent.spec.knowledge:
         return []
-    from choregos_api.knowledge.marked import mark
     from choregos_api.knowledge.on_behalf import OnBehalf
     from choregos_api.knowledge.serving import KnowledgeRefusedError, pin
+    from choregos_core.restricted import mark
     from temporalio.exceptions import ApplicationError
 
     on_behalf = OnBehalf(session, bundle.project.org_id, bundle.project.id, item.initiated_by)
