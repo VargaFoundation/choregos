@@ -1,7 +1,7 @@
 # 0114 — What a run writes after reading a restricted knowledge base stays restricted
 
-- **Status**: proposed, 2026-10-30 (follows [ADR 0097](0097-a-run-reads-a-restricted-base-on-behalf-of-its-initiator.md),
-  finding #1042); three points wait for the product owner (see "Open points")
+- **Status**: accepted, 2026-10-30 (follows [ADR 0097](0097-a-run-reads-a-restricted-base-on-behalf-of-its-initiator.md),
+  finding #1042); the product owner chose the proposed answer to the three points below the same day
 - **Concerns**: `WorkItem` (a new column), every route that serves a work item, its runs, artefacts and
   receipts (REST, MCP door, A2A door), memory writes at close-out, findings, tracker write-back and
   notifications, fan-out children
@@ -38,19 +38,19 @@ an artefact carries any visibility today (finding #1042).
 4. **Children inherit the mark.** A fan-out child of a marked work item is born with its parent's
    `restricted_knowledge`, since its title and fields come from the parent's outputs.
 5. **A finding filed by a run of a marked work item is marked the same way** and read by the same rule.
-6. **What leaves the platform carries no content of a marked work item** (open point A): the tracker
+6. **What leaves the platform carries no content of a marked work item** (point A): the tracker
    receives the state and a link to the console instead of the run's summary, the agent's question or
    the finding's evidence; Slack and e-mail notifications the same; a pull request's body is the link,
-   not the documents. Pushing the code itself stays allowed (open point C).
+   not the documents. Pushing the code itself stays allowed (point C).
 
-## Open points (product owner)
+## Points decided by the product owner
 
-- **A. Outbound content.** Proposed: withheld as in point 6 (the tracker and Slack reach people the
+- **A. Outbound content.** Chosen: withheld as in point 6 (the tracker and Slack reach people the
   platform cannot check). Alternative: sent as today, the restriction holding inside the platform only.
-- **B. Lists.** Proposed: a project member who does not read the base still sees the marked work item in
+- **B. Lists.** Chosen: a project member who does not read the base still sees the marked work item in
   lists (key, title as typed by its author, state, a "restricted" badge) and nothing more; the detail
   answers 404. Alternative: hidden from lists as well, at the cost of work items that "disappear".
-- **C. Code.** Proposed: the branch is still pushed and the pull request opened (with the link as its
+- **C. Code.** Chosen: the branch is still pushed and the pull request opened (with the link as its
   body): the code is the deliverable, and attaching a restricted base to a coding agent is the project's
   choice. Alternative: a marked work item opens no pull request and stops before delivery.
 
