@@ -484,7 +484,7 @@ def test_the_run_access_record_carries_an_optional_chain() -> None:
     schema = access["schema"]
     assert "chain" in schema["properties"] and "chain" not in schema["required"]
     validator = Draft202012Validator(schema)
-    record: dict[str, Any] = {"evenements": 0, "refusals": 0, "acces": []}
+    record: dict[str, Any] = {"events": 0, "refusals": 0, "access": []}
     assert not list(validator.iter_errors(record)), "a run recorded before S40-22 stays valid"
     for initiator in ("person:ada@example.org", "a2a:rovo", "schedule:nightly", None):
         chain = {

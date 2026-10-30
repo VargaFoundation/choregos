@@ -202,8 +202,8 @@ async def test_un_run_se_lit_avec_ses_evenements_son_diff_et_ses_acces(
     ] == [3]
 
     acces = (await client.get(f"/api/v1/runs/{run_id}/access")).json()
-    assert acces["refus"] == 1 and acces["cout_outils_eur"] == 0.002
-    assert any(a["nature"] == "tool" for a in acces["acces"]), "l'appel au catalogue compte comme un accès"
+    assert acces["refusals"] == 1 and acces["tool_cost_eur"] == 0.002
+    assert any(a["nature"] == "tool" for a in acces["access"]), "l'appel au catalogue compte comme un accès"
 
     diff = (await client.get(f"/api/v1/runs/{run_id}/diff")).json()
     assert {f["path"]: f["in_scope"] for f in diff["files"]} == {"src/a.py": True, "infra/main.tf": False}
@@ -826,11 +826,11 @@ async def test_choregos_admin_frappe_un_jeton_et_rejoue_l_amorcage(
     db_session._sessionmaker = None
 
 
-async def test_le_webhook_tekton_exige_le_secret_partage_quand_il_existe(
+async def test_tekton_webhook_accepts_token_and_jeton(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Il n'avait aucune vérification. Le puits CloudEvents de Tekton n'ajoute pas d'en-tête : le
-    secret passe aussi dans l'URL (`?jeton=`)."""
+    """It had no check at all. Tekton's CloudEvents sink adds no header: the secret also travels in the
+    URL (`?token=`; the former `?jeton=` is still accepted)."""
     from choregos_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_GENERIC_WEBHOOK_SECRET", "s3cret-tekton")
@@ -856,7 +856,27 @@ async def test_le_webhook_tekton_exige_le_secret_partage_quand_il_existe(
             json=corps,
             headers={**entetes, "ce-id": "t-4"},
         )
+        with_token = await client.post(
+            "/api/v1/webhooks/tekton",
+            params={"token": "s3cret-tekton"},
+            json=corps,
+            headers={**entetes, "ce-id": "t-5"},
+        )
+        wrong_token = await client.post(
+            "/api/v1/webhooks/tekton",
+            params={"token": "non"},
+            json=corps,
+            headers={**entetes, "ce-id": "t-6"},
+        )
+        wrong_jeton = await client.post(
+            "/api/v1/webhooks/tekton",
+            params={"jeton": "non"},
+            json=corps,
+            headers={**entetes, "ce-id": "t-7"},
+        )
         assert en_tete.status_code == 202 and dans_l_url.status_code == 202
+        assert with_token.status_code == 202
+        assert wrong_token.status_code == 401 and wrong_jeton.status_code == 401
     finally:
         reset_settings_cache()
 

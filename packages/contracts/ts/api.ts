@@ -2720,7 +2720,7 @@ export type WorkflowIssue = {
   path?: string | null;
   line?: number | null;
   column?: number | null;
-  /** @deprecated Former spelling of a code renamed to English (`gate.sans_matiere` is now `gate.nothing_to_check`, `workflow.effet_implicite` is now `workflow.implicit_effect`), emitted for one release (ADR 0046) */
+  /** @deprecated Former spelling of a code renamed to English (`role.playbook_introuvable` is now `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02) */
   deprecated_code?: string | null;
 };
 
@@ -4429,17 +4429,17 @@ export interface Operations {
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
   /** Log events scanned */
-  evenements: number;
-  /** Permission decisions whose kind was inferred because the agent did not state it (emitted since #27, declared by S34-03) */
+  events: number;
+  /** @deprecated Former name of `events`, emitted for one release (ADR 0046, S45-02) */
+  evenements?: number;
+  /** Permission decisions whose kind was inferred because the agent did not state it */
+  inferred?: number;
+  /** @deprecated Former name of `inferred`, emitted for one release (ADR 0046, S45-02) */
   deduites?: number;
   /** Total number of denied requests */
   refusals: number;
-  /** @deprecated Former name of `refusals`, still emitted for one release (ADR 0046) */
-  refus?: number;
   /** What the catalogue tools called by the run cost, in euros */
   tool_cost_eur?: number;
-  /** @deprecated Former name of `tool_cost_eur`, still emitted for one release (ADR 0046) */
-  cout_outils_eur?: number;
   /** Who started the work item and which earlier runs produced what this run read (ADR 0077 §2). Recorded at stage start by the orchestrator, never sent by the agent. Absent for a run started before it was recorded. */
   chain?: {
     /** `<kind>:<subject>` — `person:<email>`, `mcp:<email>`, `a2a:<client>`, `schedule:<name>`, `work_item:<key>`, `tracker:<kind>`, `finding:<id>`, `eval`, `demo`, `trial:<email>`; null when the work item predates the record */
@@ -4454,20 +4454,22 @@ export interface Operations {
       inputs_from: Array<string>;
     }>;
   };
-  acces: Array<{
-    nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
+  access: Array<{
+    nature: "read" | "write" | "execute" | "network" | "tool" | "other";
     /** The file, command, address or tool asked for */
     target: string;
-    /** @deprecated Former name of `target`, still emitted for one release (ADR 0046) */
-    cible?: string;
     /** How many times the agent asked for it */
     requests: number;
-    /** @deprecated Former name of `requests`, still emitted for one release (ADR 0046) */
-    demandes?: number;
     /** How many of those requests were denied */
     refusals: number;
-    /** @deprecated Former name of `refusals`, still emitted for one release (ADR 0046) */
-    refus?: number;
+    reasons?: Array<string>;
+  }>;
+  /** @deprecated Former name of `access`, emitted for one release (ADR 0046, S45-02) */
+  acces?: Array<{
+    nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
+    target: string;
+    requests: number;
+    refusals: number;
     motifs?: Array<string>;
   }>;
 } };

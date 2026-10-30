@@ -467,12 +467,12 @@ async def test_la_fiche_d_acces_replie_le_journal(
     reponse = await client.get("/api/v1/runs/run-acces-1/access")
     assert reponse.status_code == 200, reponse.text
     fiche = reponse.json()
-    assert fiche["evenements"] == 4 and fiche["refus"] == 1
-    assert fiche["acces"][0]["cible"] == "/workspace/.env", "le refus d'abord"
-    assert fiche["acces"][0]["motifs"] == ["fichier sensible"]
-    assert fiche["acces"][1]["demandes"] == 2, "deux lectures du même fichier, regroupées"
+    assert fiche["events"] == 4 and fiche["refusals"] == 1
+    assert fiche["access"][0]["target"] == "/workspace/.env", "le refus d'abord"
+    assert fiche["access"][0]["reasons"] == ["fichier sensible"]
+    assert fiche["access"][1]["requests"] == 2, "deux lectures du même fichier, regroupées"
     # La prose de l'agent n'y entre pas : la fiche redeviendrait illisible.
-    assert all("je lis le ticket" not in a["cible"] for a in fiche["acces"])
+    assert all("je lis le ticket" not in a["target"] for a in fiche["access"])
 
 
 async def test_un_ticket_dont_le_workflow_est_mort_le_dit(

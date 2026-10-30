@@ -706,7 +706,7 @@ def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> 
             playbook_path(role)
         except FileNotFoundError:
             report.warn(
-                "role.playbook_introuvable",
+                "role.playbook_not_found",
                 f"no playbook for the role `{role}`: the deployment must provide "
                 f"`{role}.md` (CHOREGOS_PLAYBOOKS_DIR)",
                 ["actors", actor_id, "role"],

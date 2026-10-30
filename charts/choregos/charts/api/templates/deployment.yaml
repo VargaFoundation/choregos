@@ -87,7 +87,7 @@ spec:
             {{- end }}
             {{- with .Values.global.playbooks.configMap }}
             # The API validates a workflow, so it must see the playbooks: without them it
-            # warns `role.playbook_introuvable` about roles the deployment does provide,
+            # warns `role.playbook_not_found` about roles the deployment does provide,
             # and the warning teaches people to ignore warnings.
             - name: CHOREGOS_PLAYBOOKS_DIR
               value: {{ $.Values.global.playbooks.mountPath | quote }}

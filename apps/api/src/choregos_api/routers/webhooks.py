@@ -315,14 +315,18 @@ async def tekton_webhook(
 ) -> WebhookAck:
     """CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1`.
 
-    Authentifié par le secret partagé, en en-tête `X-Choregos-Secret` OU dans l'URL du puits
-    (`?jeton=`) : le puits CloudEvents de Tekton se règle par une URL et n'ajoute pas d'en-tête. Il
-    n'y avait AUCUNE vérification — sans conséquence tant que la RLS cachait tout à cette route sur
-    PostgreSQL, un chemin d'écriture anonyme dès qu'elle voit les projets (« CI réussie » sur
-    n'importe quel ticket).
+    Authenticated by the shared secret, in the `X-Choregos-Secret` header OR in the sink URL
+    (`?token=`): Tekton's CloudEvents sink is configured with a URL and adds no header. `?jeton=`,
+    the former spelling, is still accepted (S45-02). There used to be NO check: harmless while
+    row-level security hid everything from this route on PostgreSQL, an anonymous write path as
+    soon as it sees the projects ("CI passed" on any work item).
     """
     settings = get_settings()
-    fourni = x_choregos_secret or request.query_params.get("jeton", "")
+    fourni = (
+        x_choregos_secret
+        or request.query_params.get("token")
+        or request.query_params.get("jeton", "")  # lang: fr-ok alias:external
+    )
     if not settings.generic_webhook_secret:
         if settings.env in {"staging", "prod"}:
             raise unauthorized("Tekton webhook not configured: CHOREGOS_GENERIC_WEBHOOK_SECRET is missing")

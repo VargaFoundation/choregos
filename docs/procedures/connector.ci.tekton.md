@@ -18,8 +18,9 @@ For the person who operates the platform. Procedure `connector.ci.tekton`, versi
    finds a commit's runs through that label. Runs that carry `choregos/project`, `choregos/work-item`
    and `choregos/run-id` are also mapped back to their work item.
 2. Point Tekton's CloudEvents sink at the platform:
-   `<api_url>/api/v1/webhooks/tekton?jeton=<the shared webhook secret>`. Tekton's sink is configured by URL and
-   cannot add a header, which is why the secret travels in the query string.
+   `<api_url>/api/v1/webhooks/tekton?token=<the shared webhook secret>`. Tekton's sink is configured by URL and
+   cannot add a header, which is why the secret travels in the query string. `?jeton=` is still
+   accepted, so a sink URL set up earlier keeps working.
 
 ## Permissions
 

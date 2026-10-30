@@ -1239,24 +1239,23 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [evenements, refusals, acces]
+                required: [events, refusals, access]
                 properties:
-                  evenements: { type: integer, description: Log events scanned }
-                  deduites:
+                  events: { type: integer, description: Log events scanned }
+                  evenements:
+                    type: integer
+                    deprecated: true
+                    description: Former name of `events`, emitted for one release (ADR 0046, S45-02)
+                  inferred:
                     type: integer
                     description: >-
                       Permission decisions whose kind was inferred because the agent did not state it
-                      (emitted since #27, declared by S34-03)
-                  refusals: { type: integer, description: Total number of denied requests }
-                  refus:
+                  deduites:
                     type: integer
                     deprecated: true
-                    description: Former name of `refusals`, still emitted for one release (ADR 0046)
+                    description: Former name of `inferred`, emitted for one release (ADR 0046, S45-02)
+                  refusals: { type: integer, description: Total number of denied requests }
                   tool_cost_eur: { type: number, description: "What the catalogue tools called by the run cost, in euros" }
-                  cout_outils_eur:
-                    type: number
-                    deprecated: true
-                    description: Former name of `tool_cost_eur`, still emitted for one release (ADR 0046)
                   chain:
                     type: object
                     description: >-
@@ -1286,28 +1285,29 @@ paths:
                               type: array
                               items: { type: string }
                               description: The run ids whose outputs this run read as declared inputs
-                  acces:
+                  access:
                     type: array
                     items:
                       type: object
                       required: [nature, target, requests, refusals]
                       properties:
-                        nature: { type: string, enum: [read, write, execute, network, tool, autre] }
+                        nature: { type: string, enum: [read, write, execute, network, tool, other] }
                         target: { type: string, description: "The file, command, address or tool asked for" }
-                        cible:
-                          type: string
-                          deprecated: true
-                          description: Former name of `target`, still emitted for one release (ADR 0046)
                         requests: { type: integer, description: How many times the agent asked for it }
-                        demandes:
-                          type: integer
-                          deprecated: true
-                          description: Former name of `requests`, still emitted for one release (ADR 0046)
                         refusals: { type: integer, description: How many of those requests were denied }
-                        refus:
-                          type: integer
-                          deprecated: true
-                          description: Former name of `refusals`, still emitted for one release (ADR 0046)
+                        reasons: { type: array, items: { type: string } }
+                  acces:
+                    type: array
+                    deprecated: true
+                    description: Former name of `access`, emitted for one release (ADR 0046, S45-02)
+                    items:
+                      type: object
+                      required: [nature, target, requests, refusals]
+                      properties:
+                        nature: { type: string, enum: [read, write, execute, network, tool, autre] }  # lang: fr-ok alias:external
+                        target: { type: string }
+                        requests: { type: integer }
+                        refusals: { type: integer }
                         motifs: { type: array, items: { type: string } }
   /runs/{id}/transcript:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -3476,6 +3476,9 @@ paths:
       parameters:
         - { name: ce-type, in: header, required: true, schema: { type: string } }
         - { name: ce-id, in: header, required: true, schema: { type: string } }
+        - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; `token` may carry it instead" }
+        - { name: token, in: query, required: false, schema: { type: string }, description: "The shared webhook secret, for a sink that is set by a URL and adds no header" }
+        - { name: jeton, in: query, required: false, deprecated: true, schema: { type: string }, description: "Former name of `token`; still accepted" }  # lang: fr-ok alias:external
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/argocd:
@@ -6765,9 +6768,8 @@ components:
           type: [string, "null"]
           deprecated: true
           description: >-
-            Former spelling of a code renamed to English (`gate.sans_matiere` is now
-            `gate.nothing_to_check`, `workflow.effet_implicite` is now `workflow.implicit_effect`),
-            emitted for one release (ADR 0046)
+            Former spelling of a code renamed to English (`role.playbook_introuvable` is now
+            `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02)
     WorkflowGraph:
       type: object
       required: [nodes, edges]
