@@ -26,14 +26,16 @@ New identifiers are English, and no file's French count may rise: per-file count
 (ADR 0098).
 
 ## Commands (the CI's, no others)
-- Everything that blocks a PR: `make ci` = `lint` + `typecheck` + `test` + `contracts-check` + `charts-lint`.
+- Everything that blocks a PR: `make ci` = `lint` + `typecheck` + `test-cov` + `contracts-check` + `procedures-check` + `charts-lint`.
 - Python: `uv run ruff check packages apps/api apps/orchestrator tools tests` then
   `ruff format --check` on the same paths — **`tests/` is one of them**, an E501 there breaks CI.
   `make lint` also runs `tools/check_english.py` (lines added since `origin/main`) and the full-repo
   ratchet `make english-ratchet` (`tools/check_english.py --all`, ADR 0098).
 - Typing: `uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools` (strict).
 - Tests: `uv run pytest -q`; `-m "not slow"` leaves out the slow ones (building the
-  workspace). Coverage: `make test-cov`, threshold 80 %.
+  workspace). Coverage: `make test-cov` (part of `make ci`) over every package in pyproject's
+  `[tool.coverage.run].source`, threshold 80 % (`fail_under`); the web suite has its own floor
+  (`apps/web/vitest.config.ts`, enforced by `pnpm test`).
 - Front end: `make web-ci` = lint + typecheck + test + build.
 - Charts: `make charts-lint` (helm lint + kubeconform). `make charts-test` requires the
   helm-unittest plugin **1.1.2** and Helm ≥ 3.18; without them it **refuses to run** rather than
@@ -59,6 +61,11 @@ New identifiers are English, and no file's French count may rise: per-file count
 - Security: no hard-coded secret; never a broad token in a runner; every tracker write goes through
   the internal API.
 - Logs: JSON, with the keys `project`, `work_item`, `run_id`, `stage` when they exist.
+- Ratchets and allowlists: a PR from any track that adds or removes a crossing import, a
+  router-private import, an organisation lookup or an API path updates, in the same PR, the CEILING
+  or the allowlist of the guard that moved (`tests/architecture/`, `apps/api/tests/test_layering_*.py`,
+  `apps/api/tests/test_one_organisation_lookup.py`, `tests/web/test_api_routes_have_a_client.py`) and
+  says so in its body (ADR 0099). A ceiling is lowered on removal and raised only as ADR 0099 allows.
 
 ## Definition of done (blocking)
 `make ci` green, docs up to date, acceptance criteria checked in the PR, no `TODO` without a linked
