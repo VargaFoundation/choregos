@@ -1412,9 +1412,11 @@ How people sign in to the instance is on **Administration → Identity** (below)
   would run on it is refused when it starts ("the agent backend `x` is disabled by the platform
   administrator"), before any budget, key or runner pod, and the work item escalates to a person
   like any configuration refusal; a stage already running is not stopped. With no setting stored
-  (fresh install) only `claude-code` is enabled, as the page shows. Which backends a project may use is still set by the
-  deployment (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
-  `allowedBackends`) and by the project's policy. A runtime that fixes its own backend (`code`,
+  (fresh install) only `claude-code` is enabled, as the page shows. The project's allowed backends (`agent.allowed_backends` in its
+  settings) are enforced at stage start too, with the same refusal ("the agent backend `x` is not one
+  this project allows"), checked before the platform switch; an empty list restricts nothing. The
+  deployment's list (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
+  `allowedBackends`) only seeds new projects and the readiness check: it does not restrict existing ones. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
 - **Executors (where agent stages run).** Read-only. The card opens with the executor(s) this
   deployment runs ("Agent stages run on `k8s_job` in this deployment"), listed first as *In use*; the
