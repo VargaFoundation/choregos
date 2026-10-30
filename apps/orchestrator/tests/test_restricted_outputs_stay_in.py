@@ -215,3 +215,46 @@ async def test_a_fan_out_child_of_a_marked_parent_is_marked(setup: Fixture) -> N
     )
     children = [i for key, i in (await _items(setup)).items() if key != setup.tracker_key]
     assert len(children) == 2 and all(child.restricted_knowledge == ["hr"] for child in children)
+
+
+@pytest.mark.parametrize("marked", [True, False])
+async def test_a_duplicate_finding_comments_without_its_evidence(setup: Fixture, marked: bool) -> None:
+    from choregos_api.db.models import Finding, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities import findings as findings_activities
+    from sqlalchemy import select
+
+    async def finding() -> str:
+        async with session_scope() as session:
+            row = Finding(
+                project_id=setup.project_id,
+                origin_work_item_id=setup.work_item_id,
+                title="Band grid leaks",
+                type="security",
+                severity="low",
+                evidence=SECRET,
+                estimate="S",
+                status="pending",
+            )
+            session.add(row)
+            await session.flush()
+            return str(row.id)
+
+    first = await findings_activities.triage_finding(
+        {"project_slug": setup.project_slug, "finding_id": await finding()}
+    )
+    assert first["status"] == "created", first
+    await _mark(setup, marked)
+    async with session_scope() as session:
+        filed = (
+            await session.execute(select(WorkItem).where(WorkItem.tracker_key == first["work_item_key"]))
+        ).scalar_one()
+        filed.restricted_knowledge = None  # the duplicate's own origin decides, not the first ticket's
+    before = _tracker_text(setup)
+    second = await findings_activities.triage_finding(
+        {"project_slug": setup.project_slug, "finding_id": await finding()}
+    )
+    assert second["status"] == "duplicate", second
+    added = _tracker_text(setup)[len(before) :]
+    assert "One more occurrence" in _tracker_text(setup)
+    assert (SECRET in added) is not marked
