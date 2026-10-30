@@ -97,6 +97,8 @@ class OnBehalf:
         self.email: str | None = None
         self._principal: Principal | None = None
         self._org_slug = ""
+        #: The restricted bases this run was served: they mark its work item (ADR 0114).
+        self.restricted_served: set[str] = set()
 
     async def _resolve(self) -> None:
         if self._resolved:
@@ -127,4 +129,5 @@ class OnBehalf:
         grants: Iterable[Any] = await _grants(self._session, base.id)
         if self._principal is None or not visible_to(self._principal, self._org_slug, base, grants):
             return f"the knowledge base `{base.slug}` is restricted and `{self.email}` may not read it"
+        self.restricted_served.add(base.slug)
         return None
