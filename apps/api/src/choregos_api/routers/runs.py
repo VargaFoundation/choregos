@@ -15,6 +15,7 @@ from ..db.models import CostLedger, Project, Run, RunEvent, WorkItem
 from ..deps import Db, Me, resolve_project
 from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
+from ..knowledge.marked import readable, require_readable
 from ..rbac import Permission
 from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto, RunLogsDto
 from ..services import run_dto, tool_connectors_of
@@ -32,6 +33,10 @@ async def _run(session: Any, run_id: str, principal: Any) -> tuple[Run, Project]
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
+    item = await session.get(WorkItem, run.work_item_id)
+    # Under a marked work item (ADR 0114) the run does not exist for a caller who may not read it.
+    if item is not None and not await readable(session, principal, item, project.org_id):
+        raise not_found("Run", run_id)
     return run, project
 
 
@@ -48,6 +53,7 @@ async def list_runs(id: str, session: Db, principal: Me) -> list[RunDto]:
     _, org_slug = await resolve_project(session, item.project_id)
     if project is None or not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
+    await require_readable(session, principal, item, project.org_id)
     rows = (
         (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
         .scalars()

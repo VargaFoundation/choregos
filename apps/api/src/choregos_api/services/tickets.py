@@ -217,6 +217,7 @@ async def work_item_dto(
         budget_usd=item.budget_usd,
         estimate=await estimate_cost(session, project.id, item),
         initiated_by=item.initiated_by,
+        restricted_knowledge=list(item.restricted_knowledge or []),
         created_at=item.created_at,
         closed_at=item.closed_at,
     )

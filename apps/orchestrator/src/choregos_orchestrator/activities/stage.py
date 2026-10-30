@@ -1087,17 +1087,19 @@ async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any, item: Any) 
     started the work item (ADR 0097), stops the run: it would answer without its reference."""
     if agent is None or not agent.spec.knowledge:
         return []
+    from choregos_api.knowledge.marked import mark
     from choregos_api.knowledge.on_behalf import OnBehalf
     from choregos_api.knowledge.serving import KnowledgeRefusedError, pin
     from temporalio.exceptions import ApplicationError
 
+    on_behalf = OnBehalf(session, bundle.project.org_id, bundle.project.id, item.initiated_by)
     try:
-        return await pin(
+        refs = await pin(
             session,
             bundle.project.org_id,
             bundle.project.slug,
             [ref.slug for ref in agent.spec.knowledge],
-            OnBehalf(session, bundle.project.org_id, bundle.project.id, item.initiated_by),
+            on_behalf,
         )
     except KnowledgeRefusedError as refusal:
         raise ApplicationError(
@@ -1105,6 +1107,9 @@ async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any, item: Any) 
             type="KnowledgeRefused",
             non_retryable=True,
         ) from refusal
+    # What this run writes lands under the work item: it is now read only by the bases' readers (ADR 0114).
+    mark(item, on_behalf.restricted_served)
+    return refs
 
 
 async def _skill_exists(session: Any, bundle: Any, slug: str) -> bool:

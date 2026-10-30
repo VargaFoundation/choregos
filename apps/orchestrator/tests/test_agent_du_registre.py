@@ -405,6 +405,10 @@ async def test_a_restricted_base_is_pinned_only_for_an_initiator_who_reads_it(se
     await started_by("person:hr-lead@example.org")
     entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
     assert [ref["slug"] for ref in entree["knowledge"]] == ["hr"]
+    # What the run writes now lands under a work item read only by the base's readers (ADR 0114).
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None and item.restricted_knowledge == ["hr"]
 
 
 async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending_review(

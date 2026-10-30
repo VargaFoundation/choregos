@@ -222,6 +222,9 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     #: Who started the work item, as `<kind>:<subject>` (`services/initiator.py`, ADR 0077 §2):
     #: written once at birth by the door it came through; `None` for a work item born before S40-22.
     initiated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: The restricted knowledge bases its runs were served (ADR 0114): only ever added to; reading the
+    #: work item and everything under it needs reading every one of them (`knowledge/marked.py`).
+    restricted_knowledge: Mapped[list[str] | None] = mapped_column(Json, nullable=True)
     paused: Mapped[bool] = mapped_column(Boolean, default=False)
     #: Pourquoi l'interpréteur du ticket est mort (`{message, activity, at}`), ou rien.
     #: Posé par le workflow lui-même en mourant, effacé quand il redémarre.

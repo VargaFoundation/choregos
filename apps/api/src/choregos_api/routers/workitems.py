@@ -16,6 +16,7 @@ from ..db.models import HumanRequest, Project, Run, WorkflowDef, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..greffons import DemandeDeGeste, controler
+from ..knowledge.marked import listed_only, readable, require_readable
 from ..logging import get_logger
 from ..object_store import object_store
 from ..rbac import Permission
@@ -65,7 +66,9 @@ router = APIRouter(tags=["work-items"])
 logger = get_logger("choregos.work_items")
 
 
-async def _load(session: Any, item_id: str) -> tuple[WorkItem, Project]:
+async def _load(session: Any, item_id: str, principal: Any) -> tuple[WorkItem, Project]:
+    """The work item and its project; a work item whose content the caller may not read (ADR 0114)
+    does not exist for them, whatever they then ask of it."""
     item = await session.get(WorkItem, item_id)
     if item is None:
         item = (
@@ -76,6 +79,7 @@ async def _load(session: Any, item_id: str) -> tuple[WorkItem, Project]:
     project = await session.get(Project, item.project_id)
     if project is None:
         raise not_found("Project", item.project_id)
+    await require_readable(session, principal, item, project.org_id)
     return item, project
 
 
@@ -103,7 +107,11 @@ async def list_work_items(
         rows = [r for r in rows if needle in r.title.lower() or needle in r.tracker_key.lower()]
     window, cursor, has_more = page.slice(list(rows))
     return WorkItemPage(
-        items=[await work_item_dto(session, item, ctx.project) for item in window],
+        items=[
+            dto if await readable(session, ctx.principal, item, ctx.project.org_id) else listed_only(dto)
+            for item in window
+            for dto in [await work_item_dto(session, item, ctx.project)]
+        ],
         meta=PageMeta(next_cursor=cursor, has_more=has_more),
     )
 
@@ -128,7 +136,7 @@ async def create_work_item(ctx: ProjectCtx, body: WorkItemCreate, session: Db) -
 
 @router.get("/work-items/{id}", response_model=WorkItemDto, operation_id="getWorkItem")
 async def get_work_item(id: str, session: Db, principal: Me) -> WorkItemDto:
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
@@ -139,7 +147,7 @@ async def get_work_item(id: str, session: Db, principal: Me) -> WorkItemDto:
 async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal: Me) -> WorkItemDto:
     """Les champs d'un ticket changent (ADR 0031, S20-05) : validés par SON workflow, celui où il est
     épinglé, et l'interpréteur l'apprend — une date d'arrivée déplacée réarme l'action qui l'attend."""
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
         raise forbidden("changing the fields of a work item needs at least the developer role")
@@ -171,7 +179,7 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
 )
 async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
     """États, runs, décisions, findings : l'histoire complète d'un ticket, dans l'ordre."""
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
@@ -183,7 +191,7 @@ async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
 async def hand_offs(id: str, session: Db, principal: Me) -> list[HandOff]:
     """Les reçus de passage du ticket, sortie par sortie (S25-04) : qui l'a produite, qui l'a lue, sous
     quelle empreinte, et ce qu'elle vaut aujourd'hui."""
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
@@ -191,7 +199,7 @@ async def hand_offs(id: str, session: Db, principal: Me) -> list[HandOff]:
 
 
 async def _readable(session: Any, principal: Any, id: str) -> WorkItem:
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
@@ -250,7 +258,7 @@ async def get_artifact_content(
 @router.get("/work-items/{id}/journey", response_model=WorkItemJourney, operation_id="getWorkItemJourney")
 async def journey(id: str, session: Db, principal: Me) -> WorkItemJourney:
     """Le parcours du ticket dans SON workflow, en une lecture : ce que la console anime (S22-01)."""
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
@@ -296,7 +304,7 @@ async def _completer_la_tache(
 )
 async def post_decision(id: str, body: DecisionRequest, session: Db, principal: Me) -> HumanRequestDto:
     """Enregistre la décision, la transmet au workflow, et ferme la demande humaine."""
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_DECIDE, org_slug, project.slug):
         raise forbidden("deciding needs at least the developer role")
@@ -516,7 +524,7 @@ async def _interpreter_not_running(gone: InterpreterNotRunningError, what: str) 
 )
 async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me) -> dict[str, str]:
     """pause, resume, stop, migrate, rerun_stage, mark_agent_ready."""
-    item, project = await _load(session, id)
+    item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
         raise forbidden("controlling a work item needs at least the developer role")
