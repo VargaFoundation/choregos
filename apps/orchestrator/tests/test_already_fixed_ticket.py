@@ -13,24 +13,23 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 
-from .conftest import Fixture, stage_result
-from .test_gabarit_livraison_logicielle import (
-    DEPOT,
-    _agents,
-    _demandes,
-    _demarrer,
-    _etat,
-    _jusqu_a,
-    _projet_dev,
-    _runs,
-    _ticket,
+from .conftest import Fixture, recording_history, stage_result
+from .kits.software_delivery import (
+    REPOSITORY,
+    create_dev_project,
+    create_ticket,
+    requests_of_item,
+    runs_of,
+    scripted_agents,
+    start_interpreter,
+    wait_for_state,
 )
+from .kits.train_and_work_item import wait_until_state
 
 pytestmark = pytest.mark.asyncio
 
@@ -104,20 +103,20 @@ async def test_a_no_change_ticket_green_on_main_closes_as_already_fixed_without_
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    project_id = await _projet_dev(setup)
-    item_id, key = await _ticket(setup, project_id, 18, "dev-simple")
+    project_id = await create_dev_project(setup)
+    item_id, key = await create_ticket(setup, project_id, 18, "dev-simple")
     calls = _pr_calls(setup, monkeypatch)
-    setup.adapters.executor.handler = _agents({"t-triage": _triage, "t-implement": _unchanged})
+    setup.adapters.executor.handler = scripted_agents({"t-triage": _triage, "t-implement": _unchanged})
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await _demarrer(temporal_env, setup, project_id, item_id, key)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, key)
             result = await asyncio.wait_for(ticket.result(), timeout=90)
             history = await ticket.fetch_history()
 
     assert result["state"] == "already_fixed"
-    assert [t for t, _ in await _runs(item_id)] == ["t-triage", "t-implement"], "no test, no review"
+    assert [t for t, _ in await runs_of(item_id)] == ["t-triage", "t-implement"], "no test, no review"
     assert calls == [] and setup.adapters.scm.prs == {}, "no pull request is attempted"
-    assert await _demandes(item_id) == [], "nobody is called"
+    assert await requests_of_item(item_id) == [], "nobody is called"
     (arrival,) = await _arrivals(item_id, "already_fixed")
     assert arrival["from"] == "triaged", arrival
     assert arrival["reason"].startswith("already fixed: nothing to change"), arrival
@@ -131,7 +130,7 @@ async def test_a_no_change_ticket_green_on_main_closes_as_already_fixed_without_
     assert "412 run, 0 failed" in comment and "Already fixed" in comment, comment
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-already-fixed-S22-47.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -139,22 +138,22 @@ async def test_a_no_change_ticket_green_on_main_closes_as_already_fixed_without_
 async def test_a_no_change_ticket_without_measured_tests_escalates_at_once(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    project_id = await _projet_dev(setup)
-    item_id, key = await _ticket(setup, project_id, 21, "dev-simple")
+    project_id = await create_dev_project(setup)
+    item_id, key = await create_ticket(setup, project_id, 21, "dev-simple")
     calls = _pr_calls(setup, monkeypatch)
-    setup.adapters.executor.handler = _agents(
+    setup.adapters.executor.handler = scripted_agents(
         {"t-triage": _triage, "t-implement": lambda: _unchanged(tests_measured=False)}
     )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await _demarrer(temporal_env, setup, project_id, item_id, key)
-            await _etat(ticket, "needs_human")
-            await _jusqu_a(ticket, "status", lambda s: bool(s["pending_request"]))
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, key)
+            await wait_for_state(ticket, "needs_human")
+            await wait_until_state(ticket, "status", lambda s: bool(s["pending_request"]))
             description = await ticket.describe()
             assert description.status is not None and description.status.name == "RUNNING"
             await ticket.cancel()
 
-    assert [t for t, _ in await _runs(item_id)] == ["t-triage", "t-implement"], "no retry, no test"
+    assert [t for t, _ in await runs_of(item_id)] == ["t-triage", "t-implement"], "no retry, no test"
     assert calls == []
     (arrival,) = await _arrivals(item_id, "needs_human")
     assert arrival["from"] == "triaged" and arrival["reason"].startswith(UNPROVEN), arrival
@@ -169,12 +168,12 @@ async def test_a_ticket_with_changes_is_unaffected(
 ) -> None:
     from choregos_contracts import Evidence
 
-    project_id = await _projet_dev(setup)
-    item_id, key = await _ticket(setup, project_id, 7, "dev-simple")
-    setup.adapters.scm.set_diff(DEPOT, "main", "choregos/7", [("src/billing/total.py", 12, 3)])
+    project_id = await create_dev_project(setup)
+    item_id, key = await create_ticket(setup, project_id, 7, "dev-simple")
+    setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/7", [("src/billing/total.py", 12, 3)])
     evidence = Evidence(tests_passed=True, tests_run=412, tests_failed=0, diff_files=1, diff_lines=15)
     evidence.measured = ["diff_files", "diff_lines", "tests_failed", "tests_passed", "tests_run"]
-    setup.adapters.executor.handler = _agents(
+    setup.adapters.executor.handler = scripted_agents(
         {
             "t-triage": _triage,
             "t-implement": lambda: stage_result(
@@ -186,10 +185,10 @@ async def test_a_ticket_with_changes_is_unaffected(
     )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await _demarrer(temporal_env, setup, project_id, item_id, key)
-            await _etat(ticket, "in_pr")
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, key)
+            await wait_for_state(ticket, "in_pr")
             await ticket.cancel()
-    assert [t for t, _ in await _runs(item_id)] == ["t-triage", "t-implement", "t-test", "t-review"]
+    assert [t for t, _ in await runs_of(item_id)] == ["t-triage", "t-implement", "t-test", "t-review"]
     assert await _arrivals(item_id, "already_fixed") == []
 
 
@@ -206,9 +205,9 @@ async def test_a_history_before_the_marker_goes_on_to_the_tests(
         "patched",
         lambda patch_id: False if patch_id == interpreter.ALREADY_FIXED_ON_EVIDENCE else real(patch_id),
     )
-    project_id = await _projet_dev(setup)
-    item_id, key = await _ticket(setup, project_id, 22, "dev-simple")
-    setup.adapters.executor.handler = _agents(
+    project_id = await create_dev_project(setup)
+    item_id, key = await create_ticket(setup, project_id, 22, "dev-simple")
+    setup.adapters.executor.handler = scripted_agents(
         {
             "t-triage": _triage,
             "t-implement": _unchanged,
@@ -218,10 +217,10 @@ async def test_a_history_before_the_marker_goes_on_to_the_tests(
     )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await _demarrer(temporal_env, setup, project_id, item_id, key)
-            await _etat(ticket, "needs_human")
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, key)
+            await wait_for_state(ticket, "needs_human")
             await ticket.cancel()
-    assert [t for t, _ in await _runs(item_id)] == ["t-triage", "t-implement", "t-test", "t-review"]
+    assert [t for t, _ in await runs_of(item_id)] == ["t-triage", "t-implement", "t-test", "t-review"]
     assert await _arrivals(item_id, "already_fixed") == []
 
 

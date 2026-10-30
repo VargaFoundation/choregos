@@ -12,12 +12,13 @@ for a FROZEN train with a batch, after `depart_now` or a hotfix boarding.
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from datetime import timedelta
 from typing import Any
 
 import pytest
+
+from .conftest import recording_history
 
 pytestmark = pytest.mark.asyncio
 
@@ -101,7 +102,7 @@ async def test_a_departure_on_an_empty_train_does_not_make_it_spin(
     from temporalio.worker import Replayer
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "train-empty-departure-S22-29.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -145,7 +146,7 @@ async def test_a_departure_on_a_frozen_train_does_not_make_it_spin(
     from temporalio.worker import Replayer
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "train-frozen-departure-S22-29.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

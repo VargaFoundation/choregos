@@ -8,32 +8,20 @@ trois tickets escaladés n'avaient d'autre sortie que l'abandon, et « Replay th
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture, refine_result
+from .conftest import Fixture, recording_history, refine_result
+from .kits.escalation import requests_of
 from .test_interpreter import _runs, _ticket, _wait_state, _wait_until, scripted, start
 
 pytestmark = pytest.mark.asyncio
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 ECHEC = StageResult(status=StageStatus.FAILED, summary="le clone a échoué", reason="agent_error")
-
-
-async def _demandes(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from sqlalchemy import select
-
-    async with session_scope() as session:
-        lignes = (
-            await session.execute(select(HumanRequest).where(HumanRequest.work_item_id == setup.work_item_id))
-        ).scalars()
-        return list(lignes)
 
 
 async def test_replay_the_stage_reprend_un_ticket_escalade(
@@ -57,7 +45,7 @@ async def test_replay_the_stage_reprend_un_ticket_escalade(
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
-    abandons = [d for d in await _demandes(setup) if d.transition_id == "t-abandon"]
+    abandons = [d for d in await requests_of(setup) if d.transition_id == "t-abandon"]
     assert abandons, "l'escalade proposait l'abandon"
     assert all(d.decided_at is not None for d in abandons), "l'abandon proposé est clos par la reprise"
 
@@ -91,7 +79,7 @@ async def test_a_rerun_buys_one_attempt_not_a_new_allowance(
         await handle.result()
         history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-rerun-one-attempt-S27-13.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -117,7 +105,7 @@ async def test_an_answer_buys_one_attempt_not_a_new_allowance(
         await _wait_state(handle, "needs_human")
         await _wait_until(handle, "the question is asked", lambda s: s["pending_request"])
         assert await _runs(setup) == 2
-        asked = next(d for d in await _demandes(setup) if d.kind == "question")
+        asked = next(d for d in await requests_of(setup) if d.kind == "question")
         await handle.signal(
             "human_decision",
             {
@@ -136,7 +124,7 @@ async def test_an_answer_buys_one_attempt_not_a_new_allowance(
         await handle.result()
         history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-answer-one-attempt-S27-04.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -156,7 +144,7 @@ async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
         await _wait_until(handle, "abandon is offered", lambda s: s["pending_request"])
-        posee = next(d for d in await _demandes(setup) if d.kind == "question")
+        posee = next(d for d in await requests_of(setup) if d.kind == "question")
 
         await handle.signal(
             "human_decision",
@@ -180,7 +168,7 @@ async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
     assert "human_answer" not in ((await _ticket(setup)).documents or {})
     # La question et l'abandon proposé sont clos. L'approbation de la nouvelle spec peut attendre —
     # ou pas encore exister : l'état se lit avant que sa demande soit créée (rouge en CI, #317).
-    ouvertes = {d.transition_id for d in await _demandes(setup) if d.decided_at is None}
+    ouvertes = {d.transition_id for d in await requests_of(setup) if d.decided_at is None}
     assert ouvertes <= {"t-approve-spec"}, ouvertes
 
 

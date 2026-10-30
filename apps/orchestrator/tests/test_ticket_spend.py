@@ -7,14 +7,13 @@ for the same ticket counted from zero, and tool calls (`kind=tool`) were never i
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 from choregos_contracts import StageInput, StageResult
 
-from .conftest import Fixture, refine_result
+from .conftest import Fixture, recording_history, refine_result
 from .test_budget_reservation import spend
 from .test_interpreter import _wait_state, start
 
@@ -61,6 +60,6 @@ async def test_a_restarted_interpreter_keeps_the_spent_amount(
     assert status["cost_usd"] == pytest.approx(3.0 + stage_cost), status
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-ticket-spend-S27-03.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")

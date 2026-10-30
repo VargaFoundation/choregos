@@ -7,14 +7,13 @@ budget was only checked after the stage — an overshoot of up to one full stage
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from datetime import timedelta
 from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 from .test_interpreter import _runs, _wait_state, _wait_until, start
 
 pytestmark = pytest.mark.asyncio
@@ -168,6 +167,6 @@ async def test_a_ticket_with_nothing_left_goes_to_a_person_without_a_run(
         history = await handle.fetch_history()
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-budget-reservation-S27-02.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")

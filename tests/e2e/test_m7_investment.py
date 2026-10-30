@@ -60,14 +60,15 @@ HISTORIES = Path(__file__).resolve().parents[1] / "replay" / "histories"
 
 async def _replayed(handle: Any, archive: str) -> None:
     """The campaign's history replays against the current code, and is archived for the next ones
-    (`CHOREGOS_ARCHIVER_HISTORIQUE=1`): a change to the interpreter that would decide differently
+    (`CHOREGOS_RECORD_HISTORY=1`): a change to the interpreter that would decide differently
     on a job step fails `tests/replay`."""
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    former_switch = os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE")  # lang: fr-ok alias:internal
+    if os.environ.get("CHOREGOS_RECORD_HISTORY") or former_switch:
         target = HISTORIES / archive
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

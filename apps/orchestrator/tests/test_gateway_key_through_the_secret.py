@@ -238,7 +238,7 @@ async def test_a_cancelled_interpreter_revokes_the_key_of_its_run(setup: Fixture
     from temporalio import activity
     from temporalio.client import WorkflowFailureError
 
-    from .test_interpreter import _worker_avec
+    from .kits.workers import worker_with
 
     waiting = asyncio.Event()
 
@@ -249,7 +249,7 @@ async def test_a_cancelled_interpreter_revokes_the_key_of_its_run(setup: Fixture
             activity.heartbeat()
             await asyncio.sleep(0.05)
 
-    async with _worker_avec(temporal_env, {"await_run": await_run_forever}):
+    async with worker_with(temporal_env, {"await_run": await_run_forever}):
         handle = await start(temporal_env, setup)
         await asyncio.wait_for(waiting.wait(), timeout=30)
         [key_id] = setup.adapters.gateway.keys

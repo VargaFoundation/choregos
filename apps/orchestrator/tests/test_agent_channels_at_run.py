@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from .conftest import Fixture
-from .test_agent_du_registre import _agent, _plan
+from .kits.registry_agent import agent_stage_plan, install_agent
 
 
 async def _channels(
@@ -25,7 +25,7 @@ async def _channels(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    await _agent(setup)
+    await install_agent(setup)
     async with session_scope() as session:
         agent = (await session.execute(select(Agent).where(Agent.slug == "coordinateur"))).scalar_one()
         first = (
@@ -53,7 +53,7 @@ async def _recorded(setup: Fixture, **plan: Any) -> tuple[int | None, str]:
     from choregos_api.db.session import session_scope
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    prepared = await prepare_stage(_plan(setup, agent="coordinateur", **plan))
+    prepared = await prepare_stage(agent_stage_plan(setup, agent="coordinateur", **plan))
     async with session_scope() as session:
         run = await session.get(Run, prepared["run_id"])
         assert run is not None

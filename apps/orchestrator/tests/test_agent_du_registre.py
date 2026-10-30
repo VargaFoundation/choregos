@@ -13,82 +13,7 @@ import pytest
 from temporalio.exceptions import ApplicationError
 
 from .conftest import Fixture, stage_result
-
-INSTRUCTIONS = "Tu coordonnes l'arrivée décrite dans « {{ ticket.title }} » : comptes, groupes, matériel."
-
-
-async def _agent(
-    setup: Fixture,
-    *,
-    slug: str = "coordinateur",
-    status: str = "active",
-    instructions: str = INSTRUCTIONS,
-    lifecycle: str = "active",
-    epingle: dict[str, Any] | None = None,
-    scope: str = "org",
-    project: str | None = None,
-) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, Project, ProjectAgent
-    from choregos_api.db.session import session_scope
-
-    async with session_scope() as session:
-        projet = await session.get(Project, setup.project_id)
-        assert projet is not None
-        project_id = None
-        if project == "this":
-            project_id = projet.id
-        elif project == "other":
-            elsewhere = Project(org_id=projet.org_id, slug="elsewhere", name="Elsewhere")
-            session.add(elsewhere)
-            await session.flush()
-            project_id = elsewhere.id
-        agent = Agent(
-            org_id=projet.org_id,
-            slug=slug,
-            kind="internal",
-            display_name=slug,
-            status=status,
-            lifecycle=lifecycle,
-            scope=scope,
-            project_id=project_id,
-        )
-        session.add(agent)
-        await session.flush()
-        spec = {
-            "instructions": instructions,
-            "model": "profile:standard",
-            "limits": {"max_turns": 7, "max_minutes": 20},
-            "budget": {"run_usd": 0.5, "daily_usd": 5.0},
-            "skills": [],
-            "mcp_servers": [],
-        }
-        session.add(
-            AgentVersion(agent_id=agent.id, org_id=projet.org_id, version=1, spec=spec, checksum="sha256:v1")
-        )
-        if epingle is not None:
-            session.add(
-                ProjectAgent(
-                    project_id=setup.project_id,
-                    org_id=projet.org_id,
-                    agent_id=agent.id,
-                    version=1,
-                    overrides=epingle,
-                )
-            )
-
-
-def _plan(setup: Fixture, **extra: Any) -> dict[str, Any]:
-    return {
-        "project_id": setup.project_id,
-        "work_item_id": setup.work_item_id,
-        "transition_id": "t-implement",
-        "role": "implement",
-        "from_state": "ready",
-        "to_state": "done",
-        "actor": "dev",
-        "attempt": 1,
-        **extra,
-    }
+from .kits.registry_agent import agent_stage_plan, install_agent
 
 
 async def test_les_instructions_de_l_agent_remplacent_le_playbook_dans_leur_cadre(setup: Fixture) -> None:
@@ -97,8 +22,8 @@ async def test_les_instructions_de_l_agent_remplacent_le_playbook_dans_leur_cadr
     from choregos_orchestrator.activities.stage import prepare_stage
     from choregos_playbooks import OUTPUT_CONTRACT, playbook_source
 
-    await _agent(setup)
-    prepare = await prepare_stage(_plan(setup, agent="coordinateur"))
+    await install_agent(setup)
+    prepare = await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     entree = prepare["stage_input"]
     prompt = entree["playbook"]["prompt"]
     assert "Tu coordonnes l'arrivée décrite dans « Les avoirs ne sont pas déduits du total »" in prompt
@@ -115,8 +40,8 @@ async def test_les_instructions_de_l_agent_remplacent_le_playbook_dans_leur_cadr
 async def test_l_epingle_du_projet_resserre_le_budget(setup: Fixture) -> None:
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup, epingle={"budget": {"run_usd": 0.2}})
-    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    await install_agent(setup, pin={"budget": {"run_usd": 0.2}})
+    entree = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     assert entree["budget"]["usd"] <= 0.2
 
 
@@ -137,9 +62,9 @@ async def test_ce_qui_ne_part_pas_le_dit_sans_reessayer(
 ) -> None:
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup, **agent)
+    await install_agent(setup, **agent)
     with pytest.raises(ApplicationError, match=motif) as refus:
-        await prepare_stage(_plan(setup, agent="coordinateur"))
+        await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     assert refus.value.non_retryable
 
 
@@ -157,17 +82,17 @@ async def test_an_agent_that_may_not_run_here_stops_the_run_without_a_retry(
     refuses a personal agent and another project's agent (ADR 0061)."""
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup, **agent)
+    await install_agent(setup, **agent)
     with pytest.raises(ApplicationError, match=motif) as refus:
-        await prepare_stage(_plan(setup, agent="coordinateur"))
+        await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     assert refus.value.non_retryable
 
 
 async def test_a_project_agent_runs_in_its_own_project(setup: Fixture) -> None:
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup, scope="project", project="this")
-    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    await install_agent(setup, scope="project", project="this")
+    entree = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     assert entree["playbook"]["ref"].startswith("agent:coordinateur@1@sha256:")
 
 
@@ -180,7 +105,7 @@ async def test_l_interpreteur_transmet_l_agent_que_l_acteur_nomme(
     from choregos_contracts import Workflow
     from sqlalchemy import select
 
-    await _agent(setup)
+    await install_agent(setup)
     document = {
         "apiVersion": "choregos/v1",
         "kind": "Workflow",
@@ -236,7 +161,7 @@ async def test_un_agent_qui_a_epuise_son_budget_du_jour_ne_lance_plus_de_run(set
     from choregos_core import utcnow
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup)  # budget du jour : 5 $
+    await install_agent(setup)  # budget du jour : 5 $
     async with session_scope() as session:
         session.add(
             Run(
@@ -259,7 +184,7 @@ async def test_un_agent_qui_a_epuise_son_budget_du_jour_ne_lance_plus_de_run(set
             CostLedger(project_id=setup.project_id, run_id="run-hier", kind="tool", cost_usd=1.5, ts=utcnow())
         )
     with pytest.raises(ApplicationError, match="daily budget") as refus:
-        await prepare_stage(_plan(setup, agent="coordinateur"))
+        await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     assert refus.value.non_retryable and refus.value.type == "admission_refused"
 
 
@@ -271,7 +196,7 @@ async def test_les_skills_de_l_agent_partent_dans_le_stage_input_avec_leur_empre
     from sqlalchemy import select
 
     fichiers = {"SKILL.md": "---\nname: procedure-onboarding\ndescription: x\n---\n"}
-    await _agent(setup)
+    await install_agent(setup)
     async with session_scope() as session:
         projet = await session.get(Project, setup.project_id)
         assert projet is not None
@@ -290,7 +215,7 @@ async def test_les_skills_de_l_agent_partent_dans_le_stage_input_avec_leur_empre
             )
         version_de_l_agent = (await session.execute(select(AgentVersion))).scalar_one()
         version_de_l_agent.spec = {**version_de_l_agent.spec, "skills": [{"slug": "procedure-onboarding"}]}
-    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    entree = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     assert entree["skills"] == [
         {"slug": "procedure-onboarding", "version": 2, "digest": empreinte_de_skill(fichiers)}
     ], "la dernière version, à défaut d'une version dite"
@@ -338,11 +263,11 @@ async def test_the_knowledge_bases_of_the_agent_are_pinned_in_the_stage_input(se
     from choregos_contracts import knowledge_digest
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup)
+    await install_agent(setup)
     await _knowledge(setup, "architecture", scope="org", projects=[], groups=[], serving_mode="files")
     await _knowledge(setup, "big-corpus", scope="org", projects=[], groups=[], serving_mode="index")
     await _reads(["architecture", "big-corpus"])
-    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    entree = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     files, index = entree["knowledge"]
     assert (files["slug"], files["mode"], len(files["documents"])) == ("architecture", "files", 1)
     assert files["digest"] == knowledge_digest(
@@ -365,12 +290,12 @@ async def test_a_base_the_project_is_not_served_stops_the_run(
 ) -> None:
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup)
+    await install_agent(setup)
     if fields is not None:
         await _knowledge(setup, "architecture", **fields)
     await _reads(["architecture"])
     with pytest.raises(ApplicationError, match=reason) as refusal:
-        await prepare_stage(_plan(setup, agent="coordinateur"))
+        await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     assert refusal.value.non_retryable and refusal.value.type == "KnowledgeRefused"
 
 
@@ -380,7 +305,7 @@ async def test_a_restricted_base_is_pinned_only_for_an_initiator_who_reads_it(se
     from choregos_api.db.session import session_scope
     from choregos_orchestrator.activities.stage import prepare_stage
 
-    await _agent(setup)
+    await install_agent(setup)
     await _knowledge(setup, "hr", scope="org", projects=[], groups=[], serving_mode="files", restricted=True)
     await _reads(["hr"])
 
@@ -392,7 +317,7 @@ async def test_a_restricted_base_is_pinned_only_for_an_initiator_who_reads_it(se
 
     await started_by("schedule:nightly")
     with pytest.raises(ApplicationError, match="acts for nobody") as refusal:
-        await prepare_stage(_plan(setup, agent="coordinateur"))
+        await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     assert refusal.value.non_retryable and refusal.value.type == "KnowledgeRefused"
 
     async with session_scope() as session:
@@ -403,7 +328,7 @@ async def test_a_restricted_base_is_pinned_only_for_an_initiator_who_reads_it(se
         await session.flush()
         session.add(Membership(user_id=user.id, org_id=projet.org_id, role="org_admin"))
     await started_by("person:hr-lead@example.org")
-    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    entree = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     assert [ref["slug"] for ref in entree["knowledge"]] == ["hr"]
     # What the run writes now lands under a work item read only by the base's readers (ADR 0114).
     async with session_scope() as session:
@@ -424,7 +349,7 @@ async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending
     from temporalio.exceptions import ApplicationError
 
     fichiers = {"SKILL.md": "---\nname: fill-forms\ndescription: x\n---\n"}
-    await _agent(setup)
+    await install_agent(setup)
     async with session_scope() as session:
         projet = await session.get(Project, setup.project_id)
         assert projet is not None
@@ -444,7 +369,7 @@ async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending
             )
         version_de_l_agent = (await session.execute(select(AgentVersion))).scalar_one()
         version_de_l_agent.spec = {**version_de_l_agent.spec, "skills": [{"slug": "fill-forms"}]}
-    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    entree = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     assert [ref["version"] for ref in entree["skills"]] == [1]
 
     async with session_scope() as session:
@@ -454,7 +379,7 @@ async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending
             "skills": [{"slug": "fill-forms", "version": 2}],
         }
     with pytest.raises(ApplicationError, match="second reviewer"):
-        await prepare_stage(_plan(setup, agent="coordinateur", attempt=2))
+        await prepare_stage(agent_stage_plan(setup, agent="coordinateur", attempt=2))
 
 
 async def _memory_of_the_run(
@@ -469,7 +394,7 @@ async def _memory_of_the_run(
         version = (await session.execute(select(AgentVersion))).scalar_one()
         spec = {k: v for k, v in version.spec.items() if k != "memory"}
         version.spec = spec if scope is None else {**spec, "memory": scope}
-    prepared = await prepare_stage(_plan(setup, agent="coordinateur", attempt=attempt))
+    prepared = await prepare_stage(agent_stage_plan(setup, agent="coordinateur", attempt=attempt))
     async with session_scope() as session:
         run = await session.get(Run, prepared["run_id"])
         assert run is not None
@@ -483,7 +408,7 @@ async def test_the_agent_memory_scope_decides_what_the_run_reads(setup: Fixture)
     handed to a run whose scope is the project."""
     from choregos_core import memory_namespace
 
-    await _agent(setup)
+    await install_agent(setup)
     setup.adapters.memory.seed(
         setup.project_slug, "convention", "project:convention", "shared by the project"
     )
@@ -516,7 +441,7 @@ async def test_the_instructions_read_the_fields_of_the_work_item(setup: Fixture)
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
         item.fields = {"symbol": "TRND.US", "product": {"relevant": True, "dsr": 0.9731}}
-    await _agent(setup, instructions="Fields: {{ ticket.fields | tojson }}")
-    prepare = await prepare_stage(_plan(setup, agent="coordinateur"))
+    await install_agent(setup, instructions="Fields: {{ ticket.fields | tojson }}")
+    prepare = await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     prompt = prepare["stage_input"]["playbook"]["prompt"]
     assert '"symbol": "TRND.US"' in prompt and "0.9731" in prompt, prompt
