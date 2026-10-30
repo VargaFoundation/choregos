@@ -23,7 +23,7 @@ from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import ARTIFACT_TYPES, ProjectConfig
 from choregos_core import ModelResolutionError, backend_enabled, checksum, parse_workflow
 from choregos_core import ValidationError as WorkflowInvalid
-from choregos_core.models import ModelResolver
+from choregos_core.models import KNOWN_BACKEND_NAMES, ModelResolver
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -831,13 +831,11 @@ async def _github_owners(
 
 
 async def _usable_backends(session: AsyncSession) -> frozenset[str]:
-    from ..routers.admin import KNOWN_BACKENDS
-
     rows = {row.name: row for row in (await session.execute(select(BackendRegistryRow))).scalars().all()}
     allowed = set(get_settings().allowed_agent_backends)
     usable = {
         name
-        for name, _capabilities in KNOWN_BACKENDS
+        for name in KNOWN_BACKEND_NAMES
         if backend_enabled(name, rows[name].enabled if name in rows else None)
         and (not allowed or name in allowed)
     }
