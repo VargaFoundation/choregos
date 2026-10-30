@@ -156,7 +156,7 @@ function GatewayForm({ org, stored }: { org: string; stored: McpGateway | null }
         One MCP gateway for {org}. Choregos calls the gateway, which fronts the MCP servers; it never is one. The secret is typed once,
         sealed in the secret store and never shown again.
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
         <Field label="Mode" hint={MODES.find((m) => m.value === mode)?.note}>
           {(props) => (
             <Select {...props} value={mode} onChange={(e) => setMode(e.target.value as GatewayMode)}>
@@ -184,7 +184,7 @@ function GatewayForm({ org, stored }: { org: string; stored: McpGateway | null }
           </ul>
         </div>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
         <Field
           label="Endpoint"
           hint="http or https; {server} is replaced by the server's name. No credentials, query or fragment."
@@ -253,7 +253,7 @@ function GatewayForm({ org, stored }: { org: string; stored: McpGateway | null }
             }
           >
             {(props) => (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <Input {...props} type="password" autoComplete="new-password" value={secret} onChange={(e) => setSecret(e.target.value)} />
                 {secretSet && <span className="text-xs text-ok">set</span>}
               </div>
@@ -342,14 +342,14 @@ function AssertionBlock({ org, assertion }: { org: string; assertion: McpGateway
       <dl className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <dt className="text-ink-muted">Issuer</dt>
-          <dd>
+          <dd className="min-w-0 break-all">
             <code>{assertion.issuer}</code>
           </dd>
           <CopyButton text={assertion.issuer} label="Copy the issuer" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <dt className="text-ink-muted">JWKS URL</dt>
-          <dd>
+          <dd className="min-w-0 break-all">
             <code>{assertion.jwks_url}</code>
           </dd>
           <CopyButton text={assertion.jwks_url} label="Copy the JWKS URL" />
@@ -361,7 +361,7 @@ function AssertionBlock({ org, assertion }: { org: string; assertion: McpGateway
         <ul className="list-disc pl-5">
           {assertion.keys.map((k) => (
             <li key={k.kid}>
-              <code>{k.kid}</code>, created {k.created_at}
+              <code className="break-all">{k.kid}</code>, created {k.created_at}
               {k.current ? " (current)" : ""}
             </li>
           ))}
