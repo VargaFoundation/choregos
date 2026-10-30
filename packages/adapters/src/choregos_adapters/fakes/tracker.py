@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tracker en mémoire : scriptable, déterministe, sans réseau."""
+"""In-memory tracker: scriptable, deterministic, no network."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from ..tracker.champs import nom_actuel, nom_present
 
 
 class FakeTracker:
-    """Tracker de test. `seed()` crée des tickets ; `move()` simule un déplacement de carte."""
+    """Test tracker. `seed()` creates tickets; `move()` simulates a card move."""
 
     owns_items = True
 
@@ -25,7 +25,7 @@ class FakeTracker:
         self.calls: list[tuple[str, Any]] = []
         self._next_number = 1
         self.webhook_secret = "fake-secret"
-        #: Les champs du board, par nom : un test y met un board d'avant S22-21 (`Taille`…).
+        #: The board's fields, by name: a test puts a board from before S22-21 there (`Taille`…).
         self.board_fields: list[str] = ["Status"]
         #: An unreachable tracker: `close_item` raises (S22-28).
         self.failure: str | None = None
@@ -113,7 +113,7 @@ class FakeTracker:
             item.closed_at = utcnow()
 
     async def upsert_status_comment(self, key: str, markdown: str, marker: str) -> None:
-        """Un seul commentaire de statut par ticket, réécrit à chaque étape."""
+        """A single status comment per ticket, rewritten at each step."""
         self.calls.append(("upsert_status_comment", key))
         item = self.items[key]
         for comment in item.comments:
@@ -140,20 +140,20 @@ class FakeTracker:
         self.items[key].fields.update(fields)
 
     async def ensure_project_fields(self, fields: list[str]) -> dict[str, list[str]]:
-        """Comme le board GitHub : garde, renomme l'ancien nom français, crée ce qui manque."""
+        """Like the GitHub board: keeps, renames the former French name, creates what is missing."""
         self.calls.append(("ensure_project_fields", list(fields)))
-        bilan: dict[str, list[str]] = {"kept": [], "renamed": [], "created": []}
-        for voulu in dict.fromkeys(nom_actuel(str(nom)) for nom in fields):
-            present = nom_present(voulu, self.board_fields)
-            if present == voulu:
-                bilan["kept"].append(voulu)
+        summary: dict[str, list[str]] = {"kept": [], "renamed": [], "created": []}
+        for wanted in dict.fromkeys(nom_actuel(str(field_name)) for field_name in fields):
+            present = nom_present(wanted, self.board_fields)
+            if present == wanted:
+                summary["kept"].append(wanted)
             elif present is not None:
-                self.board_fields[self.board_fields.index(present)] = voulu
-                bilan["renamed"].append(f"{present} → {voulu}")
+                self.board_fields[self.board_fields.index(present)] = wanted
+                summary["renamed"].append(f"{present} → {wanted}")
             else:
-                self.board_fields.append(voulu)
-                bilan["created"].append(voulu)
-        return bilan
+                self.board_fields.append(wanted)
+                summary["created"].append(wanted)
+        return summary
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
         return [key for key, item in self.items.items() if "agent-ready" in item.labels]

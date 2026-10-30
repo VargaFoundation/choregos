@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Exécuteur en mémoire : joue un `StageResult` scripté, ou délègue à une fonction."""
+"""In-memory executor: plays a scripted `StageResult`, or delegates to a function."""
 
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ StageHandler = Callable[[StageInput], StageResult | Any]
 
 
 class FakeExecutor:
-    """Exécuteur de test.
+    """Test executor.
 
-    - `queue_result()` empile les résultats rendus dans l'ordre ;
-    - `handler` permet de calculer le résultat à partir du `StageInput` ;
-    - `cancel()` marque le run annulé, comme un `PipelineRun` supprimé.
+    - `queue_result()` queues the results returned, in order;
+    - `handler` computes the result from the `StageInput`;
+    - `cancel()` marks the run cancelled, like a deleted `PipelineRun`.
     """
 
     kind = ExecutorKind.FAKE
@@ -46,7 +46,7 @@ class FakeExecutor:
         self.statuses: dict[str, ExecStatus] = {}
         self.cancelled: list[str] = []
         self._queue: list[StageResult] = []
-        self.log_lines: list[str] = ["runner: démarrage", "runner: résultat posté"]
+        self.log_lines: list[str] = ["runner: starting", "runner: result posted"]
         #: Log lines of one run, when scripted (`crash_next`); otherwise `log_lines`.
         self.run_logs: dict[str, list[str]] = {}
         self.start_calls_by_run: dict[str, int] = {}
@@ -84,7 +84,7 @@ class FakeExecutor:
         self._crashes.append((status, list(log_lines or [])))
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
-        """Idempotent par `run_id` : deux démarrages du même run ne produisent qu'une exécution."""
+        """Idempotent by `run_id`: two starts of the same run produce one execution."""
         self.start_calls_by_run[spec.run_id] = self.start_calls_by_run.get(spec.run_id, 0) + 1
         if self.start_error is not None:
             raise self.start_error
@@ -170,13 +170,13 @@ class FakeExecutor:
         run_id = ref.run_id or ""
         self.cancelled.append(run_id)
         self.lost.add(run_id)  # a cancelled run's sandbox is gone: it cannot be resumed
-        self.statuses[run_id] = ExecStatus(state="cancelled", message="annulé par l'orchestrateur")
+        self.statuses[run_id] = ExecStatus(state="cancelled", message="cancelled by the orchestrator")
 
     def result_for(self, run_id: str) -> StageResult | None:
         return self.results.get(run_id)
 
     async def fetch_result(self, ref: ExecRef) -> StageResult | None:
-        """Équivalent du `result-url` Tekton : le résultat produit par le runner."""
+        """The equivalent of Tekton's `result-url`: the result the runner produced."""
         return self.results.get(ref.run_id or "")
 
 

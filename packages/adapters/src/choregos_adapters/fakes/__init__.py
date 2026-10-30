@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Implémentations `Fake*` en mémoire de tous les adaptateurs (S0-06).
+"""In-memory `Fake*` implementations of every adapter (S0-06).
 
-Activées par `CHOREGOS_FAKES=1`. Elles sont **scriptables** : chaque fake expose des
-méthodes de mise en scène (`seed`, `set_diff`, `set_status`, `queue_result`,
-`fail_next_analysis`, `record_usage`…) pour écrire des tests lisibles.
+Enabled by `CHOREGOS_FAKES=1`. They are **scriptable**: each fake exposes staging methods
+(`seed`, `set_diff`, `set_status`, `queue_result`, `fail_next_analysis`, `record_usage`…) so that
+tests read well.
 """
 
 from __future__ import annotations

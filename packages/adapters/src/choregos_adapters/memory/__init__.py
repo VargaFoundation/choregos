@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Adaptateurs de mémoire."""
+"""Memory adapters."""
 
 from __future__ import annotations
 
 from .ecphoria import EcphoriaMemory
-from .lexicale import LexicalMemory
+from .lexical import LexicalMemory
 
 __all__ = ["EcphoriaMemory", "LexicalMemory"]

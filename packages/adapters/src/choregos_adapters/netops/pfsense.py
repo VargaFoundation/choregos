@@ -276,7 +276,7 @@ class PfSenseFirewall:
 
     # ───────────────────────────── the registry's seam ─────────────────────────────
 
-    async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def execute(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         """A declared operation, by name: what the broker and the `connector.call` effect call."""
         if operation not in {o.name for o in self.operations}:
             raise AdapterError(f"pfsense has no operation {operation}")
@@ -285,6 +285,8 @@ class PfSenseFirewall:
         except TypeError as error:
             raise AdapterError(f"pfsense {operation}: {error}") from error
         return result
+
+    executer = execute  # lang: fr-ok alias:internal
 
     async def test(self) -> dict[str, Any]:
         await self._data("GET", "/status/gateways")

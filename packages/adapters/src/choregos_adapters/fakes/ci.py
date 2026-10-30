@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CI en mémoire."""
+"""In-memory CI."""
 
 from __future__ import annotations
 
