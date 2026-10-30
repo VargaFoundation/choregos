@@ -31,8 +31,8 @@ def _id_token(**revendications: Any) -> str:
     def b64(valeur: dict[str, Any]) -> str:
         return base64.urlsafe_b64encode(json.dumps(valeur).encode()).decode().rstrip("=")
 
-    corps = {"sub": "u-1", "iss": ISSUER, "aud": "choregos", **revendications}
-    return f"{b64({'alg': 'RS256'})}.{b64(corps)}.c2lnbmF0dXJl"
+    payload = {"sub": "u-1", "iss": ISSUER, "aud": "choregos", **revendications}
+    return f"{b64({'alg': 'RS256'})}.{b64(payload)}.c2lnbmF0dXJl"
 
 
 @pytest.fixture
