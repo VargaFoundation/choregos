@@ -194,10 +194,10 @@ def _pkce() -> tuple[str, str]:
 def _handshake(
     settings: Settings, redirect: str, *, reauth: bool = False, org: str | None = None
 ) -> tuple[str, str, str, str]:
-    """Rend (state signé, cookie signé, code_challenge, nonce). Le nonce lie les deux, et part à l'IdP.
+    """Return (signed state, signed cookie, code_challenge, nonce); the nonce binds the two, sent to the IdP.
 
-    `reauth` voyage dans le cookie signé : le retour de l'IdP doit savoir qu'une authentification
-    FRAÎCHE a été demandée, pour l'exiger (voir `callback`).
+    `reauth` travels in the signed cookie: the IdP's answer must know that a FRESH authentication
+    was asked for, so that it is required (see `callback`).
     """
     nonce = secrets.token_urlsafe(24)
     verifier, challenge = _pkce()
@@ -232,7 +232,7 @@ def _id_token_claims(id_token: Any) -> dict[str, Any] | None:
 
 
 def _auth_time(id_token: Any) -> int | None:
-    """La revendication `auth_time` de l'ID token : QUAND l'utilisateur s'est authentifié chez l'IdP."""
+    """The ID token's `auth_time` claim: WHEN the user authenticated at the IdP."""
     claims = _id_token_claims(id_token)
     valeur = claims.get("auth_time") if claims is not None else None
     return int(valeur) if isinstance(valeur, int | float) and not isinstance(valeur, bool) else None
