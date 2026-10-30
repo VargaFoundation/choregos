@@ -228,7 +228,7 @@ spec:
             {{- end }}
             {{- /* A name this chart sets for the API must not also come from global.extraEnv.
                    S47-02/03/04 add their names to this dict. */}}
-            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" }}
+            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" "choregos-api.oidcEndpoints.authorization" "CHOREGOS_OIDC_TOKEN_ENDPOINT" "choregos-api.oidcEndpoints.token" "CHOREGOS_OIDC_USERINFO_ENDPOINT" "choregos-api.oidcEndpoints.userinfo" "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED" "choregos-api.oidcRequireEmailVerified" }}
             {{- range ($.Values.global.extraEnv | default list) }}
             {{- if hasKey $apiOwned .name }}
             {{- fail (printf "global.extraEnv: %s is set by the choregos-api chart; use %s instead (two values for one name: Kubernetes keeps the last one without saying so)" .name (get $apiOwned .name)) }}
@@ -251,6 +251,21 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ .Values.global.oidc.secretRef }}, key: client-secret } }
             - name: CHOREGOS_OIDC_DEFAULT_ORG
               value: {{ .Values.global.oidc.defaultOrg | default "" | quote }}
+            - name: CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED
+              value: {{ .Values.oidcRequireEmailVerified | quote }}
+            {{- $oidcEndpoints := .Values.oidcEndpoints | default dict }}
+            {{- $oidcSet := compact (list $oidcEndpoints.authorization $oidcEndpoints.token $oidcEndpoints.userinfo) }}
+            {{- if and $oidcSet (ne (len $oidcSet) 3) }}
+            {{- fail "choregos-api.oidcEndpoints: set authorization, token and userinfo together, or none" }}
+            {{- end }}
+            {{- if $oidcSet }}
+            - name: CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT
+              value: {{ $oidcEndpoints.authorization | quote }}
+            - name: CHOREGOS_OIDC_TOKEN_ENDPOINT
+              value: {{ $oidcEndpoints.token | quote }}
+            - name: CHOREGOS_OIDC_USERINFO_ENDPOINT
+              value: {{ $oidcEndpoints.userinfo | quote }}
+            {{- end }}
             # Always set, even to `false`: a missing value would leave the code's default
             # to decide, and that is precisely what left the API open in production.
             - name: CHOREGOS_BOOTSTRAP_ORG

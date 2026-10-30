@@ -58,6 +58,7 @@ async def test_sans_connexion_de_developpement_le_code_dev_est_refuse(
                 return_value=Response(
                     200,
                     json={
+                        "issuer": ISSUER,
                         "authorization_endpoint": f"{ISSUER}/authorize",
                         "token_endpoint": f"{ISSUER}/token",
                         "userinfo_endpoint": f"{ISSUER}/userinfo",
@@ -176,6 +177,7 @@ async def test_les_groupes_oidc_sont_rattaches_a_leur_organisation() -> None:
 
 def _discovery() -> dict[str, str]:
     return {
+        "issuer": ISSUER,
         "authorization_endpoint": f"{ISSUER}/authorize",
         "token_endpoint": f"{ISSUER}/token",
         "userinfo_endpoint": f"{ISSUER}/userinfo",

@@ -31,7 +31,8 @@ def _id_token(**revendications: Any) -> str:
     def b64(valeur: dict[str, Any]) -> str:
         return base64.urlsafe_b64encode(json.dumps(valeur).encode()).decode().rstrip("=")
 
-    return f"{b64({'alg': 'RS256'})}.{b64({'sub': 'u-1', **revendications})}.c2lnbmF0dXJl"
+    corps = {"sub": "u-1", "iss": ISSUER, "aud": "choregos", **revendications}
+    return f"{b64({'alg': 'RS256'})}.{b64(corps)}.c2lnbmF0dXJl"
 
 
 @pytest.fixture
@@ -49,6 +50,7 @@ def idp(org: str, monkeypatch: pytest.MonkeyPatch) -> Any:
             return_value=Response(
                 200,
                 json={
+                    "issuer": ISSUER,
                     "authorization_endpoint": f"{ISSUER}/authorize",
                     "token_endpoint": f"{ISSUER}/token",
                     "userinfo_endpoint": f"{ISSUER}/userinfo",

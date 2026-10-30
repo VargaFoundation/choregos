@@ -198,7 +198,7 @@ async def test_a_tenant_provider_without_discovery_fails_instead_of_being_guesse
     with respx.mock(assert_all_called=False) as mock:
         mock.get(f"{ACME}/.well-known/openid-configuration").mock(return_value=Response(404))
         response = await client.get("/api/v1/auth/login", params={"org": "acme"})
-    assert response.status_code == 502
+    assert response.status_code == 503
     assert "protocol/openid-connect" not in response.text
 
 

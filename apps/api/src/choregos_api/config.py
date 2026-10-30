@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     oidc_client_id: str = "choregos"
     oidc_client_secret: str = ""
     oidc_scopes: str = "openid profile email groups"
+    #: For an IdP that publishes no discovery document; set all three or none (ADR 0100).
+    oidc_authorization_endpoint: str = ""
+    oidc_token_endpoint: str = ""
+    oidc_userinfo_endpoint: str = ""
+    #: An existing account is linked by e-mail only when the provider does not say
+    #: `email_verified: false` (Entra omits the claim, so only an explicit false refuses).
+    oidc_require_email_verified: bool = True
     #: La porte MCP accepte aussi les jetons OAuth émis par l'IdP (ADR 0030, RFC 9728) : claude.ai et
     #: les clients hébergés ne savent pas présenter un jeton `chg_`. Éteint par défaut.
     mcp_oauth_enabled: bool = False
@@ -369,6 +376,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 "CHOREGOS_DEV_LOGIN_ENABLED=true en staging/prod : la connexion de développement "
                 "ouvre l'API à quiconque atteint /auth/callback. Refusé."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _oidc_endpoints_all_or_none(self) -> Settings:
+        explicit = [self.oidc_authorization_endpoint, self.oidc_token_endpoint, self.oidc_userinfo_endpoint]
+        if any(explicit) and not all(explicit):
+            raise ValueError(
+                "set CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT, CHOREGOS_OIDC_TOKEN_ENDPOINT and "
+                "CHOREGOS_OIDC_USERINFO_ENDPOINT together, or none"
             )
         return self
 
