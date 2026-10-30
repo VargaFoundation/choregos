@@ -7615,6 +7615,21 @@ components:
           description: >-
             Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>`
             for a webhook, `schedule:<name>`… Null for a work item from before S40-22.
+        restricted_knowledge:
+          type: array
+          items: { type: string }
+          default: []
+          description: >-
+            The restricted knowledge bases its runs were served (ADR 0114), only ever added to. Reading the
+            work item, its runs, artefacts and receipts needs reading every one of them; otherwise the
+            detail answers 404 and a list shows it `redacted`.
+        redacted:
+          type: boolean
+          default: false
+          description: >-
+            True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114):
+            only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `url`, dates and
+            `restricted_knowledge` are filled; everything else is empty.
         created_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
     Totals:

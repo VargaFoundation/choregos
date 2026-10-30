@@ -3489,6 +3489,10 @@ export type WorkItem = {
   estimate?: CostEstimate | null;
   /** Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>` for a webhook, `schedule:<name>`… Null for a work item from before S40-22. */
   initiated_by?: string | null;
+  /** The restricted knowledge bases its runs were served (ADR 0114), only ever added to. Reading the work item, its runs, artefacts and receipts needs reading every one of them; otherwise the detail answers 404 and a list shows it `redacted`. */
+  restricted_knowledge?: Array<string>;
+  /** True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114): only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `url`, dates and `restricted_knowledge` are filled; everything else is empty. */
+  redacted?: boolean;
   created_at?: string;
   closed_at?: string | null;
 };

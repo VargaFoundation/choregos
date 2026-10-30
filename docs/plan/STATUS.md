@@ -744,7 +744,8 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S50-01 | S50 | ⬜ | — | Connector identity modes ([ADR 0107](../adr/0107-an-agent-acts-under-an-identity.md) story 2): connector types declare which of assigned, own and on-behalf-of they support, an agent version's `mcp_servers` chooses one, and audit records carry `as`; assigned and own first. Not started. |
 | S50-02 | S50 | ⬜ | — | An agent acts on behalf of a person ([ADR 0107](../adr/0107-an-agent-acts-under-an-identity.md) story 3, #756): the RFC 8693 token exchange, Microsoft Graph first (it supports on-behalf-of); Atlassian needs each person's OAuth consent (the A2A credential of ADR 0062); GitHub user-to-server tokens of the App. Not started. |
 | S50-03 | S50 | ⬜ | — | An agent requests a child agent ([ADR 0107](../adr/0107-an-agent-acts-under-an-identity.md) story 4, amends ADR 0077 point 1): the `request_agent` broker tool, the child run the platform starts, its attenuated identity and the depth bound. Not started. |
-**Total** : 442 livrées, 274 partielles, 8 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+| S42-11f | S42 | ✅ | — | contract of the restricted outputs ([ADR 0114](../adr/0114-what-a-run-writes-after-reading-a-restricted-base-stays-restricted.md), product owner's choices A, B, C of 2026-10-30; ADR 0001, contract-change): `WorkItem.restricted_knowledge` (the restricted bases its runs were served) and `WorkItem.redacted` (a list entry the caller may not read). Descriptions and two optional fields only. Does not prove any behaviour (the implementation follows, stacked). |
+**Total** : 443 livrées, 274 partielles, 8 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
