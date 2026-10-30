@@ -711,10 +711,11 @@ export const api = {
   connectors: (id: string) => request<ConnectorDto[]>(`/projects/${qualify(id)}/connectors`),
   runAccess: (id: string) =>
     request<{
-      evenements: number;
+      events: number;
+      inferred?: number;
       refusals: number;
       tool_cost_eur?: number;
-      acces: { nature: string; target: string; requests: number; refusals: number; motifs?: string[] }[];
+      access: { nature: string; target: string; requests: number; refusals: number; reasons?: string[] }[];
       chain?: RunChain;
     }>(`/runs/${id}/access`),
   projectTools: (id: string) =>

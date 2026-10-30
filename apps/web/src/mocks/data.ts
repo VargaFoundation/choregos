@@ -564,9 +564,9 @@ export const runLogsOom: RunLogs = {
 
 /** Ce à quoi l'agent a touché, replié depuis son journal (`/runs/{id}/access`). */
 export const runAccess = {
-  evenements: 64,
+  events: 64,
   refusals: 1,
-  acces: [
+  access: [
     { nature: "read", target: "src/billing/totals.py", requests: 6, refusals: 0 },
     { nature: "write", target: "src/billing/totals.py", requests: 3, refusals: 0 },
     { nature: "write", target: "tests/billing/test_totals.py", requests: 2, refusals: 0 },
@@ -576,7 +576,7 @@ export const runAccess = {
       target: "src/billing/rates.py",
       requests: 1,
       refusals: 1,
-      motifs: ["outside the allowed paths: use report_finding or request_scope_change"],
+      reasons: ["outside the allowed paths: use report_finding or request_scope_change"],
     },
   ],
 };

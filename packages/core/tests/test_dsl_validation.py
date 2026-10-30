@@ -257,7 +257,7 @@ def test_15_un_role_metier_est_un_nom_de_plein_droit() -> None:
     # Sans playbook résolvable, un avertissement — pas une erreur : c'est au déploiement
     # de l'apporter, et le validateur n'a pas à savoir ce qu'il montera.
     codes = [i.code for i in rapport.warnings]
-    assert "role.playbook_introuvable" in codes, codes
+    assert "role.playbook_not_found" in codes, codes
 
 
 def test_16_un_role_du_paquet_n_avertit_pas(tmp_path: Path) -> None:
@@ -280,7 +280,7 @@ def test_16_un_role_du_paquet_n_avertit_pas(tmp_path: Path) -> None:
             os.environ["CHOREGOS_PLAYBOOKS_DIR"] = ancien
     # Le fixture de base porte d'autres avertissements (pas d'état d'attente humaine) :
     # ce qui compte ici est qu'il n'y en ait AUCUN sur le playbook.
-    assert "role.playbook_introuvable" not in [i.code for i in rapport.warnings], [
+    assert "role.playbook_not_found" not in [i.code for i in rapport.warnings], [
         i.format() for i in rapport.warnings
     ]
 
@@ -294,7 +294,7 @@ def test_16b_un_agent_du_registre_n_a_pas_besoin_de_playbook() -> None:
     )
     _wf, rapport = parse_workflow(metier.format(transitions=OK_TRANSITIONS), strict=False)
     assert rapport.valid, [i.format() for i in rapport.errors]
-    assert "role.playbook_introuvable" not in [i.code for i in rapport.warnings]
+    assert "role.playbook_not_found" not in [i.code for i in rapport.warnings]
 
 
 def test_17_un_role_qui_n_est_pas_un_identifiant_est_refuse() -> None:

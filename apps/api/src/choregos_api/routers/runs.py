@@ -138,7 +138,6 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
     record: dict[str, Any] = {
         **rapport.to_dict(),
         "tool_cost_eur": tool_cost_eur,
-        "cout_outils_eur": tool_cost_eur,  # lang: fr-ok -- former name, emitted for one release (ADR 0046)
     }
     if run.inputs_from is not None or run.initiated_by is not None:
         record["chain"] = await _chain(session, run)

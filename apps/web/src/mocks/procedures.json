@@ -842,7 +842,7 @@
       {
         "key": "at",
         "title": "At the cluster",
-        "markdown": "1. Label each `PipelineRun` the platform should follow with `choregos/sha=<commit>`; the connector\n   finds a commit's runs through that label. Runs that carry `choregos/project`, `choregos/work-item`\n   and `choregos/run-id` are also mapped back to their work item.\n2. Point Tekton's CloudEvents sink at the platform:\n   `https://choregos.example.com/api/v1/webhooks/tekton?jeton=<the shared webhook secret>`. Tekton's sink is configured by URL and\n   cannot add a header, which is why the secret travels in the query string."
+        "markdown": "1. Label each `PipelineRun` the platform should follow with `choregos/sha=<commit>`; the connector\n   finds a commit's runs through that label. Runs that carry `choregos/project`, `choregos/work-item`\n   and `choregos/run-id` are also mapped back to their work item.\n2. Point Tekton's CloudEvents sink at the platform:\n   `https://choregos.example.com/api/v1/webhooks/tekton?token=<the shared webhook secret>`. Tekton's sink is configured by URL and\n   cannot add a header, which is why the secret travels in the query string. `?jeton=` is still\n   accepted, so a sink URL set up earlier keeps working."
       },
       {
         "key": "permissions",

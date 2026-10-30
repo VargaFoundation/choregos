@@ -1218,8 +1218,8 @@ the chart already assumes.
 `CHOREGOS_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `CHOREGOS_GENERIC_WEBHOOK_SECRET` is
 the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, and **Tekton since
 0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
-the sink URL, `…/api/v1/webhooks/tekton?jeton=<secret>`. Outside development, a webhook whose secret
-is not configured is refused.
+the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (`?jeton=`, the former spelling, is still
+accepted). Outside development, a webhook whose secret is not configured is refused.
 
 ### When a secret is not a secret
 
