@@ -219,7 +219,7 @@ async def test_un_rollback_rend_le_ticket_a_un_humain_sans_attendre_le_delai(
 # ───────────────────── la voie express : depuis le ticket, sous SON approbation (#279) ─────────────────────
 
 HOTFIX_CAPTAINS = {"group": "hotfix-captains", "required": True}
-#: Le cas dont l'historique s'archive (`CHOREGOS_RECORD_HISTORY=1`). `train-express-ancien-code`
+#: The case whose history is archived (`CHOREGOS_RECORD_HISTORY=1`). `train-express-ancien-code`
 #: a été enregistré sur `main` avant ce changement, cas `voie-dispense` : il rougit si la décision
 #: sort du marqueur `express-lane-approval`.
 ARCHIVES_EXPRESS = {"voie-exige": "train-express-S22-17"}

@@ -66,7 +66,7 @@ async def test_dev_simple_va_du_ticket_a_la_production_verifiee_sans_humain(
             await train.result()
 
     assert issue["state"] == "verified"
-    assert await requests_of_item(item_id) == [], "aucune décision humaine"
+    assert await requests_of_item(item_id) == [], "no human decision"
     (release,) = await releases_of("prod")
     assert release.status == "done" and release.approved_by is None, "le train est parti seul"
     assert [agent for _, agent in await runs_of(item_id)] == [
@@ -92,7 +92,7 @@ async def test_dev_simple_arrete_un_ticket_trop_gros_au_triage(
             ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
             await wait_for_state(ticket, "needs_human")
             await ticket.cancel()
-    assert await runs_of(item_id) == [("t-triage", "triager")], "un seul triage, pas de développement"
+    assert await runs_of(item_id) == [("t-triage", "triager")], "a single triage, no development"
 
 
 # ───────────────────────── dev-complex ─────────────────────────
@@ -281,7 +281,9 @@ async def test_study_renumerote_un_adr_dont_le_numero_a_ete_pris_avant_la_fusion
         async with worker_factory():
             ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
             await wait_for_state(ticket, "awaiting_decision")
-            await scm.commit_files(REPOSITORY, "main", {"docs/adr/0001-cache.md": "# Cache\n"}, "autre étude")
+            await scm.commit_files(
+                REPOSITORY, "main", {"docs/adr/0001-cache.md": "# Cache\n"}, "another study"
+            )
             await decide(ticket)
             await wait_for_state(ticket, "in_pr")
             await report_ci_result(setup, ticket, "success", "ci-13")
