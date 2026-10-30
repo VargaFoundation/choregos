@@ -7628,8 +7628,8 @@ components:
           default: false
           description: >-
             True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114):
-            only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `url`, dates and
-            `restricted_knowledge` are filled; everything else is empty.
+            only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `workflow_name`,
+            `workflow_version`, `url`, dates and `restricted_knowledge` are filled; everything else is empty.
         created_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
     Totals:
