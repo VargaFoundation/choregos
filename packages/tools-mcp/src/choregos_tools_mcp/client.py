@@ -147,6 +147,12 @@ class InternalClient:
         token = (payload or {}).get("token")
         return str(token) if token else None
 
+    async def fetch_egress_token(self) -> str:
+        """The run's egress token (ADR 0115): what the proxy variables carry, so that the agent,
+        which inherits them, never holds the run token."""
+        payload = await self._request("POST", "/egress-token")
+        return str((payload or {})["token"])
+
     async def fetch_ci_logs(self, tail: int = 500) -> str:
         payload = await self._request("GET", "/ci-logs", params={"tail": tail})
         return str((payload or {}).get("logs", ""))

@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import json
 import os
+import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -42,6 +43,7 @@ from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, get_settings
 from .dod import CheckOutcome, DodReport, run_checks
+from .egress import AUTH_VARIABLE as EGRESS_AUTH_VARIABLE
 from .egress import authenticate_proxy_env
 from .exits import Exit
 from .guardrails import GuardRails
@@ -178,14 +180,21 @@ class Runner:
         self.tools: Any = None
 
     async def run(self) -> RunOutcome:
-        # ADR 0070: before anything makes a network call — git, pip, the agent — the egress proxy
-        # learns which run is calling (proxy credentials = run id and run token).
-        os.environ.update(authenticate_proxy_env(os.environ, self.settings.run_id, self.settings.run_token))
+        # The API is reached directly (`NO_PROXY` names it, `env_du_runner`): the client may exist
+        # before the proxy variables carry any credential.
         client = self.client or InternalClient(
             self.settings.api_url, self.settings.run_id, self.settings.run_token
         )
         owns_client = self.client is None
         try:
+            # ADR 0070: before anything makes a network call — git, pip, the agent — the egress
+            # proxy learns which run is calling. ADR 0115: with the run's egress token, not its run
+            # token, since the agent inherits these variables.
+            os.environ.update(
+                authenticate_proxy_env(
+                    os.environ, self.settings.run_id, await self._egress_credential(client)
+                )
+            )
             # 1. input
             try:
                 stage_input = await client.fetch_input()
@@ -546,6 +555,24 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _egress_credential(self, client: Any) -> str:
+        """What the proxy variables carry (ADR 0115): the run's egress token, which opens the run's
+        network routes and no other. An API older than ADR 0115 has no such route (404): the run
+        token then, as before ADR 0115, and the runner's log says so."""
+        if os.environ.get(EGRESS_AUTH_VARIABLE) != "run":
+            return self.settings.run_token
+        try:
+            return str(await client.fetch_egress_token())
+        except InternalApiError as exc:
+            if exc.status_code not in (404, 405):
+                raise
+            print(
+                "choregos-runner: the API has no egress token (ADR 0115): "
+                "the proxy variables carry the run token",
+                file=sys.stderr,
+            )
+            return self.settings.run_token
 
     async def _confine(
         self, plan: Any, env: dict[str, str], workspace: Workspace, journal: EventJournal

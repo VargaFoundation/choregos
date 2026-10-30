@@ -30,7 +30,7 @@ from .db.session import (
 from .errors import ApiError, forbidden, not_found, unauthorized
 from .logging import bind
 from .rbac import Permission, Principal
-from .security import RunClaims, hash_api_token, read_session, verify_run_token
+from .security import RunClaims, hash_api_token, read_session, verify_egress_token, verify_run_token
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
@@ -360,6 +360,33 @@ async def run_claims(
 
 
 RunAuth = Annotated[RunClaims, Depends(run_claims)]
+
+
+async def network_claims(
+    id: str,
+    session: Db,
+    authorization: Annotated[str | None, Header()] = None,
+) -> RunClaims:
+    """A run's network routes (ADR 0115): its run token, or its egress token — the one the proxy
+    variables carry, which the agent inherits. Every other internal route takes the run token only."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise unauthorized("missing run token")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        claims = verify_run_token(token)
+    except jwt.PyJWTError:
+        try:
+            claims = verify_egress_token(token)
+        except jwt.PyJWTError as exc:
+            raise forbidden(f"invalid run or egress token: {exc}") from exc
+    if claims.run_id != id:
+        raise forbidden("this token belongs to another run")
+    bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
+    await limiter_aux_organisations(session, TOUT)
+    return claims
+
+
+NetworkAuth = Annotated[RunClaims, Depends(network_claims)]
 
 
 @dataclass(slots=True)

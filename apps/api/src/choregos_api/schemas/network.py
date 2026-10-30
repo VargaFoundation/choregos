@@ -77,3 +77,10 @@ class NetworkActivityRow(Dto):
 
 class NetworkActivity(Dto):
     rows: list[NetworkActivityRow] = Field(default_factory=list)
+
+
+class EgressToken(Dto):
+    """What the proxy variables of a run carry (ADR 0115): its network, nothing else."""
+
+    token: str
+    expires_at: datetime
