@@ -79,6 +79,8 @@ from .project import (
     ProjectConfig,
     RepoConfig,
     ScheduleConfig,
+    StartRule,
+    TriggerConfig,
 )
 from .skill_files import (
     INERT_BINARY_EXTENSIONS,
@@ -315,6 +317,7 @@ __all__ = [
     "StageResult",
     "StageRole",
     "StageStatus",
+    "StartRule",
     "State",
     "StateKind",
     "SystemActor",
@@ -324,6 +327,7 @@ __all__ = [
     "Transition",
     "TransitionAction",
     "TransitionRef",
+    "TriggerConfig",
     "WorkItemLinks",
     "WorkItemRef",
     "Workflow",

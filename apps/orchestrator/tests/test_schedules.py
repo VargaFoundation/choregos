@@ -216,3 +216,33 @@ async def test_each_pass_fires_the_schedules_before_it_reconciles(temporal_env: 
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
     assert calls[:4] == ["fire", "reconcile", "fire", "reconcile"], calls
     assert status["fired"]["opened"] == ["DEV-weekly-20261019T0600Z"], status
+
+
+async def test_each_firing_is_recorded_among_the_project_s_received_events(setup: Fixture) -> None:
+    """S51-01: "did the cron fire?" is answered where the webhooks are; a refusal once per window."""
+    from choregos_api.db.models import ReceivedEvent
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _schedule(
+        setup,
+        {"name": "broken", "cron": "0 6 * * mon", "title": "Broken", "fields": {"nope": 1}},
+        WEEKLY,
+    )
+
+    await _fire(setup, MONDAY)
+    await _fire(setup, MONDAY.replace(minute=30))
+
+    async with session_scope() as session:
+        rows = (
+            (await session.execute(select(ReceivedEvent).where(ReceivedEvent.project_id == setup.project_id)))
+            .scalars()
+            .all()
+        )
+    seen = sorted((r.source, r.outcome, r.work_item_key) for r in rows)
+    assert seen == [
+        ("schedule:broken", "refused", "BILLING-API-broken-20261019T0600Z"),
+        ("schedule:weekly", "created_work_item", "BILLING-API-weekly-20261019T0600Z"),
+    ]
+    refused = next(r for r in rows if r.outcome == "refused")
+    assert refused.event_type == "schedule.fired" and "refused" in refused.summary

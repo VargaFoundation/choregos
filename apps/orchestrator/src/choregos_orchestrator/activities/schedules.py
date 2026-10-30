@@ -11,6 +11,10 @@ window — a retried activity, two passes inside the same hour — find the same
 item; the `(project_id, tracker_key)` constraint holds even if two ran at once. The work item is
 created without starting its interpreter: `reconcile_tracker`, on the same pass, starts it under its
 deterministic identifier, the one path every internal work item takes.
+
+Each firing that opens a work item, and each one the workflow refuses, leaves a `received_events`
+row (`schedule:<name>`, S51-01): the project's page answers "did the cron fire?" as it does for a
+webhook. A window already served writes nothing more.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from choregos_api.db.models import WorkItem
+from choregos_api.db.models import ReceivedEvent, WorkItem
 from choregos_api.errors import ApiError
 from choregos_api.logging import get_logger
 from sqlalchemy import select
@@ -61,7 +65,9 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
     """Open the work item of each schedule whose window is open and not yet served."""
     from choregos_api.rbac import SYSTEM
     from choregos_api.schemas.tickets import WorkItemCreate
-    from choregos_api.services.initiator import initiator
+
+    # One statement for both: the orchestrator's imports of the API are capped (ADR 0099).
+    from choregos_api.services import initiator, received_events
     from choregos_api.services.tickets import cle_de_ticket_interne, creer_un_ticket, le_tracker_est_interne
 
     now = datetime.fromisoformat(payload["now"]) if payload.get("now") else datetime.now(UTC)
@@ -92,7 +98,7 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
                 served.append(key)
                 continue
             try:
-                await creer_un_ticket(
+                item = await creer_un_ticket(
                     session,
                     SYSTEM,
                     bundle.project,
@@ -105,7 +111,7 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
                     ),
                     canal="schedule",
                     cle=key,
-                    initiated_by=initiator("schedule", schedule.name),
+                    initiated_by=initiator.initiator("schedule", schedule.name),
                 )
             except ApiError as erreur:
                 # Fields the workflow refuses, a workflow that does not exist: the schedule is wrong,
@@ -115,7 +121,53 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
                     "schedule refused", project=bundle.slug, schedule=schedule.name, error=erreur.detail
                 )
                 refused[schedule.name] = erreur.detail
+                if not await _refusal_recorded(session, bundle.project.id, schedule.name, key):
+                    _audit(
+                        received_events, session, bundle.project, schedule.name, key, "refused", erreur.detail
+                    )
                 continue
+            _audit(
+                received_events, session, bundle.project, schedule.name, key, "created_work_item", None, item
+            )
             opened.append(key)
             logger.info("schedule fired", project=bundle.slug, schedule=schedule.name, key=key)
     return {"opened": opened, "served": served, "refused": refused}
+
+
+async def _refusal_recorded(session: Any, project_id: str, name: str, key: str) -> bool:
+    """A refused window is retried by every pass of its catch-up hour: its row is written once."""
+    return (
+        await session.execute(
+            select(ReceivedEvent.id).where(
+                ReceivedEvent.project_id == project_id,
+                ReceivedEvent.source == f"schedule:{name}",
+                ReceivedEvent.delivery_id == key,
+            )
+        )
+    ).first() is not None
+
+
+def _audit(
+    received_events: Any,
+    session: Any,
+    project: Any,
+    name: str,
+    key: str,
+    outcome: str,
+    refusal: str | None,
+    item: Any = None,
+) -> None:
+    """The firing's `received_events` row, in the pass's session (S51-01). The refusal's detail is
+    the platform's own sentence (the workflow, the field paths), never a field's value."""
+    received_events.record_firing(
+        session,
+        org_id=project.org_id,
+        project_id=project.id,
+        source=f"schedule:{name}",
+        event_type="schedule.fired",
+        delivery_id=key,
+        outcome=outcome,
+        summary=f"schedule.fired · {name}" + (f" · refused: {refusal}" if refusal else ""),
+        item_id=item.id if item is not None else None,
+        item_key=key,
+    )

@@ -252,3 +252,25 @@ async def test_le_demarrage_relance_une_boucle_morte_mais_jamais_un_ticket(
     from choregos_orchestrator.train_client import start_workflow_once
 
     assert inspect.signature(start_workflow_once).parameters["relancer_si_echoue"].default is False
+
+
+async def test_an_item_a_start_rule_matches_is_caught_up_without_agent_ready(setup: Fixture) -> None:
+    """S51-03: a lost webhook of an item a start rule would have started is caught up by the poll."""
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+
+    clear_fake_signals()
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        project.config = {**project.config, "start_rules": [{"item_type": "Incident", "states": ["todo"]}]}
+    tracker = setup.adapters.tracker
+    incident = tracker.seed("Payroll export fails")
+    tracker.items[incident].item_type = "incident"
+    task = tracker.seed("Rename a column")
+    tracker.items[task].item_type = "Task"
+
+    result = await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
+
+    assert incident in result["created"] and incident in result["started"], result
+    assert task not in result["created"], result

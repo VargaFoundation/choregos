@@ -396,3 +396,32 @@ def test_une_commande_en_commentaire_devient_une_decision() -> None:
 def test_un_evenement_inconnu_ne_produit_rien() -> None:
     assert parse_jira_event("d-4", {"webhookEvent": "sprint_started"}) == []
     assert parse_jira_event("d-5", {}) == []
+
+
+async def test_the_poll_also_asks_for_the_project_s_start_rules() -> None:
+    """S51-03: each start rule is a JQL clause ORed with `agent-ready`; a quote cannot end it."""
+    vu: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        vu["jql"] = request.url.params.get("jql")
+        return httpx.Response(200, json={"issues": []})
+
+    from choregos_contracts import ProjectConfig
+
+    config = ProjectConfig.model_validate(
+        {
+            "slug": "bill",
+            "org": "varga",
+            "start_rules": [
+                {"item_type": "Incident", "states": ["New", "1"]},
+                {"labels_any": ["payroll", 'x" OR project = "OTHER']},
+            ],
+        }
+    )
+    await tracker(handler).list_candidates(config)
+
+    assert vu["jql"] == (
+        'project = "BILL" AND (labels = "agent-ready" OR (issuetype = "Incident" AND status in ("New", "1")) '
+        'OR (labels in ("payroll", "x\\" OR project = \\"OTHER"))) '
+        "AND statusCategory != Done ORDER BY updated DESC"
+    )

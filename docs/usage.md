@@ -2477,6 +2477,79 @@ late. With an external tracker, or with the reconciliation loop off
 (`reconcile_interval_seconds: 0`), nothing fires. Fields the workflow refuses are logged and the
 pass reports the schedule under `refused`; the other schedules still fire.
 
+### Work items opened by another system (HTTP triggers)
+
+With `tracker: internal`, any system that can send JSON — a monitoring tool, a form, a CRM, a
+ServiceNow Business Rule or Flow — can open and start a work item through a trigger (S51-01,
+[ADR 0113](adr/0113-a-workflow-starts-from-a-trigger.md)):
+
+```yaml
+triggers:
+  - name: incident
+    title: "{/number} — {/short_description}"   # {/pointer}: what the payload holds there
+    body: "Caller: {/caller/name}"
+    key: /sys_id                 # optional: one work item per value
+    labels: ["{/category}"]      # with `trigger:incident`, read by the routing
+    fields: { number: /number, ci: /cmdb_ci }   # JSON pointers; validated by the workflow's inputs
+    workflow: incident-triage    # optional; the project's routing otherwise
+```
+
+Mint the trigger's token (shown once; minting again revokes the old one; needs `connector:write`),
+then give the URL and the token to the other system:
+
+```bash
+curl -X POST "$API/api/v1/projects/acme:desk/triggers/incident/token" -H "Authorization: Bearer $ME"
+```
+
+```bash
+curl -X POST "$API/api/v1/webhooks/triggers/acme/desk/incident" \
+  -H "Authorization: Bearer chtrg_…" -H "Content-Type: application/json" \
+  -d '{"sys_id": "9d38…", "number": "INC0010042", "short_description": "Payroll export fails"}'
+```
+
+The work item starts in `workflow`, or in the workflow the project's routing picks from its labels
+(`trigger:<name>` and the rendered ones), or in the default. A sender that can only set a URL passes
+`?token=`; `X-Choregos-Token` works too. A replayed delivery (same `Idempotency-Key`, else the same
+body) answers `duplicate`; with `key`, a second call for the same value answers `already_open` and
+starts nothing. A payload without the key, or fields the workflow refuses, answers 422 with the
+reason. `POST /projects/{id}/triggers/{name}/fire` runs the same trigger with a payload you type, to
+try it before handing the URL out. With an external tracker, a trigger answers 409: use the
+tracker's own webhook.
+
+A trigger can filter and sign (S51-04, S51-05):
+
+```yaml
+    when: { /priority: ["1", "2"], /active: "true" }   # other payloads: 202, recorded `ignored`
+    auth: signature     # X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>, hex or base64
+```
+
+With `auth: signature` the bearer token is refused; the HMAC key is the signing secret shown with the
+token, and it changes when the token is minted again. The project's settings list its triggers beside
+the received events: their URL, their workflow, whether a token exists, a button to mint it (shown
+once) and a box to fire it with a payload.
+
+### Tracker items that start without `agent-ready`
+
+A project can start tracker items on its own rules (S51-03): a ServiceNow incident in the desk's
+queue, a Jira bug of a given type.
+
+```yaml
+start_rules:
+  - item_type: Incident
+    states: [New, "1"]
+  - labels_all: [payroll, urgent]
+```
+
+When a tracker event (created, updated, labelled, moved) names an item the project does not hold
+yet, the first rule whose every condition holds opens and starts it, as `agent-ready` does; the type
+and state compare without case. The backup poll that catches lost webhooks asks for them too: Jira
+by JQL, GitHub and GitLab by the labels a rule names (a rule on a type or a state is caught by the
+webhook only). Both lists can be edited as JSON in the project's *Triggers* card.
+
+**Received events.** The project's *Received events* card lists every webhook event, trigger call
+and schedule firing that reached it, and what the platform did: `created_work_item`, `already_open`,
+`ignored`, `refused` (with the platform's reason, never the payload), and the tracker outcomes.
+
 ### One child work item per element, then a join
 
 A system transition can open one child work item per element of a list and pass once every child

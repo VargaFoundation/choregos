@@ -23,6 +23,7 @@ from ..errors import ConfigurationError
 from ..http import RestClient
 from .champs import RISQUE, TAILLE, nom_actuel
 from .gitlab_events import parse_gitlab_event
+from .start_rules import label_searches
 
 STATUS_COMMENT_MARKER = "<!-- choregos:status -->"
 METADATA_START = "<!-- choregos:fields"
@@ -91,12 +92,16 @@ class GitLabTracker:
         )
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
-        """Polling de secours (S3-06) : les issues ouvertes étiquetées `agent-ready`."""
-        issues = await self.client.paginate(
-            f"/api/v4/projects/{self.encoded}/issues",
-            params={"state": "opened", "labels": "agent-ready", "order_by": "updated_at"},
-        )
-        return [self._key(int(issue["iid"])) for issue in issues]
+        """Backup polling (S3-06): the open issues labelled `agent-ready`, and those a
+        start rule made of labels names (S51-03), one search per set of labels (GitLab ANDs them)."""
+        found: dict[str, None] = {}
+        for labels in label_searches(project):
+            issues = await self.client.paginate(
+                f"/api/v4/projects/{self.encoded}/issues",
+                params={"state": "opened", "labels": ",".join(labels), "order_by": "updated_at"},
+            )
+            found.update({self._key(int(issue["iid"])): None for issue in issues})
+        return list(found)
 
     # ───────────────────────── écriture ─────────────────────────
 

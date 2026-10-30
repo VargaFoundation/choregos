@@ -149,6 +149,44 @@ class ReceivedEventDto(Dto):
     summary: str
 
 
+class TriggerDto(Dto):
+    """A project's HTTP trigger (S51-01, ADR 0113): what it opens, where it is called, whether it has
+    a token. The token itself is shown once, when it is minted."""
+
+    name: str
+    url: str
+    workflow: str | None = None
+    title: str
+    key: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    fields: dict[str, str] = Field(default_factory=dict)
+    when: dict[str, Any] = Field(default_factory=dict)
+    auth: Literal["token", "signature"] = "token"
+    has_token: bool = False
+    token_created_at: datetime | None = None
+
+
+class TriggerTokenDto(Dto):
+    """A trigger's new token, shown once: only its SHA-256 is kept."""
+
+    name: str
+    url: str
+    token: str
+    #: The HMAC key of `X-Choregos-Signature` (S51-04); it changes with the token.
+    signing_secret: str
+
+
+class TriggerAck(Dto):
+    """What a trigger call did: the outcome `received_events` recorded, or a replayed delivery."""
+
+    accepted: bool
+    duplicate: bool = False
+    outcome: str | None = None
+    work_item_id: str | None = None
+    work_item_key: str | None = None
+    workflow: str | None = None
+
+
 class ReceivedEventPage(Dto):
     items: list[ReceivedEventDto]
     meta: PageMeta

@@ -12,5 +12,7 @@
   "gitops": { "repo_url": "https://github.com/acme/billing-api-gitops.git", "path_prefix": "apps", "apps": ["billing-api"] },
   "cluster": "prod-eu-west",
   "notify": { "slack_channel": "#billing-choregos", "emails": [] },
+  "triggers": [ { "name": "incident", "title": "{/number} — {/short_description}", "key": "/sys_id",
+    "labels": ["{/category}"], "fields": { "incident": "/number" }, "workflow": null } ],
   "labels": { "team": "payments" }
 }

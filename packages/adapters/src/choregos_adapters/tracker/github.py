@@ -19,6 +19,7 @@ from ..errors import ConfigurationError
 from ..github.client import GitHubClient
 from .champs import COUT, RISQUE, RUN, TAILLE, nom_actuel, nom_present
 from .github_events import parse_github_event
+from .start_rules import label_searches
 
 STATUS_COMMENT_MARKER = "<!-- choregos:status -->"
 
@@ -179,13 +180,18 @@ class GitHubTracker:
         )
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
-        """Polling de secours : les issues `agent-ready` ouvertes (S3-06)."""
-        issues = await self.client.paginate(
-            f"/repos/{self.repo}/issues",
-            repo=self.repo,
-            params={"state": "open", "labels": "agent-ready", "sort": "updated"},
-        )
-        return [f"{self.repo}#{issue['number']}" for issue in issues if "pull_request" not in issue]
+        """Backup polling: the open `agent-ready` issues (S3-06), and those a start rule
+        made of labels names (S51-03): one search per set of labels, GitHub ANDs them. A rule on a
+        type or a state is read by the webhook only: the issue search does not express it."""
+        found: dict[str, None] = {}
+        for labels in label_searches(project):
+            issues = await self.client.paginate(
+                f"/repos/{self.repo}/issues",
+                repo=self.repo,
+                params={"state": "open", "labels": ",".join(labels), "sort": "updated"},
+            )
+            found.update({f"{self.repo}#{i['number']}": None for i in issues if "pull_request" not in i})
+        return list(found)
 
     # ───────────────────────── écriture ─────────────────────────
 

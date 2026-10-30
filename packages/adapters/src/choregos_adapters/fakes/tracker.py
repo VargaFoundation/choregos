@@ -156,7 +156,13 @@ class FakeTracker:
         return bilan
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
-        return [key for key, item in self.items.items() if "agent-ready" in item.labels]
+        """`agent-ready` items, and those a start rule matches (S51-03), as a real tracker's search."""
+        return [
+            key
+            for key, item in self.items.items()
+            if "agent-ready" in item.labels
+            or any(r.matches(set(item.labels), item.item_type, item.state) for r in project.start_rules)
+        ]
 
     def parse_webhook(self, headers: Mapping[str, str], body: bytes) -> list[InboundEvent]:
         payload = json.loads(body.decode("utf-8"))

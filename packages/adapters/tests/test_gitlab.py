@@ -282,3 +282,24 @@ def test_une_note_hors_ticket_est_ignoree() -> None:
 
 def test_un_evenement_inconnu_ne_produit_rien() -> None:
     assert parse_gitlab_event("Wiki Page Hook", "u-7", {"object_kind": "wiki_page"}) == []
+
+
+async def test_the_poll_also_searches_the_labels_of_the_start_rules() -> None:
+    """S51-03: `labels_any` becomes one search per label, each with `labels_all`."""
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params["labels"])
+        return httpx.Response(200, json=[{"iid": len(seen)}])
+
+    config = ProjectConfig.model_validate(
+        {
+            "slug": "billing-api",
+            "org": "varga",
+            "start_rules": [{"labels_all": ["ops"], "labels_any": ["p1", "p2"]}],
+        }
+    )
+    keys = await tracker(handler).list_candidates(config)
+
+    assert seen == ["agent-ready", "ops,p1", "ops,p2"]
+    assert keys == [f"{PROJECT}#1", f"{PROJECT}#2", f"{PROJECT}#3"]

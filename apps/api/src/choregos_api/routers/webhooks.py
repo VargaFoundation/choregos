@@ -172,6 +172,8 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
             AGENT_READY_LABEL in event.payload.get("labels", [])
             or event.payload.get("label") == AGENT_READY_LABEL
         )
+        if item is None and not should_start and _starts_by_rule(project, event):
+            should_start = True  # a project rule, not the label (S51-03)
         created = False
         if item is None and should_start:
             created = True
@@ -217,6 +219,40 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
         )
         delivered += 1
     return delivered
+
+
+#: The events that may start an item the project does not hold yet, by a start rule (S51-03).
+STARTS_BY_RULE = frozenset(
+    {
+        InboundEventType.ITEM_CREATED,
+        InboundEventType.ITEM_UPDATED,
+        InboundEventType.ITEM_LABELED,
+        InboundEventType.ITEM_MOVED,
+    }
+)
+
+
+def _starts_by_rule(project: Project, event: InboundEvent) -> bool:
+    """Whether one of the project's `start_rules` holds for the item the event describes (S51-03,
+    ADR 0113): a ServiceNow incident in the desk's queue starts without an `agent-ready` label. Every
+    condition of a rule must hold; a value the event does not carry never matches."""
+    if event.type not in STARTS_BY_RULE:
+        return False
+    from ..services.definitions import project_config
+
+    rules = project_config(project).start_rules
+    if not rules:
+        return False
+    payload = event.payload or {}
+    labels = {str(label) for label in payload.get("labels") or [] if label}
+    if isinstance(payload.get("label"), str) and not payload.get("removed"):
+        labels.add(payload["label"])
+    item_type = payload.get("item_type")
+    state = payload.get("to_status") or payload.get("state")
+    return any(
+        rule.matches(labels, str(item_type) if item_type else None, str(state) if state else None)
+        for rule in rules
+    )
 
 
 def _outcome(event: InboundEvent, created: bool, started: bool, labels: Any) -> str:

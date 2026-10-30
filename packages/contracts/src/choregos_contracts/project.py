@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
-from pydantic import AnyUrl, Field, field_validator
+from pydantic import AnyUrl, Field, field_validator, model_validator
 
 from .workflow import Slug, Strict
 
@@ -107,6 +108,131 @@ class ScheduleConfig(Strict):
         return value
 
 
+#: A JSON pointer into a trigger's payload (RFC 6901): `/incident/number`, `/labels/0`.
+JSON_POINTER = r"^(/([^~/]|~[01])*)+$"
+#: A `{/pointer}` placeholder in a trigger's text: what the payload holds there, or nothing.
+TRIGGER_PLACEHOLDER = r"\{(/[^{}]*)\}"
+
+
+class StartRule(Strict):
+    """A tracker item that starts its work item without the `agent-ready` label (S51-03, ADR 0113).
+
+    Read when a tracker event names an item the project does not hold yet: the first rule whose
+    every condition holds opens the work item and starts it, as `agent-ready` does. A rule without a
+    condition is refused — it would start every item of the tracker.
+
+        start_rules:
+          - item_type: incident
+            states: [New, "1"]          # the item's state in its tracker
+            labels_any: [payroll]
+    """
+
+    labels_any: list[str] = Field(default_factory=list)
+    labels_all: list[str] = Field(default_factory=list)
+    item_type: str | None = None
+    states: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _not_everything(self) -> StartRule:
+        if not (self.labels_any or self.labels_all or self.item_type or self.states):
+            raise ValueError("a start rule without a condition would start every item of the tracker")
+        return self
+
+    def matches(self, labels: set[str], item_type: str | None, state: str | None) -> bool:
+        """Every condition holds; the type and the state compare without case, and a value the item
+        does not carry never matches. The webhook and every tracker's backup poll ask this."""
+        if self.labels_any and not labels & set(self.labels_any):
+            return False
+        if not set(self.labels_all) <= labels:
+            return False
+        if self.item_type and (item_type or "").lower() != self.item_type.lower():
+            return False
+        return not self.states or (state or "").lower() in {s.lower() for s in self.states}
+
+    @property
+    def labels_only(self) -> bool:
+        """A rule a tracker that searches by labels alone (GitHub, GitLab) can ask for."""
+        return not (self.item_type or self.states)
+
+    def label_sets(self) -> list[list[str]]:
+        """The label searches (each an AND of labels) whose union is this rule's items."""
+        if not self.labels_any:
+            return [list(self.labels_all)]
+        sets = [list(dict.fromkeys([*self.labels_all, label])) for label in self.labels_any]
+        return [list(found) for found in dict.fromkeys(tuple(each) for each in sets)]
+
+
+class TriggerConfig(Strict):
+    """An HTTP door that opens a work item when another system calls it (S51-01, ADR 0113).
+
+    The caller posts JSON to `/webhooks/triggers/{org}/{project}/{name}` with the trigger's own
+    token; the platform maps the payload onto a work item and starts it in `workflow`, or in the
+    workflow the project's routing picks from its labels (`trigger:<name>` and those below). Text
+    takes `{/pointer}` placeholders; a field takes a pointer and keeps the value's JSON type. Needs
+    the internal tracker, as `schedules` does.
+
+        triggers:
+          - name: incident
+            title: "{/number} — {/short_description}"
+            key: /sys_id                 # one work item per key: a second call finds the first
+            labels: ["{/category}", "p{/priority}"]
+            fields: { incident: /number, ci: /cmdb_ci }
+            workflow: incident-triage    # optional; the project's routing otherwise
+            when: { /state: ["1", "2"] } # optional: other payloads are acknowledged and ignored
+            auth: signature              # optional: an HMAC of the body instead of the bearer token
+
+    `when` (S51-05) maps a pointer to the text, or one of the texts, it must hold; every pointer must
+    match. `auth: signature` (S51-04) takes `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>`
+    (hex or base64) keyed by the signing secret shown with the token, and no bearer token.
+    """
+
+    name: Slug
+    title: str = Field(min_length=1, max_length=500)
+    body: str = Field(default="", max_length=2000)
+    key: str | None = Field(default=None, pattern=JSON_POINTER)
+    labels: list[str] = Field(default_factory=list, max_length=20)
+    fields: dict[str, str] = Field(default_factory=dict)
+    workflow: str | None = None
+    when: dict[str, str | list[str]] = Field(default_factory=dict)
+    auth: Literal["token", "signature"] = "token"
+
+    @field_validator("when")
+    @classmethod
+    def _when_pointers(cls, value: dict[str, str | list[str]]) -> dict[str, str | list[str]]:
+        for pointer, expected in value.items():
+            if not re.fullmatch(JSON_POINTER, pointer):
+                raise ValueError(f"when: `{pointer}` is not a JSON pointer (`/a/b`)")
+            if isinstance(expected, list) and not expected:
+                raise ValueError(f"when: `{pointer}` lists no value, so nothing would ever match")
+        return value
+
+    @field_validator("fields")
+    @classmethod
+    def _pointers(cls, value: dict[str, str]) -> dict[str, str]:
+        for name, pointer in value.items():
+            if not re.fullmatch(JSON_POINTER, pointer):
+                raise ValueError(f"field `{name}`: `{pointer}` is not a JSON pointer (`/a/b`)")
+        return value
+
+    @field_validator("title", "body")
+    @classmethod
+    def _placeholders(cls, value: str) -> str:
+        return _checked_placeholders(value)
+
+    @field_validator("labels")
+    @classmethod
+    def _label_placeholders(cls, value: list[str]) -> list[str]:
+        return [_checked_placeholders(label) for label in value]
+
+
+def _checked_placeholders(text: str) -> str:
+    """Refuses a `{/…}` placeholder that is not a JSON pointer: it would render as nothing, silently."""
+    for pointer in re.findall(TRIGGER_PLACEHOLDER, text):
+        if not re.fullmatch(JSON_POINTER, pointer):
+            raise ValueError(f"`{{{pointer}}}` is not a JSON pointer placeholder (`{{/a/b}}`)")
+    return text
+
+
 #: What a project's A2A skills take in file parts by default, and the most it may set (ADR 0078 §6).
 A2A_MAX_FILE_BYTES_DEFAULT = 10 * 1024 * 1024
 A2A_MAX_FILE_BYTES_CEILING = 50 * 1024 * 1024
@@ -157,9 +283,23 @@ class ProjectConfig(Strict):
     #: Work items the platform opens by itself (S38-11). Needs the internal tracker: an external
     #: tracker is where its requests are created.
     schedules: list[ScheduleConfig] = Field(default_factory=list)
+    #: HTTP doors that open a work item when another system calls them (S51-01, ADR 0113). Needs the
+    #: internal tracker, for the same reason.
+    triggers: list[TriggerConfig] = Field(default_factory=list)
+    #: Tracker items that start without `agent-ready` (S51-03, ADR 0113): a ServiceNow incident in
+    #: the desk's queue, a Jira bug of a given type. Empty: only `agent-ready` starts, as before.
+    start_rules: list[StartRule] = Field(default_factory=list)
     #: What the A2A door takes for this project's skills (ADR 0078 §6).
     a2a: A2aConfig = Field(default_factory=A2aConfig)
     labels: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("triggers")
+    @classmethod
+    def _one_trigger_per_name(cls, value: list[TriggerConfig]) -> list[TriggerConfig]:
+        names = [t.name for t in value]
+        if twice := sorted({n for n in names if names.count(n) > 1}):
+            raise ValueError(f"two triggers named {', '.join(f'`{n}`' for n in twice)}: a URL names one")
+        return value
 
     @property
     def has_repo(self) -> bool:
@@ -199,4 +339,6 @@ __all__ = [
     "ProjectConfig",
     "RepoConfig",
     "ScheduleConfig",
+    "StartRule",
+    "TriggerConfig",
 ]

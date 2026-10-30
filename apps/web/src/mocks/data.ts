@@ -2757,6 +2757,36 @@ const mockNetworkActivity: NetworkActivity = {
   ],
 };
 
+const mockTriggers = [
+  {
+    name: "incident",
+    url: "https://choregos.example/api/v1/webhooks/triggers/acme/billing-api/incident",
+    title: "{/number} — {/short_description}",
+    workflow: null,
+    key: "/sys_id",
+    labels: ["{/category}"],
+    fields: { number: "/number" },
+    when: {},
+    auth: "token",
+    has_token: false,
+    token_created_at: null,
+  },
+];
+const mockTriggerToken = {
+  name: "incident",
+  url: mockTriggers[0]!.url,
+  token: "chtrg_demo",
+  signing_secret: "chsig_demo",
+};
+const mockTriggerAck = {
+  accepted: true,
+  duplicate: false,
+  outcome: "created_work_item",
+  work_item_id: "wi-trigger-1",
+  work_item_key: "BILLING-API-incident.demo",
+  workflow: "default-simple",
+};
+
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -3633,6 +3663,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/dev-complex$/, devComplexDef],
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
+    // HTTP triggers (S51-02): one declared trigger, its token minted once, a manual firing.
+    [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
+    [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
+    [/^\/projects\/[^/]+\/triggers$/, mockTriggers],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
     [/^\/orgs\/[^/]+\/workflow-catalogue$/, workflowCatalogue],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
