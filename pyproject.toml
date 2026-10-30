@@ -168,14 +168,14 @@ filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
 branch = true
-source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src"]
+source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src", "packages/cli/src", "packages/contracts/src", "packages/ontology/src", "packages/playbooks/src", "packages/quant/src", "packages/tools-mcp/src"]
 omit = ["*/generated/*", "*/tests/*"]
 
 [tool.coverage.report]
-# 80 % était mesuré sur core, runner et orchestrateur seulement : toute la surface HTTP et
-# tous les appels sortants (apps/api, packages/adapters) échappaient au seuil. Avec eux,
-# la couverture mesurée le 2026-09-24 est de 72 %. Le seuil suit la mesure — il monte
-# avec P1-3 (matrice RBAC, adaptateurs nus, jetons), pas avant.
+# Scope: every Python package (packages/*/src, apps/api/src, apps/orchestrator/src); the generated
+# TypeScript under packages/contracts/ts is not Python and is not measured. Measured on 2026-10-30
+# over `pytest --cov -m "not slow"`: 84 %. The threshold is kept at 80 % (the rule is to never set
+# it above the measured value), and it only rises: raise it when the measure rises, never lower it.
 fail_under = 80
 show_missing = true
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
