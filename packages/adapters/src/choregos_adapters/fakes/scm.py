@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""SCM en mémoire : branches, PR, checks, reviews, merge queue, diffs."""
+"""In-memory SCM: branches, PRs, checks, reviews, merge queue, diffs."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from choregos_core.domain import CheckRun, DiffFile, DiffSummary, PrRef, PrState
 
 
 class FakeScm:
-    """SCM de test. Les diffs sont scriptés par `set_diff()`."""
+    """Test SCM. Diffs are scripted by `set_diff()`."""
 
     def __init__(self) -> None:
         self.branches: dict[str, dict[str, str]] = {}
@@ -23,17 +23,17 @@ class FakeScm:
         self._diffs: dict[tuple[str, str, str], DiffSummary] = {}
         self.check_runs: list[dict[str, Any]] = []
         self.comments: list[tuple[str, int, str]] = []
-        #: (dépôt, branche) → {chemin: contenu} écrit par `commit_files`, et les commits dans l'ordre.
+        #: (repository, branch) → {path: content} written by `commit_files`, and the commits in order.
         self.files: dict[tuple[str, str], dict[str, str]] = {}
         self.commits: list[tuple[str, str, str, list[str]]] = []
-        # Crochets scriptables : un Atlantis simulé répond au commentaire `atlantis apply`.
+        # Scriptable hooks: a simulated Atlantis answers the `atlantis apply` comment.
         self.on_comment: list[Any] = []
 
     # ───────────────────────── scripting ─────────────────────────
 
     def set_diff(self, repo: str, base: str, head: str, files: list[tuple[Any, ...]]) -> None:
-        """`(chemin, ajouts, retraits)`, ou `(chemin, ajouts, retraits, patch)` quand une garantie
-        lit ce que la branche écrit (`markdown_sections`)."""
+        """`(path, additions, deletions)`, or `(path, additions, deletions, patch)` when a guarantee
+        reads what the branch writes (`markdown_sections`)."""
         self._diffs[(repo, base, head)] = DiffSummary(
             base=base,
             head=head,
@@ -51,7 +51,7 @@ class FakeScm:
             del self._diffs[key]
 
     def atlantis(self, conclusion: str = "success") -> None:
-        """Simule Atlantis : un `atlantis apply` pose le check `atlantis/apply`."""
+        """Simulates Atlantis: an `atlantis apply` sets the `atlantis/apply` check."""
 
         def hook(ref: PrRef, body: str) -> None:
             if "atlantis apply" not in body:
@@ -63,7 +63,7 @@ class FakeScm:
         self.on_comment.append(hook)
 
     def set_checks(self, ref: PrRef, conclusion: str, *, scanners: bool = True) -> None:
-        """Pose les check-runs de la PR. Par défaut, le projet a aussi ses scanners."""
+        """Sets the PR's check runs. By default, the project has its scanners too."""
         names = ["ci", *(["semgrep", "trivy", "gitleaks"] if scanners else [])]
         pr = self.prs[(ref.repo, ref.number)]
         pr.checks = [CheckRun(name=name, status="completed", conclusion=conclusion) for name in names]
@@ -94,16 +94,16 @@ class FakeScm:
         )
 
     async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
-        """Comme GitHub : un fichier déjà identique n'est pas réécrit, un rejeu ne crée aucun commit."""
-        arbre = self.files.setdefault((repo, branch), {})
-        changes = {chemin: contenu for chemin, contenu in files.items() if arbre.get(chemin) != contenu}
+        """Like GitHub: an identical file is not rewritten, a replay creates no commit."""
+        tree = self.files.setdefault((repo, branch), {})
+        changes = {path: content for path, content in files.items() if tree.get(path) != content}
         if changes:
-            arbre.update(changes)
+            tree.update(changes)
             self.commits.append((repo, branch, message, sorted(changes)))
         return f"commit-{len(self.commits)}"
 
     async def open_pr(self, repo: str, head: str, base: str, title: str, body: str, draft: bool) -> PrRef:
-        # Comme GitHub (`GitHubScm.open_pr`) : une PR ouverte sur la même branche est réutilisée.
+        # Like GitHub (`GitHubScm.open_pr`): a PR already open on the same branch is reused.
         for pr in self.prs.values():
             if pr.ref.repo == repo and pr.ref.head == head and not pr.merged:
                 return pr.ref
@@ -143,9 +143,9 @@ class FakeScm:
         return self._diffs.get((repo, base, head), DiffSummary(base=base, head=head))
 
     async def list_files(self, repo: str, ref: str, directory: str) -> list[str]:
-        """Les chemins sous `directory` sur `ref` : ceux que `commit_files` y a écrits."""
-        prefixe = directory.rstrip("/") + "/"
-        return sorted(p for p in self.files.get((repo, ref), {}) if p.startswith(prefixe))
+        """The paths under `directory` on `ref`: the ones `commit_files` wrote there."""
+        prefix = directory.rstrip("/") + "/"
+        return sorted(p for p in self.files.get((repo, ref), {}) if p.startswith(prefix))
 
     async def create_check_run(
         self,

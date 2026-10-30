@@ -106,15 +106,15 @@ def parse_date(value: Any, field: str) -> date:
         raise MarketDataError(f"{field} refused: an ISO date YYYY-MM-DD is expected")
     try:
         return date.fromisoformat(value)
-    except ValueError as erreur:
-        raise MarketDataError(f"{field} refused: {value} is not a calendar date") from erreur
+    except ValueError as error:
+        raise MarketDataError(f"{field} refused: {value} is not a calendar date") from error
 
 
 def validate_range(start: Any, end: Any) -> tuple[date, date]:
-    debut, fin = parse_date(start, "start"), parse_date(end, "end")
-    if debut > fin:
+    first_day, last_day = parse_date(start, "start"), parse_date(end, "end")
+    if first_day > last_day:
         raise MarketDataError("start is after end")
-    return debut, fin
+    return first_day, last_day
 
 
 def number(value: Any) -> float | None:
@@ -166,11 +166,11 @@ def answer(
     currency: str | None,
     adjusted: bool,
 ) -> dict[str, Any]:
-    reponse: dict[str, Any] = {"symbol": symbol, "provider": provider}
+    result: dict[str, Any] = {"symbol": symbol, "provider": provider}
     if currency:
-        reponse["currency"] = currency
-    reponse.update(adjusted=adjusted, bars=bars)
-    return reponse
+        result["currency"] = currency
+    result.update(adjusted=adjusted, bars=bars)
+    return result
 
 
 class MarketDataProvider:
@@ -227,7 +227,7 @@ class MarketDataProvider:
         return {"ok": True, "provider": self.name}
 
     # ── the adapter surface the broker calls ────────────────────────────────────────────────
-    async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def execute(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         if operation == "get_bars":
             if set(params) - {"symbol", "start", "end"}:
                 raise MarketDataError("get_bars: unexpected argument")
@@ -237,6 +237,8 @@ class MarketDataProvider:
                 raise MarketDataError("get_instrument: unexpected argument")
             return await self.get_instrument(params.get("symbol"))  # type: ignore[arg-type]
         raise AdapterError(f"{type(self).__name__} has no operation {operation}")
+
+    executer = execute  # lang: fr-ok alias:internal
 
     # ── helpers ─────────────────────────────────────────────────────────────────────────────
     def scrub(self, text: str) -> str:
@@ -249,19 +251,19 @@ class MarketDataProvider:
         """A GET with a bounded retry on 5xx and network errors. 429 raises `RateLimited` at once.
 
         Any other 4xx is returned to the caller, which knows what its provider means by it."""
-        derniere: str = ""
-        for tentative in range(MAX_ATTEMPTS):
+        last_failure: str = ""
+        for attempt in range(MAX_ATTEMPTS):
             try:
-                reponse = await self._client.get(url, params=params)
-            except httpx.HTTPError as panne:
+                result = await self._client.get(url, params=params)
+            except httpx.HTTPError as failure:
                 # The class only: an httpx message can carry the URL, and the URL carries the key.
-                derniere = f"network error ({type(panne).__name__})"
+                last_failure = f"network error ({type(failure).__name__})"
             else:
-                if reponse.status_code == 429:
+                if result.status_code == 429:
                     raise RateLimited(f"{self.name}: rate limited (429)")
-                if reponse.status_code < 500:
-                    return reponse
-                derniere = f"HTTP {reponse.status_code}"
-            if tentative + 1 < MAX_ATTEMPTS:
-                await self._sleep(min(self._backoff_s * 2**tentative, MAX_RETRY_AFTER_S))
-        raise MarketDataError(f"{self.name}: unavailable after {MAX_ATTEMPTS} attempts ({derniere})")
+                if result.status_code < 500:
+                    return result
+                last_failure = f"HTTP {result.status_code}"
+            if attempt + 1 < MAX_ATTEMPTS:
+                await self._sleep(min(self._backoff_s * 2**attempt, MAX_RETRY_AFTER_S))
+        raise MarketDataError(f"{self.name}: unavailable after {MAX_ATTEMPTS} attempts ({last_failure})")

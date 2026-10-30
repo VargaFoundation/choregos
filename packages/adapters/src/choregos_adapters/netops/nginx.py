@@ -167,7 +167,7 @@ class NginxConfig:
             work_item_key=work_item_key,
         )
 
-    async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def execute(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         if operation not in {o.name for o in self.operations}:
             raise AdapterError(f"nginx has no operation {operation}")
         try:
@@ -175,6 +175,8 @@ class NginxConfig:
         except TypeError as error:
             raise AdapterError(f"nginx {operation}: {error}") from error
         return result
+
+    executer = execute  # lang: fr-ok alias:internal
 
     async def test(self) -> dict[str, Any]:
         files = await self.reader.list_files(f"{self.root}/" if self.root else "")

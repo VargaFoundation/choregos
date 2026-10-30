@@ -34,15 +34,15 @@ def compare_closes(
     primary: list[dict[str, Any]], other: list[dict[str, Any]], tolerance: float
 ) -> dict[str, Any]:
     """Closes compared on the dates both have: how many, the worst relative gap, how many exceed."""
-    autres = {b["date"]: b["close"] for b in other}
-    communs = [(b["close"], autres[b["date"]], b["date"]) for b in primary if b["date"] in autres]
-    ecarts = [(abs(a - b) / abs(a) if a else (0.0 if b == 0 else float("inf")), d) for a, b, d in communs]
-    divergents = [d for e, d in ecarts if e > tolerance]
+    other_closes = {b["date"]: b["close"] for b in other}
+    common = [(b["close"], other_closes[b["date"]], b["date"]) for b in primary if b["date"] in other_closes]
+    gaps = [(abs(a - b) / abs(a) if a else (0.0 if b == 0 else float("inf")), d) for a, b, d in common]
+    diverging = [d for e, d in gaps if e > tolerance]
     return {
-        "common_days": len(communs),
-        "max_rel_diff": max((e for e, _ in ecarts), default=0.0),
-        "diverging_days": len(divergents),
-        "diverging_dates": divergents[:10],
+        "common_days": len(common),
+        "max_rel_diff": max((e for e, _ in gaps), default=0.0),
+        "diverging_days": len(diverging),
+        "diverging_dates": diverging[:10],
     }
 
 
@@ -71,75 +71,75 @@ class CompositeProvider(MarketDataProvider):
     async def get_bars(self, symbol: str, start: str, end: str) -> dict[str, Any]:
         validate_symbol(symbol)
         validate_range(start, end)
-        primaire: dict[str, Any] | None = None
+        primary_answer: dict[str, Any] | None = None
         verification: dict[str, Any] | None = None
-        vide: dict[str, Any] | None = None
-        echecs: list[dict[str, str]] = []
-        partielle: tuple[str, dict[str, Any]] | None = None
-        inconnus = 0
-        for nom, source in self._sources:
+        empty: dict[str, Any] | None = None
+        failures: list[dict[str, str]] = []
+        partial: tuple[str, dict[str, Any]] | None = None
+        unknown = 0
+        for name, source in self._sources:
             try:
-                reponse = await source.get_bars(symbol, start, end)
-            except MarketDataError as erreur:
-                inconnus += isinstance(erreur, UnknownSymbol)
-                echecs.append({"source": nom, "error": str(erreur)})
+                response = await source.get_bars(symbol, start, end)
+            except MarketDataError as error:
+                unknown += isinstance(error, UnknownSymbol)
+                failures.append({"source": name, "error": str(error)})
                 continue
-            if not reponse["bars"]:
-                vide = vide or reponse
-                echecs.append({"source": nom, "error": "empty"})
+            if not response["bars"]:
+                empty = empty or response
+                failures.append({"source": name, "error": "empty"})
                 continue
-            if primaire is None and not source.full_history:
+            if primary_answer is None and not source.full_history:
                 # Recent days only: kept to check the primary once one answers, never the bars.
-                partielle = partielle or (nom, reponse)
+                partial = partial or (name, response)
                 continue
-            if primaire is None:
-                primaire = reponse
+            if primary_answer is None:
+                primary_answer = response
                 if not self._cross_check:
                     break
-                if partielle is None:
+                if partial is None:
                     continue
-                verificateur, autre = partielle
+                checker, checked = partial
             else:
-                verificateur, autre = nom, reponse
+                checker, checked = name, response
             verification = {
-                "source": verificateur,
-                **compare_closes(primaire["bars"], autre["bars"], self._tolerance),
+                "source": checker,
+                **compare_closes(primary_answer["bars"], checked["bars"], self._tolerance),
             }
             break
-        if primaire is None:
-            if partielle is not None and vide is None:
+        if primary_answer is None:
+            if partial is not None and empty is None:
                 # Not an unknown symbol: a source knows it, but only its recent days.
                 raise MarketDataError(
-                    f"composite: only {partielle[0]} answered, and it has the recent days only"
+                    f"composite: only {partial[0]} answered, and it has the recent days only"
                 )
-            if vide is not None:
-                return {**vide, "cross_check": None, "fallbacks": echecs}
-            detail = "; ".join(f"{e['source']}: {e['error']}" for e in echecs)
-            fabrique = UnknownSymbol if inconnus == len(echecs) else MarketDataError
-            raise fabrique(f"composite: no source answered ({detail})")
-        resultat = {**primaire, "cross_check": verification if self._cross_check else None}
-        if echecs:
-            resultat["fallbacks"] = echecs
-        return resultat
+            if empty is not None:
+                return {**empty, "cross_check": None, "fallbacks": failures}
+            detail = "; ".join(f"{e['source']}: {e['error']}" for e in failures)
+            factory = UnknownSymbol if unknown == len(failures) else MarketDataError
+            raise factory(f"composite: no source answered ({detail})")
+        result = {**primary_answer, "cross_check": verification if self._cross_check else None}
+        if failures:
+            result["fallbacks"] = failures
+        return result
 
     async def get_instrument(self, symbol: str) -> dict[str, Any]:
         validate_symbol(symbol)
-        echecs: list[str] = []
+        failures: list[str] = []
         reserve: dict[str, Any] | None = None
-        for nom, source in self._sources:
+        for name, source in self._sources:
             try:
-                reponse = await source.get_instrument(symbol)
-            except MarketDataError as erreur:
-                echecs.append(f"{nom}: {erreur}")
+                response = await source.get_instrument(symbol)
+            except MarketDataError as error:
+                failures.append(f"{name}: {error}")
                 continue
             # A source that cannot tell the type (stooq) is not the last word if another can.
-            if reponse.get("type") == "unknown":
-                reserve = reserve or reponse
+            if response.get("type") == "unknown":
+                reserve = reserve or response
                 continue
-            return reponse
+            return response
         if reserve is not None:
             return reserve
-        raise UnknownSymbol(f"composite: no source knows {symbol} ({'; '.join(echecs)})")
+        raise UnknownSymbol(f"composite: no source knows {symbol} ({'; '.join(failures)})")
 
     async def test(self) -> dict[str, Any]:
-        return {"ok": True, "provider": self.name, "sources": [nom for nom, _ in self._sources]}
+        return {"ok": True, "provider": self.name, "sources": [name for name, _ in self._sources]}
