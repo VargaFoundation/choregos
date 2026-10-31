@@ -6,7 +6,7 @@
 # n'existe pas au premier build et qui, ensuite, vient du commit **précédent** — les workers
 # auraient embarqué le code d'hier sans que rien ne le signale. Deux cibles (`--target api`,
 # `--target worker`) d'un même build règlent les deux.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.15-slim-bookworm AS builder
 
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
@@ -54,7 +54,7 @@ RUN uv sync --frozen --no-dev --all-packages --no-install-package choregos-agent
 # dependencies (LangGraph, YARA…) are not the platform's, and the API runs it as a child process,
 # offline, through `choregos_api/scanners/skillspector_offline.py`. Pinned to the commit of v2.13.1;
 # a bump re-runs `apps/api/tests/test_skill_scanner.py` against the new release.
-FROM python:3.12-slim-bookworm AS skillspector
+FROM python:3.15-slim-bookworm AS skillspector
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
 ARG SKILLSPECTOR_COMMIT=f3b25697d76256998ca9d42c198d256258d4c035
@@ -107,7 +107,7 @@ RUN set -eu; \
     chmod 0755 /out/cosign
 
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
-FROM python:3.12-slim-bookworm AS commun
+FROM python:3.15-slim-bookworm AS commun
 # `PIP_PYTHON` : l'image de l'édition entreprise est construite FROM celle-ci et y ajoute sa roue
 # (ADR 0024). Le venv, créé par uv, n'a pas de `pip` ; celui du PATH est celui du système. Sans
 # cette ligne, `pip install --no-deps choregos_ee-*.whl` réussit, pose la roue dans `~/.local`,
