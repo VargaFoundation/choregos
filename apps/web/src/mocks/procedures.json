@@ -2850,63 +2850,70 @@
   {
     "id": "connector.tracker.jira",
     "title": "Use Jira Cloud as the board",
-    "version": 3,
+    "version": 4,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/jira"
     },
     "link": null,
-    "reviewed": "2026-10-28",
+    "reviewed": "2026-11-01",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A Jira Cloud site and an Atlassian account **dedicated to Choregos**: its permissions are what the\n  platform may do in the project, and comments and transitions appear under its name.\n- The project key.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this\n  secret in an `X-Choregos-Secret` header."
+        "markdown": "- A Jira Cloud site and an Atlassian account **dedicated to Choregos**: its permissions are what the\n  platform may do in the project, and comments and transitions appear under its name. The best fit\n  is an Atlassian **service account** (no licence seat, no password, an organisation administrator\n  creates it); a regular account dedicated to Choregos works too.\n- The project key.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this\n  secret in an `X-Choregos-Secret` header."
       },
       {
         "key": "at",
         "title": "At Atlassian",
-        "markdown": "1. As the dedicated account: `id.atlassian.com`, Security, **API tokens**, **Create API token**. Copy the\n   token when it is shown.\n2. In the Jira project, give that account the permissions below.\n3. **Webhook.** The endpoint is `https://choregos.example.com/api/v1/webhooks/jira` and it requires the header `X-Choregos-Secret`.\n   Jira's own System, **WebHooks** screen lets you set a URL; check there whether it can add a header.\n   If it cannot, use a **Jira Automation** rule: trigger on issue created, issue updated and comment\n   added in the project, action **Send web request** to that URL with a custom header\n   `X-Choregos-Secret`. This path has not been exercised against a live site from this repository."
+        "markdown": "1. **The token.**\n   - A **service account** (recommended): `admin.atlassian.com`, **Directory**, **Service accounts**,\n     the account, **Create credentials**, **API token**. Tick exactly two scopes, both from the\n     **classic** list: `read:jira-work` and `write:jira-work`. Nothing else, and no granular scope.\n     Pick the longest expiry offered and **note the date**: the token stops working then.\n   - A regular dedicated account: signed in as it, `id.atlassian.com`, Security, **API tokens**,\n     **Create API token** (a classic token, without scopes).\n\n   Copy the token when it is shown: it is shown once.\n2. **The project.** Jira project, **Project settings**, **People** (or **Access**): add the account\n   with a role that holds the permissions below. **A token's scopes give no right on a project by\n   themselves**: without this step every call answers `404` or `403`.\n3. **Webhook.** The endpoint is `https://choregos.example.com/api/v1/webhooks/jira` and it requires the header `X-Choregos-Secret`.\n   Jira's own System, **WebHooks** screen lets you set a URL; check there whether it can add a header.\n   If it cannot, use a **Jira Automation** rule: trigger on issue created, issue updated and comment\n   added in the project, action **Send web request** to that URL with a custom header\n   `X-Choregos-Secret`. This path has not been exercised against a live site from this repository."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,\n**Transition issues**, **Add comments**.\n\nA classic API token carries all of the account's rights. A scoped API token works only through\n`https://api.atlassian.com/ex/jira/<cloudId>` as the `base_url`; that variant is **not proven** here, so\nuse a classic token unless you have tested it.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nJira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,\n`Risk` and `Run` fields, the questions to a person, the close-out. The connector card says\n\"Choregos writes as\" that email, and each line of a work item's timeline that wrote to Jira says\n\"via Jira as\" it. An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
+        "markdown": "On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,\n**Transition issues**, **Add comments**.\n\nWhat the two scopes cover is exactly what the connector calls: `read:jira-work` for the search, an\nissue, its transitions, the project and the list of fields; `write:jira-work` for the labels, the\ntransitions, the comments, the new issues and the links between issues. A classic token, without\nscopes, carries all of the account's rights.\n\nA scoped token is **refused by the site** (`401`): it works only through the gateway,\n`https://api.atlassian.com/ex/jira/<cloud_id>`. With `auth: scoped` Choregos goes through it by itself;\nkeep the site in `base_url`, the links to issues point to it.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nJira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,\n`Risk` and `Run` fields, the questions to a person, the close-out. The connector card says\n\"Choregos writes as\" that email, and each line of a work item's timeline that wrote to Jira says\n\"via Jira as\" it. An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
       },
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the\n   key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`, the site, whatever the token. `email`: the dedicated\n   account's email. `auth`: `scoped` for a service account's token, `basic` (the default) for a classic\n   one. Leave `cloud_id` empty: Choregos reads it from the site. `project_key`: the key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Press **Test** on the connector (it reads the project). Then create an issue labelled `agent-ready` and\nwatch it appear on the board."
+        "markdown": "Press **Test** on the connector. It reads the project with the token, which proves the email, the\ntoken, its scopes and the account's place in the project at once; it answers the project's name and,\nfor a scoped token, the `cloud_id`. Then create an issue labelled `agent-ready` and watch it appear on\nthe board."
       },
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `401`: wrong email or a revoked token. The email and the token must belong to the same account.\n- `403`: the account lacks one of the project permissions above.\n- `404` on the project: wrong `project_key`, or the account cannot browse it.\n- A webhook answered `401 invalid shared secret`: the `X-Choregos-Secret` header is missing or differs\n  from the platform's shared secret.\n- Nothing starts after labelling: the label must be exactly `agent-ready`, and the webhook must reach\n  this platform from Jira.\n- A timeout: the egress allowlist must open the Atlassian site."
+        "markdown": "- `401`: wrong email, or an expired or revoked token. The email and the token must belong to the same\n  account. A service account's token with `auth: basic` is refused this way too: set `auth: scoped`.\n- `403`: the token lacks `read:jira-work` or `write:jira-work`, or the account lacks one of the project\n  permissions above.\n- `404` on the project: wrong `project_key`, or the account is not in the project (step 2 at Atlassian).\n- `cannot read the cloud id`: the site's `/_edge/tenant_info` did not answer; set `cloud_id` by hand\n  (it is on that page, from a browser).\n- A webhook answered `401 invalid shared secret`: the `X-Choregos-Secret` header is missing or differs\n  from the platform's shared secret.\n- Nothing starts after labelling: the label must be exactly `agent-ready`, and the webhook must reach\n  this platform from Jira.\n- A timeout: the egress allowlist must open the Atlassian site and, for a scoped token,\n  `api.atlassian.com`."
       }
     ],
     "values": {
       "webhook_url:jira": "https://choregos.example.com/api/v1/webhooks/jira"
     },
     "egress": [
-      "<site>.atlassian.net"
+      "<site>.atlassian.net",
+      "api.atlassian.com (scoped token)"
     ],
     "fields": {
-      "base_url": "https://<site>.atlassian.net",
-      "email": "the email of the account the API token belongs to",
+      "base_url": "https://<site>.atlassian.net, the site itself, even with a scoped token",
+      "email": "the email of the account the API token belongs to (a service account's ends in @serviceaccount.atlassian.com)",
+      "auth": "`scoped` for a service account's token, which carries the scopes read:jira-work and write:jira-work; `basic` for a classic token",
+      "cloud_id": "leave empty: read from the site at the first call, and shown by Test",
       "project_key": "the project's key, the prefix of its issue keys (BILL in BILL-42)",
       "field_names": "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira",
-      "api_token": "a classic API token, typed once",
+      "api_token": "the API token, typed once",
       "webhook_secret": "not used by the Jira webhook endpoint: the platform's shared webhook secret is"
     },
     "vendor_docs": [
       {
         "title": "Manage API tokens for your Atlassian account",
         "url": "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/"
+      },
+      {
+        "title": "Create an API token for a service account",
+        "url": "https://support.atlassian.com/user-management/docs/manage-api-tokens-for-service-accounts/"
       },
       {
         "title": "Jira automation actions (Send web request)",

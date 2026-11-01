@@ -7,6 +7,10 @@ champs personnalisés nommés, résolus une fois puis mis en cache.
 
 Les commentaires partent en Atlassian Document Format via l'API v3 : le tableau de suivi
 (§4.3) est converti, sinon Jira afficherait du markdown brut.
+
+Credentials: an API token with its account's email, as HTTP Basic. A classic token is sent to the
+site itself; a *scoped* token (the only kind an Atlassian service account has) is refused there and
+goes through the gateway, `api.atlassian.com/ex/jira/<cloud_id>` (`JiraGatewayClient`).
 """
 
 from __future__ import annotations
@@ -17,19 +21,46 @@ from typing import Any, Literal
 from choregos_contracts import InboundEvent, ProjectConfig, Risk, Size
 from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItemData
 
-from ..errors import ConfigurationError
+from ..errors import ConfigurationError, UpstreamError
 from ..http import RestClient
 from .adf import markdown_to_adf, text_of_adf
 from .champs import ANCIENS_NOMS, COUT, RISQUE, RUN, TAILLE, nom_actuel
 from .jira_events import parse_jira_event
 
 STATUS_COMMENT_MARKER = "[choregos:status]"
+GATEWAY = "https://api.atlassian.com"
 AGENT_READY_LABEL = "agent-ready"
 
 
 # Les trois catégories de statut de Jira ont des clés stables dans toutes les langues ; leurs
 # noms, eux, sont traduits. Voir `JiraTracker._transition`.
 _CANONICAL_CATEGORIES = {"to do": "new", "in progress": "indeterminate", "done": "done"}
+
+
+class JiraGatewayClient(RestClient):
+    """The REST client of a scoped token: every call goes through `api.atlassian.com/ex/jira/<cloud_id>`.
+
+    Without a `cloud_id`, the first call reads it from the site's public `/_edge/tenant_info`, so the
+    connector needs only the site, the email, the token and `auth: scoped`.
+    """
+
+    def __init__(self, site: str, *, cloud_id: str | None = None, **kwargs: Any) -> None:
+        super().__init__(f"{GATEWAY}/ex/jira/{cloud_id}" if cloud_id else site, **kwargs)
+        self.site = site.rstrip("/")
+        self.cloud_id = cloud_id or None
+
+    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        if self.cloud_id is None:
+            response = await self._client.get(f"{self.site}/_edge/tenant_info")
+            found = response.json().get("cloudId") if response.status_code == 200 else None
+            if not found:
+                raise ConfigurationError(
+                    f"cannot read the cloud id of {self.site} (/_edge/tenant_info answered "
+                    f"{response.status_code}): set `cloud_id`"
+                )
+            self.cloud_id = str(found)
+            self.base_url = f"{GATEWAY}/ex/jira/{self.cloud_id}"
+        return await super().request(method, path, **kwargs)
 
 
 class JiraTracker:
@@ -45,10 +76,13 @@ class JiraTracker:
         webhook_secret: str = "",
         field_names: dict[str, str] | None = None,
         agent_ready_label: str = AGENT_READY_LABEL,
+        site_url: str | None = None,
     ) -> None:
         if not project_key:
             raise ConfigurationError("`project_key` est obligatoire pour le tracker Jira")
         self.client = client
+        # Where a person opens an issue: the site, even when the API is called through the gateway.
+        self.site_url = (site_url or getattr(client, "site", None) or client.base_url).rstrip("/")
         self.project_key = project_key.upper()
         self.webhook_secret = webhook_secret
         # Noms côté Jira des champs structurés que Choregos écrit. Une configuration d'avant S22-21
@@ -76,7 +110,7 @@ class JiraTracker:
             key=key,
             title=fields.get("summary", ""),
             body=text_of_adf(fields.get("description")),
-            url=f"{self.client.base_url}/browse/{key}",
+            url=f"{self.site_url}/browse/{key}",
             state=((fields.get("status") or {}).get("name")),
             labels=labels,
             item_type=((fields.get("issuetype") or {}).get("name")),
@@ -275,6 +309,22 @@ class JiraTracker:
             }
         return self._fields
 
+    # ───────────────────────── test ─────────────────────────
+
+    async def test(self) -> dict[str, Any]:
+        """Can the account read the project? The connector's **Test** button: it proves the email,
+        the token, its scopes and the account's place in the project in one call."""
+        try:
+            project = await self.client.request("GET", f"/rest/api/3/project/{self.project_key}")
+        except UpstreamError as error:
+            return {"ok": False, "reason": _refusal(error.status_code, self.project_key)}
+        cloud_id = getattr(self.client, "cloud_id", None)
+        return {
+            "ok": True,
+            "project": project.get("name") or self.project_key,
+            **({"cloud_id": cloud_id} if cloud_id else {}),
+        }
+
     # ───────────────────────── webhooks ─────────────────────────
 
     def parse_webhook(self, headers: Mapping[str, str], body: bytes) -> list[InboundEvent]:
@@ -288,6 +338,23 @@ class JiraTracker:
 
         provided = headers.get("X-Choregos-Secret", headers.get("x-choregos-secret", ""))
         return bool(self.webhook_secret) and hmac.compare_digest(self.webhook_secret, provided or "")
+
+
+def _refusal(status_code: int | None, project_key: str) -> str:
+    """What a refused test means, in the words of the setup procedure."""
+    if status_code == 401:
+        return (
+            "401: the email or the token is refused. The email must be the token's account; "
+            "a scoped token (a service account's) needs `auth: scoped`"
+        )
+    if status_code == 403:
+        return (
+            "403: the token lacks a scope (`read:jira-work`, `write:jira-work`) "
+            "or the account lacks a permission on the project"
+        )
+    if status_code == 404:
+        return f"404: no project {project_key}, or the account cannot browse it: add it to the project"
+    return f"{status_code}: Jira refused to read the project {project_key}"
 
 
 def _parse_enum(enum: Any, fields: dict[str, Any], name: str) -> Any:
