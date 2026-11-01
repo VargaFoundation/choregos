@@ -2876,7 +2876,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`, the site, whatever the token. `email`: the dedicated\n   account's email. `auth`: `scoped` for a service account's token, `basic` (the default) for a classic\n   one. Leave `cloud_id` empty: Choregos reads it from the site. `project_key`: the key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue."
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`, the site, whatever the token. `email`: the dedicated\n   account's email. `auth`: `scoped` for a service account's token, `basic` (the default) for a classic\n   one. Leave `cloud_id` empty: Choregos reads it from the site. `project_key`: the key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue.\n6. Or skip the webhook and the label altogether: set `candidates_jql`, for example\n   `parent = BILL-1 AND labels in (form-a, form-b)`. Every minute the platform searches the project's open\n   issues matching it and starts one workflow per new one; an issue already started never starts again.\n   The issue's labels still pick its workflow. Exclude what another tool already handles (for example\n   `AND created >= \"2026-11-02\"`), or the first search takes it on too."
       },
       {
         "key": "test",
@@ -2901,6 +2901,7 @@
       "email": "the email of the account the API token belongs to (a service account's ends in @serviceaccount.atlassian.com)",
       "auth": "`scoped` for a service account's token, which carries the scopes read:jira-work and write:jira-work; `basic` for a classic token",
       "cloud_id": "leave empty: read from the site at the first call, and shown by Test",
+      "candidates_jql": "optional: the JQL of the issues the platform takes on by itself, without a webhook (BILL issues matching it, not done)",
       "project_key": "the project's key, the prefix of its issue keys (BILL in BILL-42)",
       "field_names": "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira",
       "api_token": "the API token, typed once",

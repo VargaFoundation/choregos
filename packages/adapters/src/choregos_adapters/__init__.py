@@ -104,6 +104,7 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
         cfg["project_key"],
         webhook_secret=cfg.get("webhook_secret", ""),
         field_names=cfg.get("field_names"),
+        candidates_jql=cfg.get("candidates_jql"),
     )
 
 
@@ -352,6 +353,11 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "cloud_id": {
                     "type": "string",
                     "description": "scoped tokens only, read from the site if empty",
+                },
+                "candidates_jql": {
+                    "type": "string",
+                    "description": "JQL of the issues to take on without a webhook (polled every minute, "
+                    "within the project); empty: the issues labelled agent-ready",
                 },
                 "field_names": {"type": "object", "additionalProperties": {"type": "string"}},
             },
