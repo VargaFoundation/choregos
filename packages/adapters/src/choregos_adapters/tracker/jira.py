@@ -17,7 +17,7 @@ from typing import Any, Literal
 from choregos_contracts import InboundEvent, ProjectConfig, Risk, Size
 from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItemData
 
-from ..errors import ConfigurationError
+from ..errors import ConfigurationError, UpstreamError
 from ..http import RestClient
 from .adf import markdown_to_adf, text_of_adf
 from .champs import ANCIENS_NOMS, COUT, RISQUE, RUN, TAILLE, nom_actuel
@@ -64,6 +64,19 @@ class JiraTracker:
         self._fields: dict[str, str] | None = None
 
     # ───────────────────────── lecture ─────────────────────────
+
+    async def test(self) -> dict[str, Any]:
+        """Can the account read its project? The console's **Test** button calls this.
+
+        One `GET /rest/api/3/project/{key}`: the classic scope `read:jira-work` and the Browse
+        permission on the project are enough, so a token holding only the scopes the tracker uses
+        passes. A refusal names its most likely cause instead of echoing Jira's body.
+        """
+        try:
+            project = await self.client.request("GET", f"/rest/api/3/project/{self.project_key}")
+        except UpstreamError as error:
+            return {"ok": False, "reason": _test_failure(error.status_code, self.project_key)}
+        return {"ok": True, "project_key": self.project_key, "project": project.get("name", "")}
 
     async def fetch_item(self, key: str) -> WorkItemData:
         issue = await self.client.request(
@@ -288,6 +301,24 @@ class JiraTracker:
 
         provided = headers.get("X-Choregos-Secret", headers.get("x-choregos-secret", ""))
         return bool(self.webhook_secret) and hmac.compare_digest(self.webhook_secret, provided or "")
+
+
+def _test_failure(status_code: int | None, project_key: str) -> str:
+    """The likely cause of a refused connector test, by HTTP status."""
+    if status_code == 401:
+        return (
+            "401: the token is refused. A service account's scoped token only works through "
+            "`https://api.atlassian.com/ex/jira/<cloudId>`, not through the site's own URL; "
+            "otherwise the token expired or was revoked"
+        )
+    if status_code == 403:
+        return "403: the token lacks the classic scope `read:jira-work`"
+    if status_code == 404:
+        return (
+            f"404: project {project_key} is not visible to this account: wrong `project_key`, "
+            "or the account is not a member of the project (Browse projects)"
+        )
+    return f"{status_code}: Jira refused to read project {project_key}"
 
 
 def _parse_enum(enum: Any, fields: dict[str, Any], name: str) -> Any:

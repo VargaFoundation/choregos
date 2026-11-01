@@ -396,3 +396,32 @@ def test_une_commande_en_commentaire_devient_une_decision() -> None:
 def test_un_evenement_inconnu_ne_produit_rien() -> None:
     assert parse_jira_event("d-4", {"webhookEvent": "sprint_started"}) == []
     assert parse_jira_event("d-5", {}) == []
+
+
+async def test_connector_test_reads_the_project() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/rest/api/3/project/BILL"
+        return httpx.Response(200, json={"key": "BILL", "name": "Billing"})
+
+    assert await tracker(handler).test() == {"ok": True, "project_key": "BILL", "project": "Billing"}
+
+
+@pytest.mark.parametrize(
+    ("status", "hint"),
+    [
+        (401, "api.atlassian.com/ex/jira/<cloudId>"),
+        (403, "read:jira-work"),
+        (404, "not a member of the project"),
+        (400, "Jira refused to read project BILL"),
+    ],
+)
+async def test_connector_test_names_the_cause_of_a_refusal(status: int, hint: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json={"errorMessages": ["secret detail"]})
+
+    result = await tracker(handler).test()
+
+    assert result["ok"] is False
+    assert hint in result["reason"]
+    assert "secret detail" not in result["reason"]
