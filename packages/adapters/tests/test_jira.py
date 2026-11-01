@@ -13,7 +13,7 @@ import pytest
 from choregos_adapters.errors import ConfigurationError, UpstreamError
 from choregos_adapters.http import RestClient
 from choregos_adapters.tracker.adf import markdown_to_adf, text_of_adf
-from choregos_adapters.tracker.jira import JiraTracker
+from choregos_adapters.tracker.jira import JiraClient, JiraTracker
 from choregos_adapters.tracker.jira_events import parse_jira_event
 from choregos_contracts import InboundEventType, Risk, Size
 from choregos_core.domain import NewItem, TrackerStateMapping
@@ -410,7 +410,7 @@ async def test_connector_test_reads_the_project() -> None:
 @pytest.mark.parametrize(
     ("status", "hint"),
     [
-        (401, "api.atlassian.com/ex/jira/<cloudId>"),
+        (401, "the token is refused"),
         (403, "read:jira-work"),
         (404, "not a member of the project"),
         (400, "Jira refused to read project BILL"),
@@ -425,3 +425,76 @@ async def test_connector_test_names_the_cause_of_a_refusal(status: int, hint: st
     assert result["ok"] is False
     assert hint in result["reason"]
     assert "secret detail" not in result["reason"]
+
+
+CLOUD_ID = "5a2b69b3-0000-4000-8000-000000000000"
+GATEWAY_ROOT = f"/ex/jira/{CLOUD_ID}"
+
+
+def client_of(base_url: str, handler: Any) -> JiraClient:
+    return JiraClient(
+        base_url,
+        auth=("svc@serviceaccount.atlassian.com", "scoped"),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        service="jira",
+    )
+
+
+async def test_a_scoped_token_on_the_site_url_goes_through_the_gateway() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(f"{request.url.host}{request.url.path}")
+        if request.url.path == "/_edge/tenant_info":
+            assert "authorization" not in request.headers
+            return httpx.Response(200, json={"cloudId": CLOUD_ID})
+        if request.url.host == "api.atlassian.com":
+            return httpx.Response(200, json=issue_payload())
+        return httpx.Response(401, text="Client must be authenticated")
+
+    client = client_of(BASE, handler)
+    item = await JiraTracker(client, "BILL").fetch_item("BILL-42")
+    await JiraTracker(client, "BILL").fetch_item("BILL-42")
+
+    assert seen == [
+        "varga.atlassian.net/rest/api/3/issue/BILL-42",
+        "varga.atlassian.net/_edge/tenant_info",
+        f"api.atlassian.com{GATEWAY_ROOT}/rest/api/3/issue/BILL-42",
+        f"api.atlassian.com{GATEWAY_ROOT}/rest/api/3/issue/BILL-42",
+    ]
+    assert item.url == f"{BASE}/browse/BILL-42"
+
+
+async def test_a_token_refused_everywhere_keeps_the_site_and_its_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/_edge/tenant_info":
+            return httpx.Response(200, json={"cloudId": CLOUD_ID})
+        return httpx.Response(401, text="nope")
+
+    client = client_of(BASE, handler)
+
+    with pytest.raises(UpstreamError) as refused:
+        await JiraTracker(client, "BILL").fetch_item("BILL-42")
+    assert refused.value.status_code == 401
+    assert client.base_url == BASE
+    assert "gateway" in (await JiraTracker(client, "BILL").test())["reason"]
+
+
+async def test_the_gateway_url_is_used_as_given() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "api.atlassian.com"
+        assert request.url.path == f"{GATEWAY_ROOT}/rest/api/3/project/BILL"
+        return httpx.Response(200, json={"name": "Billing"})
+
+    result = await JiraTracker(client_of(f"https://api.atlassian.com{GATEWAY_ROOT}", handler), "BILL").test()
+
+    assert result["ok"] is True
+
+
+async def test_a_self_hosted_jira_never_tries_the_gateway() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "jira.example.org"
+        return httpx.Response(401, text="nope")
+
+    with pytest.raises(UpstreamError):
+        await JiraTracker(client_of("https://jira.example.org", handler), "BILL").fetch_item("BILL-42")

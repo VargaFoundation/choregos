@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
+import httpx
 from choregos_contracts import InboundEvent, ProjectConfig, Risk, Size
 from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItemData
 
@@ -30,6 +32,53 @@ AGENT_READY_LABEL = "agent-ready"
 # Les trois catégories de statut de Jira ont des clés stables dans toutes les langues ; leurs
 # noms, eux, sont traduits. Voir `JiraTracker._transition`.
 _CANONICAL_CATEGORIES = {"to do": "new", "in progress": "indeterminate", "done": "done"}
+
+
+#: Atlassian's API gateway: a service account's scoped token is only accepted there.
+GATEWAY = "https://api.atlassian.com"
+
+
+class JiraClient(RestClient):
+    """A Jira Cloud client that accepts the site URL or the API gateway URL as `base_url`.
+
+    A personal API token works on `https://<site>.atlassian.net`; a service account's scoped token
+    only through `https://api.atlassian.com/ex/jira/<cloudId>`. Given the site URL, the client
+    starts there and, on the first 401, looks up the site's cloud id (`/_edge/tenant_info`, public)
+    and retries through the gateway; it keeps the gateway only when the gateway accepts the token.
+    `site_url` stays the site, for the links people open (`/browse/KEY-1`).
+    """
+
+    def __init__(self, base_url: str, **kwargs: Any) -> None:
+        super().__init__(base_url, **kwargs)
+        host = urlsplit(self.base_url).hostname or ""
+        self.site_url: str | None = self.base_url if host.endswith(".atlassian.net") else None
+
+    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        try:
+            return await super().request(method, path, **kwargs)
+        except UpstreamError as error:
+            if error.status_code != 401 or self.site_url is None or self.base_url != self.site_url:
+                raise
+            gateway = await self._gateway()
+            if gateway is None:
+                raise
+            self.base_url = gateway
+            try:
+                return await super().request(method, path, **kwargs)
+            except UpstreamError as through_gateway:
+                if through_gateway.status_code == 401:
+                    self.base_url = self.site_url
+                    raise error from through_gateway
+                raise
+
+    async def _gateway(self) -> str | None:
+        """`https://api.atlassian.com/ex/jira/<cloudId>` for this site, or `None` if not found."""
+        try:
+            response = await self._client.get(f"{self.site_url}/_edge/tenant_info")
+            cloud_id = response.json().get("cloudId") if response.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return None
+        return f"{GATEWAY}/ex/jira/{cloud_id}" if isinstance(cloud_id, str) and cloud_id else None
 
 
 class JiraTracker:
@@ -89,7 +138,7 @@ class JiraTracker:
             key=key,
             title=fields.get("summary", ""),
             body=text_of_adf(fields.get("description")),
-            url=f"{self.client.base_url}/browse/{key}",
+            url=f"{getattr(self.client, 'site_url', None) or self.client.base_url}/browse/{key}",
             state=((fields.get("status") or {}).get("name")),
             labels=labels,
             item_type=((fields.get("issuetype") or {}).get("name")),
@@ -307,9 +356,8 @@ def _test_failure(status_code: int | None, project_key: str) -> str:
     """The likely cause of a refused connector test, by HTTP status."""
     if status_code == 401:
         return (
-            "401: the token is refused. A service account's scoped token only works through "
-            "`https://api.atlassian.com/ex/jira/<cloudId>`, not through the site's own URL; "
-            "otherwise the token expired or was revoked"
+            "401: the token is refused, on the site and through the `api.atlassian.com` gateway: "
+            "wrong `email`, or the token expired or was revoked"
         )
     if status_code == 403:
         return "403: the token lacks the classic scope `read:jira-work`"

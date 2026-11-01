@@ -3,19 +3,19 @@ id: connector.tracker.jira
 title: Use Jira Cloud as the board
 applies_to: {connector: tracker/jira}
 audience: project_owner
-version: 3
-reviewed: 2026-10-28
+version: 4
+reviewed: 2026-11-01
 vendor_docs:
   - {title: "Manage API tokens for your Atlassian account", url: "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/"}
   - {title: "Jira automation actions (Send web request)", url: "https://support.atlassian.com/cloud-automation/docs/jira-automation-actions/"}
-egress: ["<site>.atlassian.net"]
+egress: ["<site>.atlassian.net", "api.atlassian.com"]
 values: ["webhook_url:jira"]
 fields:
-  base_url: "https://<site>.atlassian.net"
+  base_url: "https://<site>.atlassian.net (or the gateway form https://api.atlassian.com/ex/jira/<cloudId>)"
   email: "the email of the account the API token belongs to"
   project_key: "the project's key, the prefix of its issue keys (BILL in BILL-42)"
   field_names: "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira"
-  api_token: "a classic API token, typed once"
+  api_token: "a classic API token, or a service account's scoped token, typed once"
   webhook_secret: "not used by the Jira webhook endpoint: the platform's shared webhook secret is"
 ---
 
@@ -44,9 +44,12 @@ fields:
 On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,
 **Transition issues**, **Add comments**.
 
-A classic API token carries all of the account's rights. A scoped API token works only through
-`https://api.atlassian.com/ex/jira/<cloudId>` as the `base_url`; that variant is **not proven** here, so
-use a classic token unless you have tested it.
+A classic API token carries all of the account's rights. A scoped token (an Atlassian service
+account's) needs the classic scopes `read:jira-work` and `write:jira-work`, and Atlassian accepts it only
+through its gateway, `https://api.atlassian.com/ex/jira/<cloudId>`. You do not need to look the cloud id
+up: give the site URL, and on the first `401` the connector reads the site's cloud id from
+`https://<site>.atlassian.net/_edge/tenant_info` and goes through the gateway, keeping the gateway only
+if it accepts the token. The gateway URL itself is accepted too. Issue links keep the site URL.
 
 **What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
 Jira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,
@@ -58,7 +61,7 @@ tools its version names, under each tool connector's account, listed on its run.
 ## In Choregos
 
 1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.
-2. `base_url`: `https://<site>.atlassian.net`. `email`: the dedicated account's email. `project_key`: the
+2. `base_url`: `https://<site>.atlassian.net` (the gateway form works too). `email`: the dedicated account's email. `project_key`: the
    key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the
    project's slug; two projects holding the same key are told apart by the Jira site, and a key held
    twice on the same site routes nothing.
@@ -74,11 +77,12 @@ watch it appear on the board.
 
 ## When it fails
 
-- `401`: wrong email or a revoked token. The email and the token must belong to the same account.
+- `401`: the token was refused on the site and through the gateway: wrong email, or an expired or
+  revoked token. The email and the token must belong to the same account.
 - `403`: the account lacks one of the project permissions above.
 - `404` on the project: wrong `project_key`, or the account cannot browse it.
 - A webhook answered `401 invalid shared secret`: the `X-Choregos-Secret` header is missing or differs
   from the platform's shared secret.
 - Nothing starts after labelling: the label must be exactly `agent-ready`, and the webhook must reach
   this platform from Jira.
-- A timeout: the egress allowlist must open the Atlassian site.
+- A timeout: the egress allowlist must open the Atlassian site, and `api.atlassian.com` for a scoped token.

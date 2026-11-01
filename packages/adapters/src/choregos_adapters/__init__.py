@@ -316,7 +316,10 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("tracker",),
         _objet(
             {
-                "base_url": {"type": "string", "description": "https://<site>.atlassian.net"},
+                "base_url": {
+                    "type": "string",
+                    "description": "https://<site>.atlassian.net, or https://api.atlassian.com/ex/jira/<cloudId>",
+                },
                 "email": _TEXTE,
                 "project_key": _TEXTE,
                 "field_names": {"type": "object", "additionalProperties": {"type": "string"}},
@@ -1269,7 +1272,7 @@ def _register_builtins() -> None:
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
     from .tracker.interne import InternalTracker
-    from .tracker.jira import JiraTracker
+    from .tracker.jira import JiraClient, JiraTracker
 
     register("tracker", "github-issues", _SPECS_LIVREES[("tracker", "github-issues")])(
         lambda cfg: GitHubTracker(
@@ -1283,7 +1286,7 @@ def _register_builtins() -> None:
     register("tracker", "internal", _SPECS_LIVREES[("tracker", "internal")])(lambda cfg: InternalTracker())
     register("tracker", "jira", _SPECS_LIVREES[("tracker", "jira")])(
         lambda cfg: JiraTracker(
-            RestClient(
+            JiraClient(
                 cfg["base_url"],
                 # Jira Cloud : e-mail + jeton d'API en Basic. Le jeton vient du coffre,
                 # jamais du dépôt (AGENTS.md : aucun secret en dur).
