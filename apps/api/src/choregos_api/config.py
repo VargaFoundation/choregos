@@ -256,6 +256,10 @@ class Settings(BaseSettings):
     #: `{{hosts_csv}}`, `{{#hosts}}{{.}}{{/hosts}}`, `{{family}}`, `{{ports}}`, `{{reason}}`,
     #: `{{origin}}`, `{{requested_by}}`, `{{entry}}`, `{{selector}}`), `issueUrl`, `owner`, `entries`.
     egress_platform_change: dict[str, Any] | None = None
+    #: Hosts an operator lists so that an organisation's MCP gateway may be plain http or a private
+    #: name (ADR 0105): `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`, a JSON list of exact host names. Any
+    #: other private or plain-http gateway address is refused when the setting is written.
+    mcp_gateway_internal_hosts: list[str] = Field(default_factory=list)
     memory_url: str = "http://localhost:8432"
     object_store_url: str = "s3://choregos"
     #: The S3 endpoint (RustFS in development: `http://localhost:9000`); empty means AWS.
