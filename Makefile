@@ -25,7 +25,7 @@ setup:  ## Installe les dépendances (Python + web)
 	@[ -d apps/web ] && $(PNPM) -C apps/web install --prefer-offline || true
 
 .PHONY: ci
-ci: lint typecheck test contracts-check procedures-check charts-lint  ## Everything that blocks a PR
+ci: lint typecheck test-cov contracts-check procedures-check charts-lint  ## Everything that blocks a PR
 
 .PHONY: lint
 lint:  ## ruff check + format --check + no French in lines added since origin/main (ADR 0046) + the French ratchet (ADR 0098)
@@ -54,7 +54,7 @@ test:  ## Tests unitaires
 	$(UV) run pytest -q
 
 .PHONY: test-cov
-test-cov:  ## Tests avec couverture (seuil 80 % sur core, runner, orchestrator)
+test-cov:  ## Tests with coverage over the packages in pyproject's coverage source; the threshold is fail_under
 	$(UV) run pytest --cov --cov-report=term-missing --cov-report=xml -q
 
 .PHONY: contracts

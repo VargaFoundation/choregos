@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Notifier Slack : messages avec boutons qui renvoient vers l'API de décision (§3.1)."""
+"""Slack notifier: messages with buttons that point back to the decision API (§3.1)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ SEVERITY_EMOJI = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "erro
 
 
 class SlackNotifier:
-    """Envoi par webhook entrant (simple) ou par `chat.postMessage` (boutons)."""
+    """Sends through an incoming webhook (simple) or `chat.postMessage` (buttons)."""
 
     def __init__(
         self,
@@ -45,13 +45,13 @@ class SlackNotifier:
             )
             body = response.json() if response.content else {}
             if not body.get("ok", False):
-                raise UpstreamError("slack", f"chat.postMessage : {body.get('error', response.text[:200])}")
+                raise UpstreamError("slack", f"chat.postMessage: {body.get('error', response.text[:200])}")
             return
         if not self.webhook_url:
-            raise UpstreamError("slack", "ni `bot_token` ni `webhook_url` configurés")
+            raise UpstreamError("slack", "neither `bot_token` nor `webhook_url` is configured")
         response = await self._client.post(self.webhook_url, json=payload)
         if response.status_code >= 400:
-            raise UpstreamError("slack", f"webhook → {response.status_code} : {response.text[:200]}")
+            raise UpstreamError("slack", f"webhook → {response.status_code}: {response.text[:200]}")
 
     def _blocks(self, message: Message) -> list[dict[str, Any]]:
         emoji = SEVERITY_EMOJI.get(message.severity, "ℹ️")
@@ -81,7 +81,7 @@ class SlackNotifier:
             elements.append(
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "Ouvrir dans Choregos"},
+                    "text": {"type": "plain_text", "text": "Open in Choregos"},
                     "url": message.url,
                     "action_id": "choregos:open",
                 }

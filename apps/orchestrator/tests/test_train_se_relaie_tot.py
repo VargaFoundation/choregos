@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
+
+from .conftest import recording_history
 
 pytestmark = pytest.mark.asyncio
 
@@ -189,7 +190,7 @@ async def test_un_train_se_relaie_juste_apres_son_depart(temporal_env: Any, work
 
     # L'historique du relais rejoue contre le code courant — et s'archive pour les suivants.
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         cible = HISTORIQUES / "train-se-relaie-tot-S22-27.json"
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Notifier en mémoire."""
+"""In-memory notifier."""
 
 from __future__ import annotations
 
@@ -9,15 +9,23 @@ from choregos_core.domain import Message
 class FakeNotifier:
     def __init__(self) -> None:
         self.sent: list[tuple[str, Message]] = []
-        #: Pour éprouver un notificateur ABSENT ou en panne — le cas le plus courant en vrai :
-        #: un déploiement sans Slack. Le fake refusait de le simuler, donc rien ne vérifiait ce
-        #: que la plateforme fait quand la notification échoue (elle tuait le ticket).
-        self.panne: str | None = None
+        #: To exercise an ABSENT or failing notifier — the most common case for real: a deployment
+        #: without Slack. The fake refused to simulate it, so nothing checked what the platform does
+        #: when the notification fails (it killed the ticket).
+        self.failure: str | None = None
 
     async def send(self, channel: str, message: Message) -> None:
-        if self.panne is not None:
-            raise RuntimeError(self.panne)
+        if self.failure is not None:
+            raise RuntimeError(self.failure)
         self.sent.append((channel, message))
+
+    @property
+    def panne(self) -> str | None:  # lang: fr-ok alias:internal
+        return self.failure
+
+    @panne.setter
+    def panne(self, value: str | None) -> None:  # lang: fr-ok alias:internal
+        self.failure = value
 
     def last(self) -> Message | None:
         return self.sent[-1][1] if self.sent else None

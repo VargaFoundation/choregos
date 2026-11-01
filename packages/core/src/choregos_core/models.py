@@ -57,17 +57,20 @@ BACKEND_MODEL_CONSTRAINTS: dict[str, tuple[str, ...]] = {
     "claude-code": ("claude", "anthropic"),
 }
 
-# Les backends ACP livrés avec l'image du runner, dans l'ordre de préférence.
-# `choregos_runner.backends` en est la source ; on la redit ici parce que l'orchestrateur
-# et l'API doivent pouvoir choisir un backend sans dépendre du paquet runner.
-KNOWN_BACKEND_NAMES: tuple[str, ...] = (
-    "claude-code",
-    "codex",
-    "gemini-cli",
-    "goose",
-    "opencode",
-    "copilot-cli",
+# The ACP backends the runner image ships, in order of preference, and what each can do.
+# `choregos_runner.backends` is the source; it is restated here because the orchestrator and the
+# API must be able to pick a backend without depending on the runner package.
+KNOWN_BACKEND_CAPABILITIES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("claude-code", ("acp", "mcp", "agents_md", "structured_output")),
+    ("codex", ("acp", "mcp", "agents_md")),
+    ("gemini-cli", ("acp", "mcp")),
+    ("goose", ("acp", "mcp")),
+    ("opencode", ("acp", "mcp")),
+    ("copilot-cli", ("acp",)),
 )
+
+# The names alone, in the same order.
+KNOWN_BACKEND_NAMES: tuple[str, ...] = tuple(name for name, _ in KNOWN_BACKEND_CAPABILITIES)
 
 #: The one backend enabled when the platform administrator never stored a setting for it.
 DEFAULT_ENABLED_BACKEND = "claude-code"

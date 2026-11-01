@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Mémoire en mémoire (sic) : recherche lexicale, supersession par sujet, file `pending`."""
+"""In-memory memory: lexical search, supersession by subject, a `pending` queue."""
 
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from choregos_core.models import estimate_tokens
 
 
 class FakeMemory:
-    """Mémoire de test : suffisante pour tester le context pack, la supersession et la file pending."""
+    """Test memory: enough to test the context pack, the supersession and the pending queue."""
 
     def __init__(self) -> None:
         self.facts: dict[str, list[Memory]] = {}
         self.pending: dict[str, list[Memory]] = {}
         self.ingested: list[dict[str, Any]] = []
-        self.fail = False  # simule une panne : le context pack doit être vide, pas bloquant
+        self.fail = False  # simulates an outage: the context pack must be empty, not blocking
         self._next_id = 1
 
     def _new_id(self) -> str:
@@ -91,7 +91,7 @@ class FakeMemory:
         return sorted(out, key=lambda m: (-(m.score or 0), m.subject))
 
     async def write_fact(self, project: str, fact: Fact) -> str:
-        """Écriture gouvernée : un nouveau fait supersède le précédent de même `subject`."""
+        """Governed write: a new fact supersedes the previous one with the same `subject`."""
         for memory in self.facts.get(project, []):
             if memory.subject == fact.subject and memory.status == "active":
                 memory.status = "superseded"

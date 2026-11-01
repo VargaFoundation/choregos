@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CD en mémoire : promotions GitOps, santé, rollouts canary."""
+"""In-memory CD: GitOps promotions, health, canary rollouts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from choregos_core.domain import Change, Health, PromotionRef, RolloutState, Win
 
 
 class FakeCd:
-    """CD de test. `fail_next_analysis()` casse le prochain canary, pour tester le rollback."""
+    """Test CD. `fail_next_analysis()` breaks the next canary, to test the rollback."""
 
     def __init__(self) -> None:
         self.revisions: dict[str, str] = {}
@@ -44,7 +44,7 @@ class FakeCd:
         if self._fail_analysis:
             self._fail_analysis = False
             state = RolloutState(
-                phase="Degraded", message="analyse SLO en échec", current_step=1, total_steps=3
+                phase="Degraded", message="SLO analysis failed", current_step=1, total_steps=3
             )
         else:
             state = self.rollouts.get(
@@ -55,7 +55,7 @@ class FakeCd:
 
     async def abort_rollout(self, app: str) -> None:
         self.aborted.append(app)
-        self.rollouts[app] = RolloutState(phase="Aborted", message="abort demandé")
+        self.rollouts[app] = RolloutState(phase="Aborted", message="abort requested")
 
     async def set_sync_window(self, app: str, windows: list[Window]) -> None:
         self.windows[app] = list(windows)

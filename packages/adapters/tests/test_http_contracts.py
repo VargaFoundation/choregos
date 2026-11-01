@@ -1,9 +1,9 @@
-"""Les adaptateurs face à leur API, requête par requête — avec un transport simulé.
+"""The adapters against their API, request by request — with a simulated transport.
 
-Treize adaptateurs sur dix-neuf n'avaient aucun test (état des lieux du 2026-09-24) ; le
-plafond de dépense de LiteLLM n'était vérifié que contre `fakes/gateway.py`, qui
-réimplémente sa propre logique : le fake validait le fake. Ici, ce qui part sur le fil est
-ce qu'on vérifie : chemin, en-têtes, corps — et ce qu'on fait des réponses qui fâchent.
+Thirteen adapters out of nineteen had no test (inventory of 2026-09-24); LiteLLM's spend cap was
+only checked against `fakes/gateway.py`, which reimplements its own logic: the fake validated the
+fake. Here, what goes out on the wire is what is checked: path, headers, body — and what is done
+with the answers that annoy.
 """
 
 from __future__ import annotations
@@ -22,35 +22,33 @@ LITELLM = "http://litellm.test"
 
 
 @respx.mock
-async def test_litellm_mint_key_envoie_le_plafond_et_l_alias_du_run() -> None:
+async def test_litellm_mint_key_sends_the_cap_and_the_run_alias() -> None:
     route = respx.post(f"{LITELLM}/key/generate").mock(
         return_value=Response(200, json={"key": "sk-run", "token": "tok-1"})
     )
     gateway = LiteLlmGateway(LITELLM, "sk-master")
-    cle = await gateway.mint_key(
+    key = await gateway.mint_key(
         {"run_id": "r-1", "project": "p"}, budget_usd=2.5, ttl_s=900, models=["platform/standard"]
     )
-    corps = json.loads(route.calls[0].request.content)
-    assert corps["max_budget"] == 2.5, "le plafond DUR part chez LiteLLM : c'est lui qui coupe, pas nous"
-    assert corps["duration"] == "15m" and corps["models"] == ["platform/standard"]
-    assert corps["key_alias"] == "run-r-1" and "tags" not in corps, (
-        "les tags sont Enterprise : jamais par défaut"
-    )
+    body = json.loads(route.calls[0].request.content)
+    assert body["max_budget"] == 2.5, "the HARD cap goes to LiteLLM: it cuts off, not us"
+    assert body["duration"] == "15m" and body["models"] == ["platform/standard"]
+    assert body["key_alias"] == "run-r-1" and "tags" not in body, "tags are Enterprise: never by default"
     assert route.calls[0].request.headers["Authorization"] == "Bearer sk-master"
-    assert cle.key == "sk-run" and cle.key_id == "tok-1" and cle.budget_usd == 2.5
+    assert key.key == "sk-run" and key.key_id == "tok-1" and key.budget_usd == 2.5
 
 
 @respx.mock
-async def test_litellm_un_alias_deja_pris_ne_bloque_pas_la_reprise_d_un_run() -> None:
-    """`key_alias` est unique à vie chez LiteLLM ; un run rejoué garde son id — on repart sans alias."""
+async def test_litellm_a_taken_alias_does_not_block_a_run_being_resumed() -> None:
+    """`key_alias` is unique for life at LiteLLM; a replayed run keeps its id — retry without an alias."""
     route = respx.post(f"{LITELLM}/key/generate").mock(
         side_effect=[
             Response(400, json={"error": "key_alias already exists"}),
             Response(200, json={"key": "sk-2"}),
         ]
     )
-    cle = await LiteLlmGateway(LITELLM, "sk").mint_key({"run_id": "r-1"}, 1.0, 60, ["m"])
-    assert cle.key == "sk-2"
+    key = await LiteLlmGateway(LITELLM, "sk").mint_key({"run_id": "r-1"}, 1.0, 60, ["m"])
+    assert key.key == "sk-2"
     assert "key_alias" not in json.loads(route.calls[1].request.content)
 
 
@@ -93,7 +91,7 @@ async def test_litellm_reads_cache_reads_where_its_spend_logs_write_them() -> No
 
 
 @respx.mock
-async def test_litellm_la_depense_vient_de_la_cle_et_des_journaux() -> None:
+async def test_litellm_the_spend_comes_from_the_key_and_the_logs() -> None:
     respx.get(f"{LITELLM}/key/info").mock(return_value=Response(200, json={"info": {"spend": 0.42}}))
     respx.get(f"{LITELLM}/spend/logs").mock(
         return_value=Response(
@@ -110,27 +108,27 @@ async def test_litellm_la_depense_vient_de_la_cle_et_des_journaux() -> None:
             ],
         )
     )
-    depense = await LiteLlmGateway(LITELLM, "sk").spend("tok-1")
-    assert (depense.cost_usd, depense.tokens_in, depense.tokens_out, depense.tokens_cached) == (
+    spend = await LiteLlmGateway(LITELLM, "sk").spend("tok-1")
+    assert (spend.cost_usd, spend.tokens_in, spend.tokens_out, spend.tokens_cached) == (
         0.42,
         150,
         25,
         10,
     )
-    assert depense.requests == 2 and depense.models_used == ["claude-haiku-4-5", "claude-sonnet-5"]
+    assert spend.requests == 2 and spend.models_used == ["claude-haiku-4-5", "claude-sonnet-5"]
 
 
 @respx.mock
-async def test_litellm_revoquer_une_cle_deja_partie_est_un_succes() -> None:
+async def test_litellm_revoking_a_key_that_is_already_gone_is_a_success() -> None:
     respx.post(f"{LITELLM}/key/delete").mock(return_value=Response(404, json={"error": "not found"}))
-    await LiteLlmGateway(LITELLM, "sk").revoke("tok-vieux")  # ne lève pas
+    await LiteLlmGateway(LITELLM, "sk").revoke("tok-old")  # does not raise
     respx.post(f"{LITELLM}/key/delete").mock(return_value=Response(500, text="boom"))
     with pytest.raises(UpstreamError):
         await LiteLlmGateway(LITELLM, "sk").revoke("tok-1")
 
 
 @respx.mock
-async def test_litellm_le_catalogue_porte_les_prix_par_millier() -> None:
+async def test_litellm_the_catalogue_carries_prices_per_thousand() -> None:
     respx.get(f"{LITELLM}/model/info").mock(
         return_value=Response(
             200,
@@ -149,9 +147,9 @@ async def test_litellm_le_catalogue_porte_les_prix_par_millier() -> None:
             },
         )
     )
-    [modele] = await LiteLlmGateway(LITELLM, "sk").list_models()
-    assert modele.provider == "anthropic" and modele.litellm_model == "anthropic/claude-sonnet-5"
-    assert (modele.input_cost_per_1k, modele.output_cost_per_1k) == (0.003, 0.015)
+    [model] = await LiteLlmGateway(LITELLM, "sk").list_models()
+    assert model.provider == "anthropic" and model.litellm_model == "anthropic/claude-sonnet-5"
+    assert (model.input_cost_per_1k, model.output_cost_per_1k) == (0.003, 0.015)
 
 
 @respx.mock
@@ -210,21 +208,21 @@ async def test_litellm_an_unknown_tool_calling_capability_is_not_a_denial() -> N
 
 
 @respx.mock
-async def test_slack_webhook_puis_bot_et_leurs_refus() -> None:
+async def test_slack_webhook_then_bot_and_their_refusals() -> None:
     hook = respx.post("https://hooks.slack.test/x").mock(return_value=Response(200, text="ok"))
-    message = Message(title="Train gelé", body="raison", severity="warning")
+    message = Message(title="Train frozen", body="reason", severity="warning")
     await SlackNotifier(webhook_url="https://hooks.slack.test/x").send("#ops", message)
-    corps = json.loads(hook.calls[0].request.content)
-    assert corps["text"] == "Train gelé" and corps["blocks"][0]["type"] == "header"
+    body = json.loads(hook.calls[0].request.content)
+    assert body["text"] == "Train frozen" and body["blocks"][0]["type"] == "header"
 
     bot = respx.post("https://slack.com/api/chat.postMessage").mock(
         return_value=Response(200, json={"ok": False, "error": "channel_not_found"})
     )
     with pytest.raises(UpstreamError, match="channel_not_found"):
-        await SlackNotifier(bot_token="xoxb").send("#nulle-part", message)
+        await SlackNotifier(bot_token="xoxb").send("#nowhere", message)
     assert bot.calls[0].request.headers["Authorization"] == "Bearer xoxb"
 
-    with pytest.raises(UpstreamError, match="ni `bot_token` ni `webhook_url`"):
+    with pytest.raises(UpstreamError, match="neither `bot_token` nor `webhook_url`"):
         await SlackNotifier().send("#ops", message)
 
 
@@ -234,7 +232,7 @@ ECPHORIA = "http://ecphoria.test"
 
 
 @respx.mock
-async def test_ecphoria_le_tenant_et_le_jeton_partent_dans_les_en_tetes() -> None:
+async def test_ecphoria_the_tenant_and_the_token_go_in_the_headers() -> None:
     from choregos_adapters.memory.ecphoria import EcphoriaMemory
 
     route = respx.post(f"{ECPHORIA}/api/v1/context-pack").mock(
@@ -245,41 +243,39 @@ async def test_ecphoria_le_tenant_et_le_jeton_partent_dans_les_en_tetes() -> Non
                 "truncated": False,
                 "memories": [],
                 "incidents": [],
-                "related_items": [{"key": "D-3", "title": "Un ticket lié", "state": "done"}],
+                "related_items": [{"key": "D-3", "title": "A linked ticket", "state": "done"}],
             },
         )
     )
-    memoire = EcphoriaMemory(ECPHORIA, token="t-secret", read_timeout_ms=500)
-    pack = await memoire.context_pack("panier", "TVA du panier", ["src/**"], budget_tokens=2000)
-    requete = route.calls[0].request
-    assert requete.headers["X-Ecphoria-Tenant"] == "panier", "un tenant par projet : l'isolation est là"
-    assert requete.headers["Authorization"] == "Bearer t-secret"
-    corps = json.loads(requete.content)
+    memory = EcphoriaMemory(ECPHORIA, token="t-secret", read_timeout_ms=500)
+    pack = await memory.context_pack("basket", "VAT of the basket", ["src/**"], budget_tokens=2000)
+    request = route.calls[0].request
+    assert request.headers["X-Ecphoria-Tenant"] == "basket", "one tenant per project: the isolation is there"
+    assert request.headers["Authorization"] == "Bearer t-secret"
+    body = json.loads(request.content)
     assert (
-        corps["query"] == "TVA du panier" and corps["budget_tokens"] == 2000 and corps["paths"] == ["src/**"]
+        body["query"] == "VAT of the basket" and body["budget_tokens"] == 2000 and body["paths"] == ["src/**"]
     )
     assert pack.tokens_estimated == 120 and pack.related_items[0].key == "D-3"
 
 
 @respx.mock
-async def test_ecphoria_une_panne_rend_un_pack_vide_puis_ouvre_le_circuit() -> None:
-    """Toute panne rend un pack VIDE, jamais une erreur ; après trois, on cesse d'attendre."""
+async def test_ecphoria_an_outage_returns_an_empty_pack_then_opens_the_circuit() -> None:
+    """Any outage returns an EMPTY pack, never an error; after three, stop waiting."""
     from choregos_adapters.memory.ecphoria import EcphoriaMemory
 
-    route = respx.post(f"{ECPHORIA}/api/v1/context-pack").mock(
-        return_value=Response(503, text="quorum perdu")
-    )
-    memoire = EcphoriaMemory(ECPHORIA, read_timeout_ms=200)
+    route = respx.post(f"{ECPHORIA}/api/v1/context-pack").mock(return_value=Response(503, text="quorum lost"))
+    memory = EcphoriaMemory(ECPHORIA, read_timeout_ms=200)
     for _ in range(3):
-        pack = await memoire.context_pack("p", "q", [], budget_tokens=100)
+        pack = await memory.context_pack("p", "q", [], budget_tokens=100)
         assert pack.memories == [] and pack.query == "q"
     assert route.call_count == 3
-    await memoire.context_pack("p", "q", [], budget_tokens=100)
-    assert route.call_count == 3, "circuit ouvert : plus d'appel, plus d'attente"
+    await memory.context_pack("p", "q", [], budget_tokens=100)
+    assert route.call_count == 3, "circuit open: no more calls, no more waiting"
 
 
 @respx.mock
-async def test_ecphoria_la_recherche_lit_les_hits_avec_leur_score() -> None:
+async def test_ecphoria_the_search_reads_the_hits_with_their_score() -> None:
     from choregos_adapters.memory.ecphoria import EcphoriaMemory
 
     respx.post(f"{ECPHORIA}/api/v1/memories/search").mock(
@@ -290,7 +286,7 @@ async def test_ecphoria_la_recherche_lit_les_hits_avec_leur_score() -> None:
                     {
                         "memory": {
                             "id": "m-1",
-                            "content": "Les avoirs sont soustraits du total.",
+                            "content": "Credit notes are subtracted from the total.",
                             "kind": "decision",
                         },
                         "score": 0.91,
@@ -299,8 +295,8 @@ async def test_ecphoria_la_recherche_lit_les_hits_avec_leur_score() -> None:
             },
         )
     )
-    [hit] = await EcphoriaMemory(ECPHORIA).search("panier", "avoirs", k=5)
-    assert hit.id == "m-1" and "avoirs" in hit.content.lower()
+    [hit] = await EcphoriaMemory(ECPHORIA).search("basket", "credit notes", k=5)
+    assert hit.id == "m-1" and "credit notes" in hit.content.lower()
 
 
 # ───────────────────────── Argo CD ─────────────────────────
@@ -309,7 +305,7 @@ ARGO = "http://argocd.test"
 
 
 @respx.mock
-async def test_argocd_sante_revision_et_application_inconnue() -> None:
+async def test_argocd_health_revision_and_unknown_application() -> None:
     from choregos_adapters.cd.argocd import ArgoCdAdapter
 
     respx.get(f"{ARGO}/api/v1/applications/billing-api-prod").mock(
@@ -323,17 +319,17 @@ async def test_argocd_sante_revision_et_application_inconnue() -> None:
             },
         )
     )
-    respx.get(f"{ARGO}/api/v1/applications/nulle-part").mock(return_value=Response(404, text="not found"))
+    respx.get(f"{ARGO}/api/v1/applications/nowhere").mock(return_value=Response(404, text="not found"))
     argo = ArgoCdAdapter(base_url=ARGO, token="t")
-    sante = await argo.health("billing-api-prod")
-    assert (sante.status, sante.message, sante.revision) == ("Degraded", "1/3 pods", "abc123")
+    health = await argo.health("billing-api-prod")
+    assert (health.status, health.message, health.revision) == ("Degraded", "1/3 pods", "abc123")
     assert await argo.current_revision("billing-api-prod") == "abc123"
-    assert (await argo.health("nulle-part")).status == "Missing"
-    assert await argo.current_revision("nulle-part") == "unknown"
+    assert (await argo.health("nowhere")).status == "Missing"
+    assert await argo.current_revision("nowhere") == "unknown"
 
 
 @respx.mock
-async def test_argocd_un_rollout_avorte_se_lit_dans_ses_conditions() -> None:
+async def test_argocd_an_aborted_rollout_reads_from_its_conditions() -> None:
     from choregos_adapters.cd.argocd import ArgoCdAdapter
 
     manifest = {
@@ -343,20 +339,20 @@ async def test_argocd_un_rollout_avorte_se_lit_dans_ses_conditions() -> None:
             "currentStepIndex": 1,
             "canary": {"weight": 10},
             "conditions": [{"reason": "RolloutAborted"}],
-            "message": "analyse SLO en échec",
+            "message": "SLO analysis failed",
         },
     }
     respx.get(f"{ARGO}/api/v1/applications/billing-api-prod/resource").mock(
         return_value=Response(200, json={"manifest": json.dumps(manifest)})
     )
-    etat = await ArgoCdAdapter(base_url=ARGO).rollout_status("billing-api-prod")
+    rollout = await ArgoCdAdapter(base_url=ARGO).rollout_status("billing-api-prod")
     assert (
-        etat.phase == "Aborted"
-        and etat.current_step == 1
-        and etat.total_steps == 3
-        and etat.canary_weight == 10
+        rollout.phase == "Aborted"
+        and rollout.current_step == 1
+        and rollout.total_steps == 3
+        and rollout.canary_weight == 10
     )
-    assert "SLO" in etat.message
+    assert "SLO" in rollout.message
 
     abort = respx.post(f"{ARGO}/api/v1/applications/billing-api-prod/rollback").mock(
         return_value=Response(200, json={})

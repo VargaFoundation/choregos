@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 from urllib.parse import quote, urlsplit
 
 import pytest
@@ -77,7 +78,12 @@ def test_the_runner_applies_them_before_anything_else_runs(monkeypatch: pytest.M
         monkeypatch.setenv(name, value)
     settings = RunnerSettings(run_id=RUN, run_token=token, api_url="http://api.invalid")
 
+    egress = "egress." + _token()
+
     class Dead:
+        async def fetch_egress_token(self) -> str:
+            return egress
+
         async def fetch_input(self) -> object:
             raise RuntimeError("stop here")
 
@@ -86,5 +92,64 @@ def test_the_runner_applies_them_before_anything_else_runs(monkeypatch: pytest.M
 
     asyncio.run(Runner(settings, Dead()).run())  # type: ignore[arg-type]
     assert urlsplit(os.environ["HTTPS_PROXY"]).username == RUN
-    assert urlsplit(os.environ["https_proxy"]).password == quote(token, safe="")
+    # ADR 0115: the egress token, never the run token, since the agent inherits these variables.
+    assert urlsplit(os.environ["https_proxy"]).password == quote(egress, safe="")
+    assert quote(token, safe="") not in os.environ["https_proxy"]
     assert os.environ["NO_PROXY"] == "localhost,.svc"
+
+
+# ───────────────────────── what the agent inherits (ADR 0115) ─────────────────────────
+
+
+async def _run_with_proxy(
+    monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any, egress_token: Any
+) -> tuple[str, Any]:
+    from choregos_runner.runner import Runner
+
+    from .conftest import FakeInternalClient, agent_script, valid_result
+
+    for name, value in _env().items():
+        monkeypatch.setenv(name, value)
+    runner_settings.run_token = "the-run-token-" + os.urandom(4).hex()
+    agent_script({"turns": [{"result": valid_result()}]}, stage_input, runner_settings.workspace)
+    client = FakeInternalClient(stage_input)
+    client.egress_token = egress_token
+    await Runner(runner_settings, client).run()  # type: ignore[arg-type]
+    return os.environ["HTTPS_PROXY"], client
+
+
+async def test_the_agent_inherits_the_egress_token_never_the_run_token(
+    monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
+) -> None:
+    proxy, client = await _run_with_proxy(
+        monkeypatch, stage_input, runner_settings, "egress-" + os.urandom(4).hex()
+    )
+    parts = urlsplit(proxy)
+    assert parts.password == client.egress_token
+    assert runner_settings.run_token not in proxy
+    assert client.egress_token_calls == 1
+
+
+async def test_an_api_without_egress_tokens_keeps_the_run_token(
+    monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
+) -> None:
+    from choregos_runner.client import InternalApiError
+
+    proxy, _ = await _run_with_proxy(
+        monkeypatch, stage_input, runner_settings, InternalApiError(404, "Not Found")
+    )
+    assert urlsplit(proxy).password == quote(runner_settings.run_token, safe="")
+
+
+async def test_without_proxy_authentication_no_egress_token_is_asked(
+    monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
+) -> None:
+    monkeypatch.setenv("CHOREGOS_EGRESS_AUTH", "")
+    from choregos_runner.runner import Runner
+
+    from .conftest import FakeInternalClient, agent_script, valid_result
+
+    agent_script({"turns": [{"result": valid_result()}]}, stage_input, runner_settings.workspace)
+    client = FakeInternalClient(stage_input)
+    await Runner(runner_settings, client).run()  # type: ignore[arg-type]
+    assert client.egress_token_calls == 0

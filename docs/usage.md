@@ -137,6 +137,10 @@ when the API cannot be asked, it is a 502 and nothing is sent. The client's toke
   `user-<name>-session-<id>`; use the endpoint and port of the gateway chosen in the provider's dashboard.
 - A self-hosted Firecrawl is not routed through the proxy (it is usually in-cluster).
 
+**An MCP gateway** ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)). An `org_admin`
+sets the one gateway the organisation's MCP traffic can go through, from **Administration → MCP gateway**
+(see *MCP gateway* in the console section below).
+
 **Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
@@ -507,10 +511,10 @@ did not write never matches, so an agent that says nothing takes the default. Th
 `when` that names an output no transition declares (`when.unknown_output`) and a state whose exits all
 have a `when` (`when.no_default`).
 
-Two validation codes were renamed to English (ADR 0046): `workflow.implicit_effect` (formerly
-`workflow.effet_implicite`) and `gate.nothing_to_check` (formerly `gate.sans_matiere`). For one
-release, an issue that carries one of them also carries its former spelling in `deprecated_code`;
-match on `code`.
+Validation codes are English (ADR 0046). The window in which `workflow.implicit_effect` and
+`gate.nothing_to_check` also carried their former spellings ended in S45-02. The last renamed code,
+`role.playbook_not_found`, carries its former spelling (`role.playbook_introuvable`) in
+`deprecated_code` until 0.22.0; match on `code`.
 
 The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
 the process (each transition in plain words), the map (one lane per kind of actor), the YAML
@@ -1412,9 +1416,11 @@ How people sign in to the instance is on **Administration → Identity** (below)
   would run on it is refused when it starts ("the agent backend `x` is disabled by the platform
   administrator"), before any budget, key or runner pod, and the work item escalates to a person
   like any configuration refusal; a stage already running is not stopped. With no setting stored
-  (fresh install) only `claude-code` is enabled, as the page shows. Which backends a project may use is still set by the
-  deployment (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
-  `allowedBackends`) and by the project's policy. A runtime that fixes its own backend (`code`,
+  (fresh install) only `claude-code` is enabled, as the page shows. The project's allowed backends (`agent.allowed_backends` in its
+  settings) are enforced at stage start too, with the same refusal ("the agent backend `x` is not one
+  this project allows"), checked before the platform switch; an empty list restricts nothing. The
+  deployment's list (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
+  `allowedBackends`) only seeds new projects and the readiness check: it does not restrict existing ones. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
 - **Executors (where agent stages run).** Read-only. The card opens with the executor(s) this
   deployment runs ("Agent stages run on `k8s_job` in this deployment"), listed first as *In use*; the
@@ -2116,6 +2122,23 @@ one is stored, an empty field keeps it, and it is required the first time) and *
 the endpoint is not `host:port` or no kind is chosen. **Test the proxy** fetches a fixed echo page through the
 *stored* proxy and shows the exit IP, the country and the time, or the error; **Remove** asks first and deletes
 the sealed password. The API's refusals (409 without a secrets key, 422) are shown as returned.
+
+**MCP gateway.** [ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md): **Administration →
+MCP gateway** (`org_admin` only) sets, tests and removes the organisation's MCP gateway: Choregos calls a
+gateway that fronts MCP servers, it never is one. The **Mode** is `off` (kept, unused), `available` (a connector
+may go through it) or `required` (new direct `mcp` connectors are refused and existing ones are not called; the
+card lists the ones it stops, and a plugin's server is never stopped). The **Endpoint** is an http(s) URL without
+credentials, query or fragment; with **Routing** *in the path* it holds exactly one `{server}`, with *in a
+header* it holds none and **Server header** names the header. The **Auth type** is `bearer`, `header` (with the
+**Header name**), `oauth_client_credentials` (**Token URL**, **Client ID**, **Scope**, **Resource**, **Token
+audience**) or `jwt_assertion` (no secret; the **Audience** is required). The **Secret** is write-only: it is
+never shown, **set** says one is stored, an empty field keeps it, and it is required the first time unless the
+auth is a signed assertion. **Audience** and **Identity header** configure the signed assertion of the caller's
+identity. **Save** opens the gateway's host in the egress allowlist through the usual confirmation when it is
+not open yet. **Test the gateway** lists one server's tools through the stored gateway and shows the server,
+its version and the tool count, or the error. The *Signed assertion* block gives what the gateway needs: the
+**Issuer** and the **JWKS URL**, each with a copy button, the keys, and **Rotate key** (it creates the first key
+too). **Remove** asks first; it is refused while connectors go through the gateway, and the refusal names them.
 
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups

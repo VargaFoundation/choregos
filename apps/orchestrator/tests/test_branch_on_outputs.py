@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, recording_history, stage_result
 
 pytestmark = pytest.mark.asyncio
 
@@ -96,7 +95,7 @@ async def _replay_and_archive(handle: Any, name: str) -> None:
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / name
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

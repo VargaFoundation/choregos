@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 PARENT_ID = "wi-billing-api-varga_billing-api-123"
@@ -220,7 +219,7 @@ async def test_the_parent_waits_for_every_child_then_reads_what_they_concluded(
     ]
     assert signals.count("child_settled") == 2, "each child tells its parent: no wait for the re-read"
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-fan-out-S38-12.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

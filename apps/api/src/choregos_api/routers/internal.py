@@ -43,7 +43,7 @@ from ..db.models import (
     WorkItem,
 )
 from ..db.models import Finding as FindingRow
-from ..deps import Db, RunAuth
+from ..deps import Db, NetworkAuth, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
 from ..object_store import object_store
 from ..schemas import (
@@ -60,7 +60,7 @@ from ..schemas import (
 )
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..schemas.memory import RunMemoryHit, RunMemorySearch
-from ..schemas.network import NetworkDecisionBatch, RunNetwork
+from ..schemas.network import EgressToken, NetworkDecisionBatch, RunNetwork
 from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch, web_search
 from ..services.agent_hosted_sessions import session_network
 from ..services.artifacts import (
@@ -154,7 +154,7 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
 
 
 @router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")
-async def get_run_network(id: str, session: Db, claims: RunAuth) -> RunNetwork:
+async def get_run_network(id: str, session: Db, claims: NetworkAuth) -> RunNetwork:
     """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token.
     A hosted session's pod (S41-11) speaks as `session-{id}` and gets its agent version's network."""
     if id.startswith(SESSION_RUN_PREFIX):
@@ -169,7 +169,7 @@ async def get_run_network(id: str, session: Db, claims: RunAuth) -> RunNetwork:
     operation_id="postRunNetworkDecisions",
 )
 async def post_network_decisions(
-    id: str, body: NetworkDecisionBatch, session: Db, claims: RunAuth
+    id: str, body: NetworkDecisionBatch, session: Db, claims: NetworkAuth
 ) -> dict[str, int]:
     """What the proxy or the runner let through or refused: cumulative totals, replay-safe. A
     session's decisions are not stored yet (a `network_decisions` row belongs to a run): the batch
@@ -179,6 +179,20 @@ async def post_network_decisions(
         return {"accepted": len(body.decisions)}
     run, _, project = await _run_and_item(session, id)
     return {"accepted": await record_decisions(session, run, project, body)}
+
+
+@router.post("/runs/{id}/egress-token", response_model=EgressToken, operation_id="postRunEgressToken")
+async def post_egress_token(id: str, claims: RunAuth) -> EgressToken:
+    """The run's egress token (ADR 0115), for its run token: the runner puts it in the proxy
+    variables the agent inherits, so the agent can read its run's network and nothing else — not
+    its input, not its result, not its git token, not its tools."""
+    from datetime import UTC, datetime
+
+    from ..security import mint_egress_token
+
+    return EgressToken(
+        token=mint_egress_token(claims), expires_at=datetime.fromtimestamp(claims.expires_at, UTC)
+    )
 
 
 @router.post("/runs/{id}/result", operation_id="postRunResult")

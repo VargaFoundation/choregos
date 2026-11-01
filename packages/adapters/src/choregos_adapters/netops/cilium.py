@@ -261,7 +261,7 @@ class CiliumNetwork:
         )
         return {**result, "policy": f"{policy['kind']}/{policy['metadata']['name']}"}
 
-    async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def execute(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         if operation not in {o.name for o in self.operations}:
             raise AdapterError(f"cilium has no operation {operation}")
         try:
@@ -269,6 +269,8 @@ class CiliumNetwork:
         except TypeError as error:
             raise AdapterError(f"cilium {operation}: {error}") from error
         return result
+
+    executer = execute  # lang: fr-ok alias:internal
 
     async def test(self) -> dict[str, Any]:
         await self.kubernetes.get(f"{CILIUM_API}/ciliumclusterwidenetworkpolicies?limit=1")

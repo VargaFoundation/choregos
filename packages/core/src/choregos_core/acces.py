@@ -26,9 +26,9 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
-#: Les natures d'accès qu'on sait nommer. Le reste tombe dans `autre` plutôt que d'être
-#: perdu : un accès qu'on ne sait pas classer doit rester visible.
-NATURES = ("read", "write", "execute", "network", "tool", "autre")
+#: The access natures we can name. Anything else falls into `other` rather than being lost:
+#: an access we cannot classify must stay visible.
+NATURES = ("read", "write", "execute", "network", "tool", "other")
 
 
 @dataclass(slots=True)
@@ -51,11 +51,17 @@ class Acces:
             "target": self.cible,
             "requests": self.demandes,
             "refusals": self.refus,
-            "motifs": self.motifs,
-            # Former names, still emitted for one release (ADR 0046, S34-03).
-            "cible": self.cible,  # lang: fr-ok
-            "demandes": self.demandes,  # lang: fr-ok
-            "refus": self.refus,  # lang: fr-ok
+            "reasons": self.motifs,
+        }
+
+    def former_dict(self) -> dict[str, Any]:
+        """The line as it was served before S45-02: only `nature` and `motifs` differ."""
+        return {
+            "nature": "autre" if self.nature == "other" else self.nature,  # lang: fr-ok alias:external
+            "target": self.cible,
+            "requests": self.demandes,
+            "refusals": self.refus,
+            "motifs": self.motifs,  # lang: fr-ok alias:external
         }
 
 
@@ -75,18 +81,20 @@ class RapportAcces:
         return [a for a in self.acces if a.nature == nature]
 
     def to_dict(self) -> dict[str, Any]:
-        refusals = sum(a.refus for a in self.acces)
         return {
-            "evenements": self.evenements,
-            "refusals": refusals,
-            "refus": refusals,  # lang: fr-ok -- former name, emitted for one release (ADR 0046)
-            "deduites": self.deduites,
-            "acces": [a.to_dict() for a in self.acces],
+            "events": self.evenements,
+            "inferred": self.deduites,
+            "refusals": sum(a.refus for a in self.acces),
+            "access": [a.to_dict() for a in self.acces],
+            # Former names, emitted for one release (ADR 0046, S45-02).
+            "evenements": self.evenements,  # lang: fr-ok alias:external
+            "deduites": self.deduites,  # lang: fr-ok alias:external
+            "acces": [a.former_dict() for a in self.acces],  # lang: fr-ok alias:external
         }
 
 
 def _cle(nature: str, cible: str) -> tuple[str, str]:
-    return (nature if nature in NATURES else "autre", cible)
+    return (nature if nature in NATURES else "other", cible)
 
 
 def rapport_d_acces(evenements: list[dict[str, Any]]) -> RapportAcces:
@@ -106,7 +114,7 @@ def rapport_d_acces(evenements: list[dict[str, Any]]) -> RapportAcces:
         payload = evenement.get("payload") or {}
         if type_ == "session/request_permission":
             deduites += 1 if payload.get("inferred") else 0
-            nature = str(payload.get("kind") or "autre")
+            nature = str(payload.get("kind") or "other")
             cible = str(payload.get("target") or "")
             if not cible:
                 continue

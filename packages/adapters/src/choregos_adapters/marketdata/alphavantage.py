@@ -52,67 +52,69 @@ class AlphaVantageProvider(MarketDataProvider):
         self.full_history = not self._compact
 
     async def _query(self, params: dict[str, Any]) -> dict[str, Any]:
-        reponse = await self.fetch(URL, {**params, "apikey": self._api_key})
-        if reponse.status_code != 200:
-            raise MarketDataError(f"alphavantage: HTTP {reponse.status_code}")
+        response = await self.fetch(URL, {**params, "apikey": self._api_key})
+        if response.status_code != 200:
+            raise MarketDataError(f"alphavantage: HTTP {response.status_code}")
         try:
-            corps = reponse.json()
+            body = response.json()
         except ValueError as erreur:
             raise MarketDataError("alphavantage: unreadable answer") from erreur
-        if not isinstance(corps, dict):
+        if not isinstance(body, dict):
             raise MarketDataError("alphavantage: unexpected answer")
-        message = corps.get("Note") or corps.get("Information")
+        message = body.get("Note") or body.get("Information")
         if message:
             raise RateLimited(f"alphavantage: {self.scrub(str(message))[:200]}")
-        if "Error Message" in corps:
+        if "Error Message" in body:
             raise UnknownSymbol(f"alphavantage: unknown symbol {params.get('symbol', '')}")
-        return corps
+        return body
 
     async def get_bars(self, symbol: str, start: str, end: str) -> dict[str, Any]:
-        debut, fin = validate_range(start, end)
-        symbole = validate_symbol(symbol)
-        recent = self._compact or (date.today() - debut).days <= COMPACT_DAYS
-        corps = await self._query(
+        first_day, last_day = validate_range(start, end)
+        clean_symbol = validate_symbol(symbol)
+        recent = self._compact or (date.today() - first_day).days <= COMPACT_DAYS
+        body = await self._query(
             {
                 "function": "TIME_SERIES_DAILY",
-                "symbol": symbole,
+                "symbol": clean_symbol,
                 "outputsize": "compact" if recent else "full",
             }
         )
-        serie = corps.get("Time Series (Daily)")
-        if not isinstance(serie, dict):
-            raise UnknownSymbol(f"alphavantage: no daily series for {symbole}")
+        series_data = body.get("Time Series (Daily)")
+        if not isinstance(series_data, dict):
+            raise UnknownSymbol(f"alphavantage: no daily series for {clean_symbol}")
         bars = []
-        for jour, ligne in serie.items():
+        for day, row in series_data.items():
             bar = make_bar(
-                str(jour),
-                ligne.get("1. open"),
-                ligne.get("2. high"),
-                ligne.get("3. low"),
-                ligne.get("4. close"),
-                ligne.get("5. volume"),
+                str(day),
+                row.get("1. open"),
+                row.get("2. high"),
+                row.get("3. low"),
+                row.get("4. close"),
+                row.get("5. volume"),
             )
             if bar is not None:
                 bars.append(bar)
-        return answer(symbol, self.name, finish_bars(bars, debut, fin), currency=None, adjusted=False)
+        return answer(
+            symbol, self.name, finish_bars(bars, first_day, last_day), currency=None, adjusted=False
+        )
 
     async def get_instrument(self, symbol: str) -> dict[str, Any]:
-        symbole = validate_symbol(symbol)
-        corps = await self._query({"function": "SYMBOL_SEARCH", "keywords": symbole})
-        for candidat in corps.get("bestMatches") or []:
-            if str(candidat.get("1. symbol", "")).upper() == symbole.upper():
-                reponse: dict[str, Any] = {
+        clean_symbol = validate_symbol(symbol)
+        body = await self._query({"function": "SYMBOL_SEARCH", "keywords": clean_symbol})
+        for candidate in body.get("bestMatches") or []:
+            if str(candidate.get("1. symbol", "")).upper() == clean_symbol.upper():
+                response: dict[str, Any] = {
                     "symbol": symbol,
-                    "type": _TYPES.get(str(candidat.get("3. type", "")).lower(), "unknown"),
+                    "type": _TYPES.get(str(candidate.get("3. type", "")).lower(), "unknown"),
                     "provider": self.name,
                 }
-                for cle, source in (
-                    ("name", candidat.get("2. name")),
-                    ("currency", candidat.get("8. currency")),
+                for key, source in (
+                    ("name", candidate.get("2. name")),
+                    ("currency", candidate.get("8. currency")),
                 ):
                     if source:
-                        reponse[cle] = source
-                return reponse
+                        response[key] = source
+                return response
         raise UnknownSymbol(f"alphavantage: unknown symbol {symbol}")
 
     async def test(self) -> dict[str, Any]:

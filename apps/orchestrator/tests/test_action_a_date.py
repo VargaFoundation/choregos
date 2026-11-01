@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from collections.abc import Iterator
 from datetime import datetime, timedelta
@@ -18,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 
 HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 
@@ -179,8 +178,8 @@ async def test_l_action_attend_j_moins_10_puis_part_et_le_ticket_l_apprend_par_u
     ]
     assert "action_settled" in signaux, "l'ActionWorkflow prévient le ticket : il n'attend pas sa relecture"
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
-        english = os.environ["CHOREGOS_ARCHIVER_HISTORIQUE"] == "english"  # S34-02
+    if recording_history():
+        english = recording_history() == "english"  # S34-02
         cible = HISTORIQUES / ("wi-action-english-S34-02.json" if english else "wi-action-a-date-S20-05.json")
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
 

@@ -28,8 +28,9 @@ fields:
    finds a commit's runs through that label. Runs that carry `choregos/project`, `choregos/work-item`
    and `choregos/run-id` are also mapped back to their work item.
 2. Point Tekton's CloudEvents sink at the platform:
-   `{{webhook_url:tekton}}?jeton=<the shared webhook secret>`. Tekton's sink is configured by URL and
-   cannot add a header, which is why the secret travels in the query string.
+   `{{webhook_url:tekton}}?token=<the shared webhook secret>`. Tekton's sink is configured by URL and
+   cannot add a header, which is why the secret travels in the query string. `?jeton=` is still
+   accepted, so a sink URL set up earlier keeps working.
 
 ## Permissions
 

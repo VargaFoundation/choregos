@@ -94,15 +94,15 @@ def mock(handler: Any) -> httpx.MockTransport:
 def fixed(
     status: int = 200, *, text: str | None = None, body: Any = None
 ) -> tuple[httpx.MockTransport, list]:
-    vues: list[httpx.Request] = []
+    seen: list[httpx.Request] = []
 
-    def handler(requete: httpx.Request) -> httpx.Response:
-        vues.append(requete)
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
         if body is not None:
             return httpx.Response(status, json=body)
         return httpx.Response(status, text=text or "")
 
-    return mock(handler), vues
+    return mock(handler), seen
 
 
 async def no_sleep(_: float) -> None:
@@ -113,30 +113,30 @@ async def no_sleep(_: float) -> None:
 
 
 async def test_stooq_parse_sorted_deduplicated_floats_and_the_url() -> None:
-    transport, vues = fixed(text=STOOQ_CSV)
-    fournisseur = StooqProvider(transport=transport)
-    reponse = await fournisseur.get_bars("AAPL", "2024-01-02", "2024-01-04")
-    assert [b["date"] for b in reponse["bars"]] == ["2024-01-02", "2024-01-03", "2024-01-04"]
-    assert reponse["provider"] == "stooq" and reponse["adjusted"] is False
-    premiere = reponse["bars"][0]
-    assert premiere["close"] == 185.64 and premiere["adj_close"] is None
-    assert isinstance(premiere["volume"], float)
-    url = vues[0].url
+    transport, seen = fixed(text=STOOQ_CSV)
+    adapter = StooqProvider(transport=transport)
+    response = await adapter.get_bars("AAPL", "2024-01-02", "2024-01-04")
+    assert [b["date"] for b in response["bars"]] == ["2024-01-02", "2024-01-03", "2024-01-04"]
+    assert response["provider"] == "stooq" and response["adjusted"] is False
+    first_bar = response["bars"][0]
+    assert first_bar["close"] == 185.64 and first_bar["adj_close"] is None
+    assert isinstance(first_bar["volume"], float)
+    url = seen[0].url
     assert (url.host, url.path) == ("stooq.com", "/q/d/l/")
     assert dict(url.params) == {"s": "aapl.us", "d1": "20240102", "d2": "20240104", "i": "d"}
 
 
 async def test_stooq_appends_the_api_key_only_when_configured_and_never_returns_it() -> None:
-    transport, vues = fixed(text=STOOQ_CSV)
+    transport, seen = fixed(text=STOOQ_CSV)
     await StooqProvider(transport=transport, api_key=KEY).get_bars("AAPL", "2024-01-02", "2024-01-04")
-    assert vues[0].url.params["apikey"] == KEY
-    transport, vues = fixed(text=STOOQ_CSV)
-    reponse = await StooqProvider(transport=transport).get_bars("AAPL", "2024-01-02", "2024-01-04")
-    assert "apikey" not in vues[0].url.params and KEY not in json.dumps(reponse)
+    assert seen[0].url.params["apikey"] == KEY
+    transport, seen = fixed(text=STOOQ_CSV)
+    response = await StooqProvider(transport=transport).get_bars("AAPL", "2024-01-02", "2024-01-04")
+    assert "apikey" not in seen[0].url.params and KEY not in json.dumps(response)
 
 
 @pytest.mark.parametrize(
-    ("symbole", "attendu"),
+    ("ticker", "wanted"),
     [
         ("AAPL", "aapl.us"),
         ("BRK-B", "brk-b.us"),
@@ -148,8 +148,8 @@ async def test_stooq_appends_the_api_key_only_when_configured_and_never_returns_
         ("EURUSD=X", "eurusd"),
     ],
 )
-def test_stooq_suffix_map(symbole: str, attendu: str) -> None:
-    assert StooqProvider().stooq_symbol(symbole) == attendu
+def test_stooq_suffix_map(ticker: str, wanted: str) -> None:
+    assert StooqProvider().stooq_symbol(ticker) == wanted
 
 
 def test_stooq_suffix_map_is_configurable_and_an_unmapped_suffix_is_refused() -> None:
@@ -160,7 +160,7 @@ def test_stooq_suffix_map_is_configurable_and_an_unmapped_suffix_is_refused() ->
 
 
 @pytest.mark.parametrize(
-    ("texte", "erreur"),
+    ("raw", "error_type"),
     [
         ("No data", UnknownSymbol),
         ("Exceeded the daily hits limit", RateLimited),
@@ -171,23 +171,23 @@ def test_stooq_suffix_map_is_configurable_and_an_unmapped_suffix_is_refused() ->
         ("Symbol,Price\nAAPL,1", MarketDataError),
     ],
 )
-async def test_stooq_named_errors(texte: str, erreur: type[Exception]) -> None:
-    transport, _ = fixed(text=texte)
-    with pytest.raises(erreur) as capture:
+async def test_stooq_named_errors(raw: str, error_type: type[Exception]) -> None:
+    transport, _ = fixed(text=raw)
+    with pytest.raises(error_type) as capture:
         await StooqProvider(transport=transport).get_bars("ZZZZ", "2024-01-02", "2024-01-04")
-    assert type(capture.value) is erreur
+    assert type(capture.value) is error_type
 
 
 # ── yahoo ────────────────────────────────────────────────────────────────────────────────
 
 
 async def test_yahoo_parse_local_dates_adjusted_close_and_skips_null_rows() -> None:
-    transport, vues = fixed(body=YAHOO_CHART)
-    reponse = await YahooProvider(transport=transport).get_bars("AAPL", "2024-01-02", "2024-01-04")
-    assert [b["date"] for b in reponse["bars"]] == ["2024-01-02", "2024-01-03"]
-    assert reponse["currency"] == "USD" and reponse["adjusted"] is True
-    assert reponse["bars"][0]["adj_close"] == 184.73 and reponse["bars"][0]["close"] == 185.64
-    url = vues[0].url
+    transport, seen = fixed(body=YAHOO_CHART)
+    response = await YahooProvider(transport=transport).get_bars("AAPL", "2024-01-02", "2024-01-04")
+    assert [b["date"] for b in response["bars"]] == ["2024-01-02", "2024-01-03"]
+    assert response["currency"] == "USD" and response["adjusted"] is True
+    assert response["bars"][0]["adj_close"] == 184.73 and response["bars"][0]["close"] == 185.64
+    url = seen[0].url
     assert (url.host, url.path) == ("query1.finance.yahoo.com", "/v8/finance/chart/AAPL")
     assert url.params["interval"] == "1d" and url.params["includeAdjustedClose"] == "true"
     assert int(url.params["period1"]) == 1704153600 and int(url.params["period2"]) == 1704412800
@@ -195,8 +195,8 @@ async def test_yahoo_parse_local_dates_adjusted_close_and_skips_null_rows() -> N
 
 async def test_yahoo_instrument_and_unknown_symbol_and_rate_limit() -> None:
     transport, _ = fixed(body=YAHOO_CHART)
-    fiche = await YahooProvider(transport=transport).get_instrument("AAPL")
-    assert fiche == {
+    record = await YahooProvider(transport=transport).get_instrument("AAPL")
+    assert record == {
         "symbol": "AAPL",
         "type": "stock",
         "provider": "yahoo",
@@ -214,63 +214,63 @@ async def test_yahoo_instrument_and_unknown_symbol_and_rate_limit() -> None:
 
 
 async def test_yahoo_etf_type() -> None:
-    corps = json.loads(json.dumps(YAHOO_CHART))
-    corps["chart"]["result"][0]["meta"]["instrumentType"] = "ETF"
-    transport, _ = fixed(body=corps)
+    payload = json.loads(json.dumps(YAHOO_CHART))
+    payload["chart"]["result"][0]["meta"]["instrumentType"] = "ETF"
+    transport, _ = fixed(body=payload)
     assert (await YahooProvider(transport=transport).get_instrument("SPY"))["type"] == "etf"
 
 
 async def test_a_5xx_is_retried_a_bounded_number_of_times_then_named() -> None:
-    appels: list[int] = []
+    made: list[int] = []
 
     def handler(_: httpx.Request) -> httpx.Response:
-        appels.append(1)
+        made.append(1)
         return httpx.Response(503)
 
-    fournisseur = YahooProvider(transport=mock(handler), sleep=no_sleep)
+    adapter = YahooProvider(transport=mock(handler), sleep=no_sleep)
     with pytest.raises(MarketDataError, match="unavailable after 3 attempts"):
-        await fournisseur.get_bars("AAPL", "2024-01-02", "2024-01-04")
-    assert len(appels) == 3
+        await adapter.get_bars("AAPL", "2024-01-02", "2024-01-04")
+    assert len(made) == 3
 
 
 async def test_a_429_is_not_retried() -> None:
-    appels: list[int] = []
+    made: list[int] = []
 
     def handler(_: httpx.Request) -> httpx.Response:
-        appels.append(1)
+        made.append(1)
         return httpx.Response(429)
 
     with pytest.raises(RateLimited):
         await YahooProvider(transport=mock(handler)).get_bars("AAPL", "2024-01-02", "2024-01-04")
-    assert len(appels) == 1
+    assert len(made) == 1
 
 
 # ── alphavantage ─────────────────────────────────────────────────────────────────────────
 
 
 async def test_alphavantage_parse_and_url() -> None:
-    transport, vues = fixed(body=ALPHA_DAILY)
-    reponse = await AlphaVantageProvider(transport=transport, api_key=KEY).get_bars(
+    transport, seen = fixed(body=ALPHA_DAILY)
+    response = await AlphaVantageProvider(transport=transport, api_key=KEY).get_bars(
         "AAPL", "2024-01-02", "2024-01-31"
     )
-    assert [b["date"] for b in reponse["bars"]] == ["2024-01-02", "2024-01-04"]
-    assert reponse["bars"][1]["close"] == 181.91 and reponse["bars"][0]["adj_close"] is None
-    assert reponse["adjusted"] is False
-    url = vues[0].url
+    assert [b["date"] for b in response["bars"]] == ["2024-01-02", "2024-01-04"]
+    assert response["bars"][1]["close"] == 181.91 and response["bars"][0]["adj_close"] is None
+    assert response["adjusted"] is False
+    url = seen[0].url
     assert (url.host, url.path) == ("www.alphavantage.co", "/query")
     assert url.params["function"] == "TIME_SERIES_DAILY" and url.params["apikey"] == KEY
     assert url.params["outputsize"] == "full", "a start far in the past asks for the full series"
-    assert KEY not in json.dumps(reponse)
+    assert KEY not in json.dumps(response)
 
 
 async def test_alphavantage_compact_asks_for_the_recent_days_whatever_the_range() -> None:
     """A free key refuses `full` (a premium feature): in `compact`, a multi-year range still gets the
     last 100 trading days, and the provider says it lacks the full history (S38-21)."""
-    transport, vues = fixed(body=ALPHA_DAILY)
+    transport, seen = fixed(body=ALPHA_DAILY)
     compact = AlphaVantageProvider(transport=transport, api_key=KEY, outputsize="compact")
-    reponse = await compact.get_bars("AAPL", "2019-01-02", "2024-01-31")
-    assert vues[0].url.params["outputsize"] == "compact"
-    assert [b["date"] for b in reponse["bars"]] == ["2024-01-02", "2024-01-04"]
+    response = await compact.get_bars("AAPL", "2019-01-02", "2024-01-31")
+    assert seen[0].url.params["outputsize"] == "compact"
+    assert [b["date"] for b in response["bars"]] == ["2024-01-02", "2024-01-04"]
     assert compact.full_history is False
     assert AlphaVantageProvider(api_key=KEY).full_history is True
     with pytest.raises(MarketDataError):
@@ -294,7 +294,7 @@ async def test_tiingo_closes_are_split_adjusted_like_the_other_sources() -> None
     """A composite compares `close`, and Yahoo's is split-adjusted: Tiingo's raw close before a split
     would read as a 300 % divergence. The request runs to today, so a later split rescales it too;
     the key travels in the header, never in the URL (S38-22)."""
-    transport, vues = fixed(body=TIINGO_ROWS)
+    transport, seen = fixed(body=TIINGO_ROWS)
     response = await TiingoProvider(transport=transport, api_key=KEY).get_bars(
         "AAPL", "2020-08-28", "2020-08-31"
     )
@@ -303,10 +303,10 @@ async def test_tiingo_closes_are_split_adjusted_like_the_other_sources() -> None
     assert before["close"] == pytest.approx(499.23 / 4) and before["volume"] == pytest.approx(46907479 * 4)
     assert day["close"] == 129.04, "the split's own day is already post-split"
     assert before["adj_close"] == 121.37 and response["adjusted"] is True
-    url = vues[0].url
+    url = seen[0].url
     assert (url.host, url.path) == ("api.tiingo.com", "/tiingo/daily/aapl/prices")
     assert url.params["startDate"] == "2020-08-28" and url.params["endDate"] >= date.today().isoformat()
-    assert vues[0].headers["Authorization"] == f"Token {KEY}"
+    assert seen[0].headers["Authorization"] == f"Token {KEY}"
     assert KEY not in str(url) and KEY not in json.dumps(response)
 
 
@@ -353,7 +353,7 @@ def test_alphavantage_requires_its_key() -> None:
 
 
 @pytest.mark.parametrize(
-    ("corps", "erreur"),
+    ("payload", "error_type"),
     [
         ({"Error Message": "Invalid API call."}, UnknownSymbol),
         ({"Note": "Thank you for using Alpha Vantage! 25 requests per day."}, RateLimited),
@@ -361,10 +361,10 @@ def test_alphavantage_requires_its_key() -> None:
     ],
 )
 async def test_alphavantage_named_errors_and_the_key_is_scrubbed(
-    corps: dict, erreur: type[Exception]
+    payload: dict, error_type: type[Exception]
 ) -> None:
-    transport, _ = fixed(body=corps)
-    with pytest.raises(erreur) as capture:
+    transport, _ = fixed(body=payload)
+    with pytest.raises(error_type) as capture:
         await AlphaVantageProvider(transport=transport, api_key=KEY).get_bars(
             "AAPL", "2024-01-02", "2024-01-04"
         )
@@ -372,31 +372,31 @@ async def test_alphavantage_named_errors_and_the_key_is_scrubbed(
 
 
 async def test_alphavantage_instrument() -> None:
-    corps = {
+    payload = {
         "bestMatches": [
             {"1. symbol": "SPYG", "2. name": "SPDR Growth", "3. type": "ETF", "8. currency": "USD"},
             {"1. symbol": "SPY", "2. name": "SPDR S&P 500", "3. type": "ETF", "8. currency": "USD"},
         ]
     }
-    transport, _ = fixed(body=corps)
-    fiche = await AlphaVantageProvider(transport=transport, api_key=KEY).get_instrument("SPY")
-    assert fiche["name"] == "SPDR S&P 500" and fiche["type"] == "etf" and fiche["currency"] == "USD"
+    transport, _ = fixed(body=payload)
+    record = await AlphaVantageProvider(transport=transport, api_key=KEY).get_instrument("SPY")
+    assert record["name"] == "SPDR S&P 500" and record["type"] == "etf" and record["currency"] == "USD"
 
 
 async def test_a_network_failure_never_carries_the_url_or_the_key() -> None:
-    def handler(requete: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError(f"boom {requete.url}")
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"boom {request.url}")
 
-    fournisseur = AlphaVantageProvider(transport=mock(handler), api_key=KEY, sleep=no_sleep)
+    adapter = AlphaVantageProvider(transport=mock(handler), api_key=KEY, sleep=no_sleep)
     with pytest.raises(MarketDataError) as capture:
-        await fournisseur.get_bars("AAPL", "2024-01-02", "2024-01-04")
+        await adapter.get_bars("AAPL", "2024-01-02", "2024-01-04")
     assert KEY not in str(capture.value) and "alphavantage.co" not in str(capture.value)
-    assert KEY not in repr(fournisseur)
+    assert KEY not in repr(adapter)
 
 
 # ── validation ───────────────────────────────────────────────────────────────────────────
 
-HOSTILES = [
+HOSTILE_SYMBOLS = [
     "AAPL/../../admin",
     "AAPL?x=1",
     "AAPL#frag",
@@ -414,9 +414,9 @@ HOSTILES = [
 ]
 
 
-@pytest.mark.parametrize("symbole", HOSTILES)
+@pytest.mark.parametrize("ticker", HOSTILE_SYMBOLS)
 @pytest.mark.parametrize(
-    "fabrique",
+    "factory",
     [
         StooqProvider,
         YahooProvider,
@@ -424,51 +424,49 @@ HOSTILES = [
         lambda **k: TiingoProvider(api_key=KEY, **k),
     ],
 )
-async def test_a_symbol_cannot_change_the_url(symbole: str, fabrique: Any) -> None:
-    vues: list[httpx.Request] = []
+async def test_a_symbol_cannot_change_the_url(ticker: str, factory: Any) -> None:
+    seen: list[httpx.Request] = []
 
-    def handler(requete: httpx.Request) -> httpx.Response:
-        vues.append(requete)
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
         return httpx.Response(200, text="")
 
-    fournisseur = fabrique(transport=mock(handler))
-    for appel in (
-        fournisseur.get_bars(symbole, "2024-01-02", "2024-01-04"),
-        fournisseur.get_instrument(symbole),
+    adapter = factory(transport=mock(handler))
+    for pending_call in (
+        adapter.get_bars(ticker, "2024-01-02", "2024-01-04"),
+        adapter.get_instrument(ticker),
     ):
         with pytest.raises(MarketDataError):
-            await appel
-    assert vues == [], "nothing left the process"
+            await pending_call
+    assert seen == [], "nothing left the process"
 
 
 async def test_a_valid_symbol_with_special_characters_stays_one_path_segment() -> None:
-    transport, vues = fixed(body=YAHOO_CHART)
+    transport, seen = fixed(body=YAHOO_CHART)
     await YahooProvider(transport=transport).get_bars("^GSPC", "2024-01-02", "2024-01-04")
     await YahooProvider(transport=transport).get_bars("EURUSD=X", "2024-01-02", "2024-01-04")
-    assert [v.url.host for v in vues] == ["query1.finance.yahoo.com"] * 2
-    assert vues[0].url.raw_path.startswith(b"/v8/finance/chart/%5EGSPC?")
-    assert vues[1].url.raw_path.startswith(b"/v8/finance/chart/EURUSD%3DX?")
+    assert [v.url.host for v in seen] == ["query1.finance.yahoo.com"] * 2
+    assert seen[0].url.raw_path.startswith(b"/v8/finance/chart/%5EGSPC?")
+    assert seen[1].url.raw_path.startswith(b"/v8/finance/chart/EURUSD%3DX?")
 
 
 @pytest.mark.parametrize(
-    ("debut", "fin"),
+    ("start_date", "end_date"),
     [("2024-1-2", "2024-01-04"), ("20240102", "2024-01-04"), ("2024-02-30", "2024-03-01"),
      ("2024-01-05", "2024-01-04"), ("2024-01-02", "demain"), ("", "")],
 )  # fmt: skip
-async def test_dates_are_iso_and_ordered(debut: str, fin: str) -> None:
-    fournisseur = FakeMarketData()
+async def test_dates_are_iso_and_ordered(start_date: str, end_date: str) -> None:
+    adapter = FakeMarketData()
     with pytest.raises(MarketDataError):
-        await fournisseur.get_bars("AAPL", debut, fin)
+        await adapter.get_bars("AAPL", start_date, end_date)
 
 
-async def test_executer_refuses_an_unexpected_argument_and_an_unknown_operation() -> None:
-    fournisseur = FakeMarketData()
+async def test_execute_refuses_an_unexpected_argument_and_an_unknown_operation() -> None:
+    adapter = FakeMarketData()
     with pytest.raises(MarketDataError, match="unexpected"):
-        await fournisseur.executer(
-            "get_bars", {"symbol": "A", "start": "2024-01-02", "end": "2024-01-03", "x": 1}
-        )
+        await adapter.execute("get_bars", {"symbol": "A", "start": "2024-01-02", "end": "2024-01-03", "x": 1})
     with pytest.raises(AdapterError, match="no operation"):
-        await fournisseur.executer("delete_everything", {})
+        await adapter.execute("delete_everything", {})
 
 
 # ── composite ────────────────────────────────────────────────────────────────────────────
@@ -503,25 +501,25 @@ async def test_composite_falls_back_in_order_on_error_and_on_empty() -> None:
     c = provider_with([bar("2024-01-02", 10.0)], "c")
     d = provider_with([bar("2024-01-02", 10.0)], "d")
     composite = CompositeProvider([("a", a), ("b", b), ("c", c), ("d", d)], cross_check=False)
-    reponse = await composite.get_bars("X", "2024-01-02", "2024-01-03")
-    assert reponse["provider"] == "c" and reponse["cross_check"] is None
-    assert [e["source"] for e in reponse["fallbacks"]] == ["a", "b"]
+    response = await composite.get_bars("X", "2024-01-02", "2024-01-03")
+    assert response["provider"] == "c" and response["cross_check"] is None
+    assert [e["source"] for e in response["fallbacks"]] == ["a", "b"]
     assert d.calls == [], "without cross_check the later sources are not asked"
 
 
 async def test_composite_cross_check_math() -> None:
-    primaire = provider_with(
+    primary_rows = provider_with(
         [bar("2024-01-02", 100.0), bar("2024-01-03", 100.0), bar("2024-01-04", 100.0)], "a"
     )
     second = provider_with([bar("2024-01-03", 101.0), bar("2024-01-04", 110.0), bar("2024-01-05", 1.0)], "b")
-    reponse = await CompositeProvider([("a", primaire), ("b", second)], tolerance=0.02).get_bars(
+    response = await CompositeProvider([("a", primary_rows), ("b", second)], tolerance=0.02).get_bars(
         "X", "2024-01-02", "2024-01-05"
     )
-    assert reponse["provider"] == "a" and reponse["bars"][0]["date"] == "2024-01-02"
-    controle = reponse["cross_check"]
-    assert controle["source"] == "b" and controle["common_days"] == 2
-    assert controle["max_rel_diff"] == pytest.approx(0.10)
-    assert controle["diverging_days"] == 1 and controle["diverging_dates"] == ["2024-01-04"]
+    assert response["provider"] == "a" and response["bars"][0]["date"] == "2024-01-02"
+    check = response["cross_check"]
+    assert check["source"] == "b" and check["common_days"] == 2
+    assert check["max_rel_diff"] == pytest.approx(0.10)
+    assert check["diverging_days"] == 1 and check["diverging_dates"] == ["2024-01-04"]
 
 
 def test_compare_closes_edges() -> None:
@@ -536,33 +534,33 @@ async def test_composite_cross_check_uses_the_next_source_that_answers() -> None
     a = provider_with([bar("2024-01-02", 100.0)], "a")
     b = provider_with(UnknownSymbol("b: no"), "b")
     c = provider_with([bar("2024-01-02", 100.5)], "c")
-    reponse = await CompositeProvider([("a", a), ("b", b), ("c", c)]).get_bars(
+    response = await CompositeProvider([("a", a), ("b", b), ("c", c)]).get_bars(
         "X", "2024-01-02", "2024-01-03"
     )
-    assert reponse["cross_check"]["source"] == "c" and reponse["cross_check"]["diverging_days"] == 0
-    assert [e["source"] for e in reponse["fallbacks"]] == ["b"]
+    assert response["cross_check"]["source"] == "c" and response["cross_check"]["diverging_days"] == 0
+    assert [e["source"] for e in response["fallbacks"]] == ["b"]
 
 
 async def test_composite_never_takes_a_recent_days_source_as_the_primary() -> None:
     """Listed first, a source with the recent days only does not give the bars: the next full source
     does, and the partial one cross-checks it on the days both have (S38-21)."""
-    longue = [bar("2019-01-02", 50.0), bar("2024-01-02", 100.0), bar("2024-01-03", 101.0)]
-    recente = provider_with([bar("2024-01-02", 100.0), bar("2024-01-03", 101.0)], "av")
-    recente.full_history = False
-    reponse = await CompositeProvider([("av", recente), ("yahoo", provider_with(longue, "yahoo"))]).get_bars(
+    long_run = [bar("2019-01-02", 50.0), bar("2024-01-02", 100.0), bar("2024-01-03", 101.0)]
+    recent = provider_with([bar("2024-01-02", 100.0), bar("2024-01-03", 101.0)], "av")
+    recent.full_history = False
+    response = await CompositeProvider(
+        [("av", recent), ("yahoo", provider_with(long_run, "yahoo"))]
+    ).get_bars("X", "2019-01-02", "2024-01-03")
+    assert response["provider"] == "yahoo" and response["bars"] == long_run
+    assert response["cross_check"]["source"] == "av" and response["cross_check"]["common_days"] == 2
+
+    after = await CompositeProvider([("yahoo", provider_with(long_run, "yahoo")), ("av", recent)]).get_bars(
         "X", "2019-01-02", "2024-01-03"
     )
-    assert reponse["provider"] == "yahoo" and reponse["bars"] == longue
-    assert reponse["cross_check"]["source"] == "av" and reponse["cross_check"]["common_days"] == 2
+    assert after["provider"] == "yahoo" and after["cross_check"]["common_days"] == 2
 
-    apres = await CompositeProvider([("yahoo", provider_with(longue, "yahoo")), ("av", recente)]).get_bars(
-        "X", "2019-01-02", "2024-01-03"
-    )
-    assert apres["provider"] == "yahoo" and apres["cross_check"]["common_days"] == 2
-
-    seule = CompositeProvider([("av", recente), ("yahoo", provider_with(RateLimited("y"), "yahoo"))])
+    alone = CompositeProvider([("av", recent), ("yahoo", provider_with(RateLimited("y"), "yahoo"))])
     with pytest.raises(MarketDataError) as capture:
-        await seule.get_bars("X", "2019-01-02", "2024-01-03")
+        await alone.get_bars("X", "2019-01-02", "2024-01-03")
     assert not isinstance(capture.value, UnknownSymbol), "the symbol exists, its history is missing"
 
 
@@ -587,8 +585,8 @@ async def test_composite_instrument_prefers_a_source_that_knows_the_type() -> No
     stooq = StooqProvider()
     composite = CompositeProvider([("stooq", stooq), ("yahoo", YahooProvider(transport=transport))])
     assert (await composite.get_instrument("AAPL"))["type"] == "stock"
-    seul = CompositeProvider([("stooq", stooq)])
-    assert (await seul.get_instrument("AAPL"))["type"] == "unknown"
+    single = CompositeProvider([("stooq", stooq)])
+    assert (await single.get_instrument("AAPL"))["type"] == "unknown"
 
 
 def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
@@ -647,8 +645,8 @@ async def test_fake_is_deterministic_business_days_only_and_window_independent()
     assert all(date.fromisoformat(d).weekday() < 5 for d in dates)
     fenetre = await FakeMarketData().get_bars("AAPL", "2024-02-01", "2024-02-29")
     assert fenetre["bars"] == [x for x in a["bars"] if "2024-02-01" <= x["date"] <= "2024-02-29"]
-    autre = await FakeMarketData().get_bars("MSFT", "2024-01-01", "2024-03-31")
-    assert autre["bars"] != a["bars"]
+    another = await FakeMarketData().get_bars("MSFT", "2024-01-01", "2024-03-31")
+    assert another["bars"] != a["bars"]
     for x in a["bars"]:
         assert x["low"] <= min(x["open"], x["close"]) <= max(x["open"], x["close"]) <= x["high"]
         assert isinstance(x["close"], float) and x["close"] > 0
@@ -657,16 +655,16 @@ async def test_fake_is_deterministic_business_days_only_and_window_independent()
 
 
 async def test_fake_scripting_fixtures_instruments_errors_and_calls() -> None:
-    faux = FakeMarketData(
+    scripted = FakeMarketData(
         fixtures={"FIX": [bar("2024-01-03", 2.0), bar("2024-01-02", 1.0), bar("2023-01-02", 9.0)]},
         instruments={"FIX": {"type": "etf", "name": "Fixture"}},
         errors={"BOOM": RateLimited("fake: slow down")},
     )
-    reponse = await faux.get_bars("FIX", "2024-01-01", "2024-01-31")
-    assert [b["close"] for b in reponse["bars"]] == [1.0, 2.0]
-    assert (await faux.get_instrument("FIX"))["type"] == "etf"
+    response = await scripted.get_bars("FIX", "2024-01-01", "2024-01-31")
+    assert [b["close"] for b in response["bars"]] == [1.0, 2.0]
+    assert (await scripted.get_instrument("FIX"))["type"] == "etf"
     with pytest.raises(RateLimited):
-        await faux.get_bars("BOOM", "2024-01-01", "2024-01-31")
+        await scripted.get_bars("BOOM", "2024-01-01", "2024-01-31")
     with pytest.raises(UnknownSymbol):
-        await faux.get_instrument("NOPE1")
-    assert [c[0] for c in faux.calls] == ["get_bars", "get_instrument", "get_bars", "get_instrument"]
+        await scripted.get_instrument("NOPE1")
+    assert [c[0] for c in scripted.calls] == ["get_bars", "get_instrument", "get_bars", "get_instrument"]

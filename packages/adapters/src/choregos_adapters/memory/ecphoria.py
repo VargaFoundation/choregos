@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""MemoryAdapter Ecphoria : mémoire bi-temporelle et base de connaissance (docs/plan/04).
+"""The Ecphoria MemoryAdapter: bi-temporal memory and knowledge base (docs/plan/04).
 
-Deux règles tiennent tout : lecture à **timeout court** (une mémoire lente ne bloque jamais
-un stage — on rend un pack vide), et écriture **gouvernée** (l'orchestrateur écrit, l'agent
-propose).
+Two rules hold everything together: reads with a **short timeout** (a slow memory never blocks a
+stage — an empty pack is returned), and **governed** writes (the orchestrator writes, the agent
+proposes).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from ..errors import UpstreamError
 
 
 class EcphoriaMemory:
-    """Client REST d'Ecphoria, un tenant par projet."""
+    """The Ecphoria REST client, one tenant per project."""
 
     def __init__(
         self,
@@ -74,7 +74,7 @@ class EcphoriaMemory:
         return time.monotonic() < self._breaker_until
 
     def _trip(self) -> None:
-        """Circuit-breaker : après 3 échecs, on cesse d'attendre pendant 30 secondes."""
+        """Circuit breaker: after 3 failures, stop waiting for 30 seconds."""
         import time
 
         self._failures += 1
@@ -97,7 +97,7 @@ class EcphoriaMemory:
     async def context_pack(
         self, project: str, query: str, paths: list[str], budget_tokens: int, kinds: list[str] | None = None
     ) -> ContextPack:
-        """Endpoint composite E-05. Toute panne rend un pack **vide**, jamais une erreur."""
+        """Composite endpoint E-05. Any failure returns an **empty** pack, never an error."""
         if budget_tokens <= 0 or self._circuit_open():
             return ContextPack.empty(query)
         try:
@@ -144,7 +144,7 @@ class EcphoriaMemory:
         )
 
     async def write_fact(self, project: str, fact: Fact) -> str:
-        """Upsert idempotent par `external_id` (E-06) ; la supersession est faite par Ecphoria."""
+        """Idempotent upsert by `external_id` (E-06); Ecphoria does the supersession."""
         body = _fact_body(fact)
         if fact.external_id:
             payload = await self._request(
@@ -212,7 +212,7 @@ class EcphoriaMemory:
             timeout=max(self.read_timeout * 3, 1.0),
             json={"query": query, "k": k},
         )
-        # Un hit porte la mémoire et son score : `{"memory": {…}, "score": 0.42}`.
+        # A hit carries the memory and its score: `{"memory": {…}, "score": 0.42}`.
         return [
             _memory({**hit.get("memory", hit), "score": hit.get("score")})
             for hit in payload.get("results", [])
@@ -236,11 +236,10 @@ class EcphoriaMemory:
 
 
 def _written_id(payload: dict[str, Any]) -> str:
-    """L'identifiant d'une écriture.
+    """The identifier of a write.
 
-    Ecphoria répond `{memory, outcome}` sur un ajout et `{id, …}` sur un upsert ou une
-    proposition : les deux formes désignent la même chose, on ne veut pas que l'appelant
-    ait à le savoir.
+    Ecphoria answers `{memory, outcome}` on an add and `{id, …}` on an upsert or a proposal: both
+    shapes mean the same thing, and the caller should not have to know.
     """
     if payload.get("id"):
         return str(payload["id"])
@@ -248,11 +247,11 @@ def _written_id(payload: dict[str, Any]) -> str:
 
 
 def _fact_body(fact: Fact) -> dict[str, Any]:
-    """Corps d'écriture Ecphoria.
+    """The Ecphoria write body.
 
-    `kind`, `paths` et `provenance` sont des notions Choregos : Ecphoria les porte dans
-    `metadata`, et c'est là que le context pack va les relire pour filtrer par type et par
-    chemin autorisé. Les envoyer à la racine revenait à les perdre en silence.
+    `kind`, `paths` and `provenance` are Choregos notions: Ecphoria carries them in `metadata`,
+    and that is where the context pack reads them back to filter by type and by allowed path.
+    Sending them at the root amounted to losing them silently.
     """
     body: dict[str, Any] = {
         "subject": fact.subject,
@@ -301,10 +300,10 @@ def _memory_item(payload: dict[str, Any]) -> MemoryItem:
 
 
 def _memory(payload: dict[str, Any]) -> Memory:
-    """Mémoire Ecphoria → modèle Choregos.
+    """An Ecphoria memory → the Choregos model.
 
-    Ecphoria range le type, les chemins et la provenance dans `metadata`, et nomme son cycle
-    de vie `state` (`active` / `pending` / `superseded` / `expired`). On traduit les deux.
+    Ecphoria stores the type, the paths and the provenance in `metadata`, and names its life cycle
+    `state` (`active` / `pending` / `superseded` / `expired`). Both are translated.
     """
     metadata = payload.get("metadata") or {}
     provenance = metadata.get("provenance") or payload.get("provenance") or {}

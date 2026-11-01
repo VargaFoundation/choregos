@@ -33,9 +33,9 @@ BASE = "https://query1.finance.yahoo.com/v8/finance/chart/"
 _TYPES = {"EQUITY": "stock", "ETF": "etf"}
 
 
-def _timestamp(jour: Any, *, fin_de_journee: bool = False) -> int:
-    moment = datetime.combine(jour, time.min, tzinfo=UTC)
-    return int((moment + timedelta(days=1 if fin_de_journee else 0)).timestamp())
+def _timestamp(day: Any, *, end_of_day: bool = False) -> int:
+    moment = datetime.combine(day, time.min, tzinfo=UTC)
+    return int((moment + timedelta(days=1 if end_of_day else 0)).timestamp())
 
 
 class YahooProvider(MarketDataProvider):
@@ -43,47 +43,47 @@ class YahooProvider(MarketDataProvider):
 
     async def _chart(self, symbol: str, params: dict[str, Any]) -> dict[str, Any]:
         # The symbol is validated (no `/`, `?`, `#`, `..`) AND percent-encoded: it stays one path segment.
-        reponse = await self.fetch(BASE + quote(validate_symbol(symbol), safe=""), params)
+        response = await self.fetch(BASE + quote(validate_symbol(symbol), safe=""), params)
         try:
-            corps = reponse.json()
-            chart = corps["chart"]
+            body = response.json()
+            chart = body["chart"]
         except (ValueError, KeyError, TypeError) as erreur:
-            raise MarketDataError(f"yahoo: unreadable answer (HTTP {reponse.status_code})") from erreur
-        erreur_yahoo = chart.get("error")
-        if erreur_yahoo or reponse.status_code == 404:
-            code = (erreur_yahoo or {}).get("code", "")
+            raise MarketDataError(f"yahoo: unreadable answer (HTTP {response.status_code})") from erreur
+        yahoo_error = chart.get("error")
+        if yahoo_error or response.status_code == 404:
+            code = (yahoo_error or {}).get("code", "")
             raise UnknownSymbol(f"yahoo: {code or 'not found'} for {symbol}")
-        if reponse.status_code != 200 or not chart.get("result"):
-            raise MarketDataError(f"yahoo: HTTP {reponse.status_code}")
-        resultat: dict[str, Any] = chart["result"][0]
-        return resultat
+        if response.status_code != 200 or not chart.get("result"):
+            raise MarketDataError(f"yahoo: HTTP {response.status_code}")
+        result: dict[str, Any] = chart["result"][0]
+        return result
 
     async def get_bars(self, symbol: str, start: str, end: str) -> dict[str, Any]:
-        debut, fin = validate_range(start, end)
-        resultat = await self._chart(
+        first_day, last_day = validate_range(start, end)
+        result = await self._chart(
             symbol,
             {
-                "period1": _timestamp(debut),
-                "period2": _timestamp(fin, fin_de_journee=True),
+                "period1": _timestamp(first_day),
+                "period2": _timestamp(last_day, end_of_day=True),
                 "interval": "1d",
                 "events": "div,splits",
                 "includeAdjustedClose": "true",
             },
         )
-        meta = resultat.get("meta") or {}
+        meta = result.get("meta") or {}
         decalage = int(meta.get("gmtoffset") or 0)
-        indicateurs = resultat.get("indicators") or {}
+        indicateurs = result.get("indicators") or {}
         cotation = (indicateurs.get("quote") or [{}])[0]
         ajuste = ((indicateurs.get("adjclose") or [{}])[0]).get("adjclose")
 
-        def at(serie: Any, i: int) -> Any:
-            return serie[i] if isinstance(serie, list) and i < len(serie) else None
+        def at(series_data: Any, i: int) -> Any:
+            return series_data[i] if isinstance(series_data, list) and i < len(series_data) else None
 
         bars = []
-        for i, ts in enumerate(resultat.get("timestamp") or []):
-            jour = (datetime.fromtimestamp(int(ts) + decalage, tz=UTC)).date().isoformat()
+        for i, ts in enumerate(result.get("timestamp") or []):
+            day = (datetime.fromtimestamp(int(ts) + decalage, tz=UTC)).date().isoformat()
             bar = make_bar(
-                jour,
+                day,
                 at(cotation.get("open"), i),
                 at(cotation.get("high"), i),
                 at(cotation.get("low"), i),
@@ -96,27 +96,27 @@ class YahooProvider(MarketDataProvider):
         return answer(
             symbol,
             self.name,
-            finish_bars(bars, debut, fin),
+            finish_bars(bars, first_day, last_day),
             currency=meta.get("currency"),
             adjusted=ajuste is not None,
         )
 
     async def get_instrument(self, symbol: str) -> dict[str, Any]:
-        resultat = await self._chart(symbol, {"range": "1d", "interval": "1d"})
-        meta = resultat.get("meta") or {}
-        reponse: dict[str, Any] = {
+        result = await self._chart(symbol, {"range": "1d", "interval": "1d"})
+        meta = result.get("meta") or {}
+        response: dict[str, Any] = {
             "symbol": symbol,
             "type": _TYPES.get(str(meta.get("instrumentType", "")).upper(), "unknown"),
             "provider": self.name,
         }
-        for cle, source in (
+        for key, source in (
             ("name", meta.get("longName") or meta.get("shortName")),
             ("currency", meta.get("currency")),
             ("exchange", meta.get("fullExchangeName") or meta.get("exchangeName")),
         ):
             if source:
-                reponse[cle] = source
-        return reponse
+                response[key] = source
+        return response
 
     async def test(self) -> dict[str, Any]:
         await self.get_instrument("AAPL")

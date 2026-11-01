@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Gateway de modèles en mémoire : clés virtuelles à plafond dur et dépenses simulées."""
+"""In-memory model gateway: virtual keys with a hard cap and simulated spend."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ DEFAULT_MODELS = [
 
 
 class FakeGateway:
-    """Gateway de test : `record_usage()` simule des requêtes, le plafond coupe comme LiteLLM."""
+    """Test gateway: `record_usage()` simulates requests, the cap cuts off like LiteLLM."""
 
     def __init__(
         self,
@@ -59,8 +59,8 @@ class FakeGateway:
         # the gateway cannot do (no hard budget, no spend readback) declares just that.
         self.capabilities = GATEWAY_CAPABILITIES if capabilities is None else frozenset(capabilities)
         self.models = models or list(DEFAULT_MODELS)
-        # `auto_usage` simule la consommation d'un agent : utile pour la démo et les
-        # captures d'écran, inutile (et faussant) pour les tests de coût.
+        # `auto_usage` simulates an agent's consumption: useful for the demo and for screenshots,
+        # useless (and misleading) for cost tests.
         self.auto_usage = auto_usage
         self.keys: dict[str, VirtualKey] = {}
         self.spends: dict[str, Spend] = {}
@@ -107,7 +107,7 @@ class FakeGateway:
     def record_usage(
         self, key_id: str, tokens_in: int, tokens_out: int, cached: int = 0, model: str = "platform/standard"
     ) -> Spend:
-        """Simule des requêtes ; refuse au-delà du plafond, comme le vrai gateway."""
+        """Simulates requests; refuses beyond the cap, like the real gateway."""
         gateway_model = next((m for m in self.models if model in {m.model_name, m.litellm_model}), None)
         cost = 0.0
         if gateway_model:
@@ -156,7 +156,7 @@ class FakeGateway:
 
 
 class BudgetExceededError(RuntimeError):
-    """Le plafond dur de la clé virtuelle a coupé la requête."""
+    """The virtual key's hard cap cut the request."""
 
 
-BudgetExceeded = BudgetExceededError  # alias historique
+BudgetExceeded = BudgetExceededError  # historical alias

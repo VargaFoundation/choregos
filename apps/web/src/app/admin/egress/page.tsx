@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { NetworkActivityCard } from "@/components/admin/network-activity";
 import { NetworkCeilingCard } from "@/components/admin/network-ceiling";
+import { McpGatewayCard } from "@/components/admin/mcp-gateway";
 import { OutboundProxyCard } from "@/components/admin/outbound-proxy";
 import { PlatformChangeBlock } from "@/components/egress/egress-modal";
 import { Alert, Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
@@ -208,6 +209,7 @@ export default function EgressPage() {
           <NetworkActivityCard org={org} />
         </div>
       )}
+      <McpGatewayCard org={org} canEdit={orgAdmin} />
     </div>
   );
 }

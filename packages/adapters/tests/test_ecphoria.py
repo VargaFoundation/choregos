@@ -1,4 +1,4 @@
-"""Ecphoria : lecture à timeout court qui ne bloque jamais, écriture gouvernée, disjoncteur."""
+"""Ecphoria: reads with a short timeout that never block, governed writes, circuit breaker."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from ._transport import Fil
 URL = "http://ecphoria.test"
 
 
-def memoire(fil: Fil, **kw: object) -> EcphoriaMemory:
+def memory_for(fil: Fil, **kw: object) -> EcphoriaMemory:
     return EcphoriaMemory(URL, token="tok", client=fil.client(), **kw)  # type: ignore[arg-type]
 
 
-async def test_le_context_pack_porte_le_tenant_et_traduit_la_reponse() -> None:
+async def test_the_context_pack_carries_the_tenant_and_translates_the_answer() -> None:
     fil = Fil(
         {
             ("POST", "/api/v1/context-pack"): (
@@ -32,7 +32,7 @@ async def test_le_context_pack_porte_le_tenant_et_traduit_la_reponse() -> None:
             )
         }
     )
-    pack = await memoire(fil).context_pack("billing", "avoirs", ["src/"], 2000, kinds=["convention"])
+    pack = await memory_for(fil).context_pack("billing", "credit notes", ["src/"], 2000, kinds=["convention"])
     assert pack.tokens_estimated == 120 and pack.truncated and pack.memories[0].id == "m1"
     assert pack.related_items[0].key == "K-1"
     assert fil.requetes[0].headers["X-Ecphoria-Tenant"] == "billing"
@@ -40,33 +40,33 @@ async def test_le_context_pack_porte_le_tenant_et_traduit_la_reponse() -> None:
     assert fil.corps(0)["budget_tokens"] == 2000 and fil.corps(0)["kinds"] == ["convention"]
 
 
-async def test_une_panne_rend_un_pack_vide_et_trois_pannes_ouvrent_le_disjoncteur() -> None:
-    fil = Fil({("POST", "/api/v1/context-pack"): httpx.ReadTimeout("lent")})
-    m = memoire(fil)
+async def test_an_outage_returns_an_empty_pack_and_three_open_the_breaker() -> None:
+    fil = Fil({("POST", "/api/v1/context-pack"): httpx.ReadTimeout("slow")})
+    m = memory_for(fil)
     for _ in range(3):
         pack = await m.context_pack("billing", "q", [], 500)
         assert pack.memories == [] and pack.query == "q"
     assert len(fil.requetes) == 3
     await m.context_pack("billing", "q", [], 500)
-    assert len(fil.requetes) == 3, "disjoncteur ouvert : on n'attend plus"
-    assert (await memoire(Fil()).context_pack("billing", "q", [], 0)).memories == [], (
-        "budget nul : pas d'appel"
+    assert len(fil.requetes) == 3, "breaker open: no more waiting"
+    assert (await memory_for(Fil()).context_pack("billing", "q", [], 0)).memories == [], (
+        "zero budget: no call"
     )
 
 
-async def test_une_erreur_http_de_lecture_ne_remonte_jamais() -> None:
+async def test_an_http_error_on_read_never_bubbles_up() -> None:
     fil = Fil({("POST", "/api/v1/context-pack"): (500, "boom")})
-    assert (await memoire(fil).context_pack("billing", "q", [], 100)).memories == []
+    assert (await memory_for(fil).context_pack("billing", "q", [], 100)).memories == []
 
 
-async def test_ecrire_un_fait_range_les_notions_choregos_dans_metadata() -> None:
+async def test_writing_a_fact_stores_the_choregos_notions_in_metadata() -> None:
     fil = Fil(
         {
             ("PUT", "/api/v1/memories/by-external-id"): (200, {"id": "m-42"}),
             ("POST", "/api/v1/memories"): (201, {"memory": {"id": "m-43"}, "outcome": "added"}),
         }
     )
-    fait = Fact(
+    fact = Fact(
         kind="convention",
         subject="tests",
         content="pytest -q",
@@ -74,30 +74,30 @@ async def test_ecrire_un_fait_range_les_notions_choregos_dans_metadata() -> None
         paths=["tests/"],
         provenance=Provenance(source="orchestrator", run_id="r-1"),
     )
-    m = memoire(fil)
-    assert await m.write_fact("billing", fait) == "m-42"
-    corps = fil.corps(0)
+    m = memory_for(fil)
+    assert await m.write_fact("billing", fact) == "m-42"
+    body = fil.corps(0)
     assert (
-        corps["external_id"] == "conv-1"
-        and corps["metadata"]["kind"] == "convention"
-        and corps["metadata"]["paths"] == ["tests/"]
+        body["external_id"] == "conv-1"
+        and body["metadata"]["kind"] == "convention"
+        and body["metadata"]["paths"] == ["tests/"]
     )
-    assert "kind" not in corps, "à la racine, Ecphoria l'ignorait en silence"
+    assert "kind" not in body, "at the root, Ecphoria silently ignored it"
     assert await m.write_fact("billing", Fact(kind="run_lesson", subject="s", content="c")) == "m-43"
 
 
-async def test_proposer_un_fait_le_met_en_attente_avec_sa_provenance() -> None:
+async def test_proposing_a_fact_puts_it_on_hold_with_its_provenance() -> None:
     fil = Fil({("POST", "/api/v1/memories"): (201, {"id": "p-1"})})
     prov = Provenance(source="agent", run_id="r-9")
     assert (
-        await memoire(fil).propose_fact("billing", Fact(kind="hotspot", subject="s", content="c"), prov)
+        await memory_for(fil).propose_fact("billing", Fact(kind="hotspot", subject="s", content="c"), prov)
         == "p-1"
     )
     assert fil.requetes[0].url.params["status"] == "pending"
     assert fil.corps(0)["metadata"]["provenance"]["run_id"] == "r-9"
 
 
-async def test_la_recherche_et_les_propositions_en_attente_se_traduisent() -> None:
+async def test_the_search_and_the_pending_proposals_are_translated() -> None:
     fil = Fil(
         {
             ("POST", "/api/v1/memories/search"): (
@@ -124,34 +124,34 @@ async def test_la_recherche_et_les_propositions_en_attente_se_traduisent() -> No
             ("POST", "/api/v1/pending/p1/accept"): (200, {}),
         }
     )
-    m = memoire(fil)
+    m = memory_for(fil)
     (hit,) = await m.search("billing", "q", 5)
     assert (
         hit.kind == "incident" and hit.score == 0.4 and hit.status == "rejected" and hit.proposed_by == "r-1"
     )
-    (attente,) = await m.list_pending("billing")
-    assert attente.status == "pending" and await m.accept_pending("billing", "p1") is True
+    (waiting,) = await m.list_pending("billing")
+    assert waiting.status == "pending" and await m.accept_pending("billing", "p1") is True
     assert _memory({"id": "x"}).kind == "other"
 
 
-async def test_l_ingestion_par_lot_et_le_test_de_connexion() -> None:
+async def test_batch_ingestion_and_the_connection_test() -> None:
     fil = Fil({("POST", "/api/v1/memories/batch"): (200, {}), ("GET", "/health"): (200, {"status": "ok"})})
-    m = memoire(fil)
+    m = memory_for(fil)
     await m.ingest_events("billing", [])
-    assert fil.requetes == [], "rien à ingérer, rien envoyé"
+    assert fil.requetes == [], "nothing to ingest, nothing sent"
     await m.ingest_events(
         "billing", [{"subject": "s", "content": "c", "kind": "decision", "external_id": "e-1"}]
     )
     assert fil.corps(0)["memories"][0]["metadata"]["provenance"] == {"source": "choregos", "ref": "e-1"}
     assert (await m.test())["ok"] is True
-    assert (await memoire(Fil({("GET", "/health"): (503, "down")})).test())["ok"] is False
+    assert (await memory_for(Fil({("GET", "/health"): (503, "down")})).test())["ok"] is False
 
 
 async def test_named_and_global_memories_travel_in_their_own_tenant_and_namespace() -> None:
     """S40-11: a global memory is the organisation's tenant; every namespace but the project's shared one
     is sent in full in `X-Ecphoria-Namespace`."""
     fil = Fil({("POST", "/api/v1/context-pack"): (200, {})})
-    m = memoire(fil, tenant="billing")
+    m = memory_for(fil, tenant="billing")
     for namespace in (
         "billing",
         "billing#agent:architect",
@@ -171,4 +171,4 @@ async def test_named_and_global_memories_travel_in_their_own_tenant_and_namespac
 async def test_a_namespace_that_is_none_of_the_four_forms_is_refused() -> None:
     fil = Fil({("POST", "/api/v1/context-pack"): (200, {})})
     with pytest.raises(ValueError, match="malformed"):
-        await memoire(fil).context_pack("org:varga", "q", [], 100)
+        await memory_for(fil).context_pack("org:varga", "q", [], 100)

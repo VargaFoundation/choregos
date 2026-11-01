@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les connecteurs d'identité (ADR 0034) : un annuaire où naissent, vivent et partent des comptes."""
+"""The identity connectors (ADR 0034): a directory where accounts are born, live and leave."""
 
-from .entra import OPERATIONS_ENTRA, EntraIdentity, HorsDeLUnite
+from __future__ import annotations
 
-__all__ = ["OPERATIONS_ENTRA", "EntraIdentity", "HorsDeLUnite"]
+from .entra import OPERATIONS_ENTRA, EntraIdentity, HorsDeLUnite, OutsideUnit
+
+__all__ = ["OPERATIONS_ENTRA", "EntraIdentity", "HorsDeLUnite", "OutsideUnit"]

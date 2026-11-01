@@ -12,22 +12,21 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture
-from .test_gabarit_livraison_logicielle import (
-    _demarrer,
-    _etat,
-    _jusqu_a,
-    _projet_dev,
-    _ticket,
-    _verificateur_de_prod,
+from .conftest import Fixture, recording_history
+from .kits.software_delivery import (
+    create_dev_project,
+    create_ticket,
+    prod_verifier_result,
+    start_interpreter,
+    wait_for_state,
 )
+from .kits.train_and_work_item import wait_until_state
 
 pytestmark = pytest.mark.asyncio
 
@@ -73,8 +72,8 @@ async def _undecide(item_id: str) -> int:
 
 async def _live_ticket(setup: Fixture) -> tuple[str, str, str]:
     """A `dev-simple` work item already in production, waiting for `t-verify-prod`."""
-    projet_id = await _projet_dev(setup)
-    item_id, cle = await _ticket(setup, projet_id, 4, "dev-simple")
+    projet_id = await create_dev_project(setup)
+    item_id, cle = await create_ticket(setup, projet_id, 4, "dev-simple")
     await _set_state(item_id, "live")
     return projet_id, item_id, cle
 
@@ -92,21 +91,23 @@ async def test_a_restart_after_a_failed_attempt_plays_the_next_one(
 
     def verifier(stage_input: Any) -> Any:
         played.append(stage_input.run_id)
-        return FAILURE if len(played) == 1 else _verificateur_de_prod()
+        return FAILURE if len(played) == 1 else prod_verifier_result()
 
     setup.adapters.executor.handler = verifier
     async with worker_factory():
-        first = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
-        await _etat(first, "needs_human")
+        first = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        await wait_for_state(first, "needs_human")
         # The abandon is proposed once the escalation is mirrored: no write of it is still in flight.
-        await _jusqu_a(first, "status", lambda s: bool(s["pending_request"]))
+        await wait_until_state(first, "status", lambda s: bool(s["pending_request"]))
         await first.terminate(reason="the interpreter died (#497)")
         # Where dev #4 stood: in `live`, its first verification failed, no interpreter.
         await _set_state(item_id, "live")
         assert [status for _, status in await _runs(item_id)] == ["failed"]
 
-        handle = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
-        settled = await _jusqu_a(handle, "status", lambda s: s["state"] in ("verified", "needs_human"))
+        handle = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        settled = await wait_until_state(
+            handle, "status", lambda s: s["state"] in ("verified", "needs_human")
+        )
         assert settled["state"] == "verified", f"escalated without a new attempt: {settled}"
         outcome = await asyncio.wait_for(handle.result(), timeout=60)
         history = await handle.fetch_history()
@@ -116,7 +117,7 @@ async def test_a_restart_after_a_failed_attempt_plays_the_next_one(
     assert [run_id.rsplit("-", 1)[1] for run_id, _ in runs] == ["1", "2"], runs
     assert len(played) == 2 and played[1].endswith("-t-verify-prod-2"), played
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-restarted-new-attempt-S22-45.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -133,7 +134,7 @@ async def test_a_restart_while_the_attempt_runs_awaits_it(
     reset_settings_cache()
     projet_id, item_id, cle = await _live_ticket(setup)
     executor = setup.adapters.executor
-    executor.handler = lambda _stage_input: _verificateur_de_prod()
+    executor.handler = lambda _stage_input: prod_verifier_result()
     real_start = executor.start
 
     async def start_and_keep_running(spec: StageJobSpec) -> ExecRef:
@@ -143,16 +144,16 @@ async def test_a_restart_while_the_attempt_runs_awaits_it(
 
     executor.start = start_and_keep_running
     async with worker_factory():
-        first = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
-        await _jusqu_a(first, "status", lambda s: bool(s["current_run"]))
+        first = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        await wait_until_state(first, "status", lambda s: bool(s["current_run"]))
         for _ in range(100):
             if [status for _, status in await _runs(item_id)] == ["running"]:
                 break
             await asyncio.sleep(0.1)
         await first.terminate(reason="the interpreter died (#497)")
 
-        handle = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
-        status = await _jusqu_a(handle, "status", lambda s: bool(s["current_run"]))
+        handle = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        status = await wait_until_state(handle, "status", lambda s: bool(s["current_run"]))
         ((run_id, _),) = await _runs(item_id)
         assert status["current_run"] == run_id and run_id.endswith("-t-verify-prod-1"), status
         executor.statuses[run_id] = ExecStatus(
@@ -173,9 +174,9 @@ async def test_a_restart_after_a_succeeded_run_reads_it_back(
     stage again and could push its commits twice."""
     projet_id, item_id, cle = await _live_ticket(setup)
     executor = setup.adapters.executor
-    executor.handler = lambda _stage_input: _verificateur_de_prod()
+    executor.handler = lambda _stage_input: prod_verifier_result()
     async with worker_factory():
-        first = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
+        first = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
         await asyncio.wait_for(first.result(), timeout=60)
         # Where the work item stands if the interpreter died between the run and its decision:
         # its state not moved, and the run not marked decided (#552).
@@ -183,7 +184,7 @@ async def test_a_restart_after_a_succeeded_run_reads_it_back(
         assert await _undecide(item_id) == 1, "the applied decision is recorded on the run"
         assert [status for _, status in await _runs(item_id)] == ["succeeded"]
 
-        handle = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
+        handle = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
         outcome = await asyncio.wait_for(handle.result(), timeout=60)
 
     assert outcome["state"] == "verified", outcome

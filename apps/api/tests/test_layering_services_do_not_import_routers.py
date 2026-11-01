@@ -7,10 +7,8 @@ from pathlib import Path
 
 from .layering_kit import API_PACKAGE, resolve
 
-# Measured at 87ea1831d (services/readiness.py), counting statements. Lower it in the PR that
-# removes the import; raise it only for a mechanical rename that splits a statement, saying so in
-# the PR body, or by amending ADR 0099.
-CEILING = 1
+# A hard rule: no module outside routers/ (and main.py) imports a router. S47-08 removed the last one.
+CEILING = 0
 
 
 def _is_router(module: str, routers: str) -> bool:
@@ -49,8 +47,8 @@ def count_router_imports(package_dir: Path, package: str) -> int:
 def test_services_do_not_import_routers() -> None:
     count = count_router_imports(API_PACKAGE, "choregos_api")
     assert count <= CEILING, (
-        f"{count} router import statements outside routers/, the ceiling is {CEILING}: "
-        "a new import is refused (ADR 0099: share helpers through services)"
+        f"{count} router import statements outside routers/: services never import routers "
+        "(ADR 0099: share helpers through services or core)"
     )
 
 

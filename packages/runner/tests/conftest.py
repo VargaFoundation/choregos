@@ -127,6 +127,9 @@ class FakeInternalClient:
         #: Le jeton git que l'API frapperait pour ce run (S22-07), et combien de fois on l'a demandé.
         self.git_token: str | None = None
         self.git_token_calls = 0
+        #: The egress token the internal API would mint (ADR 0115); an exception: an older API.
+        self.egress_token: str | BaseException = "egress-tok"
+        self.egress_token_calls = 0
 
     async def fetch_skills(self) -> list[dict[str, Any]]:
         return list(self.skills)
@@ -188,6 +191,12 @@ class FakeInternalClient:
     async def fetch_git_token(self) -> str | None:
         self.git_token_calls += 1
         return self.git_token
+
+    async def fetch_egress_token(self) -> str:
+        self.egress_token_calls += 1
+        if isinstance(self.egress_token, BaseException):
+            raise self.egress_token
+        return self.egress_token
 
     async def aclose(self) -> None:
         return None

@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Microsoft Entra ID par Microsoft Graph (ADR 0034, S20-03) : les gestes d'une arrivée et d'un
-départ — créer un compte, l'ajouter à des groupes, le désactiver, révoquer ses sessions.
+"""Microsoft Entra ID through Microsoft Graph (ADR 0034, S20-03): the gestures of a joiner and a
+leaver — create an account, add it to groups, disable it, revoke its sessions.
 
-Chaque geste est IDEMPOTENT, parce qu'une action gouvernée se rejoue (ADR 0035) :
-- `create_user` cherche d'abord par UPN : un compte qui existe est rendu, pas recréé ;
-- `add_to_group` tient « already exist » pour un succès, `remove_from_group` un 404 aussi ;
-- `disable_user` et `revoke_sessions` sont sans effet la seconde fois.
+Every gesture is IDEMPOTENT, because a governed action is replayed (ADR 0035):
+- `create_user` looks up the UPN first: an account that exists is returned, not recreated;
+- `add_to_group` takes "already exist" for a success, `remove_from_group` takes a 404 too;
+- `disable_user` and `revoke_sessions` have no effect the second time.
 
-Une UNITÉ ADMINISTRATIVE borne ce que la plateforme touche : un compte créé y entre, et un geste
-sur un compte qui n'y est pas est refusé, nommé — la défense en profondeur d'un rôle Graph déjà
-délimité à l'unité. `Retry-After` est respecté (`RestClient`).
+An ADMINISTRATIVE UNIT bounds what the platform touches: an account it creates enters it, and a
+gesture on an account that is not in it is refused, by name — the defence in depth of a Graph role
+already scoped to the unit. `Retry-After` is honoured (`RestClient`).
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ from ..http.rest import RestClient
 from ..registry import schema_d_entree as _schema
 
 _UPN = _schema("upn")
-_GROUPE = _schema("upn", "group_id")
+_GROUP = _schema("upn", "group_id")
 
-#: (nom, accès, description, schéma d'entrée) — ce que le type déclare au registre.
+#: (name, access, description, input schema) — what the type declares to the registry.
 OPERATIONS_ENTRA: tuple[tuple[str, str, str, dict[str, Any]], ...] = (
     ("get_user", "read", "reads an account by its UPN", _UPN),
     (
@@ -35,15 +35,15 @@ OPERATIONS_ENTRA: tuple[tuple[str, str, str, dict[str, Any]], ...] = (
         "creates an account in the administrative unit (idempotent by UPN)",
         _schema("upn", "display_name", mail_nickname={"type": "string"}),
     ),
-    ("add_to_group", "write", "adds an account to a group (already a member: done)", _GROUPE),
-    ("remove_from_group", "write", "removes an account from a group (not a member: done)", _GROUPE),
+    ("add_to_group", "write", "adds an account to a group (already a member: done)", _GROUP),
+    ("remove_from_group", "write", "removes an account from a group (not a member: done)", _GROUP),
     ("disable_user", "write", "disables an account", _UPN),
     ("revoke_sessions", "write", "revokes every session of an account", _UPN),
 )
 
 
-class HorsDeLUnite(AdapterError):  # noqa: N818 - un refus nommé, pas une panne
-    """Un geste sur un compte que l'unité administrative de la plateforme ne contient pas."""
+class OutsideUnit(AdapterError):  # noqa: N818 - a named refusal, not a failure
+    """A gesture on an account that the platform's administrative unit does not contain."""
 
 
 class EntraIdentity:
@@ -61,15 +61,19 @@ class EntraIdentity:
         self.tenant_id = tenant_id
         self._client_id = client_id
         self._secret = client_secret
-        self.unite = administrative_unit_id
+        self.unit = administrative_unit_id
         self.graph_url = graph_url.rstrip("/")
         self.login_url = login_url.rstrip("/")
         self._http = httpx.AsyncClient(timeout=20.0, transport=transport)
-        self._jeton: tuple[str, float] | None = None
+        self._token: tuple[str, float] | None = None
+
+    @property
+    def unite(self) -> str | None:  # lang: fr-ok alias:internal
+        return self.unit
 
     async def _graph(self) -> RestClient:
-        if self._jeton is None or self._jeton[1] < time.monotonic() + 60:
-            reponse = await self._http.post(
+        if self._token is None or self._token[1] < time.monotonic() + 60:
+            response = await self._http.post(
                 f"{self.login_url}/{self.tenant_id}/oauth2/v2.0/token",
                 data={
                     "grant_type": "client_credentials",
@@ -78,18 +82,18 @@ class EntraIdentity:
                     "scope": "https://graph.microsoft.com/.default",
                 },
             )
-            if reponse.status_code >= 400:
+            if response.status_code >= 400:
                 raise UpstreamError(
-                    "entra", f"jeton refusé ({reponse.status_code})", status_code=reponse.status_code
+                    "entra", f"token refused ({response.status_code})", status_code=response.status_code
                 )
-            corps = reponse.json()
-            self._jeton = (
-                str(corps["access_token"]),
-                time.monotonic() + float(corps.get("expires_in", 3600)),
+            body = response.json()
+            self._token = (
+                str(body["access_token"]),
+                time.monotonic() + float(body.get("expires_in", 3600)),
             )
         return RestClient(
             self.graph_url,
-            headers={"Authorization": f"Bearer {self._jeton[0]}", "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {self._token[0]}", "Content-Type": "application/json"},
             client=self._http,
             service="entra",
         )
@@ -98,35 +102,35 @@ class EntraIdentity:
         graph = await self._graph()
         try:
             return dict(await graph.request("GET", f"/users/{upn}"))
-        except UpstreamError as erreur:
-            if erreur.status_code == 404:
+        except UpstreamError as error:
+            if error.status_code == 404:
                 return None
             raise
 
-    async def _dans_l_unite(self, user_id: str) -> None:
-        if not self.unite:
+    async def _in_unit(self, user_id: str) -> None:
+        if not self.unit:
             return
         graph = await self._graph()
-        unites = await graph.request("GET", f"/users/{user_id}/memberOf/microsoft.graph.administrativeUnit")
-        if not any(u.get("id") == self.unite for u in (unites or {}).get("value", [])):
-            raise HorsDeLUnite(f"le compte {user_id} n'est pas dans l'unité administrative {self.unite}")
+        units = await graph.request("GET", f"/users/{user_id}/memberOf/microsoft.graph.administrativeUnit")
+        if not any(u.get("id") == self.unit for u in (units or {}).get("value", [])):
+            raise OutsideUnit(f"account {user_id} is not in the administrative unit {self.unit}")
 
-    async def _existant(self, upn: str) -> dict[str, Any]:
-        compte = await self.get_user(upn)
-        if compte is None:
-            raise AdapterError(f"aucun compte {upn}")
-        await self._dans_l_unite(str(compte["id"]))
-        return compte
+    async def _existing(self, upn: str) -> dict[str, Any]:
+        account = await self.get_user(upn)
+        if account is None:
+            raise AdapterError(f"no account {upn}")
+        await self._in_unit(str(account["id"]))
+        return account
 
     async def create_user(
         self, upn: str, display_name: str, mail_nickname: str | None = None, **_: Any
     ) -> dict[str, Any]:
-        existant = await self.get_user(upn)
-        if existant is not None:
-            await self._dans_l_unite(str(existant["id"]))
-            return {"id": existant["id"], "upn": upn, "created": False}
+        existing = await self.get_user(upn)
+        if existing is not None:
+            await self._in_unit(str(existing["id"]))
+            return {"id": existing["id"], "upn": upn, "created": False}
         graph = await self._graph()
-        cree = await graph.request(
+        created = await graph.request(
             "POST",
             "/users",
             json={
@@ -134,75 +138,81 @@ class EntraIdentity:
                 "displayName": display_name,
                 "mailNickname": mail_nickname or upn.split("@", maxsplit=1)[0],
                 "userPrincipalName": upn,
-                # Un mot de passe que personne ne connaît : l'arrivant le définit à sa première
-                # connexion (ou l'authentification sans mot de passe le remplace).
+                # A password that nobody knows: the joiner sets it at the first sign-in (or
+                # passwordless authentication replaces it).
                 "passwordProfile": {
                     "forceChangePasswordNextSignIn": True,
-                    "password": _mot_de_passe_jetable(),
+                    "password": _throwaway_password(),
                 },
             },
         )
-        if self.unite:
+        if self.unit:
             await graph.request(
                 "POST",
-                f"/directory/administrativeUnits/{self.unite}/members/$ref",
-                json={"@odata.id": f"{self.graph_url}/directoryObjects/{cree['id']}"},
+                f"/directory/administrativeUnits/{self.unit}/members/$ref",
+                json={"@odata.id": f"{self.graph_url}/directoryObjects/{created['id']}"},
             )
-        return {"id": cree["id"], "upn": upn, "created": True}
+        return {"id": created["id"], "upn": upn, "created": True}
 
     async def add_to_group(self, upn: str, group_id: str, **_: Any) -> dict[str, Any]:
-        compte = await self._existant(upn)
+        account = await self._existing(upn)
         graph = await self._graph()
         try:
             await graph.request(
                 "POST",
                 f"/groups/{group_id}/members/$ref",
-                json={"@odata.id": f"{self.graph_url}/directoryObjects/{compte['id']}"},
+                json={"@odata.id": f"{self.graph_url}/directoryObjects/{account['id']}"},
             )
-        except UpstreamError as erreur:
-            if erreur.status_code == 400 and "already exist" in str(erreur):
+        except UpstreamError as error:
+            if error.status_code == 400 and "already exist" in str(error):
                 return {"upn": upn, "group_id": group_id, "added": False}
             raise
         return {"upn": upn, "group_id": group_id, "added": True}
 
     async def remove_from_group(self, upn: str, group_id: str, **_: Any) -> dict[str, Any]:
-        compte = await self._existant(upn)
+        account = await self._existing(upn)
         graph = await self._graph()
         try:
-            await graph.request("DELETE", f"/groups/{group_id}/members/{compte['id']}/$ref")
-        except UpstreamError as erreur:
-            if erreur.status_code == 404:
+            await graph.request("DELETE", f"/groups/{group_id}/members/{account['id']}/$ref")
+        except UpstreamError as error:
+            if error.status_code == 404:
                 return {"upn": upn, "group_id": group_id, "removed": False}
             raise
         return {"upn": upn, "group_id": group_id, "removed": True}
 
     async def disable_user(self, upn: str, **_: Any) -> dict[str, Any]:
-        compte = await self._existant(upn)
+        account = await self._existing(upn)
         graph = await self._graph()
-        await graph.request("PATCH", f"/users/{compte['id']}", json={"accountEnabled": False})
+        await graph.request("PATCH", f"/users/{account['id']}", json={"accountEnabled": False})
         return {"upn": upn, "enabled": False}
 
     async def revoke_sessions(self, upn: str, **_: Any) -> dict[str, Any]:
-        compte = await self._existant(upn)
+        account = await self._existing(upn)
         graph = await self._graph()
-        await graph.request("POST", f"/users/{compte['id']}/revokeSignInSessions")
+        await graph.request("POST", f"/users/{account['id']}/revokeSignInSessions")
         return {"upn": upn, "revoked": True}
 
-    async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
-        """Une opération déclarée, par son nom : ce qu'un effet ou le courtier appelle."""
-        if operation not in {nom for nom, *_ in OPERATIONS_ENTRA}:
-            raise AdapterError(f"entra n'a pas d'opération {operation}")
+    async def execute(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
+        """A declared operation, by name: what an effect or the broker calls."""
+        if operation not in {name for name, *_ in OPERATIONS_ENTRA}:
+            raise AdapterError(f"entra has no operation {operation}")
         if operation == "get_user":
             return {"user": await self.get_user(str(params["upn"]))}
-        resultat: dict[str, Any] = await getattr(self, operation)(**params)
-        return resultat
+        result: dict[str, Any] = await getattr(self, operation)(**params)
+        return result
+
+    executer = execute  # lang: fr-ok alias:internal
 
     async def test(self) -> dict[str, Any]:
         await self._graph()
-        return {"ok": True, "tenant": self.tenant_id, "administrative_unit": self.unite}
+        return {"ok": True, "tenant": self.tenant_id, "administrative_unit": self.unit}
 
 
-def _mot_de_passe_jetable() -> str:
+def _throwaway_password() -> str:
     import secrets
 
     return "C" + secrets.token_urlsafe(24) + "!7a"
+
+
+# Former names that other code imports (ADR 0098 §3 (b)).
+HorsDeLUnite = OutsideUnit  # lang: fr-ok alias:internal

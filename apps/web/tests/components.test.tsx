@@ -98,10 +98,10 @@ describe("fiche d'accès", () => {
     render(
       <Acces
         acces={{
-          evenements: 220,
+          events: 220,
           refusals: 1,
-          acces: [
-            { nature: "write", target: "/workspace/.env", requests: 1, refusals: 1, motifs: ["sensitive file"] },
+          access: [
+            { nature: "write", target: "/workspace/.env", requests: 1, refusals: 1, reasons: ["sensitive file"] },
             { nature: "read", target: "/workspace/src/panier.py", requests: 4, refusals: 0 },
           ],
         }}
