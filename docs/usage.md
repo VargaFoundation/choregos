@@ -507,10 +507,10 @@ did not write never matches, so an agent that says nothing takes the default. Th
 `when` that names an output no transition declares (`when.unknown_output`) and a state whose exits all
 have a `when` (`when.no_default`).
 
-Two validation codes were renamed to English (ADR 0046): `workflow.implicit_effect` (formerly
-`workflow.effet_implicite`) and `gate.nothing_to_check` (formerly `gate.sans_matiere`). For one
-release, an issue that carries one of them also carries its former spelling in `deprecated_code`;
-match on `code`.
+Validation codes are English (ADR 0046). The window in which `workflow.implicit_effect` and
+`gate.nothing_to_check` also carried their former spellings ended in S45-02. The last renamed code,
+`role.playbook_not_found`, carries its former spelling (`role.playbook_introuvable`) in
+`deprecated_code` until 0.22.0; match on `code`.
 
 The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
 the process (each transition in plain words), the map (one lane per kind of actor), the YAML

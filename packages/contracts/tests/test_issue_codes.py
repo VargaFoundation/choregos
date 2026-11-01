@@ -1,4 +1,4 @@
-"""Issue codes renamed to English accept both spellings for one release (ADR 0046, S34-03)."""
+"""Issue codes renamed to English accept both spellings for one release (ADR 0046, S34-03, S45-02)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ from choregos_contracts.issue_codes import (
 )
 
 PAIRS = [
-    ("gate.sans_matiere", "gate.nothing_to_check"),  # lang: fr-ok
-    ("workflow.effet_implicite", "workflow.implicit_effect"),  # lang: fr-ok
+    ("role.playbook_introuvable", "role.playbook_not_found"),  # lang: fr-ok
 ]
 
 
@@ -33,7 +32,15 @@ def test_a_code_never_renamed_is_left_alone() -> None:
     assert deprecated_issue_code("state.unknown") is None
 
 
-def test_the_renamed_codes_are_exactly_the_two_of_adr_0046() -> None:
+def test_role_playbook_code_is_english_with_its_former_spelling() -> None:
+    assert canonical_issue_code("role.playbook_introuvable") == "role.playbook_not_found"  # lang: fr-ok
+    # The S34-03 window ended: these two are no longer aliases.
+    assert canonical_issue_code("gate.sans_matiere") == "gate.sans_matiere"  # lang: fr-ok
+    assert canonical_issue_code("workflow.effet_implicite") == "workflow.effet_implicite"  # lang: fr-ok
+    assert deprecated_issue_code("gate.nothing_to_check") is None
+
+
+def test_the_renamed_codes_are_exactly_the_one_left() -> None:
     assert dict(PAIRS) == RENAMED_ISSUE_CODES
 
 

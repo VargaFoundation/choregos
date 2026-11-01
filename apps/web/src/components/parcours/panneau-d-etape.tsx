@@ -292,7 +292,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
   const acces = useQuery({ queryKey: ["run-access", runId], queryFn: () => api.runAccess(runId) });
   const diff = useQuery({ queryKey: ["run-diff", runId], queryFn: () => api.runDiff(runId) });
   const garanties = verdictsDe(evenements);
-  const lignes = acces.data?.acces ?? [];
+  const lignes = acces.data?.access ?? [];
   const fichiers = diff.data?.files ?? [];
   const plan = planDeLAgent(evenements);
   return (
@@ -328,7 +328,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
       </section>
       <section>
         <h4 className={LEGENDE}>
-          Access {acces.data ? `· ${acces.data.evenements} events, ${acces.data.refusals} refused` : ""}
+          Access {acces.data ? `· ${acces.data.events} events, ${acces.data.refusals} refused` : ""}
         </h4>
         {lignes.length === 0 ? (
           <p className="text-xs text-ink-muted">No access recorded.</p>
@@ -341,7 +341,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
                   <span className="w-14 shrink-0 text-ink-muted">{l.nature}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block break-all font-mono">{l.target}</span>
-                    {l.refusals > 0 && <span className="block">Refused{l.motifs?.length ? `: ${l.motifs.join(" · ")}` : ""}</span>}
+                    {l.refusals > 0 && <span className="block">Refused{l.reasons?.length ? `: ${l.reasons.join(" · ")}` : ""}</span>}
                   </span>
                 </li>
               ))}

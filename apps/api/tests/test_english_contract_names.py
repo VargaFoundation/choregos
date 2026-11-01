@@ -1,8 +1,9 @@
-"""The four access properties and the two issue codes renamed to English (ADR 0046, S34-03).
+"""The access report and the issue code renamed to English (ADR 0046, S34-03, S45-02).
 
-For one release the API emits both names: the English one, and the former French one that the
-contract marks `deprecated`. These tests read the responses against `openapi.yaml`, so that the
-contract and what is served cannot drift apart while both names live.
+The access report emits the English names and, for one release, the former ones that the contract
+marks `deprecated`; `role.playbook_not_found` carries its former spelling in `deprecated_code`. These
+tests read the responses against `openapi.yaml`, so that the contract and what is served cannot
+drift apart while both names live.
 """
 
 from __future__ import annotations
@@ -13,11 +14,13 @@ import choregos_contracts as contracts
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
 
-#: English name -> former name, per object of the access report.
-RENAMED_ACCESS_REPORT = {"refusals": "refus", "tool_cost_eur": "cout_outils_eur"}  # lang: fr-ok
-RENAMED_ACCESS_LINE = {"target": "cible", "requests": "demandes", "refusals": "refus"}  # lang: fr-ok
+#: English name -> former name, at the top of the access report.
+RENAMED_ACCESS_REPORT = {"events": "evenements", "inferred": "deduites"}  # lang: fr-ok
+#: Names the S34-03 window served and S45-02 removed.
+REMOVED_REPORT_KEYS = ("refus", "cout_outils_eur")  # lang: fr-ok
+REMOVED_LINE_KEYS = ("cible", "demandes", "refus")  # lang: fr-ok
 
-WORKFLOW_WITH_BOTH_CODES = """
+WORKFLOW_WITH_THE_CODES_OF_S34_03 = """
 apiVersion: choregos/v1
 kind: Workflow
 metadata: { name: t, version: 1 }
@@ -34,6 +37,22 @@ transitions:
       on_fail: { to: inbox, max_attempts: 2, escalate_to: done } }
   - { id: t2, from: doing, to: pr_open, by: ci }
   - { id: t3, from: pr_open, to: done, by: ci }
+"""
+
+WORKFLOW_WITH_A_MISSING_PLAYBOOK = """
+apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: t, version: 1 }
+actors:
+  dev: { type: agent, role: no_such_role }
+  ci: { type: system }
+states:
+  inbox: { display: Inbox }
+  doing: { display: Doing }
+  done: { display: Done, terminal: true }
+transitions:
+  - { id: t1, from: inbox, to: doing, by: dev }
+  - { id: t2, from: doing, to: done, by: ci }
 """
 
 
@@ -81,6 +100,7 @@ async def _run_with_access(project: dict[str, Any]) -> str:
             {"kind": "read", "target": "/workspace/src/a.py", "allowed": True, "reason": "ok"},
             {"kind": "read", "target": "/workspace/src/a.py", "allowed": True, "reason": "ok"},
             {"kind": "write", "target": "/workspace/.env", "allowed": False, "reason": "sensitive file"},
+            {"kind": "telepathy", "target": "/workspace/mind", "allowed": True, "reason": "ok"},
         ]
         for seq, payload in enumerate(events, start=1):
             session.add(
@@ -114,13 +134,31 @@ async def test_access_report_emits_english_and_former_names(
     assert report["refusals"] == 1 and report["tool_cost_eur"] == 0.002
     for english, former in RENAMED_ACCESS_REPORT.items():
         assert report[former] == report[english], former
-    denied = report["acces"][0]
+    assert report["events"] == 5
+    for key in REMOVED_REPORT_KEYS:
+        assert key not in report, key
+
+    denied = report["access"][0]
     assert (denied["target"], denied["requests"], denied["refusals"]) == ("/workspace/.env", 1, 1)
-    read = next(line for line in report["acces"] if line["target"] == "/workspace/src/a.py")
+    assert denied["reasons"] == ["sensitive file"]
+    read = next(line for line in report["access"] if line["target"] == "/workspace/src/a.py")
     assert read["requests"] == 2
-    for line in report["acces"]:
-        for english, former in RENAMED_ACCESS_LINE.items():
-            assert line[former] == line[english], former
+    # An access that cannot be classified is `other`, and its former line says `autre`.
+    unclassified = next(line for line in report["access"] if line["target"] == "/workspace/mind")
+    assert unclassified["nature"] == "other"
+
+    assert len(report["acces"]) == len(report["access"])
+    for line, former in zip(report["access"], report["acces"], strict=True):
+        assert (line["target"], line["requests"], line["refusals"], line["reasons"]) == (
+            former["target"],
+            former["requests"],
+            former["refusals"],
+            former["motifs"],
+        )
+        assert former["nature"] == ("autre" if line["nature"] == "other" else line["nature"])  # lang: fr-ok
+        for key in REMOVED_LINE_KEYS:
+            assert key not in line and key not in former, key
+        assert "motifs" not in line and "reasons" not in former  # lang: fr-ok
 
     schema = _access_schema()
     errors = [e.message for e in Draft202012Validator(schema).iter_errors(report)]
@@ -130,38 +168,53 @@ async def test_access_report_emits_english_and_former_names(
 
 def test_contract_requires_the_english_access_names_and_deprecates_the_former() -> None:
     schema = _access_schema()
-    line = schema["properties"]["acces"]["items"]
-    assert set(RENAMED_ACCESS_REPORT) - {"tool_cost_eur"} <= set(schema["required"])
-    assert set(RENAMED_ACCESS_LINE) <= set(line["required"])
-    for english, former in RENAMED_ACCESS_REPORT.items():
+    line = schema["properties"]["access"]["items"]
+    assert {"events", "refusals", "access"} <= set(schema["required"])
+    assert {"target", "requests", "refusals"} <= set(line["required"])
+    assert "other" in line["properties"]["nature"]["enum"]
+    assert "autre" not in line["properties"]["nature"]["enum"]  # lang: fr-ok
+    for english, former in {**RENAMED_ACCESS_REPORT, "access": "acces"}.items():  # lang: fr-ok
         assert not schema["properties"][english].get("deprecated"), english
         assert schema["properties"][former]["deprecated"] is True, former
         assert former not in schema["required"], former
-    for english, former in RENAMED_ACCESS_LINE.items():
-        assert not line["properties"][english].get("deprecated"), english
-        assert line["properties"][former]["deprecated"] is True, former
-        assert former not in line["required"], former
+    for key in REMOVED_REPORT_KEYS:
+        assert key not in schema["properties"], key
+    for key in REMOVED_LINE_KEYS:
+        assert key not in line["properties"], key
+        assert key not in schema["properties"]["acces"]["items"]["properties"], key  # lang: fr-ok
 
 
 async def test_validation_emits_english_codes_and_their_former_spelling(client: AsyncClient) -> None:
-    response = await client.post("/api/v1/workflows/validate", json={"yaml": WORKFLOW_WITH_BOTH_CODES})
+    response = await client.post(
+        "/api/v1/workflows/validate", json={"yaml": WORKFLOW_WITH_THE_CODES_OF_S34_03}
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     issues = {i["code"]: i for i in body["errors"] + body["warnings"]}
-    assert issues["gate.nothing_to_check"]["deprecated_code"] == "gate.sans_matiere"  # lang: fr-ok
-    assert issues["workflow.implicit_effect"]["deprecated_code"] == "workflow.effet_implicite"  # lang: fr-ok
-    assert "gate.sans_matiere" not in issues and "workflow.effet_implicite" not in issues  # lang: fr-ok
-    # A code that was never renamed carries no former spelling.
+    # The S34-03 window ended: these two carry no former spelling any more.
+    assert issues["gate.nothing_to_check"].get("deprecated_code") is None
+    assert issues["workflow.implicit_effect"].get("deprecated_code") is None
     assert issues["workflow.no_human_state"].get("deprecated_code") is None
 
+    response = await client.post(
+        "/api/v1/workflows/validate", json={"yaml": WORKFLOW_WITH_A_MISSING_PLAYBOOK}
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    issues = {i["code"]: i for i in body["errors"] + body["warnings"]}
+    assert issues["role.playbook_not_found"]["deprecated_code"] == "role.playbook_introuvable"  # lang: fr-ok
+    assert "role.playbook_introuvable" not in issues  # lang: fr-ok
 
-async def test_rejected_publication_carries_both_codes(client: AsyncClient, project: dict[str, Any]) -> None:
+
+async def test_rejected_publication_carries_the_english_code(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
     response = await client.put(
-        f"/api/v1/projects/{project['id']}/workflow", json={"yaml": WORKFLOW_WITH_BOTH_CODES}
+        f"/api/v1/projects/{project['id']}/workflow", json={"yaml": WORKFLOW_WITH_THE_CODES_OF_S34_03}
     )
     assert response.status_code == 422, response.text
     errors = response.json()["errors"]
     gate = next(e for e in errors if e["code"] == "gate.nothing_to_check")
-    assert gate["deprecated_code"] == "gate.sans_matiere"  # lang: fr-ok
+    assert gate.get("deprecated_code") is None
     problem = contracts.load_openapi()["components"]["schemas"]["Problem"]
     assert _undeclared({"errors": errors}, problem) == []
