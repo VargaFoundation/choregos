@@ -1,6 +1,6 @@
-"""Les exemples doivent valider à la fois contre les JSON Schemas et contre les modèles Python.
+"""The examples must validate against both the JSON Schemas and the Python models.
 
-C'est ce test qui empêche la dérive entre `schemas/*.json`, `openapi.yaml` et `choregos_contracts.*`.
+This test is what prevents drift between `schemas/*.json`, `openapi.yaml` and `choregos_contracts.*`.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def test_all_declared_schemas_exist() -> None:
     for name in contracts.SCHEMA_FILES:
         assert (SCHEMAS / name).exists(), name
     on_disk = {p.name for p in SCHEMAS.glob("*.json")}
-    assert on_disk == set(contracts.SCHEMA_FILES), "SCHEMA_FILES et schemas/ ont divergé"
+    assert on_disk == set(contracts.SCHEMA_FILES), "SCHEMA_FILES and schemas/ have diverged"
 
 
 @pytest.mark.parametrize(
@@ -106,13 +106,13 @@ def test_example_matches_python_model(example: str, model: type) -> None:
     raw = _load(example)
     obj = model.model_validate(raw)
     dumped = obj.model_dump(mode="json", by_alias=True, exclude_none=True)
-    # Le modèle ne doit perdre aucune clé renseignée de l'exemple.
+    # The model must not lose any key the example fills in.
     missing = {k for k, v in raw.items() if v is not None} - set(dumped)
-    assert not missing, f"clés perdues par {model.__name__} : {missing}"
+    assert not missing, f"keys lost by {model.__name__}: {missing}"
 
 
-def _modele_imbrique(annotation: Any) -> type | None:
-    """Le modèle Pydantic caché derrière `X | None`, `list[X]`, `dict[str, X]` — sinon None."""
+def _nested_model(annotation: Any) -> type | None:
+    """The Pydantic model hidden behind `X | None`, `list[X]`, `dict[str, X]`, otherwise None."""
     import typing
 
     from pydantic import BaseModel
@@ -120,41 +120,41 @@ def _modele_imbrique(annotation: Any) -> type | None:
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return annotation
     for arg in typing.get_args(annotation):
-        trouve = _modele_imbrique(arg)
-        if trouve is not None:
-            return trouve
+        found = _nested_model(arg)
+        if found is not None:
+            return found
     return None
 
 
-def _champs_du_schema(noeud: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Les propriétés d'un nœud objet, en suivant `anyOf`/`oneOf` (un champ nullable)."""
-    if "properties" in noeud:
-        return dict(noeud["properties"])
-    for combinaison in ("anyOf", "oneOf", "allOf"):
-        for branche in noeud.get(combinaison, []):
-            if isinstance(branche, dict) and "properties" in branche:
-                return dict(branche["properties"])
+def _schema_fields(node: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The properties of an object node, following `anyOf`/`oneOf` (a nullable field)."""
+    if "properties" in node:
+        return dict(node["properties"])
+    for combination in ("anyOf", "oneOf", "allOf"):
+        for branch in node.get(combination, []):
+            if isinstance(branch, dict) and "properties" in branch:
+                return dict(branch["properties"])
     return {}
 
 
-def _comparer(chemin: str, noeud: dict[str, Any], model: type, ecarts: list[str]) -> None:
-    schema_champs = _champs_du_schema(noeud)
-    if not schema_champs:
+def _compare(trail: str, node: dict[str, Any], model: type, gaps: list[str]) -> None:
+    schema_fields = _schema_fields(node)
+    if not schema_fields:
         return
-    modele_champs = {
-        (info.alias or nom): info
-        for nom, info in model.model_fields.items()  # type: ignore[attr-defined]
+    model_fields = {
+        (info.alias or name): info
+        for name, info in model.model_fields.items()  # type: ignore[attr-defined]
     }
-    absents = set(modele_champs) - set(schema_champs)
-    en_trop = set(schema_champs) - set(modele_champs)
-    for nom in sorted(absents):
-        ecarts.append(f"{chemin}.{nom} : dans le modèle {model.__name__}, absent du schéma")
-    for nom in sorted(en_trop):
-        ecarts.append(f"{chemin}.{nom} : dans le schéma, absent du modèle {model.__name__}")
-    for nom in sorted(set(schema_champs) & set(modele_champs)):
-        sous_modele = _modele_imbrique(modele_champs[nom].annotation)
-        if sous_modele is not None:
-            _comparer(f"{chemin}.{nom}", schema_champs[nom], sous_modele, ecarts)
+    missing_from_schema = set(model_fields) - set(schema_fields)
+    missing_from_model = set(schema_fields) - set(model_fields)
+    for name in sorted(missing_from_schema):
+        gaps.append(f"{trail}.{name} : in the model {model.__name__}, absent from the schema")
+    for name in sorted(missing_from_model):
+        gaps.append(f"{trail}.{name} : in the schema, absent from the model {model.__name__}")
+    for name in sorted(set(schema_fields) & set(model_fields)):
+        sub_model = _nested_model(model_fields[name].annotation)
+        if sub_model is not None:
+            _compare(f"{trail}.{name}", schema_fields[name], sub_model, gaps)
 
 
 @pytest.mark.parametrize(
@@ -167,22 +167,22 @@ def _comparer(chemin: str, noeud: dict[str, Any], model: type, ecarts: list[str]
         ("policy.schema.json", Policy),
     ],
 )
-def test_le_schema_et_le_modele_declarent_les_memes_champs(schema_name: str, model: type) -> None:
-    """Les exemples ne suffisent pas à empêcher la dérive : ils n'exercent que les champs
-    qu'ils portent. Un champ ajouté au modèle Python et oublié dans le schéma passait donc
-    tous les contrôles — arrivé le 2026-09-24 avec `Evidence.facts`, que le schéma rejetait
-    (`additionalProperties: false`) alors que le modèle l'acceptait. Ici on compare les
-    déclarations, pas un exemple."""
-    ecarts: list[str] = []
-    _comparer(schema_name.split(".", maxsplit=1)[0], contracts.load_schema(schema_name), model, ecarts)
-    assert not ecarts, "\n".join(ecarts)
+def test_schema_and_model_declare_the_same_fields(schema_name: str, model: type) -> None:
+    """The examples are not enough to prevent drift: they only exercise the fields they carry.
+    A field added to the Python model and forgotten in the schema therefore passed every check:
+    it happened on 2026-09-24 with `Evidence.facts`, which the schema rejected
+    (`additionalProperties: false`) while the model accepted it. Here the declarations are
+    compared, not an example."""
+    gaps: list[str] = []
+    _compare(schema_name.split(".", maxsplit=1)[0], contracts.load_schema(schema_name), model, gaps)
+    assert not gaps, "\n".join(gaps)
 
 
-def test_le_schema_des_evenements_connait_chaque_type_emis() -> None:
-    """`EventType` est ce que la plateforme ÉMET ; le schéma, ce qu'un consommateur accepte.
+def test_event_schema_knows_every_emitted_type() -> None:
+    """`EventType` is what the platform EMITS; the schema, what a consumer accepts.
 
-    Ils avaient divergé sans que rien ne rougisse : `workflow_failed` et `tool.called` étaient
-    émis, et un consommateur validant contre le schéma les rejetait.
+    They had diverged without anything turning red: `workflow_failed` and `tool.called` were
+    emitted, and a consumer validating against the schema rejected them.
     """
     from choregos_contracts.enums import EventType
 
@@ -199,13 +199,13 @@ def test_openapi_is_coherent() -> None:
         for verb, op in path.items()
         if verb in {"get", "post", "put", "patch", "delete"}
     ]
-    assert len(operations) == len(set(operations)), "operationId dupliqué"
-    # Toute référence interne pointe vers un composant existant.
+    assert len(operations) == len(set(operations)), "duplicate operationId"
+    # Every internal reference points to an existing component.
     text = json.dumps(spec)
     for ref in {r for r in _iter_refs(spec) if r.startswith("#/")}:
         node: Any = spec
         for part in ref.removeprefix("#/").split("/"):
-            assert part in node, f"référence cassée : {ref}"
+            assert part in node, f"broken reference: {ref}"
             node = node[part]
     assert "choregos" in text
 
@@ -214,7 +214,7 @@ def test_openapi_external_refs_exist() -> None:
     spec = contracts.load_openapi()
     for ref in {r for r in _iter_refs(spec) if r.startswith("./")}:
         target = Path(contracts.contracts_dir() / ref.removeprefix("./"))
-        assert target.exists(), f"schéma référencé manquant : {ref}"
+        assert target.exists(), f"referenced schema missing: {ref}"
 
 
 def _iter_refs(node: Any) -> list[str]:
@@ -274,7 +274,7 @@ def test_the_context_schema_and_model_declare_the_same_fields() -> None:
     """The `context` block, overrides included; the whole policy is compared above."""
     gaps: list[str] = []
     node = contracts.load_schema("policy.schema.json")["properties"]["context"]
-    _comparer("policy.context", node, ContextPolicy, gaps)
+    _compare("policy.context", node, ContextPolicy, gaps)
     assert not gaps, "\n".join(gaps)
 
 
@@ -469,7 +469,7 @@ def test_the_web_search_schema_and_model_declare_the_same_fields() -> None:
 
     gaps: list[str] = []
     node = contracts.load_schema("policy.schema.json")["properties"]["web_search"]
-    _comparer("policy.web_search", node, WebSearchPolicy, gaps)
+    _compare("policy.web_search", node, WebSearchPolicy, gaps)
     assert not gaps, "\n".join(gaps)
     raw = _load("policy.solo.json") | {"web_search": {"allow_query_reuse": "maybe"}}
     assert list(_validator("policy.schema.json").iter_errors(raw))
@@ -517,7 +517,7 @@ def test_a_workflow_a2a_block_is_read_the_same_by_the_schema_and_the_model() -> 
 
     gaps: list[str] = []
     node = contracts.load_schema("workflow.schema.json")["$defs"]["a2a"]
-    _comparer("workflow.a2a", node, WorkflowA2a, gaps)
+    _compare("workflow.a2a", node, WorkflowA2a, gaps)
     assert not gaps, "\n".join(gaps)
 
     validator = _validator("workflow.schema.json")
@@ -554,7 +554,7 @@ def test_a_project_a2a_block_bounds_file_parts_the_same_in_the_schema_and_the_mo
 
     gaps: list[str] = []
     node = contracts.load_schema("project.schema.json")["properties"]["a2a"]
-    _comparer("project.a2a", node, A2aConfig, gaps)
+    _compare("project.a2a", node, A2aConfig, gaps)
     assert not gaps, "\n".join(gaps)
     assert node["properties"]["max_file_bytes"]["default"] == A2A_MAX_FILE_BYTES_DEFAULT == 10 * 1024 * 1024
     assert node["properties"]["max_file_bytes"]["maximum"] == A2A_MAX_FILE_BYTES_CEILING

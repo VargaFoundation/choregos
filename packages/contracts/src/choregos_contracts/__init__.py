@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Contrats Choregos : schémas JSON, OpenAPI et types Python.
+"""Choregos contracts: JSON Schemas, OpenAPI and Python types.
 
-`packages/contracts` est la **source de vérité** des interfaces entre les flux.
-Toute modification passe par une PR taguée `contract-change` (docs/plan/01).
+`packages/contracts` is the **source of truth** for the interfaces between the streams.
+Any change goes through a PR labelled `contract-change` (docs/plan/01).
 """
 
 from __future__ import annotations
@@ -131,6 +131,7 @@ from .stage import (
     file_outputs,
     knowledge_digest,
     missing_outputs,
+    skill_digest,
 )
 from .workflow import (
     RUN_ACTORS,
@@ -181,9 +182,9 @@ SCHEMA_FILES = (
 
 
 def contracts_dir() -> Path:
-    """Racine des contrats : `packages/contracts` en développement, le paquet installé sinon."""
+    """Contracts root: `packages/contracts` in development, the installed package otherwise."""
     root = Path(str(resources.files("choregos_contracts"))).resolve()
-    if (root / "schemas").is_dir():  # wheel : les schémas sont embarqués
+    if (root / "schemas").is_dir():  # wheel: the schemas are bundled
         return root
     return root.parent.parent  # src/choregos_contracts -> packages/contracts
 
@@ -193,7 +194,7 @@ def schemas_dir() -> Path:
 
 
 def load_schema(name: str) -> dict[str, Any]:
-    """Charge un JSON Schema par nom de fichier (ex. `workflow.schema.json`)."""
+    """Load a JSON Schema by file name (e.g. `workflow.schema.json`)."""
     path = schemas_dir() / name
     if not path.exists():
         raise FileNotFoundError(f"schema not found: {path}")
@@ -346,6 +347,7 @@ __all__ = [
     "missing_outputs",
     "openapi_path",
     "schemas_dir",
+    "skill_digest",
     "skill_file_bytes",
     "type_of_filename",
     "type_of_value",

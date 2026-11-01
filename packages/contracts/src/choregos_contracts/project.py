@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Configuration d'un projet (schemas/project.schema.json)."""
+"""Configuration of a project (schemas/project.schema.json)."""
 
 from __future__ import annotations
 
@@ -28,18 +28,17 @@ class RepoConfig(Strict):
 
 
 class DodConfig(Strict):
-    """Ce que le RUNNER mesure lui-même, par opposition à ce que l'agent raconte.
+    """What the RUNNER measures itself, as opposed to what the agent tells.
 
-    `repo.test_command` et ses voisines vivent sous `repo`, donc un projet sans dépôt — un
-    métier qui instruit des dossiers, qualifie des profils, entretient une plateforme — ne
-    pouvait mesurer AUCUNE preuve. `evidence_facts` lisait alors des faits que l'agent avait
-    écrits, et un fait narré ne vaut pas un fait mesuré (ADR 0010, « les gates sont des
-    mécanismes »).
+    `repo.test_command` and its neighbours live under `repo`, so a project without a repository (a
+    trade that processes case files, qualifies profiles, maintains a platform) could measure NO
+    proof. `evidence_facts` then read facts the agent had written, and a narrated fact is not
+    worth a measured one (ADR 0010, "the gates are mechanisms").
 
-    `facts` associe un nom de fait à une commande : **code de sortie 0 = vrai**, autre chose =
-    faux. Le runner l'exécute après l'étape et le fait mesuré écrase celui de l'agent, exactement
-    comme les tests écrasent `tests_passed`. Une commande qui n'existe pas rend donc `false`,
-    jamais « on ne sait pas » : c'est le même choix que pour une garantie sans matière.
+    `facts` maps a fact name to a command: **exit code 0 = true**, anything else = false. The
+    runner executes it after the stage and the measured fact overwrites the agent's, exactly as
+    the tests overwrite `tests_passed`. A command that does not exist therefore returns `false`,
+    never "unknown": it is the same choice as for a guarantee without matter.
 
         dod:
           facts:
@@ -62,7 +61,7 @@ class ModelsConfig(Strict):
     @field_validator("profiles", mode="before")
     @classmethod
     def _accept_shorthand(cls, value: Any) -> Any:
-        """`standard: anthropic/claude-sonnet-5` équivaut à `{litellm_model: …}`."""
+        """`standard: anthropic/claude-sonnet-5` is equivalent to `{litellm_model: …}`."""
         if not isinstance(value, dict):
             return value
         return {k: ({"litellm_model": v} if isinstance(v, str) else v) for k, v in value.items()}
@@ -127,11 +126,11 @@ class ProjectConfig(Strict):
     org: Slug
     display_name: str | None = None
     template_ref: str | None = Field(default=None, pattern=r"^[a-z0-9-]+@[0-9]+\.[0-9]+\.[0-9]+$")
-    #: Le dépôt du projet — **facultatif**. Un métier qui instruit des dossiers, qualifie
-    #: des profils ou rédige des courriers n'en a pas, et devait jusqu'ici en déclarer un
-    #: qui ne servait à rien (limite n°1 de l'ADR 0012). Sans dépôt, l'agent travaille dans
-    #: un répertoire vide : rien à cloner, rien à pousser, et les garanties qui lisent un
-    #: diff refusent — elles n'ont rien à lire.
+    #: The project's repository: **optional**. A trade that processes case files, qualifies
+    #: profiles or drafts letters has none, and until now had to declare one that served no
+    #: purpose (limit no. 1 of ADR 0012). Without a repository, the agent works in an empty
+    #: directory: nothing to clone, nothing to push, and the guarantees that read a diff
+    #: refuse, as they have nothing to read.
     repo: RepoConfig | None = None
     envs: list[str] = Field(default_factory=lambda: ["dev", "staging", "prod"])
     agent: AgentConfig = Field(default_factory=AgentConfig)
@@ -139,20 +138,20 @@ class ProjectConfig(Strict):
     gitops: GitopsConfig | None = None
     cluster: str | None = None
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
-    #: Ce que le runner mesure lui-même. À la racine, et non sous `repo` : un projet sans dépôt
-    #: doit pouvoir prouver quelque chose.
+    #: What the runner measures itself. At the root, not under `repo`: a project without a
+    #: repository must be able to prove something.
     dod: DodConfig = Field(default_factory=DodConfig)
-    #: Les outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun, et
-    #: c'est le défaut : un catalogue déployé ne s'ouvre pas à tous les projets par
-    #: accident. `["*"]` ouvre tout le catalogue, ce qui se décide, pas se subit.
+    #: The catalogue tools this project may call, by name. Empty = none, and that is the
+    #: default: a deployed catalogue does not open to every project by accident. `["*"]`
+    #: opens the whole catalogue, which is decided, not suffered.
     #:
-    #: C'était une entrée de `labels` — un fourre-tout d'étiquettes — le temps de vérifier
-    #: que le catalogue servait. Une liste d'autorisations n'est pas une étiquette.
+    #: It used to be an entry of `labels`, a catch-all of tags, while we checked that the
+    #: catalogue was useful. A list of permissions is not a tag.
     tools: list[str] = Field(default_factory=list)
-    #: Les groupes de l'organisation auxquels ce projet appartient. Ils décident de ce que
-    #: le **déploiement** lui ouvre : un outil du catalogue marqué `groups: [rh]` n'est
-    #: obtenu que par un projet du groupe `rh`, même s'il le déclare dans `tools`.
-    #: Le projet choisit ce dont il se sert ; il ne choisit pas ce à quoi il a droit.
+    #: The organisation groups this project belongs to. They decide what the **deployment**
+    #: opens to it: a catalogue tool marked `groups: [hr]` is only obtained by a project in
+    #: the `hr` group, even if it declares it in `tools`. The project chooses what it uses;
+    #: it does not choose what it is entitled to.
     groups: list[str] = Field(default_factory=list)
     #: Work items the platform opens by itself (S38-11). Needs the internal tracker: an external
     #: tracker is where its requests are created.
@@ -163,22 +162,22 @@ class ProjectConfig(Strict):
 
     @property
     def has_repo(self) -> bool:
-        """Ce projet a-t-il un dépôt ? Tout ce qui parle de git passe par là."""
+        """Does this project have a repository? Everything that talks to git goes through here."""
         return self.repo is not None
 
     @property
     def repo_url(self) -> str:
-        """L'URL du dépôt. Lève si le projet n'en a pas — l'appelant doit avoir vérifié.
+        """The repository URL. Raises if the project has none: the caller must have checked.
 
-        Rendre une chaîne vide ferait cloner « rien » et échouer trois couches plus loin,
-        sur un message qui ne parlerait pas du dépôt absent.
+        Returning an empty string would clone "nothing" and fail three layers further on, on a
+        message that would not mention the missing repository.
         """
         if self.repo is None:
             raise ValueError(f"the project {self.slug} has no repository")
         return self.repo.url
 
     def branch_for(self, key: str, slug_hint: str = "") -> str:
-        """Nom de branche déterministe pour un ticket."""
+        """Deterministic branch name for a work item."""
         if self.repo is None:
             raise ValueError(f"the project {self.slug} has no repository")
         number = key.rsplit("#", 1)[-1] if "#" in key else key.replace("/", "-")
