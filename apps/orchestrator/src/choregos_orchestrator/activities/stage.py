@@ -614,7 +614,8 @@ async def _stage_cap(
 async def _resolve_on_enabled_backend(
     session: Any, agent: Any, resolver: ModelResolver, plan: StagePlan, bundle: Any, item: Any, backend: str
 ) -> Any:
-    """The model of the stage, once its backend is known to be enabled (S42-07c)."""
+    """The model of the stage, once its backend is known to be allowed and enabled (S42-07c, S47-20)."""
+    _require_backend_allowed(agent, bundle, backend)
     await _require_backend_enabled(session, agent, backend)
     return _resolve_model(resolver, plan, bundle, item, backend)
 
@@ -623,6 +624,27 @@ async def _backend_row(session: Any, backend: str) -> Any:
     return (
         await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == backend))
     ).scalar_one_or_none()
+
+
+def _require_backend_allowed(agent: Any, bundle: Any, backend: str) -> None:
+    """Refuse the stage when the project's `agent.allowed_backends` does not list its backend.
+
+    An empty list restricts nothing. A runtime that fixes its own backend is not concerned. The
+    refusal has the same typed, non retryable shape as a backend the platform disabled."""
+    from temporalio.exceptions import ApplicationError
+
+    if _fixed_backend(agent):
+        return
+    allowed = list(bundle.config.agent.allowed_backends)
+    if not allowed or backend in allowed:
+        return
+    logger.info("stage refused: backend not allowed", backend=backend, allowed=allowed)
+    raise ApplicationError(
+        f"the agent backend `{backend}` is not one this project allows ({', '.join(allowed)}): "
+        "add it to the project's agent settings, or choose another backend.",
+        type="BackendDisabled",
+        non_retryable=True,
+    )
 
 
 async def _require_backend_enabled(session: Any, agent: Any, backend: str) -> None:
