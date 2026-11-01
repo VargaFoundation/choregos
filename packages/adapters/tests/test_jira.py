@@ -396,3 +396,98 @@ def test_une_commande_en_commentaire_devient_une_decision() -> None:
 def test_un_evenement_inconnu_ne_produit_rien() -> None:
     assert parse_jira_event("d-4", {"webhookEvent": "sprint_started"}) == []
     assert parse_jira_event("d-5", {}) == []
+
+
+# ───────── a scoped token, and the connector's Test (service accounts) ─────────
+
+
+def _scoped(handler: Any, cloud_id: str | None = None) -> JiraTracker:
+    from choregos_adapters.tracker.jira import JiraGatewayClient
+
+    client = JiraGatewayClient(
+        BASE,
+        cloud_id=cloud_id,
+        auth=("svc@serviceaccount.atlassian.com", "jeton"),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        service="jira",
+    )
+    return JiraTracker(client, "BILL")
+
+
+async def test_a_scoped_token_goes_through_the_gateway_and_finds_the_cloud_id() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if request.url.path == "/_edge/tenant_info":
+            assert "authorization" not in request.headers  # a public endpoint: no token sent
+            return httpx.Response(200, json={"cloudId": "c-123"})
+        return httpx.Response(200, json=issue_payload())
+
+    jira = _scoped(handler)
+    item = await jira.fetch_item("BILL-42")
+    await jira.fetch_item("BILL-42")
+    assert calls[0] == f"{BASE}/_edge/tenant_info"
+    assert calls[1].startswith("https://api.atlassian.com/ex/jira/c-123/rest/api/3/issue/BILL-42")
+    assert len(calls) == 3  # the cloud id is read once
+    assert item.url == f"{BASE}/browse/BILL-42"  # a person opens the site, not the gateway
+
+
+async def test_a_given_cloud_id_is_not_looked_up() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, json={"name": "Billing"})
+
+    result = await _scoped(handler, cloud_id="c-9").test()
+    assert result == {"ok": True, "project": "Billing", "cloud_id": "c-9"}
+    assert calls == ["https://api.atlassian.com/ex/jira/c-9/rest/api/3/project/BILL"]
+
+
+async def test_an_unreadable_site_names_the_cloud_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    with pytest.raises(ConfigurationError, match="cloud_id"):
+        await _scoped(handler).fetch_item("BILL-42")
+
+
+async def test_the_connector_test_reads_the_project() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/rest/api/3/project/BILL"
+        return httpx.Response(200, json={"name": "Billing"})
+
+    assert await tracker(handler).test() == {"ok": True, "project": "Billing"}
+
+
+@pytest.mark.parametrize(
+    ("status", "says"),
+    [(401, "auth: scoped"), (403, "read:jira-work"), (404, "add it to the project"), (400, "400")],
+)
+async def test_a_refused_test_says_what_to_fix(status: int, says: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status)
+
+    result = await tracker(handler).test()
+    assert result["ok"] is False
+    assert says in result["reason"]
+
+
+def test_the_registry_builds_a_scoped_jira_on_the_gateway() -> None:
+    from choregos_adapters import _jira_tracker  # the registered builder: the suite runs on fakes
+    from choregos_adapters.tracker.jira import JiraGatewayClient
+
+    config = {"base_url": BASE, "email": "svc@x", "api_token": "t", "project_key": "BILL"}
+    classic = _jira_tracker(config)
+    scoped = _jira_tracker({**config, "auth": "scoped", "cloud_id": "c-1"})
+    assert not isinstance(classic.client, JiraGatewayClient)
+    assert scoped.client.base_url == "https://api.atlassian.com/ex/jira/c-1"
+    assert scoped.site_url == BASE
+
+
+def test_a_scoped_jira_opens_the_gateway_in_its_egress() -> None:
+    from choregos_adapters.registry import egress_hosts
+
+    hosts = egress_hosts("tracker", "jira", {"base_url": BASE, "auth": "scoped"})
+    assert ("api.atlassian.com", 443) in hosts and ("varga.atlassian.net", 443) in hosts

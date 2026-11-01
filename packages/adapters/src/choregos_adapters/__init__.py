@@ -87,8 +87,28 @@ __all__ = [
 ]
 
 
-def _confluence_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
-    """The site, plus `api.atlassian.com` when a scoped token is called through it."""
+def _jira_tracker(cfg: dict[str, Any]) -> Any:
+    """Jira Cloud: the email and the API token as Basic, the token from the vault, never from the
+    repository. A scoped token goes through the Atlassian gateway, a classic one to the site."""
+    from .http import RestClient
+    from .tracker.jira import JiraGatewayClient, JiraTracker
+
+    auth = (str(cfg["email"]), str(cfg["api_token"]))
+    client = (
+        JiraGatewayClient(cfg["base_url"], cloud_id=cfg.get("cloud_id"), auth=auth, service="jira")
+        if cfg.get("auth") == "scoped"
+        else RestClient(cfg["base_url"], auth=auth, service="jira")
+    )
+    return JiraTracker(
+        client,
+        cfg["project_key"],
+        webhook_secret=cfg.get("webhook_secret", ""),
+        field_names=cfg.get("field_names"),
+    )
+
+
+def _atlassian_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
+    """The site, plus `api.atlassian.com` when a scoped token is called through it (Jira, Confluence)."""
     from choregos_core.egress import hosts_of_config
 
     hosts = hosts_of_config(config)
@@ -316,14 +336,29 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("tracker",),
         _objet(
             {
-                "base_url": {"type": "string", "description": "https://<site>.atlassian.net"},
-                "email": _TEXTE,
+                "base_url": {
+                    "type": "string",
+                    "description": "the site, https://<site>.atlassian.net, even with a scoped token",
+                },
+                "email": {"type": "string", "description": "the account the API token belongs to"},
                 "project_key": _TEXTE,
+                "auth": {
+                    "type": "string",
+                    "enum": ["basic", "scoped"],
+                    "default": "basic",
+                    "description": "`scoped` for a scoped API token (a service account's): it is called "
+                    "through api.atlassian.com",
+                },
+                "cloud_id": {
+                    "type": "string",
+                    "description": "scoped tokens only, read from the site if empty",
+                },
                 "field_names": {"type": "object", "additionalProperties": {"type": "string"}},
             },
             ("base_url", "email", "project_key"),
         ),
         ("api_token", "webhook_secret"),
+        egress=_atlassian_egress,
     ),
     ("tracker", "plugin"): ConnectorTypeSpec(
         "a plugin's server (tracker profile, S43-07)",
@@ -518,7 +553,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("base_url", "email"),
         ),
         ("api_token",),
-        egress=_confluence_egress,
+        egress=_atlassian_egress,
     ),
     # A private git repository as a knowledge source (S39-18b): a token, or a GitHub App's short-lived
     # installation token. The credential is pinned to `host`.
@@ -1269,7 +1304,6 @@ def _register_builtins() -> None:
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
     from .tracker.interne import InternalTracker
-    from .tracker.jira import JiraTracker
 
     register("tracker", "github-issues", _SPECS_LIVREES[("tracker", "github-issues")])(
         lambda cfg: GitHubTracker(
@@ -1281,20 +1315,7 @@ def _register_builtins() -> None:
         )
     )
     register("tracker", "internal", _SPECS_LIVREES[("tracker", "internal")])(lambda cfg: InternalTracker())
-    register("tracker", "jira", _SPECS_LIVREES[("tracker", "jira")])(
-        lambda cfg: JiraTracker(
-            RestClient(
-                cfg["base_url"],
-                # Jira Cloud : e-mail + jeton d'API en Basic. Le jeton vient du coffre,
-                # jamais du dépôt (AGENTS.md : aucun secret en dur).
-                auth=(cfg["email"], cfg["api_token"]),
-                service="jira",
-            ),
-            cfg["project_key"],
-            webhook_secret=cfg.get("webhook_secret", ""),
-            field_names=cfg.get("field_names"),
-        )
-    )
+    register("tracker", "jira", _SPECS_LIVREES[("tracker", "jira")])(_jira_tracker)
     register("tracker", "plugin", _SPECS_LIVREES[("tracker", "plugin")])(_plugin_tracker)
     register("tracker", "gitlab-issues", _SPECS_LIVREES[("tracker", "gitlab-issues")])(
         lambda cfg: GitLabTracker(
