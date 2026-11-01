@@ -9,7 +9,7 @@ import pytest
 from temporalio.exceptions import ApplicationError
 
 from .conftest import Fixture
-from .test_agent_du_registre import _agent, _plan
+from .kits.registry_agent import agent_stage_plan, install_agent
 
 
 async def _with_cap(setup: Fixture, monthly: float, run_usd: float | None = 0.5) -> None:
@@ -17,7 +17,7 @@ async def _with_cap(setup: Fixture, monthly: float, run_usd: float | None = 0.5)
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    await _agent(setup)
+    await install_agent(setup)
     async with session_scope() as session:
         version = (await session.execute(select(AgentVersion))).scalars().one()
         spec = dict(version.spec)
@@ -87,7 +87,7 @@ async def test_three_alerts_reach_slack_the_agent_is_suspended_and_its_runs_are_
     assert notifier.last().severity == "error"
 
     with pytest.raises(ApplicationError) as refused:
-        await prepare_stage(_plan(setup, agent="coordinateur"))
+        await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     assert refused.value.non_retryable
     assert "suspended" in str(refused.value)
 
@@ -110,5 +110,5 @@ async def test_the_key_is_minted_at_what_is_left_of_the_monthly_cap(setup: Fixtu
 
     await _with_cap(setup, 10.0, run_usd=None)
     await _spend_as_agent(setup, 9.7, 0)  # 97 %: not suspended yet
-    entry = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    entry = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     assert entry["budget"]["usd"] == pytest.approx(0.3, abs=1e-6), entry["budget"]

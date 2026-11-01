@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from collections.abc import Iterator
 from datetime import timedelta
@@ -14,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 
 HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 ATTESTEE = "J'ai remis le badge en main propre à son porteur"
@@ -209,7 +208,7 @@ async def test_l_uid_saisi_dans_la_tache_arrive_dans_les_parametres_d_activate_b
         assert action.params == {"uid": "04A1B2C3", "porteur": "lea@acme.test"}
         assert action.title == "Activer le badge 04A1B2C3" and action.status == "succeeded"
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         cible = HISTORIQUES / "wi-tache-badge-S20-06.json"
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
 

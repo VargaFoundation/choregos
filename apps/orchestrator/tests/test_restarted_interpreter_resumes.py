@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture, refine_result
+from .conftest import Fixture, recording_history, refine_result
 from .test_interpreter import _runs, _wait_state, _wait_until, scripted, start
 
 pytestmark = pytest.mark.asyncio
@@ -124,7 +123,7 @@ async def test_the_escalation_records_where_the_work_item_resumes(
     arrival = [e.payload for e in await _state_changes(setup) if e.payload.get("to") == "needs_human"][-1]
     assert arrival["parked"] == ["needs_human", arrival["from"], "t-refine"], arrival
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-escalation-stored-S22-41.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -151,7 +150,7 @@ async def test_a_restarted_interpreter_replays_the_escalated_stage(
         history = await handle.fetch_history()
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-restarted-rerun-S22-41.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -202,7 +201,7 @@ async def test_an_answer_resumes_a_restarted_interpreter(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     """`on_answer: resume` on a restarted interpreter: the answer brings the stage back."""
-    from .test_reprise_apres_escalade import _demandes
+    from .kits.escalation import requests_of
 
     question = StageResult(
         status=StageStatus.NEEDS_HUMAN,
@@ -218,7 +217,7 @@ async def test_an_answer_resumes_a_restarted_interpreter(
         await first.terminate(reason="the interpreter died (#497)")
         handle = await start(temporal_env, setup)
         await _wait_until(handle, "the restarted interpreter waits", lambda s: s["pending_request"])
-        asked = next(d for d in await _demandes(setup) if d.kind == "question")
+        asked = next(d for d in await requests_of(setup) if d.kind == "question")
 
         await handle.signal(
             "human_decision",
