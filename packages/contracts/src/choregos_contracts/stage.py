@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""StageInput / StageResult : le contrat entre l'orchestrateur, le runner et l'agent."""
+"""StageInput / StageResult: the contract between the orchestrator, the runner and the agent."""
 
 from __future__ import annotations
 
@@ -48,8 +48,8 @@ class ProjectRef(Strict):
     test_command: str | None = None
     lint_command: str | None = None
     typecheck_command: str | None = None
-    #: {nom du fait: commande}. Code de sortie 0 = vrai. Le runner les exécute et le fait
-    #: MESURÉ écrase celui que l'agent a déclaré — c'est ce qui sépare une garantie d'un récit.
+    #: {fact name: command}. Exit code 0 = true. The runner executes them and the MEASURED fact
+    #: overwrites the one the agent declared: this is what separates a guarantee from a story.
     fact_commands: dict[str, str] = Field(default_factory=dict)
 
 
@@ -113,12 +113,12 @@ class ModelRef(Strict):
     api_format: ApiFormat = ApiFormat.OPENAI
     params: dict[str, Any] = Field(default_factory=dict)
     provider_model: str | None = None
-    """Modèle réel derrière l'alias de plateforme, quand le gateway le connaît.
+    """The real model behind the platform alias, when the gateway knows it.
 
-    L'agent appelle `litellm_model` — c'est l'alias qui porte le routage et le budget. Mais un
-    backend contraint (claude-code n'accepte que des modèles Claude) doit vérifier sa contrainte
-    sur le **vrai** modèle : sans ce champ, `platform/standard` lui est refusé alors que le
-    resolver l'a validé, et la combinaison alias + backend contraint devient impossible.
+    The agent calls `litellm_model`: the alias carries the routing and the budget. But a
+    constrained backend (claude-code accepts only Claude models) must check its constraint on
+    the **real** model: without this field, `platform/standard` is refused although the
+    resolver validated it, and the combination of alias + constrained backend becomes impossible.
     """
 
 
@@ -190,27 +190,30 @@ class Callbacks(Strict):
 
 
 class SkillRef(Strict):
-    """Une skill que l'agent porte (ADR 0033) : son nom, sa version, son empreinte. Les fichiers
-    viennent de `GET /internal/runs/{id}/skills`, et le runner vérifie l'empreinte avant de les
-    poser — une empreinte fausse arrête le run."""
+    """A skill the agent carries (ADR 0033): its name, its version, its digest. The files come
+    from `GET /internal/runs/{id}/skills`, and the runner checks the digest before laying them
+    down: a wrong digest stops the run."""
 
     slug: str
     version: int = Field(ge=1)
     digest: str
 
 
-def empreinte_de_skill(fichiers: dict[str, str]) -> str:
-    """L'empreinte d'une version de skill : l'API la calcule à la publication, le runner la
-    recalcule avant de poser les fichiers. Un seul calcul pour les deux côtés."""
+def skill_digest(files: dict[str, str]) -> str:
+    """The digest of a skill version: the API computes it at publication, the runner
+    recomputes it before laying the files down. One computation for both sides."""
     import hashlib
 
     from .skill_files import skill_file_bytes
 
-    condense = hashlib.sha256()
-    for chemin in sorted(fichiers):
+    hasher = hashlib.sha256()
+    for path in sorted(files):
         # The bytes of each file (decoded base64 for an inert binary): text digests are unchanged.
-        condense.update(chemin.encode("utf-8") + b"\0" + skill_file_bytes(chemin, fichiers[chemin]) + b"\0")
-    return "sha256:" + condense.hexdigest()
+        hasher.update(path.encode("utf-8") + b"\0" + skill_file_bytes(path, files[path]) + b"\0")
+    return "sha256:" + hasher.hexdigest()
+
+
+empreinte_de_skill = skill_digest  # lang: fr-ok alias:internal
 
 
 class StageMemory(Strict):
@@ -348,7 +351,7 @@ class PromptCall(Strict):
 
 
 class StageInput(Strict):
-    """Ce que l'orchestrateur remet au runner (docs/plan/01 §1.5)."""
+    """What the orchestrator hands to the runner (docs/plan/01 §1.5)."""
 
     schema_: Literal["choregos/StageInput/v1"] = Field(default="choregos/StageInput/v1", alias="schema")
     run_id: str
@@ -357,9 +360,9 @@ class StageInput(Strict):
     project: ProjectRef
     work_item: WorkItemRef
     transition: TransitionRef
-    #: Le dépôt sur lequel l'étape travaille. **Absent** pour un projet sans dépôt : le
-    #: runner prépare alors un répertoire vide, ne clone rien, ne pousse rien, et les
-    #: garanties qui lisent un diff refusent faute de matière (ADR 0012, limite n°1).
+    #: The repository the stage works on. **Absent** for a project without a repository: the
+    #: runner then prepares an empty directory, clones nothing, pushes nothing, and the
+    #: guarantees that read a diff refuse for lack of matter (ADR 0012, limit no. 1).
     repo: RepoRef | None = None
     agent: AgentRef
     model: ModelRef
@@ -369,7 +372,7 @@ class StageInput(Strict):
     context_pack_url: str | None = None
     playbook: PlaybookRef
     tools: ToolsRef = Field(default_factory=ToolsRef)
-    #: Les skills de l'agent du registre (ADR 0033) ; vide pour un playbook.
+    #: The skills of the registry agent (ADR 0033); empty for a playbook.
     skills: list[SkillRef] = Field(default_factory=list)
     #: The knowledge bases of the registry agent (ADR 0051); empty for a playbook.
     knowledge: list[KnowledgeRef] = Field(default_factory=list)
@@ -445,15 +448,14 @@ class Artifacts(Strict):
 
 
 class Evidence(Strict):
-    """Les preuves d'une étape. Les champs nommés parlent de logiciel ; `facts` non.
+    """The proofs of a stage. The named fields speak of software; `facts` does not.
 
-    `Evidence` refuse les champs inconnus — une faute de frappe dans `tests_run` doit se
-    voir. Mais un dossier instruit, une présélection de profils ou un courrier n'ont ni
-    tests ni couverture, et jusqu'au 2026-09-24 n'avaient donc **aucun endroit** où
-    consigner quoi que ce soit : le contrat rejetait leurs preuves. `facts` est cet
-    endroit — un dictionnaire de valeurs simples, nommées par le métier, que la garantie
-    `evidence_facts` lit. Simples justement : un nombre, un booléen, une date ou un mot
-    se vérifient ; un objet libre redeviendrait de la prose.
+    `Evidence` refuses unknown fields: a typo in `tests_run` must show. But a processed case file,
+    a profile shortlist or a letter have neither tests nor coverage, and until 2026-09-24 had
+    **nowhere** to record anything: the contract rejected their proofs. `facts` is that place,
+    a dictionary of simple values, named by the trade, that the `evidence_facts` guarantee
+    reads. Simple on purpose: a number, a boolean, a date or a word can be checked; a free
+    object would become prose again.
     """
 
     facts: dict[str, str | int | float | bool] | None = None
@@ -466,14 +468,14 @@ class Evidence(Strict):
     security_scan: Literal["ok", "failed", "skipped"] | None = None
     diff_files: int | None = None
     diff_lines: int | None = None
-    #: Ce que la plateforme a mesuré elle-même (ADR 0045) : le nom des champs qu'elle a exécutés ou
-    #: calculés, et `facts.<nom>` pour un fait qu'une commande a mesuré. Le runner l'écrit, jamais
-    #: l'agent — `merge_evidence` écrase ce qu'un agent y mettrait. Un champ absent de la liste vient
-    #: du récit de l'agent ; `None` : un runner trop ancien pour le dire.
+    #: What the platform measured itself (ADR 0045): the names of the fields it executed or
+    #: computed, and `facts.<name>` for a fact a command measured. The runner writes it, never
+    #: the agent: `merge_evidence` overwrites what an agent would put there. A field absent from
+    #: the list comes from the agent's story; `None`: a runner too old to say.
     measured: list[str] | None = None
 
     def is_complete(self) -> bool:
-        """Preuves minimales attendues par la gate `evidence_present`."""
+        """Minimal proofs expected by the `evidence_present` gate."""
         return self.tests_passed is not None and self.tests_run is not None
 
 
@@ -488,7 +490,7 @@ class Diagnostics(Strict):
 
 
 class StageOutputs(Strict):
-    """Sorties structurées d'une étape ; champs supplémentaires tolérés (rôles custom)."""
+    """Structured outputs of a stage; extra fields tolerated (custom roles)."""
 
     model_config = Strict.model_config | {"extra": "allow"}
 
@@ -505,7 +507,7 @@ class StageOutputs(Strict):
 
 
 class StageResult(Strict):
-    """Ce que le runner rend à l'orchestrateur (docs/plan/01 §1.6)."""
+    """What the runner returns to the orchestrator (docs/plan/01 §1.6)."""
 
     schema_: Literal["choregos/StageResult/v1"] = Field(default="choregos/StageResult/v1", alias="schema")
     status: StageStatus
@@ -553,7 +555,7 @@ class RelatedItem(Strict):
 
 
 class ContextPack(Strict):
-    """Mémoire injectée dans un stage. Contenu **non fiable** : données, jamais instructions."""
+    """Memory injected into a stage. **Untrusted** content: data, never instructions."""
 
     schema_: Literal["choregos/ContextPack/v1"] = Field(default="choregos/ContextPack/v1", alias="schema")
     query: str
