@@ -15,14 +15,10 @@ CONTRACT_ONLY: dict[str, str] = {
     "putMcpGateway": "S46-08",
     "deleteMcpGateway": "S46-08",
     "testMcpGateway": "S46-08",
-    "rotateMcpGatewayAssertionKey": "S46-07",
-    "getMcpGatewayJwks": "S46-07",
 }
 CONTRACT_ONLY_PATHS: set[str] = {
     "/orgs/{org}/mcp-gateway",
     "/orgs/{org}/mcp-gateway/test",
-    "/orgs/{org}/mcp-gateway/assertion-key",
-    "/orgs/{org}/mcp-gateway/jwks.json",
 }
 
 
