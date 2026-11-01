@@ -174,6 +174,7 @@ async def test_reauth_demande_a_l_idp_de_re_authentifier(
                 return_value=Response(
                     200,
                     json={
+                        "issuer": ISSUER,
                         "authorization_endpoint": f"{ISSUER}/authorize",
                         "token_endpoint": f"{ISSUER}/token",
                         "userinfo_endpoint": f"{ISSUER}/userinfo",

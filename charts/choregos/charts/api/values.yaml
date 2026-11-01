@@ -79,3 +79,17 @@ mcpCatalogueExtra: ""
 # a missing property fails the whole ExternalSecret sync.
 externalSecrets:
   sessionSecretPrevious: false
+# The OIDC provider's endpoints, for one that publishes no discovery document (ADR 0100). Set all
+# three or none: the render fails otherwise. Empty (the default): the API reads the provider's
+# discovery document, whose `issuer` must equal `global.oidc.issuer`, and answers 503 when it cannot.
+oidcEndpoints:
+  authorization: ""
+  token: ""
+  userinfo: ""
+# An existing console account is linked by e-mail only when the provider does not say
+# `email_verified: false` (a provider that omits the claim, such as Entra ID, is accepted).
+oidcRequireEmailVerified: true
+# Temporary switch for an identity provider MIGRATION (ADR 0100): re-links an account bound to
+# another subject when the provider asserts `email_verified: true`. Leave it false otherwise, and turn
+# it off again once every account has signed in through the new provider.
+oidcRelinkVerifiedEmail: false
