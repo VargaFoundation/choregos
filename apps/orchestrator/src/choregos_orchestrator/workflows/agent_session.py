@@ -17,7 +17,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import agent_session as session_activities
@@ -52,7 +52,7 @@ class AgentSessionPod:
         idle = timedelta(seconds=float(payload["idle_s"]))
         expires_at = datetime.fromisoformat(str(payload["expires_at"]))
         try:
-            await executer_activite(
+            await execute_on_its_queue(
                 session_activities.start_session_pod,
                 session,
                 start_to_close_timeout=timedelta(minutes=5),
@@ -78,7 +78,7 @@ class AgentSessionPod:
         return await self._stop(session, self._close or reason)
 
     async def _stop(self, session: dict[str, Any], reason: str) -> dict[str, Any]:
-        stopped = await executer_activite(
+        stopped = await execute_on_its_queue(
             session_activities.stop_session_pod,
             {**session, "reason": reason},
             start_to_close_timeout=timedelta(minutes=2),

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Envoi de signaux aux workflows Temporal depuis une activité (train, findings, mémoire).
+"""Sending signals to Temporal workflows from an activity (train, findings, memory).
 
-En mode fakes, les signaux sont mis en file en mémoire : la démo et les tests fonctionnent
-sans serveur Temporal, et le contenu des signaux reste vérifiable.
+In fakes mode, the signals are queued in memory: the demo and the tests work without a Temporal
+server, and the content of the signals stays checkable.
 """
 
 from __future__ import annotations
@@ -32,13 +32,16 @@ def clear_fake_signals() -> None:
 
 
 async def start_workflow_once(
-    name: str, workflow_id: str, payload: dict[str, Any], *, relancer_si_echoue: bool = False
+    name: str,
+    workflow_id: str,
+    payload: dict[str, Any],
+    *,
+    relancer_si_echoue: bool = False,  # lang: fr-ok (the keyword test_reconciliation pins)
 ) -> bool:
-    """Démarre un workflow s'il n'existe pas déjà sous cet identifiant.
+    """Start a workflow unless one already exists under this id.
 
-    Rend `True` si ce démarrage-ci a créé le workflow. Un identifiant déterministe rend
-    le geste rejouable : ni le rattrapage périodique ni un webhook rejoué ne peuvent
-    faire tourner deux fois le même ticket.
+    Returns `True` if this start created the workflow. A deterministic id makes the gesture
+    replayable: neither the periodic catch-up nor a replayed webhook can run the same ticket twice.
     """
     settings = get_settings()
     if settings.fakes:
@@ -57,11 +60,11 @@ async def start_workflow_once(
             payload,
             id=workflow_id,
             task_queue="orchestrator",
-            # Déjà terminé pour ce ticket : on ne le relance pas. Déjà en cours : on reprend
-            # la main sur l'existant plutôt que d'en créer un second.
-            # Une boucle (le rattrapage d'un projet) morte en échec repart ; un ticket, jamais.
+            # Already finished for this ticket: it is not started again. Already running: the
+            # existing one is taken over rather than creating a second.
+            # A loop (a project's catch-up) that died in failure restarts; a ticket never does.
             id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY
-            if relancer_si_echoue
+            if relancer_si_echoue  # lang: fr-ok (the keyword test_reconciliation pins)
             else WorkflowIDReusePolicy.REJECT_DUPLICATE,
             id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
         )
@@ -73,7 +76,7 @@ async def start_workflow_once(
 async def signal_workflow(
     workflow_id: str, name: str, payload: dict[str, Any], *, start: str | None = None
 ) -> None:
-    """Signale un workflow ; le démarre si `start` donne son type et qu'il n'existe pas."""
+    """Signal a workflow; start it if `start` gives its type and it does not exist."""
     settings = get_settings()
     if settings.fakes:
         _FAKE_SIGNALS[workflow_id].append((name, payload))

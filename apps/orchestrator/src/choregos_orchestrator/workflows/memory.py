@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`MemoryIngestion` : import planifié tracker/SCM/CD → mémoire (docs/plan/04)."""
+"""`MemoryIngestion`: scheduled import tracker/SCM/CD to memory (docs/plan/04)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import memory as memory_activities
@@ -50,7 +50,7 @@ class MemoryIngestion:
 
     @workflow.signal
     def alert(self, payload: dict[str, Any]) -> None:
-        """Une alerte devient un incident en mémoire, sans attendre le prochain cycle."""
+        """An alert becomes an incident in memory, without waiting for the next cycle."""
         self.events.append(payload)
 
     @workflow.signal
@@ -59,7 +59,7 @@ class MemoryIngestion:
 
     @workflow.signal
     def ab_report_now(self, payload: dict[str, Any] | None = None) -> None:
-        """Force le rapport A/B au prochain cycle, sans attendre le changement de semaine."""
+        """Force the A/B report at the next cycle, without waiting for the week to change."""
         self.last_report_week = 0
 
     @workflow.query
@@ -83,7 +83,7 @@ class MemoryIngestion:
                 )
             while self.events:
                 event = self.events.popleft()
-                await executer_activite(
+                await execute_on_its_queue(
                     memory_activities.ingest_alert,
                     {"project_slug": params.project_slug, "event": event},
                     start_to_close_timeout=timedelta(minutes=2),
@@ -91,7 +91,7 @@ class MemoryIngestion:
                 )
             wanted = self.requested or sources
             self.requested = None
-            outcome = await executer_activite(
+            outcome = await execute_on_its_queue(
                 memory_activities.ingest_sources,
                 {"project_slug": params.project_slug, "sources": wanted},
                 start_to_close_timeout=timedelta(minutes=15),
@@ -105,17 +105,17 @@ class MemoryIngestion:
         return {"cycles": self.cycles, "ingested": self.ingested}
 
     async def _weekly_ab_report(self, params: MemoryInput) -> None:
-        """Une fois par semaine ISO : la mémoire paie-t-elle ? (docs/plan/04, décision 4)
+        """Once per ISO week: does the memory pay off? (docs/plan/04, decision 4)
 
-        `workflow.now()` est déterministe : le rapport part une seule fois par semaine,
-        même si le workflow est rejoué ou reprend après un `continue_as_new`.
+        `workflow.now()` is deterministic: the report goes out once a week, even if the workflow
+        is replayed or resumes after a `continue_as_new`.
         """
         if not params.org:
             return
         week = workflow.now().isocalendar().week
         if week == (self.last_report_week or params.last_report_week):
             return
-        self.last_report = await executer_activite(
+        self.last_report = await execute_on_its_queue(
             memory_activities.memory_ab_report,
             {"org": params.org, "weeks": params.ab_report_weeks, "notify": True},
             start_to_close_timeout=timedelta(minutes=5),

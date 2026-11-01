@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Orchestrateur Choregos : workflows Temporal et activités.
+"""Choregos orchestrator: Temporal workflows and activities.
 
-L'orchestrateur planifie et n'appelle jamais un modèle : il décide quelle étape lancer,
-le runner l'exécute. Toute la logique de décision vient de `choregos_core`.
+The orchestrator plans and never calls a model: it decides which stage to launch, and the runner
+runs it. All the decision logic comes from `choregos_core`.
 """
 
 from __future__ import annotations

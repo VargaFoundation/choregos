@@ -1,51 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Planifier une activité **sur sa file** (docs/plan/02 §2.1).
+# lang: fr-ok-file alias:internal
+"""Former module path of `choregos_orchestrator.workflows.scheduling` (ADR 0098 §3 (a)).
 
-`workflow.execute_activity` sans `task_queue` planifie sur la file du *workflow*. Tous les
-workflows tournant sur `orchestrator`, toutes les activités y tournaient aussi, quelle que soit la
-file que `repartition` leur attribuait. Cette enveloppe lit la table et pose le `task_queue` que
-l'appel ne dit pas — un appelant qui le précise garde le dernier mot.
+No `replace_module` here: the Temporal sandbox re-imports the modules of `workflows/` on its own.
+`workflow` stays exported because a test patches `planification.workflow.execute_activity`.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from temporalio import workflow
 
-with workflow.unsafe.imports_passed_through():
-    from ..repartition import file_de
+from .scheduling import execute_on_its_queue, start_on_its_queue
 
-#: Sentinelle : `execute_activity` distingue « aucun argument » de « l'argument `None` », et une
-#: activité sans paramètre existe (`train_stats`, `list_fixtures`).
-_ABSENT = object()
+executer_activite = execute_on_its_queue
+demarrer_activite = start_on_its_queue
 
-
-def executer_activite(activite: Any, arg: Any = _ABSENT, **options: Any) -> Any:
-    """Comme `workflow.execute_activity`, mais sur la file déclarée de l'activité.
-
-    Retourne ce que retourne Temporal — un awaitable — donc s'utilise avec `await`, exactement
-    comme l'appel qu'elle remplace.
-    """
-    if "task_queue" not in options:
-        file = file_de(activite)
-        if file is not None:
-            options["task_queue"] = file
-    if arg is _ABSENT:
-        return workflow.execute_activity(activite, **options)
-    return workflow.execute_activity(activite, arg, **options)
-
-
-def demarrer_activite(activite: Any, arg: Any = _ABSENT, **options: Any) -> Any:
-    """Comme `workflow.start_activity`, sur la file déclarée de l'activité.
-
-    Rend la poignée de l'activité, qu'on peut attendre, interroger (`done()`) ou annuler : c'est ce
-    qu'il faut au workflow qui doit pouvoir cesser d'attendre une activité pour un signal.
-    """
-    if "task_queue" not in options:
-        file = file_de(activite)
-        if file is not None:
-            options["task_queue"] = file
-    if arg is _ABSENT:
-        return workflow.start_activity(activite, **options)
-    return workflow.start_activity(activite, arg, **options)
+__all__ = ["demarrer_activite", "executer_activite", "workflow"]

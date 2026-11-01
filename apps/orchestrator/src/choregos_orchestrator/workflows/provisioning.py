@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`ProjectProvisioning` : exécute les étapes du template, reprend là où ça a cassé."""
+"""`ProjectProvisioning`: runs the template's steps, resumes where it broke."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import provisioning as provisioning_activities
@@ -44,7 +44,7 @@ class ProjectProvisioning:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = ProvisioningInput(**payload)
-        template = await executer_activite(
+        template = await execute_on_its_queue(
             provisioning_activities.load_template_steps,
             {"template_ref": params.template_ref},
             start_to_close_timeout=timedelta(seconds=30),
@@ -57,7 +57,7 @@ class ProjectProvisioning:
         for step in steps:
             self.current = step["name"]
             try:
-                outcome = await executer_activite(
+                outcome = await execute_on_its_queue(
                     provisioning_activities.run_provision_step,
                     {
                         "project_id": params.project_id,
@@ -69,13 +69,13 @@ class ProjectProvisioning:
                     retry_policy=RETRY,
                 )
             except Exception:
-                # L'étape a épuisé ses tentatives : on s'arrête ici, l'état reste repris au redémarrage.
+                # The step ran out of attempts: stop here, the state is resumed at the restart.
                 self.failed = step["name"]
                 break
             self.completed.append(outcome["step"])
         self.current = None
 
-        result = await executer_activite(
+        result = await execute_on_its_queue(
             provisioning_activities.finish_provisioning,
             {"project_id": params.project_id},
             start_to_close_timeout=timedelta(minutes=2),

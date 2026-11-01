@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`FindingsTriage` : un workflow par projet, qui déduplique et crée les tickets liés."""
+"""`FindingsTriage`: one workflow per project, which deduplicates and creates the linked tickets."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import findings as finding_activities
@@ -40,7 +40,7 @@ class FindingsTriage:
 
     @workflow.signal
     def create_ticket(self, payload: dict[str, Any]) -> None:
-        """Triage humain : un finding écarté automatiquement peut être forcé en ticket."""
+        """Human triage: a finding dropped automatically can be forced into a ticket."""
         self.queue.append({**payload, "forced": True})
 
     @workflow.signal
@@ -64,7 +64,7 @@ class FindingsTriage:
             await workflow.wait_condition(lambda: bool(self.queue) or self.stopped)
             while self.queue:
                 item = self.queue.popleft()
-                outcome = await executer_activite(
+                outcome = await execute_on_its_queue(
                     finding_activities.triage_finding,
                     {"project_slug": params.project_slug, "finding_id": item["finding_id"]},
                     start_to_close_timeout=timedelta(minutes=3),

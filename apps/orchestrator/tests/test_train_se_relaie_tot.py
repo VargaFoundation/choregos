@@ -239,8 +239,8 @@ async def test_un_run_d_avant_rejoue_contre_le_seuil_abaisse(
     from choregos_orchestrator.workflows import train as module
     from temporalio.worker import Replayer
 
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS", 10**9)
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS_D_AVANT", 300)
+    monkeypatch.setattr(module, "RELAY_THRESHOLD", 10**9)
+    monkeypatch.setattr(module, "FORMER_RELAY_THRESHOLD", 300)
     async with worker_factory(remplacements=_au_repos()):
         train = await temporal_env.client.start_workflow(
             "ReleaseTrain",
@@ -260,11 +260,11 @@ async def test_un_run_d_avant_rejoue_contre_le_seuil_abaisse(
 
     # Le code d'aujourd'hui, à l'échelle : le nouveau marqueur est interrogé dès 100, rend `False`, et
     # le run garde son relais d'avant.
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS", 100)
+    monkeypatch.setattr(module, "RELAY_THRESHOLD", 100)
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
 
     # Le seuil seulement abaissé (l'ancien marqueur interrogé dès 100) : écart de déterminisme.
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS_D_AVANT", 100)
+    monkeypatch.setattr(module, "FORMER_RELAY_THRESHOLD", 100)
     rejeu = await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique, raise_on_replay_failure=False)
     assert rejeu.replay_failure is not None
     assert "TMPRL1100" in str(rejeu.replay_failure)

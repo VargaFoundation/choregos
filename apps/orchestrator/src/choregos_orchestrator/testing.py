@@ -1,17 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Outillage de test : des workers **répartis par file**, comme le chart en déploie un par file.
+"""Test tooling: workers **spread by queue**, as the chart deploys one per queue.
 
-Ce module vit dans le paquet et non dans un `conftest.py` parce que **trois** suites en ont besoin
-— `apps/orchestrator/tests`, `tests/e2e`, `tests/replay` — et qu'une copie par suite se
-désynchronise en silence. C'était déjà le cas : les trois construisaient un worker unique portant
-toutes les activités, donc aucune ne pouvait voir que les workflows planifiaient tout sur la même
-file (défaut du 2026-09-27).
+This module lives in the package and not in a `conftest.py` because **three** suites need it
+(`apps/orchestrator/tests`, `tests/e2e`, `tests/replay`) and a copy per suite drifts apart in
+silence. It already had: the three built a single worker carrying every activity, so none could
+see that the workflows scheduled everything on the same queue (defect of 2026-09-27).
 
-**Différence assumée avec la production** : ici, la file du workflow ne porte QUE les activités
-sans file déclarée. En production, `orchestrator` porte tout — un filet pour ne pas laisser une
-tâche orpheline pendant une montée de version. Le filet rendrait le test aveugle : une activité mal
-routée y tournerait quand même. Ne pas le poser est ce qui fait échouer la suite quand le routage
-régresse.
+**A deliberate difference from production**: here, the workflow's queue carries ONLY the
+activities with no declared queue. In production, `orchestrator` carries everything, a net so that
+no task is left orphaned during a version upgrade. The net would make the test blind: a badly
+routed activity would run anyway. Not laying it is what turns the suite red when the routing
+regresses.
 """
 
 from __future__ import annotations
@@ -20,77 +19,93 @@ import contextlib
 from collections.abc import AsyncIterator, Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from .repartition import ACTIVITES_PAR_FILE, file_de, nom_de_l_activite
+from .queues import ACTIVITIES_BY_QUEUE, activity_name, queue_of
 
 if TYPE_CHECKING:
     from temporalio.api.enums.v1 import EventType
     from temporalio.client import WorkflowHandle
 
 
-def avec_doublures(activites: Iterable[Any], remplacements: Mapping[str, Any] | None = None) -> list[Any]:
-    """La liste d'activités où celles nommées dans `remplacements` sont substituées.
+def with_doubles(activities: Iterable[Any], replacements: Mapping[str, Any] | None = None) -> list[Any]:
+    """The list of activities where those named in `replacements` are substituted.
 
-    Les clés sont des **noms Temporal** (`@activity.defn(name=…)`), pas des noms de fonction : c'est
-    le nom déclaré qui décide de la file, et c'est lui qui voyage dans l'historique.
+    The keys are **Temporal names** (`@activity.defn(name=...)`), not function names: the declared
+    name decides the queue, and it is the one that travels in the history.
     """
-    remplacements = dict(remplacements or {})
-    sortie: list[Any] = []
-    vus: set[str] = set()
-    for activite in activites:
-        nom = nom_de_l_activite(activite)
-        if nom is not None and nom in remplacements:
-            sortie.append(remplacements[nom])
-            vus.add(nom)
+    replacements = dict(replacements or {})
+    result: list[Any] = []
+    seen: set[str] = set()
+    for activity in activities:
+        name = activity_name(activity)
+        if name is not None and name in replacements:
+            result.append(replacements[name])
+            seen.add(name)
         else:
-            sortie.append(activite)
-    # Une doublure d'activité que le paquet ne connaît pas reste enregistrée.
-    sortie.extend(doublure for nom, doublure in remplacements.items() if nom not in vus)
-    return sortie
+            result.append(activity)
+    # A double of an activity the package does not know stays registered.
+    result.extend(double for name, double in replacements.items() if name not in seen)
+    return result
 
 
-def repartir(activites: Iterable[Any], file_du_workflow: str) -> dict[str, list[Any]]:
-    """Groupe des activités par file. Celles sans file déclarée vont sur la file du workflow."""
-    par_file: dict[str, list[Any]] = {file_du_workflow: []}
-    for file in ACTIVITES_PAR_FILE:
-        par_file.setdefault(file, [])
-    for activite in activites:
-        par_file[file_de(activite) or file_du_workflow].append(activite)
-    return par_file
+def group_by_queue(activities: Iterable[Any], workflow_queue: str) -> dict[str, list[Any]]:
+    """Group activities by queue. Those with no declared queue go on the workflow's queue."""
+    by_queue: dict[str, list[Any]] = {workflow_queue: []}
+    for queue in ACTIVITIES_BY_QUEUE:
+        by_queue.setdefault(queue, [])
+    for activity in activities:
+        by_queue[queue_of(activity) or workflow_queue].append(activity)
+    return by_queue
 
 
 @contextlib.asynccontextmanager
-async def workers_repartis(
+async def workers_by_queue(
     client: Any,
     *,
-    activites: Iterable[Any],
+    activities: Iterable[Any] | None = None,
     workflows: Iterable[Any],
-    file_du_workflow: str = "test",
-    remplacements: Mapping[str, Any] | None = None,
+    workflow_queue: str = "test",
+    replacements: Mapping[str, Any] | None = None,
+    activites: Iterable[Any] | None = None,  # lang: fr-ok alias:internal
+    file_du_workflow: str | None = None,  # lang: fr-ok alias:internal
+    remplacements: Mapping[str, Any] | None = None,  # lang: fr-ok alias:internal
     **options: Any,
 ) -> AsyncIterator[dict[str, list[Any]]]:
-    """Un worker par file, le temps du bloc. Rend la répartition, pour qu'un test puisse l'affirmer."""
+    """One worker per queue, for the length of the block. Yields the split, so a test can assert it."""
     from temporalio.worker import Worker
 
-    par_file = repartir(avec_doublures(activites, remplacements), file_du_workflow)
-    portes = list(workflows)
-    # Une file sans activité n'a pas de worker : Temporal refuse un worker vide, et un test qui
-    # ne fournit qu'un sous-ensemble d'activités (les doublures de `tests/replay`) laisse des
-    # files inoccupées. Ce qu'aucun worker ne porte, aucun workflow ne le planifie non plus.
+    if activities is None:
+        activities = activites  # lang: fr-ok alias:internal
+    if activities is None:
+        raise TypeError("workers_by_queue() needs `activities`")
+    if file_du_workflow is not None:  # lang: fr-ok alias:internal
+        workflow_queue = file_du_workflow  # lang: fr-ok alias:internal
+    if remplacements is not None:  # lang: fr-ok alias:internal
+        replacements = remplacements  # lang: fr-ok alias:internal
+    by_queue = group_by_queue(with_doubles(activities, replacements), workflow_queue)
+    carried = list(workflows)
+    # A queue without activities has no worker: Temporal refuses an empty worker, and a test that
+    # supplies only a subset of the activities (the doubles of `tests/replay`) leaves some queues
+    # empty. What no worker carries, no workflow schedules either.
     workers = [
         Worker(
             client,
-            task_queue=file,
-            workflows=portes if file == file_du_workflow else [],
-            activities=portees,
+            task_queue=queue,
+            workflows=carried if queue == workflow_queue else [],
+            activities=queue_activities,
             **options,
         )
-        for file, portees in par_file.items()
-        if portees or (file == file_du_workflow and portes)
+        for queue, queue_activities in by_queue.items()
+        if queue_activities or (queue == workflow_queue and carried)
     ]
-    async with contextlib.AsyncExitStack() as pile:
+    async with contextlib.AsyncExitStack() as stack:
         for worker in workers:
-            await pile.enter_async_context(worker)
-        yield par_file
+            await stack.enter_async_context(worker)
+        yield by_queue
+
+
+avec_doublures = with_doubles  # lang: fr-ok alias:internal
+repartir = group_by_queue  # lang: fr-ok alias:internal
+workers_repartis = workers_by_queue  # lang: fr-ok alias:internal
 
 
 #: The events that close a run: once one is in the history, no other event will follow.

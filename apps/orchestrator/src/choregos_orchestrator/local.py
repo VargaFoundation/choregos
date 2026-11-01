@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Interpréteur local : la même logique de décision, sans serveur Temporal.
+"""Local interpreter: the same decision logic, with no Temporal server.
 
-Il sert deux usages honnêtes :
-- `make demo` — montrer la chaîne complète sur un poste, sans cluster ;
-- `choregos dev simulate` — rejouer un ticket pour comprendre un workflow.
+It serves two honest purposes:
+- `make demo`: show the full chain on a workstation, with no cluster;
+- `choregos dev simulate`: replay a ticket to understand a workflow.
 
-Il n'a **pas** les garanties de Temporal (reprise après panne, historique, signaux
-durables) : en production, c'est `WorkflowInterpreter` qui s'exécute.
+It does **not** have Temporal's guarantees (recovery after a crash, history, durable signals):
+in production, `WorkflowInterpreter` is what runs.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ StateHook = Callable[[str], Awaitable[None]]
 
 @dataclass
 class Step:
-    """Une étape jouée par l'interpréteur local, telle qu'on la raconte."""
+    """A step played by the local interpreter, as it is told."""
 
     state: str
     transition: str
@@ -44,7 +44,7 @@ class Step:
 
 @dataclass
 class LocalRun:
-    """Trace complète d'une simulation."""
+    """The full trace of a simulation."""
 
     steps: list[Step] = field(default_factory=list)
     final_state: str = ""
@@ -73,14 +73,14 @@ async def run_local(
     deploy_ok: bool = True,
     on_state: StateHook | None = None,
 ) -> LocalRun:
-    """Déroule le workflow d'un ticket en appelant les vraies activités."""
+    """Run a ticket's workflow, calling the real activities."""
     context = await load_context({"project_id": project_id, "work_item_id": work_item_id})
     engine = WorkflowEngine(Workflow.model_validate(context["workflow"]))
     state = context.get("state") or engine.initial_state
     trace = LocalRun()
     attempts: dict[str, int] = {}
     last_outcome: str | None = None
-    last_run: str | None = None  # les transitions `system` évaluent leurs gates sur ce run
+    last_run: str | None = None  # `system` transitions evaluate their gates on this run
     last_outputs: dict[str, Any] | None = None  # what a transition's `when` reads (S48-01)
     approve = approve or (lambda _transition, _state: True)
 
@@ -118,7 +118,7 @@ async def run_local(
                 Step(state, key, kind, decision.reason, decision.next_state, cost_usd=cost, run_id=run_id)
             )
         elif kind == "human":
-            # La demande est réellement créée : commentaire sur le ticket et notification.
+            # The request is really created: a comment on the ticket and a notification.
             human = engine.human_of(transition)
             request = await tracker_activities.create_human_request(
                 {
@@ -169,7 +169,7 @@ async def run_local(
             {"project_id": project_id, "work_item_id": work_item_id}
         )
         if on_state is not None:
-            # Permet au monde extérieur (CI, review, déploiement) de réagir à l'état atteint.
+            # Lets the outside world (CI, review, deployment) react to the state reached.
             await on_state(state)
 
     trace.final_state = state
@@ -235,11 +235,11 @@ async def _run_stage(
 
 
 async def _emit_findings(project_id: str, work_item_id: str, run_id: str, result: StageResult) -> None:
-    """Déclenche le triage des findings du run.
+    """Trigger the triage of the run's findings.
 
-    Les lignes sont déjà enregistrées par `record_run_outcome` (ou par le runner pendant
-    le run) ; ici on joue simplement le workflow `FindingsTriage`, qui les déduplique et
-    crée les tickets liés.
+    The rows are already recorded by `record_run_outcome` (or by the runner during the run); here
+    the `FindingsTriage` workflow is simply played, which deduplicates them and creates the linked
+    tickets.
     """
     if not result.findings:
         return

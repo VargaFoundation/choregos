@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`ReleaseTrain` : un singleton par projet × environnement (docs/plan/05 §5.2).
+"""`ReleaseTrain`: one singleton per project x environment (docs/plan/05 §5.2).
 
-Le train est le deuxième des trois verrous : la merge queue garde `main` vert, le train
-garde l'environnement, les garde-fous déclaratifs (fenêtres Argo, Environments GitHub)
-tiennent même si Choregos tombe.
+The train is the second of the three locks: the merge queue keeps `main` green, the train keeps
+the environment, and the declarative guard rails (Argo windows, GitHub Environments) hold even if
+Choregos goes down.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
 from .activity_names import named
-from .planification import demarrer_activite, executer_activite
+from .scheduling import execute_on_its_queue, start_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import InboundEventType, ReleaseStatus
@@ -28,16 +28,17 @@ with workflow.unsafe.imports_passed_through():
 
 DEFAULT_RETRY = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=2))
 NO_RETRY = RetryPolicy(maximum_attempts=1)
-#: Un environnement `auto_sync` prévient ses tickets (#278, S21-27). Avant ce marqueur, le train y
-#: attendait `abort` sans rien lire, et un ticket qui y montait attendait 72 h puis un humain.
-AUTO_SYNC_PREVIENT = "auto-sync-previent"  # lang: fr-ok — a patch id is never renamed
-#: Le ticket dont le signal DÉMARRE le train (signal-with-start) reste dans le lot (S22-22). Avant ce
-#: marqueur, `run` écrasait le lot avec les tickets reportés : sur le locataire dev, le 09/10, #4 et #6
-#: ont réveillé chacun leur train et en ont été effacés aussitôt — le train attendait, vide, et le ticket
-#: attendait une livraison qui ne viendrait pas.
-LE_SIGNAL_DU_DEMARRAGE_EMBARQUE = "start-signal-boards"
-#: Un départ express prend l'approbation de SA voie (`express_lane.approval`, #279, S22-17). Avant ce
-#: marqueur, il prenait l'approbation ordinaire : la voie express n'était jamais lue.
+#: An `auto_sync` environment warns its tickets (#278, S21-27). Before this marker, the train waited
+#: there for `abort` without reading anything, and a ticket that boarded there waited 72 h and then a
+#: human.
+AUTO_SYNC_WARNS_ITS_ITEMS = "auto-sync-previent"  # lang: fr-ok — a patch id is never renamed
+#: The ticket whose signal STARTS the train (signal-with-start) stays in the batch (S22-22). Before
+#: this marker, `run` overwrote the batch with the carried-over tickets: on the dev tenant, on 9
+#: October, #4 and #6 each woke their own train and were erased from it at once: the train waited,
+#: empty, and the ticket waited for a delivery that would never come.
+START_SIGNAL_BOARDS = "start-signal-boards"
+#: An express departure takes ITS lane's approval (`express_lane.approval`, #279, S22-17). Before
+#: this marker, it took the ordinary approval: the express lane was never read.
 EXPRESS_LANE_APPROVAL = "express-lane-approval"
 #: The express lane is recognised by ITS label (`express_lane.label`, #351, S22-30), and a ticket already
 #: on board that comes back carrying it triggers the express lane. Before this marker, `merged` compared
@@ -55,31 +56,33 @@ EXPRESS_LANE_READS_ITS_LABEL = "express-lane-reads-its-label"
 EXPRESS_LANE_HONOURS_SKIP_SCHEDULE = "express-lane-honours-skip-schedule"
 #: The express lane label when the policy names none (the default of the `ExpressLane` contract).
 DEFAULT_EXPRESS_LABEL = "hotfix"
-#: Le train au repos se relaie (continue-as-new) avant que Temporal ne le tue (S22-24). Avant ce
-#: marqueur, seul un départ menait au relais : un train sans lot bouclait dans `_collect` — une
-#: activité `check_window` et un timer par tour, ~11 événements par minute. Sur le locataire dev, le
-#: 10/10, `train-dev-staging` portait 15 814 événements après 23 h (1 438 `check_window`), Temporal
-#: suggérait déjà le relais, et à 51 200 événements il termine le workflow (~78 h) : le train meurt,
-#: et les tickets qui y montent attendent pour toujours.
-#: `patched` n'est appelé qu'une fois le seuil franchi : il est mémorisé par exécution, et un appel
-#: précoce pendant le rejeu d'un ancien historique rendrait `False` pour toute la vie du run. Ainsi un
-#: run démarré sur la version d'avant prend le correctif s'il est mis à jour avant le seuil.
-LE_TRAIN_AU_REPOS_SE_RELAIE = "idle-train-continues-as-new"
-#: Le train se relaie AVANT que son historique ne soit trop long à rejouer (S22-27). Avant ce marqueur,
-#: le seuil était de 15 000 événements : sur le locataire dev, le 10/10 (0.17.11), un historique de
-#: ~16 000 événements (2,6 Mo) prenait 32 à 34 s à rejouer sur le pod de l'orchestrateur (1 cœur) —
-#: `[TMPRL1104] ... workflow_task_duration=33943 workflow_history_size=2571325`. Or la tâche de
-#: workflow expire à 10 s : après un `temporal workflow reset`, ou après tout redémarrage du worker
-#: (déploiement, cache collant perdu), chaque tâche expirait (`WORKFLOW_TASK_TIMED_OUT`) et le train ne
-#: progressait plus ; chaque `status_query` de la console coûtait un rejeu complet de 33 s et finissait
-#: en « query task not found, or already expired » (API 500).
-#: Même discipline que `LE_TRAIN_AU_REPOS_SE_RELAIE` : le seuil d'abord, `patched` ensuite. Un run
-#: d'avant qui rejoue au-delà du nouveau seuil y appelle `patched` sans marqueur : `False`, mémorisé,
-#: et il garde le relais d'avant (`SEUIL_DE_RELAIS_D_AVANT`, sous l'ancien marqueur). Abaisser le seuil
-#: sans nouveau marqueur ne rejouait pas : l'ancien marqueur, interrogé dès le nouveau seuil, rendait
-#: `False` pour toute la vie du run, et le relais qu'il avait enregistré à 15 000 devenait un écart
-#: de déterminisme (TMPRL1100, vérifié).
-LE_TRAIN_SE_RELAIE_TOT = "train-continues-as-new-early"
+#: The idle train relays (continue-as-new) before Temporal kills it (S22-24). Before this marker,
+#: only a departure led to the relay: a train without a batch looped in `_collect`, one
+#: `check_window` activity and one timer per turn, ~11 events per minute. On the dev tenant, on 10
+#: October, `train-dev-staging` held 15,814 events after 23 h (1,438 `check_window`), Temporal was
+#: already suggesting the relay, and at 51,200 events it terminates the workflow (~78 h): the train
+#: dies, and the tickets that board it wait forever.
+#: `patched` is only called once the threshold is crossed: it is memoised per execution, and an
+#: early call while replaying an old history would return `False` for the whole life of the run. So
+#: a run started on the previous version takes the fix if it is updated before the threshold.
+IDLE_TRAIN_CONTINUES_AS_NEW = "idle-train-continues-as-new"
+LE_TRAIN_AU_REPOS_SE_RELAIE = IDLE_TRAIN_CONTINUES_AS_NEW  # lang: fr-ok alias:internal
+#: The train relays BEFORE its history gets too long to replay (S22-27). Before this marker, the
+#: threshold was 15,000 events: on the dev tenant, on 10 October (0.17.11), a history of ~16,000
+#: events (2.6 MB) took 32 to 34 s to replay on the orchestrator pod (1 core):
+#: `[TMPRL1104] ... workflow_task_duration=33943 workflow_history_size=2571325`. But the workflow
+#: task times out at 10 s: after a `temporal workflow reset`, or after any worker restart
+#: (deployment, sticky cache lost), every task timed out (`WORKFLOW_TASK_TIMED_OUT`) and the train
+#: no longer progressed; every `status_query` from the console cost a full 33 s replay and ended in
+#: "query task not found, or already expired" (API 500).
+#: Same discipline as `IDLE_TRAIN_CONTINUES_AS_NEW`: the threshold first, `patched` second. A
+#: previous run that replays beyond the new threshold calls `patched` there with no marker:
+#: `False`, memoised, and it keeps the previous relay (`FORMER_RELAY_THRESHOLD`, under the old
+#: marker). Lowering the threshold without a new marker did not replay: the old marker, queried as
+#: soon as the new threshold was crossed, returned `False` for the whole life of the run, and the
+#: relay it had recorded at 15,000 became a determinism gap (TMPRL1100, verified).
+TRAIN_CONTINUES_AS_NEW_EARLY = "train-continues-as-new-early"
+LE_TRAIN_SE_RELAIE_TOT = TRAIN_CONTINUES_AS_NEW_EARLY  # lang: fr-ok alias:internal
 #: A departure requested on a train WITHOUT A BATCH is dropped (#370, S22-29). Before this marker,
 #: `depart_now` (or `express`) raised a flag that only `_depart` resets; but `_collect` does not depart
 #: without a batch, and its wait (`depart_requested or express or abort_requested`) returned at once:
@@ -90,7 +93,7 @@ LE_TRAIN_SE_RELAIE_TOT = "train-continues-as-new-early"
 #: way (it does not carry `depart_requested`). The API still answers 202: the signal is accepted, the
 #: train ignores it for want of a batch. `express` follows the same rule (a hotfix only raises it by
 #: boarding, hence with a batch: a theoretical case, covered at no cost).
-#: Same discipline as `LE_TRAIN_AU_REPOS_SE_RELAIE`: the condition first, `patched` second.
+#: Same discipline as `IDLE_TRAIN_CONTINUES_AS_NEW`: the condition first, `patched` second.
 EMPTY_TRAIN_DROPS_DEPARTURE = "empty-train-drops-departure"
 #: A FROZEN train no longer spins on a pending departure (#515, S22-29). Before this marker, a frozen
 #: train with a batch and `depart_requested` (or `express`) skipped both exits of `_collect` (both
@@ -112,24 +115,26 @@ FROZEN_TRAIN_DOES_NOT_SPIN = "frozen-train-does-not-spin"
 #: train relayed frozen is still lost (one bit cannot tell it from the relay's own `frozen`): the
 #: train stays frozen, the safe side, and whoever unfreezes sends it again.
 FREEZE_BEFORE_RUN_IS_KEPT = "freeze-before-run-is-kept"
-#: Le seuil (en événements d'historique) au-delà duquel le train se relaie — au repos, après un départ
-#: et après une synchro `auto_sync`. 2 000 : le rejeu coûte ~2 ms par événement sur le pod (33,9 s pour
-#: 16 000), soit ~4 s, sous les 10 s de la tâche de workflow avec une marge pour un CPU disputé par les
-#: requêtes de la console. Au repos (~11 événements par minute), c'est un relais toutes les ~3 h.
-#: Un train peut le recevoir dans son entrée (`seuil_de_relais`) : un historique archivé qui se relaie
-#: plus tôt rejoue alors contre le code tel quel, sans rien redéfinir.
-SEUIL_DE_RELAIS = 2_000
-#: Le seuil d'avant S22-27, que seuls rejouent les runs qui n'ont pas pris `LE_TRAIN_SE_RELAIE_TOT`.
-SEUIL_DE_RELAIS_D_AVANT = 15_000
-#: Combien de fois, et à quel rythme, on regarde l'environnement avant de conclure.
-ESSAIS_AUTO_SYNC = 30
-PAUSE_AUTO_SYNC = timedelta(minutes=2)
-#: Le train lit ce qu'Argo CD lui annonce (#280, S22-18). Avant ce marqueur, `deploy_event` rangeait
-#: les événements dans `events` sans que rien ne les lise : seule la scrutation des étapes du départ
-#: voyait une dégradation, à son prochain passage.
-ECOUTE_LE_CD = "train-listens-to-cd"
-#: Ce qui, annoncé pour l'environnement du départ, le fait revenir en arrière sans attendre la scrutation.
-ALERTES_CD = frozenset({str(InboundEventType.CD_DEGRADED), str(InboundEventType.ROLLOUT_ABORTED)})
+#: The threshold (in history events) beyond which the train relays: idle, after a departure and
+#: after an `auto_sync` sync. 2,000: replay costs ~2 ms per event on the pod (33.9 s for 16,000), so
+#: ~4 s, under the workflow task's 10 s with a margin for a CPU contended by the console's
+#: queries. At rest (~11 events per minute), that is a relay every ~3 h.
+#: A train can receive it in its input (`seuil_de_relais`, a recorded input): an archived history
+#: that relays earlier then replays against the code as it is, without redefining anything.
+RELAY_THRESHOLD = 2_000
+SEUIL_DE_RELAIS = RELAY_THRESHOLD  # lang: fr-ok alias:internal
+#: The threshold from before S22-27, which only the runs that did not take
+#: `TRAIN_CONTINUES_AS_NEW_EARLY` replay.
+FORMER_RELAY_THRESHOLD = 15_000
+#: How many times, and at what pace, the environment is looked at before concluding.
+AUTO_SYNC_ATTEMPTS = 30
+AUTO_SYNC_PAUSE = timedelta(minutes=2)
+#: The train reads what Argo CD announces to it (#280, S22-18). Before this marker, `deploy_event`
+#: stored the events in `events` without anything reading them: only the polling of the
+#: departure's steps saw a degradation, at its next pass.
+TRAIN_LISTENS_TO_CD = "train-listens-to-cd"
+#: What, announced for the departure's environment, makes it roll back without waiting for polling.
+CD_ALERTS = frozenset({str(InboundEventType.CD_DEGRADED), str(InboundEventType.ROLLOUT_ABORTED)})
 
 
 @dataclass
@@ -140,8 +145,8 @@ class TrainInput:
     carried_items: list[dict[str, Any]] = field(default_factory=list)
     batch_no: int = 1
     frozen: bool = False
-    #: `None` : le seuil du code (`SEUIL_DE_RELAIS`, et celui d'avant pour les runs d'avant). Un seuil
-    #: donné vaut pour le relais au repos, d'avant comme d'après S22-27.
+    #: `None`: the code's threshold (`RELAY_THRESHOLD`, and the former one for earlier runs). A given
+    #: threshold applies to the idle relay, from before as from after S22-27.
     seuil_de_relais: int | None = None  # lang: fr-ok — a recorded continue-as-new input (ADR 0098)
     #: The English name of `seuil_de_relais` (S45-03): read first, the former one after. Continue-as-new
     #: inputs recorded before S45-03 carry only the former name; S45-39 writes this one.
@@ -155,19 +160,21 @@ class TrainInput:
             return self.relay_threshold
         if self.seuil_de_relais is not None:
             return self.seuil_de_relais
-        return SEUIL_DE_RELAIS
+        return RELAY_THRESHOLD
 
     seuil = threshold  # lang: fr-ok alias:internal
 
-    def seuil_au_repos_d_avant(self) -> int:
-        """Le seuil du relais au repos tel que S22-24 le lisait (un run qui n'a pas pris S22-27)."""
+    def former_idle_threshold(self) -> int:
+        """The idle relay threshold as S22-24 read it (a run that did not take S22-27)."""
         given = self.seuil_de_relais if self.relay_threshold is None else self.relay_threshold
-        return SEUIL_DE_RELAIS_D_AVANT if given is None else given
+        return FORMER_RELAY_THRESHOLD if given is None else given
+
+    seuil_au_repos_d_avant = former_idle_threshold  # lang: fr-ok alias:internal
 
 
 @workflow.defn(name="ReleaseTrain", sandboxed=False)
 class ReleaseTrain:
-    """Collecte, départ, staging, soak, approbation, canary, vérification, rollback, gel."""
+    """Collection, departure, staging, soak, approval, canary, verification, rollback, freeze."""
 
     def __init__(self) -> None:
         self.batch: list[dict[str, Any]] = []
@@ -184,7 +191,7 @@ class ReleaseTrain:
         self.current_release: str | None = None
         self.next_departure: str | None = None
         self.window_open: bool = True
-        self.ecoute_cd: bool = False
+        self.listens_to_cd: bool = False
         #: `None` until the configuration is loaded: boardings received before it (the signal that
         #: starts the train, those delivered during `load_train_config`) wait in `pending_labels`, and
         #: the express lane examines them once its label is known.
@@ -193,17 +200,17 @@ class ReleaseTrain:
         #: A human asked for the departure (`depart_now`): it bypasses the schedule, express or not.
         self.manual_depart: bool = False
 
-    # ───────────────────────── signaux ─────────────────────────
+    # ───────────────────────── signals ─────────────────────────
 
     @workflow.signal
     def merged(self, payload: dict[str, Any]) -> None:
-        """Un ticket fusionné monte dans le train. Un doublon ne compte qu'une fois — mais l'approbation
-        qu'il apporte s'ajoute : le webhook embarque le ticket sans elle, l'interpréteur avec."""
+        """A merged ticket boards the train. A duplicate counts once, but the approval it brings is
+        added: the webhook boards the ticket without it, the interpreter with it."""
         labels = [str(label) for label in payload.get("labels") or []]
         duplicate = False
         for item in self.batch:
             if item.get("work_item_key") == payload.get("work_item_key"):
-                item["approval"] = _cumul(item.get("approval"), payload.get("approval"))
+                item["approval"] = _combine_approvals(item.get("approval"), payload.get("approval"))
                 # The labels of every boarding: the release lists those set between two boardings.
                 # An activity input, not a command: replaying an older history is unaffected.
                 if labels:
@@ -263,8 +270,8 @@ class ReleaseTrain:
 
     @workflow.signal
     def deploy_event(self, payload: dict[str, Any]) -> None:
-        """Un événement d'Argo CD pour cet environnement (webhook `/webhooks/argocd`). Le départ le lit
-        pendant le soak, le canary et la vérification (`_sous_l_oeil_du_cd`)."""
+        """An Argo CD event for this environment (webhook `/webhooks/argocd`). The departure reads it
+        during the soak, the canary and the verification (`_watched_by_the_cd`)."""
         self.events.append(payload)
 
     @workflow.query
@@ -280,17 +287,17 @@ class ReleaseTrain:
             "release_id": self.current_release,
         }
 
-    # ───────────────────────── boucle ─────────────────────────
+    # ───────────────────────── loop ─────────────────────────
 
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = TrainInput(**payload)
         # A held express is carried by ONE relay; the next relays say it again only if still held.
         payload = {key: value for key, value in payload.items() if key != "express"}
-        # Le signal qui démarre le train est livré AVANT ce corps : le lot en porte déjà le ticket.
-        deja_embarques, self.batch = list(self.batch), list(params.carried_items)
-        if workflow.patched(LE_SIGNAL_DU_DEMARRAGE_EMBARQUE):
-            for item in deja_embarques:
+        # The signal that starts the train is delivered BEFORE this body: the batch already holds the ticket.
+        already_boarded, self.batch = list(self.batch), list(params.carried_items)
+        if workflow.patched(START_SIGNAL_BOARDS):
+            for item in already_boarded:
                 self.merged(item)
         self.batch_no = params.batch_no
         if workflow.patched(FREEZE_BEFORE_RUN_IS_KEPT):
@@ -301,7 +308,7 @@ class ReleaseTrain:
             self.express = True
             self.depart_requested = True
 
-        config = await executer_activite(
+        config = await execute_on_its_queue(
             train_activities.load_train_config,
             {"project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(seconds=30),
@@ -312,12 +319,12 @@ class ReleaseTrain:
         for labels, duplicate in pending:
             self._check_express_lane(labels, duplicate=duplicate)
         if config.get("mode") == "auto_sync":
-            # Pas de train : Argo suit `main`. Le workflow reste vivant pour les requêtes.
+            # No train: Argo follows `main`. The workflow stays alive for queries.
             self.status = "auto_sync"
-            if not workflow.patched(AUTO_SYNC_PREVIENT):
+            if not workflow.patched(AUTO_SYNC_WARNS_ITS_ITEMS):
                 await _wait(lambda: self.abort_requested)
                 return {"status": "auto_sync"}
-            await self._suivre_la_synchro(params, payload)
+            await self._follow_the_sync(params, payload)
             return {"status": "auto_sync"}
 
         departures = 0
@@ -330,7 +337,7 @@ class ReleaseTrain:
             if released.get("frozen"):
                 self.frozen = True
                 self.freeze_reason = released.get("reason", "rollback")
-            if self._se_relayer_tot(params) or _longueur() > SEUIL_DE_RELAIS_D_AVANT:
+            if self._relays_early(params) or _history_length() > FORMER_RELAY_THRESHOLD:
                 workflow.continue_as_new(
                     {
                         **payload,
@@ -352,51 +359,52 @@ class ReleaseTrain:
             return False
         return workflow.patched(EXPRESS_LANE_HONOURS_SKIP_SCHEDULE)
 
-    def _se_relayer_tot(self, params: TrainInput) -> bool:
-        """Le seuil est franchi (ou Temporal suggère le relais) ET le run a pris S22-27.
+    def _relays_early(self, params: TrainInput) -> bool:
+        """The threshold is crossed (or Temporal suggests the relay) AND the run took S22-27.
 
-        `patched` n'est appelé qu'une fois la condition vraie (voir `LE_TRAIN_SE_RELAIE_TOT`). Il ne
-        rend `True` qu'à un appelant qui se relaie aussitôt : les trois appelants le font."""
+        `patched` is only called once the condition is true (see `TRAIN_CONTINUES_AS_NEW_EARLY`). It
+        only returns `True` to a caller that relays at once: the three callers do."""
         return (
-            _longueur() > params.seuil() or workflow.info().is_continue_as_new_suggested()
-        ) and workflow.patched(LE_TRAIN_SE_RELAIE_TOT)
+            _history_length() > params.seuil() or workflow.info().is_continue_as_new_suggested()
+        ) and workflow.patched(TRAIN_CONTINUES_AS_NEW_EARLY)
 
-    async def _suivre_la_synchro(self, params: TrainInput, payload: dict[str, Any]) -> None:
-        """`auto_sync` : chaque ticket qui monte attend que l'environnement soit sain, puis est prévenu."""
+    async def _follow_the_sync(self, params: TrainInput, payload: dict[str, Any]) -> None:
+        """`auto_sync`: each ticket that boards waits for the environment to be healthy, then is warned."""
         while not self.abort_requested:
             await _wait(lambda: bool(self.batch) or self.abort_requested)
             if self.abort_requested:
                 return
             items, self.batch = list(self.batch), []
-            synchro = f"auto-sync-{params.env}-{self.batch_no}"
+            sync_id = f"auto-sync-{params.env}-{self.batch_no}"
             self.batch_no += 1
-            for essai in range(ESSAIS_AUTO_SYNC):
-                verdict = await executer_activite(
+            for attempt in range(AUTO_SYNC_ATTEMPTS):
+                verdict = await execute_on_its_queue(
                     named(train_activities.confirm_auto_sync, train_activities.confirmer_auto_sync),
                     {
                         "project_slug": params.project_slug,
                         "env": params.env,
                         "items": [str(item.get("work_item_key") or "") for item in items],
-                        "sync_id": synchro,
-                        "conclure": essai == ESSAIS_AUTO_SYNC - 1,
+                        "sync_id": sync_id,
+                        # Recorded payload key (ADR 0098 §4): never renamed.
+                        "conclure": attempt == AUTO_SYNC_ATTEMPTS - 1,
                     },
                     start_to_close_timeout=timedelta(minutes=2),
                     retry_policy=DEFAULT_RETRY,
                 )
                 if verdict.get("ok") is not None or self.abort_requested:
                     break
-                await _wait(lambda: self.abort_requested, PAUSE_AUTO_SYNC)
-            if self._se_relayer_tot(params) or _longueur() > SEUIL_DE_RELAIS_D_AVANT:
+                await _wait(lambda: self.abort_requested, AUTO_SYNC_PAUSE)
+            if self._relays_early(params) or _history_length() > FORMER_RELAY_THRESHOLD:
                 workflow.continue_as_new(
                     {**payload, "carried_items": self.batch, "batch_no": self.batch_no, "frozen": self.frozen}
                 )
 
     async def _collect(self, config: dict[str, Any], params: TrainInput, payload: dict[str, Any]) -> None:
-        """Attend le cron, le lot plein, un départ manuel ou un hotfix — et se relaie au repos."""
+        """Wait for the cron, a full batch, a manual departure or a hotfix, and relay when idle."""
         self.status = str(ReleaseStatus.COLLECTING)
         batch_max = int(config.get("batch_max", 8))
         while True:
-            window = await executer_activite(
+            window = await execute_on_its_queue(
                 train_activities.check_window,
                 {"config": config},
                 start_to_close_timeout=timedelta(seconds=30),
@@ -408,8 +416,8 @@ class ReleaseTrain:
             ready = len(self.batch) >= batch_max or (
                 self.batch and self.window_open and window.get("due", False)
             )
-            # Un départ demandé par un humain (ou un hotfix) passe outre la fenêtre et le cron :
-            # c'est un acte délibéré, tracé dans l'audit. Seul le gel le retient.
+            # A departure requested by a human (or a hotfix) overrides the window and the cron: it
+            # is a deliberate act, traced in the audit. Only the freeze holds it back.
             held = False
             if (self.express or self.depart_requested) and self.batch and not self.frozen:
                 held = self._express_held_by_schedule(
@@ -419,17 +427,18 @@ class ReleaseTrain:
                     return
             if ready and not self.frozen and len(self.batch) >= int(config.get("batch_min", 1)):
                 return
-            # Au repos, l'historique grossit sans départ pour le relayer : le train se relaie ici, son
-            # lot avec lui. Le seuil d'abord, `patched` ensuite (voir `LE_TRAIN_AU_REPOS_SE_RELAIE`) ;
-            # un run d'avant S22-27 garde le seuil d'avant, sous son marqueur.
+            # At rest, the history grows with no departure to relay it: the train relays here, its
+            # batch with it. The threshold first, `patched` second (see
+            # `IDLE_TRAIN_CONTINUES_AS_NEW`); a run from before S22-27 keeps the former threshold,
+            # under its marker.
             if not self.abort_requested and (
-                self._se_relayer_tot(params)
+                self._relays_early(params)
                 or (
                     (
-                        _longueur() > params.seuil_au_repos_d_avant()
+                        _history_length() > params.former_idle_threshold()
                         or workflow.info().is_continue_as_new_suggested()
                     )
-                    and workflow.patched(LE_TRAIN_AU_REPOS_SE_RELAIE)
+                    and workflow.patched(IDLE_TRAIN_CONTINUES_AS_NEW)
                 )
             ):
                 workflow.continue_as_new(
@@ -483,7 +492,7 @@ class ReleaseTrain:
                 return
 
     async def _depart(self, params: TrainInput, config: dict[str, Any]) -> dict[str, Any]:
-        """Un départ : promotion, soak, approbation, canary, vérification, rollback éventuel."""
+        """A departure: promotion, soak, approval, canary, verification, possible rollback."""
         express = self.express
         self.express = False
         self.depart_requested = False
@@ -496,12 +505,12 @@ class ReleaseTrain:
         items = list(self.batch)
         self.batch = []
         self.status = str(ReleaseStatus.DEPARTING)
-        self.ecoute_cd = workflow.patched(ECOUTE_LE_CD)
-        if self.ecoute_cd:
-            # Ce qu'Argo CD a annoncé pendant la collecte parle de la release d'avant : ce départ ne
-            # revient pas en arrière pour elle (le smoke test regarde l'état réel juste après).
+        self.listens_to_cd = workflow.patched(TRAIN_LISTENS_TO_CD)
+        if self.listens_to_cd:
+            # What Argo CD announced during the collection is about the previous release: this
+            # departure does not roll back for it (the smoke test looks at the real state right after).
             self.events.clear()
-        release = await executer_activite(
+        release = await execute_on_its_queue(
             train_activities.create_release,
             {
                 "project_slug": params.project_slug,
@@ -516,7 +525,7 @@ class ReleaseTrain:
         self.current_release = release["release_id"]
         self.batch_no += 1
 
-        promoted = await executer_activite(
+        promoted = await execute_on_its_queue(
             train_activities.promote,
             {"release_id": self.current_release, "project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(minutes=10),
@@ -529,7 +538,7 @@ class ReleaseTrain:
         soak_minutes = int(
             (config.get("express_soak_minutes") if express else config.get("soak_minutes")) or 10
         )
-        smoke = await executer_activite(
+        smoke = await execute_on_its_queue(
             train_activities.run_smoke,
             {"release_id": self.current_release, "project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(minutes=15),
@@ -538,7 +547,7 @@ class ReleaseTrain:
         if not smoke.get("ok"):
             return await self._rollback(params, config, "smoke tests failed")
 
-        soak = await self._sous_l_oeil_du_cd(
+        soak = await self._watched_by_the_cd(
             params,
             config,
             train_activities.soak,
@@ -552,24 +561,24 @@ class ReleaseTrain:
             retry_policy=NO_RETRY,
         )
         if not soak.get("ok"):
-            # La scrutation du soak garde sa raison d'avant ; une alerte d'Argo CD dit la sienne.
-            raison = soak["reason"] if soak.get("argocd") else "SLOs degraded during the soak"
-            return await self._rollback(params, config, raison)
+            # The soak's polling keeps its former reason; an Argo CD alert gives its own.
+            reason = soak["reason"] if soak.get("argocd") else "SLOs degraded during the soak"
+            return await self._rollback(params, config, reason)
 
-        # L'approbation de la politique, OU celle qu'un ticket du lot apporte de son workflow (ADR
-        # 0041) : un correctif part seul, une fonctionnalité attend son capitaine. Un embarquement
-        # d'avant ne porte pas `approval` ; le calcul rend alors la politique seule, comme avant.
-        politique = config.get("approval") or {}
-        voie = (config.get("express_lane") or {}).get("approval")
-        # Un départ express prend l'approbation de sa voie À LA PLACE de l'ordinaire — l'exigence
-        # des tickets du lot tient toujours. Une voie qui n'en dit rien garde l'ordinaire.
-        if express and voie is not None and workflow.patched(EXPRESS_LANE_APPROVAL):
-            politique = voie
-        approval = _approbation_du_depart(politique, items)
+        # The policy's approval, OR the one a ticket of the batch brings from its workflow (ADR
+        # 0041): a fix leaves alone, a feature waits for its captain. A boarding from before does
+        # not carry `approval`; the computation then returns the policy alone, as before.
+        policy = config.get("approval") or {}
+        lane = (config.get("express_lane") or {}).get("approval")
+        # An express departure takes its lane's approval INSTEAD of the ordinary one; the batch
+        # tickets' requirement still holds. A lane that says nothing keeps the ordinary one.
+        if express and lane is not None and workflow.patched(EXPRESS_LANE_APPROVAL):
+            policy = lane
+        approval = _departure_approval(policy, items)
         if approval.get("required"):
             self.status = str(ReleaseStatus.AWAITING_APPROVAL)
             self.approved = None
-            await executer_activite(
+            await execute_on_its_queue(
                 train_activities.request_approval,
                 {
                     "release_id": self.current_release,
@@ -583,9 +592,9 @@ class ReleaseTrain:
             timeout = timedelta(hours=int(approval.get("timeout_hours", 4)))
             got = await _wait(lambda: self.approved is not None or self.abort_requested, timeout)
             if self.abort_requested or self.approved is False or not got:
-                self.batch = items + self.batch  # le lot repart au prochain tour
+                self.batch = items + self.batch  # the batch leaves again next turn
                 self.status = str(ReleaseStatus.COLLECTING)
-                await executer_activite(
+                await execute_on_its_queue(
                     train_activities.mark_release,
                     {
                         "release_id": self.current_release,
@@ -597,9 +606,9 @@ class ReleaseTrain:
                 )
                 return {"frozen": False, "reason": "approval refused"}
 
-        # L'infra passe avant le code : appliquer Terraform après le canary reviendrait à
-        # envoyer du code en production sur une infra qui ne l'attend pas encore.
-        terraform = await executer_activite(
+        # Infra goes before code: applying Terraform after the canary would amount to sending
+        # code to production onto an infra that is not expecting it yet.
+        terraform = await execute_on_its_queue(
             train_activities.apply_terraform,
             {
                 "release_id": self.current_release,
@@ -618,7 +627,7 @@ class ReleaseTrain:
         steps = list(canary.get("steps", [100]))
         step_minutes = list(canary.get("step_minutes", [0] * len(steps)))
         for index, weight in enumerate(steps):
-            analysis = await self._sous_l_oeil_du_cd(
+            analysis = await self._watched_by_the_cd(
                 params,
                 config,
                 train_activities.promote_canary_step,
@@ -638,7 +647,7 @@ class ReleaseTrain:
                 return await self._rollback(params, config, analysis.get("reason", "canary analysis failed"))
 
         self.status = str(ReleaseStatus.VERIFYING)
-        verdict = await self._sous_l_oeil_du_cd(
+        verdict = await self._watched_by_the_cd(
             params,
             config,
             train_activities.verify_prod,
@@ -650,7 +659,7 @@ class ReleaseTrain:
             return await self._rollback(params, config, verdict.get("reason", "post-deployment check failed"))
 
         self.status = str(ReleaseStatus.DONE)
-        await executer_activite(
+        await execute_on_its_queue(
             train_activities.finish_release,
             {
                 "release_id": self.current_release,
@@ -663,49 +672,50 @@ class ReleaseTrain:
         )
         return {"frozen": False, "release_id": self.current_release}
 
-    async def _sous_l_oeil_du_cd(
-        self, params: TrainInput, config: dict[str, Any], activite: Any, arg: Any, **options: Any
+    async def _watched_by_the_cd(
+        self, params: TrainInput, config: dict[str, Any], activity: Any, arg: Any, **options: Any
     ) -> Any:
-        """Une étape du départ (soak, palier de canary, vérification) qu'Argo CD peut interrompre.
+        """A departure step (soak, canary tier, verification) that Argo CD can interrupt.
 
-        La scrutation de l'étape reste le filet. Un `cd.app.degraded` ou un `cd.rollout.aborted` reçu
-        pour l'environnement et les applications du départ la devance : l'étape est annulée et rend un
-        verdict négatif, que l'appelant traite comme le sien (rollback). Les événements lus sont
-        consommés : aucun n'est relu par l'étape suivante ni par le départ suivant.
+        The step's polling remains the net. A `cd.app.degraded` or a `cd.rollout.aborted` received
+        for the departure's environment and applications gets ahead of it: the step is cancelled and
+        returns a negative verdict, which the caller treats as its own (rollback). The events read
+        are consumed: none is read again by the next step or the next departure.
         """
-        if not self.ecoute_cd:
-            return await executer_activite(activite, arg, **options)
+        if not self.listens_to_cd:
+            return await execute_on_its_queue(activity, arg, **options)
         apps = [str(app) for app in config.get("apps") or []]
-        etape = demarrer_activite(activite, arg, **options)
+        step = start_on_its_queue(activity, arg, **options)
         await workflow.wait_condition(
-            lambda: etape.done() or any(_alerte(e, params.env, apps) for e in self.events)
+            lambda: step.done() or any(_alert(e, params.env, apps) for e in self.events)
         )
-        raison = self._prendre_l_alerte(params.env, apps)
-        if raison is None:
-            return await etape
-        if not etape.done():
-            etape.cancel()
-        # L'étape annulée (ou échouée en même temps) ne dit plus rien : l'alerte d'Argo CD décide.
+        reason = self._take_the_alert(params.env, apps)
+        if reason is None:
+            return await step
+        if not step.done():
+            step.cancel()
+        # The cancelled step (or one that failed at the same time) says nothing more: the Argo CD
+        # alert decides.
         with contextlib.suppress(ActivityError):
-            await etape
-        return {"ok": False, "reason": raison, "argocd": True}
+            await step
+        return {"ok": False, "reason": reason, "argocd": True}
 
-    def _prendre_l_alerte(self, env: str, apps: list[str]) -> str | None:
-        """Consomme les événements jusqu'à la première alerte qui concerne ce départ, et en rend la raison.
+    def _take_the_alert(self, env: str, apps: list[str]) -> str | None:
+        """Consume the events up to the first alert that concerns this departure, and return its reason.
 
-        Ceux d'un autre environnement ou d'une autre application sont écartés en passant ; ce qui suit
-        l'alerte parle du même incident, que le rollback traite : tout est consommé."""
+        Those of another environment or another application are dropped on the way; what follows the
+        alert is about the same incident, which the rollback handles: everything is consumed."""
         while self.events:
-            raison = _alerte(self.events.popleft(), env, apps)
-            if raison is not None:
+            reason = _alert(self.events.popleft(), env, apps)
+            if reason is not None:
                 self.events.clear()
-                return raison
+                return reason
         return None
 
     async def _rollback(self, params: TrainInput, config: dict[str, Any], reason: str) -> dict[str, Any]:
-        """Rollback : annuler, marquer, notifier, geler si la politique le demande."""
+        """Rollback: undo, mark, notify, freeze if the policy asks."""
         self.status = str(ReleaseStatus.ROLLED_BACK)
-        await executer_activite(
+        await execute_on_its_queue(
             train_activities.rollback,
             {
                 "release_id": self.current_release,
@@ -723,51 +733,52 @@ class ReleaseTrain:
         return {"frozen": self.frozen, "reason": reason}
 
 
-def _alerte(evenement: dict[str, Any], env: str, apps: list[str]) -> str | None:
-    """La raison du rollback si l'événement est une alerte d'Argo CD pour cet environnement et l'une de
-    ses applications ; `None` sinon. Un événement qui ne nomme ni environnement ni application compte,
-    comme pour le ticket (ADR 0041) : un événement porté à la main garde son effet."""
-    if str(evenement.get("type") or "") not in ALERTES_CD:
+def _alert(event: dict[str, Any], env: str, apps: list[str]) -> str | None:
+    """The rollback's reason if the event is an Argo CD alert for this environment and one of its
+    applications; `None` otherwise. An event that names neither environment nor application counts,
+    as for the ticket (ADR 0041): an event carried by hand keeps its effect."""
+    if str(event.get("type") or "") not in CD_ALERTS:
         return None
-    detail = evenement.get("payload") or {}
+    detail = event.get("payload") or {}
     if detail.get("env") and str(detail["env"]) != env:
         return None
     app = str(detail.get("app") or "")
     if app and apps and app not in apps:
         return None
-    sujet = app or env
-    if str(evenement.get("type")) == str(InboundEventType.ROLLOUT_ABORTED):
-        return f"Argo CD reported the {sujet} rollout aborted"
-    return f"Argo CD reported {sujet} degraded"
+    subject = app or env
+    if str(event.get("type")) == str(InboundEventType.ROLLOUT_ABORTED):
+        return f"Argo CD reported the {subject} rollout aborted"
+    return f"Argo CD reported {subject} degraded"
 
 
-def _cumul(une: dict[str, Any] | None, autre: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Deux exigences d'approbation d'un même ticket : exigée si l'une l'exige, le premier groupe dit."""
-    if not une or not autre:
-        return une or autre
+def _combine_approvals(first: dict[str, Any] | None, second: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Two approval requirements of the same ticket: required if either requires it; the first
+    group named wins."""
+    if not first or not second:
+        return first or second
     return {
-        "required": bool(une.get("required") or autre.get("required")),
-        "group": une.get("group") or autre.get("group"),
+        "required": bool(first.get("required") or second.get("required")),
+        "group": first.get("group") or second.get("group"),
     }
 
 
-def _approbation_du_depart(politique: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
-    """Exigée si la politique OU un ticket du lot l'exige. Le groupe : celui de la politique s'il est
-    dit, sinon celui du premier ticket qui en nomme un ; le délai reste celui de la politique."""
-    exigences = [i["approval"] for i in items if (i.get("approval") or {}).get("required")]
-    if not exigences:
-        return politique
-    groupe = politique.get("group") or next((e.get("group") for e in exigences if e.get("group")), None)
-    return {**politique, "required": True, "group": groupe}
+def _departure_approval(policy: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Required if the policy OR a ticket of the batch requires it. The group: the policy's if it is
+    named, otherwise that of the first ticket that names one; the delay stays the policy's."""
+    requirements = [i["approval"] for i in items if (i.get("approval") or {}).get("required")]
+    if not requirements:
+        return policy
+    group_name = policy.get("group") or next((e.get("group") for e in requirements if e.get("group")), None)
+    return {**policy, "required": True, "group": group_name}
 
 
-def _longueur() -> int:
-    """La longueur de l'historique du run, en événements."""
+def _history_length() -> int:
+    """The length of the run's history, in events."""
     return workflow.info().get_current_history_length()
 
 
 async def _wait(condition: Any, timeout: timedelta | None = None) -> bool:  # noqa: ASYNC109
-    """`wait_condition` qui rend `False` sur expiration plutôt que de lever."""
+    """A `wait_condition` that returns `False` on expiry rather than raising."""
     if timeout is None:
         await workflow.wait_condition(condition)
         return True
