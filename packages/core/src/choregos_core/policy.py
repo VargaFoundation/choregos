@@ -1,12 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Policy engine : budgets, tentatives, périmètre, trains.
+"""Policy engine: budgets, attempts, scope, trains.
 
-Une politique répond à trois questions, et à elles seules : combien puis-je dépenser,
-combien de fois puis-je réessayer, et où l'agent a-t-il le droit d'écrire — plus les règles
-des trains de livraison (`release_train`).
+A policy answers three questions, and only those: how much may I spend, how many times may I
+retry, and where may the agent write; plus the rules of release trains (`release_train`).
 
-Elle ne dit PAS qui doit approuver un ticket : les humains se déclarent DANS le workflow (un
-acteur humain sur une transition, `train.approval` — ADR 0041, ADR 0044). The keys `approvals.*`,
+It does NOT say who must approve a work item: people are declared IN the workflow (a human actor
+on a transition, `train.approval`; ADR 0041, ADR 0044). The keys `approvals.*`,
 `review.require_human_for_risk` and `attempts.default_max` stay accepted by the schema (a stored
 policy still loads), but nobody reads them: they are refused when a policy is written or a project
 is created from a template (`unenforced_governance`, ADR 0101).
