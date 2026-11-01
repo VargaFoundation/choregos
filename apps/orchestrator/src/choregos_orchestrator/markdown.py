@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Rendu du commentaire de suivi écrit dans le ticket (docs/plan/04 §4.3).
+"""Rendering of the tracking comment written in the ticket (docs/plan/04 §4.3).
 
-Un seul commentaire, repéré par un marqueur, réécrit à chaque étape : c'est la vue
-humaine du travail de la plateforme — étapes, acteurs, tokens, coûts, durées, résultat.
-En anglais (ADR 0039, S21-13) : c'est le tracker qui le montre ; les marqueurs ne changent pas.
+A single comment, found by a marker and rewritten at each stage: it is the human view of the
+platform's work (stages, actors, tokens, costs, durations, result). In English (ADR 0039,
+S21-13): the tracker shows it; the markers do not change.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ TABLE_HEADER = "| # | Step | Actor | Backend · model | Tokens in / out (cached)
 
 @dataclass(slots=True)
 class StageLine:
-    """Une ligne du tableau de suivi."""
+    """One row of the tracking table."""
 
     index: int
     label: str
@@ -47,7 +47,7 @@ class StageLine:
 
 @dataclass(slots=True)
 class StatusComment:
-    """Le commentaire complet : en-tête, tableau des étapes, total, findings, liens."""
+    """The whole comment: header, stages table, total, findings, links."""
 
     workflow: str
     workflow_version: int
@@ -148,11 +148,11 @@ def _duration(seconds: float) -> str:
 
 
 def render_human_request(kind: str, payload: dict[str, object], public_url: str, key: str) -> str:
-    """Commentaire posté quand la plateforme demande un arbitrage humain.
+    """Comment posted when the platform asks for a human decision.
 
-    Il renvoie vers l'INTERFACE, seul chemin qui tranche une demande. Il invitait à répondre par
-    `/choregos approve` : ces commentaires sont analysés mais le workflow ne les traduit en rien
-    (#138) — l'humain répondait, et le ticket restait bloqué sans un signe.
+    It points to the INTERFACE, the only path that settles a request. It used to invite a reply
+    with `/choregos approve`: those comments are parsed but the workflow translates them into
+    nothing (#138), so the human replied and the ticket stayed blocked with no sign.
     """
     if kind == "question":
         options = payload.get("options") or []

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Rendu des manifests Kubernetes d'un projet, écrits dans `choregos-infra/projects/<slug>/`.
+"""Rendering of a project's Kubernetes manifests, written to `choregos-infra/projects/<slug>/`.
 
-Personne n'applique de manifeste à la main : l'orchestrateur écrit dans Git, Argo CD applique.
-C'est ce qui rend le provisioning auditable et réversible (`prune`).
+Nobody applies a manifest by hand: the orchestrator writes to Git, Argo CD applies. That is what
+makes provisioning auditable and reversible (`prune`).
 """
 
 from __future__ import annotations
@@ -18,31 +18,31 @@ def _dump(documents: list[dict[str, Any]]) -> str:
     return yaml.safe_dump_all(documents, sort_keys=False, allow_unicode=True)
 
 
-#: Le proxy d'egress d'un projet : ce par quoi un runner sort, et rien d'autre. Squid,
-#: exécuté sans root, sans capacité, sur un système de fichiers en lecture seule — vérifié
-#: tel quel en conteneur (allowlist : 200 sur `api.github.com`, 403 ailleurs).
+#: A project's egress proxy: what a runner goes out through, and nothing else. Squid, run without
+#: root, without capabilities, on a read-only filesystem, verified as is in a container
+#: (allowlist: 200 on `api.github.com`, 403 elsewhere).
 EGRESS_IMAGE = "docker.io/ubuntu/squid:6.6-24.04_beta"
 EGRESS_PORT = 3128
 EGRESS_NAME = "choregos-egress"
 KUBE_NS = "kubernetes.io/metadata.name"
-#: Ce que le proxy ne joint JAMAIS : le cluster lui-même et le lien local (métadonnées cloud).
-PLAGES_PRIVEES = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"]
+#: What the proxy NEVER reaches: the cluster itself and the link-local range (cloud metadata).
+PRIVATE_RANGES = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"]
+PLAGES_PRIVEES = PRIVATE_RANGES  # lang: fr-ok alias:internal
 
 
 def squid_config(allowed_domains: list[str]) -> str:
-    """La configuration du proxy : une allowlist par domaine, tout le reste refusé.
+    """The proxy's configuration: an allowlist by domain, everything else refused.
 
-    `dstdomain .github.com` couvre `github.com` et ses sous-domaines. `CONNECT` n'est
-    accepté que vers 443 : un tunnel vers un autre port serait une sortie déguisée. Pas de
-    cache (un runner n'a rien à partager avec le suivant), pas de `Via` ni de
-    `X-Forwarded-For` (le fournisseur n'a pas à connaître l'adresse du pod), journal
-    d'accès sur la sortie standard : c'est là que `kubectl logs` le lit.
+    `dstdomain .github.com` covers `github.com` and its subdomains. `CONNECT` is only accepted to
+    443: a tunnel to another port would be a disguised exit. No cache (a runner has nothing to
+    share with the next), no `Via` and no `X-Forwarded-For` (the provider has no need to know the
+    pod's address), access log on standard output: that is where `kubectl logs` reads it.
     """
-    domaines = " ".join(sorted({f".{d.lstrip('.')}" for d in allowed_domains}))
+    domains = " ".join(sorted({f".{d.lstrip('.')}" for d in allowed_domains}))
     return "\n".join(
         [
             f"http_port {EGRESS_PORT}",
-            f"acl allowed dstdomain {domaines}",
+            f"acl allowed dstdomain {domains}",
             "acl SSL_ports port 443",
             "acl Safe_ports port 80 443",
             "acl CONNECT method CONNECT",
@@ -51,13 +51,13 @@ def squid_config(allowed_domains: list[str]) -> str:
             "http_access allow allowed",
             "http_access deny all",
             "cache deny all",
-            # Sans cache, Squid réserve quand même 256 Mo de `cache_mem` par défaut : sous
-            # une limite de 256 Mi le pod était tué (OOM) avant d'écouter.
+            # Without a cache, Squid still reserves 256 MB of `cache_mem` by default: under a
+            # 256 Mi limit the pod was killed (OOM) before listening.
             "cache_mem 8 MB",
             "memory_pools off",
-            # Squid dimensionne ses tables sur `ulimit -n` : sous containerd, plus d'un
-            # milliard — le pod était tué (OOM) dans la seconde, quelle que soit sa limite
-            # mémoire. Reproduit en conteneur avec ce ulimit, guéri par cette ligne.
+            # Squid sizes its tables on `ulimit -n`: under containerd, over a billion, so the pod was
+            # killed (OOM) within the second, whatever its memory limit. Reproduced in a container
+            # with that ulimit, cured by this line.
             "max_filedescriptors 4096",
             "access_log stdio:/dev/stdout",
             "cache_log /dev/stderr",
@@ -74,13 +74,13 @@ def squid_config(allowed_domains: list[str]) -> str:
 def render_egress_proxy(
     namespace: str, slug: str, allowed_domains: list[str], image: str = EGRESS_IMAGE
 ) -> str:
-    """Le proxy d'egress du namespace des runners : ConfigMap, Deployment, Service, et la
-    NetworkPolicy qui n'ouvre Internet QU'À LUI. Le `default-deny-egress` du namespace
-    s'applique aussi au proxy ; cette politique ne le lève que pour son pod, vers les ports
-    web publics, jamais vers les plages privées du cluster.
+    """The egress proxy of the runners' namespace: ConfigMap, Deployment, Service, and the
+    NetworkPolicy that opens the Internet to IT ALONE. The namespace's `default-deny-egress` also
+    applies to the proxy; this policy lifts it only for its pod, to the public web ports, never to
+    the cluster's private ranges.
     """
     labels = {"app.kubernetes.io/name": EGRESS_NAME, "choregos/project": slug}
-    # Les seuls répertoires que Squid écrit ; des emptyDir, le reste du système en lecture seule.
+    # The only directories Squid writes; emptyDirs, the rest of the filesystem read-only.
     volumes = (("log", "/var/log/squid"), ("spool", "/var/spool/squid"), ("run", "/run"), ("tmp", "/tmp"))  # noqa: S108
     return _dump(
         [
@@ -103,7 +103,7 @@ def render_egress_proxy(
                             "automountServiceAccountToken": False,
                             "securityContext": {
                                 "runAsNonRoot": True,
-                                # `proxy`, l'utilisateur de l'image ; Squid n'a besoin de rien d'autre.
+                                # `proxy`, the image's user; Squid needs nothing else.
                                 "runAsUser": 13,
                                 "runAsGroup": 13,
                                 "seccompProfile": {"type": "RuntimeDefault"},
@@ -112,8 +112,8 @@ def render_egress_proxy(
                                 {
                                     "name": "squid",
                                     "image": image,
-                                    # Sans le point d'entrée de l'image : il veut créer un
-                                    # certificat et des répertoires de cache, en root.
+                                    # Without the image's entrypoint: it wants to create a
+                                    # certificate and cache directories, as root.
                                     "command": ["squid", "-N", "-f", "/etc/squid/choregos.conf"],
                                     "ports": [{"name": "proxy", "containerPort": EGRESS_PORT}],
                                     "readinessProbe": {"tcpSocket": {"port": "proxy"}, "periodSeconds": 5},
@@ -133,13 +133,13 @@ def render_egress_proxy(
                                             "subPath": "squid.conf",
                                             "readOnly": True,
                                         },
-                                        *({"name": nom, "mountPath": chemin} for nom, chemin in volumes),
+                                        *({"name": name, "mountPath": path} for name, path in volumes),
                                     ],
                                 }
                             ],
                             "volumes": [
                                 {"name": "config", "configMap": {"name": EGRESS_NAME}},
-                                *({"name": nom, "emptyDir": {}} for nom, _ in volumes),
+                                *({"name": name, "emptyDir": {}} for name, _ in volumes),
                             ],
                         },
                     },
@@ -167,7 +167,7 @@ def render_egress_proxy(
                                 {
                                     "ipBlock": {
                                         "cidr": "0.0.0.0/0",
-                                        "except": PLAGES_PRIVEES,
+                                        "except": PRIVATE_RANGES,
                                     }
                                 }
                             ],
@@ -193,12 +193,12 @@ def render_project_manifests(
     quota: Quota = DEFAUT,
     org_allow_domains: list[str] | None = None,
 ) -> dict[str, str]:
-    """Rend les fichiers d'un projet : namespaces, quotas, netpol, RBAC, egress, Tekton, Argo.
+    """Render a project's files: namespaces, quotas, netpol, RBAC, egress, Tekton, Argo.
 
     `org_allow_domains`: the hosts the organisation opened for its runners (S39-22d), joined to the
     policy's own allowlist in the proxy and in the network policy's annotation.
 
-    `quota` vient de `choregos_core.quotas` : un greffon le fixe selon l'organisation ; il était figé.
+    `quota` comes from `choregos_core.quotas`: an extension sets it per organisation; it used to be fixed.
     """
     runners = f"proj-{slug}-runners"
     ci = f"proj-{slug}-ci"
@@ -261,11 +261,11 @@ def render_project_manifests(
     )
 
     allowed_domains = sorted({*policy.sandbox.network.allow_domains, *(org_allow_domains or [])})
-    # Internet, pour un runner, c'est le proxy du namespace — et seulement s'il y a des
-    # domaines à autoriser. Avant : la politique ouvrait un namespace `choregos-egress`
-    # qu'aucun chart ne livrait ; l'allowlist n'était qu'une annotation (état des lieux du
-    # 2026-09-24). Sans domaine, pas de proxy : la porte n'existe pas.
-    sortie_proxy = (
+    # The Internet, for a runner, is the namespace's proxy, and only if there are domains to
+    # allow. Before: the policy opened a `choregos-egress` namespace that no chart delivered; the
+    # allowlist was only an annotation (state of play of 2026-09-24). With no domain, no proxy:
+    # the door does not exist.
+    proxy_egress = (
         [
             {
                 "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": EGRESS_NAME}}}],
@@ -308,7 +308,7 @@ def render_project_manifests(
                             ("monitoring", 4318),
                         )
                     ]
-                    + sortie_proxy
+                    + proxy_egress
                     + [
                         {
                             "to": [
@@ -344,12 +344,12 @@ def render_project_manifests(
                         "resources": ["pipelineruns", "taskruns"],
                         "verbs": ["create", "get", "list", "watch", "delete"],
                     },
-                    # Les MÊMES verbes que le Role du chart (`rbac-jobs.yaml`) : ce Role-ci est
-                    # celui d'un vrai namespace de projet, et il n'avait ni `patch` sur les
-                    # Jobs (réveiller un run en file) ni `update`/`patch` sur les Secrets
-                    # (remplacer, puis rattacher le jeton). Le banc tourne dans le namespace
-                    # du chart et ne l'a jamais vu ; un projet provisionné l'aurait payé en
-                    # runs figés en file — l'admission ratée se tait, par choix.
+                    # The SAME verbs as the chart's Role (`rbac-jobs.yaml`): this Role is a real
+                    # project namespace's, and it had neither `patch` on Jobs (waking a queued
+                    # run) nor `update`/`patch` on Secrets (replacing, then re-attaching the
+                    # token). The bench runs in the chart's namespace and never saw it; a
+                    # provisioned project would have paid for it in runs frozen in the queue:
+                    # the failed admission is silent, by choice.
                     {
                         "apiGroups": [""],
                         "resources": ["secrets", "configmaps"],

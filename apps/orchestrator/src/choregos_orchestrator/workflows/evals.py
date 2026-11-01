@@ -23,7 +23,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, is_cancelled_exception
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import evals as eval_activities
@@ -82,7 +82,7 @@ class EvalMatrix:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = EvalInput(**payload)
-        fixtures = params.fixtures or await executer_activite(
+        fixtures = params.fixtures or await execute_on_its_queue(
             eval_activities.list_fixtures,
             {},
             start_to_close_timeout=timedelta(minutes=1),
@@ -102,7 +102,7 @@ class EvalMatrix:
                             }
                             self.results.append(await self._live_cell(cell, fixtures))
                             continue
-                        outcome = await executer_activite(
+                        outcome = await execute_on_its_queue(
                             eval_activities.run_eval_cell,
                             {
                                 "project_slug": params.project_slug,
@@ -118,7 +118,7 @@ class EvalMatrix:
                         )
                         self.results.append(outcome)
         if params.publish:
-            await executer_activite(
+            await execute_on_its_queue(
                 eval_activities.publish_matrix,
                 {"project_slug": params.project_slug, "results": self.results},
                 start_to_close_timeout=timedelta(minutes=5),
@@ -129,7 +129,7 @@ class EvalMatrix:
 
     async def _live_cell(self, cell: dict[str, Any], fixtures: list[str]) -> dict[str, Any]:
         outcomes = [await self._live_case(cell, fixture) for fixture in fixtures]
-        result: dict[str, Any] = await executer_activite(
+        result: dict[str, Any] = await execute_on_its_queue(
             eval_activities.summarize_eval_cell,
             {**cell, "outcomes": outcomes},
             start_to_close_timeout=timedelta(minutes=1),
@@ -140,7 +140,7 @@ class EvalMatrix:
     async def _live_case(self, cell: dict[str, Any], fixture: str) -> dict[str, Any]:
         """One case as the interpreter runs a stage, then judged. A run that fails is a case that
         failed, never a matrix that stops: the next cases still run."""
-        seeded = await executer_activite(
+        seeded = await execute_on_its_queue(
             eval_activities.seed_eval_ticket,
             {**cell, "fixture": fixture, "matrix_id": workflow.info().workflow_id},
             start_to_close_timeout=timedelta(minutes=5),
@@ -169,7 +169,7 @@ class EvalMatrix:
         ids = {"project_id": plan["project_id"], "run_id": run_id}
         failure = ""
         try:
-            await executer_activite(
+            await execute_on_its_queue(
                 stage_activities.start_run,
                 {
                     "project_id": plan["project_id"],
@@ -179,7 +179,7 @@ class EvalMatrix:
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=STAGE_RETRY,
             )
-            awaited = await executer_activite(
+            awaited = await execute_on_its_queue(
                 stage_activities.await_run,
                 {**ids, "timeout_minutes": minutes + 10},
                 start_to_close_timeout=timedelta(minutes=minutes + 20),
@@ -187,7 +187,7 @@ class EvalMatrix:
                 heartbeat_timeout=timedelta(minutes=5),
                 retry_policy=POLL_RETRY,
             )
-            await executer_activite(
+            await execute_on_its_queue(
                 stage_activities.record_run_outcome,
                 {**ids, "result": awaited["result"]},
                 start_to_close_timeout=timedelta(minutes=1),
@@ -199,13 +199,13 @@ class EvalMatrix:
                 raise  # re-raised, the workflow ends cancelled: no next case starts
             failure = message_de(exc)
         # The key is revoked and the ledger written whatever the run did: a failed case costs too.
-        await executer_activite(
+        await execute_on_its_queue(
             stage_activities.collect_spend,
             ids,
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=STAGE_RETRY,
         )
-        verdict: dict[str, Any] = await executer_activite(
+        verdict: dict[str, Any] = await execute_on_its_queue(
             eval_activities.judge_eval_run,
             {**ids, "fixture": fixture, "context": cell["context"], "failure": failure},
             start_to_close_timeout=timedelta(minutes=1),
@@ -220,7 +220,7 @@ class EvalMatrix:
         its key reservation anyway; stopping it before it ends could run `cancel_run` ahead of
         that commit and miss it."""
         if not workflow.patched(CANCEL_WAITS_FOR_PREPARE):
-            prepared: dict[str, Any] = await executer_activite(
+            prepared: dict[str, Any] = await execute_on_its_queue(
                 stage_activities.prepare_stage,
                 plan,
                 start_to_close_timeout=timedelta(minutes=5),
@@ -228,7 +228,7 @@ class EvalMatrix:
             )
             return prepared
         preparing = asyncio.ensure_future(
-            executer_activite(
+            execute_on_its_queue(
                 stage_activities.prepare_stage,
                 plan,
                 start_to_close_timeout=timedelta(minutes=5),
@@ -253,7 +253,7 @@ class EvalMatrix:
         the cleanup too, or the sandbox keeps running and the key stays valid (#714)."""
         await asyncio.shield(
             asyncio.ensure_future(
-                executer_activite(
+                execute_on_its_queue(
                     stage_activities.cancel_run,
                     ids,
                     start_to_close_timeout=timedelta(minutes=5),

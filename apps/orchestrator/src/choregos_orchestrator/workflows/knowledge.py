@@ -18,7 +18,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import knowledge as knowledge_activities
@@ -55,7 +55,7 @@ class KnowledgeSync:
         done = 0
         while not self.stopped and done < int(payload.get("max_passes", PASSES_BEFORE_CONTINUE)):
             try:
-                self.last = await executer_activite(
+                self.last = await execute_on_its_queue(
                     knowledge_activities.sync_knowledge_source,
                     {"org": org, "source_id": source_id},
                     start_to_close_timeout=timedelta(minutes=30),

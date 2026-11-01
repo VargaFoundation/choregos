@@ -16,7 +16,7 @@ from typing import Any
 from temporalio import workflow
 
 from .interpreter import DEFAULT_RETRY, POLL_RETRY
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import stage as stage_activities
@@ -31,7 +31,7 @@ class AgentTrial:
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         project_id = payload["project_id"]
         work_item_id = payload["work_item_id"]
-        prepared = await executer_activite(
+        prepared = await execute_on_its_queue(
             stage_activities.prepare_stage,
             {
                 "project_id": project_id,
@@ -50,13 +50,13 @@ class AgentTrial:
         )
         run_id = prepared["run_id"]
         budget = prepared["stage_input"]["budget"]
-        await executer_activite(
+        await execute_on_its_queue(
             stage_activities.start_run,
             {"project_id": project_id, "work_item_id": work_item_id, "stage_input": prepared["stage_input"]},
             start_to_close_timeout=timedelta(minutes=5),
             retry_policy=DEFAULT_RETRY,
         )
-        awaited = await executer_activite(
+        awaited = await execute_on_its_queue(
             stage_activities.await_run,
             {"project_id": project_id, "run_id": run_id, "timeout_minutes": int(budget["max_minutes"]) + 10},
             start_to_close_timeout=timedelta(minutes=int(budget["max_minutes"]) + 20),
@@ -64,23 +64,23 @@ class AgentTrial:
             heartbeat_timeout=timedelta(minutes=5),
             retry_policy=POLL_RETRY,
         )
-        spend = await executer_activite(
+        spend = await execute_on_its_queue(
             stage_activities.collect_spend,
             {"project_id": project_id, "run_id": run_id},
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=DEFAULT_RETRY,
         )
-        await executer_activite(
+        await execute_on_its_queue(
             stage_activities.record_run_outcome,
             {"project_id": project_id, "run_id": run_id, "result": awaited["result"]},
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )
-        resultat = awaited["result"] or {}
+        outcome = awaited["result"] or {}
         return {
             "run_id": run_id,
-            "status": resultat.get("status"),
-            "summary": resultat.get("summary"),
+            "status": outcome.get("status"),
+            "summary": outcome.get("summary"),
             "cost_usd": float(spend.get("cost_usd", 0.0)),
             "budget_usd": float(budget["usd"]),
         }

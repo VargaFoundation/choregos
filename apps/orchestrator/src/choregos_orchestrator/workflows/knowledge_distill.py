@@ -17,7 +17,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError, CancelledError
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import knowledge as activities
@@ -48,7 +48,7 @@ class KnowledgeDistill:
         return {"phase": self.phase, "parts_done": self.parts_done, "spent_usd": self.spent}
 
     async def _call(self, activity: Any, payload: dict[str, Any]) -> dict[str, Any]:
-        result: dict[str, Any] = await executer_activite(
+        result: dict[str, Any] = await execute_on_its_queue(
             activity, payload, start_to_close_timeout=TIMEOUT, retry_policy=RETRY
         )
         return result

@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`ActionWorkflow` (ADR 0035) : une action approuvée, exécutée effet par effet — jamais dans la
-requête qui l'approuve.
+"""`ActionWorkflow` (ADR 0035): an approved action, run effect by effect, never in the request
+that approves it.
 
-Chaque effet est une activité, sous sa clé (`<action>:<n>`) ; une panne passagère est retentée,
-un refus définitif (`EffetRefuse`) arrête la suite. Ce qui avait été fait est alors COMPENSÉ, à
-rebours, et l'action dit ce qu'elle n'a pas pu défaire. `action-<id>` : un seul workflow par action.
+Each effect is an activity, under its key (`<action>:<n>`); a transient failure is retried, a
+final refusal (`EffetRefuse`, a recorded error type) stops the rest. What had been done is then
+COMPENSATED, in reverse, and the action says what it could not undo. `action-<id>`: one workflow
+per action.
 """
 
 from __future__ import annotations
@@ -19,24 +20,25 @@ from temporalio.exceptions import ActivityError
 
 from ..wire_names import both_names, read_key, require_key
 from .activity_names import named
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
-    from ..activities import actions as activites
+    from ..activities import actions as action_activities
 
-#: Un effet peut demander qu'on attende la PREUVE qu'il a servi (S20-08) : il rend
-#: `{"attendre_une_preuve": {"jusqu_a": <iso>}}`, et le workflow attend le signal `preuve` jusque-là.
-#: Les historiques d'avant ce marqueur n'avaient aucun effet qui le demandât.
-PREUVE_ATTENDUE = "preuve-attendue"  # lang: fr-ok — a patch id is never renamed
+#: An effect can ask to wait for the EVIDENCE that it served (S20-08): it returns
+#: `{"attendre_une_preuve": {"jusqu_a": <iso>}}` (recorded payload keys), and the workflow waits
+#: for the `preuve` signal (recorded wire name) until then. Histories from before this marker had
+#: no effect that asked for it.
+AWAITED_EVIDENCE_PATCH = "preuve-attendue"  # lang: fr-ok — a patch id is never renamed
 
 
-class PreuveManquante(Exception):  # noqa: N818 - un refus nommé : la preuve n'est pas venue, ou dit non
+class MissingEvidence(Exception):  # noqa: N818 - a named refusal: the evidence did not come, or says no
     pass
 
 
-LECTURE = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=2))
-#: Un effet passager (429, 503, réseau) est retenté ; un refus ne l'est jamais.
-EFFET = RetryPolicy(
+READ = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=2))
+#: A transient effect (429, 503, network) is retried; a refusal never is.
+EFFECT = RetryPolicy(
     maximum_attempts=6,
     initial_interval=timedelta(seconds=5),
     backoff_coefficient=2.0,
@@ -45,24 +47,25 @@ EFFET = RetryPolicy(
     # recorded before it keeps them.
     non_retryable_error_types=both_names("EffectRefused", "ActionNotFound"),
 )
+EFFET = EFFECT  # lang: fr-ok alias:internal
 
 
 @workflow.defn(name="ActionWorkflow", sandboxed=False)
 class ActionWorkflow:
     def __init__(self) -> None:
-        self.faits: list[int] = []
-        self.etat = "running"
-        #: Les preuves reçues, par position de l'effet qui les attendait.
-        self.preuves: dict[int, dict[str, Any]] = {}
+        self.done: list[int] = []
+        self.state = "running"
+        #: The evidence received, by position of the effect that waited for it.
+        self.evidence_by_position: dict[int, dict[str, Any]] = {}
 
     @workflow.query
     def status(self) -> dict[str, Any]:
-        return {"state": self.etat, "done": list(self.faits)}
+        return {"state": self.state, "done": list(self.done)}
 
     @workflow.signal
-    def preuve(self, payload: dict[str, Any]) -> None:
-        """Ce que l'extérieur a constaté (un rapport du collecteur, une livraison) : `ok` et `detail`."""
-        self.preuves[int(payload.get("position", -1))] = dict(payload)
+    def preuve(self, payload: dict[str, Any]) -> None:  # lang: fr-ok signal wire name, recorded in histories
+        """What the outside world observed (a collector report, a delivery): `ok` and `detail`."""
+        self.evidence_by_position[int(payload.get("position", -1))] = dict(payload)
 
     @workflow.signal(name="evidence")
     def evidence(self, payload: dict[str, Any]) -> None:
@@ -71,89 +74,91 @@ class ActionWorkflow:
         self.preuve(payload)
 
     @workflow.run
-    async def run(self, entree: dict[str, Any]) -> dict[str, Any]:
-        action_id = str(entree["action_id"])
-        plan = await executer_activite(
-            named(activites.load_action, activites.charger_l_action),
+    async def run(self, params: dict[str, Any]) -> dict[str, Any]:
+        action_id = str(params["action_id"])
+        plan = await execute_on_its_queue(
+            named(action_activities.load_action, action_activities.charger_l_action),
             action_id,
             start_to_close_timeout=timedelta(seconds=30),
-            retry_policy=LECTURE,
+            retry_policy=READ,
         )
         try:
             for position in range(int(require_key(plan, "effects"))):
-                fait = await executer_activite(
-                    named(activites.execute_effect, activites.executer_l_effet),
+                executed = await execute_on_its_queue(
+                    named(action_activities.execute_effect, action_activities.executer_l_effet),
                     {"action_id": action_id, "position": position},
                     start_to_close_timeout=timedelta(minutes=5),
-                    retry_policy=EFFET,
+                    retry_policy=EFFECT,
                 )
-                self.faits.append(position)
-                resultat = fait.get("result") if isinstance(fait, dict) else None
-                attente = read_key(resultat, "await_evidence") if isinstance(resultat, dict) else None
-                if attente and workflow.patched(PREUVE_ATTENDUE):
-                    await self._attendre_la_preuve(action_id, position, dict(attente))
-        except (ActivityError, PreuveManquante) as erreur:
-            if isinstance(erreur, ActivityError):
-                cause = str(erreur.cause) if erreur.cause is not None else str(erreur)
+                self.done.append(position)
+                result = executed.get("result") if isinstance(executed, dict) else None
+                awaited = read_key(result, "await_evidence") if isinstance(result, dict) else None
+                if awaited and workflow.patched(AWAITED_EVIDENCE_PATCH):
+                    await self._wait_for_evidence(action_id, position, dict(awaited))
+        except (ActivityError, MissingEvidence) as error:
+            if isinstance(error, ActivityError):
+                cause = str(error.cause) if error.cause is not None else str(error)
             else:
-                cause = str(erreur)
-            self.etat = "compensating"
+                cause = str(error)
+            self.state = "compensating"
             compensations = []
-            for position in reversed(self.faits):
+            for position in reversed(self.done):
                 compensations.append(
-                    await executer_activite(
-                        named(activites.compensate_effect, activites.compenser_l_effet),
+                    await execute_on_its_queue(
+                        named(action_activities.compensate_effect, action_activities.compenser_l_effet),
                         {"action_id": action_id, "position": position},
                         start_to_close_timeout=timedelta(minutes=5),
-                        retry_policy=LECTURE,
+                        retry_policy=READ,
                     )
                 )
-            self.etat = "failed"
-            await executer_activite(
-                named(activites.close_action, activites.cloturer_l_action),
+            self.state = "failed"
+            await execute_on_its_queue(
+                named(action_activities.close_action, action_activities.cloturer_l_action),
                 {"action_id": action_id, "status": "failed", "error": cause, "compensations": compensations},
                 start_to_close_timeout=timedelta(seconds=30),
-                retry_policy=LECTURE,
+                retry_policy=READ,
             )
             return {"status": "failed", "error": cause, "compensations": compensations}
-        self.etat = "succeeded"
-        await executer_activite(
-            named(activites.close_action, activites.cloturer_l_action),
+        self.state = "succeeded"
+        await execute_on_its_queue(
+            named(action_activities.close_action, action_activities.cloturer_l_action),
             {"action_id": action_id, "status": "succeeded"},
             start_to_close_timeout=timedelta(seconds=30),
-            retry_policy=LECTURE,
+            retry_policy=READ,
         )
-        return {"status": "succeeded", "effects": list(self.faits)}
+        return {"status": "succeeded", "effects": list(self.done)}
 
-    async def _attendre_la_preuve(self, action_id: str, position: int, attente: dict[str, Any]) -> None:
-        """L'effet est fait ; l'action attend la preuve qu'il a servi, jusqu'à son échéance. Venue et
-        favorable, la suite reprend ; contraire ou absente, l'action échoue et ce qui était fait se
-        compense, comme pour un refus."""
-        jusqu_a = datetime.fromisoformat(str(require_key(attente, "until")))
-        self.etat = "awaiting_evidence"
-        await executer_activite(
-            named(activites.mark_awaiting_evidence, activites.marquer_l_attente),
+    async def _wait_for_evidence(self, action_id: str, position: int, awaited: dict[str, Any]) -> None:
+        """The effect is done; the action waits for the evidence that it served, until its deadline.
+        If it comes and is favourable, the rest resumes; if it is contrary or missing, the action
+        fails and what was done is compensated, as for a refusal."""
+        until = datetime.fromisoformat(str(require_key(awaited, "until")))
+        self.state = "awaiting_evidence"
+        await execute_on_its_queue(
+            named(action_activities.mark_awaiting_evidence, action_activities.marquer_l_attente),
             {
                 "action_id": action_id,
                 "position": position,
+                # Recorded payload keys (ADR 0098 §4): never renamed.
                 "en_attente": True,
-                "jusqu_a": jusqu_a.isoformat(),
+                "jusqu_a": until.isoformat(),
             },
             start_to_close_timeout=timedelta(seconds=30),
-            retry_policy=LECTURE,
+            retry_policy=READ,
         )
-        delai = max(jusqu_a - workflow.now(), timedelta(0))
+        delay = max(until - workflow.now(), timedelta(0))
         with contextlib.suppress(TimeoutError):
-            await workflow.wait_condition(lambda: position in self.preuves, timeout=delai)
-        preuve = self.preuves.get(position)
-        if preuve is None:
-            raise PreuveManquante(f"no evidence before {jusqu_a.isoformat()}: timed out")
-        if not preuve.get("ok"):
-            raise PreuveManquante(f"the evidence says no: {preuve.get('detail') or 'no detail'}")
-        self.etat = "running"
-        await executer_activite(
-            named(activites.mark_awaiting_evidence, activites.marquer_l_attente),
-            {"action_id": action_id, "position": position, "en_attente": False, "preuve": preuve},
+            await workflow.wait_condition(lambda: position in self.evidence_by_position, timeout=delay)
+        evidence = self.evidence_by_position.get(position)
+        if evidence is None:
+            raise MissingEvidence(f"no evidence before {until.isoformat()}: timed out")
+        if not evidence.get("ok"):
+            raise MissingEvidence(f"the evidence says no: {evidence.get('detail') or 'no detail'}")
+        self.state = "running"
+        await execute_on_its_queue(
+            named(action_activities.mark_awaiting_evidence, action_activities.marquer_l_attente),
+            # Recorded payload keys (ADR 0098 §4): never renamed.
+            {"action_id": action_id, "position": position, "en_attente": False, "preuve": evidence},
             start_to_close_timeout=timedelta(seconds=30),
-            retry_policy=LECTURE,
+            retry_policy=READ,
         )
