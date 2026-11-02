@@ -34,6 +34,7 @@ from ..config import get_settings
 from ..db.models import KnowledgeBase, KnowledgeDocument, Organization
 from ..db.session import TOUT, session_scope
 from ..logging import get_logger
+from .formats import STRUCTURED
 
 logger = get_logger("choregos.knowledge")
 
@@ -65,6 +66,11 @@ def title_of(markdown: str, declared: str | None, filename: str) -> str:
     if first:
         return first.group(1).strip()[:300]
     return PurePosixPath(filename).stem[:300] or filename[:300]
+
+
+def heading_text(path: str) -> str:
+    """A path as the text of one markdown heading: one line, nothing a heading would swallow."""
+    return " ".join(path.split())[:300] or "document"
 
 
 def child_environment() -> dict[str, str]:
@@ -142,6 +148,7 @@ async def convert_document(org: str, document_id: str) -> str:
             )
         ).scalar_one()
         data, filename = document.content or b"", document.filename
+        path = document.source_ref or filename
     extension = PurePosixPath(filename.lower()).suffix
     try:
         result = await run_converter(
@@ -151,6 +158,9 @@ async def convert_document(org: str, document_id: str) -> str:
             max_bytes=settings.knowledge_max_markdown_mib * 1024 * 1024,
             rows_per_sheet=settings.knowledge_xlsx_rows_per_sheet,
         )
+        if extension in STRUCTURED:
+            # A YAML or JSON file says nothing of where it lives: its path heads it (and titles it).
+            result["markdown"] = f"# {heading_text(path)}\n\n{result['markdown']}"
         status, values = (
             READY,
             {

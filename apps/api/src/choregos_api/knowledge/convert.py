@@ -8,7 +8,8 @@ gives it a bare environment): a hostile document reaches a parser, never a datab
 MarkItDown (MIT) keeps what matters to an agent reading the corpus: headings of a Word document,
 one `#` title per slide. A workbook is read directly (`xlsx.py`, S42-09c): one table per sheet, cached
 values, a row cap. A PDF yields its text; its headings are not
-recovered (ADR 0051).
+recovered (ADR 0051). Structured text (YAML, JSON, TOML; S51-05) is not parsed at all: it is kept
+verbatim in a fenced code block, which the parent heads with the file's path.
 """
 
 from __future__ import annotations
@@ -20,12 +21,24 @@ import re
 import sys
 
 _BLANKS = re.compile(r"\n{3,}")
+_BACKTICKS = re.compile(r"`{3,}")
+
+
+def fenced(text: str, language: str) -> str:
+    """`text` as one fenced code block, the fence longer than any run of backticks inside it."""
+    body = text.removeprefix("\ufeff").replace("\r\n", "\n").replace("\r", "\n").strip("\n")
+    fence = "`" * max([3, *(len(run) + 1 for run in _BACKTICKS.findall(body))])
+    return f"{fence}{language}\n{body}\n{fence}\n"
 
 
 def convert(
     data: bytes, extension: str, rows_per_sheet: int | None = None
 ) -> tuple[str, str | None, list[str]]:
     """The markdown of a document, the title its format declares, and what it left out (S42-09e)."""
+    from .formats import FENCE_LANGUAGE
+
+    if extension in FENCE_LANGUAGE:
+        return fenced(data.decode("utf-8", "replace"), FENCE_LANGUAGE[extension]), None, []
     if extension == ".xlsx":
         from .xlsx import DEFAULT_ROWS_PER_SHEET, xlsx_to_markdown_with_warnings
 
