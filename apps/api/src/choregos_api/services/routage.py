@@ -35,6 +35,8 @@ class Naissance:
     size: str | None = None
     risk: str | None = None
     created_by: str | None = None
+    #: Who filed it, as its tracker names them (#1179); a person in the console is their e-mail.
+    reporter: str | None = None
     #: Who started it, `<kind>:<subject>` (`services/initiator.py`, ADR 0077 §2).
     initiated_by: str | None = None
     #: Le workflow demandé explicitement ; sinon le routage, sinon le défaut.
@@ -187,6 +189,7 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         state=WorkflowEngine(workflow).initial_state,
         workflow_def_id=ligne.id if ligne is not None else None,
         created_by=naissance.created_by,
+        reporter=naissance.reporter,
         initiated_by=naissance.initiated_by,
         allowed_paths=list(naissance.allowed_paths),
         fields=dict(naissance.fields),

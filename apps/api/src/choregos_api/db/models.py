@@ -224,6 +224,10 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     )
     temporal_wf_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Who filed the work item, as its tracker names them (Jira: the reporter, `Name <e-mail>`; GitHub,
+    #: GitLab: the author's login; the console: the person's e-mail). Written once at birth (#1179):
+    #: an agent whose rules depend on the requester reads it. Personal data, never in a redacted entry.
+    reporter: Mapped[str | None] = mapped_column(String(320), nullable=True)
     #: Who started the work item, as `<kind>:<subject>` (`services/initiator.py`, ADR 0077 §2):
     #: written once at birth by the door it came through; `None` for a work item born before S40-22.
     initiated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)

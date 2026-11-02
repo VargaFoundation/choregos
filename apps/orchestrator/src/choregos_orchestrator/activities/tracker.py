@@ -589,6 +589,7 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                         risk=str(data.risk) if data.risk else None,
                         labels=tuple(data.labels),
                         item_type=data.item_type,
+                        reporter=data.author,
                         initiated_by=initiator("tracker", "sync"),
                     ),
                 )

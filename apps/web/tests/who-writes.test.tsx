@@ -42,12 +42,13 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("a work item says where it lives, who started it, and who writes to it", () => {
+  it("a work item says where it lives, who filed it, who started it, and who writes to it", () => {
     render(
       <TrackerCard
         slug="yyy"
         tracker={jira}
         initiatedBy="tracker:jira"
+        reporter="Ada Lovelace <ada@acme.example>"
         url="https://acme.atlassian.net/browse/XXX-12"
       />,
     );
@@ -56,6 +57,8 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
       "href",
       "https://acme.atlassian.net/browse/XXX-12",
     );
+    expect(within(card).getByTestId("tracker-reporter")).toHaveTextContent("Ada Lovelace <ada@acme.example>");
+    expect(card).toHaveTextContent("Filed by Ada Lovelace");
     expect(card).toHaveTextContent("Started by a Jira webhook");
     expect(card).toHaveTextContent("Choregos writes to Jira as bot@acme.example");
     expect(within(card).getByRole("link", { name: "tracker connector" })).toHaveAttribute(
@@ -67,6 +70,7 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
   it("a work item on the internal tracker says nothing is written elsewhere", () => {
     render(<TrackerCard slug="yyy" initiatedBy="person:vincent@acme.example" />);
     const card = screen.getByTestId("tracker-card");
+    expect(within(card).queryByTestId("tracker-reporter")).toBeNull();
     expect(card).toHaveTextContent("Started by vincent@acme.example");
     expect(card).toHaveTextContent("Choregos writes to no external tracker");
   });

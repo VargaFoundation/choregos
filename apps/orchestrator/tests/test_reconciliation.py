@@ -315,3 +315,21 @@ async def test_a_project_activated_by_its_provisioning_is_polled_at_once(
         assert loop not in fake_starts(), "a failed provisioning leaves a draft: nothing to poll"
     else:
         assert fake_starts()[loop]["project_slug"] == setup.project_slug
+
+
+async def test_a_caught_up_issue_keeps_who_filed_it(setup: Fixture) -> None:
+    """The tracker's reporter is recorded at birth (#1179): the agent checks the requester on it."""
+    clear_fake_signals()
+    key = setup.adapters.tracker.seed(
+        "Access to billing", labels=["agent-ready"], author="Jean Martin <jmartin@varga.dev>"
+    )
+
+    await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
+
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        row = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == key))).scalar_one()
+        assert row.reporter == "Jean Martin <jmartin@varga.dev>"

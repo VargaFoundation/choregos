@@ -7698,6 +7698,13 @@ components:
           description: >-
             Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>`
             for a webhook, `schedule:<name>`… Null for a work item from before S40-22.
+        reporter:
+          type: [string, "null"]
+          description: >-
+            Who filed the work item, as its tracker names them: Jira's reporter (`Name <e-mail>`, the name
+            alone when the site hides the e-mail), the author's login on GitHub or GitLab, the person's
+            e-mail in the console. Personal data: empty in a redacted entry. Null for a work item from
+            before it was recorded.
         restricted_knowledge:
           type: array
           items: { type: string }

@@ -99,6 +99,8 @@ async def test_a_github_project_files_the_issue_then_the_work_item(
     body = created.json()
     assert body["fields"] == {"role": "data"} and body["budget_usd"] == 1.5
     assert body["url"] == f"https://fake.tracker/{key}"
+    # The person, not the platform's tracker account that files the issue (#1179).
+    assert body["reporter"] == "admin@varga.dev"
     assert interpreter_id("billing-api", key) in get_temporal().started  # type: ignore[attr-defined]
 
 
@@ -142,6 +144,7 @@ async def test_internal_or_absent_tracker_unchanged(
     created = await client.post(f"/api/v1/projects/{project['id']}/work-items", json={"title": "Plain"})
     assert created.status_code == 201, created.text
     assert created.json()["tracker_key"] == "BILLING-API-1"
+    assert created.json()["reporter"] == "admin@varga.dev"
     assert tracker.calls == []
 
 

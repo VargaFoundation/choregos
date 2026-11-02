@@ -947,8 +947,12 @@ def _rendre_le_playbook(
         "ticket": {
             "key": item.tracker_key,
             "title": item.title,
-            "body": item.body_snapshot or "",
+            # The body opens with who filed it (#1179): every agent reads it where it reads the
+            # request, an installed one included, without a new version of its instructions (whose
+            # checksum holds the context block they were installed with).
+            "body": _body_with_its_reporter(item),
             "fields": dict(item.fields or {}),
+            "reporter": getattr(item, "reporter", None) or "",
         },
         "spec": documents.get("spec_markdown", ""),
         "plan_markdown": documents.get("plan_markdown", ""),
@@ -992,6 +996,16 @@ def _agent_d_essai(plan: StagePlan) -> Any:
     return SimpleNamespace(
         agent=SimpleNamespace(slug="trial"), version=0, spec=AgentSpec.model_validate(plan.trial_spec)
     )
+
+
+def _body_with_its_reporter(item: Any) -> str:
+    """The work item's body as an agent reads it: `Filed by: <reporter>` first when it is known."""
+    body = item.body_snapshot or ""
+    # A stand-in work item (an eval's, a dry run's) may not carry the column.
+    reporter = getattr(item, "reporter", None)
+    if not reporter:
+        return body
+    return f"Filed by: {reporter}\n\n{body}" if body else f"Filed by: {reporter}"
 
 
 async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:

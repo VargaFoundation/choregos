@@ -25,16 +25,19 @@ export function WritesAs({ type, config }: { type: string; config?: Record<strin
   );
 }
 
-/** A work item's tracker: where it lives, who started it, who writes to it and how. */
+/** A work item's tracker: where it lives, who filed it, who started it, who writes to it and how. */
 export function TrackerCard({
   slug,
   tracker,
   initiatedBy,
+  reporter,
   url,
 }: {
   slug: string;
   tracker?: ConnectorDto;
   initiatedBy?: string | null;
+  /** Who filed it, as the tracker names them (#1179). */
+  reporter?: string | null;
   url?: string | null;
 }) {
   const account = tracker ? trackerAccount(tracker.type, tracker.config) : null;
@@ -47,6 +50,14 @@ export function TrackerCard({
             <a href={url} target="_blank" rel="noreferrer">
               Open in {tracker ? trackerName(tracker.type) : "the tracker"}
             </a>
+          </p>
+        )}
+        {reporter && (
+          <p className="text-ink-muted">
+            Filed by{" "}
+            <span className="text-ink" data-donnee data-testid="tracker-reporter">
+              {reporter}
+            </span>
           </p>
         )}
         {startedBy && (

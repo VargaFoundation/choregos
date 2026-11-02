@@ -445,3 +445,35 @@ async def test_the_instructions_read_the_fields_of_the_work_item(setup: Fixture)
     prepare = await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     prompt = prepare["stage_input"]["playbook"]["prompt"]
     assert '"symbol": "TRND.US"' in prompt and "0.9731" in prompt, prompt
+
+
+async def test_the_agent_reads_who_filed_the_work_item_before_its_body(setup: Fixture) -> None:
+    """An access request is checked against its requester (#1179): the body the agent reads opens with
+    who filed it, and `ticket.reporter` names them on its own."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        item.body_snapshot = "Level: maintainer"
+        item.reporter = "Jean Martin <jmartin@varga.dev>"
+    await install_agent(setup, instructions="{{ ticket.body }}\n--\n{{ ticket.reporter }}")
+    prepare = await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
+    prompt = prepare["stage_input"]["playbook"]["prompt"]
+    assert "Filed by: Jean Martin <jmartin@varga.dev>\n\nLevel: maintainer\n--\nJean Martin" in prompt, prompt
+
+
+async def test_a_work_item_without_a_reporter_reads_its_body_unchanged(setup: Fixture) -> None:
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        item.body_snapshot = "Level: maintainer"
+    await install_agent(setup, instructions="[{{ ticket.body }}]")
+    prepare = await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
+    assert "[Level: maintainer]" in prepare["stage_input"]["playbook"]["prompt"]

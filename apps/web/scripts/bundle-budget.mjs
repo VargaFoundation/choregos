@@ -23,7 +23,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2025 kB. Main with S47-39/40 measures 1956 kB; with S49 merged on it, 1998 kB.
 // 2026-10-29 (S47-17): 2025 -> 2050 kB. The cross-backend review card and the memory re-import action add
 // about 26 kB (1956 -> 1982 kB on main at 87ea1831), which would leave the S49 build under 1 kB of headroom.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2050);
+// 2026-11-02 (#1179): 2050 -> 2075 kB. Main sits at the 2050 kB line; the tracker card's « Filed by » row
+// and the regenerated API types tip the total over it by a fraction of a kilobyte.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2075);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {

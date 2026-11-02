@@ -129,6 +129,9 @@ class WorkItemDto(Dto):
     estimate: CostEstimate | None = None
     #: Who started the work item (ADR 0077): `person:<email>`, `tracker:<source>`…
     initiated_by: str | None = None
+    #: Who filed it, as its tracker names them (#1179): Jira's reporter (`Name <e-mail>`), the author's
+    #: login on GitHub or GitLab, the person's e-mail in the console; `None` before 0.21.5.
+    reporter: str | None = None
     #: The restricted knowledge bases its runs were served (ADR 0114).
     restricted_knowledge: list[str] = Field(default_factory=list)
     #: A list entry the caller may not read (ADR 0114, point B): only the listed fields are filled.

@@ -197,6 +197,8 @@ def test_une_issue_ouverte_devient_un_evenement() -> None:
     assert events[0].work_item_key == f"{PROJECT}#12"
     assert events[0].project_slug == "billing-api"
     assert events[0].actor == "marie"
+    # The user who opens an issue is its author (#1179).
+    assert events[0].payload["reporter"] == "marie"
 
 
 def test_un_label_ajoute_est_reconnu() -> None:
