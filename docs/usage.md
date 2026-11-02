@@ -923,7 +923,8 @@ gateway key. The runner writes the work item's fields in `.choregos/fields.json`
 with `CHOREGOS_WORKSPACE`, `CHOREGOS_RUN_ID`, `CHOREGOS_API_URL` and the run's own token
 `CHOREGOS_RUN_TOKEN` (to call a connector through the internal API), and reads back
 `.choregos/job.json` = `{"summary": …, "facts": {…}, "outputs": {…}}` and the files in
-`.choregos/outputs/`. A non-zero exit fails the step; the facts are **measured**, so
+`.choregos/outputs/`. None of these files is committed: the branch, and the pull request, carry only
+what the command changed in the repository (S51-08). A non-zero exit fails the step; the facts are **measured**, so
 `evidence_facts` gates on what the code computed, not on what an agent said. Retries, `on_fail` and
 the `*agent` wildcard treat a job like an agent step. A job reaches the outside only through the
 connector operations its actor names, `tools: [{connector: marketdata, tools: [get_bars]}]`, called
