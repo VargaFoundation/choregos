@@ -103,6 +103,11 @@ class Project(Base, PkMixin, TimestampMixin):
     #: ordonnée de `{when: {labels_any, labels_all, item_type}, workflow}`. Hors de `config`, que
     #: `PATCH /projects/{id}` remplace en entier.
     workflow_routing: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    #: How a work item that names no workflow finds one (ADR 0116): `labels` (the rules alone),
+    #: `rules_then_llm` (the rules, then a small model when none matched) or `llm` (the model alone).
+    routing_strategy: Mapped[str] = mapped_column(String(16), default="labels", server_default="labels")
+    #: What the model reads about each workflow beside its description: workflow name → hint.
+    routing_hints: Mapped[dict[str, str]] = mapped_column(Json, default=dict)
     #: Which channel of the agents this project runs when it pins nothing (S40-02, ADR 0071):
     #: `stable` (production, the default) or `candidate` (testing).
     agent_channel: Mapped[str] = mapped_column(String(16), default="stable", server_default="stable")

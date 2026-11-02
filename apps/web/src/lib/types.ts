@@ -101,6 +101,8 @@ export type {
   WorkflowGraph,
   WorkflowOperation,
   WorkflowRouting,
+  RoutingPreview,
+  RoutingPreviewRequest,
   WorkflowSummary,
   WorkflowTemplate,
   WorkflowValidation,

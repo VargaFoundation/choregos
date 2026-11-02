@@ -184,6 +184,8 @@ import type {
   WorkflowEditResult,
   WorkflowOperation,
   WorkflowRouting,
+  RoutingPreview,
+  RoutingPreviewRequest,
   WorkflowSummary,
   WorkflowTemplate,
   WorkflowValidation,
@@ -886,6 +888,12 @@ export const api = {
     request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`, {
       method: "PUT",
       body: JSON.stringify(routing),
+    }),
+  /** Where a work item would be born, and why (ADR 0116); nothing is created, a model call is booked. */
+  previewWorkflowRouting: (id: string, body: RoutingPreviewRequest) =>
+    request<RoutingPreview>(`/projects/${qualify(id)}/workflow-routing/preview`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   /** Plus de ticket neuf ; l'API refuse le défaut et la cible d'une règle (409). */
   deactivateWorkflow: (id: string, name: string) =>

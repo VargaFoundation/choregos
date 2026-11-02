@@ -41,6 +41,22 @@ test("a routing rule is edited in place, labels_all included", async ({ page }) 
   await expect(page.getByRole("status")).toContainText("Routing saved");
 });
 
+test("a small model routes what no rule claims, and the routing can be tried (ADR 0116)", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows");
+  await page.getByLabel("Strategy").selectOption("rules_then_llm");
+  await page.getByLabel("Routing hint for hotfix").fill("outage in production");
+  await page.getByRole("button", { name: "Save the routing" }).click();
+  await expect(page.getByRole("status").first()).toContainText("Routing saved");
+
+  const tryIt = page.getByRole("form", { name: "Try the routing" });
+  await tryIt.getByLabel("Title").fill("Checkout outage since 9am");
+  await tryIt.getByRole("button", { name: "Try" }).click();
+  await expect(page.getByTestId("routing-preview")).toContainText("hotfix (chosen by the model)");
+  await tryIt.getByLabel("Labels").fill("incident");
+  await tryIt.getByRole("button", { name: "Try" }).click();
+  await expect(page.getByTestId("routing-preview")).toContainText("hotfix (by a rule): routing rule 1");
+});
+
 test("le défaut se choisit, et un workflow sans règle ni défaut se désactive", async ({ page }) => {
   await page.goto("/p/billing-api/workflows");
   const carte = (nom: string) => page.getByRole("listitem").filter({ has: page.getByTestId(`workflow-card-${nom}`) });

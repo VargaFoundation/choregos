@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field
 
@@ -113,9 +113,35 @@ class RoutingRule(Dto):
     workflow: str
 
 
+#: How a work item that names no workflow finds one (ADR 0116): the rules alone, the rules then a
+#: small model when none matched, or the model alone. The default is always the last resort.
+RoutingStrategy = Literal["labels", "rules_then_llm", "llm"]
+
+
 class WorkflowRoutingDto(Dto):
     default: str
     rules: list[RoutingRule] = Field(default_factory=list)
+    #: Absent from a PUT: unchanged (a client written before ADR 0116 does not reset it).
+    strategy: RoutingStrategy | None = None
+    #: What the model reads about each workflow, beside its description: workflow name → hint.
+    #: Absent from a PUT: unchanged.
+    hints: dict[str, Annotated[str, Field(max_length=500)]] | None = None
+
+
+class RoutingPreviewRequest(Dto):
+    """A work item as it would arrive, to see where it would be born; nothing is created."""
+
+    title: str = Field(min_length=1, max_length=500)
+    body: str | None = Field(default=None, max_length=20000)
+    labels: list[str] = Field(default_factory=list)
+    item_type: str | None = None
+
+
+class RoutingPreviewDto(Dto):
+    workflow: str | None
+    by: Literal["explicit", "rule", "llm", "default"]
+    reason: str | None = None
+    model: str | None = None
 
 
 class WorkflowValidateRequest(Dto):
@@ -254,7 +280,7 @@ class ModelMatrix(Dto):
 
 # ───────────── the organisation's model catalogue (S39-07b, ADR 0060) ─────────────
 
-Usage = Literal["agent", "embed", "distill", "eval"]
+Usage = Literal["agent", "embed", "distill", "eval", "route"]
 
 
 def _agent_usage() -> list[Usage]:
