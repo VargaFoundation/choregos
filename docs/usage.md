@@ -486,6 +486,18 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**How a terminal state ends the work item is written too.** A terminal state is a success unless it
+says otherwise: `outcome: declined` for a request turned down, `outcome: cancelled` for one dropped.
+The console shows only a success green; a declined state is shown in red, a cancelled one in grey, on
+the board, the ticket and the project page. Only a terminal state may declare an outcome:
+
+```yaml
+states:
+  applied:  { display: Applied, terminal: true }                        # outcome: success, implied
+  declined: { display: Declined, terminal: true, outcome: declined }
+  dropped:  { display: Handed back, terminal: true, outcome: cancelled }
+```
+
 **The next step can depend on what the agent answered** ([ADR 0106](adr/0106-a-workflow-chooses-its-next-step-from-the-agent-s-answer.md)).
 Ask the agent for the answers you route on, as outputs, and put a `when` on the transitions that
 leave the state it lands in. The first transition whose `when` holds is taken; one without `when` is

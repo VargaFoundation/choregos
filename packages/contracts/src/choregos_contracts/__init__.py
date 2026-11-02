@@ -50,6 +50,7 @@ from .enums import (
     StageRole,
     StageStatus,
     StateKind,
+    StateOutcome,
 )
 from .events import ChoregosEvent, Control, DeployResult, HumanDecision, InboundEvent
 from .policy import (
@@ -318,6 +319,7 @@ __all__ = [
     "StageStatus",
     "State",
     "StateKind",
+    "StateOutcome",
     "SystemActor",
     "TaskSpec",
     "ToolsRef",

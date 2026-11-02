@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .enums import ActorType, StateKind
+from .enums import ActorType, StateKind, StateOutcome
 
 Identifier = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,62}$")]
 Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
@@ -134,6 +134,9 @@ class State(Strict):
     tracker: TrackerMapping | None = None
     terminal: bool = False
     kind: StateKind = StateKind.WORK
+    #: How a terminal state ends the work item: `success` (the default), `declined` or `cancelled`.
+    #: Only a terminal state may declare another outcome than the default.
+    outcome: StateOutcome = StateOutcome.SUCCESS
     #: A PRODUCTION state: it is only reached through a release train (`via: release_train`).
     #: It used to be the prefix of its name (`deployed_prod`): a rename lifted the lock (#175).
     production: bool = False
@@ -142,6 +145,11 @@ class State(Strict):
     def _coherent_kind(self) -> State:
         if self.terminal and self.kind is not StateKind.TERMINAL:
             object.__setattr__(self, "kind", StateKind.TERMINAL)
+        if self.outcome is not StateOutcome.SUCCESS and self.kind is not StateKind.TERMINAL:
+            raise ValueError(
+                f"outcome `{self.outcome}` is only for a terminal state: a work item is not "
+                "declined or cancelled while it can still move"
+            )
         return self
 
 

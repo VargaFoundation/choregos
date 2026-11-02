@@ -81,6 +81,7 @@ LISTED = frozenset(
         "title",
         "state",
         "state_display",
+        "state_outcome",
         "workflow_name",
         "workflow_version",
         "url",

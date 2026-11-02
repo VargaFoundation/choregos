@@ -205,6 +205,7 @@ async def work_item_dto(
         risk=item.risk,
         state=item.state,
         state_display=state.display if state else item.state,
+        state_outcome=str(state.outcome) if state and state.terminal else None,
         workflow_name=workflow_row.name if workflow_row else workflow.metadata.name,
         workflow_version=workflow_row.version if workflow_row else workflow.metadata.version,
         temporal_wf_id=item.temporal_wf_id,

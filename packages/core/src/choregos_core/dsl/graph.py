@@ -42,6 +42,7 @@ def to_graph(wf: Workflow) -> dict[str, Any]:
             "display": state.display,
             "kind": str(state.kind),
             "terminal": state.terminal,
+            "outcome": str(state.outcome) if state.terminal else None,
             "lane": _lane(wf, name),
             "tracker_status": state.tracker.status if state.tracker else None,
         }

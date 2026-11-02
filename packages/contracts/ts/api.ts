@@ -2730,6 +2730,8 @@ export type WorkflowGraph = {
     display: string;
     kind: string;
     terminal?: boolean;
+    /** How a terminal state ends the work item (`success`, `declined`, `cancelled`); null on a state that is not terminal. */
+    outcome?: "success" | "declined" | "cancelled" | null;
     lane?: string;
     /** The tracker column the state maps to; the console groups the path into stages by it. */
     tracker_status?: string | null;
@@ -3473,6 +3475,8 @@ export type WorkItem = {
   risk?: Risk | null;
   state: string;
   state_display?: string | null;
+  /** How the current state ends the work item when it is terminal: `success`, `declined` (a request turned down) or `cancelled` (dropped); null while it can still move. */
+  state_outcome?: "success" | "declined" | "cancelled" | null;
   workflow_name?: string | null;
   workflow_version?: number | null;
   temporal_wf_id?: string | null;
@@ -3491,7 +3495,7 @@ export type WorkItem = {
   initiated_by?: string | null;
   /** The restricted knowledge bases its runs were served (ADR 0114), only ever added to. Reading the work item, its runs, artefacts and receipts needs reading every one of them; otherwise the detail answers 404 and a list shows it `redacted`. */
   restricted_knowledge?: Array<string>;
-  /** True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114): only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `workflow_name`, `workflow_version`, `url`, dates and `restricted_knowledge` are filled; everything else is empty. */
+  /** True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114): only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `state_outcome`, `workflow_name`, `workflow_version`, `url`, dates and `restricted_knowledge` are filled; everything else is empty. */
   redacted?: boolean;
   created_at?: string;
   closed_at?: string | null;

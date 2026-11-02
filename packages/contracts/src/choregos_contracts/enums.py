@@ -47,6 +47,19 @@ class StateKind(StrEnum):
     TERMINAL = "terminal"
 
 
+class StateOutcome(StrEnum):
+    """How a TERMINAL state ends a work item: a success, a request turned down, or one dropped.
+
+    Only a terminal state declares it; absent means `success`, the meaning every terminal state had
+    before. The console shows a success green, and neither of the others: a declined access request
+    is finished, not granted.
+    """
+
+    SUCCESS = "success"
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
+
+
 class StageStatus(StrEnum):
     DONE = "done"
     BLOCKED = "blocked"

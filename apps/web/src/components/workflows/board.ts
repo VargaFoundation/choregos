@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { kindOfOutcome } from "@/components/ui";
 import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
 
 export interface Column {
@@ -6,6 +7,8 @@ export interface Column {
   display: string;
   /** Le genre que le workflow déclare ; absent, le badge le déduit du nom de l'état. */
   kind?: string;
+  /** A terminal state, whatever its outcome: a declined column folds like a successful one. */
+  terminal?: boolean;
   items: WorkItemDto[];
   /** L'état n'est pas dans ce workflow (ticket migré, ancien) : la colonne le dit (S23-04). */
   horsWorkflow?: boolean;
@@ -21,7 +24,8 @@ export function columnsFromGraph(graph: WorkflowGraph | undefined, items: WorkIt
   const declared = (graph?.nodes ?? []).map((node) => ({
     state: node.id,
     display: node.display,
-    kind: node.terminal ? "terminal" : node.kind === "wait" ? "wait" : undefined,
+    kind: node.terminal ? kindOfOutcome(node.outcome) : node.kind === "wait" ? "wait" : undefined,
+    terminal: Boolean(node.terminal),
   }));
   const byState = new Map<string, WorkItemDto[]>();
   for (const item of items) byState.set(item.state, [...(byState.get(item.state) ?? []), item]);
@@ -52,7 +56,7 @@ export const TERMINAL_FOLD = 3;
  * ones and folds the rest — a "Done" column grows forever and pushed the live ones out of sight.
  */
 export function foldedItems(column: Column, expanded: boolean): { items: WorkItemDto[]; folded: number } {
-  if (column.kind !== "terminal" || expanded || column.items.length <= TERMINAL_FOLD) {
+  if (!(column.terminal || column.kind === "terminal") || expanded || column.items.length <= TERMINAL_FOLD) {
     return { items: column.items, folded: 0 };
   }
   const recent = [...column.items].sort((a, b) => recency(b) - recency(a)).slice(0, TERMINAL_FOLD);

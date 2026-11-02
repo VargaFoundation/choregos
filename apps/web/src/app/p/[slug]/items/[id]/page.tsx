@@ -68,7 +68,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StateBadge state={data.state} display={data.state_display} />
+          <StateBadge state={data.state} display={data.state_display} outcome={data.state_outcome} />
           <CostChip costUsd={data.totals?.cost_usd} tokensIn={data.totals?.tokens_in} />
           {gare(journey.data) && (
             <GesteConfirme

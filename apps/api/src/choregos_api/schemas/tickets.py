@@ -107,6 +107,9 @@ class WorkItemDto(Dto):
     risk: str | None = None
     state: str
     state_display: str | None = None
+    #: How the current state ends the work item when it is terminal (`success`, `declined`,
+    #: `cancelled`); `None` while it can still move.
+    state_outcome: str | None = None
     workflow_name: str | None = None
     workflow_version: int | None = None
     temporal_wf_id: str | None = None
