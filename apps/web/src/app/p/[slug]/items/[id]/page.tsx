@@ -237,6 +237,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         slug={slug}
         tracker={(connectors.data ?? []).find((connector) => connector.kind === "tracker")}
         initiatedBy={data.initiated_by}
+        reporter={data.reporter}
         url={data.url}
       />
 

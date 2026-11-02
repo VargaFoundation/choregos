@@ -63,7 +63,9 @@ def _issue(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
     }
     action = attributes.get("action")
     if action == "open":
-        return [InboundEvent(type=InboundEventType.ITEM_CREATED, payload=body, **common)]
+        # The person who opens an issue is its author: GitLab names them only as the event's user.
+        opened = {**body, "reporter": common["actor"]}
+        return [InboundEvent(type=InboundEventType.ITEM_CREATED, payload=opened, **common)]
     if action == "close":
         return [InboundEvent(type=InboundEventType.ITEM_CLOSED, payload=body, **common)]
     added = _added_labels(payload)

@@ -219,6 +219,7 @@ async def work_item_dto(
         budget_usd=item.budget_usd,
         estimate=await estimate_cost(session, project.id, item),
         initiated_by=item.initiated_by,
+        reporter=item.reporter,
         restricted_knowledge=list(item.restricted_knowledge or []),
         created_at=item.created_at,
         closed_at=item.closed_at,
@@ -435,6 +436,9 @@ async def creer_un_ticket(  # noqa: PLR0913 - one creation path, the birth facts
             size=demande.size,
             risk=demande.risk,
             created_by=principal.email,
+            # The person who filed it here, even when the issue lands in an external tracker under
+            # the platform's own account (#1179).
+            reporter=principal.email,
             initiated_by=initiated_by or of_principal(principal, canal),
             workflow=demande.workflow,
             labels=tuple(demande.labels),

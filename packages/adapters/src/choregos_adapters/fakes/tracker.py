@@ -40,6 +40,7 @@ class FakeTracker:
         labels: list[str] | None = None,
         size: Size | None = None,
         risk: Risk | None = None,
+        author: str | None = None,
     ) -> str:
         key = f"{self.project_slug}#{self._next_number}"
         self._next_number += 1
@@ -52,6 +53,7 @@ class FakeTracker:
             size=size,
             risk=risk,
             state="Todo",
+            author=author,
             created_at=utcnow(),
         )
         return key

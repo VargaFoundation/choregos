@@ -25,7 +25,7 @@ from ..errors import ConfigurationError, UpstreamError
 from ..http import RestClient
 from .adf import markdown_to_adf, text_of_adf
 from .champs import ANCIENS_NOMS, COUT, RISQUE, RUN, TAILLE, nom_actuel
-from .jira_events import parse_jira_event
+from .jira_events import parse_jira_event, person_of
 
 STATUS_COMMENT_MARKER = "[choregos:status]"
 GATEWAY = "https://api.atlassian.com"
@@ -120,7 +120,7 @@ class JiraTracker:
             size=_parse_enum(Size, fields, self._nom_present(TAILLE, fields)),
             risk=_parse_enum(Risk, fields, self._nom_present(RISQUE, fields)),
             assignees=[a for a in [((fields.get("assignee") or {}).get("displayName"))] if a],
-            author=((fields.get("reporter") or {}).get("displayName")),
+            author=person_of(fields.get("reporter")),
             comments=[
                 Comment(
                     id=str(comment.get("id")),

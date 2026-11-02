@@ -42,6 +42,7 @@ async def _marked(
             title="Salary bands",
             state="review",
             body_snapshot="the brief",
+            reporter="Jean Martin <jmartin@varga.dev>",
             restricted_knowledge=["hr"] if marks is None else marks,
         )
         session.add(item)
@@ -105,9 +106,11 @@ async def test_the_list_shows_the_marked_work_item_without_its_content(
     assert (entry["tracker_key"], entry["title"], entry["state"]) == ("BILLING-1", "Salary bands", "review")
     assert entry["restricted_knowledge"] == ["hr"]
     assert entry["pending_request"] is None and entry["body_snapshot"] is None
+    assert entry["reporter"] is None, "who filed it is personal data: not in a redacted entry"
     async with _as(client, READER, **MEMBER) as reader:
         (entry,) = (await reader.get(url)).json()["items"]
     assert entry["redacted"] is False
+    assert entry["reporter"] == "Jean Martin <jmartin@varga.dev>"
     assert entry["pending_request"]["payload"]["question"] == "Publish the bands of each grade?"
 
 

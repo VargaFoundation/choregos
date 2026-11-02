@@ -540,3 +540,41 @@ async def test_without_a_connector_jql_the_candidates_are_the_agent_ready_issues
     assert seen == [
         'project = "BILL" AND labels = "agent-ready" AND statusCategory != Done ORDER BY updated DESC'
     ]
+
+
+async def test_the_reporter_is_named_with_their_email_when_the_site_shows_it() -> None:
+    """Who filed the issue reaches the work item (#1179): an access request is checked against it."""
+    shown = {"displayName": "Jean Martin", "emailAddress": "jmartin@varga.dev", "accountId": "712020:abc"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=issue_payload(reporter=shown))
+
+    item = await tracker(handler).fetch_item("BILL-42")
+    assert item.author == "Jean Martin <jmartin@varga.dev>"
+
+
+async def test_a_hidden_email_leaves_the_reporter_s_name() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=issue_payload())
+
+    assert (await tracker(handler).fetch_item("BILL-42")).author == "Augustin"
+
+
+def test_a_created_issue_carries_its_reporter() -> None:
+    events = parse_jira_event(
+        "d-9",
+        {
+            "webhookEvent": "jira:issue_created",
+            "issue": {
+                "key": "BILL-43",
+                "fields": {
+                    "summary": "titre",
+                    "labels": ["agent-ready"],
+                    "reporter": {"displayName": "Jean Martin", "emailAddress": "jmartin@varga.dev"},
+                },
+            },
+        },
+    )
+
+    assert events[0].type is InboundEventType.ITEM_CREATED
+    assert events[0].payload["reporter"] == "Jean Martin <jmartin@varga.dev>"

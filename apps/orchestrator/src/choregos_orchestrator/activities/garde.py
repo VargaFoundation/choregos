@@ -29,7 +29,11 @@ async def garde_contre_l_injection(
     if mode == "ignore":
         return
     documents = item.documents or {}
-    sources: dict[str, str] = {"ticket.title": item.title or "", "ticket.body": item.body_snapshot or ""}
+    sources: dict[str, str] = {
+        "ticket.title": item.title or "",
+        "ticket.reporter": getattr(item, "reporter", None) or "",
+        "ticket.body": item.body_snapshot or "",
+    }
     sources.update({f"document.{nom}": texte for nom, texte in documents.items() if isinstance(texte, str)})
     sources.update({f"memory.{m.id or i}": m.content for i, m in enumerate(context_pack.memories)})
     alertes = analyser(sources)

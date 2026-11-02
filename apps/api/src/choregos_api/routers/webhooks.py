@@ -189,6 +189,7 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
                     url=event.payload.get("url"),
                     labels=tuple(event.payload.get("labels") or []),
                     item_type=event.payload.get("item_type"),
+                    reporter=event.payload.get("reporter"),
                     initiated_by=initiator("tracker", event.source),
                 ),
             )

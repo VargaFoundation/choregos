@@ -472,3 +472,16 @@ def test_un_check_suite_termine_remonte_avec_ses_pr() -> None:
     (event,) = parse_github_event("check_suite", "d", payload)
     assert event.type == InboundEventType.CHECK_COMPLETED and event.payload["pr_numbers"] == [8]
     assert parse_github_event("check_suite", "d", {**payload, "action": "requested"}) == []
+
+
+def test_an_opened_issue_carries_its_author_as_reporter() -> None:
+    """Who filed the issue reaches the work item (#1179), not only who sent the event."""
+    payload = {
+        "action": "opened",
+        "repository": {"full_name": REPO},
+        "issue": {"number": 13, "title": "Avoirs", "user": {"login": "ada"}, "labels": [], "state": "open"},
+        "sender": {"login": "ada"},
+    }
+    events = parse_github_event("issues", "d-7", payload)
+    assert events[0].type is InboundEventType.ITEM_CREATED
+    assert events[0].payload["reporter"] == "ada"

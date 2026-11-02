@@ -383,6 +383,35 @@ async def test_webhook_jira_cree_le_ticket_et_demarre_le_workflow(
     assert rejeu.json()["duplicate"] is True, "une livraison rejouée ne compte qu'une fois"
 
 
+async def test_a_tracker_birth_records_who_filed_the_issue(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """The issue's author is the work item's reporter (#1179), not the webhook's sender."""
+    payload = {
+        "action": "labeled",
+        "repository": {"full_name": "varga/billing-api"},
+        "issue": {
+            "number": 11,
+            "title": "Access to billing",
+            "user": {"login": "jmartin"},
+            "labels": [{"name": "agent-ready"}],
+        },
+        "label": {"name": "agent-ready"},
+        "sender": {"login": "triage-bot"},
+    }
+    response = await client.post(
+        "/api/v1/webhooks/github",
+        content=json.dumps(payload).encode(),
+        headers={"X-GitHub-Event": "issues", "X-GitHub-Delivery": "d-11", "content-type": "application/json"},
+    )
+    assert response.status_code == 202, response.text
+
+    liste = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
+    born = next(i for i in liste["items"] if i["tracker_key"].endswith("#11"))
+    assert born["reporter"] == "jmartin"
+    assert (await client.get(f"/api/v1/work-items/{born['id']}")).json()["reporter"] == "jmartin"
+
+
 async def test_webhook_gitlab_refuse_un_jeton_invalide(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
