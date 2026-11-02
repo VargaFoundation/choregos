@@ -78,7 +78,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   </Container>
                 </header>
                 <main id="contenu" tabIndex={-1} className="flex-1 focus:outline-none">
-                  <Container size="wide" className="py-8">
+                  {/* A page that needs the whole window (the board's columns) says so with `data-full-width`. */}
+                  <Container size="wide" className="py-8 has-[[data-full-width]]:max-w-none">
                     {children}
                   </Container>
                 </main>

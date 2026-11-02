@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
+import { AgentProposal } from "@/components/agent-proposal";
 import { Artifacts } from "@/components/artifacts";
 import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
@@ -113,9 +114,20 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
 
       {data.pending_request && (
         <Card title="Decision awaited">
-          <p className="mb-2 text-sm">
-            {String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary ?? "")}
-          </p>
+          {typeof data.pending_request.payload?.title === "string" && (
+            <p className="mb-2 text-sm font-medium" data-testid="decision-title">
+              {data.pending_request.payload.title}
+            </p>
+          )}
+          {(data.pending_request.payload?.question ?? data.pending_request.payload?.summary) ? (
+            <p className="mb-2 text-sm">
+              {String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary)}
+            </p>
+          ) : null}
+          {/* What the agent proposes is read here, before deciding, not in the Artifacts card below. */}
+          <div className="mb-3">
+            <AgentProposal slug={slug} runs={runs.data} prUrl={data.pr_url} />
+          </div>
           <DecisionBar
             itemId={id}
             kind={data.pending_request.kind}

@@ -1,24 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
-import { DecisionBar } from "@/components/decision-bar";
-import { ActorIcon, Badge, Button, Card, CostChip, Dot, Drawer, Empty, ErrorNote, Heading, LEGENDE, Select, tonDEtat } from "@/components/ui";
-import { columnsFromGraph, itemsOf } from "@/components/workflows/board";
+import { Button, Drawer, Empty, ErrorNote, Heading, Select } from "@/components/ui";
+import { boardWorkflows, columnsFromGraph, itemsOf, visibleColumns } from "@/components/workflows/board";
+import { BoardSection, type BoardSectionModel } from "@/components/workflows/board-section";
 import { NewWorkItemForm } from "@/components/workflows/new-work-item";
-import { useWorkflow } from "@/components/workflows/use-workflow";
+import { useShowEmptyColumns } from "@/components/workflows/show-empty-columns";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/cn";
-import { relative } from "@/lib/format";
 import { trackerOf } from "@/lib/tracker";
 import type { WorkItemDto } from "@/lib/types";
 
 /**
- * Un board par workflow (ADR 0031, S16-10) : ses colonnes sont les états du workflow, lus par le
- * validateur ; ses tickets, ceux qui y sont épinglés. `?workflow=` garde le choix dans l'URL.
+ * The project's board (ADR 0031, S16-10): one section per workflow, the default first, each with the
+ * workflow's states as columns (read by the validator) and the tickets pinned to it. A project with
+ * several workflows showed only the default one, and its other tickets looked lost (FON-270,
+ * 2026-11-02). `?workflow=` narrows the page to one workflow and keeps the choice in the URL.
+ * The page takes the whole width, and empty columns stay out of the way unless asked for.
  */
 export default function BoardPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -29,8 +30,26 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.workItems(slug) });
   const workflows = useQuery({ queryKey: ["workflows", slug], queryFn: () => api.workflows(slug) });
   const defaut = workflows.data?.find((w) => w.is_default)?.name ?? workflows.data?.[0]?.name ?? "";
-  const choisi = search.get("workflow") ?? defaut;
-  const { definition, validation } = useWorkflow(slug, choisi);
+  const chosen = search.get("workflow");
+  const shown = boardWorkflows(workflows.data ?? [], chosen);
+  // The same query keys as `useWorkflow`: a definition read here is not read again on its pages.
+  const definitions = useQueries({
+    queries: shown.map((w) => ({
+      queryKey: ["workflow", slug, w.name],
+      queryFn: () => api.workflowNamed(slug, w.name),
+    })),
+  });
+  const validations = useQueries({
+    queries: shown.map((w, index) => {
+      const definition = definitions[index]?.data;
+      return {
+        queryKey: ["workflow-validation", slug, w.name, definition?.version],
+        queryFn: () => api.validateWorkflow(definition?.yaml ?? ""),
+        enabled: Boolean(definition?.yaml),
+      };
+    }),
+  });
+  const [showEmpty, setShowEmpty] = useShowEmptyColumns();
   const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   // A work item is filed from here whatever the tracker: with an external one the platform creates
   // the issue there first (ADR 0059).
@@ -40,15 +59,34 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
 
   if (items.error) return <ErrorNote>{(items.error as Error).message}</ErrorNote>;
 
-  const columns = columnsFromGraph(validation.data?.graph, itemsOf(items.data?.items ?? [], choisi, choisi === defaut));
-  // Ce qui attend une personne, et où : sur grand écran les colonnes du bout sortent du champ, et la
-  // seule carte avec un bouton « approve » s'y trouvait sans indice (seconde passe du 08/10, S23-09).
-  const enAttente = columns.flatMap((column) =>
-    column.items.filter((item) => item.pending_request).map((item) => ({ item, column })),
+  const sections: BoardSectionModel[] = shown.map((w, index) => {
+    const all = columnsFromGraph(validations[index]?.data?.graph, itemsOf(items.data?.items ?? [], w.name, w.name === defaut));
+    const { shown: columns, hidden } = visibleColumns(all, showEmpty);
+    const tickets = all.flatMap((column) => column.items);
+    return {
+      name: w.name,
+      version: definitions[index]?.data?.version ?? w.version,
+      description: w.description,
+      isDefault: w.is_default,
+      columns,
+      hidden,
+      total: tickets.length,
+      waiting: tickets.filter((item) => item.pending_request).length,
+    };
+  });
+  const hiddenColumns = sections.reduce((sum, section) => sum + section.hidden, 0);
+  // What waits for a person, and where: a column can still be out of sight, and the only card with an
+  // "approve" button used to sit there without a hint (second pass of 08/10, S23-09).
+  const waiting = sections.flatMap((section) =>
+    section.columns.flatMap((column) =>
+      column.items.filter((item) => item.pending_request).map((item) => ({ item, column, workflow: section.name })),
+    ),
   );
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["items", slug] });
 
   return (
-    <div className="space-y-3">
+    // `data-full-width`: the main container lets this page use the whole window (app/layout.tsx).
+    <div className="space-y-4" data-full-width>
       <div className="flex flex-wrap items-center gap-3">
         <Heading as="h2" size="md">
           Board
@@ -58,10 +96,15 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             Workflow
             <Select
               aria-label="Board workflow"
-              value={choisi}
-              onChange={(event) => router.replace(`${pathname}?workflow=${encodeURIComponent(event.target.value)}`)}
+              value={chosen ?? ""}
+              onChange={(event) =>
+                router.replace(
+                  event.target.value ? `${pathname}?workflow=${encodeURIComponent(event.target.value)}` : pathname,
+                )
+              }
               className="w-auto"
             >
+              <option value="">All workflows</option>
               {workflows.data?.map((w) => (
                 <option key={w.name} value={w.name}>
                   {w.name}
@@ -71,9 +114,11 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             </Select>
           </label>
         ) : null}
-        <span className="text-sm text-ink-muted">
-          {choisi || "—"} v{definition.data?.version ?? "?"}
-        </span>
+        {(hiddenColumns > 0 || showEmpty) && (
+          <Button size="sm" aria-pressed={showEmpty} onClick={() => setShowEmpty(!showEmpty)}>
+            {showEmpty ? "Hide empty columns" : `Show empty columns (${hiddenColumns})`}
+          </Button>
+        )}
         <span className="ml-auto">
           <Button tone="accent" size="sm" onClick={() => setNouvelle(true)}>
             New work item
@@ -85,12 +130,12 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
           <NewWorkItemForm
             slug={slug}
             workflows={workflows.data?.map((w) => w.name) ?? []}
-            initial={choisi}
+            initial={chosen ?? defaut}
             tracker={tracker}
             onDone={(item) => {
               setNouvelle(false);
               setCreated(item);
-              void queryClient.invalidateQueries({ queryKey: ["items", slug] });
+              void refresh();
             }}
           />
         )}
@@ -111,125 +156,34 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         </p>
       )}
       {items.isLoading && <Empty>Loading…</Empty>}
-      {enAttente.length > 0 && (
-        <div
-          className="raised border border-line border-l-2 border-l-waiting p-3 text-sm"
-          data-testid="attentes-du-board"
-        >
+      {waiting.length > 0 && (
+        <div className="raised border border-line border-l-2 border-l-waiting p-3 text-sm" data-testid="attentes-du-board">
           <p className="font-medium">
-            {enAttente.length} ticket{enAttente.length > 1 ? "s" : ""} wait{enAttente.length > 1 ? "" : "s"} for a
-            person
+            {waiting.length} ticket{waiting.length > 1 ? "s" : ""} wait{waiting.length > 1 ? "" : "s"} for a person
           </p>
           <ul className="mt-1 space-y-1">
-            {enAttente.map(({ item, column }) => (
+            {waiting.map(({ item, column, workflow }) => (
               <li key={item.id}>
                 <a href={`#carte-${item.id}`}>{item.title}</a>
-                <span className="text-ink-muted"> · in {column.display}</span>
+                <span className="text-ink-muted">
+                  {" "}
+                  · in {column.display}
+                  {sections.length > 1 ? ` (${workflow})` : ""}
+                </span>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {columns.length > 0 && (
-        // Le sommaire des colonnes : chacune y est, même hors champ, avec ce qu'elle tient.
-        <nav aria-label="Columns of the board" data-donnee className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-          {columns.map((column) => {
-            const attentes = column.items.filter((item) => item.pending_request).length;
-            return (
-              <a key={column.state} href={`#colonne-${column.state}`} className="text-ink-muted hover:text-ink">
-                {column.display} <span className="tabular-nums">{column.items.length}</span>
-                {attentes > 0 && <span className="font-medium text-waiting-ink"> · {attentes} waiting</span>}
-              </a>
-            );
-          })}
-        </nav>
+      {chosen && workflows.data && sections.length === 0 && (
+        <Empty>
+          No workflow named <span className="font-mono">{chosen}</span> in this project.{" "}
+          <Link href={pathname}>See all workflows</Link>
+        </Empty>
       )}
-      <div className="grid gap-3 overflow-x-auto pb-2 md:grid-flow-col md:auto-cols-[minmax(260px,1fr)]">
-        {columns.map((column) => (
-          <section
-            key={column.state}
-            id={`colonne-${column.state}`}
-            aria-label={`${column.display}, ${column.items.length} ticket${column.items.length > 1 ? "s" : ""}`}
-            className="scroll-mt-16 space-y-2"
-          >
-            <header className="flex h-8 items-center gap-2 border-b border-line" title={column.state}>
-              <Dot tone={tonDEtat(column.state, column.kind)} />
-              <h3 className={cn(LEGENDE, "truncate")}>{column.display}</h3>
-              <span className="ml-auto rounded-full bg-surface-muted px-1.5 font-mono text-[11px] tabular-nums text-ink-muted">
-                {column.items.length}
-              </span>
-            </header>
-            {column.horsWorkflow && (
-              // Sans ce mot, une colonne « In progress » après « Done » ne se comprenait pas (audit du 08/10).
-              <p className="text-xs text-ink-muted">
-                Not a state of this workflow — tickets left here by an older version
-              </p>
-            )}
-            {column.items.map((item) => (
-              <div
-                key={item.id}
-                id={`carte-${item.id}`}
-                className="scroll-mt-16 target:outline target:outline-2 target:outline-accent"
-              >
-                <Card className="p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    {item.redacted ? (
-                      // Its runs read a restricted knowledge base you do not read (ADR 0114): listed, not opened.
-                      <span className="text-sm font-medium">{item.title}</span>
-                    ) : (
-                      <Link href={`/p/${slug}/items/${item.id}`} className="text-sm font-medium no-underline">
-                        {item.title}
-                      </Link>
-                    )}
-                    {item.redacted ? (
-                      <Badge tone="neutral" title={`Read by the readers of ${(item.restricted_knowledge ?? []).join(", ")}`}>
-                        Restricted
-                      </Badge>
-                    ) : (
-                      <CostChip costUsd={item.totals?.cost_usd} tokensIn={item.totals?.tokens_in} />
-                    )}
-                  </div>
-                  <p className="mt-1 font-mono text-xs text-ink-muted">{item.tracker_key}</p>
-                  {item.current_run && (
-                    <p className="mt-2 flex items-center gap-2 text-xs">
-                      <ActorIcon
-                        kind="agent"
-                        name={`${item.current_run.stage_role} · attempt ${item.current_run.attempt}`}
-                      />
-                      <span className="text-ink-muted">{item.current_run.status}</span>
-                    </p>
-                  )}
-                  {item.failure && (
-                    <p className="mt-1 text-xs font-medium text-failed-ink" title={item.failure.message}>
-                      Dead · {item.failure.activity ?? "interpreter"}
-                    </p>
-                  )}
-                  {item.pending_request && (
-                    <div className="mt-2 space-y-2 border border-line border-l-2 border-l-waiting bg-surface p-2">
-                      <p className="text-xs text-waiting-ink">
-                        {String(item.pending_request.payload?.summary ?? item.pending_request.kind)} ·{" "}
-                        {relative(item.pending_request.requested_at)}
-                      </p>
-                      {item.pending_request.kind === "task" ? (
-                        // Un formulaire et une attestation ne tiennent pas dans une carte : la page du ticket.
-                        <Link href={`/p/${slug}/items/${item.id}`} className="text-xs">
-                          Do the task
-                        </Link>
-                      ) : (
-                        <DecisionBar
-                          itemId={item.id}
-                          kind={item.pending_request.kind}
-                          onDone={() => queryClient.invalidateQueries({ queryKey: ["items", slug] })}
-                        />
-                      )}
-                    </div>
-                  )}
-                </Card>
-              </div>
-            ))}
-          </section>
-        ))}
-      </div>
+      {sections.map((section) => (
+        <BoardSection key={section.name} slug={slug} section={section} alone={sections.length === 1} onDecided={refresh} />
+      ))}
     </div>
   );
 }
