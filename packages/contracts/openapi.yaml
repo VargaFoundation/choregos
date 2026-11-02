@@ -2223,6 +2223,18 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgent
+      description: >-
+        Deletes an agent that never served: no project pin, no run outside its trials, named by no
+        active workflow; its versions, credentials, evaluations and releases go with it. Otherwise 409
+        with the reasons: retire it instead (`changeAgentLifecycle`), which keeps its name in the history.
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents/{slug}/responses:
     parameters:
       - { $ref: "#/components/parameters/Org" }

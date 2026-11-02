@@ -438,6 +438,8 @@ export const api = {
     request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (org: string, slug: string, body: AgentPatch) =>
     request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /** Deletes an agent that never served; 409 with the reasons otherwise (retire it instead). */
+  deleteAgent: (org: string, slug: string) => request<void>(`/orgs/${org}/agents/${slug}`, { method: "DELETE" }),
   /** Its life (S32-04): activate a draft, deprecate, retire — retiring runs its checklist. */
   changeAgentLifecycle: (org: string, slug: string, body: AgentLifecycleChange) =>
     request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),

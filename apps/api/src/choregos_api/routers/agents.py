@@ -15,6 +15,7 @@ from choregos_adapters.storage import ObjectStoreError
 from choregos_core import utcnow
 from fastapi import APIRouter, Path, Query, Request, Response, status
 from pydantic import StringConstraints
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,6 +97,7 @@ from ..services.agent_governance import (
 from ..services.agent_lifecycle import (
     TransitionRefused,
     check_transition,
+    delete_blockers,
     last_run_at,
     retire,
     running_work_items,
@@ -989,6 +991,32 @@ async def change_agent_lifecycle(
     )
     resultat.agent = await _dto(session, agent, principal, org)
     return resultat
+
+
+@router.delete(
+    "/orgs/{org}/agents/{slug}", status_code=status.HTTP_204_NO_CONTENT, operation_id="deleteAgent"
+)
+async def delete_agent(org: str, slug: Slug, session: Db, principal: Me) -> Response:
+    """Delete an agent that never served: no project pin, no run outside its trials, named by no
+    active workflow. Anything else is refused (409) with its reasons — retire it instead, which keeps
+    its name in the history. Its versions, credentials, evaluations and releases go with it."""
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.MANAGE))
+    if reasons := await delete_blockers(session, organisation.id, agent):
+        raise conflict(f"agent `{slug}` cannot be deleted: {'; '.join(reasons)}. Retire it instead")
+    await record(
+        session,
+        principal,
+        "agent.delete",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=agent.id,
+        slug=slug,
+        lifecycle=agent.lifecycle,
+        scope=agent.scope,
+    )
+    await session.execute(sa_delete(Agent).where(Agent.id == agent.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

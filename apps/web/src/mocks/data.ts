@@ -3122,6 +3122,17 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       model: "mock/drafter",
     } as T;
   }
+  if (method === "DELETE" && agentEcrit && !agentEcrit[2]) {
+    // The demo has no runs or pins to count: it deletes a draft and refuses the rest, as the API
+    // refuses an agent that served (retire it instead).
+    const index = agents.findIndex((a) => a.slug === agentEcrit[1]);
+    if (index < 0) throw new ApiError(404, { detail: `agent \`${agentEcrit[1]}\` not found` });
+    if (agents[index]!.lifecycle !== "draft") {
+      throw new ApiError(409, { detail: `agent \`${agentEcrit[1]}\` cannot be deleted: it has run. Retire it instead` });
+    }
+    agents.splice(index, 1);
+    return undefined as T;
+  }
   if (method === "POST" && agentEcrit?.[2] === "/fork") {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentFork;
     const source = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;

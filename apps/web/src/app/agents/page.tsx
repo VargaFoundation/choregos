@@ -72,10 +72,16 @@ function Agents() {
   const awaiting = new Set((waiting.data ?? []).map((r) => r.agent));
   const [onlyAwaiting, setOnlyAwaiting] = useState(false);
   const [scope, setScope] = useState<AgentScope | null>(null);
+  // A retired agent is gone for good: it stays readable, but out of the way unless asked for.
+  const [showRetired, setShowRetired] = useState(false);
+  const retired = (agents.data ?? []).filter((a) => a.lifecycle === "retired").length;
   const [drawer, setDrawer] = useState<"catalogue" | null>(catalogue ? "catalogue" : null);
   const shown = withTags(
     (agents.data ?? []).filter(
-      (a) => (scope === null || (a.scope ?? "org") === scope) && (!onlyAwaiting || awaiting.has(a.slug)),
+      (a) =>
+        (scope === null || (a.scope ?? "org") === scope) &&
+        (!onlyAwaiting || awaiting.has(a.slug)) &&
+        (showRetired || a.lifecycle !== "retired"),
     ),
     tags,
   );
@@ -112,6 +118,17 @@ function Agents() {
               className={`rounded-full border px-3 py-1 text-xs ${onlyAwaiting ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
             >
               Awaiting approval ({awaiting.size})
+            </button>
+          )}
+          {retired > 0 && (
+            <button
+              type="button"
+              aria-pressed={showRetired}
+              onClick={() => setShowRetired(!showRetired)}
+              data-testid="retired-chip"
+              className={`rounded-full border px-3 py-1 text-xs ${showRetired ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+            >
+              Show retired ({retired})
             </button>
           )}
         </div>

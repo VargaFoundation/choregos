@@ -4338,6 +4338,7 @@ export interface Operations {
   decideAgentRelease: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases/{release_id}/decision"; body: AgentReleaseDecision; response: AgentRelease };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
+  deleteAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}"; body: never; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
