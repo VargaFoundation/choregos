@@ -241,7 +241,8 @@ and the connector shows the error.
 
 **Runs reach these servers through the platform.** An agent's version names the servers it uses
 and the tools it takes from each — `mcp_servers: [{"connector": "supplier", "tools": ["track_*"]}]`
-(`["*"]` for all; a server named without patterns opens nothing). A run of that agent sees, as
+(`["*"]` for all; a server named without patterns opens nothing, and the console says so —
+"no tool — name tools, or * for all" — on the agent, in its diff and in the builder). A run of that agent sees, as
 `supplier__track_order`, the tools that are **in its selection, `allowed`** for its project
 (after the project's tightening) and open to its groups — an `approval` operation is a governed
 action, not a tool. The agent calls it through `choregos-tools`; the platform checks the

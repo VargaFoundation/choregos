@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe as describeBinding, effectiveBindings, labelOf, type Binding } from "@/lib/memories";
+import { toolsLabel } from "@/lib/mcp-tools";
 import type { AgentSpec } from "@/lib/types";
 
 /**
@@ -223,7 +224,7 @@ export function diffSpecs(before: AgentSpec | null | undefined, after: AgentSpec
     b.mcp_servers,
     (s) => s.connector,
     (s) => `Tools of ${s.connector}`,
-    (s) => ((s.tools ?? []).length ? (s.tools ?? []).join(", ") : "every tool"),
+    (s) => toolsLabel(s.tools),
     (x, y) => {
       const was = new Set(x.tools ?? []);
       const now = new Set(y.tools ?? []);
