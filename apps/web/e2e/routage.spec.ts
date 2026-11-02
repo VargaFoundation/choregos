@@ -27,6 +27,20 @@ test("les règles de routage se changent en brouillon et s'enregistrent d'un ges
   await expect(page.getByTestId("workflow-card-hotfix")).toContainText("of type Bug; labelled incident");
 });
 
+test("a routing rule is edited in place, labels_all included", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows");
+  const rules = page.getByRole("list", { name: "Routing rules" });
+  await page.getByRole("button", { name: "Edit rule 1" }).click();
+  const form = page.getByRole("form", { name: "Edit routing rule 1" });
+  await expect(form.getByLabel("Labelled (any of)")).toHaveValue("incident");
+  await form.getByLabel("Labelled (all of)").fill("customer");
+  await form.getByRole("button", { name: "Update rule 1" }).click();
+  await expect(rules.getByRole("listitem")).toHaveCount(1);
+  await expect(rules).toContainText("labelled incident, labelled customer → hotfix");
+  await page.getByRole("button", { name: "Save the routing" }).click();
+  await expect(page.getByRole("status")).toContainText("Routing saved");
+});
+
 test("le défaut se choisit, et un workflow sans règle ni défaut se désactive", async ({ page }) => {
   await page.goto("/p/billing-api/workflows");
   const carte = (nom: string) => page.getByRole("listitem").filter({ has: page.getByTestId(`workflow-card-${nom}`) });

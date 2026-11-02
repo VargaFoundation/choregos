@@ -624,7 +624,8 @@ curl         $API/projects/acme:hr/workflows                                    
 - In the console, the project's **workflows** page does the same: **make default** and
   **deactivate** on each workflow (both confirmed; deactivate is offered only when the workflow is
   neither the default nor a routing target, and says why otherwise), and a **routing** card that
-  adds, orders and removes rules as a draft, saved in one gesture. A new workflow cannot take the
+  chooses the default, adds, edits in place, orders and removes rules (any of these labels, all of
+  these labels, a type) as a draft, saved in one gesture. A new workflow cannot take the
   name of an existing one: publishing it would replace that workflow's active version.
 - **Moving a running item to another version** is explicit:
 
