@@ -16,6 +16,7 @@ fields:
   email: "the email of the account the API token belongs to (a service account's ends in @serviceaccount.atlassian.com)"
   auth: "`scoped` for a service account's token, which carries the scopes read:jira-work and write:jira-work; `basic` for a classic token"
   cloud_id: "leave empty: read from the site at the first call, and shown by Test"
+  candidates_jql: "optional: the JQL of the issues the platform takes on by itself, without a webhook (BILL issues matching it, not done)"
   project_key: "the project's key, the prefix of its issue keys (BILL in BILL-42)"
   field_names: "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira"
   api_token: "the API token, typed once"
@@ -86,6 +87,11 @@ tools its version names, under each tool connector's account, listed on its run.
    `Cost (€)`, `Size`, `Risk` and `Run`.
 4. `api_token`: the token, in the password field (sealed, shown once).
 5. Label an issue `agent-ready`: the platform starts one workflow per issue.
+6. Or skip the webhook and the label altogether: set `candidates_jql`, for example
+   `parent = BILL-1 AND labels in (form-a, form-b)`. Every minute the platform searches the project's open
+   issues matching it and starts one workflow per new one; an issue already started never starts again.
+   The issue's labels still pick its workflow. Exclude what another tool already handles (for example
+   `AND created >= "2026-11-02"`), or the first search takes it on too.
 
 ## Test it
 

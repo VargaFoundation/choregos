@@ -491,3 +491,52 @@ def test_a_scoped_jira_opens_the_gateway_in_its_egress() -> None:
 
     hosts = egress_hosts("tracker", "jira", {"base_url": BASE, "auth": "scoped"})
     assert ("api.atlassian.com", 443) in hosts and ("varga.atlassian.net", 443) in hosts
+
+
+async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_label() -> None:
+    # The factory itself, not `build`: under CHOREGOS_FAKES=1 (the CI) `build` hands out the fake.
+    from choregos_adapters import _jira_tracker
+    from choregos_contracts import ProjectConfig
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url.params.get("jql")))
+        return httpx.Response(200, json={"issues": [{"key": "BILL-12"}]})
+
+    adapter = _jira_tracker(
+        {
+            "base_url": BASE,
+            "email": "bot@varga.dev",
+            "api_token": "token",
+            "project_key": "BILL",
+            "candidates_jql": " parent = BILL-1 AND labels in (form-a, form-b) ",
+        }
+    )
+    adapter.client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    keys = await adapter.list_candidates(ProjectConfig(slug="bill", org="varga"))
+
+    assert keys == ["BILL-12"]
+    assert seen == [
+        'project = "BILL" AND (parent = BILL-1 AND labels in (form-a, form-b)) '
+        "AND statusCategory != Done ORDER BY updated DESC"
+    ]
+
+
+async def test_without_a_connector_jql_the_candidates_are_the_agent_ready_issues() -> None:
+    from choregos_contracts import ProjectConfig
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url.params.get("jql")))
+        return httpx.Response(200, json={"issues": []})
+
+    jira = tracker(handler)
+    jira.candidates_jql = None
+    await jira.list_candidates(ProjectConfig(slug="bill", org="varga"))
+
+    assert seen == [
+        'project = "BILL" AND labels = "agent-ready" AND statusCategory != Done ORDER BY updated DESC'
+    ]

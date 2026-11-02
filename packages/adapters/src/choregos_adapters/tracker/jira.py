@@ -77,6 +77,7 @@ class JiraTracker:
         field_names: dict[str, str] | None = None,
         agent_ready_label: str = AGENT_READY_LABEL,
         site_url: str | None = None,
+        candidates_jql: str | None = None,
     ) -> None:
         if not project_key:
             raise ConfigurationError("`project_key` est obligatoire pour le tracker Jira")
@@ -95,6 +96,8 @@ class JiraTracker:
             **{nom_actuel(logique): nom for logique, nom in (field_names or {}).items()},
         }
         self.agent_ready_label = agent_ready_label
+        # The issues the poll takes on without any Jira-side setup (no webhook, no automation rule).
+        self.candidates_jql = (candidates_jql or "").strip() or None
         self._fields: dict[str, str] | None = None
 
     # ───────────────────────── lecture ─────────────────────────
@@ -132,11 +135,15 @@ class JiraTracker:
         )
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
-        """Polling de secours (S3-06) : les issues ouvertes étiquetées `agent-ready`."""
-        jql = (
-            f'project = "{self.project_key}" AND labels = "{self.agent_ready_label}" '
-            "AND statusCategory != Done ORDER BY updated DESC"
+        """The open issues the poll takes on: those labelled `agent-ready` (S3-06), or, when the
+        connector sets `candidates_jql`, those matching it, always within the project."""
+        selection = (
+            f"({self.candidates_jql})" if self.candidates_jql else f'labels = "{self.agent_ready_label}"'
         )
+        jql = (
+            f'project = "{self.project_key}" AND {selection} AND statusCategory != Done ORDER BY updated DESC'
+        )
+
         payload = await self.client.request(
             "GET", "/rest/api/3/search/jql", params={"jql": jql, "maxResults": 100, "fields": "key"}
         )
