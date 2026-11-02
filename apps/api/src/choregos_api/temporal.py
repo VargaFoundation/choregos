@@ -94,6 +94,7 @@ class TemporalGateway(Protocol):
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def start_reconciliation(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_hosted_build(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_session_pod(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
@@ -176,6 +177,10 @@ class FakeTemporal:
 
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started.setdefault(workflow_id, payload)  # one loop per source
+        return workflow_id
+
+    async def start_reconciliation(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        self.started.setdefault(workflow_id, payload)  # one catch-up loop per project
         return workflow_id
 
     async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str:
@@ -276,6 +281,10 @@ class RealTemporal:
 
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("KnowledgeSync", workflow_id, payload)
+
+    async def start_reconciliation(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """A project's tracker catch-up loop: `TrackerReconciliation` in the orchestrator."""
+        return await self._start("TrackerReconciliation", workflow_id, payload)
 
     async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("KnowledgeDistill", workflow_id, payload)
@@ -385,6 +394,43 @@ def set_temporal(gateway: TemporalGateway | None) -> None:
     """Point d'injection pour les tests."""
     global _gateway
     _gateway = gateway
+
+
+def reconciliation_id(project_slug: str) -> str:
+    """The id of a project's tracker catch-up loop, the one the orchestrator's worker starts."""
+    return f"reconcile-{project_slug}"
+
+
+async def start_tracker_reconciliation(project_slug: str) -> None:
+    """Start the tracker catch-up loop of a project that just became active.
+
+    The orchestrator's worker starts one loop per ACTIVE project when it starts: a project activated
+    later was never polled until the next restart, so `candidates_jql` took nothing on (2026-11-02).
+    Idempotent (deterministic id), and best effort: the activation stands if Temporal does not
+    answer, and the next worker start catches the loop up.
+    """
+    interval = get_settings().reconcile_interval_seconds
+    if interval <= 0:
+        return
+    try:
+        await get_temporal().start_reconciliation(
+            reconciliation_id(project_slug), {"project_slug": project_slug, "interval_seconds": interval}
+        )
+    except Exception as exc:  # the activation is saved; the worker start catches up
+        logger.warning("tracker catch-up not started", project=project_slug, reason=str(exc))
+
+
+async def stop_tracker_reconciliation(project_slug: str) -> None:
+    """Stop an archived project's tracker catch-up loop. A loop that does not run is fine."""
+    from temporalio.service import RPCError, RPCStatusCode
+
+    try:
+        await get_temporal().signal(reconciliation_id(project_slug), "stop", {})
+    except RPCError as exc:
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            logger.warning("tracker catch-up not stopped", project=project_slug, reason=str(exc))
+    except Exception as exc:  # the archive is saved; a pass skips an archived project
+        logger.warning("tracker catch-up not stopped", project=project_slug, reason=str(exc))
 
 
 class InterpreterNotRunningError(Exception):

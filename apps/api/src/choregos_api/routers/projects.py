@@ -401,9 +401,16 @@ async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> P
 
 @router.delete("/projects/{id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="deleteProject")
 async def delete_project(ctx: ProjectCtx, session: Db) -> None:
+    """Archive the project, whatever its status: a draft, a project left provisioning, a suspended one.
+
+    Only an `active` project used to be archived: on any other the console's Archive answered 204,
+    the audit said `project.archive`, and nothing changed (a draft could never be retired).
+    """
     ctx.require(Permission.PROJECT_DELETE)
-    if ctx.project.status == "active":
-        ctx.project.status = "archived"
+    if ctx.project.status == "archived":
+        return
+    previous = ctx.project.status
+    ctx.project.status = "archived"
     await record(
         session,
         ctx.principal,
@@ -411,7 +418,11 @@ async def delete_project(ctx: ProjectCtx, session: Db) -> None:
         org_id=ctx.project.org_id,
         target_type="project",
         target_id=ctx.id,
+        previous_status=previous,
     )
+    from ..temporal import stop_tracker_reconciliation
+
+    await stop_tracker_reconciliation(ctx.slug)
 
 
 @router.post("/projects/{id}/suspend", response_model=ProjectDto, operation_id="suspendProject")
@@ -479,6 +490,9 @@ async def _activate_without_steps(ctx: ProjectCtx, session: Db, *, dry_run: bool
         target_id=ctx.id,
         steps=0,
     )
+    from ..temporal import start_tracker_reconciliation
+
+    await start_tracker_reconciliation(ctx.slug)
     return _provision_status(ctx.project)
 
 

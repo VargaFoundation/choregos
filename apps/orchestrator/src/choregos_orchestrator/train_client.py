@@ -73,6 +73,24 @@ async def start_workflow_once(
     return True
 
 
+async def start_reconciliation_loop(project_slug: str) -> bool:
+    """Start a project's tracker catch-up loop (`reconcile-<slug>`); `False` if one already runs.
+
+    Called when the worker starts, for every active project, and when a project becomes active:
+    before, a project activated after the worker had started was never polled until its restart.
+    """
+    settings = get_settings()
+    if settings.reconcile_interval_seconds <= 0:
+        return False
+    return await start_workflow_once(
+        "TrackerReconciliation",
+        f"reconcile-{project_slug}",
+        {"project_slug": project_slug, "interval_seconds": settings.reconcile_interval_seconds},
+        # A loop that died in failure restarts when the worker starts (S22-06).
+        relancer_si_echoue=True,  # lang: fr-ok (the keyword test_reconciliation pins)
+    )
+
+
 async def signal_workflow(
     workflow_id: str, name: str, payload: dict[str, Any], *, start: str | None = None
 ) -> None:
