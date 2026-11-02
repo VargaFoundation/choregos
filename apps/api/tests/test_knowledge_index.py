@@ -116,6 +116,28 @@ def test_a_chunk_carries_its_document_title_and_heading_path() -> None:
     assert not any("Slide number" in c.text for c in chunks)
 
 
+def test_a_fenced_file_keeps_its_comments_as_code_and_every_chunk_reads_as_code() -> None:
+    """S51-05: a YAML `# comment` is not a heading, and a long file is cut into fenced pieces."""
+    from choregos_api.knowledge.chunking import chunk
+    from choregos_api.knowledge.convert import fenced
+
+    yaml = "".join(f"# service {i}\nservice_{i}:\n  replicas: {i}\n\n" for i in range(60))
+    chunks = chunk(f"# deploy/values.yaml\n\n{fenced(yaml, 'yaml')}", "deploy/values.yaml", limit=300)
+    assert len(chunks) > 1, "a long file is cut"
+    assert all(c.heading_path == ["deploy/values.yaml"] for c in chunks), "a comment is no heading"
+    for piece in chunks:
+        assert piece.body.startswith("```yaml\n") and piece.body.endswith("\n```"), piece.body
+        assert len(piece.body) <= 300
+    inner = "\n".join(c.body.removeprefix("```yaml\n").removesuffix("\n```") for c in chunks)
+    assert [line for line in inner.splitlines() if line] == [line for line in yaml.splitlines() if line]
+
+
+def test_a_fence_is_longer_than_any_backticks_it_holds() -> None:
+    from choregos_api.knowledge.convert import fenced
+
+    assert fenced('\ufeff{"md": "````"}\r\n', "json") == '`````json\n{"md": "````"}\n`````\n'
+
+
 def test_reciprocal_rank_fusion_rewards_agreement() -> None:
     from choregos_api.knowledge.index import bm25, fuse
 

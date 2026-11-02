@@ -1752,7 +1752,8 @@ curl -X POST $API/orgs/acme/knowledge -H 'Content-Type: application/json' \
 curl -X POST $API/orgs/acme/knowledge/architecture/documents -F file=@zoning-principles.pptx
 ```
 
-An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text; 20 MiB by default,
+An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text, and structured text: YAML (`.yaml`,
+`.yml`), JSON, TOML; 20 MiB by default,
 `CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB`) is answered `202 pending` and converted to markdown **in the
 background**, in a child process that sees none of the API's secrets and is stopped after
 `CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S` (120 s). Headings, slide titles and tables are kept; a PDF
@@ -1762,7 +1763,11 @@ table per sheet (hidden sheets marked), with empty cells empty, numbers as the s
 `CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
 shown`) and a document cut that way carries `warnings` (one sentence per cut sheet), shown in
 the console's document list and page, and counted in a source's last sync (`truncated`,
-`truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
+`truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Structured
+text is never parsed: it must be UTF-8, and is stored verbatim as one fenced code block (` ```yaml `,
+` ```json `, ` ```toml `) under a `# <path>` heading — the file's path in its repository for a git
+source, its name for an upload — which is also its title; in an `index` base, a `# comment` inside it
+is not a heading, and a long file is cut by lines into chunks that are each fenced again. Documents converted
 before this reading keep their old text until converted again: `POST …/documents/{id}/convert`
 (which also shrinks the corpus). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
@@ -1851,7 +1856,10 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   content type or their extension, kept under their real extension); links are never read out of a
   document, and a document on another host is not followed.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
-  (`*.md` by default). A document is named by its whole path (`docs-adr-0001.md`), so two
+  (`*.md` by default, so an existing source does not start reading every configuration file of its
+  repository; name `*.yaml`, `*.yml`, `*.json` or `*.toml` to add them — a glob's `*` crosses
+  folders, so `*.yaml` matches `deploy/prod/values.yaml` too). A document is named by its whole path
+  (`docs-adr-0001.md`, `deploy-prod-values.yaml`), so two
   `README.md` do not collide; a repository where no file matches `paths` is reported unreadable and
   deletes nothing. A **private** repository is read through a `documents` connector of type `git`
   (`host`, default `github.com`, and `auth`): `auth: token` with a fine-grained access token
