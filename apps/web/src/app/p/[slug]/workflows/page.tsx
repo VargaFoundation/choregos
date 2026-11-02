@@ -216,6 +216,9 @@ function CarteDeWorkflow({
 /**
  * Les règles de routage, dans leur ordre : la première qui correspond l'emporte. On les change en
  * brouillon, et on enregistre d'un geste — une règle retirée par erreur ne part pas seule.
+ *
+ * A rule is edited in place: "Edit" loads it into the form, which then updates it instead of adding
+ * one. The default is part of the same draft, so a project with none can choose it here.
  */
 function Routage({
   slug,
@@ -230,18 +233,25 @@ function Routage({
 }) {
   const [regles, setRegles] = useState<Regle[] | null>(null);
   const courantes = regles ?? routing.rules;
+  const [defaultDraft, setDefaultDraft] = useState<string | null>(null);
+  const currentDefault = defaultDraft ?? routing.default;
   const [labels, setLabels] = useState("");
+  const [labelsAll, setLabelsAll] = useState("");
   const [type, setType] = useState("");
   const [cible, setCible] = useState("");
+  const [editing, setEditing] = useState<number | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const cibleChoisie = cible || noms.find((n) => n !== routing.default) || noms[0] || "";
+  const cibleChoisie = cible || noms.find((n) => n !== currentDefault) || noms[0] || "";
   const nouvelle: Regle = {
-    when: { labels_any: etiquettes(labels), labels_all: [], item_type: type.trim() || null },
+    when: { labels_any: etiquettes(labels), labels_all: etiquettes(labelsAll), item_type: type.trim() || null },
     workflow: cibleChoisie,
   };
-  const ajoutable = Boolean(cibleChoisie) && (nouvelle.when.labels_any!.length > 0 || Boolean(nouvelle.when.item_type));
+  const ajoutable =
+    Boolean(cibleChoisie) &&
+    (nouvelle.when.labels_any!.length > 0 || nouvelle.when.labels_all!.length > 0 || Boolean(nouvelle.when.item_type));
+  const dirty = regles !== null || defaultDraft !== null;
 
   function changer(suivantes: Regle[]) {
     setMessage(null);
@@ -253,14 +263,35 @@ function Routage({
     suivantes.splice(index + sens, 0, regle!);
     changer(suivantes);
   }
+  function resetForm() {
+    setEditing(null);
+    setLabels("");
+    setLabelsAll("");
+    setType("");
+    setCible("");
+  }
+  function edit(index: number) {
+    const rule = courantes[index]!;
+    setEditing(index);
+    setLabels((rule.when.labels_any ?? []).join(", "));
+    setLabelsAll((rule.when.labels_all ?? []).join(", "));
+    setType(rule.when.item_type ?? "");
+    setCible(rule.workflow);
+  }
+  function discard() {
+    setRegles(null);
+    setDefaultDraft(null);
+    resetForm();
+  }
 
   async function enregistrer() {
-    if (!regles) return;
+    if (!dirty || !currentDefault) return;
     setOccupe(true);
     setErreur(null);
     try {
-      await api.putWorkflowRouting(slug, { default: routing.default, rules: regles });
+      await api.putWorkflowRouting(slug, { default: currentDefault, rules: courantes });
       setRegles(null);
+      setDefaultDraft(null);
       setMessage("Routing saved — it applies to the next request that comes in");
       await onChange();
     } catch (cause) {
@@ -274,26 +305,75 @@ function Routage({
     <div className="space-y-4 text-sm">
       <p className="text-ink-muted">
         A request from a tracker goes to the first rule it matches, from the top; one that matches none goes to the
-        default, <strong className="text-ink">{routing.default || "—"}</strong>.
+        default.
       </p>
+      <label className="flex flex-wrap items-center gap-2">
+        <span className="text-ink-muted">Default workflow</span>
+        <Select
+          value={currentDefault}
+          onChange={(event) => {
+            setMessage(null);
+            setDefaultDraft(event.target.value === routing.default ? null : event.target.value);
+          }}
+          className="w-auto"
+        >
+          {!currentDefault && (
+            <option value="" disabled>
+              Choose the default
+            </option>
+          )}
+          {noms.map((nom) => (
+            <option key={nom} value={nom}>
+              {nom}
+            </option>
+          ))}
+        </Select>
+      </label>
       {courantes.length === 0 ? (
         <p className="text-ink-muted">No rule — every request that names no workflow goes to the default.</p>
       ) : (
         <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="regles">
           {courantes.map((regle, index) => (
-            <li key={`${index}-${regle.workflow}`} className="flex flex-wrap items-center gap-2 py-2">
+            <li
+              key={`${index}-${regle.workflow}`}
+              className={`flex flex-wrap items-center gap-2 py-2 ${editing === index ? "bg-surface-muted" : ""}`}
+              aria-current={editing === index ? "true" : undefined}
+            >
               <span className="w-5 text-ink-muted">{index + 1}.</span>
               <span className="min-w-0 flex-1">
                 {condition(regle)} → <strong>{regle.workflow}</strong>
               </span>
-              <Button size="sm" onClick={() => deplacer(index, -1)} disabled={index === 0}>
-                Up<span className="sr-only"> rule {index + 1}</span>
+              <Button
+                size="sm"
+                aria-label={`Edit rule ${index + 1}`}
+                onClick={() => edit(index)}
+                disabled={editing !== null}
+              >
+                Edit
               </Button>
-              <Button size="sm" onClick={() => deplacer(index, 1)} disabled={index === courantes.length - 1}>
-                Down<span className="sr-only"> rule {index + 1}</span>
+              <Button
+                size="sm"
+                aria-label={`Up rule ${index + 1}`}
+                onClick={() => deplacer(index, -1)}
+                disabled={index === 0 || editing !== null}
+              >
+                Up
               </Button>
-              <Button size="sm" onClick={() => changer(courantes.filter((_, i) => i !== index))}>
-                Remove<span className="sr-only"> rule {index + 1}</span>
+              <Button
+                size="sm"
+                aria-label={`Down rule ${index + 1}`}
+                onClick={() => deplacer(index, 1)}
+                disabled={index === courantes.length - 1 || editing !== null}
+              >
+                Down
+              </Button>
+              <Button
+                size="sm"
+                aria-label={`Remove rule ${index + 1}`}
+                onClick={() => changer(courantes.filter((_, i) => i !== index))}
+                disabled={editing !== null}
+              >
+                Remove
               </Button>
             </li>
           ))}
@@ -302,13 +382,14 @@ function Routage({
 
       <form
         className="flex flex-wrap items-end gap-2"
-        aria-label="New routing rule"
+        aria-label={editing === null ? "New routing rule" : `Edit routing rule ${editing + 1}`}
         onSubmit={(event) => {
           event.preventDefault();
           if (!ajoutable) return;
-          changer([...courantes, nouvelle]);
-          setLabels("");
-          setType("");
+          changer(
+            editing === null ? [...courantes, nouvelle] : courantes.map((r, i) => (i === editing ? nouvelle : r)),
+          );
+          resetForm();
         }}
       >
         <label className="flex min-w-0 flex-col gap-1">
@@ -317,6 +398,15 @@ function Routage({
             value={labels}
             onChange={(event) => setLabels(event.target.value)}
             placeholder="incident, sev1"
+            className="w-auto"
+          />
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">Labelled (all of)</span>
+          <Input
+            value={labelsAll}
+            onChange={(event) => setLabelsAll(event.target.value)}
+            placeholder="customer, urgent"
             className="w-auto"
           />
         </label>
@@ -344,8 +434,13 @@ function Routage({
           </Select>
         </label>
         <Button size="sm" type="submit" disabled={!ajoutable} aria-describedby="regle-incomplete">
-          Add the rule
+          {editing === null ? "Add the rule" : `Update rule ${editing + 1}`}
         </Button>
+        {editing !== null && (
+          <Button size="sm" onClick={resetForm}>
+            Cancel
+          </Button>
+        )}
         {!ajoutable && (
           <span id="regle-incomplete" className="self-center text-xs text-ink-muted">
             A rule needs a label or a type
@@ -353,13 +448,20 @@ function Routage({
         )}
       </form>
 
-      {regles && (
+      {dirty && (
         <div className="flex flex-wrap items-center gap-2 border border-line border-l-2 border-l-accent p-2">
-          <span className="flex-1">The routing has unsaved changes</span>
-          <Button size="sm" onClick={() => setRegles(null)} disabled={occupe}>
+          <span className="flex-1">
+            {currentDefault ? "The routing has unsaved changes" : "Choose a default workflow before saving"}
+          </span>
+          <Button size="sm" onClick={discard} disabled={occupe}>
             Discard
           </Button>
-          <Button size="sm" tone="primary" onClick={() => void enregistrer()} disabled={occupe}>
+          <Button
+            size="sm"
+            tone="primary"
+            onClick={() => void enregistrer()}
+            disabled={occupe || !currentDefault || editing !== null}
+          >
             Save the routing
           </Button>
         </div>
