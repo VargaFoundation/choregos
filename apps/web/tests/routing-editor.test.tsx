@@ -43,7 +43,9 @@ async function open(routing: WorkflowRouting) {
 }
 
 describe("the routing editor edits a rule in place", () => {
-  beforeEach(() => vi.mocked(api.putWorkflowRouting).mockClear());
+  beforeEach(() => {
+    vi.mocked(api.putWorkflowRouting).mockClear();
+  });
 
   it("loads a rule into the form, updates it there, and saves the whole routing", async () => {
     await open({
