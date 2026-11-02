@@ -944,6 +944,26 @@ export type WorkflowRouting = {
       item_type?: string | null;
     };
   }>;
+  /** ADR 0116: `labels` reads the rules alone; `rules_then_llm` asks a small model when no rule matched; `llm` asks the model alone. The default is always the last resort. Always in a response (`labels` when never set); absent from a PUT, unchanged. */
+  strategy?: "labels" | "rules_then_llm" | "llm";
+  /** What the model reads about each workflow beside its description, by workflow name. Absent from a PUT, unchanged; an empty hint is dropped. */
+  hints?: {
+    [key: string]: string;
+  };
+};
+
+export type RoutingPreviewRequest = {
+  title: string;
+  body?: string | null;
+  labels?: Array<string>;
+  item_type?: string | null;
+};
+
+export type RoutingPreview = {
+  workflow: string | null;
+  by: "explicit" | "rule" | "llm" | "default";
+  reason?: string | null;
+  model?: string | null;
 };
 
 export type WorkflowValidateRequest = {
@@ -3191,7 +3211,7 @@ export type ModelCatalogueEntry = {
   source: "gateway" | "manual";
   enabled: boolean;
   allowed_roles: Array<string>;
-  usages: Array<"agent" | "embed" | "distill" | "eval">;
+  usages: Array<"agent" | "embed" | "distill" | "eval" | "route">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   gateway?: ModelGatewayFacts | null;
@@ -3207,7 +3227,7 @@ export type ModelCatalogueEntryCreate = {
   display_name?: string | null;
   enabled?: boolean;
   allowed_roles?: Array<string>;
-  usages?: Array<"agent" | "embed" | "distill" | "eval">;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   notes?: string;
@@ -3217,7 +3237,7 @@ export type ModelCataloguePatch = {
   display_name?: string | null;
   enabled?: boolean | null;
   allowed_roles?: Array<string> | null;
-  usages?: Array<"agent" | "embed" | "distill" | "eval"> | null;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route"> | null;
   price_override?: PriceOverride | null;
   clear_price_override?: boolean;
   max_usd_per_minute?: number | null;
@@ -4655,6 +4675,7 @@ export interface Operations {
   postWorkItemAction: { method: "POST"; path: "/work-items/{id}/actions"; body: WorkItemAction; response: void };
   previewModelCuration: { method: "GET"; path: "/orgs/{org}/models/curate-preview"; body: never; response: ModelCuratePreview };
   previewSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git/preview"; body: SkillGitPreviewRequest; response: SkillGitPreview };
+  previewWorkflowRouting: { method: "POST"; path: "/projects/{id}/workflow-routing/preview"; body: RoutingPreviewRequest; response: RoutingPreview };
   proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
   publishAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions"; body: AgentSpec; response: AgentVersion };

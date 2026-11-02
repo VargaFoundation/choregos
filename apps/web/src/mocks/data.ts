@@ -76,6 +76,7 @@ import type {
   WorkflowEditResult,
   WorkflowOperation,
   WorkflowRouting,
+  RoutingPreviewRequest,
   WorkflowSummary,
   WorkflowValidation,
   WorkItemCreate,
@@ -1200,6 +1201,8 @@ export const workflowSummaries: WorkflowSummary[] = [
 export const workflowRouting: WorkflowRouting = {
   default: "default-simple",
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
+  strategy: "labels",
+  hints: {},
 };
 
 const requirement = (capability: string, reason: string) => ({ capability, reasons: [reason] });
@@ -3048,8 +3051,37 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (inconnus.length) throw new ApiError(422, { detail: `unknown or inactive workflow(s): ${inconnus.join(", ")}` });
     workflowRouting.default = corps.default;
     workflowRouting.rules = corps.rules;
+    if (corps.strategy) workflowRouting.strategy = corps.strategy;
+    if (corps.hints) workflowRouting.hints = Object.fromEntries(Object.entries(corps.hints).filter(([, h]) => h.trim()));
     for (const w of workflowSummaries) w.is_default = w.name === corps.default;
     return workflowRouting as T;
+  }
+  if (method === "POST" && /^\/projects\/[^/]+\/workflow-routing\/preview$/.test(chemin ?? "")) {
+    // The demo plays the API's order (ADR 0116): the rules, then a "model" that matches the hints'
+    // words, then the default.
+    const corps = JSON.parse(String(init.body ?? "{}")) as RoutingPreviewRequest;
+    const labels = new Set(corps.labels ?? []);
+    const strategy = workflowRouting.strategy ?? "labels";
+    if (strategy !== "llm") {
+      const index = workflowRouting.rules.findIndex(
+        (r) =>
+          (!r.when.labels_any?.length || r.when.labels_any.some((l) => labels.has(l))) &&
+          (r.when.labels_all ?? []).every((l) => labels.has(l)) &&
+          (!r.when.item_type || r.when.item_type === corps.item_type) &&
+          Boolean(r.when.labels_any?.length || r.when.labels_all?.length || r.when.item_type),
+      );
+      if (index >= 0) return { workflow: workflowRouting.rules[index]!.workflow, by: "rule", reason: `routing rule ${index + 1}`, model: null } as T;
+    }
+    if (strategy === "labels") return { workflow: workflowRouting.default, by: "default", reason: null, model: null } as T;
+    const text = `${corps.title} ${corps.body ?? ""}`.toLowerCase();
+    const chosen = Object.entries(workflowRouting.hints ?? {}).find(([, hint]) =>
+      hint.toLowerCase().split(/[^a-z0-9]+/).some((w) => w.length >= 4 && text.includes(w)),
+    );
+    return (
+      chosen
+        ? { workflow: chosen[0], by: "llm", reason: `the request speaks of ${chosen[1]}`, model: "mock/router" }
+        : { workflow: workflowRouting.default, by: "default", reason: "no workflow clearly fits", model: "mock/router" }
+    ) as T;
   }
   if (method === "POST" && /^\/projects\/[^/]+\/workflow-adoptions$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as WorkflowAdopt;

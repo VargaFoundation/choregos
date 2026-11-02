@@ -603,6 +603,22 @@ curl         $API/projects/acme:hr/workflows                                    
 - A work item is bound at birth — an explicit `workflow`, else the first routing rule that
   matches its labels or its tracker type, else the default — and **pinned to that version**:
   publishing a new version never moves a running item.
+- **A small model may choose** ([ADR 0116](adr/0116-a-small-model-may-route-a-work-item.md)). The
+  routing's `strategy` is `labels` (the rules alone, the default), `rules_then_llm` (the rules,
+  then the model when none matched) or `llm` (the model alone). The model reads the item's title,
+  body, labels and type and, for each active workflow, its `metadata.description` and a `hints`
+  entry (at most 500 characters); it may only name an active workflow, and an unknown name, no
+  answer, an error or a refused model leaves the item to the default. It is the organisation's
+  `cheap` tier, which the model catalogue must enable for the `route` usage; each call is one
+  `route` line in the costs, and the work item keeps `documents.routing` (`by`, `reason`, `model`).
+  `POST /projects/{id}/workflow-routing/preview {"title": …, "body": …, "labels": […]}` says where an
+  item would be born and why, without creating it. A `PUT` that leaves out `strategy` or `hints`
+  keeps them.
+
+  ```bash
+  curl -X PUT $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding", "rules": [],
+    "strategy": "rules_then_llm", "hints": {"offboarding": "leavers, departures, last day"}}'
+  ```
 - `PUT /projects/{id}/workflow` remains, as the alias of the default workflow.
 - A stack template ships them to every project born from it, in its `manifest.yaml`:
 
@@ -624,8 +640,9 @@ curl         $API/projects/acme:hr/workflows                                    
 - In the console, the project's **workflows** page does the same: **make default** and
   **deactivate** on each workflow (both confirmed; deactivate is offered only when the workflow is
   neither the default nor a routing target, and says why otherwise), and a **routing** card that
-  chooses the default, adds, edits in place, orders and removes rules (any of these labels, all of
-  these labels, a type) as a draft, saved in one gesture. A new workflow cannot take the
+  chooses the default and the strategy, adds, edits in place, orders and removes rules (any of
+  these labels, all of these labels, a type), writes each workflow's hint for the model, as a draft
+  saved in one gesture; **Try the routing** shows where a request would land. A new workflow cannot take the
   name of an existing one: publishing it would replace that workflow's active version.
 - **Moving a running item to another version** is explicit:
 
@@ -1479,7 +1496,7 @@ a section opens this page.
   usages and price), or says that the gateway lists nothing or could not be reached. **Sync from
 the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
 list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
-the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price per 1k tokens that
+the usages (`agent`, `embed`, `distill`, `eval`, `route` — the workflow router of ADR 0116), a display name, and a price per 1k tokens that
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 

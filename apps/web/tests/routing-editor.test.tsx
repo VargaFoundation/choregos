@@ -17,13 +17,14 @@ vi.mock("@/lib/api", async (importOriginal) => {
       workflowRouting: vi.fn(),
       project: vi.fn().mockResolvedValue({ slug: "fon", org: "acme" }),
       putWorkflowRouting: vi.fn(async (_slug: string, routing: unknown) => routing),
+      previewWorkflowRouting: vi.fn(),
     },
   };
 });
 
 const WORKFLOWS = [
-  { name: "onboarding", version: 1, is_default: true, open_items: 0 },
-  { name: "offboarding", version: 2, is_default: false, open_items: 0 },
+  { name: "onboarding", version: 1, is_default: true, open_items: 0, description: "Welcome a new hire" },
+  { name: "offboarding", version: 2, is_default: false, open_items: 0, description: null },
 ];
 
 async function open(routing: WorkflowRouting) {
@@ -71,6 +72,8 @@ describe("the routing editor edits a rule in place", () => {
       rules: [
         { when: { labels_any: ["leaver", "departure"], labels_all: ["hr"], item_type: "Task" }, workflow: "offboarding" },
       ],
+      strategy: "labels",
+      hints: {},
     });
   });
 
@@ -112,7 +115,59 @@ describe("the routing editor edits a rule in place", () => {
       expect(api.putWorkflowRouting).toHaveBeenCalledWith("fon", {
         default: "offboarding",
         rules: [{ when: { labels_any: [], labels_all: [], item_type: "Bug" }, workflow: "onboarding" }],
+        strategy: "labels",
+        hints: {},
       }),
+    );
+  });
+});
+
+describe("the routing strategy (ADR 0116)", () => {
+  beforeEach(() => {
+    vi.mocked(api.putWorkflowRouting).mockClear();
+  });
+
+  it("chooses a model strategy and writes a hint per workflow, in the same draft", async () => {
+    await open({ default: "onboarding", rules: [], strategy: "labels", hints: {} });
+    expect(screen.queryByRole("group", { name: "What the model reads" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Strategy"), { target: { value: "rules_then_llm" } });
+    expect(screen.getByTestId("strategy-says")).toHaveTextContent("when none matches, a small model reads the request");
+    const reads = screen.getByRole("group", { name: "What the model reads" });
+    expect(reads).toHaveTextContent("Welcome a new hire");
+    expect(reads).toHaveTextContent("No description in its YAML.");
+    fireEvent.change(within(reads).getByLabelText("Routing hint for offboarding"), {
+      target: { value: "leavers, departures" },
+    });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save the routing" })));
+    expect(api.putWorkflowRouting).toHaveBeenCalledWith("fon", {
+      default: "onboarding",
+      rules: [],
+      strategy: "rules_then_llm",
+      hints: { offboarding: "leavers, departures" },
+    });
+  });
+
+  it("a card says the model may send requests there", async () => {
+    await open({ default: "onboarding", rules: [], strategy: "llm", hints: {} });
+    expect(screen.getByTestId("workflow-card-offboarding")).toHaveTextContent("when the model chooses it");
+  });
+
+  it("tries a request against the saved routing and says why it lands where it does", async () => {
+    vi.mocked(api.previewWorkflowRouting).mockResolvedValue({
+      workflow: "offboarding",
+      by: "llm",
+      reason: "an employee leaves",
+      model: "platform/cheap",
+    });
+    await open({ default: "onboarding", rules: [], strategy: "llm", hints: {} });
+    const form = screen.getByRole("form", { name: "Try the routing" });
+    expect(within(form).getByRole("button", { name: "Try" })).toBeDisabled();
+    fireEvent.change(within(form).getByLabelText("Title"), { target: { value: "Bob leaves on Friday" } });
+    fireEvent.change(within(form).getByLabelText("Labels"), { target: { value: "hr" } });
+    await act(async () => fireEvent.click(within(form).getByRole("button", { name: "Try" })));
+    expect(api.previewWorkflowRouting).toHaveBeenCalledWith("fon", { title: "Bob leaves on Friday", body: null, labels: ["hr"] });
+    expect(await screen.findByTestId("routing-preview")).toHaveTextContent(
+      "→ offboarding (chosen by the model): an employee leaves",
     );
   });
 });

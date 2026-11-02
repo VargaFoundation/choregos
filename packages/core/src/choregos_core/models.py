@@ -91,7 +91,7 @@ def backend_enabled(name: str, stored: bool | None) -> bool:
 RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt", "hosted")
 
 
-USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval")
+USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval", "route")
 TIERS: tuple[str, ...] = ("cheap", "standard", "strong", "aux", "embed", "local")
 
 

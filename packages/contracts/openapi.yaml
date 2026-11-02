@@ -811,6 +811,20 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowRouting" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/workflow-routing/preview:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [workflows]
+      operationId: previewWorkflowRouting
+      description: >-
+        Where a work item would be born, and why (ADR 0116): explicit, a rule, the model, or the default.
+        Nothing is created; a call to the model is booked in the cost ledger on the project.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RoutingPreviewRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RoutingPreview" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /workflows/validate:
     post:
       tags: [workflows]
@@ -966,7 +980,7 @@ paths:
       description: The models an agent may be given for a stage role and a usage; every member may read it.
       parameters:
         - { name: role, in: query, required: false, schema: { type: string } }
-        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval], default: agent } }
+        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route], default: agent } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/UsableModel" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -5101,6 +5115,35 @@ components:
                   labels_any: { type: array, items: { type: string } }
                   labels_all: { type: array, items: { type: string } }
                   item_type: { type: [string, "null"] }
+        strategy:
+          type: string
+          enum: [labels, rules_then_llm, llm]
+          description: >-
+            ADR 0116: `labels` reads the rules alone; `rules_then_llm` asks a small model when no rule
+            matched; `llm` asks the model alone. The default is always the last resort. Always in a
+            response (`labels` when never set); absent from a PUT, unchanged.
+        hints:
+          type: object
+          additionalProperties: { type: string, maxLength: 500 }
+          description: >-
+            What the model reads about each workflow beside its description, by workflow name. Absent
+            from a PUT, unchanged; an empty hint is dropped.
+    RoutingPreviewRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        body: { type: [string, "null"], maxLength: 20000 }
+        labels: { type: array, items: { type: string } }
+        item_type: { type: [string, "null"] }
+    RoutingPreview:
+      type: object
+      required: [workflow, by]
+      properties:
+        workflow: { type: [string, "null"] }
+        by: { type: string, enum: [explicit, rule, llm, default] }
+        reason: { type: [string, "null"] }
+        model: { type: [string, "null"] }
     WorkflowValidateRequest:
       type: object
       properties:
@@ -7318,7 +7361,7 @@ components:
         source: { type: string, enum: [gateway, manual] }
         enabled: { type: boolean }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] } }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
@@ -7335,7 +7378,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: boolean, default: true }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] }, default: [agent] }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
@@ -7345,7 +7388,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: [boolean, "null"] }
         allowed_roles: { type: [array, "null"], items: { type: string } }
-        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval] } }
+        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }

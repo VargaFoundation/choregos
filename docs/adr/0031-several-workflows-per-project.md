@@ -1,6 +1,7 @@
 # 0031 — A project runs several workflows; each work item is pinned to the version it was born in
 
-- **Status**: accepted, 2026-10-05
+- **Status**: accepted, 2026-10-05; §2 amended by [ADR 0116](0116-a-small-model-may-route-a-work-item.md)
+  (a routing strategy may let a small model choose)
 - **Concerns**: `workflow_defs`, `work_items.workflow_def_id`, the interpreter's `load_context`, the
   work-item constructors, the tracker webhooks, templates, the console's workflow pages; amends
   [ADR 0023](0023-a-visual-workflow-builder.md); follows [ADR 0029](0029-a-platform-for-governed-agents.md)
