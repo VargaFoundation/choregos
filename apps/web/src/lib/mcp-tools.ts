@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * What an agent's MCP server entry opens, in words. The broker opens NOTHING for a server named
  * without a pattern (`apps/api/.../services/broker.py`, `tools_of_selection`): "every tool" is `*`,
