@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { kindOfOutcome, tonDEtat } from "@/components/ui";
 import { boardWorkflows, columnsFromGraph, foldedItems, itemsOf, TERMINAL_FOLD, visibleColumns } from "@/components/workflows/board";
 import { champsDepuisSchema, valeursPourLApi } from "@/components/workflows/champs";
 import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
@@ -133,5 +134,43 @@ describe("les champs d'une demande, depuis `metadata.inputs`", () => {
         manager: "",
       }),
     ).toEqual({ date_arrivee: "2026-11-02", poste: "dev", jours_d_essai: 90, teletravail: true, materiel: ["pc", "badge"] });
+  });
+});
+
+describe("a terminal state's declared outcome", () => {
+  const graph = {
+    nodes: [
+      { id: "to_apply", display: "To apply", kind: "wait" },
+      { id: "applied", display: "Applied", kind: "terminal", terminal: true, outcome: "success" },
+      { id: "declined", display: "Declined", kind: "terminal", terminal: true, outcome: "declined" },
+      { id: "handed_back", display: "Handed back", kind: "terminal", terminal: true, outcome: "cancelled" },
+      // A graph from an API before the field: a terminal state is a success.
+      { id: "done", display: "Done", kind: "terminal", terminal: true },
+    ],
+    edges: [],
+  } as unknown as WorkflowGraph;
+
+  it("gives its column its own kind: only a success is the green terminal", () => {
+    const kinds = Object.fromEntries(columnsFromGraph(graph, []).map((c) => [c.state, c.kind]));
+    expect(kinds).toEqual({
+      to_apply: "wait",
+      applied: "terminal",
+      declined: "declined",
+      handed_back: "cancelled",
+      done: "terminal",
+    });
+  });
+
+  it("folds a long declined column like a successful one: it is finished too", () => {
+    const tickets = Array.from({ length: TERMINAL_FOLD + 2 }, (_, i) => ticket(`d${i}`, "declined"));
+    const declined = columnsFromGraph(graph, tickets).find((c) => c.state === "declined");
+    expect(declined && foldedItems(declined, false).folded).toBe(2);
+  });
+
+  it("is never shown in the tone of a success when the request was declined or cancelled", () => {
+    expect(tonDEtat("applied", kindOfOutcome("success"))).toBe("succeeded");
+    expect(tonDEtat("declined", kindOfOutcome("declined"))).toBe("danger");
+    expect(tonDEtat("handed_back", kindOfOutcome("cancelled"))).toBe("neutral");
+    expect(kindOfOutcome(null)).toBe("terminal");
   });
 });

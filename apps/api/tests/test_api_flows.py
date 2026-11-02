@@ -513,3 +513,47 @@ async def test_un_ticket_dont_le_workflow_est_mort_le_dit(
     mort = next(i for i in liste["items"] if i["id"] == item_id)
     assert mort["workflow_status"] is None
     assert mort["failure"]["message"] == "le projet n'a pas de dépôt"
+
+
+async def test_a_declined_ticket_says_so_and_is_not_a_success(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """A terminal state's declared outcome reaches the ticket and the board: a declined access
+    request in green read as granted (the Fondation access workflow, 2026-11-02)."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    yaml_text = """
+apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: access, version: 1 }
+actors:
+  analyst: { type: agent, role: analyse }
+  fondation: { type: human, group: fondation }
+states:
+  inbox: { display: To take, kind: wait }
+  to_apply: { display: To apply, kind: wait }
+  applied: { display: Applied, terminal: true }
+  declined: { display: Declined by Fondation, terminal: true, outcome: declined }
+transitions:
+  - { id: t-analyse, from: inbox, to: to_apply, by: analyst }
+  - { id: t-apply, from: to_apply, to: applied, by: fondation, on_reject: declined }
+"""
+    response = await client.put(f"/api/v1/projects/{project['id']}/workflow", json={"yaml": yaml_text})
+    assert response.status_code == 200, response.text
+
+    async with session_scope() as session:
+        ids = {}
+        for state in ("declined", "applied", "to_apply"):
+            item = WorkItem(
+                project_id=project["id"], tracker_key=f"varga/billing-api#{state}", title="T", state=state
+            )
+            session.add(item)
+            await session.flush()
+            ids[state] = item.id
+
+    outcomes = {
+        state: (await client.get(f"/api/v1/work-items/{item_id}")).json()["state_outcome"]
+        for state, item_id in ids.items()
+    }
+    assert outcomes == {"declined": "declined", "applied": "success", "to_apply": None}

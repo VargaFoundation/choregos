@@ -368,8 +368,20 @@ const STATE_TONES: Record<string, Tone> = {
   // On attend quelqu'un : l'ambre — c'était un carré blanc en sombre.
   wait: "waiting",
   terminal: "succeeded",
+  // A terminal state the workflow declares `outcome: declined` or `cancelled`: finished, not won.
+  // A declined request in green read as granted (the Fondation access workflow, 2026-11-02).
+  declined: "danger",
+  cancelled: "neutral",
   blocked: "failed",
 };
+
+/**
+ * The badge kind of a terminal state from its declared outcome: `success` (or none) is `terminal`,
+ * the green of a success; `declined` and `cancelled` keep their own kinds.
+ */
+export function kindOfOutcome(outcome?: string | null): string {
+  return outcome === "declined" || outcome === "cancelled" ? outcome : "terminal";
+}
 
 /**
  * Le genre d'un état quand l'appelant ne le connaît pas — un ticket porte le *nom* de son état,
@@ -395,12 +407,15 @@ export function StateBadge({
   state,
   display,
   kind,
+  outcome,
 }: {
   state: string;
   display?: string | null;
   kind?: string;
+  /** A work item's `state_outcome`: set only when its state is terminal, it decides the badge's tone. */
+  outcome?: string | null;
 }) {
-  const tone = tonDEtat(state, kind);
+  const tone = tonDEtat(state, kind ?? (outcome ? kindOfOutcome(outcome) : undefined));
   return (
     <Badge tone={tone} title={state}>
       {display && display !== state ? display : toSentenceCase(libelleDeCode(state))}

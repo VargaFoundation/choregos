@@ -300,6 +300,16 @@
           ],
           "default": "work"
         },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "success",
+            "declined",
+            "cancelled"
+          ],
+          "default": "success",
+          "description": "How a terminal state ends the work item: `success` (the default), `declined` (a request turned down) or `cancelled` (dropped). Only a terminal state may declare another value; the console shows only a success green."
+        },
         "production": {
           "type": "boolean",
           "default": false,

@@ -1194,6 +1194,8 @@ export type WorkflowState = {
   };
   terminal?: boolean;
   kind?: "work" | "wait" | "terminal";
+  /** How a terminal state ends the work item: `success` (the default), `declined` (a request turned down) or `cancelled` (dropped). Only a terminal state may declare another value; the console shows only a success green. */
+  outcome?: "success" | "declined" | "cancelled";
   /** A production state: it can only be reached `via: release_train` (before #175: the name's `deployed_prod` prefix). */
   production?: boolean;
 };

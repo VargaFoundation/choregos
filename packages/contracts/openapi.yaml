@@ -6800,6 +6800,10 @@ components:
               display: { type: string }
               kind: { type: string }
               terminal: { type: boolean }
+              outcome:
+                type: [string, "null"]
+                enum: [success, declined, cancelled, null]
+                description: "How a terminal state ends the work item (`success`, `declined`, `cancelled`); null on a state that is not terminal."
               lane: { type: string }
               tracker_status: { type: [string, "null"], description: "The tracker column the state maps to; the console groups the path into stages by it." }
         edges:
@@ -7613,6 +7617,12 @@ components:
         risk: { oneOf: [{ $ref: "#/components/schemas/Risk" }, { type: "null" }] }
         state: { type: string }
         state_display: { type: [string, "null"] }
+        state_outcome:
+          type: [string, "null"]
+          enum: [success, declined, cancelled, null]
+          description: >-
+            How the current state ends the work item when it is terminal: `success`, `declined` (a request
+            turned down) or `cancelled` (dropped); null while it can still move.
         workflow_name: { type: [string, "null"] }
         workflow_version: { type: [integer, "null"] }
         temporal_wf_id: { type: [string, "null"] }
@@ -7646,7 +7656,7 @@ components:
           default: false
           description: >-
             True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114):
-            only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `workflow_name`,
+            only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `state_outcome`, `workflow_name`,
             `workflow_version`, `url`, dates and `restricted_knowledge` are filled; everything else is empty.
         created_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
