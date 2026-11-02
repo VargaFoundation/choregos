@@ -141,6 +141,9 @@ class Settings(BaseSettings):
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
     temporal_task_queue: str = "orchestrator"
+    #: The tracker catch-up interval, as the orchestrator reads it (`CHOREGOS_RECONCILE_INTERVAL_SECONDS`):
+    #: the API starts a project's loop when the project becomes active; 0 disables the catch-up.
+    reconcile_interval_seconds: int = 60
     gateway_url: str = "http://localhost:4000"
     #: The gateway adapter the deployment uses (`litellm`, `openai-compatible`, `direct`...).
     gateway_type: str = "litellm"

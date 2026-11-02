@@ -252,3 +252,66 @@ async def test_le_demarrage_relance_une_boucle_morte_mais_jamais_un_ticket(
     from choregos_orchestrator.train_client import start_workflow_once
 
     assert inspect.signature(start_workflow_once).parameters["relancer_si_echoue"].default is False
+
+
+async def _set_project(setup: Fixture, **fields: Any) -> None:
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        for name, value in fields.items():
+            setattr(project, name, value)
+
+
+@pytest.mark.parametrize("status", ["archived", "suspended"])
+async def test_an_archived_or_suspended_project_takes_nothing_on(setup: Fixture, status: str) -> None:
+    """Should the loop's `stop` have missed, a pass on an archived or suspended project starts nothing."""
+    clear_fake_signals()
+    _seed_candidate(setup, "Waiting while the project is retired")
+    await _set_project(setup, status=status)
+
+    result = await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
+
+    assert result == {"skipped": status, "created": [], "started": []}
+    assert fake_starts() == {}
+
+
+async def test_the_catch_up_loop_of_a_project_starts_with_the_configured_interval(
+    setup: Fixture, monkeypatch: Any
+) -> None:
+    from choregos_orchestrator.config import get_settings
+    from choregos_orchestrator.train_client import start_reconciliation_loop
+
+    clear_fake_signals()
+    monkeypatch.setattr(get_settings(), "reconcile_interval_seconds", 45)
+
+    assert await start_reconciliation_loop("billing") is True
+    assert await start_reconciliation_loop("billing") is False, "one loop per project"
+    assert fake_starts() == {"reconcile-billing": {"project_slug": "billing", "interval_seconds": 45}}
+
+    monkeypatch.setattr(get_settings(), "reconcile_interval_seconds", 0)
+    assert await start_reconciliation_loop("quiet") is False, "0 disables the catch-up"
+    assert "reconcile-quiet" not in fake_starts()
+
+
+@pytest.mark.parametrize("failed", [False, True])
+async def test_a_project_activated_by_its_provisioning_is_polled_at_once(
+    setup: Fixture, failed: bool
+) -> None:
+    """Before, only the worker's start polled the active projects: one activated later waited for a
+    restart, and `candidates_jql` took nothing on (2026-11-02)."""
+    from choregos_orchestrator.activities.provisioning import finish_provisioning
+
+    clear_fake_signals()
+    step = {"name": "github.ensure_labels", "status": "failed" if failed else "succeeded"}
+    await _set_project(setup, status="provisioning", provision_state={"status": "running", "steps": [step]})
+
+    await finish_provisioning({"project_id": setup.project_id})
+
+    loop = f"reconcile-{setup.project_slug}"
+    if failed:
+        assert loop not in fake_starts(), "a failed provisioning leaves a draft: nothing to poll"
+    else:
+        assert fake_starts()[loop]["project_slug"] == setup.project_slug

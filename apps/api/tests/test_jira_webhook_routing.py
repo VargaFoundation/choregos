@@ -117,3 +117,18 @@ async def test_without_a_jira_connector_the_slug_still_routes(client: AsyncClien
     await _deliver(client, "ABC-1", "acme", "d-4")
 
     assert await _keys(client, project) == ["ABC-1"], "the former rule stays for a project without one"
+
+
+async def test_an_archived_project_no_longer_takes_the_key_of_its_successor(
+    client: AsyncClient, admin: str
+) -> None:
+    retired = await _project(client, "f4f")
+    successor = await _project(client, "fon")
+    await _jira(client, retired, "FON", "acme")
+    await _jira(client, successor, "FON", "acme")
+    assert (await client.delete(f"/api/v1/projects/{retired['id']}")).status_code == 204
+
+    ack = await _deliver(client, "FON-12", "acme", "d-5")
+
+    assert ack["events"] == 1, "the archived project's connector no longer makes the key ambiguous"
+    assert await _keys(client, successor) == ["FON-12"]

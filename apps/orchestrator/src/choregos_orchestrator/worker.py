@@ -49,7 +49,7 @@ async def start_reconciliation_loops() -> list[str]:
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    from .train_client import start_workflow_once
+    from .train_client import start_reconciliation_loop
 
     settings = get_settings()
     if settings.reconcile_interval_seconds <= 0:
@@ -61,13 +61,7 @@ async def start_reconciliation_loops() -> list[str]:
         )
     started: list[str] = []
     for slug in slugs:
-        fresh = await start_workflow_once(
-            "TrackerReconciliation",
-            f"reconcile-{slug}",
-            {"project_slug": slug, "interval_seconds": settings.reconcile_interval_seconds},
-            # A loop that died in failure restarts when the worker starts (S22-06).
-            relancer_si_echoue=True,  # lang: fr-ok (the keyword test_reconciliation pins)
-        )
+        fresh = await start_reconciliation_loop(slug)
         if fresh:
             started.append(slug)
     logger.info("tracker catch-up", projects=len(slugs), started=len(started))

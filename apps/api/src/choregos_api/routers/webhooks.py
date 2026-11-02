@@ -129,7 +129,9 @@ async def _jira_project_for(session: Any, payload: dict[str, Any]) -> tuple[Proj
         await session.execute(
             select(Connector, Project)
             .join(Project, Project.id == Connector.project_id)
-            .where(Connector.kind == "tracker", Connector.type == "jira")
+            # An archived project keeps its connector, but no longer takes deliveries: holding the
+            # same key as its successor, it made the routing ambiguous and nothing was routed.
+            .where(Connector.kind == "tracker", Connector.type == "jira", Project.status != "archived")
         )
     ).all()
     matches = [

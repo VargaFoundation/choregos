@@ -542,6 +542,10 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
     started: list[str] = []
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
+        if bundle.project.status in {"archived", "suspended"}:
+            # An archived project's loop is stopped, a suspended one starts nothing: should the
+            # signal have missed, a pass still takes nothing on.
+            return {"skipped": bundle.project.status, "created": [], "started": []}
         if tracker_possede_les_tickets(bundle.adapters.tracker):
             candidates = await bundle.adapters.tracker.list_candidates(bundle.config)
         else:
