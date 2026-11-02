@@ -1387,6 +1387,12 @@ warning) → `retired`, which is final.
 `POST /orgs/{org}/agents/{slug}/lifecycle {"to": "retired"}` executes the retirement checklist —
 its credentials are revoked, its project pins removed, new runs refused — and is refused (`409`)
 while one of its runs is in flight, unless `"force": true`; the audit log records each step.
+`DELETE /orgs/{org}/agents/{slug}` deletes an agent that never served — no project pin, no run
+outside its trials, named by no active workflow — with its versions, credentials, evaluations and
+releases, and frees its slug; anything else is refused (`409`) with its reasons: retire it instead,
+which keeps its name in the history. It needs the right to manage the agent and is audited
+(`agent.delete`). In the console, **Delete…** sits on the agent's overview and under *Agent status*;
+the registry hides retired agents behind **Show retired**.
 An agent with no run for 60 days says so (`unused`, `last_run_at`), and
 `POST …/agents/{slug}/owner {"email": …}` hands it to another member, credentials included.
 Agents are under the same

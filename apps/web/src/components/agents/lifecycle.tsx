@@ -3,6 +3,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { GesteConfirme } from "@/components/geste-confirme";
 import { Badge, Button, ErrorNote, Field, Input, type Tone } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { relative } from "@/lib/format";
@@ -178,6 +179,33 @@ export function LifecyclePanel({ org, agent, disabled = false }: { org: string; 
       )}
       {done && <p role="status">{done}</p>}
       {error && <ErrorNote>{error}</ErrorNote>}
+    </div>
+  );
+}
+
+/**
+ * Delete an agent that never served (no pin, no run outside its trials, named by no active
+ * workflow). The server decides and says why not — retire it instead — so the button is offered to
+ * whoever may manage the agent, and a refusal stays on screen with its reasons.
+ */
+export function DeleteAgent({ org, agent, onDeleted }: { org: string; agent: Agent; onDeleted: () => void }) {
+  const client = useQueryClient();
+  if (agent.can?.manage !== true || agent.scope === "platform") return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="delete-agent">
+      <GesteConfirme
+        tonDuBouton="danger"
+        question={`Delete ${agent.slug}? Its versions and credentials go with it, and the slug becomes free. Only an agent that never served can be deleted: one that is pinned, has run, or that a workflow names is retired instead.`}
+        confirmer={`Delete ${agent.slug}`}
+        action={async () => {
+          await api.deleteAgent(org, agent.slug);
+          client.removeQueries({ queryKey: ["agent", org, agent.slug] });
+          await client.invalidateQueries({ queryKey: ["agents", org] });
+          onDeleted();
+        }}
+      >
+        Delete…
+      </GesteConfirme>
     </div>
   );
 }

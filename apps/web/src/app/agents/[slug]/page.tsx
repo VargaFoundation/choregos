@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { ChannelBadges } from "@/components/agents/channels";
-import { LifecycleBadges, LifecyclePanel } from "@/components/agents/lifecycle";
+import { DeleteAgent, LifecycleBadges, LifecyclePanel } from "@/components/agents/lifecycle";
 import { LifecycleTab, ManageReleases } from "@/components/agents/releases";
 import {
   CatalogueWarning,
@@ -77,6 +77,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   const { slug } = use(params);
   const { org } = useSession();
   const pathname = usePathname();
+  const router = useRouter();
   const search = useSearchParams();
   const demande = search.get("tab") === "versions" ? "history" : search.get("tab"); // the former name still opens History
   const onglet: AgentTab = AGENT_TABS.some((o) => o.id === demande) ? (demande as AgentTab) : "overview";
@@ -137,6 +138,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
           <AgentDetailsCard key={`${a.slug}-${a.display_name}-${a.description}-${(a.tags ?? []).join(",")}`} org={org} agent={a} />
           {a.kind === "remote" && <RemoteDrift org={org} slug={slug} />}
           <Statut org={org} agent={a} />
+          <DeleteAgent org={org} agent={a} onDeleted={() => router.push("/agents")} />
           <p className="flex flex-wrap items-center gap-3 text-sm" data-testid="overview-channels">
             <ChannelBadges agent={a} />
             <ManageReleases slug={a.slug} />
@@ -155,6 +157,9 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         <LifecycleTab org={org} agent={a}>
           <Card title="Agent status">
             <LifecyclePanel org={org} agent={a} disabled={a.can?.manage === false || readOnly(a)} />
+            <div className="mt-3 border-t border-line pt-3">
+              <DeleteAgent org={org} agent={a} onDeleted={() => router.push("/agents")} />
+            </div>
           </Card>
         </LifecycleTab>
       )}
