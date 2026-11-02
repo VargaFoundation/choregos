@@ -97,6 +97,6 @@ describe("an agent says which MCP connectors it may call", () => {
   it("each one links to its card", () => {
     render(<AgentMcpServers servers={[{ connector: "rovo", tools: ["search"] }, { connector: "sentry", tools: [] }]} />);
     expect(screen.getByRole("link", { name: "rovo" })).toHaveAttribute("href", "/admin/connectors?connector=rovo");
-    expect(screen.getByRole("link", { name: "sentry" }).parentElement).toHaveTextContent("sentry — every tool");
+    expect(screen.getByRole("link", { name: "sentry" }).parentElement).toHaveTextContent("sentry — no tool — name tools, or * for all");
   });
 });

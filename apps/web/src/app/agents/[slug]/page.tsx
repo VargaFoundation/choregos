@@ -48,6 +48,7 @@ import {
 import { canEdit, currentVersion, parseCompare, versionOf } from "@/lib/agent-versions";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
+import { toolsLabel } from "@/lib/mcp-tools";
 import { useSession } from "@/lib/session";
 import type { Agent } from "@/lib/types";
 
@@ -432,7 +433,7 @@ function Acces({ agent }: { agent: Agent }) {
           {serveurs.map((s) => (
             <li key={s.connector}>
               <span className="font-mono">{s.connector}</span>
-              <span className="text-ink-muted"> — {(s.tools ?? []).length ? (s.tools ?? []).join(", ") : "every tool"}</span>
+              <span className="text-ink-muted"> — {toolsLabel(s.tools)}</span>
             </li>
           ))}
         </ul>

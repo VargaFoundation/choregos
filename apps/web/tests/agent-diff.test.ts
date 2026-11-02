@@ -54,6 +54,11 @@ describe("diffSpecs", () => {
     expect(change?.detail).toBe("+list_*  −get_*");
   });
 
+  it("says a server named without a tool opens none, as the broker does (S51-07)", () => {
+    const [change] = diffSpecs(base, { ...base, mcp_servers: [...(base.mcp_servers ?? []), { connector: "sentry", tools: [] }] });
+    expect(change).toMatchObject({ label: "Tools of sentry", kind: "added", after: "no tool — name tools, or * for all" });
+  });
+
   it("treats a renamed eval case as one removed and one added", () => {
     const changes = diffSpecs(base, { ...base, evals: [{ name: "has heading", must_contain: ["#"] }] });
     expect(changes.map((c) => [c.label, c.kind])).toEqual([

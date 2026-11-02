@@ -8,6 +8,7 @@ import { useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Card, Disclosure, Field, Select, buttonClasses } from "@/components/ui";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { orgConnectorHref } from "@/lib/connector-link";
+import { toolsLabel } from "@/lib/mcp-tools";
 import { networkSummary } from "@/lib/network";
 import { api } from "@/lib/api";
 import { canEdit, currentVersion, previousVersion, productionVersion, sortedVersions, versionOf } from "@/lib/agent-versions";
@@ -192,7 +193,7 @@ export function AgentMcpServers({ servers }: { servers: NonNullable<AgentSpec["m
           <Link href={orgConnectorHref(s.connector)} className="font-mono underline">
             {s.connector}
           </Link>
-          <span className="text-ink-muted"> {"—"} {(s.tools ?? []).length ? (s.tools ?? []).join(", ") : "every tool"}</span>
+          <span className="text-ink-muted"> {"—"} {toolsLabel(s.tools)}</span>
         </li>
       ))}
     </ul>

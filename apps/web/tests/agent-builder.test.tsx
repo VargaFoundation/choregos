@@ -188,7 +188,10 @@ describe("the builder", () => {
     expect(within(server).queryByRole("option", { name: "entra" })).toBeNull();
     fireEvent.change(server, { target: { value: "supplier" } });
     fireEvent.click(within(builder).getByRole("button", { name: "Add" }));
+    // A server named without a pattern opens nothing at the broker (S51-07): the builder says so.
+    expect(within(builder).getByTestId("no-tool-supplier")).toHaveTextContent("Opens no tool — name tools, or * for all.");
     fireEvent.change(within(builder).getByLabelText("Tool patterns of supplier"), { target: { value: "track_*" } });
+    expect(within(builder).queryByTestId("no-tool-supplier")).toBeNull();
     // A knowledge base, and whose memory it keeps.
     const base = within(builder).getByLabelText("Add a knowledge base");
     await within(base).findByRole("option", { name: "Network runbooks (index)" });
