@@ -26,6 +26,9 @@ RUNNER_FILES = (
     ".choregos/result.json",
     # The agent's conversation id, kept for a resumed run (S35-03): never part of a commit.
     ".choregos/acp-session.json",
+    # A job step's (ADR 0056): the work item's fields it reads, the result it writes (S51-08).
+    ".choregos/fields.json",
+    ".choregos/job.json",
 )
 
 GIT_ENV = {
@@ -175,6 +178,8 @@ class Workspace:
         self.path = path
         self.user_name = user_name
         self.user_email = user_email
+        #: Every path the runner wrote and excluded: `commit` leaves them out even once tracked.
+        self.runner_paths: list[str] = list(RUNNER_FILES)
 
     async def git(self, *args: str, timeout: float = 300.0) -> CommandResult:
         return await run_command(["git", *args], cwd=self.path, timeout=timeout)
@@ -273,6 +278,7 @@ class Workspace:
 
     def exclude(self, paths: list[str]) -> None:
         """Ajoute des chemins à `.git/info/exclude` (configuration de backend, journal…)."""
+        self.runner_paths.extend(path for path in paths if path not in self.runner_paths)
         paths = [*paths, *self.BRUIT]
         if not paths:
             return
@@ -370,11 +376,23 @@ class Workspace:
         if not status.stdout.strip():
             return None
         await self.git("add", "-A")
+        await self._unstage_runner_files()
         result = await self.git("commit", "-m", message)
         if not result.ok:
             return None
         sha = await self.git("rev-parse", "HEAD")
         return sha.stdout.strip() if sha.ok else None
+
+    async def _unstage_runner_files(self) -> None:
+        """What the runner wrote never enters a commit (S51-08). `.git/info/exclude` only keeps
+        UNTRACKED files out: a scratch file a branch already carries (committed by an older runner,
+        or by a job) was staged again by `add -A`. Unstaging keeps the branch's version as it is."""
+        specs = [f":(top,literal){path.rstrip('/')}" for path in self.runner_paths]
+        head = await self.git("rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+        if head.ok:
+            await self.git("reset", "-q", "HEAD", "--", *specs)
+        else:  # no commit yet (a project without a repository): nothing tracked to go back to
+            await self.git("rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", *specs)
 
     async def commits_since(self, base: str) -> list[str]:
         result = await self.git("log", "--format=%s", f"{base}..HEAD")

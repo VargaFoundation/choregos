@@ -44,7 +44,9 @@ anything?") rests on metrics that must be computed by code, the same way every t
    `CHOREGOS_API_URL` and `CHOREGOS_RUN_TOKEN` (the run's own short-lived token, to call a connector
    through the internal API — never a provider key), and a timeout of `max_minutes`. The command
    writes `.choregos/job.json` = `{summary, facts, outputs}` and its file outputs in
-   `.choregos/outputs/` (ADR 0049).
+   `.choregos/outputs/` (ADR 0049). These files are the runner's, never the repository's: like an
+   agent's `task.md` or `result.json`, none of them enters the commit, even when an earlier commit
+   of the branch already tracks one (amended by S51-08).
    A job reaches the outside **only** through the connector operations its actor names:
    `tools: [{connector, tools: [operation patterns]}]` (at most 16 connectors). The internal API's
    tool broker reads them from the run's stage input, the way it reads an agent's `mcp_servers`

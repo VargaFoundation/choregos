@@ -8,6 +8,7 @@ because the platform ran the code that produced them.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -207,3 +208,35 @@ async def test_fields_are_written_sorted(tmp_path: Path) -> None:
 
     write_fields(tmp_path, {"b": 1, "a": "x"})
     assert json.loads((tmp_path / FIELDS).read_text()) == {"a": "x", "b": 1}
+
+
+#: A job that changes the repository: one real file, beside every file the runner gave it.
+REPO_JOB = r"""
+import json, os, pathlib
+ws = pathlib.Path(os.environ["CHOREGOS_WORKSPACE"])
+(ws / "src" / "report.py").write_text("ROWS = 2\n")
+(ws / ".choregos" / "job.json").write_text(json.dumps({"summary": "report written"}))
+"""
+
+
+async def test_only_the_jobs_own_files_are_committed_and_pushed(
+    stage_input: StageInput, runner_settings: Any, tmp_path: Path, toy_repo: Path
+) -> None:
+    """S51-08: the runner's scratch files (`fields.json`, `task.md`, `job.json`…) stayed in the
+    commit the job's branch carried to its pull request; only what the job changed is pushed."""
+    job = _job(stage_input, tmp_path, code=REPO_JOB, outputs=[], output_types={})
+    job = job.model_copy(update={"repo": stage_input.repo})
+    client = _client(job)
+    outcome = await Runner(runner_settings, client).execute(job, client)  # type: ignore[arg-type]
+
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    assert client.results[-1].status is StageStatus.DONE, client.results[-1].summary
+    assert stage_input.repo is not None
+    pushed = subprocess.run(
+        ["git", "diff", "--name-only", "main", stage_input.repo.work_branch],
+        cwd=toy_repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    assert pushed == ["src/report.py"], f"the runner's scratch files were pushed: {pushed}"
