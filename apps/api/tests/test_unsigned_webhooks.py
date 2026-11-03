@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -27,15 +29,16 @@ async def _post(monkeypatch: pytest.MonkeyPatch, path: str, public_url: str, hea
 
 
 async def test_an_unsigned_github_webhook_is_refused_on_an_https_dev_instance(
-    monkeypatch: pytest.MonkeyPatch,
+    app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # `app` prepares the database (migrated on PostgreSQL); the test builds its own app on top.
     ping = {"X-GitHub-Event": "ping"}
     assert await _post(monkeypatch, "/api/v1/webhooks/github", "https://choregos.example.com", ping) == 401
     assert await _post(monkeypatch, "/api/v1/webhooks/github", "http://localhost:3000", ping) == 202
 
 
 async def test_an_unsigned_tekton_webhook_is_refused_on_an_https_dev_instance(
-    monkeypatch: pytest.MonkeyPatch,
+    app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     event = {"Ce-Type": "dev.tekton.event.other", "Ce-Id": "x"}
     assert await _post(monkeypatch, "/api/v1/webhooks/tekton", "https://choregos.example.com", event) == 401
