@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { UpdateCheck, VersionGate } from "@/components/skills/gate";
-import { Card, Empty, ErrorNote, Heading, Select } from "@/components/ui";
+import { Breadcrumbs, Card, Empty, ErrorNote, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { skillFileLabel } from "@/lib/skill-files";
@@ -31,19 +32,12 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
   const montre = fichier && fichiers.includes(fichier) ? fichier : (fichiers.find((f) => f === "SKILL.md") ?? fichiers[0]);
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <Link href="/skills" className="text-sm text-ink-muted hover:underline">
-          Skills
-        </Link>
-        <span aria-hidden className="text-ink-muted">
-          /
-        </span>
-        <Heading as="h1" size="lg">
-          {skill.data.slug}
-        </Heading>
-        <span className="text-sm text-ink-muted">v{skill.data.latest_version}</span>
-      </div>
-      {skill.data.description && <p className="max-w-3xl text-sm text-ink-muted">{skill.data.description}</p>}
+      <Breadcrumbs steps={[{ href: "/skills", label: "Skills" }, { label: <span data-donnee>{skill.data.slug}</span> }]} />
+      <OrgPageHeader
+        title={<span data-donnee>{skill.data.slug}</span>}
+        eyebrow={`Version ${skill.data.latest_version}`}
+        description={skill.data.description || undefined}
+      />
       {version.data && (
         <Card title={`Gate of v${version.data.version}`}>
           <VersionGate

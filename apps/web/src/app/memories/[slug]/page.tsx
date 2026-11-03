@@ -4,7 +4,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Eyebrow, Heading, Input, LEGENDE, Select } from "@/components/ui";
+import { Breadcrumbs, Button, Card, Empty, ErrorNote, EtatDeLecture, Input, LEGENDE, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { reachLabel } from "@/lib/memories";
@@ -68,13 +69,8 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Link href="/memories" className="text-xs underline">
-          Memories
-        </Link>
-        <Eyebrow>Organisation memory</Eyebrow>
-        <Heading as="h1" size="xl">
-          {current?.display_name ?? slug}
-        </Heading>
+        <Breadcrumbs steps={[{ href: "/memories", label: "Memories" }, { label: <span data-donnee>{current?.display_name ?? slug}</span> }]} />
+        <OrgPageHeader eyebrow="Organisation memory" title={<span data-donnee>{current?.display_name ?? slug}</span>} />
         <p className="font-mono text-xs text-ink-muted">
           global:{slug}
           {current?.status === "archived" && " · archived"}

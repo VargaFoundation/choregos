@@ -4,7 +4,8 @@
 import { useRouter } from "next/navigation";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
-import { Breadcrumbs, Empty, Heading, Lead } from "@/components/ui";
+import { Breadcrumbs, Empty } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { hostOf } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
 
@@ -15,12 +16,10 @@ export default function NewRemoteAgentPage() {
   return (
     <div className="space-y-6">
       <Breadcrumbs steps={[{ href: "/agents", label: "Agents" }, { href: "/agents/new", label: "New agent" }, { label: "Remote agent" }]} />
-      <div className="space-y-2">
-        <Heading as="h1" size="xl">
-          Remote agent (A2A)
-        </Heading>
-        <Lead>An agent that runs elsewhere, such as Atlassian&apos;s Rovo. Paste its card URL: the platform reads it and you choose how to call it.</Lead>
-      </div>
+      <OrgPageHeader
+        title="Remote agent (A2A)"
+        description="An agent that runs elsewhere, such as Atlassian's Rovo. Paste its card URL: the platform reads it and you choose how to call it."
+      />
       {org ? (
         <RemoteAgentForm
           org={org}

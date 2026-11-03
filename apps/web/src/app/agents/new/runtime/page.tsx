@@ -3,7 +3,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { RUNTIME_LABEL, RuntimeAgentForm, type RuntimeKind } from "@/components/agents/runtime-agent-form";
-import { Breadcrumbs, Empty, Heading, Lead } from "@/components/ui";
+import { Breadcrumbs, Empty } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { useSession } from "@/lib/session";
 
 const LEAD: Record<RuntimeKind, string> = {
@@ -24,12 +25,7 @@ export default function NewRuntimeAgentPage() {
   return (
     <div className="space-y-6">
       <Breadcrumbs steps={[{ href: "/agents", label: "Agents" }, { href: "/agents/new", label: "New agent" }, { label: RUNTIME_LABEL[kind] }]} />
-      <div className="space-y-2">
-        <Heading as="h1" size="xl">
-          {RUNTIME_LABEL[kind]}
-        </Heading>
-        <Lead>{LEAD[kind]}</Lead>
-      </div>
+      <OrgPageHeader title={RUNTIME_LABEL[kind]} description={LEAD[kind]} />
       {org ? <RuntimeAgentForm key={kind} org={org} kind={kind} onDone={(agent) => router.push(`/agents/${agent.slug}`)} /> : <Empty>Reading your session…</Empty>}
     </div>
   );

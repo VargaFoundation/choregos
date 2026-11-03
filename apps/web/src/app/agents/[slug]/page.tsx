@@ -46,6 +46,7 @@ import {
   tabClasses,
 } from "@/components/ui";
 import { canEdit, currentVersion, parseCompare, versionOf } from "@/lib/agent-versions";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { toolsLabel } from "@/lib/mcp-tools";
@@ -94,11 +95,8 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   return (
     <div className="space-y-6">
       <Breadcrumbs steps={[{ href: "/agents", label: "Agents" }, { label: <span data-donnee>{a.display_name}</span> }]} />
+      <OrgPageHeader title={<span data-donnee>{a.display_name}</span>} eyebrow={<span className="font-mono">{a.slug}</span>} />
       <div className="flex flex-wrap items-baseline gap-3">
-        <Heading as="h1" size="xl" data-donnee>
-          {a.display_name}
-        </Heading>
-        <span className="font-mono text-sm text-ink-muted">{a.slug}</span>
         <Badge tone={a.kind === "internal" ? "neutral" : "accent"}>
           {a.kind === "external" ? "External" : a.kind === "remote" ? "Remote · A2A" : "Internal"}
         </Badge>
