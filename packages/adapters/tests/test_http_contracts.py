@@ -359,3 +359,30 @@ async def test_argocd_an_aborted_rollout_reads_from_its_conditions() -> None:
     )
     await ArgoCdAdapter(base_url=ARGO).abort_rollout("billing-api-prod")
     assert json.loads(abort.calls[0].request.content) == {"name": "billing-api-prod", "prune": False}
+
+
+@respx.mock
+async def test_litellm_a_decision_model_is_listed_as_one_and_calls_no_tool() -> None:
+    """ADR 0120: LiteLLM lists Jev and Laya as `mode: evaluation`, with no tool-calling metadata."""
+    respx.get(f"{LITELLM}/model/info").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "model_name": "platform/decide",
+                        "litellm_params": {"model": "typesafe/multilingual"},
+                        "model_info": {"mode": "evaluation", "supports_function_calling": None},
+                    },
+                    {
+                        "model_name": "platform/standard",
+                        "litellm_params": {"model": "openai/choregos-standard"},
+                        "model_info": {"supports_function_calling": None},
+                    },
+                ]
+            },
+        )
+    )
+    decide, standard = await LiteLlmGateway(LITELLM, "sk").list_models()
+    assert (decide.mode, decide.supports_tool_calling) == ("evaluation", False)
+    assert (standard.mode, standard.supports_tool_calling) == ("chat", True)

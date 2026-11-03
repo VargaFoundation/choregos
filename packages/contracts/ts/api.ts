@@ -3181,6 +3181,8 @@ export type GatewayModel = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  /** What the gateway says the model does; `evaluation` is a decision model (ADR 0120). */
+  mode?: string;
   internal_price?: boolean;
   source?: "gateway" | "manual";
   owned_by?: string;
@@ -3202,6 +3204,7 @@ export type ModelGatewayFacts = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  mode?: string;
 };
 
 export type ModelCatalogueEntry = {

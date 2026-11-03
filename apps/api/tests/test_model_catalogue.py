@@ -75,6 +75,26 @@ async def test_sync_enables_new_models_in_open_mode_and_disables_them_in_curated
     assert entries["platform/standard"]["enabled"] is True, "what was decided is kept"
 
 
+async def test_a_decision_model_arrives_for_decision_steps_only(
+    client: AsyncClient, admin: str, gateway: Scripted
+) -> None:
+    """ADR 0120: a model the gateway lists as `evaluation` (Laya, Jev) is not an agent model by default."""
+    gateway.models.append(
+        GatewayModel(
+            model_name="platform/decide",
+            litellm_model="typesafe/multilingual",
+            mode="evaluation",
+            supports_tool_calling=False,
+        )
+    )
+    await client.post(f"{BASE}/sync")
+    entries = await _entries(client)
+    assert entries["platform/decide"]["usages"] == ["decide"]
+    assert entries["platform/decide"]["gateway"]["mode"] == "evaluation"
+    assert entries["platform/decide"]["gateway"]["supports_tool_calling"] is False
+    assert all(e["usages"] == ["agent"] for name, e in entries.items() if name != "platform/decide")
+
+
 async def test_the_catalogue_exposes_the_upstream_model_and_context_window_of_each_entry(
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:

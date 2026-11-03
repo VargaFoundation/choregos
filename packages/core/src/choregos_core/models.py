@@ -94,6 +94,9 @@ RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt", "hosted")
 #: What a catalogue entry may serve (ADR 0060): `route` picks a work item's workflow (ADR 0116),
 #: `decide` answers a decision step's typed questions (ADR 0121).
 USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval", "route", "decide")
+#: The `mode` LiteLLM gives a decision model in `/model/info` (`typesafe/*`, `laya/*`): it answers
+#: typed questions on `/v1/systemone` and never chats or calls a tool (ADR 0120).
+DECISION_MODE = "evaluation"
 TIERS: tuple[str, ...] = ("cheap", "standard", "strong", "aux", "embed", "local")
 
 
