@@ -588,6 +588,56 @@ global:
 - **Upgrading**: the migration seeds an `allowed` rule for every host an organisation already calls
   (connectors, web and git knowledge sources, skill sources). Review them in `/admin/egress`.
 
+## An MCP gateway (ADR 0105)
+
+An MCP gateway is another product, never part of this chart
+([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)). With the default
+NetworkPolicies on, the chart still has to let the platform reach the one you run. The
+`global.mcpGateway` block does that, and nothing else; a default render changes nothing.
+
+| Key | Effect |
+|---|---|
+| `internalHosts` | Exact host names, rendered as `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS` (a JSON list) on the API and the workers. The API refuses them as a run's destination, and the platform may call them. |
+| `hosts` | Appended to the `api` and `workers` families of `global.egress.ceiling`, only when you declared those families (an undeclared family stays *unknown*; `runners` is never touched). |
+| `namespace`, `podLabels` | In-cluster gateway: the policy `choregos-mcp-gateway-egress` opens that namespace (and those pod labels). |
+| `cidrs` | External gateway: one `ipBlock` per CIDR. |
+| `ports` | TCP ports opened (default `[443]`). |
+
+The policy is rendered when `namespace` or `cidrs` is set. It selects the API and orchestrator
+pods only: the API calls the gateway to list tools, and an approved write runs in an orchestrator
+worker. **Never the runners**: a run is untrusted code, and the gateway holds the credentials a run
+must not reach, so the runner policy is unchanged and the API also denies the gateway's hosts to
+runs. A plugin's server is run by the platform in-cluster, is never reached through the MCP gateway
+and needs nothing from `global.mcpGateway` (see [Plugin servers](#plugin-servers)).
+
+`internalHosts` is a separate list from `global.egress.denyDomains` on purpose: `denyDomains` also
+bounds the platform's own calls, which must reach the gateway. Runs are kept off it by the API.
+
+In-cluster gateway:
+
+```yaml
+global:
+  mcpGateway:
+    internalHosts: [gateway.mcp.svc.cluster.local]
+    namespace: mcp
+    podLabels: {app: gateway}
+    ports: [8080]
+```
+
+External gateway:
+
+```yaml
+global:
+  egress:
+    ceiling:
+      api: [api.github.com]
+      workers: [api.github.com]
+  mcpGateway:
+    internalHosts: [gateway.example.test]
+    hosts: [gateway.example.test]
+    cidrs: [203.0.113.0/24]
+```
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
