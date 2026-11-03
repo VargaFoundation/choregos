@@ -32,7 +32,7 @@ from choregos_contracts import Role
 from choregos_core import utcnow
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
@@ -455,10 +455,13 @@ async def _map_groups_to_roles(
     ecraser: bool = True,
     only_org: Organization | None = None,
 ) -> None:
-    """Les groupes OIDC deviennent des rôles d'organisation — chacun sur SON organisation.
+    """OIDC groups become organisation roles, each on ITS organisation.
 
-    `ecraser=False` (connexion de développement) : un rôle déjà posé — par l'amorçage, par
-    un admin — n'est pas rétrogradé. L'IdP, lui, fait foi : ce qu'il dit remplace.
+    `ecraser=False` (development sign-in): a role already set, by the bootstrap or an administrator,
+    is not downgraded, and nothing is revoked. Otherwise the provider is authoritative, at each
+    sign-in, for the roles it granted itself: a role it set (`memberships.source = idp`) and no
+    longer maps is removed and audited (ADR 0100). A role granted by a person is never converted
+    to an IdP role, so it is never revoked here.
 
     `only_org`: the groups come from that tenant's own provider (ADR 0108). A bare group applies
     to it, and a role on any other organisation is dropped.
@@ -473,8 +476,6 @@ async def _map_groups_to_roles(
     # ce fichier — c'est tout ce que la couture C3 demandait, et rien de plus.
     default_org = only_org.slug if only_org is not None else settings.oidc_default_org
     roles = mappeur_de_groupes(roles_des_groupes)(groups, default_org)
-    if not roles:
-        return
     # A group that names a FORMER slug (`choregos:<old>:<group>`, or `CHOREGOS_OIDC_DEFAULT_ORG` left at
     # the old slug) grants its role on the renamed organisation (ADR 0090). When a current slug and an
     # alias of the same organisation both appear, the higher role wins, as for two groups of one slug.
@@ -487,7 +488,11 @@ async def _map_groups_to_roles(
     roles = resolu
     if only_org is not None:
         roles = {slug: role for slug, role in roles.items() if slug == only_org.slug}
-    orgs = (await session.execute(select(Organization).where(Organization.slug.in_(roles)))).scalars().all()
+    orgs = (
+        (await session.execute(select(Organization).where(Organization.slug.in_(roles)))).scalars().all()
+        if roles
+        else []
+    )
     for org in orgs:
         existing = (
             await session.execute(
@@ -499,9 +504,77 @@ async def _map_groups_to_roles(
             )
         ).scalar_one_or_none()
         if existing is None:
-            session.add(Membership(user_id=user.id, org_id=org.id, role=str(roles[org.slug])))
+            session.add(
+                Membership(
+                    user_id=user.id,
+                    org_id=org.id,
+                    role=str(roles[org.slug]),
+                    source="idp" if ecraser else "manual",
+                )
+            )
         elif ecraser:
+            # The role follows the provider, the provenance does not: a manual row stays manual.
             existing.role = str(roles[org.slug])
+    if ecraser:
+        await _revoke_unmapped_memberships(session, user, set(roles), only_org=only_org)
+
+
+async def _revoke_unmapped_memberships(
+    session: Any, user: User, mapped: set[str], *, only_org: Organization | None = None
+) -> None:
+    """Removes the organisation roles the IdP granted (`source = idp`) and no longer maps.
+
+    The sign-in is authoritative only where it could have granted: a tenant sign-in (`only_org`)
+    for that organisation alone; an instance-provider sign-in for the organisations that have no
+    provider of their own (a tenant's role may have come from its provider, which this sign-in
+    does not speak for). The last org_admin of an organisation is kept, with a warning.
+    """
+    rows = (
+        await session.execute(
+            select(Membership, Organization.slug)
+            .join(Organization, Organization.id == Membership.org_id)
+            .where(
+                Membership.user_id == user.id,
+                Membership.project_id.is_(None),
+                Membership.source == "idp",
+                Organization.slug.not_in(mapped) if mapped else Organization.id.is_not(None),
+            )
+        )
+    ).all()
+    for row, slug in rows:
+        if only_org is not None:
+            if row.org_id != only_org.id:
+                continue
+        elif await resolve(session, SignInHint(org=slug)) is not None:
+            continue
+        if row.role == str(Role.ORG_ADMIN):
+            others = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(Membership)
+                    .where(
+                        Membership.org_id == row.org_id,
+                        Membership.project_id.is_(None),
+                        Membership.role == str(Role.ORG_ADMIN),
+                        Membership.id != row.id,
+                    )
+                )
+            ).scalar_one()
+            if others == 0:
+                logger.warning("idp revocation skipped: last org_admin", org=slug, user=user.id)
+                continue
+        await session.delete(row)
+        await record(
+            session,
+            None,
+            "member.revoke",
+            org_id=row.org_id,
+            target_type="user",
+            target_id=user.id,
+            role=row.role,
+            canal="oidc",
+            reason="no identity-provider group maps to this organisation any more",
+        )
 
 
 async def _same_organisation(session: Any, first: str, second: str) -> bool:
