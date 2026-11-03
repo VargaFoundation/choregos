@@ -95,3 +95,59 @@ async def test_a_fresh_index_is_not_read_again() -> None:
     await supply.shipping({"ghost-agent"})
     await supply.shipping({"ghost-agent"})
     assert supply.reads == 1
+
+
+async def test_a_reader_that_does_not_wait_is_answered_before_the_first_read() -> None:
+    # The first listing after a start waited for every source's index: 20 s on the dev tenant.
+    supply = _CountingSupply()
+    answer = await asyncio.wait_for(supply.shipping({"ghost-agent"}, wait=False), timeout=1)
+    assert answer == {}
+    await asyncio.sleep(0)
+    assert supply.reads == 1, "the reader that did not wait started no read behind it"
+    supply.release.set()
+    await supply_module._shipping_refresh["sources"]
+    assert await supply.shipping({"ghost-agent"}, wait=False) == {
+        "ghost-agent": Shipped("offline", "ghosts", "1.1.0")
+    }
+
+
+class _AskedSupply(_CountingSupply):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asked: list[bool] = []
+
+    async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
+        self.asked.append(wait)
+        return await super().shipping(slugs, wait=wait)
+
+
+async def test_the_listing_does_not_wait_for_the_plugin_sources(client: AsyncClient, admin: str) -> None:
+    from choregos_api.services.plugin_supply import use_plugin_supply
+
+    supply = _AskedSupply()  # its read is held: a listing that waited for it would time out
+    use_plugin_supply(supply)
+    try:
+        listed = await asyncio.wait_for(client.get(BASE), timeout=5)
+    finally:
+        supply.release.set()
+        use_plugin_supply(None)
+    assert listed.status_code == 200, listed.text
+    assert supply.asked, "no listed workflow names a missing agent: the test measures nothing"
+    assert supply.asked == [False] * len(supply.asked)
+
+
+async def test_the_api_reads_the_sources_index_when_it_starts() -> None:
+    from choregos_api.config import get_settings
+    from choregos_api.services.plugin_supply import use_plugin_supply, warm_shipping
+
+    supply = _CountingSupply()
+    supply.release.set()
+    use_plugin_supply(supply)
+    try:
+        await warm_shipping(get_settings())
+    finally:
+        use_plugin_supply(None)
+    assert supply.reads == 1
+    assert await supply.shipping({"ghost-agent"}, wait=False) == {
+        "ghost-agent": Shipped("offline", "ghosts", "1.1.0")
+    }

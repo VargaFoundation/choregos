@@ -84,6 +84,7 @@ from .routers import (
 from .security import check_session_secret
 from .services.action_relay import relay_loop
 from .services.plugin_defaults import check_configuration, reconcile_in_background
+from .services.plugin_supply import warm_shipping
 from .services.skill_scanner import mirror_loop
 
 API_PREFIX = "/api/v1"
@@ -124,12 +125,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     plugin_defaults = asyncio.create_task(reconcile_in_background(settings))
     # The skill scanner's local OSV mirror (ADR 0095), rebuilt in each replica.
     osv_mirror = asyncio.create_task(mirror_loop(settings))
+    # The plugin sources' index, read once now: the first listing of the library does not wait for it.
+    shipping_warmup = asyncio.create_task(warm_shipping(settings))
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relay is not None:
         await relay.stop()
-    for task in (metrics_refresh, action_relay, a2a_push, plugin_defaults, osv_mirror):
+    for task in (metrics_refresh, action_relay, a2a_push, plugin_defaults, osv_mirror, shipping_warmup):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task

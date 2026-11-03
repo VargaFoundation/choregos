@@ -213,7 +213,9 @@ def named_agents(workflow: Workflow) -> list[tuple[str, str, int | None]]:
     return out
 
 
-async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> dict[str, Resolution]:
+async def resolutions(
+    session: AsyncSession, org_id: str, slugs: set[str], *, wait_for_sources: bool = True
+) -> dict[str, Resolution]:
     """Where each slug resolves in the organisation, in the order of ADR 0040 §4: its own agent (a plugin's,
     a remote one), else the platform's catalogue (installed on adoption), else nowhere."""
     from .catalogue_d_agents import catalogue_of
@@ -267,7 +269,9 @@ async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> di
         from ..config import get_settings
         from .plugin_supply import plugin_supply
 
-        for slug, shipped in (await plugin_supply(get_settings()).shipping(missing)).items():
+        for slug, shipped in (
+            await plugin_supply(get_settings()).shipping(missing, wait=wait_for_sources)
+        ).items():
             out[slug] = Resolution(
                 "unresolved", plugin=f"{shipped.name} {shipped.version} ({shipped.source})"
             )
@@ -317,7 +321,8 @@ def entry_dto(
 async def entries(session: AsyncSession, org_id: str) -> list[WorkflowCatalogueEntryDto]:
     listed = await offered(session, org_id)
     slugs = {slug for o in listed for _, slug, _ in named_agents(o.workflow)}
-    resolved = await resolutions(session, org_id, slugs)
+    # A list never waits for the plugin sources (S55-04): adopting an entry still does, to name the plugin.
+    resolved = await resolutions(session, org_id, slugs, wait_for_sources=False)
     # The list carries no YAML (S55-04b): it weighed every entry's whole text and no page reads it.
     return [entry_dto(o, resolved, with_yaml=False) for o in listed]
 
