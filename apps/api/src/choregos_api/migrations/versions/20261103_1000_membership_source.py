@@ -7,8 +7,8 @@
 column.
 
 Revision ID: d2f4a6c8e0b3
-Revises: b4d6f8a0c2e7
-Create Date: 2026-10-29 10:00:00+00:00
+Revises: c6e8a0b2d4f1
+Create Date: 2026-11-03 10:00:00+00:00
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d2f4a6c8e0b3"
-down_revision: str | None = "b4d6f8a0c2e7"
+down_revision: str | None = "c6e8a0b2d4f1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
