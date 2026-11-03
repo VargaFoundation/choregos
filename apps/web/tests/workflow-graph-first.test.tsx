@@ -109,6 +109,38 @@ describe("a workflow's page", () => {
   });
 });
 
+describe("building on the graph (S55-09)", () => {
+  const twoSteps = {
+    nodes: [
+      { id: "inbox", display: "To do", kind: "wait", lane: "human", column: 0 },
+      { id: "review", display: "In review", kind: "wait", lane: "human", column: 1 },
+      { id: "done", display: "Done", terminal: true, lane: "human", column: 2 },
+    ],
+    edges: [
+      { id: "t-take", from: "inbox", to: "review", actor: "owner", actor_type: "human", nominal: true },
+      { id: "t-accept", from: "review", to: "done", actor: "owner", actor_type: "human", nominal: true },
+    ],
+    artifacts: [],
+  };
+
+  it("offers, from a chosen step, the step that follows it — not after the end", async () => {
+    vi.mocked(api.validateWorkflow).mockResolvedValue({
+      valid: true,
+      errors: [],
+      warnings: [],
+      graph: twoSteps,
+      process: [],
+      document: DOCUMENT,
+    } as never);
+    graphPage();
+    fireEvent.click(await screen.findByTestId("etape-t-take"));
+    const after = await screen.findByTestId("step-after-step");
+    expect(within(after).getByRole("form", { name: "New transition from review" })).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("etape-t-accept"));
+    await waitFor(() => expect(screen.queryByTestId("step-after-step")).toBeNull());
+  });
+});
+
 describe("a workflow's routes", () => {
   const DIR = join(import.meta.dirname, "../src/app/p/[slug]/workflows/[name]");
 

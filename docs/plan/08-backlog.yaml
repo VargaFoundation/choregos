@@ -4144,3 +4144,11 @@ stories:
     size: S
     depends_on: [S56-01]
     notes: "ADR 0113 Consequences, contract-change PR."
+  - id: S55-09
+    title: "feat(web): from a step chosen on the graph, add the step that follows it"
+    stream: S55
+    sprint: 2
+    priority: 2
+    size: S
+    depends_on: [S55-06]
+    notes: "The part of ADR 0112 §4-6 the serpentine diagram lacked: building a workflow from the graph, not only from the list view."
