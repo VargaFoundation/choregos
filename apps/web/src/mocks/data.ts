@@ -62,6 +62,7 @@ import type {
   NetworkActivity,
   ProjectNetwork,
   Membership,
+  TrackerIdentity,
   Memory,
   ProjectPage,
   ReleasePage,
@@ -2660,6 +2661,9 @@ const filedOnTheMock: WorkItemDto[] = [];
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 /** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
+/** The GitHub links the mock holds, by member id (S47-15). */
+const mockTrackerIdentities = new Map<string, TrackerIdentity>();
+
 let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string; updated_at?: string } = {
   ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
 };
@@ -2895,6 +2899,36 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       target.disabled_reason = update.enabled ? null : (update.disabled_reason ?? null);
       return structuredClone(target) as T;
     }
+  }
+  const identityRoute = /^\/orgs\/[^/]+\/members\/([^/]+)\/tracker-identities(?:\/github)?$/.exec(bare);
+  if (identityRoute) {
+    const userId = decodeURIComponent(identityRoute[1] ?? "");
+    if (method === "PUT") {
+      const put = body as { external_id: string; login: string };
+      const taken = [...mockTrackerIdentities.values()].find((i) => i.external_id === put.external_id && i.user_id !== userId);
+      if (taken) {
+        throw new ApiError(409, {
+          title: "Conflict",
+          detail: `GitHub user ${put.external_id} is already linked to another member`,
+        });
+      }
+      const saved: TrackerIdentity = {
+        tracker: "github",
+        external_id: put.external_id,
+        login: put.login,
+        user_id: userId,
+        created_by: me.email,
+        created_at: new Date().toISOString(),
+      };
+      mockTrackerIdentities.set(userId, saved);
+      return structuredClone(saved) as T;
+    }
+    if (method === "DELETE") {
+      mockTrackerIdentities.delete(userId);
+      return undefined as T;
+    }
+    const linked = mockTrackerIdentities.get(userId);
+    return structuredClone(linked ? [linked] : []) as T;
   }
   if (method === "PATCH" && /^\/orgs\/[^/]+$/.test(bare)) {
     const update = body as { name?: string; slug?: string; currency?: string };
