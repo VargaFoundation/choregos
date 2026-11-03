@@ -48,6 +48,7 @@ streams:
   S50: "An agent acts under an identity: assigned, own, on behalf of a person; child agents (ADR 0107)"
   S55: "A console that makes a complex product simple: colour that orients, readable pages (ADR 0120)"
   S56: "A workflow starts from a trigger: tracker, HTTP, schedule or a person, one audit (ADR 0113)"
+  S57: "An agent calls its run's tools from a script: the runner relays, the API governs each call (ADR 0122)"
 
 stories:
 
@@ -4176,3 +4177,123 @@ stories:
     size: S
     depends_on: [S55-11]
     notes: "ADR 0120 on the organisation's detail and creation pages."
+  - id: S57-00
+    title: "docs(adr): an agent may call its run's tools from a script (ADR 0122)"
+    stream: S57
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "Plan PLAN-2026-11-03-tool-scripts.md and its examples, ADR 0122 (proposed), backlog and STATUS rows of the stream."
+  - id: S57-01
+    title: "feat(orchestrator): round trips are measured on every run"
+    stream: S57
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S57-00]
+    notes: "run.tokens.requests from the gateway's Spend.requests (Totals gains requests, contract-change), response_bytes on choregos.tool.called, tools/report_round_trips.py; the operator runs it on production and the plan's baseline section receives the numbers."
+  - id: S57-02
+    title: "fix(runner): the agent never holds the run token, on any executor"
+    stream: S57
+    sprint: 2
+    priority: 1
+    size: S
+    depends_on: [S57-00]
+    notes: "k8s_job, ACA and local Docker put CHOREGOS_RUN_TOKEN in the runner container's env and the agent inherits os.environ; drop CHOREGOS_RUN_* secrets from the agent's environment, a test per executor (ADR 0115, ADR 0122 section 8)."
+  - id: S57-03
+    title: "fix(api): the tool-call cap holds under concurrent calls"
+    stream: S57
+    sprint: 2
+    priority: 1
+    size: S
+    depends_on: [S57-00]
+    notes: "A per-run transaction lock before the count of kind=tool ledger rows; eight concurrent calls at cap - 1 book exactly one."
+  - id: S57-04
+    title: "fix(tools-mcp): the MCP route keeps the answer's meaning"
+    stream: S57
+    sprint: 2
+    priority: 2
+    size: S
+    depends_on: [S57-00]
+    notes: "A 202 proposal says it is proposed and not executed, remaining and suspicions reach the model."
+  - id: S57-05
+    title: "contract(schemas): tool scripts in the policy, the stage input and the tool announcements"
+    stream: S57
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S57-01]
+    notes: "Policy.tools (scripts off|offer, max_concurrent_calls, per_role), the ceiling, StageInput.tools.scripts left out when off, getRunTools annotations and outputSchema, X-Choregos-Tool-Origin and X-Choregos-Script, origin and script_sha256 on choregos.tool.called, kill switch CHOREGOS_TOOL_SCRIPTS."
+  - id: S57-06
+    title: "feat(api): tool calls are attributed to their door"
+    stream: S57
+    sprint: 4
+    priority: 1
+    size: S
+    depends_on: [S57-03, S57-05]
+    notes: "Origin and script digest on the ledger dimensions, the event and the span; costs grouped by origin; no authorisation path reads the origin."
+  - id: S57-07
+    title: "feat(runner): the tool bridge on the local tool server"
+    stream: S57
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S57-02, S57-04, S57-05]
+    notes: "GET and POST /bridge/v1/tools, the API's answer returned unchanged, bounded concurrency, tools.script and tools.script.call journaled, no new port, absent when off."
+  - id: S57-08
+    title: "feat(runner): the generated client choregos_tools and its instructions"
+    stream: S57
+    sprint: 5
+    priority: 1
+    size: M
+    depends_on: [S57-07]
+    notes: "Standard library only, one module per server, INDEX.md, typed outcomes (Proposal, CapReached, Withheld, ToolError), suspicions on stderr, instructions only when offered, every shell backend wired, proved on claude-code."
+  - id: S57-09
+    title: "feat(evals): the matrix compares the two doors"
+    stream: S57
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: [S57-01, S57-08]
+    notes: "EvalInput.tools [mcp, scripts] with a replayed history, the scenarios E1-E6 and C1-C2 of the examples page, new assertions, a paired bootstrap 95 percent interval computed by publish_matrix."
+  - id: S57-10
+    title: "feat(web): a run shows its scripts"
+    stream: S57
+    sprint: 5
+    priority: 2
+    size: S
+    depends_on: [S57-06, S57-07]
+    notes: "Calls grouped by script with its text, proposals linked, spend by origin, the policy switch and its ceiling."
+  - id: S57-11
+    title: "measure: tool scripts on dev, and the decision per agent"
+    stream: S57
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S57-08, S57-09, S57-10]
+    notes: "Live matrix on dev with claude-code, ten repetitions per cell; per-agent default from the gate of the plan's section 5.2; ADR 0122 accepted, amended or superseded."
+  - id: S57-12
+    title: "feat(runner): on-demand disclosure of tools (phase 2)"
+    stream: S57
+    sprint: 8
+    priority: 3
+    size: M
+    depends_on: [S57-11]
+    notes: "tools.disclosure listed|on_demand, measured as a third matrix cell; only if S57-11 passes its gate."
+  - id: S57-13
+    title: "feat(api): a script that worked becomes a proposed skill (phase 2)"
+    stream: S57
+    sprint: 8
+    priority: 3
+    size: M
+    depends_on: [S57-11]
+    notes: "Through the supply-chain gate of ADR 0050, never installed by itself; only if S57-11 passes its gate."
+  - id: S57-14
+    title: "feat(runner): hosted runtimes reach the bridge (phase 2)"
+    stream: S57
+    sprint: 8
+    priority: 3
+    size: S
+    depends_on: [S57-11]
+    notes: "Through the loopback MCP proxy of ADR 0080; only if S57-11 passes its gate."
