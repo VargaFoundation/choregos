@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
+import structlog
 from choregos_api.db.models import BackendRegistryRow, Run
-from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
 from choregos_api.services.artifacts import producing_runs
 from choregos_api.services.hosted_builds import builds_for
@@ -94,7 +94,7 @@ __all__ = [
     "start_run",
 ]
 
-logger = get_logger("choregos.stage")
+logger = structlog.get_logger("choregos.stage")
 
 
 def _serveurs_mcp(settings: Any, memory_scope: str = "project") -> dict[str, McpServerRef]:
@@ -145,7 +145,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, plan.project_id)
         item = await load_work_item(session, plan.work_item_id)
-        bind(project=bundle.slug, work_item=item.tracker_key, stage=plan.role)
+        structlog.contextvars.bind_contextvars(
+            project=bundle.slug, work_item=item.tracker_key, stage=plan.role
+        )
         run_id = _run_id(plan)
 
         existing = await session.get(Run, run_id)

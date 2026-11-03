@@ -398,6 +398,9 @@ class WorkflowInterpreter(
             # A job (ADR 0056) runs in a run like an agent; no history holds one before it existed.
             if kind in ("agent", "job"):
                 decision = await self._run_stage(params, engine, transition, context)
+            elif kind == "decision":
+                # ADR 0121: no history holds one, the validator refused it until it ran (S52-01).
+                decision = await self._run_decision(params, engine, transition, context)
             elif kind == "human":
                 decision = await self._wait_human(params, engine, transition)
             elif kind == "train":

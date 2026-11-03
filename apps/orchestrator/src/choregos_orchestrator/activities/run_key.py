@@ -18,10 +18,10 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+import structlog
 from choregos_adapters.base import llm_guard_refusal
 from choregos_adapters.errors import ConfigurationError
 from choregos_api.db.models import GatewayKeyRow, Run
-from choregos_api.logging import get_logger
 from choregos_contracts import Budget, StageInput
 from choregos_core import utcnow
 from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
@@ -29,7 +29,7 @@ from sqlalchemy import select
 
 from .base import without_secrets
 
-logger = get_logger("choregos.run_key")
+logger = structlog.get_logger("choregos.run_key")
 
 #: What a reservation's `key_id` starts with: no gateway knows it, nothing is revoked there.
 RESERVED_PREFIX = "reserved:"
@@ -141,6 +141,21 @@ async def mint_run_key(session: Any, bundle: Any, run: Run, stage_input: StageIn
         row.revoked = False
     run.gateway_key_id = key.key_id
     return str(key.key)
+
+
+def record_step_key(session: Any, bundle: Any, run: Run, key: Any) -> None:
+    """The row of a key minted for a step that runs in the orchestrator (a decision, ADR 0121): no
+    reservation came before it, and `release_run_key` revokes it like a run's."""
+    session.add(
+        GatewayKeyRow(
+            key_id=key.key_id,
+            run_id=run.id,
+            project_id=bundle.project.id,
+            budget_usd=key.budget_usd,
+            expires_at=key.expires_at,
+        )
+    )
+    run.gateway_key_id = key.key_id
 
 
 async def revoke(bundle: Any, key_id: str) -> bool:

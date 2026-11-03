@@ -53,6 +53,7 @@ CONFIGURATION_REFUSALS = frozenset(
         "SkillPendingReview",
         "KnowledgeRefused",
         "BackendDisabled",  # S42-07c: the platform administrator switched the backend off
+        "DecisionRefused",  # ADR 0121: no `/v1/systemone` on the gateway, no `decide` in the catalogue
         *both_names("AgentUnavailable", "InvalidInstructions", "SkillMissing"),
     }
 )

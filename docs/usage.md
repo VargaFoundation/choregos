@@ -963,10 +963,41 @@ actors:
 ```
 
 Each question writes two outputs, `route` and `route_confidence` (the model's probability, 0 to 1),
-which `when` reads like an agent's. `state` names the work item's `title`, `description`, `labels`,
-`type`, its fields (`fields.<name>`) and the last stage's outputs (`outputs.<name>`). The contract
-and the validator know this actor today; the engine does not run it yet, so a workflow whose
-transition is taken `by` a decision is refused with `decision.not_runnable` until it does (S52-04).
+which `when` reads like an agent's: `when: { route: billing, route_confidence: { gte: 0.8 } }` on a
+transition after the step, beside a default exit (to a person, say) taken when the model is less
+sure. `state` names the work item's `title`, `description`, `labels`, `type` (both read from its
+tracker), its fields (`fields.<name>`) and the last stage's outputs (`outputs.<name>`).
+
+The step runs in the orchestrator, in one activity (`decide`), with no pod and no agent loop:
+
+- **What is sent**: exactly the sources `state` names, under those names, and nothing else; a source
+  that is empty or missing is left out rather than failing the step. Secrets are masked first
+  (`[REDACTED]`, the shapes of the LLM guard, ADR 0084), and the policy's
+  `sandbox.prompt_injection` reads the state before it leaves (`warn` records an event, `block`
+  stops the step). The `choregos.run.started` event names the sources sent and how many secrets were
+  masked, never their values.
+- **Where it goes**: `POST {gateway}/v1/systemone` on the project's gateway (its own connector, else
+  the organisation's, else the deployment's: the URL a run of the project is given), never to a model
+  directly. A `yes_no` question is sent as `noul`, a `choice` with its options as `criteria`, a
+  `score` with its levels, lowest first (`choregos_adapters.decisions` holds the mapping and its
+  sources: LiteLLM 1.105.5, Laya 0.4.21).
+- **The key**: a virtual key minted for the step, for its model only, capped at 0.05 $ (or the role's
+  stage budget when lower), living five minutes, and revoked as soon as the answer is in, whatever
+  happened. The spend read back from the gateway is booked on the run, like a run's.
+- **What is written**: a run with the stage's id (`<work item>-<transition>-<attempt>`, backend
+  `decision`), its result (`outputs` the answers and their probabilities, `summary` the answers in one
+  line: `route = billing (0.93) · urgent = no (0.80)`). A retried activity whose run already holds a
+  result reads it back: the model is not asked twice. A yes/no answer's probability is that of the
+  side answered; a choice's, that of the option chosen; a score's answer is its most probable level.
+- **When it fails**: an answer that leaves a question unanswered, names an option or a level that was
+  not offered, or carries a probability outside [0, 1] fails the run with `invalid_decision`; no
+  answer (the gateway down, refusing, or slower than `timeout_seconds`) with `decision_unreachable`.
+  The transition's `on_fail` then applies, as after a failed agent run.
+- **Refusals**: saving the workflow is refused with `decision.gateway_unsupported` when the project's
+  gateway does not serve `/v1/systemone` (`openai-compatible`, `direct`: use `litellm`), and with
+  `decision.model_usage` when the organisation's catalogue has no entry enabling the step's model for
+  `decide` (even in `open` mode). The step checks both again when it runs, and escalates the work item
+  like a configuration `prepare_stage` refuses.
 
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
