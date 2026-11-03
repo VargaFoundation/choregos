@@ -192,7 +192,7 @@ def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> No
 
 
 def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """A decision step (ADR 0120).
+    """A decision step (ADR 0121).
 
     - Its questions write `<name>` and `<name>_confidence`: a question named like another's
       probability would write the same output twice.
@@ -215,7 +215,7 @@ def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> Non
             report.error(
                 "decision.not_runnable",
                 f"the decision `{name}` is declared, but this platform does not run decision steps yet "
-                "(ADR 0120, S52-04)",
+                "(ADR 0121, S52-04)",
                 ["actors", name],
                 source,
             )

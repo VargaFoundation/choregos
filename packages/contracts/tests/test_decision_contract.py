@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""ADR 0120: a decision step and a decision record, read the same by the schemas and the models.
+"""ADR 0121: a decision step and a decision record, read the same by the schemas and the models.
 
 The examples only exercise the fields they carry; these tests compare the declarations and make the
 schema and the model accept and refuse the same documents.

@@ -912,7 +912,7 @@
         "state"
       ],
       "additionalProperties": false,
-      "description": "A decision step (ADR 0120): a decision model answers typed questions about the state the step names, through the project's gateway, in the orchestrator — no pod, no agent loop. Each question writes two outputs, `<name>` (the answer) and `<name>_confidence` (its probability, 0 to 1), that `when` reads.",
+      "description": "A decision step (ADR 0121): a decision model answers typed questions about the state the step names, through the project's gateway, in the orchestrator — no pod, no agent loop. Each question writes two outputs, `<name>` (the answer) and `<name>_confidence` (its probability, 0 to 1), that `when` reads.",
       "properties": {
         "type": {
           "const": "decision"
