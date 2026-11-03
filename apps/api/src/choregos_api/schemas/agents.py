@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
 from choregos_core.network import validate_pattern
@@ -91,11 +92,25 @@ class AgentMemoryBinding(Dto):
         return Binding(self.scope, self.slug, self.mode)
 
 
+#: A sample's fields, as JSON: enough for a tracker block and a few answers (S51-04).
+MAX_SAMPLE_FIELDS_BYTES = 64 * 1024
+
+
 class AgentSampleInput(Dto):
     """A sample work item an agent is tried or evaluated on (S32-03)."""
 
     title: str = Field(default="", max_length=500)
     body: str = Field(default="", max_length=20_000)
+    #: The work item's fields, as `ticket.fields` (S51-04): a case may play a ticket filed from a
+    #: tracker, `{"tracker": {"reporter": …, "answers": …}}`. Absent, `{}`, as for a console request.
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("fields")
+    @classmethod
+    def _small_fields(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if len(json.dumps(value, default=str)) > MAX_SAMPLE_FIELDS_BYTES:
+            raise ValueError(f"a sample's fields hold at most {MAX_SAMPLE_FIELDS_BYTES // 1024} KiB of JSON")
+        return value
 
 
 class AgentEvalCase(Dto):

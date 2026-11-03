@@ -49,6 +49,12 @@ class Model(BaseModel):
 # ───────────────────────────── tracker ─────────────────────────────
 
 
+#: The work item field the platform reserves for what the tracker knows about the ticket (S51-04): who
+#: filed it, its labels, its form's answers. Written from the tracker only; a workflow input may not
+#: take this name, and a person or an agent may not write it.
+TRACKER_FIELD = "tracker"
+
+
 class WorkItemData(Model):
     """Représentation canonique d'un ticket, quel que soit le tracker."""
 

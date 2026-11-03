@@ -5893,6 +5893,7 @@ components:
       properties:
         title: { type: string, maxLength: 500 }
         body: { type: string, maxLength: 20000 }
+        fields: { type: object, additionalProperties: true, description: "the work item's fields, rendered as `ticket.fields` (S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}`" }
     AgentEvalResult:
       type: object
       required: [name, passed]

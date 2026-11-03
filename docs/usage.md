@@ -1325,6 +1325,40 @@ expired agent does not start, and neither does one that has spent its `daily_usd
 (UTC) — models **and** tool calls. `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
 their success rate, their cost by kind and by project, and what it spent today.
 
+**What the tracker says about the ticket.** `ticket.fields` holds the work item's fields; a work item
+taken on from Jira (or from a plugin's tracker server) also carries `ticket.fields.tracker`, written
+by the platform from the tracker and nothing else (S51-04):
+
+```json
+{"kind": "jira", "key": "FON-270",
+ "reporter": {"account_id": "712020:…", "display_name": "Camille Martin", "email": null},
+ "creator":  {"account_id": "557058:…", "display_name": "Portal automation", "email": "portal@…"},
+ "labels": ["agent-ready", "project-request"],
+ "answers": {"Project name": "peredur", "Environment": "dev", "Members": "Camille Martin, Noah Petit"}}
+```
+
+`kind` is `jira`, or the plugin server's name (whose `author` becomes the reporter's `display_name`,
+the creator then empty, its `fields` the answers). `email` is `null` when the tracker hides it — it is
+never guessed. `answers` keys every non-empty custom field by its display name, as text, each at most
+2000 characters (20 000 in all). A work item filed in the console has no `tracker`: read it behind a
+guard, or the template fails on such an item (and at publication, on an eval case without it):
+
+```jinja
+{% if ticket.fields.tracker is defined %}
+The request was filed by {{ ticket.fields.tracker.reporter.display_name }}
+({{ ticket.fields.tracker.reporter.account_id }}); check that this account leads the project
+{{ ticket.fields.tracker.answers.get("Project name", "(not given)") }} before granting anything.
+{% endif %}
+```
+
+It is the requester's text: print it as data, never into a command, a path or a query an agent runs.
+The catalogue's agents show it as one line of JSON in a section that says so. A person cannot write
+`fields.tracker` (`422` on creation and on `PATCH /work-items/{id}`), and no workflow may declare an
+input named `tracker` (`inputs.reserved`); a workflow whose `metadata.inputs` forbids other
+properties still accepts it. A job reads the same object in `.choregos/fields.json`. An eval case or
+a trial gives its sample `fields` (`"input": {"title": …, "fields": {"tracker": {…}}}`); without
+them it renders with `ticket.fields` `{}`.
+
 A version also says **which memories** its runs read and write — `"memories"`, an ordered list of at
 most eight bindings, each `{"scope": "global" | "project", "slug": …, "mode": "read" | "write"}` (see
 [Memories](#memories)). The older `"memory"` field (`"project"` by default, `"agent"`, `"none"`) is

@@ -12,6 +12,7 @@ from choregos_api.services import Naissance, nouveau_ticket, persist_event
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
+from choregos_core.domain import TRACKER_FIELD
 from choregos_core.gates import ALREADY_FIXED_GATE
 from choregos_core.restricted import WITHHELD, is_marked
 from sqlalchemy import select, update
@@ -591,6 +592,8 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                         item_type=data.item_type,
                         reporter=data.author,
                         initiated_by=initiator("tracker", "sync"),
+                        # Who filed it, its labels, its form's answers (S51-04): `fields.tracker`.
+                        tracker=data.fields.get(TRACKER_FIELD),
                     ),
                 )
                 created.append(key)

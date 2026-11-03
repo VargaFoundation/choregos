@@ -1639,6 +1639,10 @@ export type AgentEvalCase = {
 export type AgentSampleInput = {
   title?: string;
   body?: string;
+  /** the work item's fields, rendered as `ticket.fields` (S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}` */
+  fields?: {
+    [key: string]: unknown;
+  };
 };
 
 export type AgentEvalResult = {

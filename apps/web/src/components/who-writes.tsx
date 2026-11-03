@@ -12,7 +12,7 @@ import { Card } from "@/components/ui";
 import { Provenance } from "@/components/provenance";
 import { orgConnectorHref, projectConnectionsHref } from "@/lib/connector-link";
 import type { ConnectorDto, Run, RunChain } from "@/lib/types";
-import { initiatorInWords, toolAccount, trackerAccount, trackerName } from "@/lib/who-writes";
+import { filedBy, initiatorInWords, toolAccount, trackerAccount, trackerName } from "@/lib/who-writes";
 
 /** The line a tracker connector's card carries: the account its writes go out under. */
 export function WritesAs({ type, config }: { type: string; config?: Record<string, unknown> }) {
@@ -32,6 +32,7 @@ export function TrackerCard({
   initiatedBy,
   reporter,
   url,
+  fields,
 }: {
   slug: string;
   tracker?: ConnectorDto;
@@ -39,9 +40,12 @@ export function TrackerCard({
   /** Who filed it, as the tracker names them (#1179). */
   reporter?: string | null;
   url?: string | null;
+  /** The work item's fields: `fields.tracker` says who filed it (S51-04). */
+  fields?: Record<string, unknown> | null;
 }) {
   const account = tracker ? trackerAccount(tracker.type, tracker.config) : null;
   const startedBy = initiatorInWords(initiatedBy);
+  const filed = filedBy(fields);
   return (
     <Card title="Tracker" action={<Provenance de="observed" />}>
       <div className="space-y-2 text-sm" data-testid="tracker-card">
@@ -65,6 +69,22 @@ export function TrackerCard({
             Started by{" "}
             <span className="text-ink" data-donnee>
               {startedBy}
+            </span>
+          </p>
+        )}
+        {filed?.reporter && (
+          <p className="text-ink-muted" data-testid="filed-by">
+            Filed by{" "}
+            <span className="text-ink" data-donnee>
+              {filed.reporter}
+            </span>
+          </p>
+        )}
+        {filed?.creator && filed.creator !== filed.reporter && (
+          <p className="text-ink-muted" data-testid="created-by">
+            Created in the tracker by{" "}
+            <span className="text-ink" data-donnee>
+              {filed.creator}
             </span>
           </p>
         )}
