@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Webhooks entrants : vérification de signature, dédup, normalisation, réponse < 500 ms.
+"""Inbound webhooks: signature check, dedup, normalisation, response < 500 ms.
 
-Le traitement lourd n'a pas lieu ici : on normalise en `InboundEvent`, on déduplique
-par `delivery_id`, et on signale Temporal. Tout le reste est asynchrone.
+Heavy processing does not happen here: we normalise into an `InboundEvent`, deduplicate
+by `delivery_id`, and signal Temporal. Everything else is asynchronous.
 """
 
 from __future__ import annotations
@@ -54,13 +54,13 @@ router = APIRouter(tags=["webhooks"], prefix="/webhooks")
 logger = get_logger("choregos.webhooks")
 
 AGENT_READY_LABEL = "agent-ready"
-#: Les événements de ticket qui portent la liste COURANTE de ses étiquettes : `labeled` (posée ou
-#: retirée, `removed`), et `updated` — GitLab n'émet rien d'autre quand une étiquette est retirée.
-ETIQUETTES_A_JOUR = frozenset({InboundEventType.ITEM_LABELED, InboundEventType.ITEM_UPDATED})
+#: The issue events that carry the CURRENT list of its labels: `labeled` (added or removed,
+#: `removed`), and `updated`: GitLab emits nothing else when a label is removed.
+LABEL_STATE_EVENTS = frozenset({InboundEventType.ITEM_LABELED, InboundEventType.ITEM_UPDATED})
 
 
 async def _already_seen(session: Any, source: str, delivery_id: str, event_type: str, body: bytes) -> bool:
-    """Dédup par (source, delivery_id) : un rejeu ne relance rien."""
+    """Dedup by (source, delivery_id): a replay restarts nothing."""
     existing = (
         await session.execute(
             select(WebhookDelivery).where(
@@ -81,18 +81,18 @@ async def _already_seen(session: Any, source: str, delivery_id: str, event_type:
     )
     try:
         await session.flush()
-    except IntegrityError:  # course entre deux réplicas
+    except IntegrityError:  # race between two replicas
         await session.rollback()
         return True
     return False
 
 
 async def _project_for(session: Any, slug_or_repo: str | None) -> Project | None:
-    """Le projet visé par un événement : par son dépôt d'abord, par son slug s'il est unique.
+    """The project an event targets: by its repository first, by its slug if that is unique.
 
-    Deux organisations peuvent avoir un projet `billing-api` ; prendre « le premier » routait
-    l'événement d'un locataire vers l'autre. Le nom complet du dépôt (`owner/repo`) lève
-    l'ambiguïté ; sans lui, un slug présent deux fois ne route rien — et le dit.
+    Two organisations can have a project `billing-api`; taking "the first" routed one tenant's
+    event to the other. The full repository name (`owner/repo`) removes the ambiguity; without
+    it, a slug present twice routes nothing, and says so.
     """
     if not slug_or_repo:
         return None
@@ -112,7 +112,7 @@ async def _project_for(session: Any, slug_or_repo: str | None) -> Project | None
         ]
     if len(rows) != 1:
         if rows:
-            logger.warning("événement ambigu entre plusieurs projets, non routé", slug=slug_or_repo)
+            logger.warning("ambiguous event between several projects, not routed", slug=slug_or_repo)
         return None
     return rows[0]
 
@@ -289,7 +289,7 @@ async def _dispatch(
     for event in events:
         project = project_of or await _project_for(session, event.project_slug)
         if project is None:
-            logger.info("événement sans projet connu", event_type=str(event.type), slug=event.project_slug)
+            logger.info("event without a known project", event_type=str(event.type), slug=event.project_slug)
             continue
         key = event.work_item_key
         if key is None:
@@ -313,8 +313,8 @@ async def _dispatch(
             tracker = await tracker_of(project, key)
         if item is None and should_start:
             created = True
-            # Né dans le workflow que désignent ses étiquettes ou son type (ADR 0031) — plus en
-            # `inbox` en dur, qui tuait le ticket sur un workflow commençant ailleurs (#173).
+            # Born in the workflow its labels or its type designate (ADR 0031), no longer in a
+            # hard-coded `inbox`, which killed the ticket on a workflow starting elsewhere (#173).
             item = await nouveau_ticket(
                 session,
                 project,
@@ -337,10 +337,10 @@ async def _dispatch(
             item.fields = with_tracker(dict(item.fields or {}), tracker)
         # An ended work item whose issue is open again: its decisions were not right (ADR 0121 §6).
         await observe_reopening(session, item, str(event.type), event.payload)
-        etiquettes = event.payload.get("labels")
-        if event.type in ETIQUETTES_A_JOUR and isinstance(etiquettes, list):
-            # L'état courant des étiquettes, posé ou retiré : la voie express les lit (#279).
-            noter_les_etiquettes(item, etiquettes)
+        label_list = event.payload.get("labels")
+        if event.type in LABEL_STATE_EVENTS and isinstance(label_list, list):
+            # The current state of the labels, added or removed: the express lane reads them (#279).
+            noter_les_etiquettes(item, label_list)
         if should_start:
             workflow_id = interpreter_id(project.slug, key)
             await get_temporal().start_interpreter(
@@ -370,9 +370,9 @@ async def _dispatch(
                 event_type=str(event.type),
             )
         if event.type == InboundEventType.PR_MERGED:
-            await _embarquer(session, project, item, event)
+            await _board_train(session, project, item, event)
         received_events.record(
-            session, project, event, _outcome(event, created, should_start, etiquettes), item
+            session, project, event, _outcome(event, created, should_start, label_list), item
         )
         delivered += 1
     return delivered
@@ -438,31 +438,31 @@ def _outcome(event: InboundEvent, created: bool, started: bool, labels: Any) -> 
         return "started"
     if event.type == InboundEventType.PR_MERGED:
         return "boarded"
-    if event.type in ETIQUETTES_A_JOUR and isinstance(labels, list):
+    if event.type in LABEL_STATE_EVENTS and isinstance(labels, list):
         return "labels_updated"
     return "signalled"
 
 
-async def _embarquer(session: Any, project: Project, item: WorkItem, event: InboundEvent) -> None:
-    """Le ticket fusionné monte dans le train que SON workflow prend après la fusion, avec l'approbation
-    qu'il y exige (ADR 0041). Tout ticket fusionné montait dans le train de PROD : une étude qui
-    fusionne un ADR partait en production, une livraison prudente sautait son staging."""
+async def _board_train(session: Any, project: Project, item: WorkItem, event: InboundEvent) -> None:
+    """The merged ticket boards the train that ITS workflow takes after the merge, with the approval
+    it requires there (ADR 0041). Every merged ticket used to board the PROD train: a study that
+    merges an ADR went to production, a careful delivery skipped its staging."""
     workflow = workflow_model(await workflow_du_ticket(session, item))
     train = train_apres_fusion(workflow)
     if train is None:
         return
-    # Les étiquettes de la PR ET celles du ticket : un ticket `hotfix` prend la voie express, que ce
-    # soit ce webhook ou l'interpréteur qui l'embarque le premier (#279).
-    etiquettes = [*event.payload.get("labels", []), *(item.documents or {}).get("labels", [])]
+    # The PR's labels AND the ticket's: a `hotfix` ticket takes the express lane, whether this
+    # webhook or the interpreter boards it first (#279).
+    merged_labels = [*event.payload.get("labels", []), *(item.documents or {}).get("labels", [])]
     await get_temporal().signal(
         train_id(project.slug, env_du_train(train)),
         "merged",
         {
             "work_item_key": item.tracker_key,
             "sha": event.payload.get("sha", ""),
-            "merged_at": utcnow().isoformat(),  # borne de départ du délai de livraison
+            "merged_at": utcnow().isoformat(),  # start bound of the delivery delay
             "risk": item.risk,
-            "labels": list(dict.fromkeys(etiquettes)),
+            "labels": list(dict.fromkeys(merged_labels)),
             "pr_url": event.payload.get("pr_url"),
             "title": item.title,
             "approval": dict(approbation_du_train(workflow, train)),
@@ -487,8 +487,8 @@ async def github_webhook(
     body = await request.body()
     settings = get_settings()
     if not settings.github_webhook_secret:
-        # Sans secret, la signature n'était pas vérifiée du tout : n'importe qui pouvait
-        # injecter des événements de tracker. Toléré seulement là où il n'y a pas de GitHub.
+        # Without a secret, the signature was not verified at all: anyone could inject tracker
+        # events. Tolerated only where there is no GitHub.
         if settings.deployed:
             raise unauthorized("GitHub webhook not configured: CHOREGOS_GITHUB_WEBHOOK_SECRET is missing")
     elif not verify_github_signature(settings.github_webhook_secret, body, x_hub_signature_256):
@@ -588,14 +588,14 @@ async def argocd_webhook(
     payload = json.loads(body or b"{}")
     app = payload.get("app", payload.get("application", ""))
     health = str(payload.get("health", payload.get("status", ""))).lower()
-    kind = _genre_argocd(health, payload.get("rollout"))
+    kind = _argocd_kind(health, payload.get("rollout"))
     delivery = payload.get("delivery_id", body_digest(body))
     if await _already_seen(session, "argocd", delivery, str(kind or f"argocd.{health or 'unknown'}"), body):
         return WebhookAck(accepted=True, duplicate=True)
     if kind is None:
-        # Une santé de passage (`progressing`, `suspended`, `missing`, `unknown`…) n'est ni une
-        # livraison ni une alerte : la signaler en `cd.app.degraded` faisait revenir en arrière un
-        # départ sain, depuis que le train écoute le CD (S22-18, #349).
+        # A transient health (`progressing`, `suspended`, `missing`, `unknown`...) is neither a
+        # delivery nor an alert: reporting it as `cd.app.degraded` rolled back a healthy start,
+        # since the train listens to the CD (S22-18, #349).
         return WebhookAck(accepted=True, events=0)
     event = InboundEvent(
         type=kind,
@@ -618,9 +618,9 @@ async def argocd_webhook(
     return WebhookAck(accepted=True, events=1)
 
 
-def _genre_argocd(health: str, rollout: Any) -> InboundEventType | None:
-    """Ce qu'une notification Argo CD annonce : livré, dégradé, rollout fini ou abandonné — ou
-    rien, pour une santé de passage. Seul `degraded` est une alerte (#349)."""
+def _argocd_kind(health: str, rollout: Any) -> InboundEventType | None:
+    """What an Argo CD notification announces: delivered, degraded, rollout finished or aborted, or
+    nothing, for a transient health. Only `degraded` is an alert (#349)."""
     if rollout == "aborted":
         return InboundEventType.ROLLOUT_ABORTED
     if rollout == "completed":
@@ -709,7 +709,7 @@ async def jira_webhook(
     x_choregos_secret: Annotated[str, Header()] = "",
     x_atlassian_webhook_identifier: Annotated[str, Header()] = "",
 ) -> WebhookAck:
-    """Jira Cloud ne signe pas ses webhooks : le secret partagé est la seule barrière."""
+    """Jira Cloud does not sign its webhooks: the shared secret is the only barrier."""
     body = await request.body()
     if not verify_shared_secret(get_settings().generic_webhook_secret, x_choregos_secret):
         raise unauthorized("invalid shared secret")

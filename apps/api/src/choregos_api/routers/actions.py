@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les actions gouvernées d'un projet (ADR 0035) : proposer, lire, décider.
+"""A project's governed actions (ADR 0035): propose, read, decide.
 
-L'exécution n'est jamais ici : une action approuvée part dans Temporal (`ActionWorkflow`), et la
-réponse quitte l'API avant le moindre effet. Le journal de ses effets se lit avec elle.
+Execution never happens here: an approved action goes to Temporal (`ActionWorkflow`), and the
+response leaves the API before any effect. The log of its effects is read with it.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ Ident = Annotated[str, Path(min_length=1, max_length=64)]
     operation_id="proposeAction",
 )
 async def propose_action(ctx: ProjectCtx, body: ActionCreate, session: Db) -> ActionDto:
-    """Une action en attente de décision. Ses effets doivent être déclarés (`declarer_un_effet`)."""
+    """An action awaiting a decision. Its effects must be declared (`declare_effect`)."""
     ctx.require(Permission.ITEM_CONTROL)
     action = await service.proposer(
         session,
@@ -49,21 +49,21 @@ async def propose_action(ctx: ProjectCtx, body: ActionCreate, session: Db) -> Ac
 async def list_actions(
     ctx: ProjectCtx, session: Db, status_: Annotated[str | None, Query(alias="status")] = None
 ) -> list[ActionDto]:
-    requete = select(Action).where(Action.project_id == ctx.id).order_by(Action.created_at.desc()).limit(200)
+    query = select(Action).where(Action.project_id == ctx.id).order_by(Action.created_at.desc()).limit(200)
     if status_:
-        requete = requete.where(Action.status == status_)
-    return [await service.dto(session, a) for a in (await session.execute(requete)).scalars()]
+        query = query.where(Action.status == status_)
+    return [await service.dto(session, a) for a in (await session.execute(query)).scalars()]
 
 
 @router.get("/orgs/{org}/actions", response_model=list[ActionDto], operation_id="listOrgActions")
 async def list_org_actions(
     org: str, session: Db, principal: Me, status_: Annotated[str | None, Query(alias="status")] = None
 ) -> list[ActionDto]:
-    """La boîte des décisions : les actions des projets de l'organisation que l'appelant voit —
-    `status=pending_approval` pour ce qui attend quelqu'un."""
+    """The decision inbox: the actions of the organisation's projects that the caller can see;
+    `status=pending_approval` for what is waiting on someone."""
     from ..db.models import Organization, Project
 
-    visibles = [
+    visible = [
         p
         for p in (
             await session.execute(
@@ -74,17 +74,17 @@ async def list_org_actions(
         ).scalars()
         if principal.can(Permission.PROJECT_READ, org, p.slug)
     ]
-    if not visibles:
+    if not visible:
         return []
-    requete = (
+    query = (
         select(Action)
-        .where(Action.project_id.in_([p.id for p in visibles]))
+        .where(Action.project_id.in_([p.id for p in visible]))
         .order_by(Action.created_at.desc())
         .limit(200)
     )
     if status_:
-        requete = requete.where(Action.status == status_)
-    return [await service.dto(session, a) for a in (await session.execute(requete)).scalars()]
+        query = query.where(Action.status == status_)
+    return [await service.dto(session, a) for a in (await session.execute(query)).scalars()]
 
 
 @router.get("/projects/{id}/actions/{action_id}", response_model=ActionDto, operation_id="getAction")
@@ -103,8 +103,8 @@ async def get_action(ctx: ProjectCtx, action_id: Ident, session: Db) -> ActionDt
 async def decide_action(
     ctx: ProjectCtx, action_id: Ident, body: ActionDecisionBody, session: Db
 ) -> ActionDto:
-    """Approuver (session récente exigée) ou rejeter (avec une raison). Une approbation suffisante
-    démarre `action-<id>` dans Temporal ; rien ne s'exécute dans cette requête."""
+    """Approve (a recent session is required) or reject (with a reason). A sufficient approval
+    starts `action-<id>` in Temporal; nothing runs inside this request."""
     action = await service.decider(
         session, ctx.project, ctx.org_slug, action_id, body.decision, body.reason, ctx.principal
     )

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Runs : détail, journal ACP (SSE), transcript, diff."""
+"""Runs: detail, ACP log (SSE), transcript, diff."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ async def run_events(
     after_seq: Annotated[int | None, Query()] = None,
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
 ) -> Any:
-    """Journal ACP du run. En SSE, reprend après `Last-Event-ID` (S6-04)."""
+    """The run's ACP log. Over SSE, resumes after `Last-Event-ID` (S6-04)."""
     run, _ = await _run(session, id, principal)
     query = select(RunEvent).where(RunEvent.run_id == run.id)
     if after_seq is not None:
@@ -105,14 +105,13 @@ async def run_events(
 
 @router.get("/runs/{id}/access", operation_id="getRunAccess")
 async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
-    """Ce à quoi l'agent a touché : fichiers, commandes, réseau, outils — et les refus.
+    """What the agent touched: files, commands, network, tools, and the refusals.
 
-    Rien de nouveau n'est collecté : c'est le journal du run, replié. Un journal que
-    personne ne lit n'est pas un audit, et deux agents produisent deux cents événements
-    en quelques minutes.
+    Nothing new is collected: this is the run's log, folded. A log that nobody reads is not an
+    audit, and two agents produce two hundred events in a few minutes.
 
-    Les appels au catalogue d'outils sont ajoutés depuis le registre de coûts : ils portent
-    ce qu'ils ont coûté, et une dépense fait partie de ce à quoi on a touché.
+    Calls to the tool catalogue are added from the cost ledger: they carry what they cost, and a
+    spend is part of what was touched.
     """
     run, _ = await _run(session, id, principal)
     rows = (
@@ -120,7 +119,7 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
         .scalars()
         .all()
     )
-    appels = (
+    calls = (
         (
             await session.execute(
                 select(CostLedger).where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
@@ -129,14 +128,14 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
         .scalars()
         .all()
     )
-    evenements: list[dict[str, Any]] = [{"type": r.type, "payload": r.payload} for r in rows]
-    evenements += [
-        {"type": "choregos.tool.called", "payload": {"tool": a.model, "provider": a.provider}} for a in appels
+    events: list[dict[str, Any]] = [{"type": r.type, "payload": r.payload} for r in rows]
+    events += [
+        {"type": "choregos.tool.called", "payload": {"tool": a.model, "provider": a.provider}} for a in calls
     ]
-    rapport = rapport_d_acces(evenements)
-    tool_cost_eur = round(sum(a.cost_eur for a in appels), 4)
+    report = rapport_d_acces(events)
+    tool_cost_eur = round(sum(a.cost_eur for a in calls), 4)
     record: dict[str, Any] = {
-        **rapport.to_dict(),
+        **report.to_dict(),
         "tool_cost_eur": tool_cost_eur,
     }
     if run.inputs_from is not None or run.initiated_by is not None:
@@ -238,7 +237,7 @@ async def run_logs(id: str, session: Db, principal: Me) -> RunLogsDto:
 
 @router.get("/runs/{id}/diff", response_model=DiffSummaryDto, operation_id="getRunDiff")
 async def diff(id: str, session: Db, principal: Me) -> DiffSummaryDto:
-    """Diff du run, annoté : chaque fichier est marqué dans ou hors du périmètre autorisé."""
+    """The run's diff, annotated: each file is marked inside or outside the allowed scope."""
     run, _project = await _run(session, id, principal)
     result = run.result or {}
     reports: dict[str, Any] = (result.get("artifacts") or {}).get("reports", {})
