@@ -195,8 +195,8 @@ curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
   "secret_refs": {"api_token": "env:CONNECTOR_JIRA_TOKEN"}}'
 ```
 
-The core reads `env:NAME`; a plugin declares other schemes (a vault) with
-`choregos_core.secrets.declarer_un_resolveur`. A reference the process cannot resolve fails the
+The core reads `env:NAME`; an extension declares other schemes (a vault) with
+`choregos_core.secrets.declare_resolver`. A reference the process cannot resolve fails the
 connector test with its name — never a silent fallback to a default value.
 
 `env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
@@ -2713,8 +2713,8 @@ transitions:
 - **Who approves.** When every operation the action calls — its compensations included — is
   `allowed` for the project and the workflow asks for no `approval`, the policy decides: the action
   is born approved (`by: policy`) and runs. Otherwise a person decides it in **Approvals**, like any
-  other. A workflow can add an approval, never remove one. A plugin effect declares what it needs
-  (`declarer_un_effet(name, fn, politique="allowed")`; `approval` by default).
+  other. A workflow can add an approval, never remove one. An extension effect declares what it needs
+  (`declare_effect(name, fn, policy="allowed")`; `approval` by default).
 - **What follows.** The transition passes when its action **succeeded** (`action_succeeded`, an
   implicit guarantee). Rejected, it follows `on_reject` when there is one; failed — compensated —,
   rejected without `on_reject`, or impossible to propose (a missing field, a forbidden operation),

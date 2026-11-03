@@ -1,21 +1,24 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Un run peut-il démarrer ? La décision qu'un greffon ajoute sans forker l'orchestrateur.
+"""May a run start? The decision an extension adds without forking the orchestrator.
 
-Le cœur borne déjà la dépense **par run** (plafond de la clé virtuelle) et la concurrence **par
-exécuteur** (`maxActive`). Il ne sait rien d'une limite qui dépend d'autre chose que du run : une
-organisation suspendue, un plafond mensuel par organisation, une fenêtre de gel. Ce sont des
-règles d'exploitation, pas des règles du workflow, et elles changent d'un déploiement à l'autre.
+The core already bounds spending **per run** (the virtual key's ceiling) and concurrency **per
+executor** (`maxActive`). It knows nothing of a limit that depends on something other than the run: a
+suspended organisation, a monthly ceiling per organisation, a freeze window. These are operating
+rules, not workflow rules, and they change from one deployment to another.
 
-Un greffon les déclare ici (`declarer_une_admission`) ; l'orchestrateur les joue dans
-`prepare_stage`, **avant** d'émettre la clé de passerelle et de créer le run — un refus ne coûte
-donc rien et ne laisse aucune clé derrière lui. Il les joue **après** le chemin de rejeu : un run
-déjà préparé n'est jamais refusé après coup, ce qui garde l'activité rejouable (ADR 0008) et
-laisse finir ce qui tourne quand une règle change.
+An extension declares them here (`declare_admission`); the orchestrator plays them in
+`prepare_stage`, **before** it mints the gateway key and creates the run: a refusal therefore costs
+nothing and leaves no key behind. It plays them **after** the replay path: a run already prepared is
+never refused afterwards, which keeps the activity replayable (ADR 0008) and lets what is running
+finish when a rule changes.
 
-Un contrôle rend `None` pour admettre, ou lève `AdmissionRefusee(raison)`. Le refus arrête
-l'étape sans reprise, et la raison est ce que le ticket affiche : elle doit dire quoi faire.
-Un contrôle qui lève AUTRE CHOSE n'est pas un refus, c'est une panne ; elle remonte telle quelle
-et l'activité est retentée, plutôt que de passer pour une décision.
+A check returns `None` to admit, or raises `AdmissionRefused(reason)`. The refusal stops the stage
+without a retry, and the reason is what the work item shows: it must say what to do. A check that
+raises ANYTHING ELSE is not a refusal, it is a failure; it goes up as it is and the activity is
+retried, rather than passing for a decision.
+
+The French names this module had before 0.21 (`declarer_une_admission`, `AdmissionRefusee`...) keep
+working until 0.22.0 and warn (ADR 0098 §3 (f)).
 """
 
 from __future__ import annotations
@@ -24,10 +27,12 @@ import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from .compat import EXTERNAL_ALIAS_REMOVAL, alias_names
+
 
 @dataclass(frozen=True)
-class DemandeDeRun:
-    """Ce qu'on sait d'un run au moment de décider s'il démarre."""
+class RunRequest:
+    """What is known of a run when deciding whether it starts."""
 
     org: str
     project: str
@@ -38,41 +43,65 @@ class DemandeDeRun:
     budget_usd: float
 
 
-class AdmissionRefusee(Exception):  # noqa: N818 - « refusée » dit ce que c'est : une décision, pas une erreur
-    """Le run ne démarre pas. `str()` est la raison montrée sur le ticket."""
+class AdmissionRefused(Exception):  # noqa: N818 - "refused" says what it is: a decision, not an error
+    """The run does not start. `str()` is the reason shown on the work item."""
 
 
-Controle = Callable[[DemandeDeRun], Awaitable[None] | None]
+AdmissionCheck = Callable[[RunRequest], Awaitable[None] | None]
 
-_CONTROLES: dict[str, Controle] = {}
+_CHECKS: dict[str, AdmissionCheck] = {}
 
 
-def declarer_une_admission(nom: str, controle: Controle) -> None:
-    """Appelée par un greffon à son chargement. Le cœur n'en déclare aucune.
+def declare_admission(name: str, check: AdmissionCheck) -> None:
+    """Called by an extension when it loads. The core declares none.
 
-    Nommée, pour que la raison d'un refus dise QUI a refusé, et qu'un second chargement du même
-    greffon remplace au lieu de doubler.
+    Named, so that the reason of a refusal says WHO refused, and that a second load of the same
+    extension replaces instead of doubling.
     """
-    if not callable(controle):
-        raise TypeError(f"admission “{nom}”: a callable is expected")
-    _CONTROLES[nom] = controle
+    if not callable(check):
+        raise TypeError(f"admission “{name}”: a callable is expected")
+    _CHECKS[name] = check
 
 
-def admissions_declarees() -> tuple[str, ...]:
-    return tuple(_CONTROLES)
+def declared_admissions() -> tuple[str, ...]:
+    return tuple(_CHECKS)
 
 
-async def verifier(demande: DemandeDeRun) -> None:
-    """Joue chaque contrôle déclaré ; lève `AdmissionRefusee` au premier refus, préfixé de son nom."""
-    for nom, controle in _CONTROLES.items():
+async def check(request: RunRequest) -> None:
+    """Plays every declared check; raises `AdmissionRefused` at the first refusal, prefixed by its name."""
+    for name, admission in _CHECKS.items():
         try:
-            resultat = controle(demande)
-            if inspect.isawaitable(resultat):
-                await resultat
-        except AdmissionRefusee as refus:
-            raise AdmissionRefusee(f"{nom} : {refus}") from refus
+            result = admission(request)
+            if inspect.isawaitable(result):
+                await result
+        except AdmissionRefused as refusal:
+            raise AdmissionRefused(f"{name} : {refusal}") from refusal
 
 
-def reinitialiser() -> None:
-    """Pour les tests : aucune admission déclarée."""
-    _CONTROLES.clear()
+def reset() -> None:
+    """For tests: no admission declared."""
+    _CHECKS.clear()
+
+
+DemandeDeRun = RunRequest  # lang: fr-ok alias:external
+AdmissionRefusee = AdmissionRefused  # lang: fr-ok alias:external
+Controle = AdmissionCheck  # lang: fr-ok alias:external
+declarer_une_admission = declare_admission  # lang: fr-ok alias:external
+admissions_declarees = declared_admissions  # lang: fr-ok alias:external
+verifier = check  # lang: fr-ok alias:external
+reinitialiser = reset  # lang: fr-ok alias:external
+_CONTROLES = _CHECKS  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {
+        "DemandeDeRun": "RunRequest",  # lang: fr-ok alias:external
+        "AdmissionRefusee": "AdmissionRefused",  # lang: fr-ok alias:external
+        "Controle": "AdmissionCheck",  # lang: fr-ok alias:external
+        "declarer_une_admission": "declare_admission",  # lang: fr-ok alias:external
+        "admissions_declarees": "declared_admissions",  # lang: fr-ok alias:external
+        "verifier": "check",  # lang: fr-ok alias:external
+        "reinitialiser": "reset",  # lang: fr-ok alias:external
+    },
+    removed_in=EXTERNAL_ALIAS_REMOVAL,
+)
