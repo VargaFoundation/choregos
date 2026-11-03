@@ -19,8 +19,8 @@ const PAGES = [
   "/p/billing-api/workflows",
   "/p/billing-api/workflows/new",
   "/p/billing-api/workflows/library",
+  "/p/billing-api/workflows/default-simple/steps",
   "/p/billing-api/workflows/default-simple",
-  "/p/billing-api/workflows/default-simple/map",
   "/p/billing-api/workflows/default-simple/yaml",
   "/p/billing-api/workflows/default-simple/history",
   "/login",
@@ -59,8 +59,8 @@ const PAGES = [
   "/p/billing-api/agents",
   "/p/billing-api/integrations/claude-desktop",
   "/p/billing-api/actions/pr1",
-  "/p/billing-api/workflows/release-full/map",
-  "/p/billing-api/workflows/release-full/map?view=list",
+  "/p/billing-api/workflows/release-full",
+  "/p/billing-api/workflows/release-full?view=list",
   // Le parcours animé d'un ticket (S22-02) : en cours, et fini.
   "/p/billing-api/items/w1",
   "/p/billing-api/items/w4",
@@ -92,7 +92,7 @@ for (const theme of ["dark", "light"] as const) {
 
 /** La carte en cours d'édition (S16-12) : le panneau d'un état et le brouillon passent axe aussi. */
 test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map?view=list");
+  await page.goto("/p/billing-api/workflows/default-simple?view=list");
   await page.getByTestId("workflow-graph").getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
   await panneau.getByLabel("label").fill("Nouvelles demandes");
@@ -124,7 +124,7 @@ test("réglages : la section des connecteurs sans violation sérieuse", async ({
  * les transitions, et l'état sous le curseur est décrit (aria-live) sous la carte.
  */
 test("graphe de workflow : parcours au clavier et description de l'état", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map?view=list");
+  await page.goto("/p/billing-api/workflows/default-simple?view=list");
   const carte = page.getByTestId("workflow-graph");
   await expect(carte.locator("[data-etat]")).toHaveCount(4);
   const focus = page.getByTestId("workflow-graph-focus");
@@ -161,7 +161,7 @@ test("les barres d'onglets ne défilent pas en hauteur : Windows y dessinait ses
   // L'onglet actif descend d'un pixel sur le filet ; sans la marge qui le reçoit, chaque barre
   // débordait d'un pixel en hauteur, et Windows dessinait ▲ ● ▼ au bout de la ligne (relevé le 06/10).
   const barres: Array<[string, string]> = [
-    ["/p/billing-api/workflows/default-simple/map", "views of default-simple"],
+    ["/p/billing-api/workflows/default-simple", "views of default-simple"],
     ["/integrations/claude-code", "clients"],
   ];
   for (const [chemin, nom] of barres) {

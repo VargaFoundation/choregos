@@ -24,9 +24,9 @@ describe("the workflow library's route", () => {
   });
 
   it("writes ?view=list, and still reads an old ?vue=list", () => {
-    const map = readFileSync(join(APP, "[name]/map/page.tsx"), "utf8");
+    const map = readFileSync(join(APP, "[name]/page.tsx"), "utf8");
     expect(map).toContain('params.get("view") ?? params.get("vue")');
-    for (const page of ["library/page.tsx", "new/page.tsx", "[name]/map/page.tsx"]) {
+    for (const page of ["library/page.tsx", "new/page.tsx", "[name]/page.tsx"]) {
       expect(readFileSync(join(APP, page), "utf8"), page).not.toMatch(/\?vue=/);
     }
   });

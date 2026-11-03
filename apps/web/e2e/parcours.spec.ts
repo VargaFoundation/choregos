@@ -226,8 +226,11 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await expect(page.getByTestId("workflow-card-hotfix")).toContainText("labelled incident");
   await page.getByRole("link", { name: "default-simple" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows\/default-simple$/);
+  // A workflow opens on its graph (S55-06); its steps in words are one tab away.
+  await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
+  await page.getByRole("link", { name: "Steps" }).click();
   await expect(page.getByTestId("process-step-t-implement")).toContainText("the agent stayed within its allowed paths");
-  await page.getByRole("link", { name: "Map" }).click();
+  await page.getByRole("link", { name: "Graph" }).click();
   // La carte s'ouvre en serpentin (S22-05) ; la liste à plat est à un onglet.
   await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
   await page.getByRole("button", { name: "List" }).click();
@@ -246,7 +249,7 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
 });
 
 test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map?view=list");
+  await page.goto("/p/billing-api/workflows/default-simple?view=list");
   const carte = page.getByTestId("workflow-graph");
   await carte.getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
@@ -261,14 +264,14 @@ test("workflows : un libellé changé sur la carte se lit dans la vue processus,
   await expect(carte.getByTestId("etat-inbox")).toContainText("Nouvelles demandes");
 
   // La vue processus lit le même brouillon ; publier crée la version suivante de celle qui a été lue.
-  await page.getByRole("link", { name: "Process" }).click();
+  await page.getByRole("link", { name: "Steps" }).click();
   await expect(page.getByTestId("process-step-t-refine")).toContainText("Nouvelles demandes");
   await brouillon.getByRole("button", { name: "Publish v2" }).click();
   await expect(brouillon.getByRole("status")).toHaveText("default-simple v2 published — running items finish on their version");
 });
 
 test("workflows : la vue processus ouvre le panneau d'une étape, son délai prérempli", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple");
+  await page.goto("/p/billing-api/workflows/default-simple/steps");
   await page.getByRole("button", { name: "Edit t-refine" }).click();
   const panneau = page.getByTestId("panneau-transition");
   await expect(panneau).toBeVisible();

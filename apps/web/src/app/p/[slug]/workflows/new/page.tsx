@@ -64,7 +64,7 @@ export default function NewWorkflowPage({
       }
       await client.invalidateQueries({ queryKey: ["workflows", slug] });
       // Born on the map (ADR 0112 §5): the YAML stays one tab away, never the only way.
-      router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}/map?view=list`);
+      router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}?view=list`);
     } catch (cause) {
       // Créé ailleurs entre-temps : la liste relue le dit, sous le nom, avec le lien vers lui.
       if (cause instanceof ApiError && cause.status === 409) await existants.refetch();

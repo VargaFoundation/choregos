@@ -11,7 +11,7 @@ test("un état se lit en mots, et une phrase du moteur sans backticks", async ({
   await expect(page.locator("main")).not.toContainText("rolled_back");
   await expect(page.locator("main")).not.toContainText("awaiting_approval");
 
-  await page.goto("/p/billing-api/workflows/default-simple");
+  await page.goto("/p/billing-api/workflows/default-simple/steps");
   const etape = page.getByRole("list", { name: "Steps of the process" });
   await expect(etape).toContainText("the agent refiner");
   await expect(etape).not.toContainText("`");

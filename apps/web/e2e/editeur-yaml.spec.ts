@@ -70,7 +70,7 @@ test("le texte tapé dans l'onglet YAML survit au passage par la carte, et se pu
   await page.keyboard.press("Control+End");
   await page.keyboard.type("# kept across tabs");
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
-  await page.getByRole("link", { name: "Map", exact: true }).click();
+  await page.getByRole("link", { name: "Graph", exact: true }).click();
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
   await page.getByRole("link", { name: "YAML", exact: true }).click();
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# kept across tabs");
@@ -94,7 +94,7 @@ test("un texte invalide se souligne dans la marge et interdit de publier", async
   await page.getByTestId("validation-yaml").getByRole("button", { name: "Line 1" }).click();
   await expect(page.getByTestId("yaml-editor").locator(".cm-editor.cm-focused")).toHaveCount(1);
   // La carte garde la dernière version valide, et le dit.
-  await page.getByRole("link", { name: "Map", exact: true }).click();
+  await page.getByRole("link", { name: "Graph", exact: true }).click();
   await expect(page.getByTestId("texte-illisible")).toBeVisible();
 });
 

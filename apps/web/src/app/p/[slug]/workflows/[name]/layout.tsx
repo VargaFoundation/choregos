@@ -11,9 +11,10 @@ import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
 import { BrouillonProvider } from "@/components/workflows/brouillon";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 
+// The graph first (S55-06): a workflow is read as a picture, the list of steps is one tab away.
 const VUES = [
-  { suffix: "", label: "Process" },
-  { suffix: "/map", label: "Map" },
+  { suffix: "", label: "Graph" },
+  { suffix: "/steps", label: "Steps" },
   { suffix: "/yaml", label: "YAML" },
   { suffix: "/history", label: "History" },
 ];

@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
  * renders it.
  */
 test("the process view names the registry agent of a step and links to it", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/dev-complex");
+  await page.goto("/p/billing-api/workflows/dev-complex/steps");
   const etape = page.getByTestId("process-step-t-implement");
   const lien = etape.getByRole("link", { name: "Developer" });
   await expect(lien).toBeVisible();
@@ -21,7 +21,7 @@ test("the map says what each box produces and lists the artifacts, highlighting 
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/p/billing-api/workflows/dev-complex/map");
+  await page.goto("/p/billing-api/workflows/dev-complex");
   await expect(page.getByText("→ spec_markdown, allowed_paths")).toBeVisible();
   const table = page.getByRole("table", { name: "Artifacts" });
   const ligne = table.getByTestId("artefact-test_report");
