@@ -216,6 +216,11 @@ function Instance({
   const action = (
     <span className="inline-flex items-center gap-2">
       <Badge tone="neutral">{libelleDeSorte(instance.kind)}</Badge>
+      {instance.type === "mcp-gateway" && (
+        <Badge tone="accent" data-testid={`route-${instance.name}`}>
+          via gateway{typeof instance.config?.server === "string" ? `: ${instance.config.server}` : ""}
+        </Badge>
+      )}
       {instance.kind === "mcp" && (
         <Button size="sm" onClick={() => void decouvrir()}>
           Discover
@@ -635,6 +640,10 @@ function Declarer({ org }: { org: string }) {
   const schema = (type?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
   const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
   const nameInvalid = nom !== "" && !CONNECTOR_NAME.test(nom);
+  // A connector through the gateway needs one to go through (ADR 0105).
+  const viaGateway = type?.type === "mcp-gateway";
+  const gateway = useQuery({ queryKey: ["mcp-gateway", org], queryFn: () => api.mcpGateway(org), enabled: viaGateway });
+  const noGateway = viaGateway && (!gateway.data || !gateway.data.gateway || gateway.data.gateway.mode === "off");
   async function declarer() {
     if (!type) return;
     setErreur(null);
@@ -744,11 +753,21 @@ function Declarer({ org }: { org: string }) {
               onChange={(draft) => setSecrets({ ...secrets, [champ]: draft })}
             />
           ))}
+          {noGateway && !gateway.isPending && (
+            <ErrorNote>
+              Set the organisation&apos;s MCP gateway first, in{" "}
+              <Link href="/admin" className="underline">
+                Administration
+              </Link>
+              .
+            </ErrorNote>
+          )}
           {erreur && <ErrorNote>{erreur}</ErrorNote>}
           <Button
             type="submit"
             tone="accent"
             disabled={
+              noGateway ||
               !nom ||
               nameInvalid ||
               !type ||

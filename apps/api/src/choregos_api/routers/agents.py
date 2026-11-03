@@ -133,6 +133,7 @@ from ..services.hosted_sources import (
 )
 from ..services.memory_access import check_bindings_at_publish
 from ..services.network import check_agent_network
+from ..services.organisations import organisation_by_slug
 from ..services.remote_agents import pin_remote_runtime
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
@@ -141,15 +142,6 @@ router = APIRouter(tags=["agents"])
 
 Slug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
 AgentRef = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$")]
-
-
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", slug)
-    return organisation
 
 
 async def _agent(session: AsyncSession, organisation: Organization, slug: str) -> Agent:
@@ -314,7 +306,7 @@ async def _charger(
     """The agent, for a caller who may see it: a personal agent of someone else, or a project's agent
     the caller does not belong to, is a 404 — never a 403 that would reveal it exists."""
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     agent = await _agent(session, organisation, slug)
     sujet = await subject_of(session, agent)
     if not decide(principal, org, sujet, Action.SEE).allowed:
@@ -343,7 +335,7 @@ async def list_agents(
     """The agents the caller may see (ADR 0061), optionally of one scope or one project, and carrying
     every tag given (S40-10; applied after visibility, so a tag never reveals an invisible agent)."""
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     requete = select(Agent).where(
         Agent.org_id == organisation.id, await visible_clause(session, principal, organisation)
     )
@@ -371,7 +363,7 @@ async def create_agent(
     erreurs_d_une_version(body.spec)
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     await check_agent_network(session, organisation.id, body.spec)
     projet = await _projet(session, organisation, body.project) if body.project else None
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
@@ -453,7 +445,7 @@ async def draft_agent(org: str, body: AgentDraftRequest, session: Db, principal:
             f"more than {agent_drafts.PER_MINUTE} drafts per minute",
             retry_after=wait,
         )
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     try:
         proposal = await agent_drafts.draft(session, organisation, body, principal)
     except agent_drafts.DraftingError as exc:
@@ -490,7 +482,7 @@ async def upload_hosted_source(org: str, request: Request, session: Db, principa
     version's `source.sha256` then names. The same bytes uploaded twice are one source."""
     if not may_create_somewhere(principal, org):
         raise forbidden("uploading a hosted source asks the right to create an agent in the organisation")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     data = bytearray()
     async for chunk in request.stream():
         data += chunk
@@ -524,7 +516,7 @@ async def upload_hosted_source(org: str, request: Request, session: Db, principa
 async def get_hosted_source(org: str, sha256: str, session: Db, principal: Me) -> HostedSourceDto:
     if not is_member(principal, org):
         raise forbidden("not a member of the organisation")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     try:
         return _source_dto(await load_source(object_store(), organisation.id, sha256))
     except SourceRefused as exc:
@@ -830,7 +822,7 @@ async def list_agent_metrics(
     from ..db.models import CostLedger, Project, Run
 
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     depuis = utcnow() - timedelta(days=days)
     slugs = list(
         (
@@ -1675,7 +1667,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     _lire(principal, org)
     if not principal.can(Permission.PROJECT_READ, org, body.project):
         raise forbidden(f"trying an agent in {org}/{body.project} requires being a member of it")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     sujet = None
     if body.agent:
         _, _, sujet = await _charger(session, principal, org, body.agent)
@@ -1701,6 +1693,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
         title=body.input.title or "Trial",
         body=body.input.body,
         created_by=principal.email,
+        fields=body.input.fields,
     )
     await get_temporal().start_trial(
         trial_workflow_id(item.id),
@@ -1743,7 +1736,7 @@ async def list_org_credentials(org: str, session: Db, principal: Me) -> list[Age
     from ..db.session import en_portee_de_plateforme
 
     _admin(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     lignes = (
         await session.execute(
             select(AgentCredential, Agent.slug)
@@ -1887,7 +1880,7 @@ async def list_agent_catalogue(
     from ..services import catalogue_d_agents as catalogue
 
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     rendu = []
     for proposition in (await catalogue.catalogue_of(session, organisation.id)).entries:
         etat = await catalogue.etat(session, organisation.id, proposition)
@@ -1935,7 +1928,7 @@ async def install_catalogue_agent(
     from ..services import catalogue_d_agents as catalogue
 
     _admin(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     view = await catalogue.catalogue_of(session, organisation.id)
     proposition = view.entry(slug)
     if proposition is None:
@@ -1990,7 +1983,7 @@ async def connect_catalogue_client(
     _lire(principal, org)
     if principal.kind != "user":
         raise forbidden("a client is connected by a person, from a session")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     proposition = (await catalogue.catalogue_of(session, organisation.id)).entry(slug)
     if proposition is None or proposition.genre != "external":
         raise not_found("Catalogue client", slug)

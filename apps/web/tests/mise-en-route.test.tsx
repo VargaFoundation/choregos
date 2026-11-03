@@ -47,7 +47,7 @@ describe("the getting-started card of the overview (S40-06c)", () => {
     expect((await screen.findByTestId("etape-connector-cd")).getAttribute("data-state")).toBe("todo");
     expect(screen.getByText("1 of 2 done")).toBeTruthy();
     expect(screen.queryByTestId("etape-connector-ci")).toBeNull();
-    expect(screen.getByText("Fix").getAttribute("href")).toBe("/p/dev/settings#connections");
+    expect(screen.getByText("Fix").getAttribute("href")).toBe("/p/dev/settings/connections#connections");
   });
 
   it("is absent once the project is ready (a check does not keep it open)", async () => {

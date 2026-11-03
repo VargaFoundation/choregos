@@ -71,7 +71,9 @@ from .routers import (
     skills,
     templates,
     theme,
+    tracker_identities,
     trains,
+    triggers,
     ui,
     webhooks,
     workflow_catalogue,
@@ -370,6 +372,7 @@ def create_app() -> FastAPI:
         mcp_gateway.router,
         templates.router,
         admin.router,
+        tracker_identities.router,
         agents.router,
         agent_releases.router,
         agent_sessions.router,
@@ -382,6 +385,7 @@ def create_app() -> FastAPI:
         knowledge.router,
         webhooks.router,
         received_events.router,
+        triggers.router,
         internal.router,
     )
     for router in routeurs_du_coeur:

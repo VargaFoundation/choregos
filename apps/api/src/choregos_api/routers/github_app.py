@@ -15,14 +15,13 @@ from choregos_adapters.errors import UpstreamError
 from choregos_adapters.github import GitHubAppPort
 from fastapi import APIRouter, Depends, Header, Path, Query, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import GitHubInstallation, Organization
 from ..db.org_aliases import current_slug
 from ..deps import Config, Db, Me, current_principal
-from ..errors import ApiError, conflict, forbidden, not_found, upstream
+from ..errors import ApiError, conflict, forbidden, upstream
 from ..rbac import Permission, Principal
 from ..schemas import (
     GitHubAppStatus,
@@ -34,20 +33,12 @@ from ..schemas import (
 )
 from ..schemas.base import PageMeta
 from ..services import github_app as svc
+from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["connectors"])
 
 PAGE_SIZE = 50
 OrgSlug = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")]
-
-
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    found = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if found is None:
-        raise not_found("Organisation", slug)
-    return found
 
 
 def _may_manage(principal: Principal, org: str) -> bool:
@@ -63,7 +54,7 @@ def _may_manage(principal: Principal, org: str) -> bool:
 
 
 async def _authorised(session: AsyncSession, principal: Principal, slug: str) -> Organization:
-    organisation = await _organisation(session, slug)
+    organisation = await organisation_by_slug(session, slug)
     if not _may_manage(principal, slug):
         raise forbidden(f"managing the GitHub App of {slug} needs the connector right on one of its projects")
     return organisation

@@ -64,12 +64,16 @@ export function CarteDuParcours({
   itemId,
   largeurInitiale = 1100,
   onDecided,
+  decisionAnchor,
 }: {
   journey: WorkItemJourney;
   slug: string;
   itemId: string;
   largeurInitiale?: number;
   onDecided?: () => void;
+  /** The page already shows the decision under this anchor: a waiting step leads there instead of
+   * offering a second set of buttons (S55-05). */
+  decisionAnchor?: string;
 }) {
   const modele = useMemo(() => modeler(journey), [journey]);
   const images = useMemo(() => instants(journey), [journey]);
@@ -107,6 +111,7 @@ export function CarteDuParcours({
             itemId={itemId}
             onClose={() => setChoix(null)}
             onDecided={onDecided}
+            decisionAnchor={decisionAnchor}
           />
         )}
       </div>

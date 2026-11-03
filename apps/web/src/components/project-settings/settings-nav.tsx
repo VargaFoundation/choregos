@@ -1,55 +1,56 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useEffect, useState } from "react";
-import { Tabs, tabClasses } from "@/components/ui";
+import { LayoutGrid } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { SETTINGS_GROUPS } from "@/components/project-settings/groups";
 import { cn } from "@/lib/cn";
-
-export interface SettingsSectionLink {
-  id: string;
-  label: string;
-}
+import { HUE_CLASSES } from "@/lib/workflow-hue";
 
 /**
- * The in-page navigation: a strip of anchors on small screens (`Tabs`), a sticky list at the left
- * from `lg` up. The active section follows the scroll (`IntersectionObserver`); where it does not
- * exist the links still work, they are plain anchors.
+ * The settings' groups (S55-07): each with its icon on its hue, the overview first. A strip on small
+ * screens, a sticky column from `lg` up. It was a list of twelve anchors on one endless page, all in the
+ * same grey.
  */
-export function SettingsNav({ sections }: { sections: SettingsSectionLink[] }) {
-  const [active, setActive] = useState(sections[0]?.id ?? "");
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const visible = new Set<string>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) visible.add(entry.target.id);
-          else visible.delete(entry.target.id);
-        }
-        const first = sections.find((s) => visible.has(s.id));
-        if (first) setActive(first.id);
-      },
-      { rootMargin: "0px 0px -60% 0px" },
-    );
-    for (const { id } of sections) {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    }
-    return () => observer.disconnect();
-  }, [sections]);
+export function SettingsNav({ slug }: { slug: string }) {
+  const pathname = usePathname();
+  const base = `/p/${encodeURIComponent(slug)}/settings`;
+  const links = [
+    { href: base, label: "Overview", icon: LayoutGrid, tint: "border-line bg-surface-muted text-ink-muted" },
+    ...SETTINGS_GROUPS.map((group) => ({
+      href: `${base}/${group.id}`,
+      label: group.label,
+      icon: group.icon,
+      tint: group.hue
+        ? cn(HUE_CLASSES[group.hue].soft, HUE_CLASSES[group.hue].line, HUE_CLASSES[group.hue].ink)
+        : "border-failed-line bg-failed-soft text-failed-ink",
+    })),
+  ];
   return (
-    <Tabs aria-label="Settings sections" className="lg:sticky lg:top-4 lg:flex-col lg:gap-1 lg:self-start lg:border-b-0">
-      {sections.map((section) => (
-        <a
-          key={section.id}
-          href={`#${section.id}`}
-          aria-current={active === section.id ? "location" : undefined}
-          onClick={() => setActive(section.id)}
-          className={cn(tabClasses(active === section.id), "lg:border-b-0 lg:border-l-2 lg:px-3 lg:py-1.5", active === section.id ? "lg:border-accent" : "lg:border-transparent")}
-        >
-          {section.label}
-        </a>
-      ))}
-    </Tabs>
+    <nav aria-label="Settings groups" className="lg:sticky lg:top-4 lg:self-start">
+      <ul className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+        {links.map(({ href, label, icon: Icon, tint }) => {
+          const active = pathname === href;
+          return (
+            <li key={href} className="shrink-0">
+              <Link
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm no-underline pointer-coarse:min-h-11",
+                  active ? "bg-accent-soft font-medium text-ink" : "text-ink-muted hover:bg-surface-muted hover:text-ink",
+                )}
+              >
+                <span aria-hidden className={cn("flex size-7 shrink-0 items-center justify-center rounded border", tint)}>
+                  <Icon className="size-4" strokeWidth={1.75} />
+                </span>
+                {label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

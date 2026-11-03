@@ -5,7 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
-import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Field, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Field, Heading, Input, Select } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import { workflowHueClasses } from "@/lib/workflow-hue";
 import {
   filterEntries,
   readinessPreview,
@@ -20,7 +22,7 @@ import type { ConnectorDto, WorkflowCatalogueEntry } from "@/lib/types";
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 
 /**
- * The workflow catalogue (ADR 0111): what this project can adopt — the platform's workflows, the
+ * The workflow library (ADR 0111; "catalogue" until S55-04, a word read as French): what this project can adopt — the platform's workflows, the
  * templates', the installed plugins' and the ones the organisation shared — with what each needs and
  * where its agents come from. Adopting copies the workflow into the project and installs the agents the
  * platform's catalogue provides; it never installs a plugin.
@@ -45,10 +47,15 @@ export default function WorkflowCataloguePage({ params }: { params: Promise<{ sl
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <p className="max-w-2xl text-sm text-ink-muted">
+        <div className="space-y-1">
+          <Heading as="h2" size="lg">
+            Workflow library
+          </Heading>
+          <p className="max-w-2xl text-sm text-ink-muted">
           Workflows this project can adopt. Adopting copies one into the project — later changes to the catalogue are
           offered, never applied — and installs the agents the platform provides. A plugin is never installed from here.
-        </p>
+          </p>
+        </div>
         <Link href={`/p/${slug}/workflows`} className="text-sm underline">
           Back to the project&apos;s workflows
         </Link>
@@ -65,9 +72,14 @@ export default function WorkflowCataloguePage({ params }: { params: Promise<{ sl
           )}
         </Field>
       </div>
-      {!catalogue.data && <EtatDeLecture lecture={catalogue} quoi="the workflow catalogue" />}
-      {catalogue.data && shown.length === 0 && <Empty title="No workflow">Nothing in the catalogue matches.</Empty>}
-      <ul className="grid gap-4 md:grid-cols-2" aria-label="Workflow catalogue">
+      {!catalogue.data &&
+        (catalogue.error ? (
+          <EtatDeLecture lecture={catalogue} quoi="the workflow library" />
+        ) : (
+          <LibrarySkeleton />
+        ))}
+      {catalogue.data && shown.length === 0 && <Empty title="No workflow">Nothing in the library matches.</Empty>}
+      <ul className="grid gap-4 md:grid-cols-2" aria-label="Workflow library">
         {shown.map((entry) => (
           <li key={`${entry.source}/${entry.name}`}>
             <CatalogueCard slug={slug} entry={entry} connectors={connectors.data ?? []} hasRepository={hasRepository} />
@@ -91,8 +103,18 @@ function CatalogueCard({
 }) {
   const [open, setOpen] = useState(false);
   const missing = unresolved(entry);
+  const hue = workflowHueClasses(entry.name);
   return (
-    <Card title={entry.title} eyebrow={sourceLabel(entry.source)}>
+    <Card
+      title={
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", hue.solid)} />
+          {entry.title}
+        </span>
+      }
+      eyebrow={sourceLabel(entry.source)}
+      className={cn("border-t-4", hue.stripe)}
+    >
       <div className="space-y-3 text-sm">
         {entry.summary && <p>{entry.summary}</p>}
         <div className="flex flex-wrap gap-2">
@@ -174,7 +196,7 @@ function AdoptForm({
           client.invalidateQueries({ queryKey }),
         ),
       );
-      router.push(`/p/${slug}/workflows/${encodeURIComponent(name)}/map?vue=list`);
+      router.push(`/p/${slug}/workflows/${encodeURIComponent(name)}?view=list`);
     } catch (cause) {
       setError(cause instanceof ApiError || cause instanceof Error ? cause.message : "adoption refused");
       setBusy(false);
@@ -208,5 +230,22 @@ function AdoptForm({
         <Button onClick={onCancel}>Cancel</Button>
       </div>
     </div>
+  );
+}
+
+/** The shape of the library while it is read: cards, not a sentence (S55-04). */
+function LibrarySkeleton() {
+  return (
+    <ul className="grid gap-4 md:grid-cols-2" aria-busy="true" aria-label="Reading the workflow library">
+      {[0, 1, 2, 3].map((n) => (
+        <li key={n} className="raised space-y-3 rounded-md border border-line p-4 motion-safe:animate-pulse">
+          <div className="h-3 w-24 rounded bg-surface-muted" />
+          <div className="h-5 w-2/3 rounded bg-surface-muted" />
+          <div className="h-3 w-full rounded bg-surface-muted" />
+          <div className="h-3 w-5/6 rounded bg-surface-muted" />
+          <div className="h-8 w-32 rounded bg-surface-muted" />
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any
 
 from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.services import (
     Naissance,
+    new_human_request,
     nouveau_ticket,
     persist_event,
     record_human_verdict,
@@ -18,6 +18,7 @@ from choregos_api.services import (
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType, HumanActor, HumanRequestKind, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
+from choregos_core.domain import TRACKER_FIELD
 from choregos_core.gates import ALREADY_FIXED_GATE
 from choregos_core.restricted import WITHHELD, is_marked
 from sqlalchemy import select, update
@@ -252,14 +253,13 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             return {"request_id": existing.id, "reused": True}
 
         sla_hours = int(payload.get("sla_hours") or 24)
-        row = HumanRequest(
+        row = new_human_request(
             work_item_id=item.id,
             project_id=bundle.project.id,
             transition_id=payload.get("transition_id"),
             kind=payload["kind"],
             payload=payload.get("payload", {}),
-            requested_at=utcnow(),
-            due_at=utcnow() + timedelta(hours=sla_hours),
+            sla_hours=sla_hours,
         )
         session.add(row)
         await session.flush()
@@ -632,6 +632,8 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                         item_type=data.item_type,
                         reporter=data.author,
                         initiated_by=initiator("tracker", "sync"),
+                        # Who filed it, its labels, its form's answers (S51-04): `fields.tracker`.
+                        tracker=data.fields.get(TRACKER_FIELD),
                     ),
                 )
                 created.append(key)

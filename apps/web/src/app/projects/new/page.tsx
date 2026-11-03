@@ -46,12 +46,14 @@ export default function NewProjectPage() {
     workflow: "",
     slug: "",
     name: "",
-    sansDepot: false,
+    // Asked first, with no default (owner review of 2026-11-03): a code project was assumed, and an
+    // onboarding project was asked for a repository, a language and a Slack channel.
+    sansDepot: null as boolean | null,
     repo: "",
     language: "python",
     tracker: "internal",
     gitops: "",
-    channel: "#choregos",
+    channel: "",
   });
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
@@ -114,14 +116,16 @@ export default function NewProjectPage() {
   }
 
   const raisonDAttente =
-    step === 1 && !form.slug
+    step === 0 && form.sansDepot === null
+      ? "say what the project delivers to go on"
+      : step === 1 && !form.slug
       ? "an identifier is needed to go on"
       : step === 1 && !slugValid
         ? "the identifier is not valid yet"
         : step === 1 && !repoValid
           ? form.repo
             ? "the repository is not valid yet"
-            : "a repository is needed — or tick “no code repository” in the first step"
+            : "a repository is needed — or choose a business process in the first step"
           : null;
 
   const recapitulatif: [string, string][] = [
@@ -134,7 +138,7 @@ export default function NewProjectPage() {
     ...(form.sansDepot ? [] : ([["Main language", form.language]] as [string, string][])),
     ["Tracker", TRACKERS.find((t) => t.value === form.tracker)?.label ?? form.tracker],
     ...(form.sansDepot ? [] : ([["GitOps repository", form.gitops]] as [string, string][])),
-    ["Slack channel", form.channel],
+    ...(form.channel ? ([["Slack channel", form.channel]] as [string, string][]) : []),
   ];
 
   return (
@@ -169,15 +173,38 @@ export default function NewProjectPage() {
       <Card>
         {step === 0 && (
           <div className="space-y-3 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.sansDepot}
-                onChange={(event) => set("sansDepot", event.target.checked)}
-              />
-              <span>This project has no code repository (a line of business: HR, purchasing, legal…)</span>
-            </label>
-            {!form.sansDepot && (
+            <fieldset className="space-y-2">
+              <legend className="mb-1">What does this project deliver?</legend>
+              <label className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="kind"
+                  className="mt-1"
+                  checked={form.sansDepot === true}
+                  onChange={() => set("sansDepot", true)}
+                />
+                <span>
+                  A business process, no code repository
+                  <span className="block text-xs text-ink-muted">
+                    HR onboarding and offboarding, purchasing, legal, support: requests handled by agents and people.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="kind"
+                  className="mt-1"
+                  checked={form.sansDepot === false}
+                  onChange={() => set("sansDepot", false)}
+                />
+                <span>
+                  Software, from a code repository
+                  <span className="block text-xs text-ink-muted">Agents plan, change and deliver the code of a repository.</span>
+                </span>
+              </label>
+            </fieldset>
+            {form.sansDepot === false && (
               <label className="block space-y-1">
                 <span>Stack template</span>
                 <Select
@@ -198,7 +225,7 @@ export default function NewProjectPage() {
                 </span>
               </label>
             )}
-            {!avecTemplate && (
+            {form.sansDepot !== null && !avecTemplate && (
               <label className="block space-y-1">
                 <span>Workflow</span>
                 <Select aria-label="Workflow" value={form.workflow} onChange={(event) => set("workflow", event.target.value)} className="w-full">
@@ -222,9 +249,19 @@ export default function NewProjectPage() {
 
         {step === 1 && (
           <div className="space-y-3 text-sm">
-            <Field label="Identifier (slug)" value={form.slug} onChange={(value) => set("slug", value)} placeholder="billing-api" />
+            <Field
+              label="Identifier (slug)"
+              value={form.slug}
+              onChange={(value) => set("slug", value)}
+              placeholder={form.sansDepot ? "employee-onboarding" : "billing-api"}
+            />
             {!slugValid && form.slug && <ErrorNote>Lowercase letters, digits and dashes only</ErrorNote>}
-            <Field label="Display name" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
+            <Field
+              label="Display name"
+              value={form.name}
+              onChange={(value) => set("name", value)}
+              placeholder={form.sansDepot ? "Employee onboarding" : "Billing API"}
+            />
             {!form.sansDepot && (
               <>
                 <Field label="Repository" value={form.repo} onChange={(value) => set("repo", value)} placeholder="acme/billing-api" />
@@ -272,10 +309,17 @@ export default function NewProjectPage() {
                 placeholder="https://github.com/acme/billing-api-gitops.git"
               />
             )}
-            <Field label="Slack channel" value={form.channel} onChange={(value) => set("channel", value)} placeholder="#choregos" />
+            <Field
+              label="Slack channel for notifications (optional)"
+              value={form.channel}
+              onChange={(value) => set("channel", value)}
+              placeholder="#people-ops"
+            />
             <p className="text-xs text-ink-muted">
               Secrets are not typed here: they come from External Secrets, referenced by the connector.
-              The other connectors (SCM, CI, CD, gateway) are set in the project settings.
+              {form.sansDepot
+                ? "Other connectors (a document store, an HR or ticketing system, notifications) are added in the project settings."
+                : "The other connectors (SCM, CI, CD, gateway) are set in the project settings."}
             </p>
           </div>
         )}

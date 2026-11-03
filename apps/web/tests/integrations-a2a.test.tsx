@@ -78,7 +78,7 @@ describe("the A2A card on the Integrations page (ADR 0078)", () => {
       "Billing API: up to 10 MiB change it in its settings",
       "Contracts: up to 25 MiB change it in its settings",
     ]);
-    expect(within(rows[1]!).getByRole("link")).toHaveAttribute("href", "/p/contracts/settings#a2a");
+    expect(within(rows[1]!).getByRole("link")).toHaveAttribute("href", "/p/contracts/settings/agents#a2a");
   });
 });
 

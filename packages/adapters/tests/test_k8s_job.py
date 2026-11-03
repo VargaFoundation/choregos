@@ -527,3 +527,33 @@ async def test_a_job_created_despite_a_lost_answer_keeps_its_token() -> None:
     with pytest.raises(TimeoutError):
         await KubernetesJobExecutor(client=api).start(_spec_pour("r-0"))  # type: ignore[arg-type]
     assert "run-r-0" in api.secrets
+
+
+async def test_the_runner_pod_names_the_pull_secrets_it_is_given() -> None:
+    """S51-09: a job step naming its own image (a private registry project) sat in
+    ImagePullBackOff, its pod naming no pull secret. By name: the secret's value never enters it."""
+    client = _RecordingClient()
+    executor = KubernetesJobExecutor(client=client, image_pull_secrets=["harbor-prive", "ghcr-ee"])  # type: ignore[arg-type]
+    await executor.start(_spec())
+    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
+    assert job["spec"]["template"]["spec"]["imagePullSecrets"] == [
+        {"name": "harbor-prive"},
+        {"name": "ghcr-ee"},
+    ]
+
+
+async def test_without_pull_secrets_the_pod_names_none() -> None:
+    client = _RecordingClient()
+    await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
+    assert "imagePullSecrets" not in job["spec"]["template"]["spec"]
+
+
+def test_the_deployment_s_pull_secrets_reach_the_executor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """What the chart sets from `global.imagePullSecrets`, read where the executor is built."""
+    from choregos_adapters import build
+
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "harbor-prive, ghcr-ee,")
+    executor = build("runtime", "k8s_job", {"kubernetes": {"token": "t", "verify": False}})
+    assert executor.image_pull_secrets == ["harbor-prive", "ghcr-ee"]

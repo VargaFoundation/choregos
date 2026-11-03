@@ -120,6 +120,12 @@ The step journals `checks.skipped` and its evidence says `skipped`; the pull req
 the change. A session (S41-11) has no repository: its pod gets `workspace: none` whatever the
 version asks.
 
+`runtime.workspace` is the hosted form of the spec's own `workspace` field, which any agent may
+declare ([ADR 0119](adr/0119-an-agent-declares-the-workspace-it-needs.md)): a hosted version may also
+set the top-level `workspace`, but only to the same value (another one is a `422`). Under `none` the
+repository's host is not on the run's network either; under `read` the runner's write scope is
+`.choregos/outputs/**` only, and a scope change is denied.
+
 **The executor starts the container beside the runner (S41-05).** The orchestrator accepts a hosted
 step when the version's image is pinned: an `image` source runs `ref@digest` (no digest,
 `hosted_image_unpinned`); a `zip` source runs its build's image once the build is `ready`

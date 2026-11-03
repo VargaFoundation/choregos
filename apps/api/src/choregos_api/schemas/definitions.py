@@ -56,7 +56,8 @@ class WorkflowCatalogueEntryDto(Dto):
     needs_repository: bool
     groups: list[str]
     agents: list[WorkflowCatalogueAgentDto]
-    yaml: str
+    #: In the answer to a share only; the list leaves it out (S55-04b).
+    yaml: str | None = None
     shared_by: str | None = None
     shared_from: str | None = None
     shared_at: datetime | None = None
@@ -238,6 +239,7 @@ class GatewayModelDto(Dto):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    mode: str = "chat"
     internal_price: bool = False
     source: Literal["gateway", "manual"] = "gateway"
     owned_by: str = ""
@@ -303,6 +305,7 @@ class ModelGatewayFacts(Dto):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    mode: str = "chat"
 
 
 class ModelCatalogueEntry(Dto):
@@ -361,6 +364,12 @@ class ModelTiers(Dto):
 class ModelCatalogueGateway(Dto):
     type: str
     capabilities: list[str] = Field(default_factory=list)
+    #: Where it is set: the organisation's own `gateway` connector, or the deployment's environment
+    #: (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no screen changes.
+    source: Literal["organisation", "deployment"] = "deployment"
+    #: The address the platform calls. The deployment's is an operator's internal address: only a
+    #: platform administrator reads it; the organisation's own is shown to its members.
+    base_url: str | None = None
 
 
 class ModelCatalogue(Dto):

@@ -17,7 +17,8 @@ import { bodyOfDrafts, EMPTY_DRAFT, problemOfDraft, SecretField, type SecretDraf
 import { Alert, Badge, Button, EtatDeLecture, ErrorNote, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/catalogue";
-import { authLabel, filterMcpEntries, hostOf, whyNotInstallable } from "@/lib/mcp-catalogue";
+import { authLabel, filterMcpEntries, hostOf, routesOf, whyNotInstallable } from "@/lib/mcp-catalogue";
+import { SERVER_PATTERN } from "@/lib/mcp-gateway";
 import { useSession } from "@/lib/session";
 import type { ConnectorEnablement, McpCatalogueEntry } from "@/lib/types";
 
@@ -121,6 +122,7 @@ function Entry({
   // (OAuth, local process) come second.
   const why = entry.can.install ? whyNotInstallable(entry) : (entry.cannot_reason ?? whyNotInstallable(entry));
   const host = hostOf(entry);
+  const routes = routesOf(entry);
   return (
     <CatalogueCard
       id={entry.id}
@@ -134,6 +136,7 @@ function Entry({
           {entry.reference && <Badge tone="neutral">Reference server</Badge>}
           <Badge tone="neutral">{entry.transport === "remote" ? "Hosted" : "Local process"}</Badge>
           <Badge tone="neutral">{authLabel(entry.auth)}</Badge>
+          {routes.length === 1 && routes[0] === "gateway" && <Badge tone="accent">Through your MCP gateway</Badge>}
           {entry.state === "installed" && <Badge tone="ok">Installed</Badge>}
           {entry.state === "update" && <Badge tone="warn">Update available</Badge>}
         </>
@@ -207,8 +210,12 @@ function secretBody(draft: SecretDraft): { secret_refs: Record<string, string>; 
 function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueEntry; onDone: () => void }) {
   const router = useRouter();
   const client = useQueryClient();
-  const needsSecret = entry.auth !== "none";
+  const routes = routesOf(entry);
+  const [route, setRoute] = useState<"direct" | "gateway">(routes.includes("direct") ? "direct" : "gateway");
+  const viaGateway = route === "gateway";
+  const needsSecret = entry.auth !== "none" && !viaGateway;
   const [name, setName] = useState(entry.id);
+  const [gatewayServer, setGatewayServer] = useState(entry.id);
   const [secret, setSecret] = useState<SecretDraft>(EMPTY_DRAFT);
   // Available is not enabled (ADR 0065, 0074): the console proposes selected projects.
   const [availability, setAvailability] = useState<"selected_projects" | "all_projects">("selected_projects");
@@ -216,7 +223,8 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
   const [busy, setBusy] = useState(false);
   const guard = useEgressGuard();
   const host = hostOf(entry);
-  const unreadable = problemOfDraft(secret) !== null;
+  const unreadable = !viaGateway && problemOfDraft(secret) !== null;
+  const serverInvalid = viaGateway && !SERVER_PATTERN.test(gatewayServer);
   async function install() {
     setError(null);
     setBusy(true);
@@ -226,7 +234,11 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
         (allow) =>
           api.installMcpCatalogueEntry(org, entry.id, {
             name,
-            ...(needsSecret ? secretBody(secret) : { secret_refs: {} }),
+            ...(viaGateway
+              ? { route: "gateway" as const, gateway_server: gatewayServer }
+              : needsSecret
+                ? secretBody(secret)
+                : { secret_refs: {} }),
             availability,
             ...egressFlag(allow),
           }),
@@ -271,12 +283,12 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
       <p className="text-ink-muted" data-donnee>
         {entry.description}
       </p>
-      {entry.remote && (
+      {entry.remote && !viaGateway && (
         <p className="text-xs text-ink-muted">
           Server: <code>{entry.remote.url}</code>
         </p>
       )}
-      {host && entry.egress === "undeclared" && (
+      {host && !viaGateway && entry.egress === "undeclared" && (
         <Alert tone="warn" title="Host not declared">
           This deployment does not declare <code>{host}</code> reachable from the API. Ask your operator to open it
           first, or the connector will time out.
@@ -291,9 +303,38 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
           onChange={(event) => setName(event.target.value)}
         />
       </label>
+      {routes.length > 1 && (
+        <fieldset className="space-y-1">
+          <legend className="text-xs text-ink-muted">Route</legend>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="route" checked={route === "direct"} onChange={() => setRoute("direct")} />
+            Directly (Choregos holds the credential)
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="route" checked={route === "gateway"} onChange={() => setRoute("gateway")} />
+            Through the organisation&apos;s MCP gateway (the gateway holds it)
+          </label>
+        </fieldset>
+      )}
+      {viaGateway && (
+        <div className="space-y-1">
+          <label className="block space-y-1">
+            <span className="text-xs text-ink-muted">Server name at the gateway</span>
+            <Input
+              className="w-full"
+              value={gatewayServer}
+              aria-invalid={serverInvalid}
+              onChange={(event) => setGatewayServer(event.target.value)}
+            />
+          </label>
+          <p className={serverInvalid ? "text-xs text-danger" : "text-xs text-ink-muted"}>
+            Letters, digits, dots, dashes and underscores. The gateway holds the credential: none is asked here.
+          </p>
+        </div>
+      )}
       {needsSecret ? (
         <SecretField field="token" draft={secret} onChange={setSecret} />
-      ) : (
+      ) : viaGateway ? null : (
         <p className="text-xs text-ink-muted">This server takes no credential.</p>
       )}
       <fieldset className="space-y-1">
@@ -319,7 +360,7 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
       </fieldset>
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex gap-2">
-        <Button type="submit" tone="accent" disabled={busy || !name || unreadable || (needsSecret && !secret.text)}>
+        <Button type="submit" tone="accent" disabled={busy || !name || unreadable || serverInvalid || (needsSecret && !secret.text)}>
           {busy ? "Installing…" : "Install"}
         </Button>
         <Button onClick={onDone}>Cancel</Button>

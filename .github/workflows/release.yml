@@ -28,7 +28,7 @@ jobs:
       matrix:
         # `image` carries its own keys through `include`; `platform` is a dimension. Two
         # `include`s that add the same key to every combination would overlap.
-        image: [api, orchestrator, tools, web, runner]
+        image: [api, orchestrator, tools, web, runner, laya]
         platform: [amd64, arm64]
         include:
           - { image: api, file: docker/api.Dockerfile, target: api }
@@ -36,6 +36,7 @@ jobs:
           - { image: tools, file: docker/tools.Dockerfile, target: "" }
           - { image: web, file: docker/web.Dockerfile, target: "" }
           - { image: runner, file: docker/runner.Dockerfile, target: "" }
+          - { image: laya, file: docker/laya.Dockerfile, target: "" }
     env:
       IMAGE: ghcr.io/vargafoundation/choregos-${{ matrix.image }}
     steps:
@@ -84,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, orchestrator, tools, web, runner]
+        image: [api, orchestrator, tools, web, runner, laya]
     env:
       IMAGE: ghcr.io/vargafoundation/choregos-${{ matrix.image }}
     steps:

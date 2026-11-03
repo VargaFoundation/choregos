@@ -83,7 +83,7 @@ def _aware(moment: datetime) -> datetime:
     return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
-async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
+async def _principal_from_user(session: AsyncSession, user: User, *, narrow: bool = True) -> Principal:
     # L'identité se résout en portée de PLATEFORME, puis la session est bornée plus bas. Sans cette
     # ligne, la jointure sur `projects` (sous RLS) ne voyait aucun projet sur PostgreSQL : une
     # appartenance DE PROJET arrivait avec `project_slug = None`, et devenait un rôle sur TOUTE
@@ -118,9 +118,18 @@ async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
     # La session de CETTE requête ne voit que les organisations du principal : c'est ici
     # que la RLS s'arme, parce que c'est ici qu'on sait qui parle.
     orgs = set(org_roles) | {qualified.split("/", 1)[0] for qualified in project_roles}
-    await limiter_aux_organisations(session, sorted(orgs))
-    await nommer_l_utilisateur(session, user.id)
+    if narrow:
+        await limiter_aux_organisations(session, sorted(orgs))
+        await nommer_l_utilisateur(session, user.id)
     return principal
+
+
+async def principal_for_user(session: AsyncSession, user: User, *, narrow: bool = True) -> Principal:
+    """The principal of a known user, for code that acts on their behalf outside a sign-in.
+
+    `narrow=False` leaves the session's scope and attribution untouched: a webhook that handles several
+    events must not end up scoped to, or attributed to, the first member it resolved (S47-14)."""
+    return await _principal_from_user(session, user, narrow=narrow)
 
 
 def jeton_rest(token: ApiToken) -> bool:

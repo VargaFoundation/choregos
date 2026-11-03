@@ -497,6 +497,26 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class TrackerIdentity(Base, PkMixin, TimestampMixin):
+    """A member's account on a tracker, by the provider's stable numeric user id (S47-14, ADR 0102).
+
+    Linked by an organisation administrator (not proven by the member). A login or a display name is
+    never matched: only `external_id`. `login` is shown, nothing more."""
+
+    __tablename__ = "tracker_identities"
+    __table_args__ = (
+        UniqueConstraint("org_id", "tracker", "external_id", name="uq_tracker_identities_external"),
+        UniqueConstraint("org_id", "user_id", "tracker", name="uq_tracker_identities_member"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    tracker: Mapped[str] = mapped_column(String(16))
+    external_id: Mapped[str] = mapped_column(String(64))
+    login: Mapped[str] = mapped_column(String(255))
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+
 class A2aPushConfig(Base, PkMixin, TimestampMixin):
     """A URL an A2A client registered to hear of a task (ADR 0078 §5, S40-23d).
 
@@ -635,15 +655,33 @@ class ReceivedEvent(Base, PkMixin):
         ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True
     )
     work_item_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    #: `jira`, `github`, `gitlab`, `tekton`, `argocd`, `alertmanager`, `plugin:<plugin>/<server>`
+    #: `jira`, `github`, `gitlab`, `tekton`, `argocd`, `alertmanager`, `plugin:<plugin>/<server>`,
+    #: `trigger:<name>` (S56-01), `schedule:<name>`
     source: Mapped[str] = mapped_column(String(160))
     event_type: Mapped[str] = mapped_column(String(80))
     delivery_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     #: `created_work_item`, `started`, `signalled`, `boarded`, `labels_updated`,
-    #: `ignored_no_item_key` or `ignored_not_agent_ready`
+    #: `ignored_no_item_key`, `ignored_not_agent_ready`, `already_open` or `refused` (S56-01)
     outcome: Mapped[str] = mapped_column(String(32))
     summary: Mapped[str] = mapped_column(String(300), default="")
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TriggerToken(Base, PkMixin):
+    """The token of a project's HTTP trigger (S56-01, ADR 0113): its SHA-256, never the token.
+
+    The trigger itself is declared in the project's configuration (`triggers:`); this row is what a
+    caller must prove. Minting a new one replaces the old: one token per trigger, shown once."""
+
+    __tablename__ = "trigger_tokens"
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_trigger_tokens_project_name"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(63))
+    token_sha256: Mapped[str] = mapped_column(String(64))
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class DecisionRecordRow(Base, PkMixin):

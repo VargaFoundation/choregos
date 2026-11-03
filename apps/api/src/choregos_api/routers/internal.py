@@ -26,6 +26,7 @@ from choregos_contracts import (
     artifact_digest,
 )
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
+from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import func, select
 
@@ -35,7 +36,6 @@ from ..config import get_settings
 from ..db.models import (
     AgentSessionRecord,
     CostLedger,
-    HumanRequest,
     Organization,
     Project,
     Run,
@@ -61,7 +61,14 @@ from ..schemas import (
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..schemas.memory import RunMemoryHit, RunMemorySearch
 from ..schemas.network import EgressToken, NetworkDecisionBatch, RunNetwork
-from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch, web_search
+from ..services import (
+    effective_policy,
+    new_human_request,
+    persist_event,
+    ranger_les_sorties,
+    web_fetch,
+    web_search,
+)
 from ..services.agent_hosted_sessions import session_network
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -329,6 +336,15 @@ async def post_scope_change(
         return ScopeChangeDecision(
             decision="granted", allowed_paths=current, reason="already within the scope"
         )
+    if is_read_only_scope(run.allowed_paths):
+        # An agent that declares `workspace: read` (ADR 0119) never widens its scope: neither the
+        # policy's automatic grant nor a human turns a read into a write.
+        return ScopeChangeDecision(
+            decision="denied",
+            allowed_paths=current,
+            reason="the agent declares a read-only workspace (`workspace: read`): it writes no file "
+            "of the repository; publish a version with `workspace: write` to change code",
+        )
     if any(engine.path_denied(p) for p in new_paths):
         return ScopeChangeDecision(
             decision="denied",
@@ -341,13 +357,12 @@ async def post_scope_change(
         item.allowed_paths = granted
         return ScopeChangeDecision(decision="granted", allowed_paths=granted, reason="granted automatically")
 
-    request_row = HumanRequest(
+    request_row = new_human_request(
         work_item_id=item.id,
         project_id=project.id,
         transition_id=run.transition_id,
         kind="scope_change",
         payload={"paths": new_paths, "justification": body.justification, "run_id": run.id},
-        requested_at=utcnow(),
     )
     session.add(request_row)
     await session.flush()
@@ -368,13 +383,12 @@ async def post_scope_change(
 async def post_question(id: str, body: QuestionIn, session: Db, claims: RunAuth) -> dict[str, str]:
     """L'agent demande un arbitrage : le run devra se terminer en `needs_human`."""
     run, item, project = await _run_and_item(session, id)
-    request_row = HumanRequest(
+    request_row = new_human_request(
         work_item_id=item.id,
         project_id=project.id,
         transition_id=run.transition_id,
         kind="question",
         payload={"question": body.text, "options": body.options, "run_id": run.id},
-        requested_at=utcnow(),
     )
     session.add(request_row)
     await session.flush()
@@ -895,7 +909,9 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         raise conflict("result already posted for this run")
     from ..services.courtier import outils_du_courtier
 
-    du_catalogue = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
+    du_catalogue = outils_du_projet(
+        _outils_autorises(project), _groupes_du_projet(project), include_writers=True
+    )
     outil = next((o for o in du_catalogue if o.name == name), None)
     des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
     du_courtier = await outils_du_courtier(session, run, project)
@@ -941,6 +957,19 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             session, run, project, SimpleNamespace(nom=name), code, corps
         )
     elif outil is not None:
+        if outil.may_write:
+            detail = (
+                f"catalogue tool `{name}` may write (an http POST or a remote MCP tool) and catalogue "
+                "calls are not governed actions: the deployment marks it `read_only: true` if it only "
+                "reads, or the organisation declares the server as an MCP connector, whose writes are "
+                "governed (ADR 0034)"
+            )
+            raise ApiError(
+                status.HTTP_409_CONFLICT,
+                "Catalogue write refused",
+                detail,
+                errors=[{"code": "catalogue_write_refused", "msg": detail}],
+            )
         from ..services.courtier import bounded_payload
 
         code, corps = await appeler_outil(outil, body or {})

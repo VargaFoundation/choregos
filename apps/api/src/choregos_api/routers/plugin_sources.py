@@ -9,13 +9,12 @@ offers to this core. A source whose index cannot be read is listed with the reas
 from __future__ import annotations
 
 from fastapi import APIRouter, status
-from sqlalchemy import select
 
-from ..db.models import Organization
 from ..deps import Db, Me
-from ..errors import ApiError, forbidden, not_found
+from ..errors import ApiError, forbidden
 from ..rbac import Permission
 from ..schemas.plugin_sources import PluginSourcesDto
+from ..services.organisations import organisation_by_slug
 from ..services.plugin_sources import SourceError, list_sources, plugins_config
 
 router = APIRouter(tags=["agents"])
@@ -25,9 +24,7 @@ router = APIRouter(tags=["agents"])
 async def list_plugin_sources(org: str, session: Db, principal: Me) -> PluginSourcesDto:
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"reading the plugin sources of {org} requires being a member of it")
-    found = (await session.execute(select(Organization.id).where(Organization.slug == org))).first()
-    if found is None:
-        raise not_found("Organisation", org)
+    await organisation_by_slug(session, org)
     try:
         config = plugins_config()
     except SourceError as exc:

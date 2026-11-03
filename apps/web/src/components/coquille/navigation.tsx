@@ -237,9 +237,17 @@ export function isIdentitySection(section: { icon?: AdminSection["icon"] }): boo
   return !!section.icon && IDENTITY_ICONS.includes(section.icon);
 }
 
-/** The administration's sections: the core's screens, then one per section a plugin declares (ADR 0032). */
+/**
+ * The administration's sections: the core's screens, then one per section a plugin declares (ADR 0032),
+ * in two groups (owner review of 2026-11-03). What one organisation administers comes first; what spans
+ * the whole instance (every organisation, the deployment) is its own group, so a platform
+ * administrator does not read the list of every tenant as a page of their organisation. A section of
+ * scope `platform` is only served to a platform administrator (`/ui/admin-sections`), so an
+ * organisation administrator of a shared instance sees the instance group with the core's read-only
+ * pages alone.
+ */
 export function adminGroups(
-  pluginSections: { id: string; title: string; icon?: AdminSection["icon"] }[] = [],
+  pluginSections: { id: string; title: string; icon?: AdminSection["icon"]; scope?: AdminSection["scope"] }[] = [],
 ): NavGroup[] {
   const page = (href: string, label: string, icon: LucideIcon): NavEntry => ({
     href,
@@ -247,6 +255,8 @@ export function adminGroups(
     icon,
     active: (pathname: string) => pathname === href,
   });
+  const plugin = (s: { id: string; title: string; icon?: AdminSection["icon"] }) => page(`/admin/x/${s.id}`, s.title, sectionIcon(s.icon));
+  const shown = pluginSections.filter((s) => !isIdentitySection(s));
   return [
     {
       title: "Administration",
@@ -259,11 +269,15 @@ export function adminGroups(
         page("/admin/egress", "Network", Globe),
         page("/admin/identity", "Identity", Fingerprint),
         page("/admin/audit", "Audit", ScrollText),
+        ...shown.filter((s) => s.scope !== "platform").map(plugin),
+      ],
+    },
+    {
+      title: "Instance (all organisations)",
+      entries: [
         page("/admin/platform", "Platform", Server),
         page("/admin/edition", "Edition", BadgeCheck),
-        ...pluginSections
-          .filter((s) => !isIdentitySection(s))
-          .map((s) => page(`/admin/x/${s.id}`, s.title, sectionIcon(s.icon))),
+        ...shown.filter((s) => s.scope === "platform").map(plugin),
       ],
     },
   ];
@@ -299,6 +313,13 @@ const PAGES_OF_A_SECTION: Record<string, string> = {
   "/workflows/catalogue": "Library",
   "/workflows/library": "Library",
   "/workflows/new": "New workflow",
+  // The settings' groups (S55-07, `components/project-settings/groups.tsx`).
+  "/settings/general": "General",
+  "/settings/connections": "Connections",
+  "/settings/agents": "Agents",
+  "/settings/security": "Guardrails",
+  "/settings/people": "People",
+  "/settings/danger": "Danger zone",
 };
 
 /** The section a project path is in, with its family's hue: what a page's header shows (S55-02). */
@@ -457,7 +478,8 @@ export function ListeDeNavigation({
     <>
       <ScopeHeader scope={scope} compact={barre} rail={rail} />
       {groups.map((groupe) => {
-        const idTitre = `${id}-${groupe.title}`;
+        // A title may hold spaces, and `aria-labelledby` reads a space as two ids.
+        const idTitre = `${id}-${groupe.title.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
         return (
           <div key={groupe.title} className={barre ? "mb-3" : "mt-4"}>
             {/* A caption, not a heading: the page carries its only h1 and its sections. */}

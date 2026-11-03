@@ -55,9 +55,15 @@ from ..services import (
     workflow_actif,
 )
 from ..services.decision_ledger import step_calibration as measure_step
-from ..services.definitions import CEILING_KEY, ceiling_of, policy_model
+from ..services.definitions import CEILING_KEY, ceiling_of, policy_engine, policy_model
 from ..services.llm_routing import book
+from ..services.memory_policy import (
+    active_workflows_of,
+    log_memory_disabled_warnings,
+    memory_disabled_warnings,
+)
 from ..services.network import project_effective_network
+from ..services.organisations import organisation_by_slug
 from ..services.routage import Naissance, route
 
 router = APIRouter(tags=["workflows"])
@@ -127,6 +133,14 @@ async def validate_for_project(
     workflow, _ = parse_workflow(source, strict=False)
     known = await groups_known_in(session, ctx.project.org_id)
     validation.warnings += [WorkflowIssue(**issue) for issue in unknown_group_warnings(workflow, known)]
+    # An agent that asks for memory the project's policy disables gets none: said, not refused (S51-01).
+    engine = await policy_engine(session, ctx.id)
+    for issue in await memory_disabled_warnings(
+        session, ctx.project.org_id, [workflow], memory_enabled=engine.memory_enabled()
+    ):
+        validation.warnings.append(
+            WorkflowIssue(code=issue["code"], message=issue["message"], path=issue["path"])
+        )
     return validation
 
 
@@ -613,6 +627,16 @@ async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto
         )
     # The network warnings stay logged: they are not refused.
     signaler_ce_que_la_politique_n_applique_pas(policy, ctx.project.slug)
+    # Turning memory off under workflows whose agents ask for it: said, never refused (S51-01).
+    log_memory_disabled_warnings(
+        await memory_disabled_warnings(
+            session,
+            ctx.project.org_id,
+            await active_workflows_of(session, ctx.id),
+            memory_enabled=policy.memory.enabled,
+        ),
+        ctx.project.slug,
+    )
     current = await active_policy(session, ctx.id)
     version = policy.metadata.version
     if current is not None and current.version >= version:
@@ -657,21 +681,16 @@ def _ceiling_dto(organisation: Organization) -> PolicyCeilingDto:
     )
 
 
-async def _organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
+async def _member_organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
     if principal.org_roles.get(org) is None:
         raise forbidden(f"reading the policy ceiling of {org} requires being a member of it")
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", org)
-    return organisation
+    return await organisation_by_slug(session, org)
 
 
 @router.get("/orgs/{org}/policy-ceiling", response_model=PolicyCeilingDto, operation_id="getPolicyCeiling")
 async def get_policy_ceiling(org: str, session: Db, principal: Me) -> PolicyCeilingDto:
     """The caps every project policy of the organisation stays under (S27-05)."""
-    return _ceiling_dto(await _organisation(session, principal, org))
+    return _ceiling_dto(await _member_organisation(session, principal, org))
 
 
 @router.put("/orgs/{org}/policy-ceiling", response_model=PolicyCeilingDto, operation_id="putPolicyCeiling")
@@ -680,7 +699,7 @@ async def put_policy_ceiling(
 ) -> PolicyCeilingDto:
     """Sets the ceiling (`org_admin`). A project policy already above it is not refused: the policy
     that runs is clamped to it, and the project's policy page says what was clamped."""
-    organisation = await _organisation(session, principal, org)
+    organisation = await _member_organisation(session, principal, org)
     if principal.org_roles.get(org) != Role.ORG_ADMIN:
         raise forbidden("setting the policy ceiling needs the org_admin role")
     settings = dict(organisation.settings or {})

@@ -111,6 +111,7 @@ test("findings : triage disponible", async ({ page }) => {
 
 test("wizard : validation du slug avant de continuer", async ({ page }) => {
   await page.goto("/projects/new");
+  await page.getByLabel(/^Software, from a code repository/).check();
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByLabel("Identifier (slug)").fill("Billing API");
   await expect(page.getByText("Lowercase letters, digits and dashes only")).toBeVisible();
@@ -225,8 +226,11 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await expect(page.getByTestId("workflow-card-hotfix")).toContainText("labelled incident");
   await page.getByRole("link", { name: "default-simple" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows\/default-simple$/);
+  // A workflow opens on its graph (S55-06); its steps in words are one tab away.
+  await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
+  await page.getByRole("link", { name: "Steps" }).click();
   await expect(page.getByTestId("process-step-t-implement")).toContainText("the agent stayed within its allowed paths");
-  await page.getByRole("link", { name: "Map" }).click();
+  await page.getByRole("link", { name: "Graph" }).click();
   // La carte s'ouvre en serpentin (S22-05) ; la liste à plat est à un onglet.
   await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
   await page.getByRole("button", { name: "List" }).click();
@@ -245,7 +249,7 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
 });
 
 test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map?vue=list");
+  await page.goto("/p/billing-api/workflows/default-simple?view=list");
   const carte = page.getByTestId("workflow-graph");
   await carte.getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
@@ -260,14 +264,14 @@ test("workflows : un libellé changé sur la carte se lit dans la vue processus,
   await expect(carte.getByTestId("etat-inbox")).toContainText("Nouvelles demandes");
 
   // La vue processus lit le même brouillon ; publier crée la version suivante de celle qui a été lue.
-  await page.getByRole("link", { name: "Process" }).click();
+  await page.getByRole("link", { name: "Steps" }).click();
   await expect(page.getByTestId("process-step-t-refine")).toContainText("Nouvelles demandes");
   await brouillon.getByRole("button", { name: "Publish v2" }).click();
   await expect(brouillon.getByRole("status")).toHaveText("default-simple v2 published — running items finish on their version");
 });
 
 test("workflows : la vue processus ouvre le panneau d'une étape, son délai prérempli", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple");
+  await page.goto("/p/billing-api/workflows/default-simple/steps");
   await page.getByRole("button", { name: "Edit t-refine" }).click();
   const panneau = page.getByTestId("panneau-transition");
   await expect(panneau).toBeVisible();
@@ -499,7 +503,7 @@ test("agents : un agent externe montre son client, et un projet ses agents impli
 });
 
 test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un secret en référence", async ({ page }) => {
-  await page.goto("/p/billing-api/settings");
+  await page.goto("/p/billing-api/settings/connections");
   const connecteurs = page.getByTestId("connecteurs");
   // Billing API livre du logiciel : un dépôt et une CI, chacun avec sa raison.
   await expect(page.getByTestId("connecteur-scm")).toContainText("Not connected");
@@ -529,7 +533,7 @@ test("connecteurs de l'organisation : chaque opération porte sa politique ; un 
   await expect(page.getByLabel("Policy of create_account")).toHaveValue("approval");
   await expect(page.getByLabel("Project groups of create_account")).toHaveValue("hr");
 
-  await page.goto("/p/billing-api/settings");
+  await page.goto("/p/billing-api/settings/security");
   const projet = page.getByTestId("operations-du-projet");
   await expect(projet).toContainText("read_user");
   // `create_account` est `approval` dans l'organisation : le choix ne propose pas `allowed`.
@@ -620,7 +624,7 @@ test("mise en route : un projet neuf dit ce qui lui manque ; un projet qui tourn
   await expect(page.getByTestId("etape-connector-cd")).toContainText("demo is a stand-in");
   await expect(page.getByTestId("etape-people-release-captain")).toContainText("(to do)");
   await page.getByTestId("etape-connector-cd").getByRole("link", { name: "Fix" }).click();
-  await expect(page).toHaveURL(/\/p\/checkout-web\/settings#connections$/);
+  await expect(page).toHaveURL(/\/p\/checkout-web\/settings\/connections#connections$/);
 
   await page.goto("/p/billing-api");
   await expect(page.getByText("PRs merged on first pass")).toBeVisible();

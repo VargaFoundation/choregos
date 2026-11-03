@@ -80,7 +80,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
           rule it matches, else the default — and stays pinned to that version until it ends.
         </p>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/p/${slug}/workflows/catalogue`} className={buttonClasses("secondary", "sm")}>
+          <Link href={`/p/${slug}/workflows/library`} className={buttonClasses("secondary", "sm")}>
             Browse the catalogue
           </Link>
           <Link href={`/p/${slug}/workflows/new`} className={buttonClasses("secondary", "sm")}>

@@ -37,3 +37,12 @@ pull request; renaming `deployed_prod` lifted the production lock. The typed edi
   connector requirements read the effect, not the name (`scm` for a transition that opens or
   merges, `cd` for a production state).
 - A future effect of the platform is a new value of `does`, not a new magic prefix.
+
+## Amendment (S51-11): how an effect is done
+
+An effect's options sit next to it, under a key named for what it acts on, not as new values of
+`does`. `pull_request: { draft: true }` on a transition that opens the pull request (`does: open_pr`,
+or a name that implies it) opens it as a draft. A pull request already open keeps its state. Any
+other transition carrying `pull_request:` is refused (`transition.pull_request_without_open_pr`).
+The interpreter adds `draft` to the activity's input only when it is asked for, so a workflow that
+does not ask schedules the same input as before.

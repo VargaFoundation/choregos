@@ -34,6 +34,7 @@ import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
 import { NO_TOOL_LABEL } from "@/lib/mcp-tools";
+import { WORKSPACE_LABELS, type Workspace } from "@/lib/workspace";
 import type {
   Agent,
   AgentNetwork,
@@ -139,6 +140,8 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     evals: (spec.evals ?? []).filter((c) => c.name.trim()),
     // Nothing written is the default: the API keeps the version's digest as it was.
     network: isDefaultNetwork(spec.network) ? undefined : spec.network,
+    // Left unsaid, a run writes as before and the digest does not move (S51-03, ADR 0119).
+    workspace: spec.workspace ?? undefined,
   };
 }
 
@@ -541,6 +544,8 @@ export function AgentBuilder({
             )}
           </div>
         </Disclosure>
+
+        <WorkspaceSection spec={spec} set={set} summary={summaries.workspace} defaultOpen={opened.workspace} />
 
         <SkillsSection library={library.data ?? []} spec={spec} set={set} summary={summaries.skills} defaultOpen={opened.skills} />
 
@@ -1033,6 +1038,53 @@ function McpSection({
           .
         </p>
       )}
+    </Disclosure>
+  );
+}
+
+/**
+ * The workspace a run of this agent gets (S51-03, ADR 0119). The repository is the project's: the agent
+ * only says whether it needs none of it, needs to read it, or edits it.
+ */
+function WorkspaceSection({
+  spec,
+  set,
+  summary,
+  defaultOpen,
+}: {
+  spec: AgentSpec;
+  set: (patch: Partial<AgentSpec>) => void;
+  summary: string;
+  defaultOpen: boolean;
+}) {
+  const choices: [Workspace | "default", string][] = [
+    ["default", `The default: ${WORKSPACE_LABELS.write}`],
+    ["none", WORKSPACE_LABELS.none],
+    ["read", WORKSPACE_LABELS.read],
+    ["write", WORKSPACE_LABELS.write],
+  ];
+  const current = spec.workspace ?? "default";
+  return (
+    <Disclosure title="Workspace" summary={summary} defaultOpen={defaultOpen}>
+      <p className="text-xs text-ink-muted">
+        The repository comes from the project that runs the agent. With none, nothing is cloned and the repository&apos;s
+        host is not on the run&apos;s network; with read, the run clones it and may write only its deliverables.
+      </p>
+      <fieldset className="space-y-1.5" data-testid="agent-workspace-mode">
+        <legend className="text-xs font-medium text-ink-muted">Repository</legend>
+        {choices.map(([value, label]) => (
+          <label key={value} className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="agent-workspace"
+              value={value}
+              checked={current === value}
+              onChange={() => set({ workspace: value === "default" ? null : value })}
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
     </Disclosure>
   );
 }

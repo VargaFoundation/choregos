@@ -6,7 +6,7 @@
   `POST /projects/{id}/workflow-adoptions`, the optional `metadata.catalogue` block of
   `workflow.schema.json` (contract-change), `workflow_defs.source` and `origin`, the table
   `org_workflows`, the readiness item `workflow-catalogue`, the console's
-  `/p/<slug>/workflows/catalogue` and the project wizard; builds on
+  `/p/<slug>/workflows/library` (`/workflows/catalogue` until S55-04) and the project wizard; builds on
   [ADR 0031](0031-several-workflows-per-project.md), [ADR 0036](0036-a-template-ships-what-a-plugin-installs.md),
   [ADR 0040](0040-a-built-in-agent-catalogue.md), [ADR 0062](0062-remote-agents-over-a2a.md),
   [ADR 0074](0074-catalogue-rights.md) and [ADR 0093](0093-an-agent-ships-as-a-plugin.md)

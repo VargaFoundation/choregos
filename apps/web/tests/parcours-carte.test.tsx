@@ -20,14 +20,14 @@ vi.mock("@/lib/sse", () => ({ useEventStream: () => ({ events: [], connected: fa
 
 const MAINTENANT = Date.parse("2026-10-08T12:00:00Z");
 
-function rendre(journey: WorkItemJourney = parcoursEnCours(MAINTENANT)) {
+function rendre(journey: WorkItemJourney = parcoursEnCours(MAINTENANT), decisionAnchor?: string) {
   vi.mocked(api.runEvents).mockResolvedValue(runEvents);
   vi.mocked(api.runAccess).mockResolvedValue(runAccess);
   vi.mocked(api.runDiff).mockResolvedValue(runDiff as never);
   vi.mocked(api.decide).mockResolvedValue({});
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <CarteDuParcours journey={journey} slug="billing-api" itemId={journey.work_item_id} />
+      <CarteDuParcours journey={journey} slug="billing-api" itemId={journey.work_item_id} decisionAnchor={decisionAnchor} />
     </QueryClientProvider>,
   );
 }
@@ -140,6 +140,15 @@ describe("la carte animée du parcours (S22-02)", () => {
     expect(panneau).toHaveTextContent("Decide here");
     fireEvent.click(within(panneau).getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(api.decide).toHaveBeenCalledWith("w2", { kind: "approve" }));
+  });
+
+  it("leads to the page's decision instead of offering a second one when the page shows it (S55-05)", () => {
+    rendre(parcoursEnAttente(MAINTENANT), "decision");
+    fireEvent.click(screen.getByTestId("etape-t-approve-spec"));
+    const panneau = screen.getByTestId("panneau-parcours");
+    expect(within(panneau).getByTestId("decision-elsewhere")).toBeInTheDocument();
+    expect(within(panneau).getByRole("link", { name: "Go to the decision" })).toHaveAttribute("href", "#decision");
+    expect(within(panneau).queryByRole("button", { name: "Approve" })).toBeNull();
   });
 
   it("un ticket fini : tout est fait, la fin est atteinte, la CI rouge et sa réparation se voient", () => {

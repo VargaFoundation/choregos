@@ -9,12 +9,13 @@ import { Alert, Badge, Button, Card, Disclosure, Field, Select, buttonClasses } 
 import { normalizeSpec } from "@/lib/agent-diff";
 import { orgConnectorHref } from "@/lib/connector-link";
 import { toolsLabel } from "@/lib/mcp-tools";
-import { networkSummary } from "@/lib/network";
+import { networkMode, networkSummary } from "@/lib/network";
 import { api } from "@/lib/api";
 import { canEdit, currentVersion, previousVersion, productionVersion, sortedVersions, versionOf } from "@/lib/agent-versions";
 import { relative, usd } from "@/lib/format";
 import { describe, effectiveBindings, writesTo } from "@/lib/memories";
 import type { Agent, AgentSpec, AgentVersion } from "@/lib/types";
+import { workspaceLine } from "@/lib/workspace";
 import { AgentDetailsCard } from "./details";
 import { RestoreDialog } from "./history";
 import { RuntimeRow } from "./runtime-row";
@@ -30,7 +31,7 @@ import { sectionSummaries } from "./spec-summary";
 /** Lines of instructions shown before "Show all". */
 export const INSTRUCTION_LINES = 12;
 
-const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network"]);
+const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network", "workspace"]);
 
 const here = (slug: string, query: string) => `/agents/${slug}?${query}`;
 
@@ -183,9 +184,71 @@ function VersionBar({ agent, shown }: { agent: Agent; shown: AgentVersion }) {
   );
 }
 
+/** The section of a project's settings page that sets what an agent leaves to its project. */
+export type ProjectSettingsSection = "agents-models" | "network" | "tools";
+
+/**
+ * A value the agent leaves to the project that runs it, as a link to where it is set (owner review
+ * of 2026-11-03: "The project's profile" was a dead end). A project agent has one project, so the link
+ * goes to that section of its settings; an organisation agent runs in any project, so it says so and
+ * points at the projects, plus the organisation-wide page that bounds the value when there is one.
+ */
+export function ProjectSetting({
+  agent,
+  section,
+  children,
+  organisation,
+}: {
+  agent: Pick<Agent, "scope" | "project"> | undefined;
+  section: ProjectSettingsSection;
+  children: ReactNode;
+  organisation?: { href: string; label: string };
+}) {
+  const project = agent?.scope === "project" ? agent.project : null;
+  const also = organisation && (
+    <>
+      {" "}
+      <span className="text-ink-muted">
+        {"\u00b7"}{" "}
+        <Link href={organisation.href} className="underline">
+          {organisation.label}
+        </Link>
+      </span>
+    </>
+  );
+  if (project) {
+    return (
+      <span data-testid={`inherited-${section}`}>
+        <Link href={`/p/${project}/settings#${section}`} className="underline">
+          {children}
+        </Link>
+        <span className="text-ink-muted"> ({project})</span>
+        {also}
+      </span>
+    );
+  }
+  return (
+    <span data-testid={`inherited-${section}`}>
+      {children}{" "}
+      <span className="text-ink-muted">
+        {"\u2014"} set in{" "}
+        <Link href="/" className="underline">
+          each project&apos;s settings
+        </Link>
+      </span>
+      {also}
+    </span>
+  );
+}
+
 /** The MCP connectors an agent version may call, each a link to its card (owner review of 2026-10-28). */
-export function AgentMcpServers({ servers }: { servers: NonNullable<AgentSpec["mcp_servers"]> }) {
-  if (servers.length === 0) return <>Those of the platform (or of its human)</>;
+export function AgentMcpServers({ servers, agent }: { servers: NonNullable<AgentSpec["mcp_servers"]>; agent?: Pick<Agent, "scope" | "project"> }) {
+  if (servers.length === 0)
+    return (
+      <ProjectSetting agent={agent} section="tools" organisation={{ href: "/catalogue/mcp-servers", label: "MCP servers" }}>
+        Those of the platform (or of its human)
+      </ProjectSetting>
+    );
   return (
     <ul>
       {servers.map((s) => (
@@ -243,7 +306,13 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
 
         <Disclosure title="Model and runtime" summary={summaries.model}>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-            <Row label="Model">{spec.model ?? "The project's profile"}</Row>
+            <Row label="Model">
+              {spec.model ?? (
+                <ProjectSetting agent={agent} section="agents-models" organisation={{ href: "/admin/models", label: "Organisation tiers" }}>
+                  The project&apos;s profile
+                </ProjectSetting>
+              )}
+            </Row>
             {spec.runtime?.kind === "code" ? (
               <Row label="Runtime">
                 <CodeRuntimeRow runtime={spec.runtime} />
@@ -253,16 +322,28 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
                 <RuntimeRow runtime={spec.runtime} />
               </Row>
             ) : (
-              <Row label="Backend">{spec.backend ?? "The project's"}</Row>
+              <Row label="Backend">
+                {spec.backend ?? (
+                  <ProjectSetting agent={agent} section="agents-models">
+                    The project&apos;s
+                  </ProjectSetting>
+                )}
+              </Row>
             )}
           </dl>
         </Disclosure>
 
         <Disclosure
           title="Capabilities"
-          summary={`skills ${summaries.skills} · tools ${summaries.tools} · knowledge ${summaries.knowledge} · memory ${summaries.memory}`}
+          summary={`workspace ${summaries.workspace} · skills ${summaries.skills} · tools ${summaries.tools} · knowledge ${summaries.knowledge} · memory ${summaries.memory}`}
         >
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+            <Row label="Workspace">
+              <span data-testid="agent-workspace-line">{workspaceLine(spec)}</span>
+              <span className="block text-xs text-ink-muted" data-testid="agent-repository-source">
+                The repository comes from the project that runs the agent, never from the agent.
+              </span>
+            </Row>
             <Row label="Skills">
               {(spec.skills ?? []).length === 0
                 ? "None"
@@ -274,7 +355,7 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
                   ))}
             </Row>
             <Row label="Tools">
-              <AgentMcpServers servers={spec.mcp_servers ?? []} />
+              <AgentMcpServers servers={spec.mcp_servers ?? []} agent={agent} />
             </Row>
             <Row label="Knowledge">
               {(spec.knowledge ?? []).length === 0 ? "None" : (spec.knowledge ?? []).map((k) => k.slug).join(", ")}
@@ -288,7 +369,15 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
         <Disclosure title="Network access" summary={summaries.network}>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
             <Row label="Network">
-              <span data-testid="agent-network-line">{networkSummary(spec.network)}</span>
+              <span data-testid="agent-network-line">
+                {networkMode(spec.network) === "project" ? (
+                  <ProjectSetting agent={agent} section="network">
+                    {networkSummary(spec.network)}
+                  </ProjectSetting>
+                ) : (
+                  networkSummary(spec.network)
+                )}
+              </span>
             </Row>
           </dl>
         </Disclosure>

@@ -246,7 +246,21 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
         if result.status == StageStatus.DONE and project is not None and run.backend != JOB_BACKEND:
             await _record_declared_confidences(session, project, item, run, result, declarees)
         recorded = await _persist_findings(session, run, item, result)
-        return {"recorded": True, "status": run.status, "findings": recorded}
+        outcome = {"recorded": True, "status": run.status, "findings": recorded}
+    if outcome["status"] == "failed":
+        await _keep_the_lesson(payload["run_id"])
+    return outcome
+
+
+async def _keep_the_lesson(run_id: str) -> None:
+    """A failed run's lesson goes to memory now (S51-02), once (`run:<id>`). Best effort: memory never
+    blocks a stage (ADR 0007); the memory loop's `run_lessons` source catches a missed one up."""
+    from .memory import keep_the_lesson_of_a_failed_run
+
+    try:
+        await keep_the_lesson_of_a_failed_run(run_id)
+    except Exception as error:
+        logger.warning("lesson of a failed run not kept", run_id=run_id, error=str(error)[:300])
 
 
 async def _record_declared_confidences(

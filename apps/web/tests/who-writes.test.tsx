@@ -63,8 +63,22 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
     expect(card).toHaveTextContent("Choregos writes to Jira as bot@acme.example");
     expect(within(card).getByRole("link", { name: "tracker connector" })).toHaveAttribute(
       "href",
-      "/p/yyy/settings#connections",
+      "/p/yyy/settings/connections",
     );
+  });
+
+  it("a work item filed from the tracker says who filed it and who created it (S51-04)", () => {
+    const tracker = {
+      kind: "jira",
+      reporter: { account_id: "712020:aa", display_name: "Camille Martin", email: null },
+      creator: { account_id: "557058:bot", display_name: "Portal", email: "portal@acme.example" },
+    };
+    const { rerender } = render(<TrackerCard slug="yyy" tracker={jira} fields={{ tracker }} />);
+    expect(screen.getByTestId("filed-by")).toHaveTextContent("Filed by Camille Martin");
+    expect(screen.getByTestId("created-by")).toHaveTextContent("Created in the tracker by Portal (portal@acme.example)");
+    rerender(<TrackerCard slug="yyy" tracker={jira} fields={{ project_name: "x" }} />);
+    expect(screen.queryByTestId("filed-by")).toBeNull();
+    expect(screen.queryByTestId("created-by")).toBeNull();
   });
 
   it("a work item on the internal tracker says nothing is written elsewhere", () => {

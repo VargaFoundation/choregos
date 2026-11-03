@@ -6,6 +6,7 @@ import { Circle, CircleCheck, CircleDot } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
+import { localHref } from "@/components/project-settings/readiness-panel";
 
 const ICON = {
   done: { Icon: CircleCheck, tone: "text-ok", words: "done" },
@@ -45,7 +46,7 @@ export function MiseEnRoute({ slug }: { slug: string }) {
                 <span className="block text-xs text-ink-muted">{item.detail}</span>
               </span>
               {item.state !== "done" && item.fix.href && (
-                <Link href={item.fix.href} className="shrink-0 text-xs">
+                <Link href={localHref(item.fix.href, slug)} className="shrink-0 text-xs">
                   Fix
                 </Link>
               )}

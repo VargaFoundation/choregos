@@ -53,7 +53,8 @@ from ..services.artifacts import (
 )
 from ..services.human_groups import decider_group_verdict, group_of_the_step
 from ..services.recus import passages_du_ticket
-from ..services.routage import valider_les_champs
+from ..services.routage import refuse_reserved_fields, valider_les_champs
+from ..services.work_item_controls import apply_control
 from ..temporal import (
     InterpreterNotRunningError,
     deliver_control,
@@ -151,6 +152,8 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
         raise forbidden("changing the fields of a work item needs at least the developer role")
+    # What the tracker says about the ticket stays the tracker's (S51-04): kept, never written here.
+    refuse_reserved_fields(body.fields)
     workflow = workflow_model(await workflow_du_ticket(session, item))
     champs = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
     valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
@@ -290,6 +293,7 @@ async def _completer_la_tache(
     if attest and not body.attested:
         raise unprocessable(f"the task asks you to attest: “{attest}”")
     workflow = workflow_model(await workflow_du_ticket(session, item))
+    refuse_reserved_fields(body.values)
     champs = {**(item.fields or {}), **body.values}
     valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
     item.fields = champs
@@ -519,6 +523,18 @@ async def _interpreter_not_running(gone: InterpreterNotRunningError, what: str) 
     )
 
 
+async def _control_not_delivered(item: WorkItem, action: str, gone: InterpreterNotRunningError) -> ApiError:
+    if item.created_by == "eval":
+        # An eval item is run by `EvalMatrix` itself and never gets an interpreter (#715).
+        return ApiError(
+            status.HTTP_409_CONFLICT,
+            "Driven by an eval matrix",
+            EVAL_ITEM_HAS_NO_INTERPRETER,
+            errors=[{"code": "driven_by_eval_matrix", "msg": EVAL_ITEM_HAS_NO_INTERPRETER}],
+        )
+    return await _interpreter_not_running(gone, f"the `{action}` action")
+
+
 @router.post(
     "/work-items/{id}/actions", status_code=status.HTTP_202_ACCEPTED, operation_id="postWorkItemAction"
 )
@@ -540,6 +556,14 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
         await get_temporal().start_interpreter(workflow_id, payload)
         item.temporal_wf_id = workflow_id
     else:
+        if body.action in {"pause", "resume", "stop"}:
+            try:
+                await apply_control(
+                    session, principal, project, item, org_slug, body.action, body.reason, None
+                )
+            except InterpreterNotRunningError as gone:
+                raise await _control_not_delivered(item, body.action, gone) from gone
+            return {"status": "accepted", "action": body.action}
         if body.action == "rerun_stage":
             await _grant_top_up(session, principal, project, item, body.top_up_usd)
         cible = await _cible_de_migration(session, item, project, body) if body.action == "migrate" else None
@@ -555,19 +579,7 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
         try:
             await deliver_control(project.slug, item.tracker_key, control)
         except InterpreterNotRunningError as gone:
-            if item.created_by == "eval":
-                # An eval item is run by `EvalMatrix` itself and never gets an interpreter (#715).
-                raise ApiError(
-                    status.HTTP_409_CONFLICT,
-                    "Driven by an eval matrix",
-                    EVAL_ITEM_HAS_NO_INTERPRETER,
-                    errors=[{"code": "driven_by_eval_matrix", "msg": EVAL_ITEM_HAS_NO_INTERPRETER}],
-                ) from gone
-            raise await _interpreter_not_running(gone, f"the `{body.action}` action") from gone
-        if body.action == "pause":
-            item.paused = True
-        elif body.action in {"resume", "stop"}:
-            item.paused = False
+            raise await _control_not_delivered(item, body.action, gone) from gone
 
     await record(
         session,

@@ -47,6 +47,7 @@ streams:
   S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0110-0112)"
   S50: "An agent acts under an identity: assigned, own, on behalf of a person; child agents (ADR 0107)"
   S55: "A console that makes a complex product simple: colour that orients, readable pages (ADR 0120)"
+  S56: "A workflow starts from a trigger: tracker, HTTP, schedule or a person, one audit (ADR 0113)"
 
 stories:
 
@@ -3980,6 +3981,14 @@ stories:
     size: L
     depends_on: [S55-02]
     notes: "Acceptance: /workflows/catalogue redirects to /workflows/library; ?vue becomes ?view; the list no longer re-parses every workflow nor reads the plugin sources on each call; yaml out of the list entry (contract-change)."
+  - id: S55-04b
+    title: "contract(api): a workflow library entry no longer carries its YAML; GET one entry for it"
+    stream: S55
+    sprint: 2
+    priority: 3
+    size: S
+    depends_on: [S55-04]
+    notes: "The list sends every entry's full YAML and the page never reads it."
   - id: S55-05
     title: "feat(web): a ticket reads in five seconds — the next step, the request itself, one decision surface"
     stream: S55
@@ -4085,3 +4094,53 @@ stories:
     size: S
     depends_on: [S52-04]
     notes: "ADR 0121; ADR 0111 catalogue"
+  - id: S52-09
+    title: "feat(api,adapters): the catalogue knows a decision model — `decide` only, no tools, from the gateway's mode"
+    stream: S52
+    sprint: 2
+    priority: 1
+    size: S
+    depends_on: [S52-03]
+    notes: "ADR 0121 §3: LiteLLM lists Jev and Laya as mode `evaluation`; a synced decision model is never an agent's by default"
+
+  # ───────────── S56 — A workflow starts from a trigger (ADR 0113) ─────────────
+  - id: S56-01
+    title: "contract(schemas): HTTP triggers open a work item in a workflow or by routing; triggers and schedules are received events"
+    stream: S56
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "ADR 0113 §1-7, contract-change PR (ADR 0001). Acceptance: a wrong token, a missing key, a refused workflow and an external tracker each refused and recorded; one work item per key; a refusal keeps no dedup row; the routing reads `trigger:<name>`."
+  - id: S56-02
+    title: "feat(web): a project's triggers — URL, token minted once, fire with a sample payload"
+    stream: S56
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S56-01]
+    notes: "ADR 0113 §3, §5."
+  - id: S56-03
+    title: "feat(api): a tracker event starts on a project rule, not only on `agent-ready`"
+    stream: S56
+    sprint: 2
+    priority: 2
+    size: M
+    depends_on: [S56-01]
+    notes: "ADR 0113, ServiceNow two-way. Acceptance: a ServiceNow incident matching the rule starts without a label; an item matching none is recorded `ignored_not_agent_ready` as today."
+  - id: S56-04
+    title: "feat(api): HMAC-signed trigger deliveries"
+    stream: S56
+    sprint: 2
+    priority: 3
+    size: S
+    depends_on: [S56-01]
+    notes: "ADR 0113 Consequences."
+  - id: S56-05
+    title: "contract(schemas): a trigger's `when` filter and the `ignored` outcome"
+    stream: S56
+    sprint: 2
+    priority: 3
+    size: S
+    depends_on: [S56-01]
+    notes: "ADR 0113 Consequences, contract-change PR."

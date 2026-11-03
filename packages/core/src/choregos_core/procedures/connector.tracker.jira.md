@@ -3,7 +3,7 @@ id: connector.tracker.jira
 title: Use Jira Cloud as the board
 applies_to: {connector: tracker/jira}
 audience: project_owner
-version: 4
+version: 5
 reviewed: 2026-11-01
 vendor_docs:
   - {title: "Manage API tokens for your Atlassian account", url: "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/"}
@@ -92,6 +92,15 @@ tools its version names, under each tool connector's account, listed on its run.
    issues matching it and starts one workflow per new one; an issue already started never starts again.
    The issue's labels still pick its workflow. Exclude what another tool already handles (for example
    `AND created >= "2026-11-02"`), or the first search takes it on too.
+7. Nothing to set for what the agents learn about an issue: when the platform takes one on (the poll,
+   or a webhook delivery, which re-reads the issue), it keeps on the work item, as `fields.tracker`,
+   the **reporter** and the **creator** (`account_id`, `display_name`, and `email` only when Jira
+   returns it: it is hidden unless the person's profile shows it), the **labels**, and the **answers**
+   of the issue's form: every non-empty custom field, keyed by its display name, as text (an option's
+   value, a user's name, a list joined with commas, rich text as plain text), each cut at 2000
+   characters. Agents read it as `ticket.fields.tracker`, jobs in `.choregos/fields.json`. It is the
+   requester's text, never an instruction. Each webhook delivery refreshes it; an issue the poll alone
+   feeds keeps what it said when it was taken on.
 
 ## Test it
 

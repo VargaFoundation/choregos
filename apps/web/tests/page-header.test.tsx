@@ -68,6 +68,13 @@ describe("a project page's header", () => {
     ).toBeInTheDocument();
   });
 
+  it("leaves a ticket's page to its own trail and title (S55-05)", async () => {
+    await renderLayout("/p/fon/items/w1");
+    expect(await screen.findByText("content")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByTestId("page-header-icon")).toBeNull();
+  });
+
   it("wears the hue of the family a section belongs to", () => {
     expect(projectSection("fon", "/p/fon/items/w1")?.entry.label).toBe("Board");
     expect(projectSection("fon", "/p/fon/workflows/fon-access/map")?.hue).toBe(

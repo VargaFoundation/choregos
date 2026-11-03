@@ -32,6 +32,7 @@ from choregos_contracts.workflow import (
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
+from ..domain import TRACKER_FIELD
 from ..errors import Issue
 from ..gates import ALREADY_FIXED_GATE, known_gates
 from .dates import champ_de
@@ -158,6 +159,14 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             "inputs.not_object",
             "`metadata.inputs` describes an object: the work item's fields",
             ["metadata", "inputs"],
+            source,
+        )
+    if TRACKER_FIELD in (schema.get("properties") or {}) or TRACKER_FIELD in (schema.get("required") or []):
+        report.error(
+            "inputs.reserved",
+            f"`{TRACKER_FIELD}` is reserved: the platform puts there what the tracker says about the "
+            "ticket (`ticket.fields.tracker`); name the field otherwise",
+            ["metadata", "inputs", "properties", TRACKER_FIELD],
             source,
         )
 
@@ -640,6 +649,17 @@ def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 f"write `does: {implicite}`, so that a rename no longer changes it"
             )
             report.warn("workflow.implicit_effect", message, ["transitions", index, "to"], source)
+        if t.pull_request is not None and (not systeme or effet_de_la_transition(t) != "open_pr"):
+            message = (
+                "`pull_request:` says how the platform opens the pull request: only a `system` transition "
+                "that opens it (`does: open_pr`) carries it"
+            )
+            report.error(
+                "transition.pull_request_without_open_pr",
+                message,
+                ["transitions", index, "pull_request"],
+                source,
+            )
     for nom, etat in wf.states.items():
         if nom.startswith(PREFIXE_PRODUCTION) and not etat.production:
             message = (

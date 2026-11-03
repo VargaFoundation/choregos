@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
-import WorkflowCataloguePage from "@/app/p/[slug]/workflows/catalogue/page";
+import WorkflowCataloguePage from "@/app/p/[slug]/workflows/library/page";
 import { filterEntries, readinessPreview, sourceLabel } from "@/components/workflows/catalogue";
 import { api } from "@/lib/api";
 import type { ConnectorDto, WorkflowCatalogueEntry } from "@/lib/types";
@@ -78,7 +78,7 @@ describe("the workflow catalogue (S49-08, ADR 0111)", () => {
   it("opens on what a project without a repository can run, and adopts as the default", async () => {
     repo = undefined;
     await show();
-    const list = await screen.findByRole("list", { name: "Workflow catalogue" });
+    const list = await screen.findByRole("list", { name: "Workflow library" });
     await within(list).findByText("default-request");
     expect(within(list).queryByText("default-simple")).toBeNull();
     expect(within(list).queryByRole("button", { name: "Adopt incident-intake" })).toBeNull();
@@ -100,13 +100,13 @@ describe("the workflow catalogue (S49-08, ADR 0111)", () => {
         make_default: true,
       }),
     );
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/p/f4f/workflows/requests/map?vue=list"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/p/f4f/workflows/requests?view=list"));
   });
 
   it("with a repository, lists every workflow", async () => {
     repo = { url: "https://github.com/acme/f4f.git" };
     await show();
-    const list = await screen.findByRole("list", { name: "Workflow catalogue" });
+    const list = await screen.findByRole("list", { name: "Workflow library" });
     await within(list).findByText("default-simple");
     expect(within(list).getByText("default-request")).toBeInTheDocument();
   });

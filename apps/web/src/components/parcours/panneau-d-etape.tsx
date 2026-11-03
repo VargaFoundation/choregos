@@ -36,6 +36,7 @@ export function PanneauDEtape({
   itemId,
   onClose,
   onDecided,
+  decisionAnchor,
 }: {
   etape: Etape;
   etat: EtatEtape;
@@ -44,6 +45,7 @@ export function PanneauDEtape({
   itemId: string;
   onClose: () => void;
   onDecided?: () => void;
+  decisionAnchor?: string;
 }) {
   const tentatives = etat.tentatives;
   const [choisie, setChoisie] = useState<string | null>(null);
@@ -63,7 +65,6 @@ export function PanneauDEtape({
           <h3 className="text-lg font-semibold text-ink">
             {etape.libelle} <span className="font-normal text-ink-muted">{etape.action}</span>
           </h3>
-          <p className="font-mono text-xs text-ink-muted">Transition {etape.id}</p>
         </div>
         <button
           type="button"
@@ -75,9 +76,13 @@ export function PanneauDEtape({
         </button>
       </div>
 
-      {(etape.phrase || (process?.gates ?? []).length > 0) && (
+      {/* The step's technical name and its checks are there for who needs them, folded (S55-05). */}
+      {
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer text-ink-muted">What this step does</summary>
+          <p className="mt-1 text-xs text-ink-muted">
+            Transition <span className="font-mono">{etape.id}</span>
+          </p>
           {etape.phrase && (
             <p className="mt-1 text-ink-muted">
               <PhraseDuMoteur texte={etape.phrase} />
@@ -98,7 +103,7 @@ export function PanneauDEtape({
             </ul>
           )}
         </details>
-      )}
+      }
 
       {tentatives.length === 0 ? (
         <p className="mt-4 text-sm text-ink-muted">
@@ -120,13 +125,13 @@ export function PanneauDEtape({
                 data-testid={`tentative-${t.id}`}
                 onClick={() => setChoisie(t.id)}
                 className={cn(
-                  "border px-2 py-0.5 font-mono text-xs pointer-coarse:min-h-11",
+                  "rounded-full border px-2.5 py-0.5 text-xs pointer-coarse:min-h-11",
                   t.id === pas?.id
                     ? "border-accent-line bg-accent-soft text-accent-strong"
                     : "border-line text-ink-muted hover:text-ink",
                 )}
               >
-                {t.attempt} · {t.status.replace(/_/g, " ")}
+                Attempt {t.attempt} · {t.status.replace(/_/g, " ")}
               </button>
             ))}
           </div>
@@ -135,7 +140,7 @@ export function PanneauDEtape({
               {pas.kind === "agent" ? (
                 <PasDAgent pas={pas} slug={slug} />
               ) : pas.kind === "human" ? (
-                <PasHumain pas={pas} itemId={itemId} onDecided={onDecided} />
+                <PasHumain pas={pas} itemId={itemId} onDecided={onDecided} decisionAnchor={decisionAnchor} />
               ) : (
                 <PasDAction pas={pas} slug={slug} />
               )}
@@ -371,13 +376,29 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
   );
 }
 
-function PasHumain({ pas, itemId, onDecided }: { pas: JourneyStep; itemId: string; onDecided?: () => void }) {
+function PasHumain({
+  pas,
+  itemId,
+  onDecided,
+  decisionAnchor,
+}: {
+  pas: JourneyStep;
+  itemId: string;
+  onDecided?: () => void;
+  decisionAnchor?: string;
+}) {
   const attendu = pas.status === "waiting";
   return (
     <div className="space-y-3">
       <Faits pas={pas} />
       {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
-      {attendu ? (
+      {attendu && decisionAnchor ? (
+        // One place to decide (S55-05): the page shows the decision with what the agent proposes.
+        <p className="border border-line border-l-2 border-l-waiting p-3 text-sm" data-testid="decision-elsewhere">
+          This decision is taken at the top of the page, with what the agent proposes.{" "}
+          <a href={`#${decisionAnchor}`}>Go to the decision</a>
+        </p>
+      ) : attendu ? (
         <div className="border border-line border-l-2 border-l-waiting p-3">
           <p className={cn(LEGENDE, "mb-2")}>Decide here</p>
           <DecisionBar itemId={itemId} kind={pas.role ?? "approval"} onDone={onDecided} />

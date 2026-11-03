@@ -7,7 +7,20 @@ import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { gare } from "@/components/parcours/modele";
-import { ActorIcon, Button, Card, CostChip, Dot, Empty, ErrorNote, Breadcrumbs, Heading, StateBadge, tonDActeur } from "@/components/ui";
+import {
+  ActorIcon,
+  Breadcrumbs,
+  Button,
+  buttonClasses,
+  Card,
+  CostChip,
+  Dot,
+  Empty,
+  ErrorNote,
+  Heading,
+  StateBadge,
+  tonDActeur,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
@@ -18,6 +31,10 @@ import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
 import { TrackerCard } from "@/components/who-writes";
 import { viaInWords } from "@/lib/who-writes";
+import { NextStepBanner } from "@/components/ticket/next-step-banner";
+import { LongText, RequestCard } from "@/components/ticket/request-card";
+import { WorkflowChip } from "@/components/workflow-chip";
+import { nextStep } from "@/lib/next-step";
 
 /** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
 function enMouvement(journey: WorkItemJourney | undefined): boolean {
@@ -49,6 +66,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   if (item.error) return <ErrorNote>{(item.error as Error).message}</ErrorNote>;
   if (!item.data) return <Empty>Loading…</Empty>;
   const data = item.data;
+  const next = nextStep(data, journey.data);
 
   async function control(action: string) {
     await api.action(id, action);
@@ -59,27 +77,27 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
     <div className="space-y-4">
       <Breadcrumbs steps={[{ href: `/p/${slug}/board`, label: "Board" }, { label: data.tracker_key }]} />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Heading as="h2" size="lg" data-donnee>
+        <div className="min-w-0 space-y-1.5">
+          <Heading as="h1" size="xl" data-donnee>
             {data.title}
           </Heading>
-          <p className="font-mono text-xs text-ink-muted">
-            <span data-donnee>{data.tracker_key}</span> · workflow {data.workflow_name} v{data.workflow_version}
-          </p>
+          {/* Which workflow, in its colour, and where the ticket stands in it (S55-05). */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {data.workflow_name && (
+              <WorkflowChip
+                name={data.workflow_name}
+                version={data.workflow_version}
+                href={`/p/${slug}/workflows/${encodeURIComponent(data.workflow_name)}`}
+              />
+            )}
+            <StateBadge state={data.state} display={data.state_display} outcome={data.state_outcome} />
+            <span className="font-mono text-ink-muted" data-donnee>
+              {data.tracker_key}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StateBadge state={data.state} display={data.state_display} outcome={data.state_outcome} />
           <CostChip costUsd={data.totals?.cost_usd} tokensIn={data.totals?.tokens_in} />
-          {gare(journey.data) && (
-            <GesteConfirme
-              ton="accent"
-              question="Replay the stage that escalated? An agent runs it again from the start — a new run, billed."
-              confirmer="Replay the stage"
-              action={() => control("rerun_stage")}
-            >
-              Replay the stage
-            </GesteConfirme>
-          )}
           <Button
             onClick={() =>
               void control(data.paused ? "resume" : "pause").catch((cause: unknown) =>
@@ -100,6 +118,26 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </div>
       </div>
 
+      <NextStepBanner
+        step={next}
+        action={
+          next.action?.kind === "decide" ? (
+            <a href="#decision" className={buttonClasses("accent", "sm")}>
+              {next.action.label}
+            </a>
+          ) : next.action?.kind === "replay" || gare(journey.data) ? (
+            <GesteConfirme
+              ton="accent"
+              question="Replay the stage that escalated? An agent runs it again from the start — a new run, billed."
+              confirmer="Replay the stage"
+              action={() => control("rerun_stage")}
+            >
+              Replay the stage
+            </GesteConfirme>
+          ) : undefined
+        }
+      />
+
       {erreurDeControle && <ErrorNote>{erreurDeControle}</ErrorNote>}
       {(data.failure ||
         (data.workflow_status && ["FAILED", "TERMINATED", "TIMED_OUT"].includes(data.workflow_status))) && (
@@ -112,30 +150,75 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </ErrorNote>
       )}
 
-      {data.pending_request && (
-        <Card title="Decision awaited">
-          {typeof data.pending_request.payload?.title === "string" && (
-            <p className="mb-2 text-sm font-medium" data-testid="decision-title">
-              {data.pending_request.payload.title}
-            </p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
+          {data.pending_request && (
+            <Card title="Decision awaited" id="decision" className="scroll-mt-16 border-l-4 border-l-waiting">
+              {typeof data.pending_request.payload?.title === "string" && (
+                <p className="mb-2 text-sm font-medium" data-testid="decision-title">
+                  {data.pending_request.payload.title}
+                </p>
+              )}
+              {(data.pending_request.payload?.question ?? data.pending_request.payload?.summary) ? (
+                // Markdown, folded past a screenful — it was one raw paragraph (S55-05).
+                <div className="mb-3" data-testid="decision-text">
+                  <LongText text={String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary)} />
+                </div>
+              ) : null}
+              {/* What the agent proposes is read here, before deciding, not in the Artifacts card below. */}
+              <div className="mb-3">
+                <AgentProposal slug={slug} runs={runs.data} prUrl={data.pr_url} />
+              </div>
+              <DecisionBar
+                itemId={id}
+                kind={data.pending_request.kind}
+                request={data.pending_request}
+                onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
+              />
+            </Card>
           )}
-          {(data.pending_request.payload?.question ?? data.pending_request.payload?.summary) ? (
-            <p className="mb-2 text-sm">
-              {String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary)}
-            </p>
-          ) : null}
-          {/* What the agent proposes is read here, before deciding, not in the Artifacts card below. */}
-          <div className="mb-3">
-            <AgentProposal slug={slug} runs={runs.data} prUrl={data.pr_url} />
-          </div>
-          <DecisionBar
-            itemId={id}
-            kind={data.pending_request.kind}
-            request={data.pending_request}
-            onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
-          />
+          <RequestCard body={data.body_snapshot} fields={data.fields} />
+        </div>
+        <Card title="About this ticket" data-testid="ticket-facts" className="self-start">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-ink-muted">Filed</dt>
+            <dd title={shortDate(data.created_at)}>{relative(data.created_at)}</dd>
+            {data.closed_at && (
+              <>
+                <dt className="text-ink-muted">Closed</dt>
+                <dd title={shortDate(data.closed_at)}>{relative(data.closed_at)}</dd>
+              </>
+            )}
+            <dt className="text-ink-muted">Spent</dt>
+            <dd>
+              {usd(data.totals?.cost_usd)}
+              {data.estimate?.median_usd ? (
+                <span className="text-ink-muted"> of about {usd(data.estimate.median_usd)}</span>
+              ) : null}
+            </dd>
+            {data.url && (
+              <>
+                <dt className="text-ink-muted">Issue</dt>
+                <dd className="min-w-0 truncate">
+                  <a href={data.url} target="_blank" rel="noreferrer">
+                    {data.tracker_key}
+                  </a>
+                </dd>
+              </>
+            )}
+            {data.pr_url && (
+              <>
+                <dt className="text-ink-muted">Pull request</dt>
+                <dd className="min-w-0 truncate">
+                  <a href={data.pr_url} target="_blank" rel="noreferrer">
+                    {data.pr_url.replace(/^https?:\/\//, "")}
+                  </a>
+                </dd>
+              </>
+            )}
+          </dl>
         </Card>
-      )}
+      </div>
 
       <Card title="Journey">
         {journey.data ? (
@@ -143,6 +226,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
             journey={journey.data}
             slug={slug}
             itemId={id}
+            decisionAnchor={data.pending_request ? "decision" : undefined}
             onDecided={() => {
               void queryClient.invalidateQueries({ queryKey: ["journey", id] });
               void queryClient.invalidateQueries({ queryKey: ["item", id] });
@@ -155,6 +239,9 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         )}
       </Card>
 
+      <Heading as="h3" size="md" className="pt-2">
+        History and outputs
+      </Heading>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Cost per stage" className="lg:col-span-2" action={<Provenance de="observed" />}>
           <div className="overflow-x-auto">
@@ -239,6 +326,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         initiatedBy={data.initiated_by}
         reporter={data.reporter}
         url={data.url}
+        fields={data.fields}
       />
 
       <Card title="Artifacts" action={<Provenance de="observed" />}>
@@ -257,13 +345,6 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </Card>
       )}
 
-      {data.pr_url && (
-        <Card title="Pull request">
-          <a href={data.pr_url} target="_blank" rel="noreferrer" className="text-sm">
-            {data.pr_url}
-          </a>
-        </Card>
-      )}
     </div>
   );
 }
