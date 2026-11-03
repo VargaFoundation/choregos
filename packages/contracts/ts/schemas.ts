@@ -178,6 +178,10 @@ export type PluginEvalsCase = {
   input?: {
     title?: string;
     body?: string;
+    /** the work item's fields, rendered as `ticket.fields` (the API's `AgentSampleInput.fields`, S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}`. At most 64 KiB of JSON, checked by the installer */
+    fields?: {
+      [key: string]: unknown;
+    };
   };
   must_contain?: PluginEvalsNeedles;
   must_not_contain?: PluginEvalsNeedles;

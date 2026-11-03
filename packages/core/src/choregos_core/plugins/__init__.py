@@ -16,7 +16,8 @@ rather than the first:
 - each skill directory holds a `SKILL.md`;
 - each template's `manifest.yaml` against `template.schema.json`, and each source of a knowledge base it
   ships (`defaults.knowledge`, S51-06) that reads a template input names an input the template declares;
-- each eval suite against `plugin-evals.schema.json`, naming an agent of the plugin;
+- each eval suite against `plugin-evals.schema.json`, naming an agent of the plugin, a case's
+  `input.fields` within the API's 64 KiB of JSON;
 - each procedure through the ADR 0067 parser (`choregos_core.procedures.parse`), and each
   `{{plugin_webhook_url:<plugin>/<server>}}` it holds names this plugin and a server of it with a webhook;
 - each template that takes its tracker from a plugin (`requires.connectors.tracker:
@@ -40,6 +41,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import io
+import json
 import re
 import tarfile
 import tempfile
@@ -79,6 +81,8 @@ TRACKER_PROFILE: dict[str, str] = {
 MAX_FILES = 2000
 MAX_BYTES = 50 * 1024 * 1024
 AGENT_SLUG = r"^[a-z][a-z0-9-]{1,62}$"
+#: An eval case's `input.fields`, as JSON: the API's `AgentSampleInput` cap (S51-04, S51-10).
+MAX_CASE_FIELDS_BYTES = 64 * 1024
 
 
 class PluginError(ChoregosError):
@@ -229,6 +233,12 @@ def _check_eval(path: Path, ref: str, agents: set[str], problems: list[str]) -> 
     if doc["agent"] not in agents:
         problems.append(f"{ref}: evaluates `{doc['agent']}`, which the plugin does not ship")
     names = [str(case["name"]) for case in doc.get("cases") or []]
+    for index, case in enumerate(doc.get("cases") or []):
+        fields = (case.get("input") or {}).get("fields")
+        if fields and len(json.dumps(fields, default=str)) > MAX_CASE_FIELDS_BYTES:
+            problems.append(
+                f"{ref}:cases/{index}/input/fields: at most {MAX_CASE_FIELDS_BYTES // 1024} KiB of JSON"
+            )
     for duplicate in sorted({n for n in names if names.count(n) > 1}):
         problems.append(f"{ref}: case `{duplicate}` is declared twice")
 

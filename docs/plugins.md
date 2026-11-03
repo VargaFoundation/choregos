@@ -149,6 +149,12 @@ cases:                             # optional, AgentEvalCase
   - name: names-the-author
     input: {title: Say hello, body: Greet Ada.}
     must_contain: [Greet the author]   # case-sensitive, on the instructions rendered on `input`
+  - name: names-the-reporter
+    input:
+      title: Say hello
+      fields:                      # optional, rendered as `ticket.fields` (S51-10)
+        tracker: {kind: jira, key: FON-270, reporter: {display_name: Ada Lovelace}}
+    must_contain: [Ada Lovelace]   # when the instructions say {{ ticket.fields.tracker.reporter.display_name }}
   - name: live-greeting
     live: true                     # a capped trial on a real model (S40-02d)
     expect_status: done
@@ -156,7 +162,10 @@ cases:                             # optional, AgentEvalCase
     must_contain: [Hello]
 ```
 
-An unknown key is refused, and a suite holds `must_contain`, `cases` or both. The installer plays level 1
+An unknown key is refused, and a suite holds `must_contain`, `cases` or both. A case's `input` is the
+API's `AgentSampleInput`: `title`, `body` and `fields`, the work item's fields the instructions see as
+`ticket.fields` (`{}` when absent), at most 64 KiB of JSON. `fields.tracker` plays a ticket filed from a
+tracker (ADR 0118); a plugin's case may set it, a caller's work item may not. The installer plays level 1
 and every case that is not `live`; a failure refuses the plugin. A `live` case is validated, not run at
 install.
 
