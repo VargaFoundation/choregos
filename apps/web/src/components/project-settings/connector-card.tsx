@@ -13,13 +13,13 @@ import { titreDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ConnectorType, ProjectRequirement } from "@/lib/types";
 
 /** The config keys that say WHERE a connector points, in the order a person would look for them. */
-const CLES_DE_CONFIG = ["repo", "owner", "gitops_repo", "project_key", "base_url", "url", "channel", "namespace"];
+const CONFIG_KEYS = ["repo", "owner", "gitops_repo", "project_key", "base_url", "url", "channel", "namespace"];
 
 /** A one-line reading of the configuration: `owner/repo`, a GitOps repository, a base URL. */
 export function configurationEnClair(config: Record<string, unknown> | undefined): string {
-  for (const cle of CLES_DE_CONFIG) {
-    const valeur = config?.[cle];
-    if (typeof valeur === "string" && valeur) return valeur;
+  for (const key of CONFIG_KEYS) {
+    const value = config?.[key];
+    if (typeof value === "string" && value) return value;
   }
   return "";
 }
@@ -29,8 +29,8 @@ export function configurationEnClair(config: Record<string, unknown> | undefined
  * and keeps the full sentences behind a disclosure.
  */
 export function workflowsQuiExigent(reasons: string[]): string[] {
-  const noms = reasons.map((raison) => /^([\w.-]+): /.exec(raison)?.[1]).filter((nom): nom is string => !!nom);
-  return [...new Set(noms)];
+  const names = reasons.map((raison) => /^([\w.-]+): /.exec(raison)?.[1]).filter((nom): nom is string => !!nom);
+  return [...new Set(names)];
 }
 
 const GITHUB_TYPES = new Set(["github", "github-issues"]);
@@ -80,13 +80,13 @@ export function ConnectorCard({
   onTest: () => Promise<void>;
 }) {
   const [ouvert, setOuvert] = useState(false);
-  const etat = connectorState({ connector: actuel, requirement: exigence, required: exigence !== undefined });
-  const typeAffiche = actuel?.type ?? exigence?.default_type ?? undefined;
-  const nomDuType = typeAffiche ? (types.find((t) => t.type === typeAffiche)?.display ?? typeAffiche) : undefined;
+  const state = connectorState({ connector: actuel, requirement: exigence, required: exigence !== undefined });
+  const shownType = actuel?.type ?? exigence?.default_type ?? undefined;
+  const typeName = shownType ? (types.find((t) => t.type === shownType)?.display ?? shownType) : undefined;
   const reglage = configurationEnClair(actuel?.config);
   const raisons = exigence?.reasons ?? [];
   const workflows = workflowsQuiExigent(raisons);
-  const titre = titreDeSorte(sorte);
+  const title = titreDeSorte(sorte);
   return (
     <li
       className="flex flex-col gap-3 rounded-md border border-line bg-surface p-4"
@@ -95,16 +95,16 @@ export function ConnectorCard({
       <div className="flex items-start gap-3">
         <span
           role="img"
-          aria-label={nomDuType ?? titre}
+          aria-label={typeName ?? title}
           className="grid size-10 shrink-0 place-items-center rounded-md border border-line bg-surface-sunken text-ink"
         >
-          <ConnectorIcon kind={sorte} type={typeAffiche ?? ""} size={22} />
+          <ConnectorIcon kind={sorte} type={shownType ?? ""} size={22} />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-ink">
-            {titre} <code className="ml-1 text-xs font-normal text-ink-muted">{sorte}</code>
+            {title} <code className="ml-1 text-xs font-normal text-ink-muted">{sorte}</code>
           </h3>
-          {nomDuType && <p className="text-xs break-words text-ink-muted" data-donnee>{nomDuType}</p>}
+          {typeName && <p className="text-xs break-words text-ink-muted" data-donnee>{typeName}</p>}
           {reglage && <p className="font-mono text-xs break-all text-ink-muted">{reglage}</p>}
           {actuel && GITHUB_TYPES.has(actuel.type) && typeof actuel.config?.repo === "string" && (
             <GitHubVia repo={actuel.config.repo} />
@@ -113,21 +113,21 @@ export function ConnectorCard({
           {actuel && sorte === "tracker" && <WritesAs type={actuel.type} config={actuel.config} />}
         </div>
       </div>
-      {etat && (
+      {state && (
         <div>
-          <Badge tone={etat.tone} data-testid={`etat-${sorte}`}>
-            {etat.label}
+          <Badge tone={state.tone} data-testid={`etat-${sorte}`}>
+            {state.label}
           </Badge>
         </div>
       )}
-      {etat && (etat.standIn || (etat.detail && etat.action !== "connect")) && (
+      {state && (state.standIn || (state.detail && state.action !== "connect")) && (
         <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-          {etat.standIn && (
+          {state.standIn && (
             <Badge tone="warn" dot={false}>
               Demo stand-in
             </Badge>
           )}
-          {etat.detail && etat.action !== "connect" && etat.label !== "Provided by the platform" && <span>{etat.detail}</span>}
+          {state.detail && state.action !== "connect" && state.label !== "Provided by the platform" && <span>{state.detail}</span>}
         </p>
       )}
       {workflows.length > 0 && (
@@ -155,7 +155,7 @@ export function ConnectorCard({
           {actuel ? "Edit" : "Configure"}
         </Button>
       </div>
-      <Drawer open={ouvert} onClose={() => setOuvert(false)} title={`${titre}${nomDuType ? ` · ${nomDuType}` : ""}`}>
+      <Drawer open={ouvert} onClose={() => setOuvert(false)} title={`${title}${typeName ? ` · ${typeName}` : ""}`}>
         {/* Mounted while the drawer is open only: the native dialog keeps its children in the page,
             and the form's setup procedure (S39-23) opens when the form is shown, not at page load. */}
         {ouvert && (

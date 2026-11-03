@@ -3,16 +3,16 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { SchemaForm, champsManquants, valeursParDefaut, type JsonSchema } from "@/components/schema-form";
+import { SchemaForm, missingFields, defaultValues, type JsonSchema } from "@/components/schema-form";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { AdminAction, AdminForm, AdminSecretOnce, AdminSection, AdminTable } from "@/lib/types";
 
 /**
- * Le chemin d'un bloc, rempli : `{org}` par l'organisation courante, tout autre `{…}` par la clé
- * de la ligne. Le manifeste dit `{id}` ; la route du greffon peut nommer son paramètre autrement,
- * le cœur les a rapprochés au démarrage.
+ * A block's path, filled in: `{org}` by the current organisation, any other `{…}` by the row's key.
+ * The manifest says `{id}`; the extension's route may name its parameter differently,
+ * the core matched them at start-up.
  */
 export function remplir(chemin: string, org: string, cle?: string): string {
   return chemin
@@ -20,7 +20,7 @@ export function remplir(chemin: string, org: string, cle?: string): string {
     .replace(/\{[^}]+\}/g, encodeURIComponent(cle ?? ""));
 }
 
-/** Une section déclarée par un greffon, rendue par les blocs de la console (ADR 0032). */
+/** A section declared by an extension, rendered by the console's blocks (ADR 0032). */
 export function SectionRendue({ section, org }: { section: AdminSection; org: string }) {
   return (
     <div className="space-y-4" data-testid={`admin-section-${section.id}`}>
@@ -48,17 +48,17 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
   });
   const [saisie, setSaisie] = useState<Record<string, unknown> | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const valeurs = saisie ?? { ...valeursParDefaut(schema), ...(lu.data ?? {}) };
-  const manquants = champsManquants(schema, valeurs);
+  const values = saisie ?? { ...defaultValues(schema), ...(lu.data ?? {}) };
+  const manquants = missingFields(schema, values);
 
   async function enregistrer() {
     setMessage(null);
     try {
-      // Les seuls champs du schéma : la lecture peut rendre plus (un état complet), et une route
-      // d'écriture stricte refuserait le reste.
-      const champs = new Set(Object.keys(schema.properties ?? {}));
-      const corps = Object.fromEntries(Object.entries(valeurs).filter(([nom]) => champs.has(nom)));
-      await api.sectionCall(bloc.write_method ?? "PUT", remplir(bloc.write, org), corps);
+      // Only the schema's fields: the read may return more (a complete state), and a strict write
+      // route would refuse the rest.
+      const fields = new Set(Object.keys(schema.properties ?? {}));
+      const body = Object.fromEntries(Object.entries(values).filter(([nom]) => fields.has(nom)));
+      await api.sectionCall(bloc.write_method ?? "PUT", remplir(bloc.write, org), body);
       setMessage("Saved");
       setSaisie(null);
       await lu.refetch();
@@ -80,7 +80,7 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
       {lu.error ? (
         <ErrorNote>{String(lu.error)}</ErrorNote>
       ) : (
-        <SchemaForm schema={schema} value={valeurs} onChange={setSaisie} disabled={lu.isLoading} org={org} />
+        <SchemaForm schema={schema} value={values} onChange={setSaisie} disabled={lu.isLoading} org={org} />
       )}
       {message && (
         <p className="mt-2 text-sm" role="status">
@@ -92,22 +92,22 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
 }
 
 function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
-  const lignes = useQuery({
+  const rows = useQuery({
     queryKey: ["admin-table", org, bloc.list],
     queryFn: async () => {
-      const reponse = await api.sectionCall<unknown>("GET", remplir(bloc.list, org));
-      return (Array.isArray(reponse) ? reponse : ((reponse as { items?: unknown[] })?.items ?? [])) as Array<
+      const response = await api.sectionCall<unknown>("GET", remplir(bloc.list, org));
+      return (Array.isArray(response) ? response : ((response as { items?: unknown[] })?.items ?? [])) as Array<
         Record<string, unknown>
       >;
     },
   });
-  const cleDeLigne = bloc.row_key ?? "id";
+  const rowKey = bloc.row_key ?? "id";
   return (
     <Card title={bloc.title}>
       {bloc.description && <p className="mb-3 text-sm text-ink-muted">{bloc.description}</p>}
-      {lignes.error && <ErrorNote>{String(lignes.error)}</ErrorNote>}
-      {lignes.data && lignes.data.length === 0 && <Empty>Nothing yet</Empty>}
-      {lignes.data && lignes.data.length > 0 && (
+      {rows.error && <ErrorNote>{String(rows.error)}</ErrorNote>}
+      {rows.data && rows.data.length === 0 && <Empty>Nothing yet</Empty>}
+      {rows.data && rows.data.length > 0 && (
         <Table aria-label={bloc.title}>
           <THead>
             <TR>
@@ -122,8 +122,8 @@ function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
             </TR>
           </THead>
           <TBody>
-            {lignes.data.map((ligne, index) => (
-              <TR key={String(ligne[cleDeLigne] ?? index)}>
+            {rows.data.map((ligne, index) => (
+              <TR key={String(ligne[rowKey] ?? index)}>
                 {bloc.columns.map((colonne) => (
                   <TD key={colonne.key}>
                     <Cellule valeur={ligne[colonne.key]} format={colonne.format} />
@@ -137,8 +137,8 @@ function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
                           key={action.label}
                           action={action}
                           org={org}
-                          cle={String(ligne[cleDeLigne] ?? "")}
-                          onDone={() => void lignes.refetch()}
+                          cle={String(ligne[rowKey] ?? "")}
+                          onDone={() => void rows.refetch()}
                         />
                       ))}
                     </span>
@@ -278,7 +278,7 @@ function BoutonDAction({
           size="sm"
           tone={action.danger ? "danger" : "primary"}
           onClick={() => void agir()}
-          disabled={params ? champsManquants(params, valeurs).length > 0 : false}
+          disabled={params ? missingFields(params, valeurs).length > 0 : false}
         >
           Confirm {action.label}
         </Button>
@@ -301,7 +301,7 @@ function BoutonDAction({
   );
 }
 
-/** Un secret rendu une fois : montré ici, jamais gardé — ni en mémoire de requête, ni ailleurs. */
+/** A secret shown once: displayed here, never kept, neither in request memory nor elsewhere. */
 function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
   const client = useQueryClient();
   const params = bloc.params as JsonSchema | undefined;
@@ -312,12 +312,12 @@ function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
   async function obtenir() {
     setErreur(null);
     try {
-      const reponse = await api.sectionCall<Record<string, unknown>>(
+      const secretResponse = await api.sectionCall<Record<string, unknown>>(
         bloc.method ?? "POST",
         remplir(bloc.path, org),
         params ? valeurs : undefined,
       );
-      setSecret(String(reponse?.[bloc.secret_field] ?? ""));
+      setSecret(String(secretResponse?.[bloc.secret_field] ?? ""));
       setValeurs({});
       await client.invalidateQueries({ queryKey: ["admin-table", org] });
     } catch (cause) {
@@ -340,7 +340,7 @@ function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
         <div className="space-y-3">
           {params && <SchemaForm schema={params} value={valeurs} onChange={setValeurs} org={org} />}
           {bloc.confirm && <p className="text-sm text-ink-muted">{bloc.confirm}</p>}
-          <Button tone="accent" onClick={() => void obtenir()} disabled={params ? champsManquants(params, valeurs).length > 0 : false}>
+          <Button tone="accent" onClick={() => void obtenir()} disabled={params ? missingFields(params, valeurs).length > 0 : false}>
             {bloc.label}
           </Button>
           {erreur && <ErrorNote>{erreur}</ErrorNote>}

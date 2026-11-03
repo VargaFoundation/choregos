@@ -10,32 +10,32 @@ const YAML = "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: demo, v
 function vueDe(conteneur: HTMLElement): EditorView {
   const dom = conteneur.querySelector(".cm-editor") as HTMLElement;
   const vue = EditorView.findFromDOM(dom);
-  if (!vue) throw new Error("aucun éditeur rendu");
+  if (!vue) throw new Error("no editor rendered");
   return vue;
 }
 
-describe("l'éditeur YAML (CodeMirror, S21-05)", () => {
-  it("une erreur du serveur se pose sur sa ligne, de sa colonne au bout de la ligne", () => {
+describe("the YAML editor (CodeMirror, S21-05)", () => {
+  it("a server error is placed on its line, from its column to the end of the line", () => {
     const doc = Text.of(YAML.split("\n"));
     const d = diagnostic(doc, { code: "x", message: "unknown key", path: "states.inbox", line: 5, column: 12 }, "error");
     expect(doc.sliceString(d.from, d.to)).toBe("display: Inbox }");
     expect(d.message).toBe("unknown key (states.inbox)");
-    // Une ligne hors du texte (le texte a changé depuis la validation) se ramène à la dernière.
+    // A line outside the text (the text changed since the validation) is brought back to the last one.
     const hors = diagnostic(doc, { code: "x", message: "m", line: 99, column: 1 }, "warning");
     expect(hors.from).toBe(doc.line(doc.lines).from);
   });
 
-  it("les erreurs du serveur se posent dans la marge de l'éditeur rendu", () => {
+  it("the server's errors are placed in the rendered editor's margin", () => {
     const { container } = render(
       <YamlEditor label="YAML of demo" value={YAML} onChange={vi.fn()} issues={[{ code: "x", message: "bad state", line: 4, column: 1 }]} />,
     );
     const vue = vueDe(container);
-    const lignes: number[] = [];
-    forEachDiagnostic(vue.state, (_d, from) => lignes.push(vue.state.doc.lineAt(from).number));
-    expect(lignes).toEqual([4]);
+    const rows: number[] = [];
+    forEachDiagnostic(vue.state, (_d, from) => rows.push(vue.state.doc.lineAt(from).number));
+    expect(rows).toEqual([4]);
   });
 
-  it("une frappe remonte par onChange ; un texte changé au-dehors remplace le document sans y revenir", () => {
+  it("a keystroke goes up through onChange; a text changed from outside replaces the document without coming back", () => {
     const onChange = vi.fn();
     const { container, rerender } = render(<YamlEditor label="YAML of demo" value={YAML} onChange={onChange} issues={[]} />);
     const vue = vueDe(container);
@@ -47,7 +47,7 @@ describe("l'éditeur YAML (CodeMirror, S21-05)", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("le champ porte le nom donné aux lecteurs d'écran, et la lecture seule se respecte", () => {
+  it("the field carries the name given to screen readers, and read-only is respected", () => {
     const { container, rerender } = render(
       <YamlEditor label="YAML of demo" value={YAML} onChange={vi.fn()} issues={[]} readOnly />,
     );

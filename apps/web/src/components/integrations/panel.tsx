@@ -21,20 +21,20 @@ import type { ApiTokenCreated } from "@/lib/types";
 const DUREES = [7, 30, 90] as const;
 
 /**
- * La page Integrations (ADR 0030) : comment brancher SON agent — Claude Code, Claude Desktop,
- * Cursor, VS Code… — sur la porte MCP, avec un jeton frappé pour ce client, et le constat qu'il
- * s'est bien connecté.
+ * The Integrations page (ADR 0030): how to plug IN your agent (Claude Code, Claude Desktop,
+ * Cursor, VS Code…) into the MCP door, with a token minted for that client, and the finding that it
+ * did connect.
  *
- * Dans un projet (`projet` renseigné), la porte est celle du projet et le jeton y est lié.
+ * In a project (`projet` set), the door is the project's and the token is bound to it.
  *
- * Quand la porte accepte les jetons de l'IdP et que le déploiement nomme le client enregistré, la
- * connexion par l'authentification unique passe en premier : rien à coller, rien à faire expirer.
- * Le jeton reste proposé, un clic plus loin.
+ * When the door accepts the IdP's tokens and the deployment names the registered client,
+ * single sign-on comes first: nothing to paste, nothing to expire.
+ * The token is still offered, one click further.
  */
 export function IntegrationsPanel({ client, projet, base }: { client: ClientId; projet?: string; base: string }) {
-  const portee = projet ? qualify(projet) : undefined;
+  const scope = projet ? qualify(projet) : undefined;
   const infos = useQuery({ queryKey: ["integrations"], queryFn: () => api.integrations(), staleTime: Infinity });
-  const url = infos.data ? urlDeLaPorte(infos.data.mcp_url, portee) : "…";
+  const url = infos.data ? urlDeLaPorte(infos.data.mcp_url, scope) : "…";
   const [ecriture, setEcriture] = useState(false);
   const [duree, setDuree] = useState<(typeof DUREES)[number]>(30);
   const [frappe, setFrappe] = useState<ApiTokenCreated | null>(null);
@@ -42,12 +42,12 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
   const [parJeton, setParJeton] = useState(false);
   const oauth = infos.data?.oauth;
   const generique = CLIENTS.find((c) => c.id === client) ?? CLIENTS[0]!;
-  // L'authentification unique d'abord, quand l'IdP a un client pour celui-ci ; le jeton sur demande.
+  // Single sign-on first, when the IdP has a client for this one; the token on request.
   const sso = clientOAuth(client, oauth) !== null && !parJeton;
   const info = sso ? etatDuClient(generique, url, oauth) : generique;
   const code = extrait(client, url, frappe?.token ?? PLACEHOLDER, sso ? oauth : null);
-  const avecJetonMcp = info.auth === "MCP token";
-  const aussiParJeton = clientOAuth(client, oauth) !== null && generique.auth === "MCP token";
+  const withMcpToken = info.auth === "MCP token";
+  const alsoByToken = clientOAuth(client, oauth) !== null && generique.auth === "MCP token";
 
   async function frapper() {
     setErreur(null);
@@ -55,7 +55,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
       const cree = await api.createToken({
         name: info.label,
         scopes: [ecriture ? "mcp:write" : "mcp:read"],
-        project: portee ?? null,
+        project: scope ?? null,
         expires_in_days: duree,
       });
       setFrappe(cree);
@@ -83,9 +83,9 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title={`Connect ${info.label}`} className="lg:col-span-2">
           <p className="text-sm text-ink-muted">
-            {portee ? (
+            {scope ? (
               <>
-                The door of project <Code>{portee}</Code>: tools need no project argument, and the token is bound to
+                The door of project <Code>{scope}</Code>: tools need no project argument, and the token is bound to
                 this project.
               </>
             ) : (
@@ -114,7 +114,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
               VPN stays out of its reach: use Claude Code or Claude Desktop meanwhile.
             </Alert>
           )}
-          {aussiParJeton && (
+          {alsoByToken && (
             <p className="mt-3 text-xs text-ink-muted">
               {sso ? (
                 <>
@@ -132,7 +132,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
           )}
         </Card>
 
-        {avecJetonMcp && (
+        {withMcpToken && (
           <Card title="A token for this client">
             {frappe ? (
               <div className="space-y-3 text-sm">
@@ -140,7 +140,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                   Token <strong>{frappe.name}</strong> ({(frappe.scopes ?? []).join(", ")}
                   {frappe.project ? `, ${frappe.project}` : ""}) — shown once, already in the snippet.
                 </p>
-                <Etat id={frappe.id} />
+                <TokenState id={frappe.id} />
               </div>
             ) : (
               <div className="space-y-3 text-sm">
@@ -231,14 +231,14 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
   );
 }
 
-/** Un bloc à copier. Sans `navigator.clipboard` (une page en HTTP), le texte reste sélectionnable. */
+/** A block to copy. Without `navigator.clipboard` (a page over HTTP), the text stays selectable. */
 function Extrait({ code }: { code: string }) {
   const [copie, setCopie] = useState(false);
   const pressePapier = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
   return (
     <div className="relative">
-      {/* Les lignes reviennent à la ligne plutôt que de défiler : un bloc qui défile devrait
-          s'atteindre au clavier (axe), et la copie garde le texte exact. */}
+      {/* Lines wrap rather than scroll: a block that scrolls would have to be
+              reachable by keyboard (axe), and the copy keeps the exact text. */}
       <pre className="whitespace-pre-wrap break-all bg-surface-sunken p-3 text-xs" data-testid="snippet">
         <code>{code}</code>
       </pre>
@@ -258,18 +258,18 @@ function Extrait({ code }: { code: string }) {
   );
 }
 
-/** « Connecté » : le dernier usage du jeton, relu toutes les trois secondes tant qu'il n'y en a pas. */
-function Etat({ id }: { id: string }) {
-  const jetons = useQuery({
+/** "Connected": the token's last use, re-read every three seconds until there is one. */
+function TokenState({ id }: { id: string }) {
+  const tokens = useQuery({
     queryKey: ["tokens"],
     queryFn: () => api.myTokens(),
     refetchInterval: (requete) => {
-      const jeton = requete.state.data?.find((t) => t.id === id);
-      return jeton?.last_used_at ? false : 3000;
+      const token = requete.state.data?.find((t) => t.id === id);
+      return token?.last_used_at ? false : 3000;
     },
   });
-  const jeton = jetons.data?.find((t) => t.id === id);
-  if (!jeton?.last_used_at) {
+  const usedToken = tokens.data?.find((t) => t.id === id);
+  if (!usedToken?.last_used_at) {
     return (
       <p className="text-xs text-ink-muted" data-testid="connection-status">
         Waiting for the first call from your client…
@@ -278,8 +278,8 @@ function Etat({ id }: { id: string }) {
   }
   return (
     <p className="text-xs" data-testid="connection-status">
-      Connected — last call {shortDate(jeton.last_used_at)}
-      {jeton.last_client ? ` from ${jeton.last_client}` : ""}
+      Connected — last call {shortDate(usedToken.last_used_at)}
+      {usedToken.last_client ? ` from ${usedToken.last_client}` : ""}
     </p>
   );
 }

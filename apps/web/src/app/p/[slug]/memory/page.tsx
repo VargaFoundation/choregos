@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { MemoryReimport } from "@/components/memory-reimport";
-import { Button, Card, Drawer, Empty, ErrorNote, EtatDeLecture, Input, LEGENDE, Select } from "@/components/ui";
+import { Button, Card, Drawer, Empty, ErrorNote, ReadState, Input, LEGENDE, Select } from "@/components/ui";
 import { OrganisationMemoryStore, ProjectMemoryStore } from "@/components/memory-store";
 import { api, type MemoryChoice } from "@/lib/api";
 import { shortDate } from "@/lib/format";
@@ -156,7 +156,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
               </li>
             ))}
           </ul>
-          <EtatDeLecture lecture={results} quoi="the memory" />
+          <ReadState lecture={results} quoi="the memory" />
           {submitted && results.data?.length === 0 && <Empty>No memory for “{submitted}”</Empty>}
         </Card>
 
@@ -192,7 +192,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
                     </li>
                   ))}
               </ul>
-              <EtatDeLecture lecture={pending} quoi="the proposed facts" />
+              <ReadState lecture={pending} quoi="the proposed facts" />
               {pending.data?.length === 0 && <Empty>No pending fact</Empty>}
             </>
           )}

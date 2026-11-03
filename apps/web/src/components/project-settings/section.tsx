@@ -44,7 +44,7 @@ export function useSectionWrites(slug: string) {
     try {
       await action();
       setMessage(succes);
-      for (const cle of cles) void queryClient.invalidateQueries({ queryKey: [cle, slug] });
+      for (const key of cles) void queryClient.invalidateQueries({ queryKey: [key, slug] });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "refused");
     }

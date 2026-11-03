@@ -17,7 +17,7 @@ import { useBrouillon } from "@/components/workflows/brouillon";
 import { CarteDuWorkflow } from "@/components/workflows/carte/carte-du-workflow";
 import {
   areteDeLaCarte,
-  type NoeudDuGraphe,
+  type NoeudDuGraphe as GraphNode, // lang: fr-ok
 } from "@/components/workflows/carte/disposition";
 import { timingOfStep } from "@/components/workflows/timing";
 import {
@@ -72,10 +72,10 @@ type Definition = {
  * to edit the states.
  */
 export default function MapPage() {
-  const brouillon = useBrouillon();
+  const draft = useBrouillon();
   const params = useSearchParams();
   const router = useRouter();
-  const chemin = usePathname();
+  const pathname = usePathname();
   // `vue` was the French name of `view` (S55-04): an old link still opens the list.
   const vue =
     (params.get("view") ?? params.get("vue")) === "list" ? "list" : "diagram";
@@ -88,7 +88,7 @@ export default function MapPage() {
   // What the toolbar opened (S55-06): each tool in a drawer, so the graph keeps the width.
   const [tool, setTool] = useState<"step" | "actors" | "settings" | null>(null);
   const { slug, name } = useParams<{ slug: string; name: string }>();
-  const resolutions = useAgentResolution(slug, brouillon.process);
+  const resolutions = useAgentResolution(slug, draft.process);
   const activity = useWorkflowActivity(slug, name);
   const project = useQuery({
     queryKey: ["project", slug],
@@ -98,35 +98,35 @@ export default function MapPage() {
     queryKey: ["workflows", slug],
     queryFn: () => api.workflows(slug),
   });
-  if (brouillon.definition.error)
-    return <ErrorNote>{String(brouillon.definition.error)}</ErrorNote>;
-  const graph = brouillon.graph;
+  if (draft.definition.error)
+    return <ErrorNote>{String(draft.definition.error)}</ErrorNote>;
+  const graph = draft.graph;
   if (!graph) return <Empty>The map appears once the workflow is read…</Empty>;
-  const noeuds = graph.nodes as NoeudDuGraphe[];
+  const noeuds = graph.nodes as GraphNode[];
   // The draft's actors, not the published version's: an actor added on the map can carry a step at once.
-  const definition = (brouillon.document ??
-    brouillon.definition.data?.json ??
+  const definition = (draft.document ??
+    draft.definition.data?.json ??
     {}) as Definition;
   const acteurs = Object.keys(definition.actors ?? {});
-  const noeud =
+  const graphNode =
     choix?.kind === "node" ? noeuds.find((n) => n.id === choix.id) : undefined;
   const arete =
     choix?.kind === "edge" ? areteDeLaCarte(graph, choix.id) : undefined;
-  const etapes = brouillon.process ?? [];
-  const etapeChoisie = arete
-    ? etapes.find((e) => e.id === arete.id)
+  const steps = draft.process ?? [];
+  const chosenStep = arete
+    ? steps.find((e) => e.id === arete.id)
     : undefined;
   // An agent step that names no registry agent: what it runs is said from the actor's own fields.
   const builtinActor =
-    etapeChoisie?.actor_type === "agent" && !etapeChoisie.agent
+    chosenStep?.actor_type === "agent" && !chosenStep.agent
       ? {
-          role: etapeChoisie.role ?? undefined,
-          model: etapeChoisie.model ?? undefined,
-          ...definition.actors?.[etapeChoisie.actor],
+          role: chosenStep.role ?? undefined,
+          model: chosenStep.model ?? undefined,
+          ...definition.actors?.[chosenStep.actor],
         }
       : undefined;
-  const timing = etapeChoisie
-    ? timingOfStep(etapeChoisie, {
+  const timing = chosenStep
+    ? timingOfStep(chosenStep, {
         timeoutHours: arete?.timeout_hours,
         graph,
         onTimeout: definition.defaults?.on_timeout,
@@ -207,7 +207,7 @@ export default function MapPage() {
                     )}
                     onClick={() =>
                       router.replace(
-                        v === "list" ? `${chemin}?view=list` : chemin,
+                        v === "list" ? `${pathname}?view=list` : pathname,
                       )
                     }
                   >
@@ -219,14 +219,14 @@ export default function MapPage() {
           >
             <div
               className={
-                brouillon.grapheObsolete ? "space-y-3 opacity-60" : "space-y-3"
+                draft.grapheObsolete ? "space-y-3 opacity-60" : "space-y-3"
               }
             >
-              {brouillon.grapheObsolete && <TexteIllisible />}
+              {draft.grapheObsolete && <TexteIllisible />}
               {vue === "diagram" ? (
                 <CarteEnSerpentin
                   graph={graph}
-                  process={brouillon.process ?? []}
+                  process={draft.process ?? []}
                   initial={definition.initial}
                   choix={choix?.kind === "edge" ? choix.id : null}
                   onChoisir={(id) => setChoix({ kind: "edge", id })}
@@ -236,7 +236,7 @@ export default function MapPage() {
               ) : (
                 <CarteDuWorkflow
                   graph={graph}
-                  process={brouillon.process}
+                  process={draft.process}
                   initial={definition.initial}
                   acteurs={definition.actors}
                   onSelect={(kind, id) => setChoix({ kind, id })}
@@ -251,7 +251,7 @@ export default function MapPage() {
           {vue === "diagram" && (
             <ArtifactFlowCard
               artifacts={graph.artifacts}
-              steps={etapes}
+              steps={steps}
               onHighlight={setFlux}
             />
           )}
@@ -279,38 +279,38 @@ export default function MapPage() {
               </button>
             </Card>
           )}
-          {noeud && (
+          {graphNode && (
             <PanneauDEtat
-              key={`n-${noeud.id}`}
-              noeud={noeud}
+              key={`n-${graphNode.id}`}
+              noeud={graphNode}
               etats={noeuds}
               acteurs={acteurs}
             />
           )}
-          {arete && etapeChoisie && (
+          {arete && chosenStep && (
             <Card title="This step">
               <StepDetails
-                step={etapeChoisie}
+                step={chosenStep}
                 resolution={
-                  etapeChoisie.agent
-                    ? resolutions.get(etapeChoisie.agent)
+                  chosenStep.agent
+                    ? resolutions.get(chosenStep.agent)
                     : undefined
                 }
                 flow={graph.artifacts}
-                stepsById={new Map(etapes.map((e) => [e.id, e]))}
-                decision={decisionActorOf(brouillon.document, etapeChoisie.actor)}
-                calibration={{ project: slug, workflow: name, thresholds: workflowThresholds(brouillon.document, etapeChoisie.to) }}
+                stepsById={new Map(steps.map((e) => [e.id, e]))}
+                decision={decisionActorOf(draft.document, chosenStep.actor)}
+                calibration={{ project: slug, workflow: name, thresholds: workflowThresholds(draft.document, chosenStep.to) }}
               />
-              {etapeChoisie.actor_type === "human" && etapeChoisie.group && (
+              {chosenStep.actor_type === "human" && chosenStep.group && (
                 <GroupMembersLine
                   projectSlug={slug}
-                  group={etapeChoisie.group}
+                  group={chosenStep.group}
                 />
               )}
               {waitingSentence(
                 activity.data,
-                etapeChoisie.from,
-                etapeChoisie.from_display ?? etapeChoisie.from,
+                chosenStep.from,
+                chosenStep.from_display ?? chosenStep.from,
               ) && (
                 <p
                   className="mt-2 text-xs text-ink-muted"
@@ -318,17 +318,17 @@ export default function MapPage() {
                 >
                   {waitingSentence(
                     activity.data,
-                    etapeChoisie.from,
-                    etapeChoisie.from_display ?? etapeChoisie.from,
+                    chosenStep.from,
+                    chosenStep.from_display ?? chosenStep.from,
                   )}
                 </p>
               )}
-              {stepActivitySentence(activity.data, etapeChoisie.id) && (
+              {stepActivitySentence(activity.data, chosenStep.id) && (
                 <p
                   className="mt-2 text-xs text-ink-muted"
                   data-testid="activite-de-l-etape"
                 >
-                  {stepActivitySentence(activity.data, etapeChoisie.id)}
+                  {stepActivitySentence(activity.data, chosenStep.id)}
                 </p>
               )}
             </Card>
@@ -336,7 +336,7 @@ export default function MapPage() {
           {builtinActor && (
             <Card title="This agent">
               <BuiltinAgentOfActor
-                key={etapeChoisie?.actor}
+                key={chosenStep?.actor}
                 projectSlug={slug}
                 actor={builtinActor}
               />
@@ -348,7 +348,7 @@ export default function MapPage() {
               arete={arete}
               acteurs={acteurs}
               definitions={definition.actors}
-              gates={etapeChoisie?.gates}
+              gates={chosenStep?.gates}
               timing={timing}
               states={noeuds.map((n) => n.id)}
               workflows={(workflows.data ?? []).map((w) => w.name)}
@@ -366,7 +366,7 @@ export default function MapPage() {
               />
             </Card>
           )}
-          {!noeud && !arete && !drawn && (
+          {!graphNode && !arete && !drawn && (
             <Empty title="Change a step">
               Choose a step on the graph to see what it does, change it, or add
               the step that follows it (click, or Tab then Enter). In the list

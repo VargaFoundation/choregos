@@ -5,18 +5,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useServedTheme } from "@/components/served-theme";
-import { buttonClasses, Card, Drawer, EtatDeLecture } from "@/components/ui";
+import { buttonClasses, Card, Drawer, ReadState } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Edition } from "@/lib/types";
 
 /**
- * Ce que l'édition entreprise ajoute, dit en clair (ADR 0024).
+ * What the enterprise edition adds, said in plain words (ADR 0024).
  *
- * Les clés sont celles que l'édition entreprise annonce dans `GET /edition` ; une clé inconnue
- * s'affiche telle quelle plutôt que de disparaître. En communautaire, la même liste dit ce
- * qu'apporterait l'édition entreprise — sans faux écran ni bouton qui mènerait nulle part.
+ * The keys are those the enterprise edition announces in `GET /edition`; an unknown key
+ * is shown as it is rather than disappearing. In the community edition, the same list says what
+ * the enterprise edition would bring, with no fake screen or button that would lead nowhere.
  */
-export const FONCTIONS_ENTREPRISE: ReadonlyArray<readonly [string, string]> = [
+export const ENTERPRISE_FEATURES: ReadonlyArray<readonly [string, string]> = [
   ["multi_org", "several organisations on one installation"],
   ["saml", "SAML sign-in, per organisation"],
   ["scim", "SCIM provisioning of users and groups"],
@@ -31,13 +31,13 @@ export const FONCTIONS_ENTREPRISE: ReadonlyArray<readonly [string, string]> = [
   ["theme", "a custom look per instance and organisation"],
 ];
 
-const LIBELLES = new Map(FONCTIONS_ENTREPRISE);
+const LIBELLES = new Map(ENTERPRISE_FEATURES);
 
 export function libelleFonction(cle: string): string {
   return LIBELLES.get(cle) ?? cle;
 }
 
-/** Le badge de la barre du haut : sur quelle édition tourne la plateforme. */
+/** The top bar's badge: which edition the platform runs. */
 export function EditionBadge({
   edition,
   publisher,
@@ -60,16 +60,16 @@ export function EditionBadge({
   );
 }
 
-/** La carte de l'administration : l'édition, sa version, et ce qu'elle s'autorise. */
+/** The administration card: the edition, its version, and what it allows itself. */
 export function EditionCard({ edition }: { edition: Edition | undefined }) {
   if (!edition) return null;
-  const entreprise = edition.edition === "enterprise";
+  const isEnterprise = edition.edition === "enterprise";
   return (
     <Card title="Edition">
       <p className="text-sm">
-        {entreprise ? "Enterprise edition" : "Community edition"}{" "}
+        {isEnterprise ? "Enterprise edition" : "Community edition"}{" "}
         <span className="text-xs text-ink-muted">
-          {entreprise && edition.edition_version ? (
+          {isEnterprise && edition.edition_version ? (
             <>
               <span className="font-mono">{edition.edition_version}</span>
               {edition.publisher ? ` · published by ${edition.publisher}` : null}
@@ -81,7 +81,7 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
           <span className="font-mono">{edition.version}</span>
         </span>
       </p>
-      {entreprise ? (
+      {isEnterprise ? (
         <ul className="mt-2 space-y-1 text-xs" aria-label="Enterprise features">
           {edition.features.map((cle) => (
             <li key={cle}>{libelleFonction(cle)}</li>
@@ -93,7 +93,7 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
             This installation runs the community core: one organisation. The enterprise edition adds:
           </p>
           <ul className="mt-1 space-y-1 text-xs" aria-label="What the enterprise edition adds">
-            {FONCTIONS_ENTREPRISE.map(([cle, libelle]) => (
+            {ENTERPRISE_FEATURES.map(([cle, libelle]) => (
               <li key={cle}>{libelle}</li>
             ))}
           </ul>
@@ -161,14 +161,14 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /**
  * The About panel: what is deployed (product, core version and licence, edition, who publishes it,
  * the build revision) and where to read more. Everything comes from `GET /edition` and the served
- * theme; nothing here names an edition or a publisher itself, the plugin announces them.
+ * theme; nothing here names an edition or a publisher itself, the extension announces them.
  */
 export function AboutPanel() {
   const productName = useServedTheme().product_name;
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
   const data = edition.data;
-  if (!data) return <EtatDeLecture lecture={edition} quoi="the version information" />;
+  if (!data) return <ReadState lecture={edition} quoi="the version information" />;
   const enterprise = data.edition === "enterprise";
 
   async function copy(texte: string) {

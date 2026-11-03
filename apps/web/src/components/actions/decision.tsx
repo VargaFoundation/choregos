@@ -8,9 +8,9 @@ import { api } from "@/lib/api";
 import type { Action } from "@/lib/types";
 
 /**
- * Décider d'une action (ADR 0035). Approuver demande une authentification récente : l'API répond
- * `step_up_required` au-delà, et la console repasse par l'IdP puis revient ici. Rejeter dit
- * pourquoi — le bouton reste fermé tant qu'il n'y a pas de raison.
+ * Deciding on an action (ADR 0035). Approving requires a recent authentication: the API answers
+ * `step_up_required` beyond that, and the console goes through the IdP again then comes back here. Rejecting says
+ * why: the button stays closed until there is a reason.
  */
 export function DecisionDAction({ projet, action }: { projet: string; action: Action }) {
   const client = useQueryClient();
@@ -51,8 +51,8 @@ export function DecisionDAction({ projet, action }: { projet: string; action: Ac
         </Button>
       </div>
       <p className="text-xs text-ink-muted" data-testid="regles-de-decision">
-        {/* Sans `step_up_minutes`, la règle n'exige pas d'authentification récente (S20-08) : ne pas
-            promettre un détour par l'IdP qui n'aura pas lieu. */}
+        {/* Without `step_up_minutes`, the rule does not require a recent authentication (S20-08): do not
+                promise a detour through the IdP that will not happen. */}
         {action.approval?.step_up_minutes != null
           ? `Approving needs a recent sign-in (within ${String(action.approval.step_up_minutes)} min). `
           : ""}

@@ -9,13 +9,13 @@ import { api } from "@/lib/api";
 import { safeAsset } from "@/lib/served-theme";
 
 /**
- * Un formulaire tiré d'un JSON Schema — celui d'une section d'administration déclarée par un
- * greffon (ADR 0032), demain celui d'un connecteur (ADR 0034). Fait ici plutôt qu'avec `@rjsf` :
- * le budget du bundle, et les seuls cas qui servent — un objet de scalaires, de choix, de listes,
- * de textes sur plusieurs lignes (`format: "multiline"` : un certificat PEM) et de correspondances
- * (`type: "object"` de chaînes : un groupe de l'IdP → un groupe de rôle), une par ligne.
+ * A form drawn from a JSON Schema: that of an administration section declared by an
+ * extension (ADR 0032), tomorrow that of a connector (ADR 0034). Built here rather than with `@rjsf`:
+ * the bundle budget, and only the cases that are used: an object of scalars, of choices, of lists,
+ * of multi-line texts (`format: "multiline"`: a PEM certificate) and of mappings
+ * (`type: "object"` of strings: an IdP group -> a role group), one per line.
  *
- * L'API reste juge : ce formulaire ne refuse que ce qui manque, il ne revalide pas le schéma.
+ * The API remains the judge: this form refuses only what is missing, it does not revalidate the schema.
  */
 export type JsonSchema = {
   type?: string;
@@ -34,25 +34,25 @@ export type JsonSchema = {
   "x-max-bytes"?: number;
 };
 
-type Valeurs = Record<string, unknown>;
+type Values = Record<string, unknown>;
 
-/** Les champs obligatoires laissés vides : de quoi désactiver « enregistrer » avant l'API. */
-export function champsManquants(schema: JsonSchema, valeurs: Valeurs): string[] {
+/** The required fields left empty: enough to disable "save" before the API. */
+export function missingFields(schema: JsonSchema, valeurs: Values): string[] {
   return (schema.required ?? []).filter((nom) => {
-    const valeur = valeurs[nom];
-    if (valeur === undefined || valeur === null || valeur === "") return true;
-    if (Array.isArray(valeur)) return valeur.length === 0;
-    return typeof valeur === "object" && Object.keys(valeur).length === 0;
+    const value = valeurs[nom];
+    if (value === undefined || value === null || value === "") return true;
+    if (Array.isArray(value)) return value.length === 0;
+    return typeof value === "object" && Object.keys(value).length === 0;
   });
 }
 
-/** Les valeurs par défaut du schéma, pour amorcer un formulaire vide. */
-export function valeursParDefaut(schema: JsonSchema): Valeurs {
-  const valeurs: Valeurs = {};
+/** The schema's default values, to seed an empty form. */
+export function defaultValues(schema: JsonSchema): Values {
+  const values: Values = {};
   for (const [nom, propriete] of Object.entries(schema.properties ?? {})) {
-    if (propriete.default !== undefined) valeurs[nom] = propriete.default;
+    if (propriete.default !== undefined) values[nom] = propriete.default;
   }
-  return valeurs;
+  return values;
 }
 
 export function SchemaForm({
@@ -64,8 +64,8 @@ export function SchemaForm({
   connectorType,
 }: {
   schema: JsonSchema;
-  value: Valeurs;
-  onChange: (value: Valeurs) => void;
+  value: Values;
+  onChange: (value: Values) => void;
   disabled?: boolean;
   /** Fills `{org}` in an asset field's `x-upload`; without it such a field cannot upload. */
   org?: string;
@@ -79,7 +79,7 @@ export function SchemaForm({
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {proprietes.map(([nom, propriete]) => (
-        <Champ
+        <Field
           key={nom}
           id={`${base}-${nom}`}
           nom={nom}
@@ -101,7 +101,7 @@ export function SchemaForm({
   );
 }
 
-function Champ({
+function Field({
   id,
   nom,
   propriete,
@@ -124,7 +124,7 @@ function Champ({
 }) {
   const libelle = propriete.title ?? nom.replaceAll("_", " ");
   const aide = propriete.description ? `${id}-aide` : undefined;
-  const etiquette = (
+  const label = (
     <label htmlFor={id} className="text-xs text-ink-muted">
       {libelle}
       {requis && <span aria-hidden> *</span>}
@@ -148,14 +148,14 @@ function Champ({
           aria-describedby={aide}
           onChange={(event) => onChange(event.target.checked)}
         />
-        {etiquette}
+        {label}
         {indication}
       </div>
     );
   }
-  let controle;
+  let control;
   if (propriete.enum) {
-    controle = (
+    control = (
       <Select
         id={id}
         value={valeur === undefined ? "" : String(valeur)}
@@ -173,7 +173,7 @@ function Champ({
     );
   } else if (propriete.format === "github-repo") {
     // A repository picked from what the Choregos GitHub App sees, never an installation id (ADR 0073).
-    controle = (
+    control = (
       <GitHubRepoField
         id={id}
         value={typeof valeur === "string" ? valeur : ""}
@@ -183,7 +183,7 @@ function Champ({
       />
     );
   } else if (propriete.format === "asset") {
-    controle = (
+    control = (
       <AssetField
         id={id}
         propriete={propriete}
@@ -195,11 +195,11 @@ function Champ({
       />
     );
   } else if (nom === "data_handling" && connectorType && propriete.properties?.terms_ref) {
-    controle = <DataHandlingField id={id} type={connectorType} value={valeur} disabled={disabled} onChange={onChange} />;
+    control = <DataHandlingField id={id} type={connectorType} value={valeur} disabled={disabled} onChange={onChange} />;
   } else if (propriete.type === "object") {
-    controle = <Correspondance id={id} valeur={valeur} disabled={disabled} aide={aide} onChange={onChange} />;
+    control = <Correspondance id={id} valeur={valeur} disabled={disabled} aide={aide} onChange={onChange} />;
   } else if (propriete.format === "multiline") {
-    controle = (
+    control = (
       <Textarea
         id={id}
         className="w-auto font-mono text-xs"
@@ -212,7 +212,7 @@ function Champ({
       />
     );
   } else if (propriete.type === "array") {
-    controle = (
+    control = (
       <Input
         id={id}
         value={Array.isArray(valeur) ? valeur.join(", ") : ""}
@@ -220,61 +220,61 @@ function Champ({
         disabled={disabled}
         aria-describedby={aide}
         onChange={(event) => {
-          const liste = event.target.value
+          const list = event.target.value
             .split(",")
             .map((part) => part.trim())
             .filter(Boolean);
-          onChange(liste.length > 0 ? liste : undefined);
+          onChange(list.length > 0 ? list : undefined);
         }}
       />
     );
   } else {
-    const nombre = propriete.type === "integer" || propriete.type === "number";
-    controle = (
+    const isNumber = propriete.type === "integer" || propriete.type === "number";
+    control = (
       <Input
         id={id}
-        type={nombre ? "number" : propriete.format === "date" ? "date" : propriete.format === "password" ? "password" : "text"}
+        type={isNumber ? "number" : propriete.format === "date" ? "date" : propriete.format === "password" ? "password" : "text"}
         value={valeur === undefined || valeur === null ? "" : String(valeur)}
         required={requis}
         disabled={disabled}
         aria-describedby={aide}
         onChange={(event) => {
-          const brut = event.target.value;
-          if (brut === "") return onChange(undefined);
-          if (propriete.type === "integer") return onChange(Number.parseInt(brut, 10));
-          if (propriete.type === "number") return onChange(Number(brut));
-          return onChange(brut);
+          const raw = event.target.value;
+          if (raw === "") return onChange(undefined);
+          if (propriete.type === "integer") return onChange(Number.parseInt(raw, 10));
+          if (propriete.type === "number") return onChange(Number(raw));
+          return onChange(raw);
         }}
       />
     );
   }
   return (
     <div className={nom === "data_handling" && connectorType ? "space-y-1 md:col-span-2" : "space-y-1"}>
-      {etiquette}
-      {controle}
+      {label}
+      {control}
       {indication}
     </div>
   );
 }
 
-/** `clé = valeur`, une par ligne : ce qu'on lit, et ce qu'on tape. */
-export function lireUneCorrespondance(texte: string): { valeurs: Record<string, string>; illisibles: number[] } {
-  const valeurs: Record<string, string> = {};
+/** `key = value`, one per line: what is read, and what is typed. */
+export function parseMapping(texte: string): { valeurs: Record<string, string>; illisibles: number[] } {
+  const parsed: Record<string, string> = {};
   const illisibles: number[] = [];
   texte.split("\n").forEach((ligne, index) => {
     if (!ligne.trim()) return;
     const egal = ligne.indexOf("=");
-    const cle = egal < 0 ? "" : ligne.slice(0, egal).trim();
-    if (!cle) {
+    const key = egal < 0 ? "" : ligne.slice(0, egal).trim();
+    if (!key) {
       illisibles.push(index + 1);
       return;
     }
-    valeurs[cle] = ligne.slice(egal + 1).trim();
+    parsed[key] = ligne.slice(egal + 1).trim();
   });
-  return { valeurs, illisibles };
+  return { valeurs: parsed, illisibles };
 }
 
-function ecrireUneCorrespondance(valeur: unknown): string {
+function writeMapping(valeur: unknown): string {
   if (!valeur || typeof valeur !== "object" || Array.isArray(valeur)) return "";
   return Object.entries(valeur as Record<string, unknown>)
     .map(([cle, contenu]) => `${cle} = ${String(contenu)}`)
@@ -282,9 +282,9 @@ function ecrireUneCorrespondance(valeur: unknown): string {
 }
 
 /**
- * Une correspondance, une ligne par paire. Le texte tapé reste tel quel pendant la saisie — une
- * ligne illisible est dite, jamais effacée — et suit la valeur quand elle change d'ailleurs (la
- * lecture du formulaire arrive après son premier rendu).
+ * A mapping, one line per pair. The typed text stays as it is while typing; an
+ * unreadable line is reported, never erased; and it follows the value when it changes from elsewhere (the
+ * form's read arrives after its first render).
  */
 function Correspondance({
   id,
@@ -299,15 +299,15 @@ function Correspondance({
   aide?: string;
   onChange: (valeur: unknown) => void;
 }) {
-  const [texte, setTexte] = useState(() => ecrireUneCorrespondance(valeur));
+  const [texte, setTexte] = useState(() => writeMapping(valeur));
   const [recue, setRecue] = useState(valeur);
   if (valeur !== recue) {
-    // Une valeur venue d'ailleurs (la lecture) remplace le texte ; celle qu'on vient de taper, non.
+    // A value that came from elsewhere (the read) replaces the text; one that was just typed does not.
     setRecue(valeur);
-    const tapee = lireUneCorrespondance(texte).valeurs;
-    if (JSON.stringify(tapee) !== JSON.stringify(valeur ?? {})) setTexte(ecrireUneCorrespondance(valeur));
+    const tapee = parseMapping(texte).valeurs;
+    if (JSON.stringify(tapee) !== JSON.stringify(valeur ?? {})) setTexte(writeMapping(valeur));
   }
-  const { illisibles } = lireUneCorrespondance(texte);
+  const { illisibles } = parseMapping(texte);
   return (
     <>
       <Textarea
@@ -320,7 +320,7 @@ function Correspondance({
         aria-describedby={aide}
         onChange={(event) => {
           setTexte(event.target.value);
-          const { valeurs } = lireUneCorrespondance(event.target.value);
+          const { valeurs } = parseMapping(event.target.value);
           onChange(Object.keys(valeurs).length > 0 ? valeurs : undefined);
         }}
       />
@@ -334,7 +334,7 @@ function Correspondance({
 }
 
 /** The path an asset field uploads to, `{org}` filled in; null when it cannot be (no org, or another placeholder). */
-export function cheminDeTeleversement(modele: string | undefined, org: string | undefined): string | null {
+export function uploadPath(modele: string | undefined, org: string | undefined): string | null {
   if (!modele) return null;
   if (modele.includes("{org}")) {
     if (!org) return null;
@@ -344,7 +344,7 @@ export function cheminDeTeleversement(modele: string | undefined, org: string | 
 }
 
 /** Why a file cannot be offered, from the schema's limits, or null. A courtesy: the upload route is the judge. */
-export function refusDuFichier(fichier: { type: string; size: number }, propriete: JsonSchema): string | null {
+export function fileRefusal(fichier: { type: string; size: number }, propriete: JsonSchema): string | null {
   const accepte = propriete["x-accept"];
   if (accepte && accepte.length > 0 && !accepte.includes(fichier.type)) {
     return `This file type is not accepted (${accepte.join(", ")})`;
@@ -381,19 +381,19 @@ function AssetField({
 }) {
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
-  const chemin = cheminDeTeleversement(propriete["x-upload"], org);
+  const path = uploadPath(propriete["x-upload"], org);
   const actuel = typeof valeur === "string" && valeur !== "" ? valeur : null;
   // Only a same-origin served file is drawn; any other reference is shown as text, never loaded.
   const image = actuel ? safeAsset(actuel) : undefined;
 
-  async function choisir(fichier: File | undefined) {
+  async function choose(fichier: File | undefined) {
     setErreur(null);
-    if (!fichier || !chemin) return;
-    const refus = refusDuFichier(fichier, propriete);
-    if (refus) return setErreur(refus);
+    if (!fichier || !path) return;
+    const refusal = fileRefusal(fichier, propriete);
+    if (refusal) return setErreur(refusal);
     setEnvoi(true);
     try {
-      const { ref } = await api.sectionUpload(chemin, fichier);
+      const { ref } = await api.sectionUpload(path, fichier);
       onChange(ref);
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "upload refused");
@@ -417,14 +417,14 @@ function AssetField({
           id={id}
           type="file"
           accept={propriete["x-accept"]?.join(",")}
-          disabled={disabled || envoi || !chemin}
+          disabled={disabled || envoi || !path}
           aria-describedby={describedBy}
           className="text-xs"
           // The same file chosen twice must fire again.
           onChange={(event) => {
-            const fichier = event.target.files?.[0];
+            const file = event.target.files?.[0];
             event.target.value = "";
-            void choisir(fichier);
+            void choose(file);
           }}
         />
         {actuel && (

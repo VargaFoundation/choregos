@@ -1,25 +1,25 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Acces } from "@/components/acces";
-import { EditionBadge, EditionCard, FONCTIONS_ENTREPRISE } from "@/components/edition";
-import { Garanties } from "@/components/garanties";
+import { Access } from "@/components/access";
+import { EditionBadge, EditionCard, ENTERPRISE_FEATURES } from "@/components/edition";
+import { Guarantees } from "@/components/guarantees";
 import { LiveLog } from "@/components/live-log";
-import { Preuves } from "@/components/preuves";
+import { EvidencePanel } from "@/components/evidence";
 import { ActorIcon, CostChip, Disclosure, Tabs, StateBadge } from "@/components/ui";
 import type { RunEventDto } from "@/lib/types";
 
 describe("composants transverses", () => {
-  it("affiche le libellé du projet, pas l'identifiant d'état", () => {
-    render(<StateBadge state="awaiting_spec_approval" display="Spec à valider" kind="wait" />);
-    expect(screen.getByText("Spec à valider")).toBeInTheDocument();
+  it("shows the project's label, not the state identifier", () => {
+    render(<StateBadge state="awaiting_spec_approval" display="Spec to approve" kind="wait" />);
+    expect(screen.getByText("Spec to approve")).toBeInTheDocument();
   });
 
-  it("marque le dépassement de budget", () => {
+  it("marks the budget overrun", () => {
     const { container } = render(<CostChip costUsd={30} budgetUsd={25} />);
     expect(container.querySelector(".text-danger")).not.toBeNull();
   });
 
-  it("une barre d'onglets reçoit le pixel que l'onglet actif déborde : pas de défilement vertical", () => {
+  it("a tab bar receives the pixel that the active tab overflows: no vertical scroll", () => {
     render(
       <Tabs aria-label="sections" className="mt-2">
         <a href="#a">a</a>
@@ -29,7 +29,7 @@ describe("composants transverses", () => {
     expect(barre).toHaveClass("pb-px", "overflow-x-auto", "mt-2");
   });
 
-  it("nomme le type d'acteur pour les lecteurs d'écran", () => {
+  it("names the actor type for screen readers", () => {
     render(<ActorIcon kind="agent" name="implement" />);
     expect(screen.getByText("Agent")).toBeInTheDocument();
   });
@@ -40,21 +40,21 @@ describe("journal ACP", () => {
     seq: index + 1,
     type: index % 500 === 0 ? "session/request_permission" : "session/update",
     ts: new Date().toISOString(),
-    payload: index % 500 === 0 ? { allowed: false, target: "src/hors-perimetre.py", reason: "hors périmètre" } : { text: `ligne ${index}` },
+    payload: index % 500 === 0 ? { allowed: false, target: "src/out-of-scope.py", reason: "out of scope" } : { text: `line ${index}` },
   }));
 
-  it("virtualise : seules quelques lignes sont montées", () => {
+  it("virtualises: only a few rows are mounted", () => {
     const { container } = render(<LiveLog events={events} height={300} />);
     const rows = container.querySelectorAll('[data-testid="live-log"] > div > div');
     expect(rows.length).toBeLessThan(60);
     expect(screen.getByText(/5000 events/)).toBeInTheDocument();
   });
 
-  it("met en évidence les permissions refusées : une pastille, et un filet sur la ligne", () => {
+  it("highlights refused permissions: a pill, and a rule on the row", () => {
     render(<LiveLog events={events.slice(0, 3)} />);
-    const refus = screen.getByText("Denied");
-    expect(refus).toHaveClass("rounded-full", "text-failed-ink");
-    expect(refus.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed");
+    const refusal = screen.getByText("Denied");
+    expect(refusal).toHaveClass("rounded-full", "text-failed-ink");
+    expect(refusal.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed");
   });
 
   it("reads a journaled result as its status and summary, not as the whole result (#410)", () => {
@@ -70,33 +70,33 @@ describe("journal ACP", () => {
   });
 });
 
-describe("preuves d'une étape", () => {
-  it("affiche les faits nommés par le métier plutôt que des tests absents", () => {
-    // Un dossier instruit n'a ni tests ni couverture : afficher « tests : ✗ · lint : — »
-    // pour lui était faux, et la faute se voyait à l'écran avant de se voir au contrat.
-    render(<Preuves evidence={{ facts: { profils_retenus: 2, besoin_complet: true } }} />);
+describe("a step's evidence", () => {
+  it("shows the facts named by the trade rather than absent tests", () => {
+    // A processed file has neither tests nor coverage: showing "tests: ✗ · lint: -"
+    // for it was wrong, and the mistake showed on screen before showing in the contract.
+    render(<EvidencePanel evidence={{ facts: { profils_retenus: 2, besoin_complet: true } }} />);
     expect(screen.getByText(/Profils retenus/)).toBeInTheDocument();
     expect(screen.getByText(/✓/)).toBeInTheDocument();
     expect(screen.queryByText(/tests/)).toBeNull();
   });
 
-  it("garde les mesures du logiciel quand ce sont elles qui existent", () => {
-    render(<Preuves evidence={{ tests_run: 6, tests_passed: true, lint: "ok" }} />);
+  it("keeps the software's measures when those are what exist", () => {
+    render(<EvidencePanel evidence={{ tests_run: 6, tests_passed: true, lint: "ok" }} />);
     expect(screen.getByText(/Tests: ✓ 6/)).toBeInTheDocument();
     expect(screen.getByText(/Lint: ok/)).toBeInTheDocument();
   });
 
-  it("ne montre pas une grille de tirets quand il n'y a aucune preuve", () => {
-    render(<Preuves evidence={{}} />);
+  it("does not show a grid of dashes when there is no evidence", () => {
+    render(<EvidencePanel evidence={{}} />);
     expect(screen.getByText(/No evidence recorded/)).toBeInTheDocument();
   });
 });
 
-describe("fiche d'accès", () => {
-  it("met les refus devant, avec leur motif", () => {
+describe("access sheet", () => {
+  it("puts the refusals first, with their reason", () => {
     // What an audit comes for: "denied" says nothing, "sensitive file" does.
     render(
-      <Acces
+      <Access
         acces={{
           events: 220,
           refusals: 1,
@@ -112,8 +112,8 @@ describe("fiche d'accès", () => {
     expect(screen.getByText(/220 events/)).toBeInTheDocument();
   });
 
-  it("ne prétend rien quand il n'y a rien", () => {
-    render(<Acces />);
+  it("claims nothing when there is nothing", () => {
+    render(<Access />);
     expect(screen.getByText(/No access recorded/)).toBeInTheDocument();
   });
 });
@@ -125,47 +125,47 @@ describe("garanties", () => {
       seq: 2,
       type: "gate.outcome",
       ts: "2026-09-24T10:01:00Z",
-      payload: { name: "scope_respected", passed: true, pending: false, detail: "dans le périmètre" },
+      payload: { name: "scope_respected", passed: true, pending: false, detail: "within scope" },
     },
     {
       seq: 3,
       type: "gate.outcome",
       ts: "2026-09-24T10:01:00Z",
-      payload: { name: "evidence_present", passed: false, pending: false, detail: "aucun test exécuté" },
+      payload: { name: "evidence_present", passed: false, pending: false, detail: "no test run" },
     },
   ];
 
-  it("montre chaque garantie évaluée et son verdict, les refus d'abord", () => {
-    render(<Garanties events={events} />);
+  it("shows each evaluated guarantee and its verdict, refusals first", () => {
+    render(<Guarantees events={events} />);
     expect(screen.getByText("2 evaluated · 1 refused")).toBeInTheDocument();
     const items = screen.getAllByRole("listitem");
     expect(items[0]?.textContent).toContain("evidence_present");
-    expect(items[0]?.textContent).toContain("aucun test exécuté");
+    expect(items[0]?.textContent).toContain("no test run");
     expect(screen.getByLabelText("Refused")).toBeInTheDocument();
   });
 
-  it("dit quand aucune garantie n'a été évaluée, plutôt qu'un ✓ à vide", () => {
-    render(<Garanties events={[events[0]!]} />);
+  it("says when no guarantee was evaluated, rather than an empty ✓", () => {
+    render(<Guarantees events={[events[0]!]} />);
     expect(screen.getByText(/No gate evaluated/)).toBeInTheDocument();
   });
 });
 
-describe("édition (ADR 0024)", () => {
-  it("en communautaire, dit ce que l'édition entreprise ajouterait", () => {
+describe("edition (ADR 0024)", () => {
+  it("in the community edition, says what the enterprise edition would add", () => {
     render(<EditionCard edition={{ edition: "community", features: [], version: "0.13.1" }} />);
-    const liste = screen.getByRole("list", { name: "What the enterprise edition adds" });
-    expect(liste.querySelectorAll("li").length).toBe(FONCTIONS_ENTREPRISE.length);
+    const list = screen.getByRole("list", { name: "What the enterprise edition adds" });
+    expect(list.querySelectorAll("li").length).toBe(ENTERPRISE_FEATURES.length);
     expect(screen.getByText("SCIM provisioning of users and groups")).toBeInTheDocument();
   });
 
-  it("en entreprise, liste ce qu'elle s'autorise, et garde une clé inconnue lisible", () => {
+  it("in the enterprise edition, lists what it allows itself, and keeps an unknown key readable", () => {
     render(<EditionCard edition={{ edition: "enterprise", features: ["saml", "nouveaute"], version: "0.14.0" }} />);
-    const liste = screen.getByRole("list", { name: "Enterprise features" });
-    expect(liste.textContent).toContain("SAML sign-in, per organisation");
-    expect(liste.textContent).toContain("nouveaute");
+    const list = screen.getByRole("list", { name: "Enterprise features" });
+    expect(list.textContent).toContain("SAML sign-in, per organisation");
+    expect(list.textContent).toContain("nouveaute");
   });
 
-  it("le badge nomme l'édition", () => {
+  it("the badge names the edition", () => {
     render(<EditionBadge edition="enterprise" />);
     expect(screen.getByTestId("edition-badge")).toHaveTextContent("Enterprise edition");
   });

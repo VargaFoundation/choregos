@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SchemaForm, cheminDeTeleversement, refusDuFichier, type JsonSchema } from "@/components/schema-form";
+import { SchemaForm, uploadPath, fileRefusal, type JsonSchema } from "@/components/schema-form";
 
 type Upload = (path: string, file: File) => Promise<{ ref: string }>;
 let upload: Upload = async () => ({ ref: "" });
@@ -104,15 +104,15 @@ describe("a schema-form asset field (S42-13)", () => {
 
 describe("the helpers of an asset field", () => {
   it("fills {org} (encoded) and refuses any other placeholder", () => {
-    expect(cheminDeTeleversement("/orgs/{org}/x", "a b")).toBe("/orgs/a%20b/x");
-    expect(cheminDeTeleversement("/x", undefined)).toBe("/x");
-    expect(cheminDeTeleversement("/orgs/{org}/x/{id}", "acme")).toBeNull();
-    expect(cheminDeTeleversement(undefined, "acme")).toBeNull();
+    expect(uploadPath("/orgs/{org}/x", "a b")).toBe("/orgs/a%20b/x");
+    expect(uploadPath("/x", undefined)).toBe("/x");
+    expect(uploadPath("/orgs/{org}/x/{id}", "acme")).toBeNull();
+    expect(uploadPath(undefined, "acme")).toBeNull();
   });
 
   it("judges type and size from the schema's limits", () => {
-    expect(refusDuFichier({ type: "image/png", size: 10 }, SCHEMA.properties!.logo!)).toBeNull();
-    expect(refusDuFichier({ type: "image/png", size: 5000 }, { "x-max-bytes": 100 })).toContain("100 bytes");
-    expect(refusDuFichier({ type: "text/html", size: 1 }, { "x-accept": ["image/png"] })).toContain("not accepted");
+    expect(fileRefusal({ type: "image/png", size: 10 }, SCHEMA.properties!.logo!)).toBeNull();
+    expect(fileRefusal({ type: "image/png", size: 5000 }, { "x-max-bytes": 100 })).toContain("100 bytes");
+    expect(fileRefusal({ type: "text/html", size: 1 }, { "x-accept": ["image/png"] })).toContain("not accepted");
   });
 });

@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, Card, ErrorNote, Input, Select } from "@/components/ui";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -93,7 +93,7 @@ export function OrganisationCard({ org, canEdit }: { org: string; canEdit: boole
       </p>
       {platform.isSuccess && (
         <div className="mt-2">
-          <GesteConfirme
+          <ConfirmedGesture
             ton="primary"
             question={
               <>
@@ -111,7 +111,7 @@ export function OrganisationCard({ org, canEdit }: { org: string; canEdit: boole
             action={changeSlug}
           >
             Change the slug
-          </GesteConfirme>
+          </ConfirmedGesture>
         </div>
       )}
     </Card>

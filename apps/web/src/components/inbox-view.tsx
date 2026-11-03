@@ -5,7 +5,7 @@ import { CircleCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { Statut, propose } from "@/components/actions/statut";
+import { Status, propose } from "@/components/actions/status";
 import { orgConnectorHref } from "@/lib/connector-link";
 import { DecisionBar } from "@/components/decision-bar";
 import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
@@ -16,15 +16,15 @@ import { FAMILY_LABEL } from "@/lib/egress";
 import { useSession } from "@/lib/session";
 
 /**
- * La boîte de ce qui attend une personne (S23-02) : les tickets arrêtés sur une demande humaine,
- * décidés ici comme sur le board, puis les actions gouvernées qui attendent leur approbation
- * (ADR 0035). Les groupes ne sont pas encore vérifiés : chacun voit tout ce qui attend dans
- * l'organisation, et la page le dit plutôt que de laisser croire à un filtre.
+ * The inbox of what waits for a person (S23-02): the tickets stopped on a human request,
+ * decided here as on the board, then the governed actions awaiting their approval
+ * (ADR 0035). Groups are not verified yet: everyone sees everything that waits in
+ * the organisation, and the page says so rather than suggest a filter.
  */
 export function InboxView({ project, heading = "h1" }: { project?: string; heading?: "h1" | "h2" }) {
   const { org } = useSession();
   const queryClient = useQueryClient();
-  const boite = useADecider(org, project);
+  const inbox = useADecider(org, project);
   // A developer sees the alert but is not offered the gesture (`can_acknowledge`); should the role
   // change between the read and the click, the API's refusal is shown, not swallowed.
   const [refus, setRefus] = useState<string | null>(null);
@@ -52,21 +52,21 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
           )}
         </p>
       </div>
-      {boite.erreur && <ErrorNote>{String(boite.erreur)}</ErrorNote>}
-      {boite.projetsIllisibles.length > 0 && (
+      {inbox.erreur && <ErrorNote>{String(inbox.erreur)}</ErrorNote>}
+      {inbox.projetsIllisibles.length > 0 && (
         <ErrorNote>
-          The tickets of {boite.projetsIllisibles.join(", ")} could not be read: what waits there is not listed.
+          The tickets of {inbox.projetsIllisibles.join(", ")} could not be read: what waits there is not listed.
         </ErrorNote>
       )}
 
-      <Card title="Tickets" action={<span className="text-xs text-ink-muted">{boite.tickets.length} waiting</span>}>
-        {!boite.pret ? (
+      <Card title="Tickets" action={<span className="text-xs text-ink-muted">{inbox.tickets.length} waiting</span>}>
+        {!inbox.pret ? (
           <p className="text-sm text-ink-muted">Reading…</p>
-        ) : boite.tickets.length === 0 ? (
+        ) : inbox.tickets.length === 0 ? (
           <Empty title="No ticket waits" icon={CircleCheck} hue={6}>Every ticket in flight is in the hands of an agent or the platform.</Empty>
         ) : (
           <ul className="divide-y divide-line" data-testid="tickets-en-attente">
-            {boite.tickets.map(({ item, demande, enRetard }) => (
+            {inbox.tickets.map(({ item, demande, enRetard }) => (
               <li key={item.id} className="space-y-2 py-4 first:pt-0" data-testid={`attente-${item.id}`}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <Badge tone={demande.kind === "approval" ? "ink" : "neutral"}>{libelleDeDemande(demande.kind)}</Badge>
@@ -91,7 +91,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                   )}
                 </p>
                 {demande.kind === "task" ? (
-                  // Un formulaire et une attestation ne tiennent pas dans une ligne : la page du ticket.
+                  // A form and an attestation do not fit in a row: the ticket's page.
                   <Link href={`/p/${item.project_slug}/items/${item.id}`} className="text-sm">
                     Do the task
                   </Link>
@@ -109,19 +109,19 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         )}
       </Card>
 
-      <Card title="Actions to approve" action={<span className="text-xs text-ink-muted">{boite.actions.length} waiting</span>}>
+      <Card title="Actions to approve" action={<span className="text-xs text-ink-muted">{inbox.actions.length} waiting</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           Writes into systems that are not ours — an account, a laptop order, a badge — run only once a person approves
           them, with a recent sign-in. The platform runs them afterwards, effect by effect, and undoes what it did if a
           later effect is refused.
         </p>
-        {!boite.pret ? (
+        {!inbox.pret ? (
           <p className="text-sm text-ink-muted">Reading…</p>
-        ) : boite.actions.length === 0 ? (
+        ) : inbox.actions.length === 0 ? (
           <Empty title="Nothing waits" icon={CircleCheck} hue={6}>No action needs a decision.</Empty>
         ) : (
           <ul className="space-y-2" data-testid="boite">
-            {boite.actions.map((action) => (
+            {inbox.actions.map((action) => (
               <li key={action.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm">
                 <Link
                   href={`/p/${action.project_slug ?? ""}/actions/${action.id}`}
@@ -129,7 +129,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                 >
                   {action.title}
                 </Link>
-                <Statut statut={action.status} />
+                <Status statut={action.status} />
                 <span className="text-xs text-ink-muted">
                   {!project && (
                     <>
@@ -146,18 +146,18 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
       </Card>
 
       {!project && (
-        <Card title="Network access" action={<span className="text-xs text-ink-muted">{boite.egressRequests.length} waiting</span>}>
+        <Card title="Network access" action={<span className="text-xs text-ink-muted">{inbox.egressRequests.length} waiting</span>}>
           <p className="mb-3 max-w-3xl text-sm text-ink-muted">
             A host somebody needs Choregos to call for the organisation — an MCP server, a git repository, a web site.
             An administrator allows it, or refuses it; the person asked retries once it is approved.
           </p>
-          {!boite.pret ? (
+          {!inbox.pret ? (
             <p className="text-sm text-ink-muted">Reading…</p>
-          ) : boite.egressRequests.length === 0 ? (
+          ) : inbox.egressRequests.length === 0 ? (
             <Empty title="No request waits" icon={CircleCheck} hue={6}>Nobody is waiting for a host to be opened.</Empty>
           ) : (
             <ul className="space-y-2" data-testid="egress-requests">
-              {boite.egressRequests.map((rule) => (
+              {inbox.egressRequests.map((rule) => (
                 <li key={rule.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm" data-testid={`egress-${rule.id}`}>
                   <span className="font-medium" data-donnee>
                     {rule.host}
@@ -168,7 +168,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                     {rule.origin ? <OriginLink origin={rule.origin} /> : null} · asked by {rule.requested_by ?? "someone"}
                     {rule.requested_at ? ` ${relative(rule.requested_at)}` : ""}
                   </span>
-                  {boite.canDecideEgress ? (
+                  {inbox.canDecideEgress ? (
                     <span className="flex gap-2">
                       <Button
                         size="sm"
@@ -200,20 +200,20 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         </Card>
       )}
 
-      <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{boite.budgets.length} open</span>}>
+      <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{inbox.budgets.length} open</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           A project&apos;s or an agent&apos;s daily budget that reached the policy&apos;s alert share (80 % by default)
           or the whole budget. One item per budget, threshold and day. Acknowledging one takes it out of everyone&apos;s
           inbox, so it needs the project owner role or above.
         </p>
         {refus && <ErrorNote>{refus}</ErrorNote>}
-        {!boite.pret ? (
+        {!inbox.pret ? (
           <p className="text-sm text-ink-muted">Reading…</p>
-        ) : boite.budgets.length === 0 ? (
+        ) : inbox.budgets.length === 0 ? (
           <Empty title="No budget crossed">Nothing has reached its alert threshold today.</Empty>
         ) : (
           <ul className="space-y-2" data-testid="budgets-franchis">
-            {boite.budgets.map((alerte) => (
+            {inbox.budgets.map((alerte) => (
               <li key={alerte.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm">
                 <Badge tone={alerte.threshold >= 100 ? "danger" : "warn"}>{alerte.threshold} %</Badge>
                 <span>{phraseDeBudget(alerte)}</span>

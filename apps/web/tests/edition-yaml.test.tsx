@@ -16,18 +16,18 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: { ...reel.api, workflowNamed: vi.fn(), validateWorkflow: vi.fn(), editWorkflow: vi.fn(), putWorkflowNamed: vi.fn() },
   };
 });
-// L'éditeur réel (CodeMirror) a ses propres tests : ici, un champ de texte suffit à taper.
+// The real editor (CodeMirror) has its own tests: here, a text field is enough to type.
 vi.mock("next/dynamic", () => ({
   default: () =>
-    function Editeur({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+    function Editor({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
       return <textarea aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />;
     },
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/p/rh/workflows/onboarding/yaml" }));
 
 const LU = "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: onboarding, version: 3 }\nstates:\n  inbox: { display: Inbox }\n";
-const graphe = { nodes: [{ id: "inbox", display: "Inbox", kind: "wait", lane: "agent" }], edges: [] };
-const valide: WorkflowValidation = { valid: true, errors: [], warnings: [], graph: graphe, process: [] };
+const graph = { nodes: [{ id: "inbox", display: "Inbox", kind: "wait", lane: "agent" }], edges: [] };
+const valid: WorkflowValidation = { valid: true, errors: [], warnings: [], graph: graph, process: [] };
 const invalide: WorkflowValidation = {
   valid: false,
   errors: [{ code: "workflow.states", message: "a workflow declares its states", line: 1, column: 1 }],
@@ -36,25 +36,25 @@ const invalide: WorkflowValidation = {
 const version = { courante: 3 };
 
 function Sonde() {
-  const brouillon = useBrouillon();
+  const draft = useBrouillon();
   return (
     <div>
-      <textarea aria-label="texte" value={brouillon.yaml} onChange={(e) => brouillon.ecrire(e.target.value)} />
-      <p data-testid="validation">{brouillon.validation.etat}</p>
-      <button type="button" onClick={() => void brouillon.appliquer(operations.libelle("inbox", "New requests"))}>
+      <textarea aria-label="texte" value={draft.yaml} onChange={(e) => draft.ecrire(e.target.value)} />
+      <p data-testid="validation">{draft.validation.etat}</p>
+      <button type="button" onClick={() => void draft.appliquer(operations.libelle("inbox", "New requests"))}>
         geste
       </button>
     </div>
   );
 }
 
-/** Un onglet qu'on quitte et où l'on revient : le fournisseur du brouillon, lui, reste (il vit dans la mise en page). */
+/** A tab that is left and returned to: the draft's provider stays (it lives in the layout). */
 function Tabs({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(true);
   return (
     <>
       <button type="button" onClick={() => setVisible(!visible)}>
-        changer d&apos;onglet
+        switch tab
       </button>
       {visible && children}
     </>
@@ -62,7 +62,7 @@ function Tabs({ children }: { children: ReactNode }) {
 }
 
 let client: QueryClient;
-async function rendre(contenu: ReactNode = <Sonde />) {
+async function mount(contenu: ReactNode = <Sonde />) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -76,105 +76,105 @@ async function rendre(contenu: ReactNode = <Sonde />) {
 }
 
 const taper = (texte: string) => fireEvent.change(screen.getByLabelText("texte"), { target: { value: texte } });
-const valideAuBout = () => waitFor(() => expect(screen.getByTestId("validation")).toHaveTextContent("a_jour"), { timeout: 2000 });
+const validAtTheEnd = () => waitFor(() => expect(screen.getByTestId("validation")).toHaveTextContent("a_jour"), { timeout: 2000 });
 
 beforeEach(() => {
   version.courante = 3;
   vi.mocked(api.workflowNamed).mockImplementation(
     async () => ({ name: "onboarding", version: version.courante, yaml: LU, is_active: true, json: { actors: {} } }) as never,
   );
-  vi.mocked(api.validateWorkflow).mockReset().mockResolvedValue(valide);
+  vi.mocked(api.validateWorkflow).mockReset().mockResolvedValue(valid);
   vi.mocked(api.editWorkflow).mockReset();
   vi.mocked(api.putWorkflowNamed).mockReset().mockResolvedValue({ name: "onboarding", version: 4 } as never);
 });
 
-describe("le brouillon unique des trois vues (S21-06)", () => {
-  it("le texte tapé devient le brouillon, et se publie avec la version lue au début", async () => {
-    await rendre();
+describe("the single draft of the three views (S21-06)", () => {
+  it("the typed text becomes the draft, and is published with the version read at the start", async () => {
+    await mount();
     taper(`${LU}# typed\n`);
     expect(await screen.findByText("1 change not published yet")).toBeInTheDocument();
-    await valideAuBout();
+    await validAtTheEnd();
     fireEvent.click(screen.getByRole("button", { name: "Publish v4" }));
     await waitFor(() => expect(api.putWorkflowNamed).toHaveBeenCalledWith("rh", "onboarding", `${LU}# typed\n`, 3));
   });
 
-  it("le texte survit au changement d'onglet", async () => {
-    await rendre();
+  it("the text survives a tab change", async () => {
+    await mount();
     taper(`${LU}# kept\n`);
-    fireEvent.click(screen.getByRole("button", { name: "changer d'onglet" }));
+    fireEvent.click(screen.getByRole("button", { name: "switch tab" }));
     expect(screen.queryByLabelText("texte")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "changer d'onglet" }));
+    fireEvent.click(screen.getByRole("button", { name: "switch tab" }));
     expect((screen.getByLabelText("texte") as HTMLTextAreaElement).value).toBe(`${LU}# kept\n`);
   });
 
-  it("une validation périmée ne remplace pas la plus récente", async () => {
+  it("a stale validation does not replace the latest one", async () => {
     let lente: (v: WorkflowValidation) => void = () => {};
     vi.mocked(api.validateWorkflow).mockImplementation((texte: string) =>
-      texte === "kind: Workflow\n" ? new Promise((resolve) => (lente = resolve)) : Promise.resolve(valide),
+      texte === "kind: Workflow\n" ? new Promise((resolve) => (lente = resolve)) : Promise.resolve(valid),
     );
-    await rendre();
+    await mount();
     taper("kind: Workflow\n");
     await waitFor(() => expect(api.validateWorkflow).toHaveBeenCalledWith("kind: Workflow\n", expect.anything()), {
       timeout: 2000,
     });
     taper(`${LU}# fixed\n`);
-    await valideAuBout();
-    // La première réponse arrive APRÈS la seconde : elle ne doit rien écrire.
+    await validAtTheEnd();
+    // The first answer arrives AFTER the second: it must write nothing.
     act(() => lente(invalide));
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByText(/Would be invalid/)).toBeNull();
     expect(screen.getByRole("button", { name: "Publish v4" })).toBeEnabled();
   });
 
-  it("une réponse périmée qui arrive pendant la validation suivante ne débloque pas la publication", async () => {
-    const enAttente = new Map<string, (v: WorkflowValidation) => void>();
+  it("a stale answer that arrives during the next validation does not unblock publishing", async () => {
+    const pending = new Map<string, (v: WorkflowValidation) => void>();
     vi.mocked(api.validateWorkflow).mockImplementation((texte: string) =>
-      texte === LU ? Promise.resolve(valide) : new Promise((resolve) => enAttente.set(texte, resolve)),
+      texte === LU ? Promise.resolve(valid) : new Promise((resolve) => pending.set(texte, resolve)),
     );
-    await rendre();
+    await mount();
     taper(`${LU}# A\n`);
-    await waitFor(() => expect(enAttente.has(`${LU}# A\n`)).toBe(true), { timeout: 2000 });
+    await waitFor(() => expect(pending.has(`${LU}# A\n`)).toBe(true), { timeout: 2000 });
     taper(`${LU}# B\n`);
-    await waitFor(() => expect(enAttente.has(`${LU}# B\n`)).toBe(true), { timeout: 2000 });
-    // A répond alors que B est encore en vol : le verdict de A ne vaut pas pour B.
-    await act(async () => enAttente.get(`${LU}# A\n`)!(valide));
+    await waitFor(() => expect(pending.has(`${LU}# B\n`)).toBe(true), { timeout: 2000 });
+    // A answers while B is still in flight: A's verdict does not hold for B.
+    await act(async () => pending.get(`${LU}# A\n`)!(valid));
     expect(screen.getByTestId("validation")).toHaveTextContent("en_cours");
     expect(screen.getByRole("button", { name: "Publish v4" })).toBeDisabled();
-    await act(async () => enAttente.get(`${LU}# B\n`)!(valide));
-    await valideAuBout();
+    await act(async () => pending.get(`${LU}# B\n`)!(valid));
+    await validAtTheEnd();
     expect(screen.getByRole("button", { name: "Publish v4" })).toBeEnabled();
   });
 
-  it("une validation injoignable le dit et interdit de publier ; réessayer la relance", async () => {
-    let appels = 0;
+  it("an unreachable validation says so and forbids publishing; retrying relaunches it", async () => {
+    let calls = 0;
     vi.mocked(api.validateWorkflow).mockImplementation(async (texte: string) => {
-      if (texte === LU) return valide; // la version publiée
-      appels += 1;
-      if (appels === 1) throw new Error("network down");
-      return valide;
+      if (texte === LU) return valid; // the published version
+      calls += 1;
+      if (calls === 1) throw new Error("network down");
+      return valid;
     });
-    await rendre();
+    await mount();
     taper(`${LU}# offline\n`);
     expect(await screen.findByText(/Could not validate the text: network down/, {}, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Publish v4" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    await valideAuBout();
+    await validAtTheEnd();
     expect(screen.getByRole("button", { name: "Publish v4" })).toBeEnabled();
   });
 
-  it("un texte invalide interdit de publier", async () => {
+  it("an invalid text forbids publishing", async () => {
     vi.mocked(api.validateWorkflow).mockResolvedValue(invalide);
-    await rendre();
+    await mount();
     taper("kind: Workflow\n");
-    await valideAuBout();
+    await validAtTheEnd();
     expect(screen.getByText(/the workflow would be invalid/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Publish v4" })).toBeDisabled();
   });
 
-  it("une version publiée pendant l'édition ne remplace pas le texte et ouvre le conflit", async () => {
-    await rendre();
+  it("a version published during the edit does not replace the text and opens the conflict", async () => {
+    await mount();
     taper(`${LU}# mine\n`);
-    await valideAuBout();
+    await validAtTheEnd();
     version.courante = 4;
     await act(() => client.invalidateQueries({ queryKey: ["workflow", "rh", "onboarding"] }));
     expect(await screen.findByTestId("conflit")).toHaveTextContent("you started from v3, the workflow is now v4");
@@ -182,13 +182,13 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     expect(screen.getByRole("button", { name: "Publish v5" })).toBeDisabled();
   });
 
-  it("un 409 garde le texte et propose de recharger ou d'écraser", async () => {
+  it("a 409 keeps the text and offers to reload or overwrite", async () => {
     vi.mocked(api.putWorkflowNamed)
       .mockRejectedValueOnce(new ApiError(409, { title: "Conflict" }))
       .mockResolvedValueOnce({ name: "onboarding", version: 5 } as never);
-    await rendre();
+    await mount();
     taper(`${LU}# mine\n`);
-    await valideAuBout();
+    await validAtTheEnd();
     version.courante = 4;
     fireEvent.click(screen.getByRole("button", { name: "Publish v4" }));
     expect(await screen.findByTestId("conflit")).toBeInTheDocument();
@@ -197,18 +197,18 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     await waitFor(() => expect(api.putWorkflowNamed).toHaveBeenLastCalledWith("rh", "onboarding", `${LU}# mine\n`, 4));
   });
 
-  it("un geste sur la carte s'applique au texte édité", async () => {
-    const resultat = { ...valide, yaml: `${LU}# typed\n# grafted\n`, diff: "+# grafted", inverse: [], notices: [] } as WorkflowEditResult;
-    vi.mocked(api.editWorkflow).mockResolvedValue(resultat);
-    await rendre();
+  it("a gesture on the map applies to the edited text", async () => {
+    const outcome = { ...valid, yaml: `${LU}# typed\n# grafted\n`, diff: "+# grafted", inverse: [], notices: [] } as WorkflowEditResult;
+    vi.mocked(api.editWorkflow).mockResolvedValue(outcome);
+    await mount();
     taper(`${LU}# typed\n`);
     fireEvent.click(screen.getByRole("button", { name: "geste" }));
     await waitFor(() => expect(api.editWorkflow).toHaveBeenCalledWith(`${LU}# typed\n`, [operations.libelle("inbox", "New requests")]));
     expect(await screen.findByText("2 changes not published yet")).toBeInTheDocument();
   });
 
-  it("annuler défait une session de frappe d'un coup", async () => {
-    await rendre();
+  it("undo reverts a typing session at once", async () => {
+    await mount();
     taper(`${LU}#`);
     taper(`${LU}# a`);
     taper(`${LU}# ab`);
@@ -218,19 +218,19 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     expect((screen.getByLabelText("texte") as HTMLTextAreaElement).value).toBe(LU);
   });
 
-  it("quitter avec un brouillon non publié demande confirmation", async () => {
-    await rendre();
-    const sansBrouillon = new Event("beforeunload", { cancelable: true });
-    window.dispatchEvent(sansBrouillon);
-    expect(sansBrouillon.defaultPrevented).toBe(false);
+  it("leaving with an unpublished draft asks for confirmation", async () => {
+    await mount();
+    const withoutDraft = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(withoutDraft);
+    expect(withoutDraft.defaultPrevented).toBe(false);
     taper(`${LU}# unsaved\n`);
     await screen.findByText("1 change not published yet");
-    const avecBrouillon = new Event("beforeunload", { cancelable: true });
-    window.dispatchEvent(avecBrouillon);
-    expect(avecBrouillon.defaultPrevented).toBe(true);
+    const withDraft = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(withDraft);
+    expect(withDraft.defaultPrevented).toBe(true);
   });
 
-  it("l'onglet YAML n'a pas de bouton de publication à lui : il écrit dans le brouillon commun", async () => {
+  it("the YAML tab has no publish button of its own: it writes into the shared draft", async () => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
@@ -240,9 +240,9 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
         </BrouillonProvider>
       </QueryClientProvider>,
     );
-    const champ = (await screen.findByLabelText("YAML of onboarding")) as HTMLTextAreaElement;
+    const field = (await screen.findByLabelText("YAML of onboarding")) as HTMLTextAreaElement;
     expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
-    fireEvent.change(champ, { target: { value: `${LU}# from the YAML tab\n` } });
+    fireEvent.change(field, { target: { value: `${LU}# from the YAML tab\n` } });
     await waitFor(() => expect(screen.getByTestId("validation-yaml")).toHaveTextContent("✓ valid workflow"), { timeout: 2000 });
     expect(screen.getAllByRole("button", { name: /Publish/ })).toHaveLength(1);
   });

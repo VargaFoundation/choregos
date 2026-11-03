@@ -6,7 +6,7 @@ import type { Provenance as Genre } from "@/lib/provenance";
 
 const ICONES: Record<Genre, LucideIcon> = { declared: MessageSquareQuote, observed: Eye, inferred: Sigma, unknown: CircleHelp };
 
-/** Ce que veut dire chaque provenance, pour l'infobulle et pour un lecteur d'écran. */
+/** What each provenance means, for the tooltip and for a screen reader. */
 export const SENS: Record<Genre, string> = {
   declared: "said by the agent, not checked by the platform",
   observed: "measured or seen by the platform itself",
@@ -14,7 +14,7 @@ export const SENS: Record<Genre, string> = {
   unknown: "the source is not known",
 };
 
-/** L'étiquette de provenance d'un signal (ADR 0045) : un mot, une icône, et ce qu'il veut dire. */
+/** A signal's provenance label (ADR 0045): a word, an icon, and what it means. */
 export function Provenance({ de, className }: { de: Genre; className?: string }) {
   const Icone = ICONES[de];
   return (

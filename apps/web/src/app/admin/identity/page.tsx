@@ -4,8 +4,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { InstanceIdentityCard } from "@/components/admin/instance-identity";
 import { SectionRendue } from "@/components/admin/section";
-import { isIdentitySection } from "@/components/coquille/navigation";
-import { EtatDeLecture, Heading, Lead } from "@/components/ui";
+import { isIdentitySection } from "@/components/shell/navigation";
+import { ReadState, Heading, Lead } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { withoutCoreRows } from "@/lib/identity";
@@ -34,7 +34,7 @@ export default function IdentityPage() {
         directory provisioning) is set here.
       </Lead>
       <InstanceIdentityCard />
-      <EtatDeLecture lecture={sections} quoi="the identity settings" />
+      <ReadState lecture={sections} quoi="the identity settings" />
       {identity.map((section) => (
         <section
           key={section.id}

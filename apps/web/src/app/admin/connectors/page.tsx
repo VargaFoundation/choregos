@@ -5,13 +5,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
-import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
-import { resumeDeLaDecouverte } from "@/components/decouverte";
+import { DeliveryTools, groupConnectors } from "@/components/org-connectors";
+import { discoverySummary } from "@/components/discovery";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
-import { Glossaire } from "@/components/glossaire";
+import { Glossary } from "@/components/glossary";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { dataHandlingProblems } from "@/lib/data-handling";
-import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
+import { SchemaForm, missingFields, type JsonSchema } from "@/components/schema-form";
 import {
   AddKey,
   EMPTY_DRAFT,
@@ -27,34 +27,34 @@ import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
 import { libelleDeSorte, isOrgDeclarable } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorOperation, ConnectorSecretState, OperationPatch, OrgConnector } from "@/lib/types";
-import { Confirmation } from "@/components/geste-confirme";
+import { Confirmation } from "@/components/confirmed-gesture";
 
 const POLITIQUES = ["allowed", "approval", "forbidden"] as const;
 const TON = { allowed: "ok", approval: "warn", forbidden: "danger" } as const;
-/** Du plus libre au plus strict : passer à un rang plus bas assouplit, et se confirme (S23-07). */
+/** From the loosest to the strictest: moving to a lower rank loosens, and is confirmed (S23-07). */
 const RIGUEUR = { allowed: 0, approval: 1, forbidden: 2 } as const;
-const CE_QUE_CA_PERMET = {
+const WHAT_IT_ALLOWS = {
   allowed: "agents run it without asking anyone",
   approval: "agents run it once a person approves",
   forbidden: "nobody runs it",
 } as const;
 
 /**
- * Les connecteurs (ADR 0034), rangés par ce qu'ils SONT (revue du 07/10 : « ça mélange des agents,
- * des MCPs et des connecteurs API, c'est flou ») : les systèmes métier de l'organisation, qui déclarent
- * leurs opérations ; ses serveurs MCP, dont on découvre les outils ; et, en lecture, les outils de
- * livraison de chaque projet, qui se règlent dans le projet. Seul l'administrateur de l'organisation
- * décide des deux premiers ; un projet ne fait que resserrer.
+ * The connectors (ADR 0034), sorted by what they ARE (review of 7 Oct: "it mixes agents,
+ * MCPs and API connectors, it is blurry"): the organisation's business systems, which declare
+ * their operations; its MCP servers, whose tools are discovered; and, read-only, each project's
+ * delivery tools, which are set in the project. Only the organisation's administrator
+ * decides the first two; a project can only tighten.
  */
 export default function OrgConnectorsPage() {
   const { org } = useSession();
   const instances = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
   // Landing from the catalogue (ADR 0065): the connector just installed is marked, with what its
   // first discovery found.
-  const arrivee = useArrivee();
+  const arrival = useArrival();
   // Arriving from Catalogue → Plugins (S43-08): the server's connector is marked and its settings open.
   const focus = useFocus();
-  const { metier, mcp } = rangerLesConnecteurs(instances.data ?? []);
+  const { metier, mcp } = groupConnectors(instances.data ?? []);
   const lecture = instances.error ? (
     <ErrorNote>{String(instances.error)}</ErrorNote>
   ) : !instances.data ? (
@@ -82,10 +82,10 @@ export default function OrgConnectorsPage() {
           Browse connector types
         </Link>
       </aside>
-      {arrivee && (
+      {arrival && (
         <p className="max-w-3xl text-sm" role="status" data-testid="installed-from-catalogue">
-          Installed <strong data-donnee>{arrivee.name}</strong> from the catalogue.
-          {arrivee.discovery ? ` Tools: ${arrivee.discovery}.` : ""} Open the tools your agents need below.
+          Installed <strong data-donnee>{arrival.name}</strong> from the catalogue.
+          {arrival.discovery ? ` Tools: ${arrival.discovery}.` : ""} Open the tools your agents need below.
         </p>
       )}
       <div className="space-y-3">
@@ -94,7 +94,7 @@ export default function OrgConnectorsPage() {
           — and opens to the project groups you name (none: every project). A project can tighten an operation, never
           widen it.
         </p>
-        <Glossaire ici="connectors" ouvert />
+        <Glossary ici="connectors" ouvert />
       </div>
       <section className="space-y-3" aria-labelledby="business" data-testid="section-metier">
         <h2 id="business" className="text-lg font-semibold">
@@ -145,15 +145,15 @@ export default function OrgConnectorsPage() {
                 key={instance.name}
                 org={org}
                 instance={instance}
-                highlighted={instance.name === arrivee?.name || instance.name === focus}
+                highlighted={instance.name === arrival?.name || instance.name === focus}
                 open={instance.name === focus}
               />
             ))
           ))}
       </section>
-      <OutilsDeLivraison org={org} />
+      <DeliveryTools org={org} />
       <Suspense>
-        <Declarer org={org} />
+        <DeclareInstance org={org} />
       </Suspense>
     </div>
   );
@@ -175,7 +175,7 @@ function useFocus(): string | null {
 }
 
 /** The connector the catalogue just installed, and what its first discovery found (empty on the server). */
-function useArrivee(): { name: string; discovery: string } | null {
+function useArrival(): { name: string; discovery: string } | null {
   const search = useSyncExternalStore(subscribeToLocation, () => window.location.search, NO_SEARCH);
   const params = new URLSearchParams(search);
   const name = params.get("name");
@@ -207,7 +207,7 @@ function Instance({
     setErreur(null);
     setDiff(null);
     try {
-      setDiff(resumeDeLaDecouverte(await api.discoverConnectorOperations(org, instance.name)));
+      setDiff(discoverySummary(await api.discoverConnectorOperations(org, instance.name)));
       await client.invalidateQueries({ queryKey: ["org-connectors", org] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "discovery failed");
@@ -372,7 +372,7 @@ function Secrets({
             onChange={setConfig}
             connectorType={webSearchType(instance.kind, instance.type)}
           />
-          <Button size="sm" tone="primary" type="submit" disabled={champsManquants(jsonSchema, config).length > 0 || dataHandlingProblems(instance.type, config.data_handling).length > 0}
+          <Button size="sm" tone="primary" type="submit" disabled={missingFields(jsonSchema, config).length > 0 || dataHandlingProblems(instance.type, config.data_handling).length > 0}
           >
             Save settings
           </Button>
@@ -463,7 +463,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
           onChange={(event) => {
             const choisie = event.target.value as keyof typeof RIGUEUR;
             const actuelle = operation.policy as keyof typeof RIGUEUR;
-            // Resserrer s'applique tout de suite ; assouplir ouvre une écriture à des agents : on le dit d'abord.
+            // Tightening applies at once; loosening opens a write to agents: say so first.
             if (RIGUEUR[choisie] < (RIGUEUR[actuelle] ?? 2)) setAssouplir(choisie);
             else {
               setAssouplir(null);
@@ -484,7 +484,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
           <div className="mt-2 max-w-sm">
             <Confirmation
               ton="primary"
-              question={`Loosen ${operation.name} to ${assouplir}? ${CE_QUE_CA_PERMET[assouplir as keyof typeof CE_QUE_CA_PERMET] ?? ""}, in every project it applies to.`}
+              question={`Loosen ${operation.name} to ${assouplir}? ${WHAT_IT_ALLOWS[assouplir as keyof typeof WHAT_IT_ALLOWS] ?? ""}, in every project it applies to.`}
               confirmer={`Set ${assouplir}`}
               action={async () => {
                 await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir });
@@ -617,8 +617,8 @@ function ResultCap({
 /** The API's rule for a connector's name (`OrgConnectorCreate.name`): checked here, so it is said, not a bare 422. */
 const CONNECTOR_NAME = /^[a-z][a-z0-9-]{1,62}$/;
 
-/** Déclarer une instance : son type (ceux qui exposent des opérations d'abord), sa configuration, ses secrets. */
-function Declarer({ org }: { org: string }) {
+/** Declare an instance: its type (those that expose operations first), its configuration, its secrets. */
+function DeclareInstance({ org }: { org: string }) {
   const client = useQueryClient();
   const guard = useEgressGuard();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
@@ -628,10 +628,10 @@ function Declarer({ org }: { org: string }) {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const [erreur, setErreur] = useState<string | null>(null);
-  // Les outils de livraison d'un projet se règlent dans le projet : ils ne se déclarent pas ici.
+  // A project's delivery tools are set in the project: they are not declared here.
   // The organisation's own model gateway is the one exception (S44-04).
   const candidats = (types.data ?? []).filter((t) => isOrgDeclarable(t.kind, t.type));
-  const familles = [
+  const families = [
     { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp" && t.kind !== "gateway") },
     { titre: "MCP servers", types: candidats.filter((t) => t.kind === "mcp") },
     { titre: "Model gateway (LLM)", types: candidats.filter((t) => t.kind === "gateway") },
@@ -644,7 +644,7 @@ function Declarer({ org }: { org: string }) {
   const viaGateway = type?.type === "mcp-gateway";
   const gateway = useQuery({ queryKey: ["mcp-gateway", org], queryFn: () => api.mcpGateway(org), enabled: viaGateway });
   const noGateway = viaGateway && (!gateway.data || !gateway.data.gateway || gateway.data.gateway.mode === "off");
-  async function declarer() {
+  async function declareInstance() {
     if (!type) return;
     setErreur(null);
     try {
@@ -684,7 +684,7 @@ function Declarer({ org }: { org: string }) {
           className="space-y-3 text-sm"
           onSubmit={(event) => {
             event.preventDefault();
-            void declarer();
+            void declareInstance();
           }}
         >
           <div className="grid gap-3 md:grid-cols-2">
@@ -717,7 +717,7 @@ function Declarer({ org }: { org: string }) {
                 }}
               >
                 <option value="">—</option>
-                {familles.map((famille) => (
+                {families.map((famille) => (
                   <optgroup key={famille.titre} label={famille.titre}>
                     {famille.types.map((t) => (
                       <option key={`${t.kind}/${t.type}`} value={`${t.kind}/${t.type}`}>
@@ -771,7 +771,7 @@ function Declarer({ org }: { org: string }) {
               !nom ||
               nameInvalid ||
               !type ||
-              champsManquants(schema, config).length > 0 ||
+              missingFields(schema, config).length > 0 ||
               illisibles.length > 0 ||
               dataHandlingProblems(type.type, config.data_handling).length > 0
             }

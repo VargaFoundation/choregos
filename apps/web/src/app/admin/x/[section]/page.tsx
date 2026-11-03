@@ -5,12 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import { SectionRendue } from "@/components/admin/section";
-import { isIdentitySection } from "@/components/coquille/navigation";
+import { isIdentitySection } from "@/components/shell/navigation";
 import { Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
-/** Une section déclarée par un greffon, rendue par la console (ADR 0032). */
+/** A section declared by an extension, rendered by the console (ADR 0032). */
 export default function SectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section: id } = use(params);
   const { org } = useSession();

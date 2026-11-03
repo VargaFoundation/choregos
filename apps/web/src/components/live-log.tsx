@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Journal ACP virtualisé : 10 000 événements sans saccade, permissions mises en évidence. Il a
- * l'allure d'un historique d'événements (ADR 0043) : des lignes de 32 px, l'heure en mono, un refus
- * en pastille rouge, et des en-têtes de colonne qui restent en haut quand on défile.
+ * Virtualised ACP journal: 10,000 events without a stutter, permissions highlighted. It has
+ * the look of an event history (ADR 0043): 32 px rows, the time in mono, a refusal
+ * as a red pill, and column headers that stay on top when scrolling.
  */
 "use client";
 
@@ -73,9 +73,9 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
                 key={event.seq}
                 style={{ position: "absolute", top: (start + index) * ROW_HEIGHT, height: ROW_HEIGHT }}
                 className={cn(
-                  // Chaque ligne a son filet gauche, transparent sauf un refus ou un résultat : les
-                  // colonnes restent alignées. Un filet plutôt qu'un fond teinté : la couleur seule ne
-                  // disait pas « refusé » (S23-05).
+                  // Each row has its left rule, transparent except for a refusal or a result: the
+                  // columns stay aligned. A rule rather than a tinted background: colour alone did not
+                  // say "refused" (S23-05).
                   "flex w-full items-center gap-3 border-b border-l-2 border-b-line/50 border-l-transparent px-3 hover:bg-surface-muted",
                   denied && "border-l-failed",
                   isResult && "border-l-succeeded",
@@ -106,27 +106,27 @@ function summarize(event: RunEventDto): string {
   if (event.type === "session/request_permission") {
     return `${payload.allowed ? "Allowed" : "Refused"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
   }
-  if (event.type === "session/update") return resumerLaMiseAJour(payload);
+  if (event.type === "session/update") return summariseUpdate(payload);
   // The runner journals the whole result (#410); one line says its status and summary.
   if (event.type === "run.result") return `${payload.status ?? ""} · ${payload.summary ?? ""}`;
   return JSON.stringify(payload);
 }
 
-/** Une mise à jour ACP en une ligne : le texte d'un message, l'état d'un plan — le JSON sinon. */
-function resumerLaMiseAJour(payload: Record<string, unknown>): string {
+/** An ACP update in one line: a message's text, a plan's state, the JSON otherwise. */
+function summariseUpdate(payload: Record<string, unknown>): string {
   const update = (payload.update ?? payload) as Record<string, unknown>;
   const genre = String(update.sessionUpdate ?? "");
-  const contenu = update.content as { text?: unknown } | undefined;
-  if ((genre === "agent_message_chunk" || genre === "agent_thought_chunk") && typeof contenu?.text === "string") {
-    return genre === "agent_thought_chunk" ? `(thinking) ${contenu.text}` : contenu.text;
+  const content = update.content as { text?: unknown } | undefined;
+  if ((genre === "agent_message_chunk" || genre === "agent_thought_chunk") && typeof content?.text === "string") {
+    return genre === "agent_thought_chunk" ? `(thinking) ${content.text}` : content.text;
   }
   if (genre === "tool_call" || genre === "tool_call_update") {
-    const titre = typeof update.title === "string" ? update.title : String(update.toolCallId ?? "");
-    return [titre, typeof update.status === "string" ? update.status : null].filter(Boolean).join(" · ");
+    const title = typeof update.title === "string" ? update.title : String(update.toolCallId ?? "");
+    return [title, typeof update.status === "string" ? update.status : null].filter(Boolean).join(" · ");
   }
   if (genre === "plan" && Array.isArray(update.entries)) {
-    const entrees = update.entries as { status?: unknown }[];
-    return `Plan · ${entrees.filter((e) => e.status === "completed").length} of ${entrees.length} done`;
+    const entries = update.entries as { status?: unknown }[];
+    return `Plan · ${entries.filter((e) => e.status === "completed").length} of ${entries.length} done`;
   }
   return String(payload.text ?? JSON.stringify(payload));
 }

@@ -3,7 +3,7 @@
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { Button, Card, Empty, ErrorNote, PhraseDuMoteur, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EngineSentence, StateBadge } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { FormulaireDEtape, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { StepDetails } from "@/components/workflows/step-details";
@@ -59,7 +59,7 @@ export default function StepsPage() {
                 <div className="flex items-start gap-2">
                   <p className="min-w-0 flex-1 break-words text-sm">
                     <span className="mr-2 text-ink-muted">{index + 1}.</span>
-                    <PhraseDuMoteur texte={step.sentence} />
+                    <EngineSentence texte={step.sentence} />
                   </p>
                   <Button size="sm" onClick={() => setOpened(opened === step.id ? null : step.id)}>
                     {opened === step.id ? "Close" : `Edit ${step.id}`}

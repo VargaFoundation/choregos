@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { GatewayKeysCard } from "@/components/admin/gateway-keys";
-import { Alert, Button, Card, Code, Empty, EtatDeLecture, Field, Input, StateBadge } from "@/components/ui";
+import { Alert, Button, Card, Code, Empty, ReadState, Field, Input, StateBadge } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { AgentBackendInfo, ExecutorInfo } from "@/lib/types";
 
@@ -58,7 +58,7 @@ export default function PlatformPage() {
             <BackendRow key={backend.name} backend={backend} />
           ))}
         </ul>
-        <EtatDeLecture lecture={backends} quoi="the agent backends" />
+        <ReadState lecture={backends} quoi="the agent backends" />
         {backends.data?.length === 0 && <Empty>No backend registered</Empty>}
       </Card>
       <Card title="Executors (where agent stages run)">
@@ -110,7 +110,7 @@ export default function PlatformPage() {
             </li>
           ))}
         </ul>
-        <EtatDeLecture lecture={executors} quoi="the executors" />
+        <ReadState lecture={executors} quoi="the executors" />
         {executors.data?.length === 0 && <Empty>No executor registered</Empty>}
       </Card>
       <div className="lg:col-span-2">

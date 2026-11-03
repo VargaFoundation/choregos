@@ -3,9 +3,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { AiClientCatalogue } from "@/components/agents/catalogue";
-import { ClientsMcp } from "@/components/agents/clients-mcp";
-import { estUnClientMcp } from "@/components/agents/registre";
-import { Glossaire } from "@/components/glossaire";
+import { McpClients } from "@/components/agents/mcp-clients";
+import { isMcpClient } from "@/components/agents/registry";
+import { Glossary } from "@/components/glossary";
 import { Empty } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
@@ -15,11 +15,11 @@ import { A2aAgent } from "./a2a";
 import { IntegrationsPanel } from "./panel";
 
 /**
- * La page Integrations, à l'échelle de l'organisation ou d'un projet (ADR 0030).
+ * The Integrations page, at the scale of the organisation or of a project (ADR 0030).
  *
- * « Comment je me connecte à Choregos depuis mon Claude ? » — la question du product owner le
- * 2026-10-05. La réponse tient sur cette page : un onglet par client, un jeton frappé pour lui,
- * l'extrait à coller, et le constat qu'il s'est connecté.
+ * "How do I connect to Choregos from my Claude?" The product owner's question on
+ * 2026-10-05. The answer fits on this page: a tab per client, a token minted for it,
+ * the snippet to paste, and the finding that it connected.
  */
 export function IntegrationsPage({ client, projet }: { client: string; projet?: string }) {
   const base = projet ? `/p/${projet}/integrations` : "/integrations";
@@ -28,7 +28,7 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
       {!projet && (
         <div className="space-y-2">
           <OrgPageHeader title="Integrations" description="Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work items, and tells you what waits for your decision — with your rights, never more. It never decides: you do, in the console." />
-          <Glossaire ici="clients" />
+          <Glossary ici="clients" />
         </div>
       )}
       {estClient(client) ? (
@@ -36,7 +36,7 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
       ) : (
         <Empty title="Unknown client">No client called {client}</Empty>
       )}
-      {!projet && <ClientsDeLOrganisation />}
+      {!projet && <OrganisationClients />}
     </div>
   );
 }
@@ -46,13 +46,13 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
  * external agent each acts as — and the assistants that connect in one click. The agents' page is
  * the registry only.
  */
-function ClientsDeLOrganisation() {
+function OrganisationClients() {
   const { org } = useSession();
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
-  const jetons = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
+  const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
   return (
     <>
-      <ClientsMcp org={org} clients={(jetons.data ?? []).filter(estUnClientMcp)} agents={agents.data ?? []} />
+      <McpClients org={org} clients={(tokens.data ?? []).filter(isMcpClient)} agents={agents.data ?? []} />
       <A2aAgent org={org} />
       <AiClientCatalogue org={org} />
     </>

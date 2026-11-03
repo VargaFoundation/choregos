@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Card, Empty, EtatDeLecture } from "@/components/ui";
+import { Card, Empty, ReadState } from "@/components/ui";
 import { api, type CostFilter } from "@/lib/api";
 import { type Currency, money, top } from "@/lib/spend";
 
@@ -52,7 +52,7 @@ export function BreakdownCard({
       }
     >
       {!report.data ? (
-        <EtatDeLecture lecture={report} quoi={title} />
+        <ReadState lecture={report} quoi={title} />
       ) : rows.length === 0 ? (
         <Empty>Nothing spent here in this period.</Empty>
       ) : (

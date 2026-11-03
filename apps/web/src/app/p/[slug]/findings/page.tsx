@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, ReadState, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 
@@ -113,7 +113,7 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
           ))}
         </TBody>
       </Table>
-      <EtatDeLecture lecture={findings} quoi="the findings" />
+      <ReadState lecture={findings} quoi="the findings" />
       {findings.data?.items.length === 0 && <Empty>No finding</Empty>}
     </Card>
   );

@@ -24,7 +24,7 @@ import { BUILD_POLL_MS, buildInProgress, latestRuntime } from "@/components/agen
 import { TagList } from "@/components/agents/tags";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
-import { estUnClientMcp, etatDuClient, readOnly } from "@/components/agents/registre";
+import { isMcpClient, clientState, readOnly } from "@/components/agents/registry";
 import {
   Badge,
   Breadcrumbs,
@@ -32,7 +32,7 @@ import {
   Card,
   Empty,
   ErrorNote,
-  EtatDeLecture,
+  ReadState,
   Heading,
   Select,
   StateBadge,
@@ -80,8 +80,8 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   const pathname = usePathname();
   const router = useRouter();
   const search = useSearchParams();
-  const demande = search.get("tab") === "versions" ? "history" : search.get("tab"); // the former name still opens History
-  const onglet: AgentTab = AGENT_TABS.some((o) => o.id === demande) ? (demande as AgentTab) : "overview";
+  const requested = search.get("tab") === "versions" ? "history" : search.get("tab"); // the former name still opens History
+  const onglet: AgentTab = AGENT_TABS.some((o) => o.id === requested) ? (requested as AgentTab) : "overview";
   const agent = useQuery({
     queryKey: ["agent", org, slug],
     queryFn: () => api.agent(org, slug),
@@ -135,7 +135,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         <>
           <AgentDetailsCard key={`${a.slug}-${a.display_name}-${a.description}-${(a.tags ?? []).join(",")}`} org={org} agent={a} />
           {a.kind === "remote" && <RemoteDrift org={org} slug={slug} />}
-          <Statut org={org} agent={a} />
+          <AgentStatus org={org} agent={a} />
           <DeleteAgent org={org} agent={a} onDeleted={() => router.push("/agents")} />
           <p className="flex flex-wrap items-center gap-3 text-sm" data-testid="overview-channels">
             <ChannelBadges agent={a} />
@@ -146,7 +146,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
               <ScopePanel org={org} agent={a} />
             </Card>
           )}
-          <Mesures org={org} slug={slug} />
+          <AgentMetrics org={org} slug={slug} />
         </>
       )}
       {onglet === "definition" && <Definition org={org} agent={a} />}
@@ -164,7 +164,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       {onglet === "runs" && <Runs org={org} slug={slug} />}
       {onglet === "access" && (
         <>
-          <Acces agent={a} />
+          <AgentAccess agent={a} />
           {a.kind === "external" && <Clients org={org} slug={slug} />}
         </>
       )}
@@ -172,8 +172,8 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   );
 }
 
-/** Suspendre, réactiver, révoquer : la révocation se relit à chaque appel (S18-06). */
-function Statut({ org, agent }: { org: string; agent: Agent }) {
+/** Suspend, reactivate, revoke: the revocation is re-read on every call (S18-06). */
+function AgentStatus({ org, agent }: { org: string; agent: Agent }) {
   const client = useQueryClient();
   const [erreur, setErreur] = useState<string | null>(null);
   const [aConfirmer, setAConfirmer] = useState(false);
@@ -221,11 +221,11 @@ function Statut({ org, agent }: { org: string; agent: Agent }) {
   );
 }
 
-/** Ses runs sur 30 jours, leur issue, leur coût — modèles et outils —, par projet ; sa journée. */
-function Mesures({ org, slug }: { org: string; slug: string }) {
-  const mesures = useQuery({ queryKey: ["agent-metrics", org, slug], queryFn: () => api.agentMetrics(org, slug) });
-  if (mesures.error) return <ErrorNote>{String(mesures.error)}</ErrorNote>;
-  const m = mesures.data;
+/** Its runs over 30 days, their outcome, their cost (models and tools), per project; its day. */
+function AgentMetrics({ org, slug }: { org: string; slug: string }) {
+  const metrics = useQuery({ queryKey: ["agent-metrics", org, slug], queryFn: () => api.agentMetrics(org, slug) });
+  if (metrics.error) return <ErrorNote>{String(metrics.error)}</ErrorNote>;
+  const m = metrics.data;
   return (
     <Card title="Last 30 days">
       {!m ? (
@@ -380,7 +380,7 @@ function AcpDefinition({ org, agent }: { org: string; agent: Agent }) {
 /** Its latest runs, across the projects one may read (S30-05): one request. */
 function Runs({ org, slug }: { org: string; slug: string }) {
   const runs = useQuery({ queryKey: ["agent-runs", org, slug], queryFn: () => api.agentRuns(org, slug) });
-  if (!runs.data) return <EtatDeLecture lecture={runs} quoi="the agent's runs" />;
+  if (!runs.data) return <ReadState lecture={runs} quoi="the agent's runs" />;
   if (runs.data.length === 0) return <Empty title="No run yet">A workflow that names this agent runs it.</Empty>;
   return (
     <Card title="Latest runs" padding="none" className="overflow-hidden">
@@ -421,7 +421,7 @@ function Runs({ org, slug }: { org: string; slug: string }) {
 }
 
 /** What the agent may reach: the tools and servers its current version names, and its skills. */
-function Acces({ agent }: { agent: Agent }) {
+function AgentAccess({ agent }: { agent: Agent }) {
   const courante = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version)[0];
   const serveurs = courante?.spec.mcp_servers ?? [];
   return (
@@ -445,18 +445,18 @@ function Acces({ agent }: { agent: Agent }) {
   );
 }
 
-/** Les clients MCP qui incarnent cet agent : quand chacun a appelé, avec quoi ; en rattacher, détacher. */
+/** The MCP clients that embody this agent: when each one called, with what; attach, detach. */
 function Clients({ org, slug }: { org: string; slug: string }) {
   const client = useQueryClient();
-  const liens = useQuery({
+  const links = useQuery({
     queryKey: ["agent-credentials", org, slug],
     queryFn: () => api.agentCredentials(org, slug),
   });
-  const jetons = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
+  const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
   const [choisi, setChoisi] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
-  const rattaches = new Set((liens.data ?? []).map((l) => l.token_id));
-  const libres = (jetons.data ?? []).filter((j) => estUnClientMcp(j) && !rattaches.has(j.id));
+  const rattaches = new Set((links.data ?? []).map((l) => l.token_id));
+  const libres = (tokens.data ?? []).filter((j) => isMcpClient(j) && !rattaches.has(j.id));
   async function agir(geste: () => Promise<unknown>) {
     setErreur(null);
     try {
@@ -470,17 +470,17 @@ function Clients({ org, slug }: { org: string; slug: string }) {
   return (
     <Card title="MCP clients acting as this agent">
       <div className="space-y-3">
-        {(liens.data ?? []).length === 0 ? (
+        {(links.data ?? []).length === 0 ? (
           <p className="text-sm text-ink-muted">No client yet: attach one of your MCP tokens below.</p>
         ) : (
           <ul className="space-y-2" data-testid="clients-de-l-agent">
-            {(liens.data ?? []).map((lien) => {
-              const etat = etatDuClient(lien);
+            {(links.data ?? []).map((lien) => {
+              const state = clientState(lien);
               return (
                 <li key={lien.id} className="flex flex-wrap items-center gap-3 text-sm">
                   <span className="font-medium">{lien.token_name ?? lien.client_id ?? lien.kind}</span>
-                  <Badge tone={etat.connecte ? (etat.recent ? "ok" : "neutral") : "neutral"}>
-                    {etat.connecte ? "Connected" : "Never called"}
+                  <Badge tone={state.connecte ? (state.recent ? "ok" : "neutral") : "neutral"}>
+                    {state.connecte ? "Connected" : "Never called"}
                   </Badge>
                   <span className="text-xs text-ink-muted">
                     {lien.last_used_at ? `Last call ${relative(lien.last_used_at)}` : lien.kind}

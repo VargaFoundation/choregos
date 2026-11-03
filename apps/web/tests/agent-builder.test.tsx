@@ -13,7 +13,7 @@ import {
   slugFromName,
   toolMatches,
 } from "@/components/agents/builder";
-import { resumeDeLaVersion } from "@/components/agents/registre";
+import { versionSummary } from "@/components/agents/registry";
 import { api } from "@/lib/api";
 import type { AgentSpec, KnowledgeBase, MemoryStore, OrgConnector, Skill } from "@/lib/types";
 
@@ -353,7 +353,7 @@ describe("the builder", () => {
     expect(cleanSpec(code).runtime).toMatchObject({ kind: "code", image: "ticket-triager" });
     expect(cleanSpec({ backend: "codex" })).not.toHaveProperty("runtime");
     expect(runtimeKind({ backend: "codex" })).toBe("acp");
-    expect(resumeDeLaVersion(code)).toBe("code · ticket-triager");
+    expect(versionSummary(code)).toBe("code · ticket-triager");
   });
 });
 

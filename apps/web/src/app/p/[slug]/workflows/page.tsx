@@ -5,16 +5,16 @@ import Link from "next/link";
 import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { cn } from "@/lib/cn";
 import { workflowHueClasses } from "@/lib/workflow-hue";
 import { Workflow as WorkflowIcon } from "lucide-react";
-import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, EtatDeLecture, Input, PhraseDuMoteur, Select, Textarea } from "@/components/ui";
+import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, ReadState, Input, EngineSentence, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { RoutingPreview, WorkflowRouting, WorkflowSummary } from "@/lib/types";
 
-type Regle = WorkflowRouting["rules"][number];
+type Rule = WorkflowRouting["rules"][number];
 type Strategy = NonNullable<WorkflowRouting["strategy"]>;
 
 /** The three strategies of ADR 0116, each in one sentence. */
@@ -32,8 +32,8 @@ const STRATEGIES: Array<{ value: Strategy; label: string; says: string }> = [
   },
 ];
 
-/** Les conditions d'une règle de routage, en clair : « étiqueté incident », « type Bug ». */
-function condition(rule: Regle): string {
+/** A routing rule's conditions, in plain words: "labelled incident", "type Bug". */
+function condition(rule: Rule): string {
   const parts: string[] = [];
   if (rule.when.labels_any?.length) parts.push(`labelled ${rule.when.labels_any.join(" or ")}`);
   if (rule.when.labels_all?.length) parts.push(`labelled ${rule.when.labels_all.join(" and ")}`);
@@ -41,8 +41,8 @@ function condition(rule: Regle): string {
   return parts.join(", ") || "always";
 }
 
-/** « incident, sev1 » → ["incident", "sev1"] : des étiquettes, sans vide ni doublon. */
-function etiquettes(texte: string): string[] {
+/** "incident, sev1" -> ["incident", "sev1"]: labels, with no blank and no duplicate. */
+function labelsOf(texte: string): string[] {
   return [
     ...new Set(
       texte
@@ -54,12 +54,12 @@ function etiquettes(texte: string): string[] {
 }
 
 /**
- * Les workflows du projet (ADR 0031) : un projet en porte autant qu'il a de processus — l'arrivée et
- * le départ d'un projet RH, la livraison et le correctif d'une équipe produit. Chaque carte dit sa
- * version active, si c'est le défaut, ce qui y est routé et combien de tickets y sont épinglés.
+ * The project's workflows (ADR 0031): a project carries as many as it has processes: arrival and
+ * departure for an HR project, delivery and hotfix for a product team. Each card gives its
+ * active version, whether it is the default, what is routed to it and how many tickets are pinned to it.
  *
- * L'API savait déjà choisir le défaut, router par étiquette ou par type, et désactiver un workflow ;
- * la console ne savait que le dire (seconde passe du 08/10, S23-13). Ces trois gestes sont ici.
+ * The API already knew how to choose the default, route by label or by type, and deactivate a workflow;
+ * the console could only say so (second pass of 8 Oct, S23-13). These three gestures are here.
  */
 export default function WorkflowsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -96,7 +96,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
       <ul className="grid gap-4 md:grid-cols-2" aria-label="Workflows">
         {workflows.data?.map((workflow) => (
           <li key={workflow.name}>
-            <CarteDeWorkflow
+            <WorkflowCard
               slug={slug}
               org={project.data?.org ?? ""}
               workflow={workflow}
@@ -111,11 +111,11 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
       <Card title="Routing">
         {!routing.data || !workflows.data ? (
           <>
-            <EtatDeLecture lecture={routing} quoi="the routing" />
-            <EtatDeLecture lecture={workflows} quoi="the workflows" />
+            <ReadState lecture={routing} quoi="the routing" />
+            <ReadState lecture={workflows} quoi="the workflows" />
           </>
         ) : (
-          <Routage
+          <Routing
             slug={slug}
             routing={routing.data}
             workflows={workflows.data}
@@ -132,7 +132,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
   );
 }
 
-function CarteDeWorkflow({
+function WorkflowCard({
   slug,
   org,
   workflow,
@@ -144,12 +144,12 @@ function CarteDeWorkflow({
   org: string;
   workflow: WorkflowSummary;
   routing: WorkflowRouting | undefined;
-  routed: Regle[];
+  routed: Rule[];
   onChange: () => Promise<void>;
 }) {
-  const nom = workflow.name;
-  // Ce que l'API refuserait, dit avant : le défaut et la cible d'une règle ne se désactivent pas.
-  const pourquoiPas = workflow.is_default
+  const name = workflow.name;
+  // What the API would refuse, said beforehand: the default and a rule's target cannot be deactivated.
+  const whyNot = workflow.is_default
     ? "The default cannot be deactivated — make another one the default first"
     : routed.length > 0
       ? "A routing rule sends requests here — remove it first"
@@ -157,18 +157,18 @@ function CarteDeWorkflow({
   return (
     <Card
       // Its own colour on its edge and its dot (ADR 0120): the same as on the board and on its tickets.
-      className={cn("border-t-4", workflowHueClasses(nom).stripe)}
+      className={cn("border-t-4", workflowHueClasses(name).stripe)}
       title={
         <span className="inline-flex items-center gap-2">
-          <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", workflowHueClasses(nom).solid)} />
-          <Link href={`/p/${slug}/workflows/${encodeURIComponent(nom)}`} className="hover:underline">
-            {nom}
+          <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", workflowHueClasses(name).solid)} />
+          <Link href={`/p/${slug}/workflows/${encodeURIComponent(name)}`} className="hover:underline">
+            {name}
           </Link>
         </span>
       }
       action={workflow.is_default ? <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>Default</Badge> : undefined}
     >
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" data-testid={`workflow-card-${nom}`}>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" data-testid={`workflow-card-${name}`}>
         <dt className="text-ink-muted">Active version</dt>
         <dd>v{workflow.version}</dd>
         <dt className="text-ink-muted">Open items</dt>
@@ -193,48 +193,48 @@ function CarteDeWorkflow({
       {!workflow.is_default && (
         <div className="mt-4 flex flex-wrap items-start gap-2 border-t border-line pt-3">
           {routing && (
-            <GesteConfirme
+            <ConfirmedGesture
               ton="primary"
-              question={`Make ${nom} the default? A request that names no workflow and matches no rule is born in ${nom} from now on; tickets already running stay where they are.`}
-              confirmer={`Make ${nom} the default`}
+              question={`Make ${name} the default? A request that names no workflow and matches no rule is born in ${name} from now on; tickets already running stay where they are.`}
+              confirmer={`Make ${name} the default`}
               action={async () => {
-                await api.putWorkflowRouting(slug, { ...routing, default: nom });
+                await api.putWorkflowRouting(slug, { ...routing, default: name });
                 await onChange();
               }}
             >
               Make default
-            </GesteConfirme>
+            </ConfirmedGesture>
           )}
-          {pourquoiPas ? (
-            <p className="self-center text-xs text-ink-muted">{pourquoiPas}</p>
+          {whyNot ? (
+            <p className="self-center text-xs text-ink-muted">{whyNot}</p>
           ) : (
-            <GesteConfirme
+            <ConfirmedGesture
               tonDuBouton="danger"
-              question={`Deactivate ${nom}? It takes no new request; its ${workflow.open_items} open ticket${workflow.open_items === 1 ? "" : "s"} finish on their version. Publishing it again brings it back.`}
-              confirmer={`Deactivate ${nom}`}
+              question={`Deactivate ${name}? It takes no new request; its ${workflow.open_items} open ticket${workflow.open_items === 1 ? "" : "s"} finish on their version. Publishing it again brings it back.`}
+              confirmer={`Deactivate ${name}`}
               action={async () => {
-                await api.deactivateWorkflow(slug, nom);
+                await api.deactivateWorkflow(slug, name);
                 await onChange();
               }}
             >
               Deactivate
-            </GesteConfirme>
+            </ConfirmedGesture>
           )}
         </div>
       )}
       {workflow.can_share && org && (
         // Shown only when the server says so (ADR 0074); sharing copies this version (ADR 0111 §4).
         <div className="mt-3 border-t border-line pt-3">
-          <GesteConfirme
-            question={`Share ${nom} v${workflow.version} to the organisation's catalogue? Every project of ${org} can then adopt a copy; later changes here reach the catalogue only when shared again.`}
-            confirmer={`Share ${nom}`}
+          <ConfirmedGesture
+            question={`Share ${name} v${workflow.version} to the organisation's catalogue? Every project of ${org} can then adopt a copy; later changes here reach the catalogue only when shared again.`}
+            confirmer={`Share ${name}`}
             action={async () => {
-              await api.shareWorkflow(org, { project: slug, name: nom });
+              await api.shareWorkflow(org, { project: slug, name: name });
               await onChange();
             }}
           >
             Share to the catalogue
-          </GesteConfirme>
+          </ConfirmedGesture>
         </div>
       )}
     </Card>
@@ -242,13 +242,13 @@ function CarteDeWorkflow({
 }
 
 /**
- * Les règles de routage, dans leur ordre : la première qui correspond l'emporte. On les change en
- * brouillon, et on enregistre d'un geste — une règle retirée par erreur ne part pas seule.
+ * The routing rules, in their order: the first that matches wins. They are changed in a
+ * draft, and saved in one gesture: a rule removed by mistake does not leave alone.
  *
  * A rule is edited in place: "Edit" loads it into the form, which then updates it instead of adding
  * one. The default is part of the same draft, so a project with none can choose it here.
  */
-function Routage({
+function Routing({
   slug,
   routing,
   workflows,
@@ -260,7 +260,7 @@ function Routage({
   onChange: () => Promise<void>;
 }) {
   const names = workflows.map((w) => w.name);
-  const [regles, setRegles] = useState<Regle[] | null>(null);
+  const [regles, setRegles] = useState<Rule[] | null>(null);
   const courantes = regles ?? routing.rules;
   const [defaultDraft, setDefaultDraft] = useState<string | null>(null);
   const currentDefault = defaultDraft ?? routing.default;
@@ -276,17 +276,17 @@ function Routage({
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const cibleChoisie = cible || names.find((n) => n !== currentDefault) || names[0] || "";
-  const nouvelle: Regle = {
-    when: { labels_any: etiquettes(labels), labels_all: etiquettes(labelsAll), item_type: type.trim() || null },
-    workflow: cibleChoisie,
+  const chosenTarget = cible || names.find((n) => n !== currentDefault) || names[0] || "";
+  const newRule: Rule = {
+    when: { labels_any: labelsOf(labels), labels_all: labelsOf(labelsAll), item_type: type.trim() || null },
+    workflow: chosenTarget,
   };
   const ajoutable =
-    Boolean(cibleChoisie) &&
-    (nouvelle.when.labels_any!.length > 0 || nouvelle.when.labels_all!.length > 0 || Boolean(nouvelle.when.item_type));
+    Boolean(chosenTarget) &&
+    (newRule.when.labels_any!.length > 0 || newRule.when.labels_all!.length > 0 || Boolean(newRule.when.item_type));
   const dirty = regles !== null || defaultDraft !== null || strategyDraft !== null || hintsDraft !== null;
 
-  function changer(suivantes: Regle[]) {
+  function changer(suivantes: Rule[]) {
     setMessage(null);
     setRegles(suivantes);
   }
@@ -446,7 +446,7 @@ function Routage({
           event.preventDefault();
           if (!ajoutable) return;
           changer(
-            editing === null ? [...courantes, nouvelle] : courantes.map((r, i) => (i === editing ? nouvelle : r)),
+            editing === null ? [...courantes, newRule] : courantes.map((r, i) => (i === editing ? newRule : r)),
           );
           resetForm();
         }}
@@ -481,7 +481,7 @@ function Routage({
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">Goes to</span>
           <Select
-            value={cibleChoisie}
+            value={chosenTarget}
             onChange={(event) => setCible(event.target.value)}
             className="w-auto"
           >
@@ -554,7 +554,7 @@ function Routage({
       )}
       {erreur && (
         <ErrorNote>
-          <PhraseDuMoteur texte={erreur} />
+          <EngineSentence texte={erreur} />
         </ErrorNote>
       )}
       {message && <p role="status">{message}</p>}
@@ -576,7 +576,7 @@ function TryRouting({ slug }: { slug: string }) {
     setErreur(null);
     try {
       setAnswer(
-        await api.previewWorkflowRouting(slug, { title: title.trim(), body: body.trim() || null, labels: etiquettes(labels) }),
+        await api.previewWorkflowRouting(slug, { title: title.trim(), body: body.trim() || null, labels: labelsOf(labels) }),
       );
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "refused");
@@ -627,7 +627,7 @@ function TryRouting({ slug }: { slug: string }) {
       )}
       {erreur && (
         <ErrorNote>
-          <PhraseDuMoteur texte={erreur} />
+          <EngineSentence texte={erreur} />
         </ErrorNote>
       )}
     </form>
