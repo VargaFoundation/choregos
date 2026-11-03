@@ -352,7 +352,7 @@ conformance-hosted:  ## The 8 checks of a hosted agent (ADR 0080): IMAGE=<ref>, 
 .PHONY: evals
 evals:  ## Evals of the playbooks and of the catalogue agents
 	$(UV) run python -m choregos_playbooks.evals.runner --all
-	$(UV) run python -m choregos_core.catalogue_d_agents.evals --all
+	$(UV) run python -m choregos_core.agent_catalogue.evals --all
 
 .PHONY: clean
 clean:  ## Nettoie les artefacts locaux

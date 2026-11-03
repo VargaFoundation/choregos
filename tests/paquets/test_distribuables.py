@@ -152,7 +152,8 @@ def test_les_migrations_partent_dans_le_wheel_de_l_api(wheels: dict[str, pathlib
     attendus = {str(p) for p in revisions} | {
         "choregos_api/migrations/env.py",
         "choregos_api/migrations/script.py.mako",
-        "choregos_api/migrer.py",
+        "choregos_api/migrate.py",
+        "choregos_api/migrer.py",  # lang: fr-ok alias:external
     }
     noms = set(zipfile.ZipFile(wheels["choregos-api"]).namelist())
     manquants = sorted(attendus - noms)

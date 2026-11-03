@@ -823,7 +823,7 @@ async def test_choregos_admin_frappe_un_jeton_et_rejoue_l_amorcage(
     assert amorce.exit_code == 0, amorce.output
     assert "acme" in amorce.output and "ops@varga.dev" in amorce.output
     encore = await invoque("orgs", "bootstrap")
-    assert "aucune" in encore.output, "idempotent : la seconde fois ne crée rien"
+    assert "none" in encore.output, "idempotent: the second time creates nothing"
     assert (await invoque()).exit_code != 0, "sans commande, l'aide"
     db_session._engine = None
     db_session._sessionmaker = None

@@ -8,13 +8,15 @@ agents and their cases are the offline plugins' since S43-09 (ADR 0093 §6).
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from dataclasses import replace
 
 import pytest
-from choregos_core.catalogue_d_agents import DOSSIER, entree, entrees
-from choregos_core.catalogue_d_agents.evals import cases, evaluate
+from choregos_core.agent_catalogue import FOLDER, entries, entry
+from choregos_core.agent_catalogue.evals import cases, evaluate
 
-INTERNAL = [e for e in entrees() if e.genre == "internal"]
+INTERNAL = [e for e in entries() if e.kind == "internal"]
 CASES = {c.name: c.case for c in cases()}
 #: The specialists of S33-06: each states its output contract and the tools it needs.
 SPECIALISTS = ("secops", "compliance", "devops", "docs-writer", "ux-designer", "qa", "architect")
@@ -43,9 +45,9 @@ def test_the_eval_is_green_on_the_shipped_instructions(name: str) -> None:
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_the_eval_turns_red_when_the_instructions_are_emptied(name: str) -> None:
     case = CASES[name]
-    agent = entree(str(case["agent"]))
+    agent = entry(str(case["agent"]))
     assert agent is not None
-    context_only = (DOSSIER / "_contexte.md").read_text(encoding="utf-8")
+    context_only = (FOLDER / "_context.md").read_text(encoding="utf-8")
     emptied = replace(
         agent, document={**agent.document, "spec": {**agent.document["spec"], "instructions": context_only}}
     )
@@ -54,7 +56,7 @@ def test_the_eval_turns_red_when_the_instructions_are_emptied(name: str) -> None
 
 @pytest.mark.parametrize("slug", SPECIALISTS)
 def test_a_specialist_states_its_output_contract_and_its_tools(slug: str) -> None:
-    agent = entree(slug)
+    agent = entry(slug)
     assert agent is not None and agent.outputs and agent.tools, slug
     instructions = agent.document["spec"]["instructions"]
     written = set(re.findall(r'"([a-z_]+)":', instructions))
@@ -62,11 +64,24 @@ def test_a_specialist_states_its_output_contract_and_its_tools(slug: str) -> Non
 
 
 def test_compliance_is_followed_by_people_and_is_never_legal_advice() -> None:
-    agent = entree("compliance")
+    agent = entry("compliance")
     assert agent is not None and agent.human_gate_after
     assert "not legal advice" in agent.document["spec"]["instructions"]
 
 
 def test_netops_is_not_duplicated_here() -> None:
     """S33-08 ships `netops`; this catalogue does not grow a second one."""
-    assert [e.slug for e in entrees()].count("netops") <= 1
+    assert [e.slug for e in entries()].count("netops") <= 1
+
+
+def test_former_evals_module_runs() -> None:
+    """`python -m choregos_core.catalogue_d_agents.evals --all` still runs, as the nightly job did."""
+    former = "choregos_core.catalogue_d_agents.evals"  # lang: fr-ok alias:external
+    done = subprocess.run(
+        [sys.executable, "-m", former, "--all"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "28 agent eval(s) green." in done.stdout

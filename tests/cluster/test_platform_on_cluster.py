@@ -117,7 +117,7 @@ def _stack() -> str:
                     # No `|| true`: it turned a migration failure into a silent start, the
                     # schema then came from `create_all` — and this bench proved nothing about
                     # the migrations. Same command as the chart's Job.
-                    "python -m choregos_api.migrer && "
+                    "python -m choregos_api.migrate && "
                     "uvicorn choregos_api.main:app --host 0.0.0.0 --port 8000",
                 ],
             ),

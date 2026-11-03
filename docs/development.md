@@ -406,9 +406,11 @@ The migrations live **inside** the `choregos_api` package and are run by one com
 chart's migration Job runs:
 
 ```sh
-python -m choregos_api.migrer            # upgrade heads — the core, then every extension branch
-python -m choregos_api.migrer downgrade <extension_label>@base
+python -m choregos_api.migrate           # upgrade heads — the core, then every extension branch
+python -m choregos_api.migrate downgrade <extension_label>@base
 ```
+
+`python -m choregos_api.migrer` is the former name of the same command: it keeps working until 0.22.0.
 
 An extension that needs tables declares a directory of Alembic revisions in the `choregos.migrations`
 entry-point group; the value it points to is a path:
@@ -500,15 +502,18 @@ than `GestureRefused` propagates. `apps/api/tests/test_controle_des_gestes.py` p
 ## Running the API suite on PostgreSQL
 
 SQLite has no row-level security. The API suite therefore runs twice in CI: on SQLite, then on
-PostgreSQL with the schema migrated by `python -m choregos_api.migrer` and a **non-superuser** role
+PostgreSQL with the schema migrated by `python -m choregos_api.migrate` and a **non-superuser** role
 (a superuser ignores RLS whatever the policies say):
 
 ```sh
 docker run -d --name pg -e POSTGRES_USER=choregos -e POSTGRES_PASSWORD=choregos \
   -e POSTGRES_DB=choregos_test -p 5432:5432 postgres:16-alpine
 CHOREGOS_TEST_DATABASE_URL=postgresql+asyncpg://choregos:choregos@localhost:5432/choregos_test \
-CHOREGOS_TEST_SUITE_SUR_POSTGRES=1 uv run pytest apps/api/tests
+CHOREGOS_TEST_SUITE_ON_POSTGRES=1 uv run pytest apps/api/tests
 ```
+
+CI sets both `CHOREGOS_TEST_SUITE_ON_POSTGRES` and the former `CHOREGOS_TEST_SUITE_SUR_POSTGRES`: the
+conftest still reads the former one until S45-42 switches it.
 
 In that mode, a test's bare `session_scope()` — a fixture setting up data — means "as the platform".
 Product code never opens an unscoped session, so this hides nothing; `test_rls_postgres.py` keeps the

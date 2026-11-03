@@ -95,10 +95,10 @@ def test_every_door_client_of_the_integrations_page_has_a_procedure_that_links_t
 
 
 def test_every_agent_of_the_client_catalogue_is_covered() -> None:
-    from choregos_core.catalogue_d_agents import entrees
+    from choregos_core.agent_catalogue import entries
 
     # The clients ship in the offline plugin `mcp-clients` since S43-09 (ADR 0093 §6).
-    slugs = [str(e.client) for e in entrees() if e.genre == "external"]
+    slugs = [str(e.client) for e in entries() if e.kind == "external"]
     assert len(slugs) == 6
     for slug in slugs:
         client = DOOR_ALIASES.get(slug, slug)

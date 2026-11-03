@@ -94,7 +94,7 @@ jobs:
       - name: playbook evals (blocking threshold)
         run: uv run python -m choregos_playbooks.evals.runner --all --json evals.json
       - name: evals of the catalogue's agents (S33-06)
-        run: uv run python -m choregos_core.catalogue_d_agents.evals --all
+        run: uv run python -m choregos_core.agent_catalogue.evals --all
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: evals, path: evals.json, if-no-files-found: ignore }

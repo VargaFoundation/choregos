@@ -31,7 +31,7 @@ PLUGIN_VERSIONS = {"requests": "1.0.1"}
 
 #: The fingerprints the core's own YAML had at 3156d12e (choregos-agents' MIGRATION-FROM-CORE.md): the
 #: plugins carry the same documents, so an installed agent's checksum does not move. They include the
-#: core's `_contexte.md`: S51-04 added its `fields.tracker` section, so every agent that prepends it
+#: core's `_context.md`: S51-04 added its `fields.tracker` section, so every agent that prepends it
 #: moved once (an installed one is offered the update); `claude-ai`, a client, prepends none.
 FINGERPRINTS = {
     "architect": "sha256:687e23ee5cfc454162ac4790c01fa5aa12c3302caa0c8359eaf5c7a12d9549a5",
@@ -45,7 +45,7 @@ FINGERPRINTS = {
 def test_the_core_ships_no_agent_yaml_anymore() -> None:
     folder = Path(catalogue.__file__).parent
     assert not list(folder.rglob("*.yaml")), "an agent, client, eval case or skill came back"
-    assert (folder / "_contexte.md").is_file(), "the work item's context stays the core's"
+    assert (folder / "_context.md").is_file(), "the work item's context stays the core's"
 
 
 def test_the_offline_directory_of_a_source_tree_is_the_repositorys() -> None:
@@ -69,7 +69,7 @@ def test_the_documents_are_the_cores_byte_for_byte(slug: str) -> None:
 
 
 def test_the_context_is_prepended_once() -> None:
-    context = (Path(catalogue.__file__).parent / "_contexte.md").read_text(encoding="utf-8")
+    context = (Path(catalogue.__file__).parent / "_context.md").read_text(encoding="utf-8")
     instructions = entree("developer").document["spec"]["instructions"]  # type: ignore[union-attr]
     assert instructions.startswith(context) and instructions.count(context) == 1
 
