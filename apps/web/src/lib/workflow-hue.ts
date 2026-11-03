@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Colour that orients (ADR 0120): eight categorical hues for identity — a workflow, a section of the
  * navigation, a group of settings —, never for a status and never for what can be clicked.
