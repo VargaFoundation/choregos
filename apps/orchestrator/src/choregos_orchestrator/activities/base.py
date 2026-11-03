@@ -350,6 +350,14 @@ async def send_courtesy(notify: Any, channel: str, message: Message) -> bool:
     return True
 
 
+def notification_target(bundle: Any) -> str:
+    """Where notifications go: the e-mail addresses for an e-mail notifier, else the Slack channel."""
+    emails = list(bundle.config.notify.emails)
+    if emails and getattr(bundle.adapters.notify, "channel_kind", "") == "email":
+        return ",".join(emails)
+    return str(bundle.config.notify.slack_channel or "#choregos")
+
+
 def without_secrets(stage_input: dict[str, Any] | None, *, keep_gateway_key: bool) -> dict[str, Any]:
     """A `StageInput` payload with no run token, and with no gateway key unless asked (#519).
 

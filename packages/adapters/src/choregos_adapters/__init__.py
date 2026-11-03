@@ -911,6 +911,26 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         _object_schema({"channel": {"type": "string", "default": "#choregos"}, "public_url": _TEXT}),
         ("webhook_url", "bot_token"),
     ),
+    # SMTP does not go through the httpx egress guard: the spec declares its egress, and the
+    # operator's network policy must open it.
+    ("notify", "email"): ConnectorTypeSpec(
+        "E-mail (SMTP)",
+        ("notify",),
+        _object_schema(
+            {
+                "host": _TEXT,
+                "port": {"type": "integer", "default": 587},
+                "username": _TEXT,
+                "from_address": _TEXT,
+                "to": {"type": "array", "items": _TEXT},
+                "starttls": {"type": "boolean", "default": True},
+                "use_ssl": {"type": "boolean", "default": False},
+            },
+            ("host", "from_address"),
+        ),
+        ("password",),
+        egress=lambda cfg: [(str(cfg["host"]), int(cfg.get("port", 587)))],
+    ),
 }
 
 
@@ -1315,6 +1335,7 @@ def _register_builtins() -> None:
     from .http import RestClient
     from .memory.ecphoria import EcphoriaMemory
     from .memory.lexicale import LexicalMemory
+    from .notify.email import EmailNotifier
     from .notify.slack import SlackNotifier
     from .scm.github import GitHubScm
     from .tracker.github import GitHubTracker
@@ -1520,6 +1541,18 @@ def _register_builtins() -> None:
             bot_token=cfg.get("bot_token", _env("CHOREGOS_SLACK_TOKEN", "")),
             default_channel=cfg.get("channel", "#choregos"),
             public_url=cfg.get("public_url", _env("CHOREGOS_PUBLIC_URL", "")),
+        )
+    )
+    register("notify", "email", _SHIPPED_SPECS[("notify", "email")])(
+        lambda cfg: EmailNotifier(
+            host=str(cfg["host"]),
+            port=int(cfg.get("port", 587)),
+            username=str(cfg.get("username", "")),
+            password=str(cfg.get("password", "")),
+            from_address=str(cfg["from_address"]),
+            to=[str(address) for address in cfg.get("to") or []],
+            starttls=bool(cfg.get("starttls", True)),
+            use_ssl=bool(cfg.get("use_ssl", False)),
         )
     )
 
