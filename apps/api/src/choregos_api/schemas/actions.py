@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les actions gouvernées (ADR 0035) : ce qu'on propose, ce qu'on décide, ce qui s'est passé."""
+"""Governed actions (ADR 0035): what is proposed, what is decided, what happened."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from .base import Dto
 
 
 class ActionEffectSpec(Dto):
-    """Un effet : son nom déclaré (`connector.call`…), ses paramètres (rendus en Jinja isolé avec
-    `params` et `effects`), et ce qui le défait si une suite échoue."""
+    """An effect: its declared name (`connector.call`...), its parameters (rendered in isolated Jinja with
+    `params` and `effects`), and what undoes it if a later step fails."""
 
     model_config = ConfigDict(extra="forbid", from_attributes=True, populate_by_name=True)
 
@@ -22,15 +22,18 @@ class ActionEffectSpec(Dto):
     compensate: dict[str, Any] | None = None
 
 
-class Approbateur(Dto):
+class Approver(Dto):
     role: Literal["developer", "release_captain", "project_owner", "org_admin"] = "project_owner"
     #: An identity-provider group the approver must also belong to (ADR 0052).
     group: str | None = Field(default=None, min_length=1, max_length=200)
     min: int = Field(default=1, ge=1, le=5)
 
 
+Approbateur = Approver  # lang: fr-ok alias:internal
+
+
 class ApprovalSpec(Dto):
-    approvers: list[Approbateur] = Field(default_factory=lambda: [Approbateur()], min_length=1)
+    approvers: list[Approver] = Field(default_factory=lambda: [Approver()], min_length=1)
     step_up_minutes: int = Field(default=10, ge=1, le=120)
     separation_of_duties: bool = True
 
@@ -78,9 +81,9 @@ class ActionDto(Dto):
     temporal_wf_id: str | None = None
     work_item_id: str | None = None
     run_id: str | None = None
-    #: le projet, pour la boîte des décisions de l'organisation
+    #: the project, for the organisation's decision inbox
     project_slug: str | None = None
     created_at: datetime | None = None
     finished_at: datetime | None = None
-    #: le journal des effets, clé par clé
+    #: the effects log, key by key
     journal: list[ActionEffectDto] = Field(default_factory=list)

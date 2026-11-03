@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les secrets d'un connecteur, en références, champ par champ (ADR 0034)
+"""A connector's secrets, as references, field by field (ADR 0034)
 
-`connectors.secret_ref` (une seule référence, jamais lue) ne suffit pas : Jira a un jeton d'API
-et un secret de webhook. `secret_refs` les nomme champ par champ ; aucune valeur n'y est stockée.
+`connectors.secret_ref` (a single reference, never read) is not enough: Jira has an API token
+and a webhook secret. `secret_refs` names them field by field; no value is stored in it.
 
 Revision ID: c5d7e9f1a3b6
 Revises: b4c6d8e0f2a5

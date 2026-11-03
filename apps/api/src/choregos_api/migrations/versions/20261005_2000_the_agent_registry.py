@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le registre d'agents : des agents de l'organisation, leurs versions immuables, l'épingle des projets (ADR 0033)
+"""The agent registry: the organisation's agents, their immutable versions, the projects' pins (ADR 0033)
 
-Les trois tables portent l'organisation et passent sous la RLS forcée, comme les autres : un agent
-de `b` n'existe pas pour une session bornée à `a`, même si une route oubliait de filtrer.
+The three tables carry the organisation and go under forced RLS, like the others: an agent
+of `b` does not exist for a session bounded to `a`, even if a route forgot to filter.
 
 Revision ID: e1f3a5b7c9d2
 Revises: c9e1a3b5d7f0

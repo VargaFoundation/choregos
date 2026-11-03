@@ -1,89 +1,36 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Backends, exécuteurs, clés, audit, webhooks."""
+# lang: fr-ok-file alias:internal; former `schemas.platform`, ADR 0098
+"""The former name of `choregos_api.schemas.platform`: every name still resolves."""
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Literal
+from choregos_core.compat import replace_module
 
-from pydantic import Field
+from . import platform as _current
+from .platform import (
+    AgentBackendInfo,
+    AgentBackendUpdate,
+    AuditEntry,
+    AuditPage,
+    ConformanceReport,
+    ExecutorInfo,
+    GatewayKeyInfo,
+    PlatformIdentity,
+    PlatformIdentityRow,
+    WebhookAck,
+)
 
-from .base import Dto, PageMeta
+__all__ = [
+    "AgentBackendInfo",
+    "AgentBackendUpdate",
+    "AuditEntry",
+    "AuditPage",
+    "ConformanceReport",
+    "ExecutorInfo",
+    "GatewayKeyInfo",
+    "PlatformIdentity",
+    "PlatformIdentityRow",
+    "WebhookAck",
+]
 
-
-class ConformanceReport(Dto):
-    last_run_at: datetime | None = None
-    passed: int | None = None
-    total: int | None = None
-    report_url: str | None = None
-    failures: list[str] = Field(default_factory=list)
-
-
-class AgentBackendInfo(Dto):
-    name: str
-    enabled: bool
-    version: str | None = None
-    capabilities: list[str] = Field(default_factory=list)
-    conformance: ConformanceReport = Field(default_factory=ConformanceReport)
-    disabled_reason: str | None = None
-
-
-class AgentBackendUpdate(Dto):
-    name: str
-    enabled: bool
-    disabled_reason: str | None = None
-
-
-class ExecutorInfo(Dto):
-    kind: Literal["tekton", "k8s_job", "local_docker", "aca", "agent_sandbox"]
-    enabled: bool = True
-    cluster: str | None = None
-    namespace_pattern: str | None = None
-    runner_image: str | None = None
-    default_timeout_minutes: int = 120
-
-
-class GatewayKeyInfo(Dto):
-    key_id: str
-    run_id: str | None = None
-    project_slug: str | None = None
-    budget_usd: float | None = None
-    spend_usd: float = 0.0
-    expires_at: datetime | None = None
-    revoked: bool = False
-    created_at: datetime
-
-
-class AuditEntry(Dto):
-    id: str
-    actor_id: str | None = None
-    actor_kind: str
-    action: str
-    target_type: str | None = None
-    target_id: str | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
-    ts: datetime
-
-
-class AuditPage(Dto):
-    items: list[AuditEntry]
-    meta: PageMeta
-
-
-class WebhookAck(Dto):
-    accepted: bool
-    duplicate: bool = False
-    events: int = 0
-
-
-class PlatformIdentityRow(Dto):
-    key: str
-    label: str
-    #: Display value; a secret shows only `set` or `missing`.
-    value: str
-    #: `settings`: set by the deployment; `derived`: computed from other settings; `default`: built in.
-    source: Literal["settings", "derived", "default"]
-
-
-class PlatformIdentity(Dto):
-    items: list[PlatformIdentityRow]
+replace_module(__name__, _current)

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Des champs de ticket, validés par le JSON Schema que déclare leur workflow (ADR 0031)
+"""Ticket fields, validated by the JSON Schema their workflow declares (ADR 0031)
 
 Revision ID: c9e1a3b5d7f0
 Revises: b8d0f2a4c6e9

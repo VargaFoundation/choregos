@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les agents externes : un jeton de la porte MCP ou un client OAuth, rattaché à un agent (ADR 0033)
+"""External agents: an MCP door token or an OAuth client, attached to an agent (ADR 0033)
 
-Sous la RLS forcée, comme le reste du registre.
+Under forced RLS, like the rest of the registry.
 
 Revision ID: b4c6d8e0f2a5
 Revises: a3b5c7d9e1f4

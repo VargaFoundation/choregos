@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Un run nomme l'agent du registre qui l'a fait, et sa version (ADR 0033)
+"""A run names the registry agent that did it, and its version (ADR 0033)
 
 Revision ID: a3b5c7d9e1f4
 Revises: f2a4b6c8d0e3

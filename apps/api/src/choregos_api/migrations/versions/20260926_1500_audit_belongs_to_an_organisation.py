@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
-"""L'audit appartient à une organisation
+"""The audit belongs to an organisation
 
-`audit_log` était la dernière table de mutation hors RLS, et elle n'avait même pas de colonne
-d'organisation. `GET /api/v1/audit` n'appliquait aucun filtre : il suffisait d'avoir
-`audit:read` dans UNE organisation pour lire l'audit de TOUTES — les slugs de projets, les
-actions, les identifiants d'acteurs de tous les locataires de l'instance. L'état des lieux du
-2026-09-24 avait manqué ce point ; il est sorti de l'inventaire du 2026-09-26.
+`audit_log` was the last mutation table outside RLS, and it did not even have an organisation
+column. `GET /api/v1/audit` applied no filter: having `audit:read` in ONE organisation was
+enough to read the audit of ALL of them: the project slugs, the actions, the actor identifiers
+of every tenant of the instance. The state of play of 2026-09-24 had missed this point; it came
+out of the inventory of 2026-09-26.
 
-`org_id` est nullable à dessein : une connexion ou un jeton d'API n'appartient à aucune
-organisation. La politique laisse donc passer ces lignes **uniquement** pour une session de
-portée `*` (plateforme, orchestrateur, jeton de run) — fail-closed comme les douze autres.
+`org_id` is nullable on purpose: a sign-in or an API token belongs to no organisation. The
+policy therefore lets these rows through **only** for a session of scope `*` (platform,
+orchestrator, run token), fail-closed like the twelve others.
 
 Revision ID: c3e5a7f9b1d4
 Revises: b2d4f6a8c0e1
@@ -34,9 +34,9 @@ def _postgres() -> bool:
 
 
 def upgrade() -> None:
-    # `batch_alter_table` parce que SQLite ne sait pas ajouter une contrainte après coup : il
-    # recrée la table. Le test `test_migrations` compare les modèles aux migrations sur SQLite,
-    # et une clé étrangère posée seulement sous PostgreSQL l'a fait rougir à raison.
+    # `batch_alter_table` because SQLite cannot add a constraint afterwards: it
+    # recreates the table. The test `test_migrations` compares the models to the migrations on SQLite,
+    # and a foreign key laid only under PostgreSQL rightly turned it red.
     with op.batch_alter_table("audit_log") as batch:
         batch.add_column(sa.Column("org_id", sa.String(length=36), nullable=True))
         batch.create_foreign_key(
@@ -52,14 +52,14 @@ def upgrade() -> None:
     op.execute("ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE audit_log FORCE ROW LEVEL SECURITY")
     op.execute("DROP POLICY IF EXISTS audit_log_org_isolation ON audit_log")
-    # `USING` borne la LECTURE, `WITH CHECK` borne l'ÉCRITURE, et les deux diffèrent ici.
-    # Sans `WITH CHECK` explicite, PostgreSQL réutilise `USING` à l'INSERT — et la connexion
-    # elle-même devenait impossible : `auth.login` écrit une trace SANS organisation (elle
-    # précède la résolution), depuis une session déjà bornée aux organisations du principal.
-    # Le premier jet de cette migration a fait échouer tous les tests d'API sur
-    # « new row violates row-level security policy for table audit_log ». Une session bornée
-    # peut donc ÉCRIRE une trace de plateforme — qu'elle ne pourra pas relire — mais jamais
-    # une trace attribuée à une AUTRE organisation.
+    # `USING` bounds READING, `WITH CHECK` bounds WRITING, and the two differ here.
+    # Without an explicit `WITH CHECK`, PostgreSQL reuses `USING` at INSERT, and signing in
+    # itself became impossible: `auth.login` writes a trace WITHOUT an organisation (it
+    # precedes the resolution), from a session already bounded to the principal's organisations.
+    # The first draft of this migration made every API test fail on
+    # "new row violates row-level security policy for table audit_log". A bounded session
+    # can therefore WRITE a platform trace, which it will not be able to read back, but never
+    # a trace attributed to ANOTHER organisation.
     op.execute(
         """
         CREATE POLICY audit_log_org_isolation ON audit_log

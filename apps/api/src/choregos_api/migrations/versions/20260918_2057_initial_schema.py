@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""schema initial
+"""initial schema
 
 Revision ID: a6de8f2759b3
 Revises:
@@ -37,9 +37,9 @@ RLS_TABLES = (
 
 
 def _enable_rls() -> None:
-    """RLS PostgreSQL : une organisation ne voit jamais les lignes d'une autre (§1.3).
+    """PostgreSQL RLS: an organisation never sees another one's rows (§1.3).
 
-    La politique s'appuie sur `app.current_org`, posé par `session_scope(org_slug=…)`.
+    The policy relies on `app.current_org`, set by `session_scope(org_slug=...)`.
     """
     if op.get_bind().dialect.name != "postgresql":
         return

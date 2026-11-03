@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Environnement Alembic : migrations async, schéma lu depuis les modèles."""
+"""Alembic environment: async migrations, schema read from the models."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from logging.config import fileConfig
 from alembic import context
 from choregos_api.config import get_settings
 from choregos_api.db.base import Base
-from choregos_api.db.models import ALL_TABLES, objet_du_coeur  # noqa: F401 - importe toutes les tables
+from choregos_api.db.models import ALL_TABLES, objet_du_coeur  # noqa: F401 - imports every table
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
