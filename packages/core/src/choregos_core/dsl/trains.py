@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ce qu'un workflow demande au train qu'il prend (ADR 0041).
+"""What a workflow asks of the train it takes (ADR 0041).
 
-La revue produit du 2026-10-07 l'a constaté : `train: {env: prod, approval: captain}` était écrit
-dans les workflows livrés et lu par personne. L'orchestrateur ne passait au train que
-l'environnement, et le train ne tirait son approbation QUE de la politique du projet — un projet
-ne pouvait donc pas livrer un correctif sans humain et une fonctionnalité avec. Ces deux fonctions
-disent, depuis le workflow ÉPINGLÉ du ticket, ce que son train exige.
+The product review of 2026-10-07 found it: `train: {env: prod, approval: captain}` was written
+in the shipped workflows and read by nobody. The orchestrator passed the train only the
+environment, and the train drew its approval ONLY from the project's policy, so a project
+could not ship a fix without a human and a feature with one. These functions say, from the
+work item's PINNED workflow, what its train requires.
 """
 
 from __future__ import annotations
@@ -13,52 +13,65 @@ from __future__ import annotations
 from typing import TypedDict
 
 from choregos_contracts import HumanActor, SystemActor, Workflow
-from choregos_contracts.workflow import Transition, effet_de_la_transition
+from choregos_contracts.workflow import Transition, transition_effect
 
 
-class ApprobationDuTrain(TypedDict):
-    """Ce qu'un ticket exige du départ de son lot — un dict : il voyage dans des signaux Temporal."""
+class TrainApproval(TypedDict):
+    """What a work item requires of its batch's departure: a dict, because it travels in Temporal signals."""
 
     required: bool
     group: str | None
 
 
-def prend_le_train(transition: Transition) -> bool:
+def takes_the_train(transition: Transition) -> bool:
     return transition.via == "release_train" or transition.train is not None
 
 
-def env_du_train(transition: Transition) -> str:
-    """L'environnement visé ; `prod` quand la transition ne le dit pas (`via: release_train` seul)."""
+def train_env(transition: Transition) -> str:
+    """The target environment; `prod` when the transition does not say (`via: release_train` alone)."""
     return transition.train.env if transition.train else "prod"
 
 
-def approbation_du_train(workflow: Workflow, transition: Transition) -> ApprobationDuTrain:
-    """`train.approval` nomme un acteur humain : son groupe approuve le départ. Un acteur qui n'est
-    pas humain exige quand même l'approbation — le groupe sera celui de la politique."""
+def train_approval(workflow: Workflow, transition: Transition) -> TrainApproval:
+    """`train.approval` names a human actor: their group approves the departure. An actor that is
+    not human still requires the approval; the group will then be the policy's."""
     if transition.train is None or not transition.train.approval:
         return {"required": False, "group": None}
-    acteur = workflow.actors.get(str(transition.train.approval))
-    return {"required": True, "group": acteur.group if isinstance(acteur, HumanActor) else None}
+    actor = workflow.actors.get(str(transition.train.approval))
+    return {"required": True, "group": actor.group if isinstance(actor, HumanActor) else None}
 
 
-def train_apres_fusion(workflow: Workflow) -> Transition | None:
-    """Le train qu'un ticket prend juste après la fusion de sa PR, ou `None` s'il n'en prend pas :
-    une étude qui fusionne un ADR ne va nulle part, une livraison prudente passe d'abord par staging.
-    Le webhook de GitHub embarquait en PROD tout ticket fusionné, quel que soit son workflow."""
-    for fusion in workflow.transitions:
-        acteur = workflow.actors.get(fusion.by or "")
-        if not isinstance(acteur, SystemActor) or effet_de_la_transition(fusion) != "merge_pr":
+def train_after_merge(workflow: Workflow) -> Transition | None:
+    """The train a work item takes right after its PR merges, or `None` when it takes none:
+    a study that merges an ADR goes nowhere, a prudent delivery goes through staging first.
+    The GitHub webhook used to ship every merged work item to PROD, whatever its workflow."""
+    for merge in workflow.transitions:
+        actor = workflow.actors.get(merge.by or "")
+        if not isinstance(actor, SystemActor) or transition_effect(merge) != "merge_pr":
             continue
-        for suite in workflow.transitions:
-            if suite.from_ == fusion.to and prend_le_train(suite):
-                return suite
+        for follow_up in workflow.transitions:
+            if follow_up.from_ == merge.to and takes_the_train(follow_up):
+                return follow_up
     return None
+
+
+# Former names, still imported outside core until their own stories switch them (ADR 0098 §3 (b)).
+ApprobationDuTrain = TrainApproval  # lang: fr-ok alias:internal
+prend_le_train = takes_the_train  # lang: fr-ok alias:internal
+env_du_train = train_env  # lang: fr-ok alias:internal
+approbation_du_train = train_approval  # lang: fr-ok alias:internal
+train_apres_fusion = train_after_merge  # lang: fr-ok alias:internal
 
 
 __all__ = [
     "ApprobationDuTrain",
+    "TrainApproval",
     "approbation_du_train",
     "env_du_train",
     "prend_le_train",
+    "takes_the_train",
+    "train_after_merge",
+    "train_approval",
     "train_apres_fusion",
+    "train_env",
 ]

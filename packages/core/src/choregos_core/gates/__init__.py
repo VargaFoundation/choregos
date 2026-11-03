@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Registre des gates : conditions déterministes portées par une transition.
+"""Gate registry: deterministic conditions carried by a transition.
 
-Une gate est **le** mécanisme de garantie (docs/plan/01) : elle ne fait pas confiance
-à l'agent, elle vérifie. Deux familles :
+A gate is **the** guarantee mechanism (docs/plan/01): it does not trust the agent, it
+checks. Two families:
 
-- **synchrones** : évaluables immédiatement à partir du `StageResult`, du diff et de la politique
+- **synchronous**: evaluable immediately from the `StageResult`, the diff and the policy
   (`scope_respected`, `evidence_present`, `diff_size_max`, `no_secrets`, `coverage_delta_min`,
-  `adr_number_free`, `docs_updated`…) ;
-- **asynchrones** : elles attendent un événement externe (`ci_green`, `review_approved`,
+  `adr_number_free`, `docs_updated`…);
+- **asynchronous**: they wait for an external event (`ci_green`, `review_approved`,
   `scans_ok`, `provenance_signed`, `flag_present`, `external`).
 """
 
@@ -28,7 +28,7 @@ from ..errors import GateError
 
 @dataclass(slots=True)
 class GateContext:
-    """Tout ce dont une gate synchrone a besoin pour trancher."""
+    """Everything a synchronous gate needs to rule."""
 
     result: StageResult | None = None
     changed_files: list[str] = field(default_factory=list)
@@ -43,25 +43,25 @@ class GateContext:
     flags: list[str] = field(default_factory=list)
     required_flag: str | None = None
     external_results: dict[str, bool] = field(default_factory=dict)
-    # Les sorties que la transition déclare (`outputs:`), lues par `outputs_present`.
+    # The outputs the transition declares (`outputs:`), read by `outputs_present`.
     expected_outputs: list[str] = field(default_factory=list)
-    #: Les outils du catalogue que ce run a APPELÉS (noms du catalogue), lus au registre
-    #: de coûts — jamais dans ce que l'agent raconte. `tool_called` s'en sert.
+    #: The catalogue tools this run CALLED (catalogue names), read from the cost
+    #: ledger, never from what the agent says. `tool_called` uses it.
     tool_calls: list[str] = field(default_factory=list)
-    #: Le diff a-t-il PU être obtenu ? Faux quand le connecteur SCM ne sait pas comparer
-    #: (fake, panne, dépôt injoignable). Une garantie qui repose sur le diff ne doit alors
-    #: pas se prononcer : sans diff, `scope_respected` déclarerait le périmètre respecté et
-    #: `no_secrets` l'absence de secrets, faute d'avoir regardé quoi que ce soit.
+    #: Could the diff be obtained? False when the SCM connector cannot compare
+    #: (fake, outage, unreachable repository). A guarantee that rests on the diff must then
+    #: not rule: without a diff, `scope_respected` would declare the perimeter respected and
+    #: `no_secrets` the absence of secrets, having looked at nothing.
     diff_available: bool = True
-    #: L'état de l'action gouvernée que la transition a proposée (S20-05) — lu en base, jamais
-    #: déduit : `action_succeeded` ne passe que sur `succeeded`.
+    #: The state of the governed action the transition proposed (S20-05), read from the database, never
+    #: deduced: `action_succeeded` only passes on `succeeded`.
     action_status: str | None = None
-    #: Le texte que la branche AJOUTE, fichier par fichier : les lignes `+` du diff cumulé (un
-    #: fichier neuf l'est tout entier). `markdown_sections` lit ce qui est écrit, pas ce que
-    #: l'agent raconte en avoir écrit.
+    #: The text the branch ADDS, file by file: the `+` lines of the cumulated diff (a
+    #: new file is entirely added). `markdown_sections` reads what is written, not what
+    #: the agent says it wrote.
     added_text: dict[str, str] = field(default_factory=dict)
-    #: Les chemins présents sur la branche PAR DÉFAUT, sous le dossier que lit la garantie
-    #: (`adr_number_free`) ; `None` quand le connecteur SCM n'a pas pu les lister.
+    #: The paths present on the DEFAULT branch, under the folder the guarantee reads
+    #: (`adr_number_free`); `None` when the SCM connector could not list them.
     default_branch_files: list[str] | None = None
     #: The item's documents: the outputs earlier steps declared, by name (`item.documents`).
     #: `numbers_measured` reads the measured ones there — a job's `metrics` — never the agent's text.
@@ -80,7 +80,7 @@ class GateContext:
 
 @dataclass(slots=True, frozen=True)
 class GateOutcome:
-    """Verdict d'une gate. `pending` = la gate attend un événement externe."""
+    """A gate's verdict. `pending` = the gate waits for an external event."""
 
     name: str
     passed: bool
@@ -115,8 +115,8 @@ _NEEDS: dict[str, frozenset[str]] = {}
 
 
 def gate(name: str, *, asynchronous: bool = False, needs: tuple[str, ...] = ()) -> Callable[[GateFn], GateFn]:
-    """`needs` : les capacités de connecteur que la garantie lit (ADR 0034) — un diff vient du
-    `scm`, un statut de pipeline de la `ci`. Un workflow qui la pose les exige de son projet."""
+    """`needs`: the connector capabilities the guarantee reads (ADR 0034). A diff comes from the
+    `scm`, a pipeline status from the `ci`. A workflow that sets it requires them of its project."""
 
     def decorator(fn: GateFn) -> GateFn:
         _REGISTRY[name] = fn
@@ -129,7 +129,7 @@ def gate(name: str, *, asynchronous: bool = False, needs: tuple[str, ...] = ()) 
 
 
 def gate_needs(name: str) -> frozenset[str]:
-    """Les capacités qu'une garantie lit ; une garantie inconnue n'en exige aucune."""
+    """The capabilities a guarantee reads; an unknown guarantee requires none."""
     return _NEEDS.get(name, frozenset())
 
 
@@ -142,7 +142,7 @@ def is_async_gate(name: str) -> bool:
 
 
 def evaluate(name: str, ctx: GateContext, params: dict[str, Any] | None = None) -> GateOutcome:
-    """Évalue une gate du registre. Une gate inconnue est une erreur de configuration."""
+    """Evaluate a registry gate. An unknown gate is a configuration error."""
     fn = _REGISTRY.get(name)
     if fn is None:
         raise GateError(f"unknown gate: {name} (known: {', '.join(known_gates())})")
@@ -150,7 +150,7 @@ def evaluate(name: str, ctx: GateContext, params: dict[str, Any] | None = None) 
 
 
 def matches_any(path: str, patterns: list[str]) -> bool:
-    """Un chemin est dans le périmètre si un motif glob le couvre (`src/**` couvre `src/a/b.py`)."""
+    """A path is within the perimeter if a glob pattern covers it (`src/**` covers `src/a/b.py`)."""
     for pattern in patterns:
         if fnmatch.fnmatch(path, pattern):
             return True
@@ -161,10 +161,10 @@ def matches_any(path: str, patterns: list[str]) -> bool:
     return False
 
 
-# ───────────────────────────── gates synchrones ─────────────────────────────
+# ───────────────────────────── synchronous gates ─────────────────────────────
 
 
-def _sans_diff(name: str) -> GateOutcome:
+def _without_diff(name: str) -> GateOutcome:
     return GateOutcome(
         name,
         False,
@@ -175,7 +175,7 @@ def _sans_diff(name: str) -> GateOutcome:
 @gate("scope_respected", needs=("scm",))
 def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if not ctx.diff_available:
-        return _sans_diff("scope_respected")
+        return _without_diff("scope_respected")
     allowed = params.get("paths") or ctx.allowed_paths
     if not allowed:
         return GateOutcome("scope_respected", True, detail="no allowed paths declared")
@@ -213,75 +213,75 @@ def _evidence_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 
 @gate("outputs_in")
 def _outputs_in(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """Les sorties nommées prennent une valeur permise : `{values: {verdict: [approve]}}`.
+    """The named outputs take an allowed value: `{values: {verdict: [approve]}}`.
 
-    Le moteur ne lit pas le verdict d'une revue : une revue qui demandait des changements passait
-    `outputs_present` (la sortie existe) et le ticket avançait. Ici, la valeur compte.
+    The engine does not read a review's verdict: a review that asked for changes passed
+    `outputs_present` (the output exists) and the work item moved on. Here, the value counts.
     """
-    permises: dict[str, list[Any]] = dict(params.get("values") or {})
-    if not permises:
+    permitted: dict[str, list[Any]] = dict(params.get("values") or {})
+    if not permitted:
         return GateOutcome(
             "outputs_in", False, detail="no value required: `values:` missing on the guarantee"
         )
     if ctx.result is None:
         return GateOutcome("outputs_in", False, detail="no stage result")
-    produites = ctx.result.outputs.model_dump(exclude_none=True)
-    ecarts = [
-        f"{cle} = {produites.get(cle)!r} (allowed: {', '.join(str(v) for v in valeurs)})"
-        for cle, valeurs in permises.items()
-        if str(produites.get(cle)) not in {str(v) for v in valeurs}
+    produced = ctx.result.outputs.model_dump(exclude_none=True)
+    deviations = [
+        f"{key} = {produced.get(key)!r} (allowed: {', '.join(str(v) for v in allowed_values)})"
+        for key, allowed_values in permitted.items()
+        if str(produced.get(key)) not in {str(v) for v in allowed_values}
     ]
     return GateOutcome(
         "outputs_in",
-        not ecarts,
-        detail="outputs within the allowed values" if not ecarts else "; ".join(ecarts),
-        annotations=ecarts,
+        not deviations,
+        detail="outputs within the allowed values" if not deviations else "; ".join(deviations),
+        annotations=deviations,
     )
 
 
-def _titres(texte: str) -> set[str]:
-    """Les titres Markdown d'un texte, sans dièses ni casse : `## Decision Outcome` → `decision outcome`."""
+def _headings(text: str) -> set[str]:
+    """The Markdown headings of a text, without hashes or case: `## Decision Outcome` → `decision outcome`."""
     return {
-        ligne.lstrip("#").strip().lower()
-        for ligne in texte.splitlines()
-        if ligne.startswith("#") and ligne.lstrip("#").startswith(" ")
+        line.lstrip("#").strip().lower()
+        for line in text.splitlines()
+        if line.startswith("#") and line.lstrip("#").startswith(" ")
     }
 
 
 @gate("markdown_sections", needs=("scm",))
 def _markdown_sections(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """Les documents que la branche ajoute portent leurs sections : `{paths, sections, patterns,
-    min_files}`. Un ADR au format MADR 4 doit dire son contexte, ses options et sa décision — et le
-    dire DANS le fichier, lu dans le diff, pas dans le résumé de l'agent."""
+    """The documents the branch adds carry their sections: `{paths, sections, patterns,
+    min_files}`. An ADR in the MADR 4 format must say its context, its options and its decision, and
+    say it IN the file, read in the diff, not in the agent's summary."""
     if not ctx.diff_available:
-        return _sans_diff("markdown_sections")
-    chemins = [str(c) for c in params.get("paths") or []]
-    if not chemins:
+        return _without_diff("markdown_sections")
+    paths = [str(c) for c in params.get("paths") or []]
+    if not paths:
         return GateOutcome("markdown_sections", False, detail="no path: `paths:` missing on the guarantee")
-    fichiers = {chemin: texte for chemin, texte in ctx.added_text.items() if matches_any(chemin, chemins)}
+    files = {path: text for path, text in ctx.added_text.items() if matches_any(path, paths)}
     minimum = int(params.get("min_files", 1))
-    if len(fichiers) < minimum:
+    if len(files) < minimum:
         return GateOutcome(
             "markdown_sections",
             False,
-            detail=f"{len(fichiers)} file(s) matching {', '.join(chemins)} in the change, {minimum} expected",
+            detail=f"{len(files)} file(s) matching {', '.join(paths)} in the change, {minimum} expected",
         )
-    manques = []
-    for chemin, texte in sorted(fichiers.items()):
-        titres = _titres(texte)
-        manques += [
-            f"{chemin}: section “{s}” missing"
+    lacking = []
+    for path, text in sorted(files.items()):
+        titres = _headings(text)
+        lacking += [
+            f"{path}: section “{s}” missing"
             for s in params.get("sections") or []
             if str(s).lower() not in titres
         ]
-        manques += [
-            f"{chemin}: {m!r} not found" for m in params.get("patterns") or [] if not re.search(str(m), texte)
+        lacking += [
+            f"{path}: {m!r} not found" for m in params.get("patterns") or [] if not re.search(str(m), text)
         ]
     return GateOutcome(
         "markdown_sections",
-        not manques,
-        detail=f"{len(fichiers)} document(s) with their sections" if not manques else "; ".join(manques),
-        annotations=manques,
+        not lacking,
+        detail=f"{len(files)} document(s) with their sections" if not lacking else "; ".join(lacking),
+        annotations=lacking,
     )
 
 
@@ -315,7 +315,7 @@ def _docs_updated(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     branch diff, not the agent's report: it never takes the writer's word that nothing needed saying.
     """
     if not ctx.diff_available:
-        return _sans_diff("docs_updated")
+        return _without_diff("docs_updated")
     docs = [str(p) for p in params.get("docs") or DOCS_PATHS]
     ignore = [str(p) for p in params.get("ignore") or NO_DOCS_NEEDED]
     minimum = int(params.get("min_files", 1))
@@ -342,31 +342,31 @@ def _docs_updated(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-#: Le motif par défaut d'un ADR numéroté : `docs/adr/0042-titre.md`.
-MOTIF_ADR = "docs/adr/[0-9][0-9][0-9][0-9]-*.md"
+#: The default pattern of a numbered ADR: `docs/adr/0042-title.md`.
+ADR_PATTERN = "docs/adr/[0-9][0-9][0-9][0-9]-*.md"
 
 
-def _numero(chemin: str) -> int | None:
-    """Le numéro en tête du nom de fichier : `docs/adr/0042-rls.md` → 42."""
-    trouve = re.match(r"(\d+)-", chemin.rsplit("/", 1)[-1])
-    return int(trouve.group(1)) if trouve else None
+def _number(path: str) -> int | None:
+    """The number at the head of the file name: `docs/adr/0042-rls.md` → 42."""
+    found = re.match(r"(\d+)-", path.rsplit("/", 1)[-1])
+    return int(found.group(1)) if found else None
 
 
 @gate("adr_number_free", needs=("scm",))
 def _adr_number_free(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """Le numéro de l'ADR que la branche ajoute n'est pas déjà pris sur la branche par défaut (#287).
+    """The number of the ADR the branch adds is not already taken on the default branch (#287).
 
-    L'architecte numérote « le plus grand existant plus un », lu au moment où il écrit : deux études
-    qui tournent ensemble prennent le même numéro, et la seconde fusionnerait un doublon. Rien ne
-    réserve un numéro ; cette garantie, posée à la fusion, refuse le doublon au dernier moment utile.
-    Un chemin déjà présent tel quel sur la branche par défaut n'est pas un ajout : c'est le même
-    fichier (ou un conflit d'ajout que la forge refuse d'elle-même).
+    The architect numbers "the largest existing plus one", read at the moment of writing: two studies
+    that run together take the same number, and the second would merge a duplicate. Nothing
+    reserves a number; this guarantee, set at the merge, refuses the duplicate at the last useful moment.
+    A path already present as is on the default branch is not an addition: it is the same
+    file (or an add conflict the forge refuses by itself).
     """
     if not ctx.diff_available:
-        return _sans_diff("adr_number_free")
-    motif = str(params.get("pattern") or MOTIF_ADR)
+        return _without_diff("adr_number_free")
+    pattern = str(params.get("pattern") or ADR_PATTERN)
     if ctx.default_branch_files is None:
-        if not any(fnmatch.fnmatch(p, motif) for p in ctx.changed_files):
+        if not any(fnmatch.fnmatch(p, pattern) for p in ctx.changed_files):
             return GateOutcome("adr_number_free", True, detail="no numbered record added by the change")
         return GateOutcome(
             "adr_number_free",
@@ -374,56 +374,56 @@ def _adr_number_free(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
             detail="default branch unavailable: the numbers already taken could not be listed "
             "(SCM connector)",
         )
-    existants = sorted(p for p in ctx.default_branch_files if fnmatch.fnmatch(p, motif))
-    ajoutes = [p for p in ctx.changed_files if fnmatch.fnmatch(p, motif) and p not in existants]
-    if not ajoutes:
+    existing = sorted(p for p in ctx.default_branch_files if fnmatch.fnmatch(p, pattern))
+    added = [p for p in ctx.changed_files if fnmatch.fnmatch(p, pattern) and p not in existing]
+    if not added:
         return GateOutcome("adr_number_free", True, detail="no numbered record added by the change")
-    pris: dict[int, list[str]] = {}
-    for chemin in existants:
-        numero = _numero(chemin)
-        if numero is not None:
-            pris.setdefault(numero, []).append(chemin)
-    doublons = [
-        (chemin, numero, pris[numero])
-        for chemin in sorted(ajoutes)
-        if (numero := _numero(chemin)) is not None and numero in pris
+    taken: dict[int, list[str]] = {}
+    for path in existing:
+        number = _number(path)
+        if number is not None:
+            taken.setdefault(number, []).append(path)
+    duplicates = [
+        (path, number, taken[number])
+        for path in sorted(added)
+        if (number := _number(path)) is not None and number in taken
     ]
-    if not doublons:
+    if not duplicates:
         return GateOutcome(
             "adr_number_free",
             True,
-            detail=f"number free on the default branch: {', '.join(sorted(ajoutes))}",
+            detail=f"number free on the default branch: {', '.join(sorted(added))}",
         )
-    libre = max(pris) + 1
+    free_number = max(taken) + 1
     return GateOutcome(
         "adr_number_free",
         False,
         detail="; ".join(
-            f"{chemin}: number {numero:04d} is already taken on the default branch by {', '.join(autres)}"
-            for chemin, numero, autres in doublons
+            f"{path}: number {number:04d} is already taken on the default branch by {', '.join(others)}"
+            for path, number, others in duplicates
         )
-        + f" — renumber it (next free number: {libre:04d})",
-        annotations=[chemin for chemin, _, _ in doublons],
+        + f" — renumber it (next free number: {free_number:04d})",
+        annotations=[path for path, _, _ in duplicates],
     )
 
 
 @gate("outputs_present")
 def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """Les sorties déclarées de l'étape existent et ne sont pas vides.
+    """The declared outputs of the stage exist and are not empty.
 
-    La garantie générique du moteur : `evidence_present` parle de tests et de couverture,
-    donc de logiciel. Une étape qui produit une liste de candidats, un courrier ou un
-    dossier instruit n'a pas de tests — elle a des SORTIES, que la transition nomme
-    (`outputs:`) et que celle-ci vérifie. Sans elle, un workflow hors logiciel n'aurait
-    aucune garantie mécanique, et il faudrait croire l'agent sur parole.
+    The engine's generic guarantee: `evidence_present` speaks of tests and coverage,
+    so of software. A stage that produces a list of candidates, a letter or an
+    investigated file has no tests: it has OUTPUTS, which the transition names
+    (`outputs:`) and which this one checks. Without it, a non-software workflow would have
+    no mechanical guarantee, and the agent would have to be taken at its word.
     """
     required = [str(k) for k in (params.get("keys") or ctx.expected_outputs)]
     if not required:
-        # Symétrie avec `_sans_diff` : une garantie DEMANDÉE qui n'a rien à regarder ne
-        # passe pas, elle refuse. Livrée le 2026-09-23, celle-ci passait — le même défaut
-        # que celui qu'on venait de corriger sur les garanties de diff, à un jour près.
-        # `allow_empty: true` reste possible pour une transition dont les sorties sont
-        # facultatives, mais il faut alors l'écrire.
+        # Symmetry with `_without_diff`: a REQUESTED guarantee that has nothing to look at does
+        # not pass, it refuses. Shipped on 2026-09-23, this one passed: the same defect
+        # as the one just fixed on the diff guarantees, a day apart.
+        # `allow_empty: true` stays possible for a transition whose outputs are
+        # optional, but it must then be written.
         if params.get("allow_empty"):
             return GateOutcome("outputs_present", True, detail="no output declared (tolerated)")
         return GateOutcome(
@@ -434,8 +434,8 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         )
     if ctx.result is None:
         return GateOutcome("outputs_present", False, detail="no stage result")
-    # `StageOutputs` tolère les champs supplémentaires (rôles custom) : c'est ce qui permet
-    # à un métier de nommer ses propres sorties sans toucher au contrat.
+    # `StageOutputs` tolerates extra fields (custom roles): that is what lets
+    # a trade name its own outputs without touching the contract.
     produced = ctx.result.outputs.model_dump(exclude_none=True)
     # A file output (ADR 0049) is present when the runner stored it from `.choregos/outputs/`.
     produced.update(dict.fromkeys(ctx.result.artifacts.files, True))
@@ -448,75 +448,77 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-#: Les états d'une action qui ne bougeront plus.
-ACTION_REGLEE = frozenset({"succeeded", "failed", "rejected"})
+#: The states of an action that will not move again.
+ACTION_SETTLED = frozenset({"succeeded", "failed", "rejected"})
+ACTION_REGLEE = ACTION_SETTLED  # lang: fr-ok alias:internal
+MOTIF_ADR = ADR_PATTERN  # lang: fr-ok alias:internal
 
 
 @gate("action_succeeded", asynchronous=True)
 def _action_succeeded(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """L'action gouvernée de la transition a RÉUSSI : chacun de ses effets fait, confirmé (ADR 0035).
+    """The transition's governed action SUCCEEDED: each of its effects done, confirmed (ADR 0035).
 
-    Rejetée, échouée — et alors compensée —, elle bloque ; proposée, en attente d'une décision ou
-    en cours, elle attend. Une transition sans action n'a rien à juger : le validateur le refuse.
+    Rejected, failed (and then compensated), it blocks; proposed, awaiting a decision or
+    running, it waits. A transition without an action has nothing to judge: the validator refuses it.
     """
-    statut = ctx.action_status
-    if statut is None or statut not in ACTION_REGLEE:
-        return GateOutcome("action_succeeded", False, pending=True, detail=f"action {statut or 'to propose'}")
-    if statut == "succeeded":
+    status = ctx.action_status
+    if status is None or status not in ACTION_SETTLED:
+        return GateOutcome("action_succeeded", False, pending=True, detail=f"action {status or 'to propose'}")
+    if status == "succeeded":
         return GateOutcome("action_succeeded", True, detail="action succeeded")
-    return GateOutcome("action_succeeded", False, detail=f"action {statut}")
+    return GateOutcome("action_succeeded", False, detail=f"action {status}")
 
 
 @gate("tool_called")
 def _tool_called(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """Les outils que la transition exige ont été appelés — au registre, pas dans le récit.
+    """The tools the transition requires were called, in the ledger, not in the narrative.
 
-    Sur le banc du 2026-09-24 le playbook de sourcing disait « vérifie le lieu avec
-    `verifier_adresse` avant toute chose », l'agent consignait `lieu_verifie: true`, et le
-    registre n'avait aucun appel : dix listages du catalogue, zéro appel. Un outil annoncé
-    dans un prompt n'est pas un outil employé. Cette garantie lit les appels que la
-    plateforme a elle-même comptés (ADR 0014) : on ne croit pas l'agent, on le mesure.
+    On the 2026-09-24 bench the sourcing playbook said "check the place with
+    `verify_address` before anything else", the agent recorded `place_verified: true`, and the
+    ledger had no call: ten catalogue listings, zero calls. A tool announced
+    in a prompt is not a tool used. This guarantee reads the calls the
+    platform counted itself (ADR 0014): the agent is not believed, it is measured.
     """
-    exiges = [str(t) for t in (params.get("tools") or [])]
-    if not exiges:
+    required_tools = [str(t) for t in (params.get("tools") or [])]
+    if not required_tools:
         return GateOutcome(
             "tool_called",
             False,
             detail="no tool required: the guarantee needs `tools: [...]` to have something to check",
         )
-    appeles = set(ctx.tool_calls)
-    manquants = [t for t in exiges if t not in appeles]
+    called = set(ctx.tool_calls)
+    lacking_tools = [t for t in required_tools if t not in called]
     return GateOutcome(
         "tool_called",
-        not manquants,
+        not lacking_tools,
         detail=(
-            f"tools called: {', '.join(exiges)}"
-            if not manquants
-            else f"tools required but never called (per the ledger): {', '.join(manquants)}"
+            f"tools called: {', '.join(required_tools)}"
+            if not lacking_tools
+            else f"tools required but never called (per the ledger): {', '.join(lacking_tools)}"
         ),
-        annotations=manquants,
+        annotations=lacking_tools,
     )
 
 
 @gate("evidence_facts")
 def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """Les preuves que le métier a nommées sont là, et comparables si on le demande.
+    """The evidence the trade named is there, and comparable if asked.
 
-    `evidence_present` exige des tests : c'est la preuve du logiciel. `outputs_present`
-    vérifie qu'une étape a produit ses sorties, mais une sortie est ce que l'agent
-    RACONTE. Entre les deux manquait ce qu'un dossier instruit peut offrir de mesurable :
-    des faits nommés — `profils_retenus: 3`, `piece_identite: true`, `delai_jours: 12` —
-    consignés dans `evidence.facts` et vérifiés ici.
+    `evidence_present` requires tests: that is the evidence of software. `outputs_present`
+    checks that a stage produced its outputs, but an output is what the agent
+    TELLS. Between the two lacked what an investigated file can offer that is measurable:
+    named facts (`profiles_kept: 3`, `identity_document: true`, `days_elapsed: 12`)
+    recorded in `evidence.facts` and checked here.
 
         gates:
           - name: evidence_facts
-            params: { keys: [profils_retenus], min: { profils_retenus: 1 }, must_be_true: [besoin_complet] }
+            params: { keys: [profiles_kept], min: { profiles_kept: 1 }, must_be_true: [need_complete] }
 
     `max` is the mirror bound (a ceiling: `max: { diverging_excess: 0 }`); like `min` it compares
     only real numbers, so a fact declared `true` never passes for a 1.
 
-    `min` refuse un zéro poli : un agent qui ne trouve personne doit le dire en échouant
-    son étape, pas en rendant une preuve vide qui passe.
+    `min` refuses a polite zero: an agent that finds nobody must say so by failing
+    its stage, not by returning an empty piece of evidence that passes.
     """
     required = [str(k) for k in (params.get("keys") or [])]
     if not required:
@@ -540,42 +542,42 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
                 detail=f"declared, not measured: {', '.join(declared)}",
                 annotations=declared,
             )
-    manquants = [key for key in required if key not in facts]
-    if manquants:
+    lacking_tools = [key for key in required if key not in facts]
+    if lacking_tools:
         return GateOutcome(
             "evidence_facts",
             False,
-            detail=f"missing facts: {', '.join(manquants)}",
-            annotations=manquants,
+            detail=f"missing facts: {', '.join(lacking_tools)}",
+            annotations=lacking_tools,
         )
-    # Un booléen est un entier en Python : `piece_identite: false` passerait un `min: 0`
-    # sans qu'on l'ait voulu. On ne compare donc que ce qui est un nombre pour de bon.
-    insuffisants = [
-        f"{key} = {facts[key]} < {seuil}"
-        for key, seuil in (params.get("min") or {}).items()
+    # A boolean is an integer in Python: `identity_document: false` would pass a `min: 0`
+    # without anyone wanting it. So only what is a real number is compared.
+    failures = [
+        f"{key} = {facts[key]} < {threshold}"
+        for key, threshold in (params.get("min") or {}).items()
         if key in facts
         and isinstance(facts[key], int | float)
         and not isinstance(facts[key], bool)
-        and float(facts[key]) < float(seuil)
+        and float(facts[key]) < float(threshold)
     ]
-    excessifs = [
-        f"{key} = {facts[key]} > {plafond}"
-        for key, plafond in (params.get("max") or {}).items()
+    too_high = [
+        f"{key} = {facts[key]} > {ceiling}"
+        for key, ceiling in (params.get("max") or {}).items()
         if key in facts
         and isinstance(facts[key], int | float)
         and not isinstance(facts[key], bool)
-        and float(facts[key]) > float(plafond)
+        and float(facts[key]) > float(ceiling)
     ]
-    insuffisants += excessifs
-    # `must_be_true` et pas `true` : en YAML, une clé `true:` est lue comme le BOOLÉEN
-    # `True`, et le workflow est refusé avec un message sur les types. Un nom de
-    # paramètre ne doit pas être un mot réservé du format qui le porte.
-    faux = [key for key in (params.get("must_be_true") or []) if facts.get(key) is not True]
-    if insuffisants or faux:
+    failures += too_high
+    # `must_be_true` and not `true`: in YAML, a `true:` key is read as the BOOLEAN
+    # `True`, and the workflow is refused with a message about types. A parameter
+    # name must not be a reserved word of the format that carries it.
+    not_true = [key for key in (params.get("must_be_true") or []) if facts.get(key) is not True]
+    if failures or not_true:
         detail = "; ".join(
-            filter(None, [", ".join(insuffisants), ("false: " + ", ".join(faux)) if faux else ""])
+            filter(None, [", ".join(failures), ("false: " + ", ".join(not_true)) if not_true else ""])
         )
-        return GateOutcome("evidence_facts", False, detail=detail, annotations=insuffisants + faux)
+        return GateOutcome("evidence_facts", False, detail=detail, annotations=failures + not_true)
     return GateOutcome("evidence_facts", True, detail=f"facts checked: {', '.join(sorted(required))}")
 
 
@@ -806,7 +808,7 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 @gate("diff_size_max", needs=("scm",))
 def _diff_size_max(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if not ctx.diff_available:
-        return _sans_diff("diff_size_max")
+        return _without_diff("diff_size_max")
     max_files = int(params.get("files", params.get("n", 60)))
     max_lines = int(params.get("lines", 100_000))
     files = len(ctx.changed_files)
@@ -830,7 +832,7 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
 
 
 def scan_secrets(text: str) -> list[str]:
-    """Détecteur de secrets volontairement simple : il complète gitleaks, il ne le remplace pas."""
+    """A deliberately simple secret detector: it complements gitleaks, it does not replace it."""
     found: list[str] = []
     for label, pattern in SECRET_PATTERNS:
         if re.search(pattern, text):
@@ -841,7 +843,7 @@ def scan_secrets(text: str) -> list[str]:
 @gate("no_secrets", needs=("scm",))
 def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if not ctx.diff_available:
-        return _sans_diff("no_secrets")
+        return _without_diff("no_secrets")
     found = ctx.secrets_found
     return GateOutcome(
         "no_secrets",
@@ -851,7 +853,7 @@ def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-# La couverture que le runner MESURE dans le dépôt cloné : un dépôt, pas une CI (S21-23).
+# The coverage the runner MEASURES in the cloned repository: a repository, not a CI (S21-23).
 @gate("coverage_delta_min", needs=("scm",))
 def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     threshold = float(params.get("x", params.get("min", 0.0)))
@@ -865,17 +867,17 @@ def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome
     )
 
 
-# ───────────────────────────── gates asynchrones ─────────────────────────────
+# ───────────────────────────── asynchronous gates ─────────────────────────────
 
 
-# `ci_green` et `scans_ok` lisent les checks de la PR À TRAVERS LE DÉPÔT (`scm.get_pr`, dans
-# `activities/gates.py`) — GitHub Actions comme Tekton. Ils déclaraient un `ci` que rien ne lisait :
-# un projet sur GitHub Actions se voyait réclamer un Tekton qu'il n'a pas (S21-23).
+# `ci_green` and `scans_ok` read the PR's checks THROUGH THE REPOSITORY (`scm.get_pr`, in
+# `activities/gates.py`), GitHub Actions as well as Tekton. They declared a `ci` that nothing read:
+# a project on GitHub Actions was asked for a Tekton it does not have (S21-23).
 @gate("ci_green", asynchronous=True, needs=("scm",))
 def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    # `pending` est ce que rend `checks_conclusion` tant qu'un check tourne : le prendre pour un
-    # échec escaladait un ticket dont la CI, verte 13 s plus tard, n'avait pas fini (#5 du
-    # locataire dev, 09/10 — S22-14).
+    # `pending` is what `checks_conclusion` returns while a check runs: taking it for a
+    # failure escalated a work item whose CI, green 13 s later, had not finished (#5 of the
+    # dev tenant, 09/10, S22-14).
     if ctx.ci_status in (None, "pending"):
         return GateOutcome("ci_green", False, pending=True, detail="CI pending")
     ok = ctx.ci_status in {"success", "succeeded", "neutral"}
@@ -911,9 +913,9 @@ def _scans_ok(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-# La provenance se lit sur la PR, comme les scans : un check dont le nom contient `provenance`
-# (`attest-build-provenance`, `slsa-provenance`…). Rien ne renseignait `signed` : la garantie
-# attendait pour toujours, et un ticket `advanced` ne fusionnait jamais (#283).
+# The provenance is read on the PR, like the scans: a check whose name contains `provenance`
+# (`attest-build-provenance`, `slsa-provenance`…). Nothing filled in `signed`: the guarantee
+# waited forever, and an `advanced` work item never merged (#283).
 @gate("provenance_signed", asynchronous=True, needs=("scm",))
 def _provenance_signed(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.signed is None:
@@ -930,7 +932,7 @@ def _provenance_signed(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 
 @gate("flag_present", asynchronous=True)
 def _flag_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    """Gate S9-06 : un ticket `risk: high` doit nommer un feature flag qui existe réellement."""
+    """Gate S9-06: a `risk: high` work item must name a feature flag that really exists."""
     name = params.get("name") or ctx.required_flag
     if not name:
         return GateOutcome("flag_present", False, detail="no feature flag named in the spec")

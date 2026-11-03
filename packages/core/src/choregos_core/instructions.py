@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les instructions d'un agent du registre, rendues dans un bac à sable (ADR 0033).
+"""The instructions of a registry agent, rendered in a sandbox (ADR 0033).
 
-Un playbook est un fichier du déploiement, relu en PR ; les instructions d'un agent s'écrivent dans
-la console, par un administrateur d'organisation. Elles sont donc rendues par Jinja **isolé**
-(`SandboxedEnvironment`) : un gabarit ne remonte pas aux classes Python — `{{ ''.__class__ }}` est
-refusé —, n'appelle pas de méthode dangereuse, ne lit que les variables qu'on lui donne.
+A playbook is a deployment file, reviewed in a PR; an agent's instructions are written in the
+console, by an organisation administrator. They are therefore rendered by an **isolated** Jinja
+(`SandboxedEnvironment`): a template does not climb up to the Python classes (`{{ ''.__class__ }}`
+is refused), calls no dangerous method, and reads only the variables it is given.
 
-Les mêmes variables qu'un playbook : `ticket`, `spec`, `plan_markdown`, `inputs`, `allowed_paths`,
-`context`, `project`. Le cadre que l'agent ne peut pas modifier — le contrat de sortie, les
-invariants — est ajouté APRÈS le rendu, par l'orchestrateur.
+The same variables as a playbook: `ticket`, `spec`, `plan_markdown`, `inputs`, `allowed_paths`,
+`context`, `project`. The frame the agent cannot modify (the output contract, the
+invariants) is added AFTER the rendering, by the orchestrator.
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ from typing import Any
 from jinja2 import StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 
-#: De quoi rendre un gabarit pour le vérifier, à la publication d'une version.
-VARIABLES_D_EXEMPLE: dict[str, Any] = {
+#: Enough to render a template to check it, when a version is published.
+SAMPLE_VARIABLES: dict[str, Any] = {
     "ticket": {
         "key": "DEMO-1",
         "title": "Onboarding of Camille",
-        "body": "Arrive le 2 novembre.",
+        "body": "Arrives on 2 November.",
         "fields": {},
     },
     "spec": "",
@@ -36,21 +36,34 @@ VARIABLES_D_EXEMPLE: dict[str, Any] = {
     "production_indicators": [],
 }
 
-_ENVIRONNEMENT = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False, keep_trailing_newline=True)
+_ENVIRONMENT = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False, keep_trailing_newline=True)
 
 
-def rendre_les_instructions(source: str, **variables: Any) -> str:
-    """Le gabarit rendu dans le bac à sable ; lève `TemplateError` (dont `SecurityError`)."""
-    return _ENVIRONNEMENT.from_string(source).render({**VARIABLES_D_EXEMPLE, **variables})
+def render_instructions(source: str, **variables: Any) -> str:
+    """The template rendered in the sandbox; raises `TemplateError` (`SecurityError` included)."""
+    return _ENVIRONMENT.from_string(source).render({**SAMPLE_VARIABLES, **variables})
 
 
-def erreurs_des_instructions(source: str) -> list[str]:
-    """Ce qui empêcherait le gabarit de rendre — vérifié quand une version est publiée."""
+def instruction_errors(source: str) -> list[str]:
+    """What would keep the template from rendering, checked when a version is published."""
     try:
-        rendre_les_instructions(source)
-    except TemplateError as erreur:
-        return [f"{type(erreur).__name__} : {erreur}"]
+        render_instructions(source)
+    except TemplateError as error:
+        return [f"{type(error).__name__} : {error}"]
     return []
 
 
-__all__ = ["VARIABLES_D_EXEMPLE", "erreurs_des_instructions", "rendre_les_instructions"]
+# Former names, still imported outside core until their own stories switch them (ADR 0098 §3 (b)).
+VARIABLES_D_EXEMPLE = SAMPLE_VARIABLES  # lang: fr-ok alias:internal
+rendre_les_instructions = render_instructions  # lang: fr-ok alias:internal
+erreurs_des_instructions = instruction_errors  # lang: fr-ok alias:internal
+
+
+__all__ = [
+    "SAMPLE_VARIABLES",
+    "VARIABLES_D_EXEMPLE",
+    "erreurs_des_instructions",
+    "instruction_errors",
+    "render_instructions",
+    "rendre_les_instructions",
+]

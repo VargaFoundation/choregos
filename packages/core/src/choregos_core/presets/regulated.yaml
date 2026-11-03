@@ -1,4 +1,4 @@
-# Preset `regulated` : traçabilité maximale, sandbox durcie et fermée, trains approuvés.
+# Preset `regulated`: maximum traceability, hardened and closed sandbox, approved trains.
 apiVersion: choregos/v1
 kind: Policy
 metadata:
@@ -16,9 +16,9 @@ budgets:
   max_minutes: { default: 60, implement: 120, review: 40 }
   daily_project_usd: 600
   alert_at_ratio: 0.7
-# Pas d'`approvals` ici : personne ne les applique (ADR 0044). Un humain qui approuve se déclare
-# dans le WORKFLOW (acteur humain sur une transition, `train.approval`) ; staging et prod restent
-# approuvés par `release_train.<env>.approval`, que le train applique.
+# No `approvals` here: nobody applies them (ADR 0044). A human who approves is declared
+# in the WORKFLOW (a human actor on a transition, `train.approval`); staging and prod stay
+# approved by `release_train.<env>.approval`, which the train applies.
 attempts:
   by_role: { implement: 2, fix_ci: 2 }
   dod_iterations: 2

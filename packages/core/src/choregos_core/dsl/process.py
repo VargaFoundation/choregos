@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""La vue « processus » d'un workflow : chaque transition dite en clair (ADR 0031).
+"""The "process" view of a workflow: each transition said in plain words (ADR 0031).
 
-La carte (`graph.to_graph`) montre la FORME d'un workflow ; elle restait muette sur ce qui compte à
-un métier : qui fait passer un ticket d'un état au suivant, à quelles conditions, et ce qui arrive
-quand ça rate. Ici, chaque transition devient une phrase, et ses éléments restent structurés pour
-la console. Les phrases sont en anglais, comme l'interface (S5-01).
+The map (`graph.to_graph`) shows the SHAPE of a workflow; it stayed silent on what matters to a
+trade: who moves a work item from one state to the next, under which conditions, and what happens
+when it fails. Here, each transition becomes a sentence, and its elements stay structured for
+the console. The sentences are in English, like the interface (S5-01).
 """
 
 from __future__ import annotations
@@ -21,13 +21,13 @@ from choregos_contracts.workflow import (
     JobActor,
     ScoreQuestion,
     Transition,
-    effet_de_la_transition,
+    transition_effect,
 )
 
 from choregos_core.gates import DIFF_GATES, is_async_gate
 
-#: Ce que vérifie chaque garantie, en une phrase. Un test exige un résumé pour chaque garantie
-#: connue : une garantie nouvelle sans résumé ferait parler la vue processus dans le vide.
+#: What each guarantee checks, in one sentence. A test requires a summary for every known
+#: guarantee: a new guarantee without a summary would make the process view speak into the void.
 RESUMES: dict[str, str] = {
     "action_succeeded": "its governed action succeeded",
     "adr_number_free": "the decision record's number is not already taken on the default branch",
@@ -100,11 +100,11 @@ def gate_detail(name: str, params: dict[str, Any], timeout_hours: int | None = N
     return "; ".join(parts) or None
 
 
-def _affiche(wf: Workflow, etat: str) -> str:
-    if etat == AGENT_WILDCARD:
+def _display(wf: Workflow, state: str) -> str:
+    if state == AGENT_WILDCARD:
         return "any agent step"
-    state = wf.states.get(etat)
-    return state.display if state else etat
+    found = wf.states.get(state)
+    return found.display if found else state
 
 
 def _decision(acteur: DecisionActor) -> str:
@@ -120,140 +120,136 @@ def _decision(acteur: DecisionActor) -> str:
     return f"a decision by `{acteur.model}` on {', '.join(acteur.state)}: {', '.join(questions)}"
 
 
-def _qui(wf: Workflow, t: Transition) -> tuple[str, str, str]:
-    """(type d'acteur, nom, description)."""
+def _who(wf: Workflow, t: Transition) -> tuple[str, str, str]:
+    """(actor type, name, description)."""
     if t.via == "release_train":
         env = t.train.env if t.train else "the target environment"
         return "release_train", "release_train", f"the release train to {env}"
-    nom = t.by or "system"
-    acteur = wf.actors.get(nom)
-    if isinstance(acteur, AgentActor):
-        return "agent", nom, f"the agent `{nom}` (role {acteur.role}, model {acteur.model})"
-    if isinstance(acteur, JobActor):
-        return "job", nom, f"the job `{nom}` (role {acteur.role}): `{' '.join(acteur.command)}`, no model"
-    if isinstance(acteur, HumanActor):
-        delai = f", within {acteur.sla_hours} h" if acteur.sla_hours else ""
-        return "human", nom, f"a person of group `{acteur.group}`{delai}"
-    if isinstance(acteur, DecisionActor):
-        return "decision", nom, _decision(acteur)
-    # Ce que la plateforme fait en la franchissant, en clair (`does`, #175).
-    geste = {"open_pr": ", which opens the pull request", "merge_pr": ", which merges the pull request"}
-    return "system", nom, f"the platform{geste.get(effet_de_la_transition(t) or '', '')}"
+    name = t.by or "system"
+    actor = wf.actors.get(name)
+    if isinstance(actor, AgentActor):
+        return "agent", name, f"the agent `{name}` (role {actor.role}, model {actor.model})"
+    if isinstance(actor, JobActor):
+        return "job", name, f"the job `{name}` (role {actor.role}): `{' '.join(actor.command)}`, no model"
+    if isinstance(actor, HumanActor):
+        delay = f", within {actor.sla_hours} h" if actor.sla_hours else ""
+        return "human", name, f"a person of group `{actor.group}`{delay}"
+    if isinstance(actor, DecisionActor):
+        return "decision", name, _decision(actor)
+    # What the platform does when it crosses it, in plain words (`does`, #175).
+    gesture = {"open_pr": ", which opens the pull request", "merge_pr": ", which merges the pull request"}
+    return "system", name, f"the platform{gesture.get(transition_effect(t) or '', '')}"
 
 
 def _action(t: Transition) -> str | None:
-    """L'action gouvernée que la transition propose, en clair : quoi, quand, sous quelle validation."""
+    """The governed action the transition proposes, in plain words: what, when, under which approval."""
     if t.action is None:
         return None
-    texte = f"proposing the governed action `{t.action.kind}`"
+    text = f"proposing the governed action `{t.action.kind}`"
     if t.action.not_before:
-        texte += f" not before `{t.action.not_before}`"
+        text += f" not before `{t.action.not_before}`"
     if t.action.approval is not None:
         roles = ", ".join(f"{a.min} {a.role}" for a in t.action.approval.approvers)
-        texte += f", approved by {roles}"
+        text += f", approved by {roles}"
     else:
-        texte += ", approved by a person when one of its operations requires it"
-    return texte
+        text += ", approved by a person when one of its operations requires it"
+    return text
 
 
-def _tache(t: Transition) -> str | None:
-    """La tâche qu'une personne fait, en clair : quoi, quels champs, ce qu'elle atteste."""
+def _task(t: Transition) -> str | None:
+    """The task a person does, in plain words: what, which fields, what they attest."""
     if t.task is None:
         return None
-    champs = ", ".join(f"`{nom}`" for nom in (t.task.form.get("properties") or {}))
-    texte = f"done “{t.task.title or t.to}” (filling {champs})"
+    fields = ", ".join(f"`{name}`" for name in (t.task.form.get("properties") or {}))
+    text = f"done “{t.task.title or t.to}” (filling {fields})"
     if t.task.attest:
-        texte += f" and attested “{t.task.attest}”"
-    return texte
+        text += f" and attested “{t.task.attest}”"
+    return text
 
 
 def to_process(wf: Workflow) -> list[dict[str, Any]]:
-    """Une étape par transition, dans l'ordre du YAML : qui agit, de quel état vers lequel, sous
-    quelles garanties, ce qui doit être produit, et ce qui arrive en cas d'échec ou de rejet."""
-    etapes = []
+    """One step per transition, in the order of the YAML: who acts, from which state to which, under
+    which guarantees, what must be produced, and what happens on failure or rejection."""
+    steps = []
     for t in wf.transitions:
-        type_, nom, qui = _qui(wf, t)
-        noms = [g.name for g in t.gates]
+        type_, name, who = _who(wf, t)
+        names = [g.name for g in t.gates]
         gate_params = {g.name: dict(g.params) for g in t.gates}
-        if t.action is not None and "action_succeeded" not in noms:
-            noms.insert(0, "action_succeeded")  # implicite : une transition à action l'attend toujours
-        garanties = [
+        if t.action is not None and "action_succeeded" not in names:
+            names.insert(0, "action_succeeded")  # implicit: a transition with an action always waits for it
+        guarantees = [
             {
-                "name": nom,
-                "summary": RESUMES.get(nom, nom),
-                "detail": gate_detail(nom, gate_params.get(nom, {}), t.timeout_hours),
-                "asynchronous": is_async_gate(nom),
+                "name": gate,
+                "summary": RESUMES.get(gate, gate),
+                "detail": gate_detail(gate, gate_params.get(gate, {}), t.timeout_hours),
+                "asynchronous": is_async_gate(gate),
             }
-            for nom in noms
+            for gate in names
         ]
         conditions = []
         if t.outputs:
             conditions.append("it produced " + ", ".join(f"`{o}`" for o in t.outputs))
-        conditions += [RESUMES.get(nom, nom) for nom in noms]
-        phrase = f"From “{_affiche(wf, t.from_)}”, {qui} moves the item to “{_affiche(wf, t.to)}”"
+        conditions += [RESUMES.get(gate, gate) for gate in names]
+        sentence = f"From “{_display(wf, t.from_)}”, {who} moves the item to “{_display(wf, t.to)}”"
         action = _action(t)
         if action:
-            phrase += f", after {action},"
-        tache = _tache(t)
-        if tache:
-            phrase += f", once they have {tache},"
+            sentence += f", after {action},"
+        task = _task(t)
+        if task:
+            sentence += f", once they have {task},"
         if conditions:
-            phrase += " once " + "; ".join(conditions)
-        phrase += "."
-        echec = None
+            sentence += " once " + "; ".join(conditions)
+        sentence += "."
+        failure = None
         if t.on_fail is not None:
-            reprise, escalade = _affiche(wf, t.on_fail.to), _affiche(wf, t.on_fail.escalate_to)
-            echec = (
-                f"On failure it retries up to {t.on_fail.max_attempts} time(s) from “{reprise}”, "
-                f"then goes to “{escalade}”."
+            retry_from, escalation = _display(wf, t.on_fail.to), _display(wf, t.on_fail.escalate_to)
+            failure = (
+                f"On failure it retries up to {t.on_fail.max_attempts} time(s) from “{retry_from}”, "
+                f"then goes to “{escalation}”."
             )
-            phrase += " " + echec
-        rejet = f"If rejected, back to “{_affiche(wf, t.on_reject)}”." if t.on_reject else None
-        if rejet:
-            phrase += " " + rejet
+            sentence += " " + failure
+        rejection = f"If rejected, back to “{_display(wf, t.on_reject)}”." if t.on_reject else None
+        if rejection:
+            sentence += " " + rejection
         if t.timeout_hours:
-            phrase += f" It times out after {t.timeout_hours} h."
-        acteur = wf.actors.get(t.by) if t.by else None
+            sentence += f" It times out after {t.timeout_hours} h."
+        actor = wf.actors.get(t.by) if t.by else None
         # A decision writes its answers and their probabilities: what a `when` compares (ADR 0121).
         outputs = (
-            acteur.outputs + [o for o in t.outputs if o not in acteur.outputs]
-            if isinstance(acteur, DecisionActor)
+            actor.outputs + [o for o in t.outputs if o not in actor.outputs]
+            if isinstance(actor, DecisionActor)
             else list(t.outputs)
         )
-        etapes.append(
+        steps.append(
             {
                 "id": t.key,
                 "from": t.from_,
-                "from_display": _affiche(wf, t.from_),
+                "from_display": _display(wf, t.from_),
                 "to": t.to,
-                "to_display": _affiche(wf, t.to),
-                "actor": nom,
+                "to_display": _display(wf, t.to),
+                "actor": name,
                 "actor_type": type_,
-                "who": qui,
+                "who": who,
                 "outputs": outputs,
-                "gates": garanties,
-                "on_fail": echec,
-                "on_reject": rejet,
+                "gates": guarantees,
+                "on_fail": failure,
+                "on_reject": rejection,
                 "timeout_hours": t.timeout_hours,
                 "action": action,
-                "task": tache,
-                "sentence": phrase,
+                "task": task,
+                "sentence": sentence,
                 # What the step names, structured, so the console need not parse the sentence.
-                "agent": acteur.agent if isinstance(acteur, AgentActor) else None,
-                "role": str(acteur.role)
-                if isinstance(acteur, AgentActor | JobActor | DecisionActor)
-                else None,
-                "model": acteur.model if isinstance(acteur, AgentActor | DecisionActor) else None,
-                "group": acteur.group if isinstance(acteur, HumanActor) else None,
-                "sla_hours": acteur.sla_hours if isinstance(acteur, HumanActor) else None,
-                "command": list(acteur.command) if isinstance(acteur, JobActor) else None,
-                "image": (str(acteur.image) if acteur.image else None)
-                if isinstance(acteur, JobActor)
-                else None,
+                "agent": actor.agent if isinstance(actor, AgentActor) else None,
+                "role": str(actor.role) if isinstance(actor, AgentActor | JobActor | DecisionActor) else None,
+                "model": actor.model if isinstance(actor, AgentActor | DecisionActor) else None,
+                "group": actor.group if isinstance(actor, HumanActor) else None,
+                "sla_hours": actor.sla_hours if isinstance(actor, HumanActor) else None,
+                "command": list(actor.command) if isinstance(actor, JobActor) else None,
+                "image": (str(actor.image) if actor.image else None) if isinstance(actor, JobActor) else None,
                 "inputs": list(t.inputs),
                 "output_types": dict(t.output_types),
-                "writes_branch": isinstance(acteur, AgentActor | JobActor)
+                "writes_branch": isinstance(actor, AgentActor | JobActor)
                 and bool(set(t.gate_names()) & DIFF_GATES),
             }
         )
-    return etapes
+    return steps

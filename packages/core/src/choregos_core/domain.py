@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Modèles de domaine partagés par les adaptateurs, l'orchestrateur et l'API.
+"""Domain models shared by the adapters, the orchestrator and the API.
 
-Ce sont les types qui circulent dans les signatures de `packages/adapters/base.py` (§1.9).
-Ils sont sérialisables (pydantic) parce qu'ils traversent les frontières d'activité Temporal.
+These are the types that travel in the signatures of `packages/adapters/base.py` (§1.9).
+They are serialisable (pydantic) because they cross the Temporal activity boundaries.
 """
 
 from __future__ import annotations
@@ -28,14 +28,14 @@ def utcnow() -> datetime:
 
 
 def aware(value: datetime | None) -> datetime | None:
-    """Rend un horodatage conscient du fuseau : SQLite rend des `datetime` naïfs."""
+    """Make a timestamp timezone-aware: SQLite returns naive `datetime` values."""
     if value is None:
         return None
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 def elapsed_seconds(start: datetime | None, end: datetime | None) -> float:
-    """Durée en secondes entre deux horodatages, robuste aux valeurs naïves ou absentes."""
+    """Duration in seconds between two timestamps, robust to naive or missing values."""
     start_aware, end_aware = aware(start), aware(end)
     if start_aware is None or end_aware is None:
         return 0.0
@@ -56,7 +56,7 @@ TRACKER_FIELD = "tracker"
 
 
 class WorkItemData(Model):
-    """Représentation canonique d'un ticket, quel que soit le tracker."""
+    """Canonical representation of a work item, whatever the tracker."""
 
     key: str
     title: str
@@ -64,7 +64,7 @@ class WorkItemData(Model):
     url: str | None = None
     state: str | None = None
     labels: list[str] = Field(default_factory=list)
-    #: Le type du ticket dans son tracker (Jira : `issuetype`) — le routage des workflows le lit (ADR 0031).
+    #: The item's type in its tracker (Jira: `issuetype`), read by workflow routing (ADR 0031).
     item_type: str | None = None
     size: Size | None = None
     risk: Risk | None = None
@@ -96,7 +96,7 @@ class NewItem(Model):
 
 
 class TrackerStateMapping(Model):
-    """Comment un état du DSL se reflète dans le tracker."""
+    """How a DSL state is reflected in the tracker."""
 
     status: str | None = None
     label: str | None = None
@@ -143,7 +143,7 @@ class PrState(Model):
     labels: list[str] = Field(default_factory=list)
 
     def checks_conclusion(self) -> str | None:
-        """Agrégat des check-runs : `failure` gagne, puis `pending`, sinon `success`."""
+        """Aggregate of the check runs: `failure` wins, then `pending`, otherwise `success`."""
         if not self.checks:
             return None
         if any(c.status != "completed" for c in self.checks):
@@ -202,7 +202,7 @@ class CiStatus(Model):
 
 
 class Change(Model):
-    """Une modification à promouvoir : une image sur un app."""
+    """A change to promote: an image on an app."""
 
     app: str
     image: str | None = None
@@ -232,7 +232,7 @@ class RolloutState(Model):
 
 
 class Window(Model):
-    """Fenêtre de synchronisation Argo CD (`kind=allow|deny`)."""
+    """Argo CD sync window (`kind=allow|deny`)."""
 
     kind: Literal["allow", "deny"] = "allow"
     schedule: str = "* * * * *"
@@ -241,7 +241,7 @@ class Window(Model):
     timezone: str = "Europe/Paris"
 
 
-# ───────────────────────────── exécution ─────────────────────────────
+# ───────────────────────────── execution ─────────────────────────────
 
 
 #: The variable through which an executor gives the runner its run's gateway key (#523).
@@ -268,7 +268,7 @@ class AgentContainer(Model):
 
 
 class StageJobSpec(Model):
-    """Ce qu'un `Executor` doit lancer pour une étape."""
+    """What an `Executor` must launch for a stage."""
 
     run_id: str
     project_slug: str
@@ -396,7 +396,7 @@ class GatewayModel(Model):
     owned_by: str = ""
 
 
-# ───────────────────────────── mémoire ─────────────────────────────
+# ───────────────────────────── memory ─────────────────────────────
 
 
 class Provenance(Model):
@@ -455,7 +455,7 @@ class Message(Model):
 
 
 class RunRecord(Model):
-    """Ce que l'orchestrateur enregistre pour un run (miroir de la table `runs`)."""
+    """What the orchestrator records for a run (a mirror of the `runs` table)."""
 
     id: str
     work_item_key: str
@@ -525,7 +525,7 @@ class FindingRecord(Model):
 
 
 class LaunchContext(Model):
-    """Ce dont un backend a besoin pour écrire sa configuration dans le workspace."""
+    """What a backend needs to write its configuration into the workspace."""
 
     workspace: str
     stage_input: StageInput

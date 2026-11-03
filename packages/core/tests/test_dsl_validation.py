@@ -1,4 +1,4 @@
-"""Validation du DSL : les trois templates passent, douze documents fautifs sont localisés."""
+"""DSL validation: the three templates pass, twelve faulty documents are located."""
 
 from __future__ import annotations
 
@@ -58,12 +58,12 @@ def _errors(text: str) -> list[str]:
         _workflow, report = parse_workflow(text, strict=False)
     except ValidationError as exc:
         assert all(i.line is not None for i in exc.issues if i.code.startswith("schema.")), (
-            "les erreurs de schéma doivent être localisées"
+            "schema errors must be located"
         )
         return [i.code for i in exc.issues]
-    assert not report.valid, "ce document aurait dû être refusé"
+    assert not report.valid, "this document should have been refused"
     for issue in report.errors:
-        assert issue.path, "toute erreur porte un chemin"
+        assert issue.path, "every error carries a path"
     return [i.code for i in report.errors]
 
 
@@ -106,7 +106,7 @@ def test_05_no_terminal_state() -> None:
 def test_06_orphan_state() -> None:
     text = wf_text().replace(
         "  done: { display: Done, terminal: true }",
-        "  done: { display: Done, terminal: true }\n  oublie: { display: Oublié }",
+        "  done: { display: Done, terminal: true }\n  forgotten: { display: Forgotten }",
     )
     codes = _errors(text)
     assert "state.no_inbound" in codes or "state.orphan" in codes
@@ -171,7 +171,7 @@ def test_14_unknown_field_is_refused() -> None:
 
 
 def test_warning_when_no_human_state() -> None:
-    """Un workflow sans état d'attente ne pourra jamais demander d'arbitrage : avertissement."""
+    """A workflow without a waiting state can never ask for arbitration: a warning."""
     _, report = parse_workflow(wf_text(), strict=False)
     assert report.valid
     assert any(i.code == "workflow.no_human_state" for i in report.warnings), [
@@ -206,108 +206,108 @@ def test_error_message_carries_line_and_column() -> None:
     assert "line" in issue.format()
 
 
-def test_13_garantie_sans_matiere() -> None:
-    """`outputs_present` sans `outputs:` ne regarde rien. Le moteur refuse aussi au moment
-    de trancher, mais un workflow faux doit échouer quand on l'écrit : sinon il s'épingle
-    sur un ticket et la garantie ne se découvre qu'en vol, verte et vide."""
-    sans = (
+def test_13_guarantee_with_nothing_to_check() -> None:
+    """`outputs_present` without `outputs:` looks at nothing. The engine also refuses at the moment
+    of ruling, but a wrong workflow must fail when it is written: otherwise it is pinned
+    on a work item and the guarantee is only discovered in flight, green and empty."""
+    unfilled = (
         "  - {id: t1, from: inbox, to: doing, by: dev, gates: [outputs_present], on_fail: "
         + RETRY
         + "}\n  - {id: t2, from: doing, to: done, by: ci}\n"
     )
-    assert "gate.nothing_to_check" in _errors(wf_text(sans))
+    assert "gate.nothing_to_check" in _errors(wf_text(unfilled))
 
-    avec = sans.replace("gates: [outputs_present]", "outputs: [profils], gates: [outputs_present]")
-    _wf, rapport = parse_workflow(wf_text(avec), strict=False)
-    assert rapport.valid, [i.format() for i in rapport.errors]
+    filled = unfilled.replace("gates: [outputs_present]", "outputs: [profiles], gates: [outputs_present]")
+    _wf, report = parse_workflow(wf_text(filled), strict=False)
+    assert report.valid, [i.format() for i in report.errors]
 
-    assume = sans.replace(
+    assumed = unfilled.replace(
         "gates: [outputs_present]",
         "gates: [{name: outputs_present, params: {allow_empty: true}}]",
     )
-    _wf2, rapport2 = parse_workflow(wf_text(assume), strict=False)
-    assert rapport2.valid, "on peut assumer l'absence de sorties, il faut l'écrire"
+    _wf2, report2 = parse_workflow(wf_text(assumed), strict=False)
+    assert report2.valid, "the absence of outputs can be assumed, but it must be written"
 
 
-def test_14_evidence_facts_sans_keys() -> None:
-    """Même règle pour la garantie des preuves métier : sans `keys:`, elle ne lit rien."""
-    sans = (
+def test_14_evidence_facts_without_keys() -> None:
+    """The same rule for the trade-evidence guarantee: without `keys:`, it reads nothing."""
+    unfilled = (
         "  - {id: t1, from: inbox, to: doing, by: dev, gates: [evidence_facts], on_fail: "
         + RETRY
         + "}\n  - {id: t2, from: doing, to: done, by: ci}\n"
     )
-    assert "gate.nothing_to_check" in _errors(wf_text(sans))
+    assert "gate.nothing_to_check" in _errors(wf_text(unfilled))
 
-    avec = sans.replace(
+    filled = unfilled.replace(
         "gates: [evidence_facts]",
-        "gates: [{name: evidence_facts, params: {keys: [profils_retenus]}}]",
+        "gates: [{name: evidence_facts, params: {keys: [profiles_kept]}}]",
     )
-    _wf, rapport = parse_workflow(wf_text(avec), strict=False)
-    assert rapport.valid, [i.format() for i in rapport.errors]
+    _wf, report = parse_workflow(wf_text(filled), strict=False)
+    assert report.valid, [i.format() for i in report.errors]
 
 
-def test_15_un_role_metier_est_un_nom_de_plein_droit() -> None:
-    """Avant le 2026-09-24 il fallait écrire `role: custom` + `playbook: sourcing` : cela
-    fonctionnait, mais le board affichait « custom » pour toutes les étapes d'un métier et
-    les évals ne savaient pas de quoi il s'agissait (ADR 0012, limite n°4)."""
-    metier = BASE.replace("dev: {{ type: agent, role: implement }}", "dev: {{ type: agent, role: sourcing }}")
-    _wf, rapport = parse_workflow(metier.format(transitions=OK_TRANSITIONS), strict=False)
-    assert rapport.valid, [i.format() for i in rapport.errors]
+def test_15_a_trade_role_is_a_name_in_its_own_right() -> None:
+    """Before 2026-09-24 one had to write `role: custom` + `playbook: sourcing`: it
+    worked, but the board showed "custom" for all the steps of a trade and
+    the evals did not know what it was about (ADR 0012, limit no. 4)."""
+    trade = BASE.replace("dev: {{ type: agent, role: implement }}", "dev: {{ type: agent, role: sourcing }}")
+    _wf, report = parse_workflow(trade.format(transitions=OK_TRANSITIONS), strict=False)
+    assert report.valid, [i.format() for i in report.errors]
 
-    # Sans playbook résolvable, un avertissement — pas une erreur : c'est au déploiement
-    # de l'apporter, et le validateur n'a pas à savoir ce qu'il montera.
-    codes = [i.code for i in rapport.warnings]
+    # Without a resolvable playbook, a warning and not an error: it is up to the deployment
+    # to bring it, and the validator does not have to know what it will mount.
+    codes = [i.code for i in report.warnings]
     assert "role.playbook_not_found" in codes, codes
 
 
-def test_16_un_role_du_paquet_n_avertit_pas(tmp_path: Path) -> None:
-    """Et le playbook du déploiement fait taire l'avertissement : avertir alors qu'il est
-    là serait un avertissement qu'on apprend à ignorer."""
+def test_16_a_deployment_playbook_silences_the_warning(tmp_path: Path) -> None:
+    """The deployment's playbook silences the warning: warning when it is
+    there would be a warning people learn to ignore."""
     import os
 
-    (tmp_path / "sourcing.md").write_text("Tu fais du sourcing.", encoding="utf-8")
-    ancien = os.environ.get("CHOREGOS_PLAYBOOKS_DIR")
+    (tmp_path / "sourcing.md").write_text("You do sourcing.", encoding="utf-8")
+    previous = os.environ.get("CHOREGOS_PLAYBOOKS_DIR")
     os.environ["CHOREGOS_PLAYBOOKS_DIR"] = str(tmp_path)
     try:
-        metier = BASE.replace(
+        trade = BASE.replace(
             "dev: {{ type: agent, role: implement }}", "dev: {{ type: agent, role: sourcing }}"
         )
-        _wf, rapport = parse_workflow(metier.format(transitions=OK_TRANSITIONS), strict=False)
+        _wf, report = parse_workflow(trade.format(transitions=OK_TRANSITIONS), strict=False)
     finally:
-        if ancien is None:
+        if previous is None:
             del os.environ["CHOREGOS_PLAYBOOKS_DIR"]
         else:
-            os.environ["CHOREGOS_PLAYBOOKS_DIR"] = ancien
-    # Le fixture de base porte d'autres avertissements (pas d'état d'attente humaine) :
-    # ce qui compte ici est qu'il n'y en ait AUCUN sur le playbook.
-    assert "role.playbook_not_found" not in [i.code for i in rapport.warnings], [
-        i.format() for i in rapport.warnings
+            os.environ["CHOREGOS_PLAYBOOKS_DIR"] = previous
+    # The base fixture carries other warnings (no human waiting state):
+    # what matters here is that there is NONE about the playbook.
+    assert "role.playbook_not_found" not in [i.code for i in report.warnings], [
+        i.format() for i in report.warnings
     ]
 
 
-def test_16b_un_agent_du_registre_n_a_pas_besoin_de_playbook() -> None:
-    """Un acteur qui nomme un agent du registre prend ses instructions (ADR 0033) : le playbook de
-    son rôle n'est qu'un repli, et l'avertir de son absence serait du bruit (S20-07)."""
-    metier = BASE.replace(
+def test_16b_a_registry_agent_needs_no_playbook() -> None:
+    """An actor that names a registry agent takes its instructions (ADR 0033): the playbook of
+    its role is only a fallback, and warning about its absence would be noise (S20-07)."""
+    trade = BASE.replace(
         "dev: {{ type: agent, role: implement }}",
-        "dev: {{ type: agent, role: coordination, agent: coordinateur-onboarding }}",
+        "dev: {{ type: agent, role: coordination, agent: onboarding-coordinator }}",
     )
-    _wf, rapport = parse_workflow(metier.format(transitions=OK_TRANSITIONS), strict=False)
-    assert rapport.valid, [i.format() for i in rapport.errors]
-    assert "role.playbook_not_found" not in [i.code for i in rapport.warnings]
+    _wf, report = parse_workflow(trade.format(transitions=OK_TRANSITIONS), strict=False)
+    assert report.valid, [i.format() for i in report.errors]
+    assert "role.playbook_not_found" not in [i.code for i in report.warnings]
 
 
-def test_17_un_role_qui_n_est_pas_un_identifiant_est_refuse() -> None:
-    """Un rôle sert de NOM DE FICHIER pour le playbook : une espace ou une barre oblique
-    y ferait chercher ailleurs que prévu."""
-    mauvais = BASE.replace(
+def test_17_a_role_that_is_not_an_identifier_is_refused() -> None:
+    """A role serves as the FILE NAME of the playbook: a space or a slash
+    would make it look elsewhere than planned."""
+    bad = BASE.replace(
         "dev: {{ type: agent, role: implement }}", 'dev: {{ type: agent, role: "../secrets" }}'
     )
-    assert any(code.startswith("schema.") for code in _errors(mauvais.format(transitions=OK_TRANSITIONS)))
+    assert any(code.startswith("schema.") for code in _errors(bad.format(transitions=OK_TRANSITIONS)))
 
 
-def test_tool_called_sans_outil_est_refusee_a_l_ecriture() -> None:
-    """Une garantie `tool_called` sans `tools:` n'aurait rien à vérifier : le DSL la refuse."""
+def test_tool_called_without_a_tool_is_refused_when_written() -> None:
+    """A `tool_called` guarantee without `tools:` would have nothing to check: the DSL refuses it."""
     from choregos_core.dsl.parser import parse_workflow
 
     source = """
@@ -317,36 +317,36 @@ metadata: { name: t, version: 1 }
 actors:
   a: { type: agent, role: sourcing }
 states:
-  debut: { display: Début }
-  fin: { display: Fin, terminal: true }
+  start: { display: Start }
+  end: { display: End, terminal: true }
 transitions:
   - id: t1
-    from: debut
-    to: fin
+    from: start
+    to: end
     by: a
     gates:
       - name: tool_called
 """
-    _, rapport = parse_workflow(source, strict=False)
-    assert not rapport.valid
-    assert any(e.code == "gate.nothing_to_check" and "tool_called" in e.message for e in rapport.errors)
+    _, report = parse_workflow(source, strict=False)
+    assert not report.valid
+    assert any(e.code == "gate.nothing_to_check" and "tool_called" in e.message for e in report.errors)
     ok = source.replace(
-        "      - name: tool_called", "      - { name: tool_called, params: { tools: [verifier_adresse] } }"
+        "      - name: tool_called", "      - { name: tool_called, params: { tools: [verify_address] } }"
     )
-    _, rapport = parse_workflow(ok, strict=False)
-    assert not [e for e in rapport.errors if e.code == "gate.nothing_to_check"]
+    _, report = parse_workflow(ok, strict=False)
+    assert not [e for e in report.errors if e.code == "gate.nothing_to_check"]
 
 
-def test_l_escalade_d_un_humain_vers_un_acteur_inconnu_est_refusee() -> None:
-    """Trouvé en découpant `_check_references` (2026-09-25) : la boucle des acteurs relisait la
-    variable de la boucle des transitions, et cette erreur n'était jamais rapportée."""
+def test_the_escalation_of_a_human_to_an_unknown_actor_is_refused() -> None:
+    """Found while splitting `_check_references` (2026-09-25): the actors loop re-read the
+    variable of the transitions loop, and this error was never reported."""
     yaml_text = """
 apiVersion: choregos/v1
 kind: Workflow
 metadata: { name: t, version: 1 }
 actors:
   dev: { type: agent, role: implement, model: "profile:standard" }
-  owner: { type: human, group: maintainers, escalate_to: fantome }
+  owner: { type: human, group: maintainers, escalate_to: ghost }
 states:
   inbox: { display: Inbox }
   done: { display: Done, terminal: true }
@@ -354,46 +354,46 @@ transitions:
   - { id: t1, from: inbox, to: done, by: dev }
 """
     _, report = parse_workflow(yaml_text, strict=False)
-    assert any(e.code == "actor.unknown" and "fantome" in e.message for e in report.errors), report.errors
+    assert any(e.code == "actor.unknown" and "ghost" in e.message for e in report.errors), report.errors
 
 
-def _avec_garantie(nom: str, params: str = "") -> str:
-    """default-simple, avec une garantie de plus sur t-verify."""
+def _with_guarantee(name: str, params: str = "") -> str:
+    """default-simple, with one more guarantee on t-verify."""
     from choregos_core.dsl import template_yaml
 
-    garantie = f"{{ name: {nom}{', params: ' + params if params else ''} }}"
+    guarantee = f"{{ name: {name}{', params: ' + params if params else ''} }}"
     return template_yaml("default-simple").replace(
         "    by: checker\n    gates: [evidence_present]",
-        f"    by: checker\n    gates: [evidence_present, {garantie}]",
+        f"    by: checker\n    gates: [evidence_present, {guarantee}]",
     )
 
 
-def test_outputs_in_sans_values_est_refusee() -> None:
+def test_outputs_in_without_values_is_refused() -> None:
     from choregos_core.dsl import parse_workflow
 
-    _, rapport = parse_workflow(_avec_garantie("outputs_in"), strict=False)
-    assert "gate.nothing_to_check" in {e.code for e in rapport.errors}
-    _, rapport = parse_workflow(
-        _avec_garantie("outputs_in", "{ values: { verdict: [approve] } }"), strict=False
+    _, report = parse_workflow(_with_guarantee("outputs_in"), strict=False)
+    assert "gate.nothing_to_check" in {e.code for e in report.errors}
+    _, report = parse_workflow(
+        _with_guarantee("outputs_in", "{ values: { verdict: [approve] } }"), strict=False
     )
-    assert "gate.nothing_to_check" not in {e.code for e in rapport.errors}
+    assert "gate.nothing_to_check" not in {e.code for e in report.errors}
 
 
-def test_markdown_sections_sans_chemins_est_refusee() -> None:
+def test_markdown_sections_without_paths_is_refused() -> None:
     from choregos_core.dsl import parse_workflow
 
-    _, rapport = parse_workflow(_avec_garantie("markdown_sections"), strict=False)
-    assert "gate.nothing_to_check" in {e.code for e in rapport.errors}
+    _, report = parse_workflow(_with_guarantee("markdown_sections"), strict=False)
+    assert "gate.nothing_to_check" in {e.code for e in report.errors}
 
 
-def test_sans_agent_qui_ecrit_du_code_une_pr_n_exige_pas_de_verify() -> None:
-    """Une étude fusionne un ADR : il n'y a rien à tester avant sa PR (S21-22). Un agent `implement`
-    sans `verify` reste averti."""
-    etude = BASE.format(
+def test_without_an_agent_that_writes_code_a_pr_requires_no_verify() -> None:
+    """A study merges an ADR: there is nothing to test before its PR (S21-22). An `implement` agent
+    without `verify` is still warned."""
+    study = BASE.format(
         transitions="  - { id: t-adr, from: inbox, to: doing, by: dev }\n"
         "  - { id: t-pr, from: doing, to: done, by: ci, does: open_pr }"
     )
-    _, avec_code = parse_workflow(etude, strict=False)
-    assert "workflow.no_verify_before_pr" in {w.code for w in avec_code.warnings}
-    _, sans_code = parse_workflow(etude.replace("role: implement", "role: architect"), strict=False)
-    assert "workflow.no_verify_before_pr" not in {w.code for w in sans_code.warnings}
+    _, with_code = parse_workflow(study, strict=False)
+    assert "workflow.no_verify_before_pr" in {w.code for w in with_code.warnings}
+    _, without_code = parse_workflow(study.replace("role: implement", "role: architect"), strict=False)
+    assert "workflow.no_verify_before_pr" not in {w.code for w in without_code.warnings}

@@ -1,4 +1,4 @@
-"""La vue « processus » : chaque transition dite en clair (ADR 0031)."""
+"""The "process" view: each transition said in plain words (ADR 0031)."""
 
 from __future__ import annotations
 
@@ -8,20 +8,20 @@ from choregos_core import parse_workflow, to_process
 from choregos_core.dsl import RESUMES
 from choregos_core.gates import known_gates
 
-RACINE = pathlib.Path(__file__).resolve().parents[3]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 
 def _staffing() -> list[dict[str, object]]:
-    workflow, _ = parse_workflow((RACINE / "demo/workflows/staffing.yaml").read_text(encoding="utf-8"))
+    workflow, _ = parse_workflow((ROOT / "demo/workflows/staffing.yaml").read_text(encoding="utf-8"))
     return to_process(workflow)
 
 
-def test_chaque_garantie_connue_a_un_resume() -> None:
-    """Une garantie nouvelle sans résumé ferait parler la vue processus dans le vide."""
+def test_every_known_guarantee_has_a_summary() -> None:
+    """A new guarantee without a summary would make the process view speak into the void."""
     assert sorted(set(known_gates()) - set(RESUMES)) == []
 
 
-def test_un_agent_ses_sorties_ses_garanties_et_ses_reprises() -> None:
+def test_an_agent_its_outputs_its_guarantees_and_its_retries() -> None:
     sourcing = next(e for e in _staffing() if e["to"] == "sourcing")
     assert sourcing["actor_type"] == "agent"
     phrase = str(sourcing["sentence"])
@@ -30,7 +30,7 @@ def test_un_agent_ses_sorties_ses_garanties_et_ses_reprises() -> None:
     assert "retries up to 2 time(s)" in phrase and "“Needs a human”" in phrase
 
 
-def test_une_personne_son_delai_et_le_rejet() -> None:
+def test_a_person_their_delay_and_the_rejection() -> None:
     validation = next(e for e in _staffing() if e["from"] == "a_valider")
     assert validation["actor_type"] == "human"
     phrase = str(validation["sentence"])
@@ -38,14 +38,14 @@ def test_une_personne_son_delai_et_le_rejet() -> None:
     assert "If rejected, back to “Sourcing”" in phrase and "times out after 72 h" in phrase
 
 
-def test_ce_que_fait_la_plateforme_se_dit_en_clair() -> None:
-    """`does` (#175) : la vue processus dit que la plateforme ouvre, puis fusionne la PR."""
+def test_what_the_platform_does_is_said_in_plain_words() -> None:
+    """`does` (#175): the process view says the platform opens, then merges the PR."""
     from choregos_core.dsl import template_yaml
 
     workflow, _ = parse_workflow(template_yaml("default-simple"))
-    etapes = {e["to"]: str(e["sentence"]) for e in to_process(workflow)}
-    assert "the platform, which opens the pull request" in etapes["pr_open"]
-    assert "the platform, which merges the pull request" in etapes["merged"]
+    steps = {e["to"]: str(e["sentence"]) for e in to_process(workflow)}
+    assert "the platform, which opens the pull request" in steps["pr_open"]
+    assert "the platform, which merges the pull request" in steps["merged"]
 
 
 def test_a_guarantee_says_its_thresholds_and_how_long_it_waits() -> None:

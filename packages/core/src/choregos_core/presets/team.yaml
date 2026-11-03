@@ -1,4 +1,4 @@
-# Preset `team` : une équipe produit, relecture croisée, sandbox gVisor, prod approuvée par le train.
+# Preset `team`: a product team, cross review, gVisor sandbox, prod approved by the train.
 apiVersion: choregos/v1
 kind: Policy
 metadata:
@@ -20,9 +20,9 @@ budgets:
   max_minutes: { default: 60, triage: 5, refine: 25, plan: 20, implement: 120, verify: 40, review: 30 }
   daily_project_usd: 400
   alert_at_ratio: 0.8
-# Pas d'`approvals` ici : personne ne les applique (ADR 0044). Un humain qui approuve se déclare
-# dans le WORKFLOW (acteur humain sur une transition, `train.approval`) ; la prod reste approuvée
-# par `release_train.prod.approval`, que le train applique.
+# No `approvals` here: nobody applies them (ADR 0044). A human who approves is declared
+# in the WORKFLOW (a human actor on a transition, `train.approval`); prod stays approved
+# by `release_train.prod.approval`, which the train applies.
 attempts:
   by_role: { implement: 3, fix_ci: 3, address_review: 3 }
   dod_iterations: 3

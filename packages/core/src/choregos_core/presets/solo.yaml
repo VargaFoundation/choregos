@@ -1,4 +1,4 @@
-# Preset `solo` : un développeur, budgets serrés, un capitaine approuve les départs en prod.
+# Preset `solo`: one developer, tight budgets, a captain approves the departures to prod.
 apiVersion: choregos/v1
 kind: Policy
 metadata:
@@ -52,9 +52,9 @@ budgets:
     verify: 30
   daily_project_usd: 150
   alert_at_ratio: 0.8
-# Pas d'`approvals` ici : personne ne les applique (ADR 0044). Un humain qui approuve se déclare
-# dans le WORKFLOW (acteur humain sur une transition, `train.approval`) ; la prod reste approuvée
-# par `release_train.prod.approval`, que le train applique.
+# No `approvals` here: nobody applies them (ADR 0044). A human who approves is declared
+# in the WORKFLOW (a human actor on a transition, `train.approval`); prod stays approved
+# by `release_train.prod.approval`, which the train applies.
 attempts:
   by_role:
     implement: 3

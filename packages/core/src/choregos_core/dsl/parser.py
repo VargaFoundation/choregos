@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Parsing d'un workflow : YAML/JSON → modèle validé, avec erreurs localisées."""
+"""Parsing a workflow: YAML/JSON → validated model, with located errors."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .yamlsource import json_pointer, load_yaml, locate
 
 
 def checksum(document: Any) -> str:
-    """Empreinte stable d'un workflow (clé d'épinglage sur un ticket)."""
+    """Stable fingerprint of a workflow (the pinning key on a work item)."""
     if isinstance(document, Workflow):
         payload = document.model_dump(mode="json", by_alias=True, exclude_none=True)
     elif isinstance(document, str):
@@ -33,7 +33,7 @@ def _pydantic_issues(exc: PydanticValidationError, source: Any) -> list[Issue]:
     issues: list[Issue] = []
     for error in exc.errors():
         path = [p for p in error["loc"] if isinstance(p, (str, int))]
-        # pydantic nomme le champ aliasé `from_` ; le YAML dit `from`
+        # pydantic names the aliased field `from_`; the YAML says `from`
         path = ["from" if p == "from_" else p for p in path]
         line, column = locate(source, list(path)) if source is not None else (None, None)
         issues.append(
@@ -49,14 +49,14 @@ def _pydantic_issues(exc: PydanticValidationError, source: Any) -> list[Issue]:
 
 
 def parse_workflow(text: str, *, strict: bool = True) -> tuple[Workflow, ValidationReport]:
-    """Parse un workflow YAML/JSON et applique les règles statiques.
+    """Parse a YAML/JSON workflow and apply the static rules.
 
-    `strict=True` lève `ValidationError` si le document est invalide ; sinon la
-    fonction rend le rapport et le workflow est garanti syntaxiquement valide.
+    `strict=True` raises `ValidationError` if the document is invalid; otherwise the
+    function returns the report and the workflow is guaranteed syntactically valid.
     """
     try:
         source = load_yaml(text)
-    except yaml.YAMLError as exc:  # syntaxe YAML cassée
+    except yaml.YAMLError as exc:  # broken YAML syntax
         mark = getattr(exc, "problem_mark", None)
         issue = Issue(
             code="yaml.syntax",
@@ -73,12 +73,12 @@ def parse_workflow(text: str, *, strict: bool = True) -> tuple[Workflow, Validat
         )
 
     document = dict(source)
-    # L'ordre des clés est vrai ICI, et nulle part ailleurs : on inscrit donc le départ dans le
-    # document avant toute sérialisation. Un `initial` déjà écrit est respecté — c'est le validateur
-    # qui dira s'il nomme un état connu et non terminal.
-    etats = document.get("states")
-    if not document.get("initial") and isinstance(etats, dict) and etats:
-        document["initial"] = next(iter(etats))
+    # The order of the keys is true HERE, and nowhere else: so the start is written into the
+    # document before any serialisation. An `initial` already written is respected; the validator
+    # will say whether it names a known, non-terminal state.
+    states = document.get("states")
+    if not document.get("initial") and isinstance(states, dict) and states:
+        document["initial"] = next(iter(states))
 
     try:
         workflow = Workflow.model_validate(document)
@@ -96,6 +96,6 @@ def parse_workflow_file(path: str | Path, *, strict: bool = True) -> tuple[Workf
 
 
 def dump_workflow(workflow: Workflow) -> str:
-    """Sérialise un workflow en YAML canonique (ordre des clés conservé)."""
+    """Serialise a workflow as canonical YAML (key order kept)."""
     payload = workflow.model_dump(mode="json", by_alias=True, exclude_none=True)
     return yaml.safe_dump(payload, sort_keys=False, allow_unicode=True, width=120)

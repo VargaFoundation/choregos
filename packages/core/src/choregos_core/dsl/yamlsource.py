@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Chargement YAML avec position des nœuds, pour des erreurs localisées (ligne/colonne).
+"""YAML loading with node positions, for located errors (line/column).
 
-Le validateur du DSL doit dire « ligne 42, colonne 7 » et pas seulement « champ manquant » :
-c'est ce que l'éditeur de workflow du front affiche, et ce que la CLI imprime.
+The DSL validator must say "line 42, column 7" and not only "missing field":
+that is what the front end's workflow editor shows, and what the CLI prints.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import yaml
 
 
 class PositionedDict(dict[str, Any]):
-    """Dictionnaire qui se souvient d'où viennent ses clés dans le YAML source."""
+    """A dictionary that remembers where its keys come from in the source YAML."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -23,7 +23,7 @@ class PositionedDict(dict[str, Any]):
 
 
 class PositionedList(list[Any]):
-    """Liste qui retient la position de chacun de ses éléments."""
+    """A list that keeps the position of each of its items."""
 
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
@@ -33,12 +33,12 @@ class PositionedList(list[Any]):
 
 
 class PositionalLoader(yaml.SafeLoader):
-    """SafeLoader dont les constructeurs conservent la position des nœuds (via `start_mark`)."""
+    """A SafeLoader whose constructors keep the position of the nodes (via `start_mark`)."""
 
 
 def _node_pos(node: Any) -> tuple[int, int]:
     mark = getattr(node, "start_mark", None)
-    if mark is None:  # pragma: no cover - nœuds synthétiques
+    if mark is None:  # pragma: no cover - synthetic nodes
         return 0, 0
     return mark.line + 1, mark.column + 1
 
@@ -70,12 +70,12 @@ PositionalLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_SEQUENCE_TAG
 
 
 def load_yaml(text: str) -> Any:
-    """Charge du YAML en conservant les positions (mappings et séquences)."""
-    return yaml.load(text, Loader=PositionalLoader)  # noqa: S506 - loader dérivé de SafeLoader
+    """Load YAML while keeping the positions (mappings and sequences)."""
+    return yaml.load(text, Loader=PositionalLoader)  # noqa: S506 - loader derived from SafeLoader
 
 
 def locate(document: Any, path: list[str | int]) -> tuple[int | None, int | None]:
-    """Retrouve (ligne, colonne) d'un chemin de clés/index dans un document chargé par `load_yaml`."""
+    """Find (line, column) for a path of keys/indexes in a document loaded by `load_yaml`."""
     node: Any = document
     line: int | None = getattr(document, "line", None) or None
     column: int | None = getattr(document, "column", None) or None
@@ -99,7 +99,7 @@ def _position_of(node: Any, part: str | int) -> tuple[int, int] | None:
 
 
 def json_pointer(path: list[str | int]) -> str:
-    """Rend un chemin lisible : `states.ready.display` ou `transitions[2].to`."""
+    """Render a readable path: `states.ready.display` or `transitions[2].to`."""
     out = ""
     for part in path:
         if isinstance(part, int):
