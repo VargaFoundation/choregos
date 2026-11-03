@@ -257,6 +257,12 @@ Each image is built **from** the runner image: the runner is the entrypoint, the
 subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
 warm pool built from the runner image: use `k8s_job` for steps that name their own image.
 
+An image in a private registry project pulls with the same `global.imagePullSecrets` as the chart's
+own pods (S51-09): the chart puts them on the `choregos-runner` ServiceAccount and hands their names
+to every worker (`CHOREGOS_RUNNER_IMAGE_PULL_SECRETS`), and the `k8s_job` executor names them in each
+runner pod it creates — a job step's image and a hosted agent's container alike. Each secret must
+exist in the namespace the runner pods run in (`runner.namespacePattern`).
+
 ### Registries for hosted agents
 
 A hosted agent ([ADR 0080](adr/0080-hosted-prompt-and-voice-agents.md),
@@ -587,6 +593,56 @@ global:
   `CHOREGOS_FAKES=1` is `warn`.
 - **Upgrading**: the migration seeds an `allowed` rule for every host an organisation already calls
   (connectors, web and git knowledge sources, skill sources). Review them in `/admin/egress`.
+
+## An MCP gateway (ADR 0105)
+
+An MCP gateway is another product, never part of this chart
+([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)). With the default
+NetworkPolicies on, the chart still has to let the platform reach the one you run. The
+`global.mcpGateway` block does that, and nothing else; a default render changes nothing.
+
+| Key | Effect |
+|---|---|
+| `internalHosts` | Exact host names, rendered as `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS` (a JSON list) on the API and the workers. The API refuses them as a run's destination, and the platform may call them. |
+| `hosts` | Appended to the `api` and `workers` families of `global.egress.ceiling`, only when you declared those families (an undeclared family stays *unknown*; `runners` is never touched). |
+| `namespace`, `podLabels` | In-cluster gateway: the policy `choregos-mcp-gateway-egress` opens that namespace (and those pod labels). |
+| `cidrs` | External gateway: one `ipBlock` per CIDR. |
+| `ports` | TCP ports opened (default `[443]`). |
+
+The policy is rendered when `namespace` or `cidrs` is set. It selects the API and orchestrator
+pods only: the API calls the gateway to list tools, and an approved write runs in an orchestrator
+worker. **Never the runners**: a run is untrusted code, and the gateway holds the credentials a run
+must not reach, so the runner policy is unchanged and the API also denies the gateway's hosts to
+runs. A plugin's server is run by the platform in-cluster, is never reached through the MCP gateway
+and needs nothing from `global.mcpGateway` (see [Plugin servers](#plugin-servers)).
+
+`internalHosts` is a separate list from `global.egress.denyDomains` on purpose: `denyDomains` also
+bounds the platform's own calls, which must reach the gateway. Runs are kept off it by the API.
+
+In-cluster gateway:
+
+```yaml
+global:
+  mcpGateway:
+    internalHosts: [gateway.mcp.svc.cluster.local]
+    namespace: mcp
+    podLabels: {app: gateway}
+    ports: [8080]
+```
+
+External gateway:
+
+```yaml
+global:
+  egress:
+    ceiling:
+      api: [api.github.com]
+      workers: [api.github.com]
+  mcpGateway:
+    internalHosts: [gateway.example.test]
+    hosts: [gateway.example.test]
+    cidrs: [203.0.113.0/24]
+```
 
 ## Extra volumes for the API
 
@@ -1127,7 +1183,9 @@ global:
 
 Every pod the chart renders carries it — the four Choregos components **and** the embedded
 dependencies, because a platform that admits a single registry sends every image through it, not
-only ours. The secret must already exist in the namespace; on a shared platform it is usually the
+only ours. The runner pods the chart does not render carry it too: the `agent_sandbox` template, the
+`choregos-runner` ServiceAccount and every `k8s_job` runner pod, so a job step's own image pulls
+from the same registry (S51-09). The secret must already exist in the namespace; on a shared platform it is usually the
 tenant's base layer that creates it from a secret store, not this chart.
 
 Without the value, no pod declares one. A test renders the chart both ways and fails if a new
@@ -1420,3 +1478,61 @@ guardrails:
 Without it, a key the platform marked `choregos_llm_guard: redact` reaches the provider unmasked,
 and nothing fails to say so. `GET /guardrails/list` with the master key shows `choregos-secrets`
 when the guard is loaded. LiteLLM reads its config only at start: restart it after the change.
+
+## The decision model (Laya behind LiteLLM)
+
+A workflow's `decision` step (ADR 0121, decided in PR #1183)
+asks typed questions of a decision model through the gateway's `POST /v1/systemone` route. The chart
+ships the first one, **Laya** (`convaiinnovations/laya-multilingual`, mmBERT-base, 322M parameters,
+100+ languages, weights under Apache-2.0), on CPU, off by default:
+
+```yaml
+global:
+  gateway:
+    embedded: true                  # required: only the embedded LiteLLM serves it
+  decisions:
+    embedded: true                  # deploys `charts/laya` and adds `platform/decide` to LiteLLM
+    apiKeySecret: ""                # key `api-key`; empty: the chart generates one and keeps it
+    inputCostPerToken: 0.00000002   # USD per token read: the internal price (ADR 0004)
+```
+
+What it renders:
+
+- **`<release>-laya`**, a Deployment of `ghcr.io/vargafoundation/choregos-laya` (`docker/laya.Dockerfile`):
+  `laya-serve` with the checkpoint baked in at a pinned commit, `HF_HUB_OFFLINE=1`, nothing fetched at
+  run time. It asks for 2 GiB of memory (measured on 2026-11-03: 1.6 GiB resident with the checkpoint loaded, 1.95 GiB after a reload) and opens its port
+  only once the checkpoint is loaded; the probes read `GET /health`, which answers without a credential.
+- **A NetworkPolicy** that admits LiteLLM's pods only, on port 8000, and lets Laya reach nothing. The
+  platform never calls a decision model directly: the cost is counted and the cap enforced at the
+  gateway. With `networkPolicies.enabled`, `choregos-allow-platform` opens the platform's egress to it.
+- **`platform/decide`** in LiteLLM's `model_list`:
+
+  ```yaml
+  - model_name: platform/decide
+    litellm_params:
+      model: typesafe/multilingual          # Laya speaks TypeSafe Jev's wire
+      api_base: http://<release>-laya:8000  # LiteLLM posts to <api_base>/v1/systemone
+      api_key: os.environ/LAYA_API_KEY      # from the Secret above, sent as a bearer
+    model_info:
+      mode: evaluation
+      input_cost_per_token: 0.000000020000
+      output_cost_per_token: 0.000000000000
+  ```
+
+  LiteLLM 1.105.5 lists `laya/*` in its price map but has no `laya` provider in its code: its
+  documentation's `laya/` deployments need a later build. Laya serves the `/v1/systemone` wire
+  exactly, so the `typesafe` provider pointed at Laya's Service carries it; `tests/live/test_decisions_live.py`
+  proves it against LiteLLM 1.105.5 (answers, virtual key, model scope, the spend log at the internal price).
+
+Laya counts the tokens it read as `input_tokens` and answers none, so its spend is
+`input_tokens × inputCostPerToken`. Its probabilities are over-confident as shipped (Laya's own
+documentation): until the decision ledger has measured it on a workflow, a threshold on its confidence
+is a guess.
+
+Each model of `choregos-litellm.models` may also name its own `apiBase`, `apiKeyEnv` (the environment
+variable LiteLLM reads its key from) and `inputCostPerToken` / `outputCostPerToken`; an entry that sets
+none of them renders as before.
+
+On a laptop, `COMPOSE_PROFILES=decisions docker compose up` (or the line in `.env`) starts Laya and
+routes `platform/decide` to it, in fakes mode as with a model key. Set the profile this way rather than
+with `--profile decisions`: the variable is also what tells `litellm-config` to add the alias.

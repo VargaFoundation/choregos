@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Template
 from ..errors import unprocessable
+from .template_knowledge import parse_template_knowledge
 
 WORKFLOW_SANS_GABARIT = "template:default-simple@1"
 #: Without a template and without a repository: a workflow that delivers no code (ADR 0110).
@@ -52,6 +53,9 @@ class Livraison:
     agents_du_catalogue: dict[str, str] = field(default_factory=dict)
     #: Ce que des greffons installent (S20-09) : nom de l'installateur → fichiers de son dossier.
     extensions: dict[str, dict[str, str]] = field(default_factory=dict)
+    #: The knowledge bases its agents read (S51-06, ADR 0117), checked, and the inputs it declares.
+    knowledge: list[Any] = field(default_factory=list)
+    inputs: list[dict[str, Any]] = field(default_factory=list)
 
 
 async def manifeste_du_gabarit(
@@ -105,6 +109,12 @@ def livraison(manifeste: dict[str, Any], dossier: Path | None, *, has_repository
             str(nom): _fichiers_du_dossier(str(ref), dossier, f"extension `{nom}`")
             for nom, ref in (defauts.get("extensions") or {}).items()
         },
+        knowledge=parse_template_knowledge(
+            defauts.get("knowledge"),
+            manifeste.get("inputs"),
+            str((manifeste.get("metadata") or {}).get("name") or "?"),
+        ),
+        inputs=[dict(i) for i in manifeste.get("inputs") or [] if isinstance(i, dict)],
     )
 
 

@@ -159,6 +159,17 @@ async def _check_decision_steps(session: AsyncSession, project: Project, workflo
             + "; ".join(e["msg"] for e in errors),
             errors,
         )
+async def _warn_about_memory_the_policy_disables(
+    session: AsyncSession, project: Project, workflow: Workflow
+) -> None:
+    """A named agent that binds memory under a policy that disables it: logged, never refused (S51-01)."""
+    from .memory_policy import log_memory_disabled_warnings, memory_disabled_warnings
+
+    engine = await policy_engine(session, project.id)
+    issues = await memory_disabled_warnings(
+        session, project.org_id, [workflow], memory_enabled=engine.memory_enabled()
+    )
+    log_memory_disabled_warnings(issues, project.slug)
 
 
 async def derniere_version(session: AsyncSession, project_id: Any, nom: str) -> int | None:
@@ -236,6 +247,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     await _verifier_les_agents_nommes(session, project, workflow)
     await _verifier_le_budget(session, project, workflow)
     await _check_decision_steps(session, project, workflow)
+    await _warn_about_memory_the_policy_disables(session, project, workflow)
     actuelle = await workflow_actif(session, project.id, nom)
     if base_version is not None and (actuelle is None or actuelle.version != base_version):
         lue = actuelle.version if actuelle is not None else "none"
@@ -337,7 +349,7 @@ async def ensure_defaults(
     if workflow is None:
         assert livree is not None
         workflow = await _publier_ce_que_livre_le_gabarit(session, project, livree)
-        if livree.agents or livree.skills or livree.extensions:
+        if livree.agents or livree.skills or livree.extensions or livree.knowledge:
             from .installation import installer_ce_que_livre_le_gabarit
 
             await installer_ce_que_livre_le_gabarit(session, project, livree, str(project.template_ref))

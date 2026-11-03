@@ -1,0 +1,5 @@
+# Laya (ADR 0121), the decision model behind LiteLLM as `platform/decide`: `make laya-lock`
+# recompiles requirements.txt. CPU-only torch (`--torch-backend cpu`): no CUDA wheels in the image.
+# 0.4.12, not the newest: releases at least 14 days old, as for headroom (`make headroom-lock`).
+# Its server surface was checked against 0.4.21 (S52-02): same `LAYA_*` variables, same `/health`.
+laya[serve]==0.4.12

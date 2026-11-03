@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 import structlog
 from choregos_core.domain import GatewayModel, Spend, VirtualKey, utcnow
+from choregos_core.models import DECISION_MODE
 
 from ..base import GATEWAY_CAPABILITIES
 from ..errors import UpstreamError
@@ -158,6 +159,7 @@ class LiteLlmGateway:
             params = entry.get("litellm_params", {}) or {}
             name = str(entry.get("model_name", ""))
             litellm_model = str(params.get("model", name))
+            mode = str(info.get("mode") or "chat")
             models.append(
                 GatewayModel(
                     model_name=name,
@@ -169,8 +171,11 @@ class LiteLlmGateway:
                     output_audio_cost_per_1k=_per_1k(info.get("output_cost_per_audio_token")),
                     cached_input_cost_per_1k=_per_1k(info.get("cache_read_input_token_cost")),
                     max_input_tokens=info.get("max_input_tokens"),
-                    supports_tool_calling=_unless_denied(info.get("supports_function_calling")),
+                    # A decision model answers typed questions; it never calls a tool (ADR 0121).
+                    supports_tool_calling=mode != DECISION_MODE
+                    and _unless_denied(info.get("supports_function_calling")),
                     supports_vision=bool(info.get("supports_vision", False)),
+                    mode=mode,
                     internal_price=name in self.internal_prices,
                 )
             )

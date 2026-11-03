@@ -70,6 +70,9 @@ contents:
   tracker is a server of the plugin says `requires.connectors.tracker: plugin:<plugin>/<server>`; the
   server must be one of the same plugin and declare `implements: [tracker]` (see
   [The tracker profile](#the-tracker-profile)).
+  A template may ship the knowledge bases its agents read (`defaults.knowledge`, see
+  [Knowledge bases](#knowledge-bases)); a source that reads a template input must name an input the
+  template declares.
 - **Evals** match `plugin-evals.schema.json` and name an agent of the plugin (see [Evals](#evals)).
 - **Procedures** go through the same parser as the core's (ADR 0067): front matter, fixed sections,
   links listed in `vendor_docs`, no secret-shaped string. A procedure gives the address of its server's
@@ -91,6 +94,46 @@ contents:
   An operation's `human_approval` is a floor: an organisation may raise it, never lower it. A tool the
   server serves but does not list is refused.
 
+Validation also **warns**, without refusing: an agent that reads a knowledge base (`spec.knowledge`) that
+no template of the plugin ships runs only in an organisation that already has that base and serves it to
+the project — its runs stop otherwise. `choregos plugin validate` prints each warning after the digest
+(`! agent `x` reads the knowledge base `y`, which no template of this plugin ships …`).
+
+### Knowledge bases
+
+An agent names the bases it reads by slug, and its run stops when a base does not exist or is not served
+to its project. A plugin ships the base with the template that brings the agent
+([ADR 0117](adr/0117-a-template-ships-the-knowledge-bases-its-agents-read.md)), in the shape of a
+`kind: KnowledgeBase` manifest less what the project decides (scope, uploads, eval set):
+
+```yaml
+# templates/hello-flow/manifest.yaml
+defaults:
+  workflow: template:default-simple@1
+  knowledge:
+    - slug: greeting-docs              # what the agents name in spec.knowledge
+      name: Greeting documentation
+      serving_mode: files              # or index
+      sources:
+        - name: Repository docs
+          kind: git                    # git only
+          config:
+            url_from_input: repo       # or url: https://github.com/acme/handbook
+            ref: main
+            paths: ["docs/**/*.md"]
+          interval_minutes: 60         # or refresh_mode: cron, refresh_cron, refresh_timezone
+inputs:
+  - { name: repo, type: github-repo }
+```
+
+A project born of the template gets each base owned by it and served to it, its sources attached and
+synced at once. A `github-repo` input left empty is the project's repository, read through the
+deployment's GitHub App with a read-only token; another private repository names an organisation
+`documents/git` connector (`connector:`). A base of that slug the organisation already has is reused when it
+is served to the project and never rewritten; otherwise the project is born without it and the audit log
+says why (`template.knowledge.skip`). [Knowledge bases from a template](usage.md#knowledge-bases-from-a-template)
+has the full rules.
+
 ### Evals
 
 An eval file (`plugin-evals.schema.json`) has the shape of the catalogue's cases (the core's own until
@@ -106,6 +149,12 @@ cases:                             # optional, AgentEvalCase
   - name: names-the-author
     input: {title: Say hello, body: Greet Ada.}
     must_contain: [Greet the author]   # case-sensitive, on the instructions rendered on `input`
+  - name: names-the-reporter
+    input:
+      title: Say hello
+      fields:                      # optional, rendered as `ticket.fields` (S51-10)
+        tracker: {kind: jira, key: FON-270, reporter: {display_name: Ada Lovelace}}
+    must_contain: [Ada Lovelace]   # when the instructions say {{ ticket.fields.tracker.reporter.display_name }}
   - name: live-greeting
     live: true                     # a capped trial on a real model (S40-02d)
     expect_status: done
@@ -113,7 +162,10 @@ cases:                             # optional, AgentEvalCase
     must_contain: [Hello]
 ```
 
-An unknown key is refused, and a suite holds `must_contain`, `cases` or both. The installer plays level 1
+An unknown key is refused, and a suite holds `must_contain`, `cases` or both. A case's `input` is the
+API's `AgentSampleInput`: `title`, `body` and `fields`, the work item's fields the instructions see as
+`ticket.fields` (`{}` when absent), at most 64 KiB of JSON. `fields.tracker` plays a ticket filed from a
+tracker (ADR 0118); a plugin's case may set it, a caller's work item may not. The installer plays level 1
 and every case that is not `live`; a failure refuses the plugin. A `live` case is validated, not run at
 install.
 
