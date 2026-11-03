@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Connecteurs : configuration, test de connexion, catalogue des types."""
+"""Connectors: configuration, connection test, catalogue of types."""
 
 from __future__ import annotations
 
@@ -74,9 +74,9 @@ async def _dto(session: AsyncSession, ctx: ProjectContext, row: Connector) -> Co
 
 @router.get("/connectors/types", response_model=list[ConnectorType], operation_id="listConnectorTypes")
 async def list_connector_types() -> list[ConnectorType]:
-    """Les types que le REGISTRE connaît — ceux du cœur et ceux des greffons (ADR 0034). La liste
-    vivait ici, en double du registre et en désaccord avec lui : jira y était « indisponible »
-    alors qu'il est enregistré, et un type ajouté par un greffon n'y apparaissait jamais."""
+    """The types the REGISTRY knows: the core's and those of extensions (ADR 0034). The list
+    used to live here, duplicating the registry and disagreeing with it: jira was "unavailable"
+    although it is registered, and a type added by an extension never appeared in it."""
     from choregos_adapters import offered_connector_types
 
     return [
@@ -116,11 +116,11 @@ async def put_connector(
 ) -> ConnectorDto:
     ctx.require(Permission.CONNECTOR_WRITE)
     if kind == "gateway" and body.type == "direct" and get_settings().env in {"staging", "prod"}:
-        # La passerelle directe rend la clé qu'on lui a donnée : aucune clé virtuelle par run,
-        # aucun plafond dur, aucun coût mesuré. Le banc a tourné ainsi une semaine et
-        # « prouvait » un plafond de dépense qui n'avait jamais mesuré une dépense. La fabrique
-        # d'adaptateur la refuse déjà ; on refuse aussi de l'ÉCRIRE, pour que l'erreur arrive
-        # quand quelqu'un la choisit, pas au premier run de la nuit suivante.
+        # The direct gateway returns the key it was given: no virtual key per run, no hard cap,
+        # no measured cost. The bench ran like that for a week and "proved" a spend cap that had
+        # never measured any spend. The adapter factory already refuses it; we also refuse to
+        # WRITE it, so that the error arrives when someone picks it, not on the first run of the
+        # following night.
         raise unprocessable(
             "the `direct` gateway is refused in this environment: it measures no cost and "
             "enforces no cap. Use `litellm`."
@@ -277,8 +277,8 @@ async def clear_connector_secret(
     operation_id="listProjectRequirements",
 )
 async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequirement]:
-    """Ce que les workflows actifs du projet exigent de ses connecteurs, et pourquoi (ADR 0034) :
-    un projet sans dépôt ni train n'a rien à faire d'un `scm`, d'une `ci` ou d'un `cd`."""
+    """What the project's active workflows require of its connectors, and why (ADR 0034):
+    a project with no repository or train has no use for an `scm`, a `ci` or a `cd`."""
     from choregos_adapters import deployment_default_type
     from choregos_core.dsl.exigences import exigences
 
@@ -309,7 +309,7 @@ async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequ
     "/projects/{id}/connectors/{kind}/test", response_model=ConnectorTestResult, operation_id="testConnector"
 )
 async def test_connector(ctx: ProjectCtx, kind: Annotated[str, Path()], session: Db) -> ConnectorTestResult:
-    """Teste la connexion et les permissions du connecteur ; met à jour son état de santé."""
+    """Test the connector's connection and permissions; update its health state."""
     ctx.require(Permission.CONNECTOR_WRITE)
     row = (
         await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))
