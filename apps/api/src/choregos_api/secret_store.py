@@ -8,6 +8,8 @@ Three layers:
   (`CHOREGOS_SECRETS_KEKS="k2:<b64 32 bytes>,k1:<b64 32 bytes>"`, the first is active). The
   additional authenticated data (`org_id|name|version`) binds a row to its place: a ciphertext
   copied to another organisation or name does not open.
+- `KeyWrapper`: wraps the data keys. `EnvKeyWrapper` (the keyring above) is the default; an
+  extension can supply a KMS or Vault-transit wrapper (ADR 0103).
 - `SecretStore`: the seam. `SealedDbSecretStore` (the table `org_secrets`) is the default;
   `FakeSecretStore` serves `CHOREGOS_FAKES` when no key is configured.
 - `resolved_configuration`: what every call site that builds an adapter uses. It reads the
@@ -119,30 +121,71 @@ def _aad(org_id: str, name: str, version: int) -> bytes:
     return f"{org_id}|{name}|{version}".encode()
 
 
-def seal(value: str, keyring: Keyring, org_id: str, name: str, version: int) -> Sealed:
+class KeyWrapper(Protocol):
+    """Wraps and unwraps the data keys (DEKs). The environment keyring is the default; an
+    extension can supply a KMS or Vault-transit wrapper (ADR 0103). Core ships no KMS client."""
+
+    active_id: str
+
+    def wrap(self, dek: bytes, aad: bytes) -> tuple[bytes, bytes, str]:
+        """Returns `(wrapped, nonce, kek_id)`; `kek_id` is at most 32 characters."""
+        ...
+
+    def unwrap(self, wrapped: bytes, nonce: bytes, aad: bytes, kek_id: str) -> bytes:
+        """Raises `SecretStoreUnavailable` when the key is unknown or the envelope does not open."""
+        ...
+
+
+class EnvKeyWrapper:
+    """The default wrapper: AES-256-GCM under the keyring of `CHOREGOS_SECRETS_KEKS`."""
+
+    def __init__(self, keyring: Keyring) -> None:
+        self._keyring = keyring
+        self.active_id = keyring.active_id
+
+    def wrap(self, dek: bytes, aad: bytes) -> tuple[bytes, bytes, str]:
+        nonce = os.urandom(12)
+        wrapped = AESGCM(self._keyring.active).encrypt(nonce, dek, b"dek|" + aad)
+        return wrapped, nonce, self._keyring.active_id
+
+    def unwrap(self, wrapped: bytes, nonce: bytes, aad: bytes, kek_id: str) -> bytes:
+        try:
+            return AESGCM(self._keyring.get(kek_id)).decrypt(nonce, wrapped, b"dek|" + aad)
+        except InvalidTag:
+            raise SecretStoreUnavailable("the sealed key does not open (wrong key, or moved)") from None
+
+
+def _as_wrapper(wrapper: KeyWrapper | Keyring) -> KeyWrapper:
+    return EnvKeyWrapper(wrapper) if isinstance(wrapper, Keyring) else wrapper
+
+
+def seal(value: str, wrapper: KeyWrapper | Keyring, org_id: str, name: str, version: int) -> Sealed:
     aad = _aad(org_id, name, version)
-    dek, nonce, dek_nonce = AESGCM.generate_key(256), os.urandom(12), os.urandom(12)
+    dek, nonce = AESGCM.generate_key(256), os.urandom(12)
+    wrapped_dek, dek_nonce, kek_id = _as_wrapper(wrapper).wrap(dek, aad)
     return Sealed(
         ciphertext=AESGCM(dek).encrypt(nonce, value.encode(), aad),
         nonce=nonce,
-        wrapped_dek=AESGCM(keyring.active).encrypt(dek_nonce, dek, b"dek|" + aad),
+        wrapped_dek=wrapped_dek,
         dek_nonce=dek_nonce,
-        kek_id=keyring.active_id,
+        kek_id=kek_id,
     )
 
 
-def _open_dek(row: OrgSecret, keyring: Keyring) -> bytes:
+def _open_dek(row: OrgSecret, wrapper: KeyWrapper | Keyring) -> bytes:
     aad = _aad(row.org_id, row.name, row.version)
     try:
-        return AESGCM(keyring.get(row.kek_id)).decrypt(row.dek_nonce, row.wrapped_dek, b"dek|" + aad)
-    except InvalidTag:
-        raise SecretStoreUnavailable(
-            f"`{row.name}`: the sealed key does not open (wrong key, or moved)"
-        ) from None
+        return _as_wrapper(wrapper).unwrap(row.wrapped_dek, row.dek_nonce, aad, row.kek_id)
+    except SecretStoreUnavailable as refus:
+        if "does not open" in str(refus):
+            raise SecretStoreUnavailable(
+                f"`{row.name}`: the sealed key does not open (wrong key, or moved)"
+            ) from None
+        raise
 
 
-def unseal(row: OrgSecret, keyring: Keyring) -> str:
-    dek = _open_dek(row, keyring)
+def unseal(row: OrgSecret, wrapper: KeyWrapper | Keyring) -> str:
+    dek = _open_dek(row, wrapper)
     try:
         return (
             AESGCM(dek).decrypt(row.nonce, row.ciphertext, _aad(row.org_id, row.name, row.version)).decode()
@@ -192,26 +235,30 @@ def check_name(name: str) -> str:
 class SealedDbSecretStore:
     """The default: AES-256-GCM envelopes in `org_secrets`, KEKs from the deployment."""
 
-    def __init__(self, keyring: Keyring | None = None) -> None:
+    def __init__(self, keyring: Keyring | None = None, wrapper: KeyWrapper | None = None) -> None:
         self._keyring = keyring
+        self._wrapper_given = wrapper
 
-    def _keys(self) -> Keyring | None:
-        return self._keyring or keyring_from_env()
+    def _wrapper(self) -> KeyWrapper | None:
+        if self._wrapper_given is not None:
+            return self._wrapper_given
+        keyring = self._keyring or keyring_from_env()
+        return EnvKeyWrapper(keyring) if keyring is not None else None
 
     def available(self) -> bool:
-        return self._keys() is not None
+        return self._wrapper() is not None
 
     async def put(
         self, session: AsyncSession, org_id: str, name: str, value: str, actor: str | None
     ) -> SecretMeta:
-        keyring = self._keys()
-        if keyring is None:
+        wrapper = self._wrapper()
+        if wrapper is None:
             raise SecretStoreUnavailable(NO_KEY_MESSAGE)
         check_name(name)
         row = await _row(session, org_id, name)
         now = utcnow()
         version = row.version + 1 if row is not None else 1
-        sealed = seal(value, keyring, org_id, name, version)
+        sealed = seal(value, wrapper, org_id, name, version)
         if row is None:
             row = OrgSecret(org_id=org_id, name=name, created_by=actor)
             session.add(row)
@@ -224,8 +271,8 @@ class SealedDbSecretStore:
     async def get_many(self, session: AsyncSession, org_id: str, names: Sequence[str]) -> dict[str, str]:
         if not names:
             return {}
-        keyring = self._keys()
-        if keyring is None:
+        wrapper = self._wrapper()
+        if wrapper is None:
             raise SecretIntrouvable(NO_KEY_MESSAGE)
         rows = {r.name: r for r in await _rows(session, org_id, names)}
         out: dict[str, str] = {}
@@ -236,7 +283,7 @@ class SealedDbSecretStore:
                     f"`{STORE_SCHEME}:{name}`: no value is stored (cleared, or never set)"
                 )
             try:
-                out[name] = unseal(row, keyring)
+                out[name] = unseal(row, wrapper)
             except SecretStoreUnavailable as refus:
                 raise SecretIntrouvable(str(refus)) from refus
         return out
@@ -257,19 +304,17 @@ class SealedDbSecretStore:
     async def rewrap(self, session: AsyncSession, org_id: str | None = None) -> int:
         """Re-wrap the data keys under the active KEK (after a rotation: the new key first in the
         list). The VALUES are never touched, only their wrapping. Returns the rows changed."""
-        keyring = self._keys()
-        if keyring is None:
+        wrapper = self._wrapper()
+        if wrapper is None:
             raise SecretStoreUnavailable(NO_KEY_MESSAGE)
-        query = select(OrgSecret).where(OrgSecret.kek_id != keyring.active_id)
+        query = select(OrgSecret).where(OrgSecret.kek_id != wrapper.active_id)
         if org_id is not None:
             query = query.where(OrgSecret.org_id == org_id)
         changed = 0
         for row in (await session.execute(query)).scalars():
-            dek = _open_dek(row, keyring)
-            dek_nonce = os.urandom(12)
+            dek = _open_dek(row, wrapper)
             aad = _aad(row.org_id, row.name, row.version)
-            row.wrapped_dek = AESGCM(keyring.active).encrypt(dek_nonce, dek, b"dek|" + aad)
-            row.dek_nonce, row.kek_id = dek_nonce, keyring.active_id
+            row.wrapped_dek, row.dek_nonce, row.kek_id = wrapper.wrap(dek, aad)
             changed += 1
         await session.flush()
         return changed
@@ -468,7 +513,9 @@ async def resolved_configuration(
 __all__ = [
     "ENV_KEKS",
     "NO_KEY_MESSAGE",
+    "EnvKeyWrapper",
     "FakeSecretStore",
+    "KeyWrapper",
     "Keyring",
     "SealedDbSecretStore",
     "SecretMeta",
