@@ -52,8 +52,8 @@ async def test_un_workflow_invalide_est_refuse_avec_la_ligne_fautive(platform: P
     assert any(error.get("line") for error in problem["errors"]), problem
 
 
-async def test_carte_deplacee_sur_le_board_fait_avancer_le_ticket(platform: Platform) -> None:
-    """A human moves a card: it is a decision, not a mere label change."""
+async def test_a_card_moved_on_the_board_does_not_move_the_work_item(platform: Platform) -> None:
+    """A card move on the board is not a decision (ADR 0102): the webhook keeps it, sends nothing."""
     await login(platform.client)
     payload = {
         "action": "edited",
@@ -93,10 +93,9 @@ async def test_carte_deplacee_sur_le_board_fait_avancer_le_ticket(platform: Plat
     assert response.status_code == 202
     from choregos_api.temporal import get_temporal
 
-    # No workflow is started for this ticket in this scenario: the gateway records
-    # the signal attempt, which proves that the webhook did route the event.
+    # A signal to the ticket's interpreter would be recorded here, even without a running workflow.
     attempts = get_temporal().missing  # type: ignore[attr-defined]
-    assert any(name == "inbound" for name, _ in attempts), attempts
+    assert not any(name == "inbound" for name, _ in attempts), attempts
 
 
 async def test_le_wizard_cree_un_projet_et_demarre_le_provisioning(platform: Platform) -> None:
