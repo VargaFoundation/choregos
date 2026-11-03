@@ -20,7 +20,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
   // Par NATURE : un appel d'outil du catalogue coûte comme un modèle, et se fondait
   // dans le même total. Une dépense qu'on ne voit pas est une dépense qu'on ne borne pas.
   const parNature = useQuery({ queryKey: ["costs", slug, "kind"], queryFn: () => api.costs(slug, "kind") });
-  const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.workItems(slug) });
+  const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.allWorkItems(slug) });
   const dora = useQuery({ queryKey: ["dora", slug], queryFn: () => api.dora(slug) });
   // Tant que le projet n'est pas actif, on suit son provisioning ici — l'assistant
   // redirigeait vers cette page et rien n'y disait où en étaient les étapes.
