@@ -14,7 +14,7 @@ from ..db.models import Agent, AgentVersion, Organization, Project
 from ..db.models import AgentEvaluation as AgentEvaluationRow
 from ..deps import Db, Me, ProjectCtx
 from ..errors import forbidden, not_found
-from ..fraicheur import exiger_une_authentification_fraiche
+from ..freshness import require_fresh_authentication
 from ..rbac import Permission
 from ..schemas import (
     AgentDto,
@@ -152,7 +152,7 @@ async def set_agent_release_policy(
     if agent.scope != PERSONAL and agent_releases.loosens(before, body):
         if not agent_releases.is_human_session(principal):
             raise forbidden("loosening a release policy is done in a human session, not with an API token")
-        exiger_une_authentification_fraiche(principal, before.stable.step_up_minutes)
+        require_fresh_authentication(principal, before.stable.step_up_minutes)
     agent.release_policy = body.model_dump(mode="json")
     await session.flush()
     await record(

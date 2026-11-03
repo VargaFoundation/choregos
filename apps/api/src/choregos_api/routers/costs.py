@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Coûts : agrégats par jour, étape, modèle, backend, taille, export CSV — et métriques DORA."""
+"""Costs: aggregates per day, stage, model, backend, size, CSV export — and DORA metrics."""
 
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ from ..services import effective_policy
 router = APIRouter(tags=["costs"])
 
 GROUPS: dict[str, Any] = {
-    # `kind` sépare ce qu'a coûté un MODÈLE de ce qu'a coûté un OUTIL du catalogue. Sans
-    # lui, une facture d'API tierce se fondait dans le coût des modèles et n'était donc
-    # visible nulle part — la seule dépense de la plateforme que personne ne regardait.
+    # `kind` separates what a MODEL cost from what a catalogue TOOL cost. Without
+    # it, a third-party API bill melted into the cost of the models and was therefore
+    # visible nowhere — the one expense of the platform that nobody looked at.
     "kind": CostLedger.kind,
     "stage": CostLedger.stage_role,
     "model": CostLedger.model,
@@ -205,7 +205,7 @@ async def project_costs_csv(
     until: Annotated[date | None, Query()] = None,
     kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
 ) -> Response:
-    """Le même rapport, en CSV : de quoi le recoller dans un tableur ou une facturation."""
+    """The same report, as CSV: something to paste into a spreadsheet or an invoice."""
     report = await project_costs(ctx, session, group_by=group_by, since=since, until=until, kind=kind)
     return _csv_response(report, f"couts-{ctx.slug}-{group_by}-{utcnow():%Y%m%d}.csv")
 
@@ -252,14 +252,14 @@ def _csv_response(report: CostReport, filename: str) -> Response:
     if report.total.budget_usd is not None:
         writer.writerow(["budget_quotidien_usd", f"{report.total.budget_usd:.2f}"])
     return Response(
-        # Excel francophone lit le point-virgule ; le BOM lui évite de casser les accents.
+        # French-speaking Excel reads the semicolon; the BOM keeps it from breaking the accents.
         content="﻿" + buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
-# ───────────────────────── métriques de livraison (DORA) ─────────────────────────
+# ───────────────────────── delivery metrics (DORA) ─────────────────────────
 
 FREQUENCY_LEVELS = ((1.0, "elite"), (1 / 7, "high"), (1 / 30, "medium"))
 LEAD_TIME_LEVELS = ((24.0, "elite"), (24.0 * 7, "high"), (24.0 * 30, "medium"))
@@ -277,7 +277,7 @@ def _level(value: float | None, thresholds: tuple[tuple[float, str], ...], *, hi
 
 
 def _hours(start: datetime | None, end: datetime | None) -> float | None:
-    """Écart en heures, robuste aux horodatages naïfs rendus par SQLite."""
+    """Gap in hours, robust to the naive timestamps SQLite returns."""
     if start is None or end is None:
         return None
     from choregos_core import elapsed_seconds
@@ -294,15 +294,15 @@ async def project_dora(
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
 ) -> DoraReport:
-    """Les quatre mesures DORA, dérivées des déploiements et des rollbacks enregistrés.
+    """The four DORA measures, derived from the recorded deployments and rollbacks.
 
-    Rien n'est déclaré à la main : la fréquence vient des lignes `deployments` clôturées,
-    le délai de livraison de l'écart entre la fusion d'un ticket et la mise en production
-    du lot qui le portait, le taux d'échec des rollbacks, et le délai de rétablissement
-    de l'écart entre un rollback et le déploiement réussi qui l'a suivi.
+    Nothing is declared by hand: the frequency comes from the closed `deployments` rows,
+    the lead time from the gap between a ticket's merge and the production release
+    of the batch that carried it, the failure rate from the rollbacks, and the recovery time
+    from the gap between a rollback and the successful deployment that followed it.
     """
-    # Les deux bornes sont conscientes du fuseau : SQLite rend des horodatages naïfs et
-    # les soustraire à une borne aware lèverait un TypeError en pleine requête.
+    # Both bounds are timezone-aware: SQLite returns naive timestamps and
+    # subtracting them from an aware bound would raise a TypeError in the middle of the request.
     start = datetime.combine(since, datetime.min.time(), tzinfo=UTC) if since else _default_since()
     end = datetime.combine(until, datetime.max.time(), tzinfo=UTC) if until else utcnow()
     rows = (
@@ -384,7 +384,7 @@ async def project_dora(
     )
 
 
-# ───────────────────── revue croisée : le multi-backend paie-t-il ? ─────────────────────
+# ───────────────────── cross review: does multi-backend pay off? ─────────────────────
 
 
 @router.get(

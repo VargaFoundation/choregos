@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Trains et releases : état, départ, gel, approbation, abandon.
+"""Trains and releases: state, departure, freeze, approval, abandonment.
 
-L'API ne décide rien : elle signale le workflow `ReleaseTrain`, qui est le seul
-à savoir si la fenêtre est ouverte et si le lot peut partir.
+The API decides nothing: it signals the `ReleaseTrain` workflow, which alone
+knows whether the window is open and whether the batch may leave.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from ..audit import record
 from ..db.models import Project, Release
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import forbidden, not_found
-from ..greffons import DemandeDeGeste, controler
+from ..extensions import GestureRequest, check_gesture
 from ..rbac import Permission
 from ..schemas import (
     AbortRequest,
@@ -75,7 +75,7 @@ async def get_release(id: str, session: Db, principal: Me) -> ReleaseDto:
 
 @router.get("/projects/{id}/trains/{env}", response_model=TrainStatusDto, operation_id="getTrainStatus")
 async def train_status(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db) -> TrainStatusDto:
-    """État du train : lot en attente, verrou, prochain départ. Source : le workflow, sinon la base."""
+    """State of the train: pending batch, lock, next departure. Source: the workflow, else the database."""
     live = await get_temporal().query(train_id(ctx.slug, env), "status_query")
     current = (
         await session.execute(
@@ -132,7 +132,7 @@ async def depart(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db) -> d
 async def freeze(
     ctx: ProjectCtx, env: Annotated[str, Path()], body: FreezeRequest, session: Db
 ) -> dict[str, str]:
-    """Gel : le motif est obligatoire — un train gelé sans raison est un incident silencieux."""
+    """Freeze: the reason is mandatory — a train frozen for no reason is a silent incident."""
     ctx.require(Permission.TRAIN_OPERATE)
     await get_temporal().signal(
         train_id(ctx.slug, env), "freeze", {"reason": body.reason, "by": ctx.principal.email}
@@ -178,13 +178,13 @@ async def unfreeze(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db) ->
 
 @router.post("/releases/{id}/approve", status_code=status.HTTP_202_ACCEPTED, operation_id="approveRelease")
 async def approve(id: str, body: ApproveRequest, session: Db, principal: Me) -> dict[str, str]:
-    """Approuver une mise en production demande le rôle release_captain (ou owner)."""
+    """Approving a production release needs the release_captain role (or owner)."""
     row, project, org_slug = await _release(session, id, principal)
     if not principal.can(Permission.TRAIN_APPROVE, org_slug, project.slug):
         raise forbidden("approving a release needs the release_captain role")
-    await controler(
+    await check_gesture(
         session,
-        DemandeDeGeste(
+        GestureRequest(
             "release.approve",
             org_slug,
             principal,

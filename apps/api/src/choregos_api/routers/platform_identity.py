@@ -12,7 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ..config import Settings
-from ..deps import Config, Db, Me, exiger_admin_de_plateforme
+from ..deps import Config, Db, Me, require_platform_admin
 from ..mcp.oauth import emetteur
 from ..schemas import PlatformIdentity, PlatformIdentityRow
 from ..tenant_sign_in import has_resolver
@@ -134,5 +134,5 @@ def _rows(settings: Settings) -> list[PlatformIdentityRow]:
 
 @router.get("/platform/identity", response_model=PlatformIdentity, operation_id="getPlatformIdentity")
 async def get_platform_identity(session: Db, principal: Me, settings: Config) -> PlatformIdentity:
-    await exiger_admin_de_plateforme(session, principal)
+    await require_platform_admin(session, principal)
     return PlatformIdentity(items=_rows(settings))

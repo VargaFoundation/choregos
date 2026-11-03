@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Work items : liste, détail, timeline, décisions humaines, actions de contrôle."""
+"""Work items: list, detail, timeline, human decisions, control actions."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from ..audit import record
 from ..db.models import HumanRequest, Project, Run, WorkflowDef, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
-from ..greffons import DemandeDeGeste, controler
+from ..extensions import GestureRequest, check_gesture
 from ..knowledge.marked import listed_only, readable, require_readable
 from ..logging import get_logger
 from ..object_store import object_store
@@ -146,8 +146,8 @@ async def get_work_item(id: str, session: Db, principal: Me) -> WorkItemDto:
 
 @router.patch("/work-items/{id}", response_model=WorkItemDto, operation_id="updateWorkItem")
 async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal: Me) -> WorkItemDto:
-    """Les champs d'un ticket changent (ADR 0031, S20-05) : validés par SON workflow, celui où il est
-    épinglé, et l'interpréteur l'apprend — une date d'arrivée déplacée réarme l'action qui l'attend."""
+    """The fields of a ticket change (ADR 0031, S20-05): validated by ITS workflow, the one it is
+    pinned to, and the interpreter learns of it — a moved arrival date re-arms the action waiting on it."""
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
@@ -155,9 +155,9 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
     # What the tracker says about the ticket stays the tracker's (S51-04): kept, never written here.
     refuse_reserved_fields(body.fields)
     workflow = workflow_model(await workflow_du_ticket(session, item))
-    champs = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
-    valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
-    item.fields = champs
+    field_values = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
+    valider_les_champs(workflow.metadata.inputs, field_values, workflow.metadata.name)
+    item.fields = field_values
     await record(
         session,
         principal,
@@ -170,10 +170,10 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
     if item.temporal_wf_id:
         try:
             await get_temporal().signal(
-                interpreter_id(project.slug, item.tracker_key), "fields_changed", {"fields": champs}
+                interpreter_id(project.slug, item.tracker_key), "fields_changed", {"fields": field_values}
             )
-        except Exception as erreur:  # un ticket fini n'a plus d'interpréteur : les champs restent
-            logger.warning("champs non transmis à l'interpréteur", work_item=item.id, erreur=str(erreur))
+        except Exception as error:  # a finished ticket has no interpreter any more: the fields stay
+            logger.warning("fields not sent to the interpreter", work_item=item.id, error=str(error))
     return await work_item_dto(session, item, project, with_temporal=True)
 
 
@@ -181,7 +181,7 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
     "/work-items/{id}/timeline", response_model=list[TimelineEntry], operation_id="getWorkItemTimeline"
 )
 async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
-    """États, runs, décisions, findings : l'histoire complète d'un ticket, dans l'ordre."""
+    """States, runs, decisions, findings: the complete history of a ticket, in order."""
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
@@ -192,8 +192,8 @@ async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
 
 @router.get("/work-items/{id}/hand-offs", response_model=list[HandOff], operation_id="getWorkItemHandOffs")
 async def hand_offs(id: str, session: Db, principal: Me) -> list[HandOff]:
-    """Les reçus de passage du ticket, sortie par sortie (S25-04) : qui l'a produite, qui l'a lue, sous
-    quelle empreinte, et ce qu'elle vaut aujourd'hui."""
+    """The ticket's hand-off receipts, output by output (S25-04): who produced it, who read it, under
+    which digest, and what it is worth today."""
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
@@ -260,7 +260,7 @@ async def get_artifact_content(
 
 @router.get("/work-items/{id}/journey", response_model=WorkItemJourney, operation_id="getWorkItemJourney")
 async def journey(id: str, session: Db, principal: Me) -> WorkItemJourney:
-    """Le parcours du ticket dans SON workflow, en une lecture : ce que la console anime (S22-01)."""
+    """The ticket's journey through ITS workflow, in one read: what the console animates (S22-01)."""
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
@@ -268,35 +268,35 @@ async def journey(id: str, session: Db, principal: Me) -> WorkItemJourney:
     return await parcours(session, item)
 
 
-async def _completer_la_tache(
-    session: Any, item: WorkItem, demande: HumanRequest, body: DecisionRequest
+async def _complete_the_task(
+    session: Any, item: WorkItem, human_request: HumanRequest, body: DecisionRequest
 ) -> tuple[dict[str, Any], str | None]:
-    """Une tâche faite (S20-06) : ses valeurs validées par SON formulaire — rien qui n'y soit —,
-    l'attestation quand elle en demande une, puis les valeurs versées dans les champs du ticket,
-    validés à leur tour par le workflow épinglé. La décision les garde, avec la phrase attestée telle
-    qu'elle a été montrée : c'est la preuve."""
+    """A task done (S20-06): its values validated by ITS form — nothing that is not in it —,
+    the attestation when it asks for one, then the values poured into the ticket's fields,
+    validated in turn by the pinned workflow. The decision keeps them, with the attested sentence exactly
+    as it was shown: that is the proof."""
     import jsonschema
 
-    payload = dict(demande.payload or {})
-    formulaire = dict(payload.get("form") or {})
-    hors = sorted(set(body.values) - set(formulaire.get("properties") or {}))
-    if hors:
-        raise unprocessable(f"not in the task's form: {', '.join(hors)}")
-    erreurs = sorted(
-        jsonschema.Draft202012Validator(formulaire).iter_errors(body.values), key=lambda e: list(e.path)
+    payload = dict(human_request.payload or {})
+    form = dict(payload.get("form") or {})
+    outside = sorted(set(body.values) - set(form.get("properties") or {}))
+    if outside:
+        raise unprocessable(f"not in the task's form: {', '.join(outside)}")
+    errors = sorted(
+        jsonschema.Draft202012Validator(form).iter_errors(body.values), key=lambda e: list(e.path)
     )
-    if erreurs:
+    if errors:
         raise unprocessable(
-            "the task is not filled in", [{"loc": ["values", *e.path], "msg": e.message} for e in erreurs]
+            "the task is not filled in", [{"loc": ["values", *e.path], "msg": e.message} for e in errors]
         )
     attest = payload.get("attest")
     if attest and not body.attested:
         raise unprocessable(f"the task asks you to attest: “{attest}”")
     workflow = workflow_model(await workflow_du_ticket(session, item))
     refuse_reserved_fields(body.values)
-    champs = {**(item.fields or {}), **body.values}
-    valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
-    item.fields = champs
+    field_values = {**(item.fields or {}), **body.values}
+    valider_les_champs(workflow.metadata.inputs, field_values, workflow.metadata.name)
+    item.fields = field_values
     return dict(body.values), (str(attest) if attest else None)
 
 
@@ -307,7 +307,7 @@ async def _completer_la_tache(
     operation_id="postDecision",
 )
 async def post_decision(id: str, body: DecisionRequest, session: Db, principal: Me) -> HumanRequestDto:
-    """Enregistre la décision, la transmet au workflow, et ferme la demande humaine."""
+    """Record the decision, pass it to the workflow, and close the human request."""
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_DECIDE, org_slug, project.slug):
@@ -345,9 +345,9 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
             group=group,
             transition=request_row.transition_id,
         )
-    await controler(
+    await check_gesture(
         session,
-        DemandeDeGeste(
+        GestureRequest(
             "workitem.decision",
             org_slug,
             principal,
@@ -362,13 +362,13 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         ),
     )
 
-    tache = request_row.kind == HumanRequestKind.TASK.value
-    if body.kind == "complete" and not tache:
+    is_task = request_row.kind == HumanRequestKind.TASK.value
+    if body.kind == "complete" and not is_task:
         raise unprocessable("only a task is completed (`complete`); here: approve, reject or answer")
-    if tache and body.kind not in {"complete", "reject"}:
+    if is_task and body.kind not in {"complete", "reject"}:
         raise unprocessable("a task is completed (`complete`, with its values) or sent back (`reject`)")
-    valeurs, attestation = (
-        await _completer_la_tache(session, item, request_row, body) if body.kind == "complete" else ({}, None)
+    values, attested_sentence = (
+        await _complete_the_task(session, item, request_row, body) if body.kind == "complete" else ({}, None)
     )
 
     kind_map = {
@@ -380,13 +380,13 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
     }
     decision = HumanDecision(
         request_id=request_row.id,
-        kind=HumanRequestKind.TASK if tache else kind_map[body.kind],
+        kind=HumanRequestKind.TASK if is_task else kind_map[body.kind],
         approved=body.kind in {"approve", "scope_change", "complete"} if body.kind != "reject" else False,
         answer=body.answer,
         granted_paths=body.granted_paths,
         reason=body.reason,
-        values=valeurs,
-        attestation=attestation,
+        values=values,
+        attestation=attested_sentence,
         decided_by=principal.email,
         channel="web",
     )
@@ -410,7 +410,7 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         subject=item.tracker_key,
         kind=body.kind,
         by=principal.email,
-        **({"fields": sorted(valeurs), "attestation": attestation} if tache else {}),
+        **({"fields": sorted(values), "attestation": attested_sentence} if is_task else {}),
     )
     await record(
         session,
@@ -424,39 +424,39 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
     return human_request_dto(request_row)
 
 
-async def _cible_de_migration(
+async def _migration_target(
     session: Any, item: WorkItem, project: Project, body: WorkItemAction
 ) -> dict[str, Any]:
-    """La définition cible d'un `migrate`, lue et vérifiée ICI (ADR 0031).
+    """The target definition of a `migrate`, read and checked HERE (ADR 0031).
 
-    L'interpréteur ne fait aucune entrée/sortie : il reçoit la définition elle-même, pas son
-    identifiant. L'état courant du ticket doit exister dans la cible, ou y être mappé — sinon 422,
-    et rien n'est transmis. Un ticket occupé (décision humaine attendue, run en cours) changerait
-    d'état avant d'avoir migré, et le mapping vérifié ici ne vaudrait plus : 409.
+    The interpreter does no I/O: it receives the definition itself, not its
+    identifier. The ticket's current state must exist in the target, or be mapped to it — otherwise 422,
+    and nothing is sent. A busy ticket (human decision awaited, run in progress) would change
+    state before having migrated, and the mapping checked here would no longer hold: 409.
     """
     if not body.workflow_def_id:
         raise unprocessable("migrate needs workflow_def_id: the version to migrate the work item to")
-    ligne = await session.get(WorkflowDef, body.workflow_def_id)
-    if ligne is None or ligne.project_id != project.id:
+    definition_row = await session.get(WorkflowDef, body.workflow_def_id)
+    if definition_row is None or definition_row.project_id != project.id:
         raise not_found("Workflow definition", body.workflow_def_id)
-    attend = select(HumanRequest.id).where(
+    waiting = select(HumanRequest.id).where(
         HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None)
     )
-    if (await session.execute(attend.limit(1))).first() is not None:
+    if (await session.execute(waiting.limit(1))).first() is not None:
         raise conflict(
             "the work item is waiting for a human decision: decide, or stop it, before migrating it"
         )
-    tourne = select(Run.id).where(Run.work_item_id == item.id, Run.status.in_(("queued", "running")))
-    if (await session.execute(tourne.limit(1))).first() is not None:
+    running = select(Run.id).where(Run.work_item_id == item.id, Run.status.in_(("queued", "running")))
+    if (await session.execute(running.limit(1))).first() is not None:
         raise conflict(
             "a run of this work item is in progress: pause the work item, let the run finish, then migrate"
         )
-    cible = workflow_model(ligne)
+    target = workflow_model(definition_row)
     try:
-        WorkflowEngine(cible).can_migrate_to(cible, item.state, body.state_mapping)
-    except ValueError as erreur:
-        raise unprocessable(str(erreur)) from erreur
-    return cible.model_dump(mode="json", by_alias=True, exclude_none=True)
+        WorkflowEngine(target).can_migrate_to(target, item.state, body.state_mapping)
+    except ValueError as error:
+        raise unprocessable(str(error)) from error
+    return target.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
 async def _grant_top_up(
@@ -566,11 +566,11 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
             return {"status": "accepted", "action": body.action}
         if body.action == "rerun_stage":
             await _grant_top_up(session, principal, project, item, body.top_up_usd)
-        cible = await _cible_de_migration(session, item, project, body) if body.action == "migrate" else None
+        target = await _migration_target(session, item, project, body) if body.action == "migrate" else None
         control = Control(
             action=body.action,
             workflow_def_id=body.workflow_def_id,
-            workflow=cible,
+            workflow=target,
             state_mapping=body.state_mapping,
             run_id=body.run_id,
             reason=body.reason,
