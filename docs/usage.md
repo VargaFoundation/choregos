@@ -1051,6 +1051,14 @@ probability is a guess. The validator warns `decision.threshold_without_human` w
 step nor leads to a state a human step leaves: the work items the model was least sure of would move
 on unchecked, and nobody's verdict would measure the decision.
 
+The same card's **Calibration** row reads that route for the step, with a target of 90 %: per
+question, the decisions observed out of those recorded, the accuracy and the expected calibration
+error, the ten reliability bins as a table (what the model said against how often it was right), what
+the threshold your `when` sets on `<name>_confidence` (in the exits of the state the decision leads
+to) keeps and how often those answers were right, and the suggested threshold or why there is none
+("12 observed decisions; 30 are needed"). When your threshold is below the suggested one, it says so.
+Until an outcome is observed the card still calls a threshold on the probability a guess.
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated

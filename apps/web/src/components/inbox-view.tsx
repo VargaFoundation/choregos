@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { CircleCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
@@ -63,7 +62,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         {!boite.pret ? (
           <p className="text-sm text-ink-muted">Reading…</p>
         ) : boite.tickets.length === 0 ? (
-          <Empty title="No ticket waits" icon={CircleCheck} hue={6}>Every ticket in flight is in the hands of an agent or the platform.</Empty>
+          <Empty title="No ticket waits">Every ticket in flight is in the hands of an agent or the platform.</Empty>
         ) : (
           <ul className="divide-y divide-line" data-testid="tickets-en-attente">
             {boite.tickets.map(({ item, demande, enRetard }) => (
@@ -118,7 +117,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         {!boite.pret ? (
           <p className="text-sm text-ink-muted">Reading…</p>
         ) : boite.actions.length === 0 ? (
-          <Empty title="Nothing waits" icon={CircleCheck} hue={6}>No action needs a decision.</Empty>
+          <Empty title="Nothing waits">No action needs a decision.</Empty>
         ) : (
           <ul className="space-y-2" data-testid="boite">
             {boite.actions.map((action) => (
@@ -154,7 +153,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
           {!boite.pret ? (
             <p className="text-sm text-ink-muted">Reading…</p>
           ) : boite.egressRequests.length === 0 ? (
-            <Empty title="No request waits" icon={CircleCheck} hue={6}>Nobody is waiting for a host to be opened.</Empty>
+            <Empty title="No request waits">Nobody is waiting for a host to be opened.</Empty>
           ) : (
             <ul className="space-y-2" data-testid="egress-requests">
               {boite.egressRequests.map((rule) => (

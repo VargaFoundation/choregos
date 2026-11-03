@@ -34,6 +34,8 @@ export type ReadTransition = {
   gates?: Array<string | { name: string; params?: Record<string, unknown> }>;
   inputs?: string[];
   outputs?: string[];
+  /** What the last stage's outputs must be for this exit to be taken (ADR 0106): an output name and its condition. */
+  when?: Record<string, unknown> | null;
   on_fail?: { to?: string; max_attempts?: number; escalate_to?: string } | null;
   on_reject?: string | null;
   does?: string | null;

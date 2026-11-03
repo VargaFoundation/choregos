@@ -7,6 +7,13 @@ import { cn } from "@/lib/cn";
 import type { AgentResolution, ArtifactFlow, ProcessStep } from "@/lib/types";
 import { answerWords, DecisionChip, exampleWhen, questionKind } from "@/components/workflows/decision";
 import {
+  DecisionCalibration,
+  ProbabilityNote,
+  useStepCalibration,
+  type CalibrationRead,
+  type CalibrationSource,
+} from "@/components/workflows/decision-calibration";
+import {
   CONFIDENCE_SUFFIX,
   DEFAULT_DECISION_MODEL,
   DEFAULT_DECISION_TIMEOUT_SECONDS,
@@ -91,23 +98,40 @@ function Source({ nom, flow, parId }: { nom: string; flow: ArtifactFlow | undefi
  * version a run would load, a group and its SLA, a job's command —, what it reads and from where, what
  * it produces. Read only: the editor panel stays apart, under it.
  */
-export function StepDetails({
-  step,
-  resolution,
-  flow,
-  stepsById,
-  decision,
-  className,
-}: {
+type StepDetailsProps = {
   step: ProcessStep;
   /** The decision actor the step names (ADR 0121), read from the workflow: its questions, state and model. */
   decision?: WorkflowDecisionActor;
+  /** Where a decision step's calibration is read (S52-06b); without it, the card says nothing is measured. */
+  calibration?: CalibrationSource;
   /** The answer for `step.agent`; absent while it loads or against an API without the endpoint. */
   resolution?: AgentResolution;
   flow?: ArtifactFlow[];
   stepsById: Map<string, ProcessStep>;
   className?: string;
-}) {
+};
+
+export function StepDetails(props: StepDetailsProps) {
+  // Only a decision step reads its calibration, once, for both the note on its probability and its row.
+  if (props.decision && props.calibration) return <DecisionStepDetails {...props} calibration={props.calibration} />;
+  return <StepDetailsCard {...props} />;
+}
+
+function DecisionStepDetails(props: StepDetailsProps & { calibration: CalibrationSource }) {
+  const read = useStepCalibration(props.calibration.project, props.calibration.workflow, props.step.from);
+  return <StepDetailsCard {...props} read={read} />;
+}
+
+function StepDetailsCard({
+  step,
+  resolution,
+  flow,
+  stepsById,
+  decision,
+  calibration,
+  read,
+  className,
+}: StepDetailsProps & { read?: CalibrationRead }) {
   const parNom = new Map((flow ?? []).map((a) => [a.name, a]));
   const lecture = step.inputs ?? [];
   // A decision writes each answer and its probability; an older API listed none for it.
@@ -254,10 +278,18 @@ export function StepDetails({
             </ul>
             {decision && exampleWhen(decision) && (
               <p className="mt-1 text-ink-muted" data-testid={`decision-when-${step.id}`}>
-                A transition from the next state compares them: <code className="text-ink">{exampleWhen(decision)}</code>. The
-                probability is the model&apos;s own until the platform has measured this step: a threshold on it is a guess.
+                A transition from the next state compares them: <code className="text-ink">{exampleWhen(decision)}</code>.{" "}
+                <ProbabilityNote calibration={read?.data} />
               </p>
             )}
+          </dd>
+        </>
+      )}
+      {decision && read && (
+        <>
+          <dt className={LEGENDE}>Calibration</dt>
+          <dd data-testid={`decision-calibration-${step.id}`}>
+            <DecisionCalibration read={read} thresholds={calibration?.thresholds} />
           </dd>
         </>
       )}

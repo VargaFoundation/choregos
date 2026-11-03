@@ -25,7 +25,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // about 26 kB (1956 -> 1982 kB on main at 87ea1831), which would leave the S49 build under 1 kB of headroom.
 // 2026-11-02 (#1179): 2050 -> 2075 kB. Main sits at the 2050 kB line; the tracker card's « Filed by » row
 // and the regenerated API types tip the total over it by a fraction of a kilobyte.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2075);
+// 2026-11-03 (S52-06b, on S52-05 and S52-06): 2075 -> 2100 kB. The decision step on the map (S52-06) and its
+// calibration card with the demo mode's calibration (S52-06b) measure 2076 kB, 1 kB over the line.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2100);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {

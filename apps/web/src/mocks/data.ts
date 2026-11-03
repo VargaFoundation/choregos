@@ -86,7 +86,7 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
-import type { McpGatewayPut, McpGatewayState, OutboundProxyPut, OutboundProxyState, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
+import type { McpGatewayPut, McpGatewayState, OutboundProxyPut, OutboundProxyState, StepCalibration, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
@@ -2841,6 +2841,78 @@ function mockProjectNetwork(): ProjectNetwork {
   };
 }
 
+/**
+ * A decision step's calibration (S52-06b): `route` measured on 42 observed decisions, a threshold
+ * suggested; `urgent` on 12, too few for one.
+ */
+function stepCalibrationDemo(workflow: string, step: string): StepCalibration {
+  const bins = (counts: number[], right: number[]) =>
+    counts.map((count, index) => ({
+      lower: index / 10,
+      upper: (index + 1) / 10,
+      count,
+      mean_probability: count ? index / 10 + 0.05 : null,
+      accuracy: count ? (right[index] ?? 0) / count : null,
+    }));
+  const thresholds = (points: Array<[number, number, number]>, observed: number) =>
+    points.map(([threshold, count, right]) => ({
+      threshold,
+      count,
+      coverage: observed ? count / observed : null,
+      accuracy: count ? right / count : null,
+    }));
+  return {
+    workflow,
+    step,
+    target_accuracy: 0.9,
+    min_observed: 30,
+    questions: [
+      {
+        question: "route",
+        source: "decision_model",
+        model: "platform/decide",
+        model_version: "laya-0.4.21",
+        count: 57,
+        observed: 42,
+        accuracy: 37 / 42,
+        ece: 0.04,
+        bins: bins([0, 0, 0, 0, 0, 2, 4, 6, 12, 18], [0, 0, 0, 0, 0, 1, 2, 5, 11, 18]),
+        thresholds: thresholds(
+          [
+            [0.5, 42, 37],
+            [0.55, 42, 37],
+            [0.6, 40, 35],
+            [0.65, 40, 35],
+            [0.7, 36, 34],
+            [0.75, 36, 34],
+            [0.8, 30, 29],
+            [0.85, 30, 29],
+            [0.9, 18, 18],
+            [0.95, 9, 9],
+          ],
+          42,
+        ),
+        suggested_threshold: 0.7,
+        suggestion_reason: null,
+      },
+      {
+        question: "urgent",
+        source: "decision_model",
+        model: "platform/decide",
+        model_version: "laya-0.4.21",
+        count: 15,
+        observed: 12,
+        accuracy: 10 / 12,
+        ece: 0.09,
+        bins: bins([0, 0, 0, 0, 0, 1, 1, 3, 3, 4], [0, 0, 0, 0, 0, 0, 1, 2, 3, 4]),
+        thresholds: [],
+        suggested_threshold: null,
+        suggestion_reason: "12 observed decision(s): a threshold is suggested from 30 on",
+      },
+    ],
+  };
+}
+
 const mockNetworkActivity: NetworkActivity = {
   rows: [
     { host: "api.stripe.com", layer: "proxy", decision: "denied", reason: "not_allowed", count: 14, runs: 3, projects: ["billing-api"], agents: ["architect"], last_at: iso(35) },
@@ -3729,6 +3801,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       states: [{ state: "ready", open_items: 2, waiting_since: new Date(Date.now() - 3 * 86_400_000).toISOString() }],
       steps: [{ transition: "t-implement", runs: 4, succeeded: 3, failed: 1, cost_usd: 6.4, median_minutes: 18 }],
     } as T;
+  const calibrationMatch = /^\/projects\/[^/]+\/workflows\/([^/]+)\/steps\/([^/]+)\/calibration$/.exec(route ?? "");
+  if (calibrationMatch)
+    return stepCalibrationDemo(decodeURIComponent(calibrationMatch[1]!), decodeURIComponent(calibrationMatch[2]!)) as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   if (method === "GET" && /^\/(orgs|projects)\/[^/]+\/costs$/.test(chemin ?? "") && path.includes("group_by=")) {
