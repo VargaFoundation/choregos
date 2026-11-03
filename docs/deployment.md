@@ -1423,7 +1423,7 @@ when the guard is loaded. LiteLLM reads its config only at start: restart it aft
 
 ## The decision model (Laya behind LiteLLM)
 
-A workflow's `decision` step (ADR 0120, decided in PR #1183)
+A workflow's `decision` step (ADR 0121, decided in PR #1183)
 asks typed questions of a decision model through the gateway's `POST /v1/systemone` route. The chart
 ships the first one, **Laya** (`convaiinnovations/laya-multilingual`, mmBERT-base, 322M parameters,
 100+ languages, weights under Apache-2.0), on CPU, off by default:

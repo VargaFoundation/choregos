@@ -1,6 +1,6 @@
 {{- $name := printf "%s-laya" .Release.Name }}
 {{- if not .Values.global.gateway.embedded }}
-{{- fail "global.decisions.embedded needs global.gateway.embedded: only the embedded LiteLLM serves Laya as platform/decide, and Laya admits no other caller (ADR 0120)" }}
+{{- fail "global.decisions.embedded needs global.gateway.embedded: only the embedded LiteLLM serves Laya as platform/decide, and Laya admits no other caller (ADR 0121)" }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -81,7 +81,7 @@ spec:
   ports:
     - { name: http, port: 8000, targetPort: http }
 ---
-# ADR 0120: the platform never calls a decision model directly, always through the gateway, where
+# ADR 0121: the platform never calls a decision model directly, always through the gateway, where
 # the cost is counted and the cap enforced. So only LiteLLM's pods reach Laya, and Laya reaches
 # nothing: its checkpoint is in the image.
 apiVersion: networking.k8s.io/v1

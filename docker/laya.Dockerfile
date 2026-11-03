@@ -1,4 +1,4 @@
-# Laya (ADR 0120): the self-hosted decision model LiteLLM serves as `platform/decide`.
+# Laya (ADR 0121): the self-hosted decision model LiteLLM serves as `platform/decide`.
 # `laya-serve` speaks TypeSafe Jev's wire (`POST /v1/systemone`) on port 8000, on CPU.
 #
 # The multilingual checkpoint (`convaiinnovations/laya-multilingual`, mmBERT-base, 322M parameters,

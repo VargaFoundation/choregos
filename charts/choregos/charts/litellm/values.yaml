@@ -14,7 +14,7 @@ upstream:
 # (`embedding`, `evaluation` for a decision model), `apiBase` and `apiKeyEnv` (its own endpoint and the
 # environment variable holding its key, instead of the upstream's), `inputCostPerToken` and
 # `outputCostPerToken` (USD, its internal price: ADR 0004). `global.decisions.embedded` adds
-# `platform/decide` (Laya, ADR 0120) to this list.
+# `platform/decide` (Laya, ADR 0121) to this list.
 models:
   - alias: platform/standard
     model: openai/gpt-5.5

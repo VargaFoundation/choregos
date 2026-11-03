@@ -290,7 +290,7 @@ global:
     # generates one, stable from one update to the next.
     secretRef: choregos-gateway-secrets
   decisions:
-    # ADR 0120: `true` deploys Laya (a CPU decision model, `charts/laya`) and the embedded LiteLLM
+    # ADR 0121: `true` deploys Laya (a CPU decision model, `charts/laya`) and the embedded LiteLLM
     # serves it as `platform/decide`, the catalogue entry a workflow's `decision` step names. Only
     # with `gateway.embedded: true`: an external gateway serves its own decision models.
     embedded: false

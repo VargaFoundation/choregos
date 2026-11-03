@@ -50,7 +50,7 @@ spec:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ ($servers.namespace | default dict).name | default "choregos-plugins" }} } } }]
     {{- end }}
     {{- if .Values.global.decisions.embedded }}
-    # The decision model (ADR 0120), for LiteLLM; its own NetworkPolicy admits LiteLLM's pods only.
+    # The decision model (ADR 0121), for LiteLLM; its own NetworkPolicy admits LiteLLM's pods only.
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-laya } } }]
       ports: [{ protocol: TCP, port: 8000 }]
     {{- end }}

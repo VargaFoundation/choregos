@@ -194,7 +194,7 @@ jobs:
               - 'tests/live/test_llm_guard_live.py'
               - 'tests/live/llm_guard_upstream.py'
               - '.github/workflows/ci.yml'
-            # A decision through the chart's LiteLLM to the Laya image (S52-02, ADR 0120).
+            # A decision through the chart's LiteLLM to the Laya image (S52-02, ADR 0121).
             decisions-live:
               - 'docker/laya.Dockerfile'
               - 'docker/laya/**'
@@ -386,7 +386,7 @@ jobs:
             file: docker/web.Dockerfile
           - image: runner
             file: docker/runner.Dockerfile
-          # The decision model behind LiteLLM (ADR 0120, S52-02): its checkpoint is baked in.
+          # The decision model behind LiteLLM (ADR 0121, S52-02): its checkpoint is baked in.
           - image: laya
             file: docker/laya.Dockerfile
     steps:
@@ -904,7 +904,7 @@ jobs:
         if: failure()
         run: docker ps -a
   decisions-live:
-    # A decision through the gateway, for real (S52-02, ADR 0120): the chart's LiteLLM image, guard and
+    # A decision through the gateway, for real (S52-02, ADR 0121): the chart's LiteLLM image, guard and
     # span callback, `platform/decide` as the chart renders it, and Laya built from this commit on a
     # network with no way out. A virtual key's `POST /v1/systemone` must be answered, scoped, and
     # written to the spend log at the internal price; only LiteLLM itself proves its `typesafe`

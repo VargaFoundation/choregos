@@ -1,4 +1,4 @@
-# A decision through the gateway, for real and on one machine (S52-02, ADR 0120): LiteLLM at the
+# A decision through the gateway, for real and on one machine (S52-02, ADR 0121): LiteLLM at the
 # chart's version with the chart's guard and span callback, and Laya from `docker/laya.Dockerfile`.
 # Laya has no network at all: it proves that the image needs none. Every port is bound to 127.0.0.1.
 #

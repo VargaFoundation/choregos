@@ -248,7 +248,7 @@ def _served(directory: pathlib.Path) -> dict[str, dict[str, Any]]:
 def test_the_decisions_profile_serves_platform_decide_from_laya(
     tmp_path: pathlib.Path, switch: str, keys: dict[str, str]
 ) -> None:
-    """ADR 0120 (S52-02): with the profile, LiteLLM routes `platform/decide` to the `laya` service,
+    """ADR 0121 (S52-02): with the profile, LiteLLM routes `platform/decide` to the `laya` service,
     in fakes mode as with a key: Laya runs on the machine and needs no model key."""
     write_litellm_config(tmp_path, {**keys, "LITELLM_DECISIONS": switch})
     decide = _served(tmp_path)["platform/decide"]

@@ -1,4 +1,4 @@
-"""A decision through the gateway, for real: LiteLLM 1.105.5 in front of Laya (S52-02, ADR 0120).
+"""A decision through the gateway, for real: LiteLLM 1.105.5 in front of Laya (S52-02, ADR 0121).
 
 What no rendering proves: that LiteLLM 1.105.5's `typesafe` provider, pointed at Laya's Service,
 reaches `laya-serve` with Laya's bearer and reads its answers back; that the chart's guard and span

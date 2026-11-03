@@ -7,7 +7,7 @@
 | `choregos-tools` | sidecar MCP | ne détient que le jeton du run |
 | `choregos-web` | front Next.js | build de production, CSP stricte |
 | `choregos-runner` | le workspace d'un agent | agents ACP épinglés, scanners, **shims de refus** |
-| `choregos-laya` | the decision model behind LiteLLM (`platform/decide`, ADR 0120) | CPU only, checkpoint baked in at a pinned commit, offline at run time (`HF_HUB_OFFLINE=1`) |
+| `choregos-laya` | the decision model behind LiteLLM (`platform/decide`, ADR 0121) | CPU only, checkpoint baked in at a pinned commit, offline at run time (`HF_HUB_OFFLINE=1`) |
 
 ## Construire localement
 

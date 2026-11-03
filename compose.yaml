@@ -9,7 +9,7 @@
 # console, LiteLLM, and a one-shot seed that creates the demo organisation and project.
 # `docker compose --profile memory up` adds Ecphoria (the memory service).
 # `COMPOSE_PROFILES=decisions docker compose up` (or the line in `.env`) adds Laya, the decision model
-# LiteLLM serves as `platform/decide` (ADR 0120): the profile is also what tells `litellm-config` to
+# LiteLLM serves as `platform/decide` (ADR 0121): the profile is also what tells `litellm-config` to
 # route the alias, so set it this way rather than with `--profile`, which the config never sees.
 #
 # Everything here is for a laptop: development passwords, development sign-in (no identity
@@ -275,7 +275,7 @@ services:
     # Optional: `COMPOSE_PROFILES=decisions docker compose up` (see the header). The first build
     # downloads torch (CPU) and the multilingual checkpoint, about 1.5 GB; the server then runs
     # offline and loads the checkpoint before it opens its port. No port on the host: only LiteLLM
-    # calls it (ADR 0120: a decision goes through the gateway, where it is counted).
+    # calls it (ADR 0121: a decision goes through the gateway, where it is counted).
     profiles: [decisions]
     image: choregos-laya:local
     build:

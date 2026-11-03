@@ -5,7 +5,7 @@
 {{- $decisions := .Values.global.decisions | default dict }}
 {{- $models := .Values.models }}
 {{- if $decisions.embedded }}
-{{- /* ADR 0120: Laya speaks TypeSafe Jev's wire exactly, and LiteLLM 1.105.5 has no `laya` provider in
+{{- /* ADR 0121: Laya speaks TypeSafe Jev's wire exactly, and LiteLLM 1.105.5 has no `laya` provider in
        code (only price entries): `typesafe/` with Laya's Service as `api_base` posts to
        `<api_base>/v1/systemone` with `model: multilingual` and Laya's bearer. */}}
 {{- $models = append $models (dict
@@ -125,7 +125,7 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ . }}, key: api-key } }
             {{- end }}
             {{- if $decisions.embedded }}
-            # The bearer Laya asks for (ADR 0120); `platform/decide` sends it as its `api_key`.
+            # The bearer Laya asks for (ADR 0121); `platform/decide` sends it as its `api_key`.
             - name: LAYA_API_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.decisionsKeySecret" . }}, key: api-key } }
             {{- end }}

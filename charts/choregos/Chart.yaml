@@ -44,7 +44,7 @@ dependencies:
     version: 0.21.5
     repository: file://charts/ecphoria
     condition: global.memory.embedded
-  # ADR 0120: a self-hosted decision model behind the embedded LiteLLM, as `platform/decide`.
+  # ADR 0121: a self-hosted decision model behind the embedded LiteLLM, as `platform/decide`.
   - name: choregos-laya
     version: 0.21.5
     repository: file://charts/laya

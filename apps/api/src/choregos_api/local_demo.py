@@ -24,7 +24,7 @@ aliases to that provider (`litellm_config`), the agent runs in the runner image 
 local Docker executor, and the platform mints a LiteLLM key per run, as in a cluster.
 `LITELLM_REAL=0` keeps fakes even with a key; `LITELLM_REAL=1` refuses to start without one.
 
-Decision model (`COMPOSE_PROFILES=decisions`, ADR 0120): compose starts Laya and LiteLLM serves it as
+Decision model (`COMPOSE_PROFILES=decisions`, ADR 0121): compose starts Laya and LiteLLM serves it as
 `platform/decide`, in either mode: Laya runs on the machine and needs no model key.
 """
 
@@ -133,7 +133,7 @@ LOCAL_NETWORK = "choregos"
 MOCK_RESPONSE = "simulated answer: the local install has no model key"
 #: The module name LiteLLM loads the LLM guard from, next to its config (ADR 0084).
 GUARDRAIL_MODULE = "choregos_guardrail"
-#: `platform/decide` (ADR 0120): Laya's multilingual checkpoint, through LiteLLM's `typesafe` provider
+#: `platform/decide` (ADR 0121): Laya's multilingual checkpoint, through LiteLLM's `typesafe` provider
 #: (Laya speaks TypeSafe Jev's wire; LiteLLM 1.105.5 has no `laya` provider in code), at the `laya`
 #: service of `compose.yaml`, with the bearer LiteLLM reads from its own environment.
 DECIDE_MODEL = {
@@ -167,7 +167,7 @@ def model_provider(env: Mapping[str, str]) -> Provider | None:
 
 
 def decisions_enabled(env: Mapping[str, str]) -> bool:
-    """Whether the install runs the decision model (ADR 0120), from `LITELLM_DECISIONS`.
+    """Whether the install runs the decision model (ADR 0121), from `LITELLM_DECISIONS`.
 
     Compose passes it `COMPOSE_PROFILES` unless `.env` sets it: the profile that starts Laya is then
     the one switch that also routes `platform/decide` to it. `1`, `true` or `yes` force it on.

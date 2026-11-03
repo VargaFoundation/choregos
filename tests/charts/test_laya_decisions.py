@@ -1,4 +1,4 @@
-"""S52-02 (ADR 0120): Laya, a self-hosted decision model, behind the embedded LiteLLM as `platform/decide`.
+"""S52-02 (ADR 0121): Laya, a self-hosted decision model, behind the embedded LiteLLM as `platform/decide`.
 
 The chart renders it only when `global.decisions.embedded` asks; LiteLLM then routes the alias to
 Laya's Service with Laya's bearer and an internal price, the entries it already served render as
