@@ -178,6 +178,10 @@ export type PluginEvalsCase = {
   input?: {
     title?: string;
     body?: string;
+    /** the work item's fields, rendered as `ticket.fields` (the API's `AgentSampleInput.fields`, S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}`. At most 64 KiB of JSON, checked by the installer */
+    fields?: {
+      [key: string]: unknown;
+    };
   };
   must_contain?: PluginEvalsNeedles;
   must_not_contain?: PluginEvalsNeedles;
@@ -727,6 +731,40 @@ export type Project = {
     /** The workflow of the work item; the project's routing when absent. */
     workflow?: string | null;
   }>;
+  /** HTTP doors that open a work item when another system calls them (S56-01, ADR 0113): `POST /webhooks/triggers/{org}/{project}/{name}` with the trigger's token. Needs the internal tracker. */
+  triggers?: Array<{
+    name: string;
+    /** The work item's title; `{/pointer}` becomes what the payload holds there. */
+    title: string;
+    /** The work item's description; `{/pointer}` placeholders as in `title`. */
+    body?: string;
+    /** A JSON pointer to the payload's own identifier: one work item per value, a second call finds the first. */
+    key?: string | null;
+    /** The work item's labels, which the project's routing reads, with `trigger:<name>`; `{/pointer}` placeholders; an empty one is dropped. */
+    labels?: Array<string>;
+    /** The work item's fields: a field name to a JSON pointer, whose value keeps its JSON type; validated by the workflow's `metadata.inputs`. */
+    fields?: {
+      [key: string]: string;
+    };
+    /** The workflow of the work item; the project's routing when absent. */
+    workflow?: string | null;
+    /** A JSON pointer to the text, or one of the texts, the payload must hold there (S56-05); a payload that does not match is acknowledged and recorded `ignored`. */
+    when?: {
+      [key: string]: string | Array<string>;
+    };
+    /** `token`: the bearer token; `signature`: `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>` keyed by the signing secret (S56-04). */
+    auth?: "token" | "signature";
+  }>;
+  /** Tracker items that start their work item without the `agent-ready` label (S56-03, ADR 0113): the first rule whose every condition holds starts an item the project does not hold yet. */
+  start_rules?: Array<{
+    labels_any: unknown;
+  } | {
+    labels_all: unknown;
+  } | {
+    item_type: string;
+  } | {
+    states: unknown;
+  }>;
   /** What the A2A door takes for this project's skills (ADR 0078 §6). */
   a2a?: {
     /** The file parts a message carries: each one, and all of them together, at most this many bytes once decoded. 10 MiB by default, 50 MiB at most. */
@@ -1067,6 +1105,33 @@ export type Template = {
     agents?: Array<string>;
     /** the skills installed the same way: folders of the template, each with its SKILL.md, or `catalogue:<slug>` (S20-07) */
     skills?: Array<string>;
+    /** the knowledge bases the template's agents read (S51-06, ADR 0117), in the shape of the CLI's `kind: KnowledgeBase` manifest less what the project decides (scope, uploads, eval set): each is created for a project born of the template, served to it and owned by it, its sources attached and synced at once; a base of that slug already served to the project is reused, never rewritten */
+    knowledge?: Array<{
+      /** the slug the agents name in `spec.knowledge` */
+      slug: string;
+      name: string;
+      description?: string;
+      serving_mode?: "files" | "index";
+      sources?: Array<{
+        name: string;
+        /** a git repository; other kinds need an organisation connector a template cannot know */
+        kind: "git";
+        /** an organisation `documents/git` connector for a private repository; without it the project's own repository is read through the deployment's GitHub App, any other anonymously */
+        connector?: string;
+        config: {
+          url?: string;
+          /** the template input that holds the repository: `owner/name` (a `github-repo` input) or an https URL; a `github-repo` input left empty is the project's repository */
+          url_from_input?: string;
+          ref?: string;
+          /** glob patterns; markdown anywhere by default */
+          paths?: Array<string>;
+        };
+        interval_minutes?: number;
+        refresh_mode?: "interval" | "cron" | "manual";
+        refresh_cron?: string;
+        refresh_timezone?: string;
+      }>;
+    }>;
     /** what a PLUGIN installs in the project when it is born: an installer name → a folder of the template (`ontology: ./ontology`). Without a plugin to install it, the project is born without it, and the audit log says so (S20-09) */
     extensions?: {
       [key: string]: string;

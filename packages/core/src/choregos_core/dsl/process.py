@@ -15,8 +15,11 @@ from choregos_contracts import Workflow
 from choregos_contracts.workflow import (
     AGENT_WILDCARD,
     AgentActor,
+    ChoiceQuestion,
+    DecisionActor,
     HumanActor,
     JobActor,
+    ScoreQuestion,
     Transition,
     effet_de_la_transition,
 )
@@ -104,6 +107,19 @@ def _affiche(wf: Workflow, etat: str) -> str:
     return state.display if state else etat
 
 
+def _decision(acteur: DecisionActor) -> str:
+    """A decision step in plain words (ADR 0121): its model, what it reads, and what it answers."""
+    questions = []
+    for name, question in acteur.questions.items():
+        if isinstance(question, ChoiceQuestion):
+            questions.append(f"{name} (choice of {', '.join(question.options)})")
+        elif isinstance(question, ScoreQuestion):
+            questions.append(f"{name} (score {', '.join(question.levels)})")
+        else:
+            questions.append(f"{name} (yes/no)")
+    return f"a decision by `{acteur.model}` on {', '.join(acteur.state)}: {', '.join(questions)}"
+
+
 def _qui(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     """(type d'acteur, nom, description)."""
     if t.via == "release_train":
@@ -118,6 +134,8 @@ def _qui(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     if isinstance(acteur, HumanActor):
         delai = f", within {acteur.sla_hours} h" if acteur.sla_hours else ""
         return "human", nom, f"a person of group `{acteur.group}`{delai}"
+    if isinstance(acteur, DecisionActor):
+        return "decision", nom, _decision(acteur)
     # Ce que la plateforme fait en la franchissant, en clair (`does`, #175).
     geste = {"open_pr": ", which opens the pull request", "merge_pr": ", which merges the pull request"}
     return "system", nom, f"the platform{geste.get(effet_de_la_transition(t) or '', '')}"
@@ -196,6 +214,12 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
         if t.timeout_hours:
             phrase += f" It times out after {t.timeout_hours} h."
         acteur = wf.actors.get(t.by) if t.by else None
+        # A decision writes its answers and their probabilities: what a `when` compares (ADR 0121).
+        outputs = (
+            acteur.outputs + [o for o in t.outputs if o not in acteur.outputs]
+            if isinstance(acteur, DecisionActor)
+            else list(t.outputs)
+        )
         etapes.append(
             {
                 "id": t.key,
@@ -206,7 +230,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "actor": nom,
                 "actor_type": type_,
                 "who": qui,
-                "outputs": list(t.outputs),
+                "outputs": outputs,
                 "gates": garanties,
                 "on_fail": echec,
                 "on_reject": rejet,
@@ -216,8 +240,10 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "sentence": phrase,
                 # What the step names, structured, so the console need not parse the sentence.
                 "agent": acteur.agent if isinstance(acteur, AgentActor) else None,
-                "role": str(acteur.role) if isinstance(acteur, AgentActor | JobActor) else None,
-                "model": acteur.model if isinstance(acteur, AgentActor) else None,
+                "role": str(acteur.role)
+                if isinstance(acteur, AgentActor | JobActor | DecisionActor)
+                else None,
+                "model": acteur.model if isinstance(acteur, AgentActor | DecisionActor) else None,
                 "group": acteur.group if isinstance(acteur, HumanActor) else None,
                 "sla_hours": acteur.sla_hours if isinstance(acteur, HumanActor) else None,
                 "command": list(acteur.command) if isinstance(acteur, JobActor) else None,

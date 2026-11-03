@@ -113,6 +113,7 @@ describe("the folded sections", () => {
       knowledge: "none",
       memory: "1 project · writes to the project's shared memory",
       evals: "0 cases",
+      workspace: "write (default)",
     });
     const spec = {
       model: "profile:strong",

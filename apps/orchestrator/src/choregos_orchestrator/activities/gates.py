@@ -54,7 +54,9 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             except Exception as exc:
                 # A run that changed nothing pushed no branch: its diff is EMPTY, not unreadable
                 # (#536). Any other failure stays "diff unavailable" and the guarantee refuses.
-                diff = empty_diff_of_unchanged_run(exc, result, depot.default_branch, branch)
+                diff = empty_diff_of_unchanged_run(
+                    exc, result, depot.default_branch, branch, cloned=_run_cloned(run)
+                )
             if diff is not None:
                 changed = diff.paths()
                 additions, deletions = diff.additions, diff.deletions
@@ -154,8 +156,14 @@ async def _parent_documents(session: Any, item: Any) -> dict[str, Any] | None:
     return dict(parent.documents or {})
 
 
+def _run_cloned(run: Run | None) -> bool:
+    """Whether the run cloned the repository: `False` only for a recorded `repo: null` (ADR 0119)."""
+    stage_input = (run.stage_input if run is not None else None) or {}
+    return "repo" not in stage_input or stage_input["repo"] is not None
+
+
 def empty_diff_of_unchanged_run(
-    exc: Exception, result: StageResult | None, base: str, branch: str
+    exc: Exception, result: StageResult | None, base: str, branch: str, *, cloned: bool = True
 ) -> DiffSummary | None:
     """The empty diff of a run that changed nothing, or `None` when the diff is truly unreadable.
 
@@ -168,6 +176,10 @@ def empty_diff_of_unchanged_run(
     """
     if not (isinstance(exc, UpstreamError) and exc.status_code == 404):
         return None
+    # A run that never cloned the repository (`workspace: none`, ADR 0119) cannot have pushed to
+    # it: what it wrote in its empty directory is no change to the repository.
+    if not cloned:
+        return DiffSummary(base=base, head=branch)
     # A runner that does not measure its diff proves nothing; a measured change or a commit is not empty.
     if not unchanged_run(result):
         return None
