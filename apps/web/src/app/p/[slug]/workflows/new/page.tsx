@@ -9,16 +9,16 @@ import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
 import { renommer } from "@/components/workflows/renommer";
 import { ApiError, api } from "@/lib/api";
 
-const NOM = /^[a-z][a-z0-9-]{0,62}$/;
+const NAME_PATTERN = /^[a-z][a-z0-9-]{0,62}$/;
 
 /**
- * Un workflow de plus dans le projet, à partir d'un gabarit : il naît actif, à côté des autres, et
- * ne reçoit une demande que si elle le nomme ou si une règle de routage l'y envoie.
+ * One more workflow in the project, from a template: it is born active, next to the others, and
+ * receives a request only if the request names it or a routing rule sends it there.
  *
- * Le PUT par nom publie la version suivante d'un workflow qui existe déjà : nommer « onboarding » un
- * nouveau workflow remplaçait l'onboarding actif par le gabarit, sans un mot (seconde passe du 08/10,
- * S23-06). Le nom est vérifié pendant la frappe ; l'API, elle, refuse de créer un nom pris (`create_only`,
- * #336) — deux créations à la même seconde ne s'écrasent plus.
+ * The PUT by name publishes the next version of a workflow that already exists: naming a new workflow
+ * "onboarding" replaced the active onboarding with the template, without a word (second pass of 8 Oct,
+ * S23-06). The name is checked while typing; the API, for its part, refuses to create a taken name (`create_only`,
+ * #336): two creations in the same second no longer overwrite each other.
  */
 export default function NewWorkflowPage({
   params,
@@ -48,11 +48,11 @@ export default function NewWorkflowPage({
     queryKey: ["workflows", slug],
     queryFn: () => api.workflows(slug),
   });
-  const nomValide = NOM.test(nom);
+  const validName = NAME_PATTERN.test(nom);
   const pris = existants.data?.some((w) => w.name === nom) ?? false;
 
-  async function publier() {
-    if (!choisi || !nomValide || pris) return;
+  async function publish() {
+    if (!choisi || !validName || pris) return;
     setEnvoi(true);
     setErreur(null);
     try {
@@ -66,7 +66,7 @@ export default function NewWorkflowPage({
       // Born on the map (ADR 0112 §5): the YAML stays one tab away, never the only way.
       router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}?view=list`);
     } catch (cause) {
-      // Créé ailleurs entre-temps : la liste relue le dit, sous le nom, avec le lien vers lui.
+      // Created elsewhere in the meantime: the re-read list says so, under the name, with the link to it.
       if (cause instanceof ApiError && cause.status === 409) await existants.refetch();
       else setErreur(cause instanceof Error ? cause.message : "publication refused");
     } finally {
@@ -80,12 +80,12 @@ export default function NewWorkflowPage({
         <Field
           label="Name"
           hint={
-            nom && (!nomValide || pris)
+            nom && (!validName || pris)
               ? undefined
               : "Lowercase letters, digits and dashes — e.g. offboarding"
           }
           error={
-            nom && !nomValide
+            nom && !validName
               ? "Lowercase letters, digits and dashes only"
               : pris
                 ? `A workflow named ${nom} already exists — publishing would replace its active version`
@@ -133,8 +133,8 @@ export default function NewWorkflowPage({
         {erreur && <ErrorNote>{erreur}</ErrorNote>}
         <Button
           tone="accent"
-          onClick={publier}
-          disabled={!nomValide || !choisi || envoi || pris || !existants.data}
+          onClick={publish}
+          disabled={!validName || !choisi || envoi || pris || !existants.data}
         >
           Publish {nom || "the workflow"}
         </Button>

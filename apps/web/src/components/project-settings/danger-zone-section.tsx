@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { SettingsSection } from "@/components/project-settings/section";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -22,7 +22,7 @@ export function DangerZoneSection({ slug }: { slug: string }) {
               <strong>Suspend</strong> — no new run starts and nothing is deleted; the project stays readable.
               {status === "suspended" && <span className="text-warn"> It is suspended.</span>}
             </p>
-            <GesteConfirme
+            <ConfirmedGesture
               confirmer="Suspend the project"
               disabled={status !== "active"}
               question={`Suspend ${slug}? Runs in flight finish; no new one starts.`}
@@ -30,14 +30,14 @@ export function DangerZoneSection({ slug }: { slug: string }) {
               onFait={() => void refresh()}
             >
               Suspend
-            </GesteConfirme>
+            </ConfirmedGesture>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="min-w-0 flex-1">
               <strong>Archive</strong> — retires the project: it leaves the lists and its work stops. This is not undone from the console.
               {status === "archived" && <span className="text-warn"> It is archived.</span>}
             </p>
-            <GesteConfirme
+            <ConfirmedGesture
               confirmer="Archive the project"
               tonDuBouton="danger"
               disabled={status === "archived"}
@@ -46,7 +46,7 @@ export function DangerZoneSection({ slug }: { slug: string }) {
               onFait={() => void refresh()}
             >
               Archive
-            </GesteConfirme>
+            </ConfirmedGesture>
           </div>
         </div>
       </Card>

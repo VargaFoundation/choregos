@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Card, EtatDeLecture, Stat } from "@/components/ui";
+import { Badge, Card, ReadState, Stat } from "@/components/ui";
 import { type Currency, money, monthForecast, monthStart, usdToCurrency } from "@/lib/spend";
 import { fetchReport, reportKey, type Scope } from "./breakdown";
 
@@ -17,7 +17,7 @@ export function MonthPanel({ scope, currency, now }: { scope: Scope; currency: C
   if (!report.data) {
     return (
       <Card title="This month">
-        <EtatDeLecture lecture={report} quoi="this month's spend" />
+        <ReadState lecture={report} quoi="this month's spend" />
       </Card>
     );
   }

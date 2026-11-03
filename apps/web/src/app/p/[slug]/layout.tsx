@@ -4,7 +4,7 @@
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { projectSection, projectTrail } from "@/components/coquille/navigation";
+import { projectSection, projectTrail } from "@/components/shell/navigation";
 import { PageHeader } from "@/components/page-header";
 import {
   BreadcrumbBase,
@@ -24,15 +24,15 @@ export default function ProjectLayout({
   const pathname = usePathname();
   // The title is the project's NAME ("Billing API"), as on its card in the list (S23-04). Same key
   // as the overview and the sidebar: a single read.
-  const projet = useQuery({
+  const project = useQuery({
     queryKey: ["project", slug],
     queryFn: () => api.project(slug),
   });
-  const nom = projet.data?.name ?? slug;
+  const name = project.data?.name ?? slug;
   // No tab row any more (S30-03): the sidebar lists the project's sections, the trail says where one is.
   const base: BreadcrumbStep[] = [
     { href: "/", label: "Projects" },
-    { href: `/p/${slug}`, label: <span data-donnee>{nom}</span> },
+    { href: `/p/${slug}`, label: <span data-donnee>{name}</span> },
   ];
   const trail = projectTrail(slug, pathname);
   // The header names the section one is in, in its family's colour, under the project's name (S55-02):
@@ -50,9 +50,9 @@ export default function ProjectLayout({
           <PageHeader
             icon={section?.entry.icon}
             hue={section?.hue}
-            eyebrow={overview ? undefined : <span data-donnee>{nom}</span>}
+            eyebrow={overview ? undefined : <span data-donnee>{name}</span>}
             title={
-              overview ? <span data-donnee>{nom}</span> : section.entry.label
+              overview ? <span data-donnee>{name}</span> : section.entry.label
             }
           />
         )}

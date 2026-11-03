@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
-import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Field, Heading, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, ReadState, Field, Heading, Input, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { workflowHueClasses } from "@/lib/workflow-hue";
 import {
@@ -74,7 +74,7 @@ export default function WorkflowCataloguePage({ params }: { params: Promise<{ sl
       </div>
       {!catalogue.data &&
         (catalogue.error ? (
-          <EtatDeLecture lecture={catalogue} quoi="the workflow library" />
+          <ReadState lecture={catalogue} quoi="the workflow library" />
         ) : (
           <LibrarySkeleton />
         ))}

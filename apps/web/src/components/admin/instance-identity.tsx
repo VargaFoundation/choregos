@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Card, EtatDeLecture } from "@/components/ui";
+import { Badge, Card, ReadState } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 
 /**
@@ -36,7 +36,7 @@ export function InstanceIdentityCard() {
           </tbody>
         </table>
       </div>
-      <EtatDeLecture lecture={identity} quoi="the sign-in configuration" />
+      <ReadState lecture={identity} quoi="the sign-in configuration" />
       <p className="mt-2 text-xs text-ink-muted">
         Set in the deployment (chart global.oidc / global.mcp.oauth); read-only here.
       </p>

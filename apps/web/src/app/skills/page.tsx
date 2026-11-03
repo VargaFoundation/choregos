@@ -4,24 +4,24 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { Glossaire } from "@/components/glossaire";
+import { Glossary } from "@/components/glossary";
 import { GitImport, RiskBadge } from "@/components/skills/gate";
-import { SkillTabs } from "@/components/skills/onglets";
+import { SkillTabs } from "@/components/skills/tabs";
 import { Card, Empty, ErrorNote } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 /**
- * La bibliothèque de skills de l'organisation (ADR 0033) : un dossier dont le `SKILL.md` dit quand
- * s'en servir, importé en zip, versionné, jamais réécrit. Un skill ne déclare aucune permission :
- * ce que l'agent peut faire, sa version le dit, et le runner vérifie l'empreinte de chaque skill.
+ * The organisation's skill library (ADR 0033): a folder whose `SKILL.md` says when
+ * to use it, imported as a zip, versioned, never rewritten. A skill declares no permission:
+ * what the agent can do is said by its version, and the runner checks each skill's fingerprint.
  */
 export default function SkillsPage() {
   const { org } = useSession();
   const client = useQueryClient();
   const skills = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
-  const fichier = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [fait, setFait] = useState<string | null>(null);
   async function importer(archive: File) {
@@ -36,7 +36,7 @@ export default function SkillsPage() {
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "import refused");
     } finally {
-      if (fichier.current) fichier.current.value = "";
+      if (fileInput.current) fileInput.current.value = "";
     }
   }
   return (
@@ -52,7 +52,7 @@ export default function SkillsPage() {
             </>
           }
         />
-        <Glossaire ici="skills" />
+        <Glossary ici="skills" />
         <SkillTabs active="library" />
       </div>
       <Card title="Library">
@@ -125,7 +125,7 @@ export default function SkillsPage() {
             <span className="text-xs text-ink-muted">Archive</span>
             <input
               className="min-w-0 max-w-full"
-              ref={fichier}
+              ref={fileInput}
               type="file"
               accept=".zip,application/zip"
               onChange={(event) => {

@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { BarreLaterale } from "@/components/coquille/barre-laterale";
-import { SECTION_ICONS, sectionIcon } from "@/components/coquille/navigation";
+import { Sidebar } from "@/components/shell/sidebar";
+import { SECTION_ICONS, sectionIcon } from "@/components/shell/navigation";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -46,7 +46,7 @@ describe("plugin section icons", () => {
   it("draws each declared icon, and the settings icon when none is declared", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <BarreLaterale />
+        <Sidebar />
       </QueryClientProvider>,
     );
     const bar = screen.getByRole("complementary", { name: "Sidebar" });
@@ -62,7 +62,7 @@ describe("plugin section icons", () => {
   it("folds the identity sections into the one Identity entry (S44-04)", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <BarreLaterale />
+        <Sidebar />
       </QueryClientProvider>,
     );
     const bar = screen.getByRole("complementary", { name: "Sidebar" });
@@ -76,7 +76,7 @@ describe("plugin section icons", () => {
   it("puts what spans the instance in its own group, apart from the organisation's administration (owner review of 2026-11-03)", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <BarreLaterale />
+        <Sidebar />
       </QueryClientProvider>,
     );
     const bar = screen.getByRole("complementary", { name: "Sidebar" });

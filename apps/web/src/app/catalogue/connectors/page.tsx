@@ -9,7 +9,7 @@ import { CataloguePurpose } from "@/components/catalogue/catalogue-purpose";
 import { EnablementDrawer } from "@/components/catalogue/enablement-drawer";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { ConnectorIcon } from "@/components/connector-icon";
-import { Badge, Button, EtatDeLecture } from "@/components/ui";
+import { Badge, Button, ReadState } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { NO_FILTERS, type CatalogueFilters } from "@/lib/catalogue";
@@ -53,7 +53,7 @@ export default function ConnectorCataloguePage() {
         .
       </p>
       <CataloguePurpose kind="connectors" />
-      <EtatDeLecture lecture={catalogue} quoi="the catalogue" />
+      <ReadState lecture={catalogue} quoi="the catalogue" />
       {catalogue.data && (
         <>
           <CatalogueFacets

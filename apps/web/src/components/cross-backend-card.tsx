@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Card, EtatDeLecture, Label } from "@/components/ui";
+import { Badge, Card, ReadState, Label } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, shortDate, toSentenceCase } from "@/lib/format";
 import type { CrossBackendArm } from "@/lib/types";
@@ -24,7 +24,7 @@ export function CrossBackendCard({ slug }: { slug: string }) {
       action={data?.cross_backend_required ? <Badge tone="accent">required by the policy</Badge> : undefined}
     >
       {data === undefined ? (
-        <EtatDeLecture lecture={report} quoi="the cross-backend review" />
+        <ReadState lecture={report} quoi="the cross-backend review" />
       ) : (
         <div className="space-y-4" data-testid="cross-backend">
           <div>

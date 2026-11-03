@@ -5,14 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { EvalMatrixTable } from "@/components/eval-matrix";
 import { SettingsSection, useSectionWrites } from "@/components/project-settings/section";
-import { Button, Card, Disclosure, Empty, ErrorNote, EtatDeLecture, Field, Input, Select } from "@/components/ui";
+import { Button, Card, Disclosure, Empty, ErrorNote, ReadState, Field, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useProjectConfigPatch, type ProjectConfigValue } from "@/lib/project-config";
 import { useSession } from "@/lib/session";
 import { usableModels } from "@/lib/usable-models";
 import type { AgentBackendInfo, ProjectDto, ProjectModels } from "@/lib/types";
 
-const PROFILS = ["standard", "strong", "cheap", "by_size"];
+const PROFILES = ["standard", "strong", "cheap", "by_size"];
 
 /** The models the project's agents call, and the combinations the nightly evals have validated. */
 export function AgentsModelsSection({ slug }: { slug: string }) {
@@ -46,7 +46,7 @@ export function AgentsModelsSection({ slug }: { slug: string }) {
             Published by the nightly evals: an unvalidated combination is refused on save.
           </p>
           <EvalMatrixTable entries={matrix.data?.entries ?? []} />
-          <EtatDeLecture lecture={matrix} quoi="the eval matrix" />
+          <ReadState lecture={matrix} quoi="the eval matrix" />
           {matrix.data && (matrix.data.entries ?? []).length === 0 && <Empty>No eval published yet</Empty>}
         </div>
       </Disclosure>
@@ -74,7 +74,7 @@ function ModelsEditor({
   const options = Array.from(new Set([...disponibles, ...Object.values(profils)])).filter(Boolean);
   return (
     <div className="space-y-2 text-sm">
-      {PROFILS.map((profil) => (
+      {PROFILES.map((profil) => (
         <label key={profil} className="flex items-center justify-between gap-3">
           <span className="font-mono text-xs">profile:{profil}</span>
           <Input

@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { OperationsDuProjet } from "@/components/operations-du-projet";
+import { ProjectOperations } from "@/components/project-operations";
 import { SettingsSection, useSectionWrites } from "@/components/project-settings/section";
 import { Button, Disclosure } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -15,7 +15,7 @@ const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => 
 });
 
 /** A sentence about a policy, read from its JSON: what a person looks for before opening the YAML. */
-export function resumeDeLaPolitique(json: unknown): string {
+export function policySummary(json: unknown): string {
   const policy = (json ?? {}) as { budgets?: Record<string, unknown>; release_train?: Record<string, { mode?: string }> };
   const parts: string[] = [];
   const budget = policy.budgets?.per_ticket_usd;
@@ -46,7 +46,7 @@ export function GuardrailsSection({ slug }: { slug: string }) {
           </ul>
         </div>
       )}
-      <Disclosure id="policy" title="Policy" summary={resumeDeLaPolitique(policy.data?.json)}>
+      <Disclosure id="policy" title="Policy" summary={policySummary(policy.data?.json)}>
         <div className="p-4 pt-0">
           <PolicyEditor
             yaml={policy.data?.yaml ?? ""}
@@ -54,7 +54,7 @@ export function GuardrailsSection({ slug }: { slug: string }) {
           />
         </div>
       </Disclosure>
-      <OperationsDuProjet slug={slug} />
+      <ProjectOperations slug={slug} />
     </SettingsSection>
   );
 }

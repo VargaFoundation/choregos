@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { Connecteurs } from "@/components/connecteurs";
+import { Connectors } from "@/components/connectors";
 import { ReceivedEvents } from "@/components/project-settings/received-events";
 import { SettingsSection } from "@/components/project-settings/section";
 import { Triggers } from "@/components/project-settings/triggers";
@@ -25,7 +25,7 @@ export function ConnectionsSection({ slug }: { slug: string }) {
         </>
       }
     >
-      <Connecteurs slug={slug} />
+      <Connectors slug={slug} />
       <div className="mt-4">
         <Triggers slug={slug} />
       </div>

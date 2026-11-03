@@ -5,13 +5,13 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
 import { DecisionDAction } from "@/components/actions/decision";
-import { DetailOntologie } from "@/components/actions/ontologie";
-import { Statut, propose } from "@/components/actions/statut";
+import { OntologyDetail } from "@/components/actions/ontology";
+import { Status, propose } from "@/components/actions/status";
 import { Card, Empty, ErrorNote, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 
-/** Une action gouvernée : ce qu'elle fera, qui en a décidé, et le journal de ses effets clé par clé. */
+/** A governed action: what it will do, who decided on it, and the log of its effects key by key. */
 export default function ActionPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params);
   const action = useQuery({ queryKey: ["action", slug, id], queryFn: () => api.projectAction(slug, id) });
@@ -30,14 +30,14 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         <Heading as="h2" size="lg" data-donnee>
           {a.title}
         </Heading>
-        <Statut statut={a.status} />
+        <Status statut={a.status} />
       </div>
       <p className="text-sm text-ink-muted">
         <span data-donnee>{a.kind}</span> · proposed by {propose(a.proposed_by)}
         {a.created_at ? ` · ${relative(a.created_at)}` : ""}
         {a.justification ? ` — ${a.justification}` : ""}
       </p>
-      <DetailOntologie action={a} />
+      <OntologyDetail action={a} />
       <Card title="Decision">
         {a.status === "pending_approval" ? (
           <DecisionDAction projet={slug} action={a} />
@@ -62,13 +62,13 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
       <Card title="Effects">
         <ol className="space-y-2 text-sm">
           {(a.effects ?? []).map((spec, position) => {
-            const fait = (a.journal ?? []).find((e) => e.position === position);
+            const recorded = (a.journal ?? []).find((e) => e.position === position);
             return (
               <li key={position} className="border-t border-line pt-2" data-testid={`effet-${position}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <code>{String(spec.effect)}</code>
-                  {fait ? <Statut statut={fait.status} /> : <span className="text-xs text-ink-muted">Not started</span>}
-                  {fait && <span className="text-xs text-ink-muted">Key {fait.key} · {fait.attempts} attempt(s)</span>}
+                  {recorded ? <Status statut={recorded.status} /> : <span className="text-xs text-ink-muted">Not started</span>}
+                  {recorded && <span className="text-xs text-ink-muted">Key {recorded.key} · {recorded.attempts} attempt(s)</span>}
                 </div>
                 <pre className="mt-1 whitespace-pre-wrap break-words text-xs text-ink-muted">
                   {JSON.stringify(spec.with ?? {}, null, 1)}
@@ -76,7 +76,7 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
                 {spec.compensate ? (
                   <p className="text-xs text-ink-muted">Undone by {String((spec.compensate as { effect?: string }).effect)}</p>
                 ) : null}
-                {fait?.error && <p className="text-xs text-danger">{fait.error}</p>}
+                {recorded?.error && <p className="text-xs text-danger">{recorded.error}</p>}
               </li>
             );
           })}

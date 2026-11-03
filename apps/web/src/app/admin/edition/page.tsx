@@ -6,8 +6,8 @@ import { EditionCard } from "@/components/edition";
 import { api } from "@/lib/api";
 
 /**
- * L'édition qui tourne. En communautaire, la liste honnête de ce que l'édition entreprise ajoute :
- * du texte, pas de faux écran ni de bouton qui mènerait nulle part (ADR 0024, 0032).
+ * The running edition. In the community edition, the honest list of what the enterprise edition adds:
+ * text, no fake screen or button that would lead nowhere (ADR 0024, 0032).
  */
 export default function EditionPage() {
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });

@@ -1,15 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ClientsMcp, OUTILS_EN_LECTURE, versionDuClient } from "@/components/agents/clients-mcp";
+import { McpClients, READ_ONLY_TOOLS, versionDuClient } from "@/components/agents/mcp-clients";
 import {
   implicitFromApi,
-  estUnClientMcp,
-  etatDuClient,
-  resumeDeLaVersion,
-  slugDeLActeur,
-  versionDeLActeur,
-} from "@/components/agents/registre";
+  isMcpClient,
+  clientState,
+  versionSummary,
+  actorSlug,
+  actorVersion,
+} from "@/components/agents/registry";
 import { api } from "@/lib/api";
 import type { ApiToken } from "@/lib/types";
 
@@ -38,39 +38,39 @@ describe("a project's implicit agents (S18-07, computed by the API since S30-04)
     ]);
   });
 
-  it("enregistré, il garde ce que le workflow disait de lui, et rien de plus", () => {
+  it("registered, it keeps what the workflow said of it, and nothing more", () => {
     const redacteur = implicitFromApi(fromApi).find((i) => i.acteur === "redacteur");
-    expect(versionDeLActeur(redacteur!)).toEqual({ model: "profile:standard", limits: { max_turns: 30, max_minutes: null } });
-    expect(slugDeLActeur("Rédacteur RH_2")).toBe("r-dacteur-rh-2");
+    expect(actorVersion(redacteur!)).toEqual({ model: "profile:standard", limits: { max_turns: 30, max_minutes: null } });
+    expect(actorSlug("Rédacteur RH_2")).toBe("r-dacteur-rh-2"); // lang: fr-ok (a non-ASCII letter becomes a dash)
   });
 });
 
 describe("les clients MCP", () => {
-  it("un jeton qui ouvre la porte MCP est un client ; un jeton large ne l'est pas", () => {
-    expect(estUnClientMcp({ scopes: ["mcp:read"] })).toBe(true);
-    expect(estUnClientMcp({ scopes: ["*"] })).toBe(false);
+  it("a token that opens the MCP door is a client; a broad token is not", () => {
+    expect(isMcpClient({ scopes: ["mcp:read"] })).toBe(true);
+    expect(isMcpClient({ scopes: ["*"] })).toBe(false);
   });
 
-  it("connecté, seulement s'il a appelé — et plus du tout une fois révoqué", () => {
+  it("connected, only if it called, and no longer once revoked", () => {
     const maintenant = new Date("2026-10-05T12:00:00Z");
-    expect(etatDuClient({ last_used_at: null }, maintenant)).toEqual({ connecte: false, recent: false });
-    expect(etatDuClient({ last_used_at: "2026-10-05T11:57:00Z" }, maintenant)).toEqual({ connecte: true, recent: true });
-    expect(etatDuClient({ last_used_at: "2026-10-01T11:57:00Z" }, maintenant)).toEqual({ connecte: true, recent: false });
-    expect(etatDuClient({ last_used_at: "2026-10-05T11:57:00Z", revoked_at: "2026-10-05T11:58:00Z" }, maintenant).connecte).toBe(
+    expect(clientState({ last_used_at: null }, maintenant)).toEqual({ connecte: false, recent: false });
+    expect(clientState({ last_used_at: "2026-10-05T11:57:00Z" }, maintenant)).toEqual({ connecte: true, recent: true });
+    expect(clientState({ last_used_at: "2026-10-01T11:57:00Z" }, maintenant)).toEqual({ connecte: true, recent: false });
+    expect(clientState({ last_used_at: "2026-10-05T11:57:00Z", revoked_at: "2026-10-05T11:58:00Z" }, maintenant).connecte).toBe(
       false,
     );
   });
 
-  it("en lecture seule, un agent externe ne nomme que des outils qui lisent", () => {
+  it("read-only, an external agent names only tools that read", () => {
     expect(versionDuClient(false)).toEqual({});
-    expect(versionDuClient(true)).toEqual({ mcp_servers: [{ connector: "choregos", tools: OUTILS_EN_LECTURE }] });
-    expect(OUTILS_EN_LECTURE.some((motif) => /create|update|delete|decide/.test(motif))).toBe(false);
+    expect(versionDuClient(true)).toEqual({ mcp_servers: [{ connector: "choregos", tools: READ_ONLY_TOOLS }] });
+    expect(READ_ONLY_TOOLS.some((motif) => /create|update|delete|decide/.test(motif))).toBe(false);
   });
 
-  it("une version se dit en une ligne", () => {
-    expect(resumeDeLaVersion({})).toBe("defaults of the platform");
+  it("a version is said in one line", () => {
+    expect(versionSummary({})).toBe("defaults of the platform");
     expect(
-      resumeDeLaVersion({
+      versionSummary({
         model: "profile:standard",
         skills: [{ slug: "a" }, { slug: "b" }],
         budget: { daily_usd: 5 },
@@ -80,13 +80,13 @@ describe("les clients MCP", () => {
   });
 
   it("a version's summary names its monthly cap", () => {
-    expect(resumeDeLaVersion({ budget: { monthly_usd: 100 } })).toBe("$100/month");
+    expect(versionSummary({ budget: { monthly_usd: 100 } })).toBe("$100/month");
   });
 
-  it("enregistrer un Claude Code crée l'agent externe PUIS lui rattache son jeton", async () => {
+  it("registering a Claude Code creates the external agent THEN attaches its token", async () => {
     vi.mocked(api.createAgent).mockResolvedValue({} as never);
     vi.mocked(api.attachAgentToken).mockResolvedValue({} as never);
-    const jeton: ApiToken = {
+    const token: ApiToken = {
       id: "tok-1",
       name: "Claude Code",
       created_at: "2026-10-05T10:00:00Z",
@@ -96,7 +96,7 @@ describe("les clients MCP", () => {
     };
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <ClientsMcp org="acme" clients={[jeton]} agents={[]} />
+        <McpClients org="acme" clients={[token]} agents={[]} />
       </QueryClientProvider>,
     );
     expect(screen.getByText("Connected")).toBeInTheDocument();

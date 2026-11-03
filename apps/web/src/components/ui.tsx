@@ -5,8 +5,8 @@
  * import from it. The look is an operations console in the manner of Temporal's UI: sentence case,
  * sans for what is read and mono only for what is compared, 4–6 px radii, round pills.
  *
- * Ce qui est propre à Choregos — l'état d'un ticket, le coût d'un run, l'acteur d'une étape — se
- * dit en pastilles teintées, la prune pour ce qui agit seul, et toujours en toutes lettres.
+ * What is specific to Choregos (a ticket's state, a run's cost, a step's actor) is
+ * said in tinted pills, plum for what acts alone, and always in full words.
  */
 "use client";
 
@@ -36,8 +36,8 @@ import { toSentenceCase, libelleDeCode, segmentsDeCode, tokens, usd } from "@/li
 // ───────────────────────────── tons ─────────────────────────────
 
 /**
- * Les tons du design system, et ceux des états d'une console d'opérations. Les premiers gardent
- * leurs noms pour que les pages n'aient rien à changer ; ils se disent désormais en teintes.
+ * The design system's tones, and those of an operations console's states. The former keep
+ * their names so that the pages have nothing to change; they are now said in hues.
  */
 export type Tone =
   | "neutral"
@@ -54,7 +54,7 @@ export type Tone =
   | "agent"
   | "info";
 
-/** Une pastille : un fond teinté, un filet de sa teinte, son texte — 4,5:1 au moins (theme-contraste). */
+/** A pill: a tinted background, a rule of its hue, its text, at least 4.5:1 (theme-contrast). */
 const PASTILLE: Record<Tone, string> = {
   neutral: "border-neutral-line bg-neutral-soft text-neutral-ink",
   ink: "border-line-strong bg-surface-muted text-ink",
@@ -71,7 +71,7 @@ const PASTILLE: Record<Tone, string> = {
   info: "border-info-line bg-info-soft text-info",
 };
 
-/** Le point d'un ton : rond, plein. */
+/** A tone's dot: round, filled. */
 const POINT: Record<Tone, string> = {
   neutral: "bg-neutral",
   ink: "bg-ink",
@@ -88,8 +88,8 @@ const POINT: Record<Tone, string> = {
   info: "bg-info",
 };
 
-/** Le texte d'un ton, sans fond. */
-const TEXTE: Record<Tone, string> = {
+/** A tone's text, with no background. */
+const TEXT: Record<Tone, string> = {
   neutral: "text-ink-muted",
   ink: "text-ink",
   accent: "text-accent-strong",
@@ -105,9 +105,9 @@ const TEXTE: Record<Tone, string> = {
   info: "text-info",
 };
 
-// ───────────────────────────── points, pastilles, légendes ─────────────────────────────
+// ───────────────────────────── dots, pills, legends ─────────────────────────────
 
-/** Le point d'un état : rond (la puce carrée était la signature éditoriale de la fondation). */
+/** A state's dot: round (the square bullet was the foundation's editorial signature). */
 export function Dot({ tone = "ink", size = 6, className }: { tone?: Tone; size?: 4 | 6 | 8; className?: string }) {
   const dimension = { 4: "size-1", 6: "size-1.5", 8: "size-2" }[size];
   return <span aria-hidden className={cn("inline-block shrink-0 rounded-full", dimension, POINT[tone], className)} />;
@@ -115,18 +115,18 @@ export function Dot({ tone = "ink", size = 6, className }: { tone?: Tone; size?:
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: Tone;
-  /** `outline` et `soft` : la pastille teintée ; `plain` : le point et le texte, sans fond. */
+  /** `outline` and `soft`: the tinted pill; `plain`: the dot and the text, with no background. */
   variant?: "outline" | "soft" | "plain";
   dot?: boolean;
 }
 
-/** Une pastille d'état : arrondie, teintée, son point — l'état se lit au mot, jamais à la couleur seule. */
+/** A state pill: rounded, tinted, its dot; the state is read in the word, never by colour alone. */
 export function Badge({ tone = "neutral", variant = "outline", dot = true, className, children, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap",
-        variant === "plain" ? TEXTE[tone] : cn("rounded-full border px-2 py-0.5 leading-4", PASTILLE[tone]),
+        variant === "plain" ? TEXT[tone] : cn("rounded-full border px-2 py-0.5 leading-4", PASTILLE[tone]),
         className,
       )}
       {...props}
@@ -155,7 +155,7 @@ export function Eyebrow({ children, tone, className }: { children: ReactNode; to
 
 // ───────────────────────────── titres ─────────────────────────────
 
-const TITRE = {
+const HEADING = {
   hero: "font-(family-name:--choregos-font-title) text-3xl md:text-4xl leading-tight font-(--choregos-font-title-weight)",
   // The title role (family and weight) is the theme's (ADR 0064): Geist at 600 unless it says otherwise;
   // `lg` stays regular.
@@ -171,11 +171,11 @@ export function Heading({
   size = "lg",
   className,
   ...props
-}: HTMLAttributes<HTMLHeadingElement> & { as?: ElementType; size?: keyof typeof TITRE }) {
-  return <Tag className={cn("tracking-tight text-ink", TITRE[size], className)} {...props} />;
+}: HTMLAttributes<HTMLHeadingElement> & { as?: ElementType; size?: keyof typeof HEADING }) {
+  return <Tag className={cn("tracking-tight text-ink", HEADING[size], className)} {...props} />;
 }
 
-/** Ce qui suit un titre de page : une phrase, discrète. */
+/** What follows a page title: a sentence, discreet. */
 export function Lead({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
   return <p className={cn("max-w-3xl text-sm text-ink-muted", className)} {...props} />;
 }
@@ -224,7 +224,7 @@ export function TD({ className, align = "left", ...props }: TdHTMLAttributes<HTM
 
 // ───────────────────────────── chiffres ─────────────────────────────
 
-/** Le libellé d'un champ ou d'un chiffre : petit, en `ink-muted`. */
+/** A field's or a figure's label: small, in `ink-muted`. */
 export function Label({ className, ...props }: HTMLAttributes<HTMLSpanElement>) {
   return <span className={cn("block text-xs text-ink-muted", className)} {...props} />;
 }
@@ -276,7 +276,7 @@ export function Stat({
           <IconTile icon={icon} hue={hue} size="md" />
         </div>
       )}
-      <div className={cn("font-mono text-2xl leading-none font-light tabular-nums", tone === "ink" ? "text-ink" : TEXTE[tone])}>
+      <div className={cn("font-mono text-2xl leading-none font-light tabular-nums", tone === "ink" ? "text-ink" : TEXT[tone])}>
         {value}
       </div>
       <Label>{label}</Label>
@@ -291,12 +291,12 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "accent" | "dang
 export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANTES: Record<ButtonVariant, string> = {
-  // L'action : l'iris, une par vue — l'aplat inversé (blanc en sombre) n'existe plus.
+  // The action: iris, one per view; the inverted fill (white in dark) no longer exists.
   primary: "border-inverse bg-inverse text-inverse-ink hover:border-inverse-hover hover:bg-inverse-hover",
   accent: "border-accent bg-accent text-accent-ink hover:border-accent-hover hover:bg-accent-hover",
   secondary: "border-line-strong bg-raised text-ink hover:bg-surface-muted",
   ghost: "border-transparent bg-transparent text-ink-muted hover:bg-surface-muted hover:text-ink",
-  // Détruire se dit en rouge, sans aplat : un fond rouge au survol rendait le texte illisible.
+  // Destroying is said in red, with no fill: a red background on hover made the text unreadable.
   danger: "border-failed-line bg-transparent text-failed-ink hover:bg-failed-soft",
 };
 
@@ -321,7 +321,7 @@ export function buttonClasses(variant: ButtonVariant = "secondary", size: Button
   );
 }
 
-/** Les classes d'un onglet : l'actif porte le trait de l'accent, plus celui de l'encre. */
+/** A tab's classes: the active one carries the accent's stroke, plus the ink's. */
 export function tabClasses(active: boolean, className?: string) {
   return cn(
     "-mb-px inline-flex items-center gap-2 border-b-2 py-2.5 text-sm whitespace-nowrap no-underline transition-colors duration-200",
@@ -333,7 +333,7 @@ export function tabClasses(active: boolean, className?: string) {
 // ───────────────────────────── champs ─────────────────────────────
 
 /** A field's look: 32 px, a control border (3:1), 4 px corners, the accent on focus. */
-export const CHAMP =
+export const FIELD =
   "w-full rounded border border-line-strong bg-surface px-2.5 text-[13px] text-ink transition-colors duration-200 ease-standard " +
   "hover:border-ink-subtle focus:border-accent focus:outline-none pointer-coarse:min-h-11 " +
   "disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-subtle aria-invalid:border-danger";
@@ -342,26 +342,26 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   { className, ...props },
   ref,
 ) {
-  return <input ref={ref} className={cn(CHAMP, "h-8", className)} {...props} />;
+  return <input ref={ref} className={cn(FIELD, "h-8", className)} {...props} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(
   { className, ...props },
   ref,
 ) {
-  return <textarea ref={ref} className={cn(CHAMP, "min-h-24 py-2 leading-relaxed", className)} {...props} />;
+  return <textarea ref={ref} className={cn(FIELD, "min-h-24 py-2 leading-relaxed", className)} {...props} />;
 });
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select(
   { className, ...props },
   ref,
 ) {
-  return <select ref={ref} className={cn(CHAMP, "h-8 pr-7", className)} {...props} />;
+  return <select ref={ref} className={cn(FIELD, "h-8 pr-7", className)} {...props} />;
 });
 
 /**
- * Un champ complet : libellé, contrôle, aide ou erreur — reliés au contrôle (`htmlFor`,
- * `aria-describedby`) : un lecteur d'écran les annonce ensemble.
+ * A complete field: label, control, help or error, all tied to the control (`htmlFor`,
+ * `aria-describedby`): a screen reader announces them together.
  */
 export function Field({
   label,
@@ -398,11 +398,11 @@ export function Field({
   );
 }
 
-/** Le genre d'un état du workflow, tel que le DSL le déclare, dit dans les tons d'une console d'opérations. */
+/** The kind of a workflow state, as the DSL declares it, said in an operations console's tones. */
 const STATE_TONES: Record<string, Tone> = {
   // Quelque chose tourne : le bleu.
   work: "running",
-  // On attend quelqu'un : l'ambre — c'était un carré blanc en sombre.
+  // Someone is awaited: amber; it was a white square in dark.
   wait: "waiting",
   terminal: "succeeded",
   // A terminal state the workflow declares `outcome: declined` or `cancelled`: finished, not won.
@@ -421,10 +421,10 @@ export function kindOfOutcome(outcome?: string | null): string {
 }
 
 /**
- * Le genre d'un état quand l'appelant ne le connaît pas — un ticket porte le *nom* de son état,
- * pas son genre, qui vit dans le workflow. Les templates nomment leurs états de façon régulière
- * (`awaiting_*`, `deployed_*`, `*_blocked`) : c'est cette régularité qu'on lit. Un appelant qui
- * a le workflow sous la main (le board) passe `kind` et court-circuite la déduction.
+ * The kind of a state when the caller does not know it: a ticket carries its state's *name*,
+ * not its kind, which lives in the workflow. The templates name their states regularly
+ * (`awaiting_*`, `deployed_*`, `*_blocked`): that regularity is what is read. A caller that
+ * has the workflow at hand (the board) passes `kind` and short-circuits the deduction.
  */
 function inferKind(state: string): string {
   const s = state.toLowerCase();
@@ -434,8 +434,8 @@ function inferKind(state: string): string {
   return "work";
 }
 
-/** Le ton d'un état du workflow : celui de sa pastille, de son point sur le board. */
-export function tonDEtat(state: string, kind?: string): Tone {
+/** A workflow state's tone: that of its pill, of its dot on the board. */
+export function toneOfState(state: string, kind?: string): Tone {
   const resolved = kind ?? inferKind(state);
   return state.includes("needs_human") || state.includes("blocked") ? "failed" : (STATE_TONES[resolved] ?? "running");
 }
@@ -452,7 +452,7 @@ export function StateBadge({
   /** A work item's `state_outcome`: set only when its state is terminal, it decides the badge's tone. */
   outcome?: string | null;
 }) {
-  const tone = tonDEtat(state, kind ?? (outcome ? kindOfOutcome(outcome) : undefined));
+  const tone = toneOfState(state, kind ?? (outcome ? kindOfOutcome(outcome) : undefined));
   return (
     <Badge tone={tone} title={state}>
       {display && display !== state ? display : toSentenceCase(libelleDeCode(state))}
@@ -461,9 +461,9 @@ export function StateBadge({
 }
 
 /**
- * Le coût d'un ticket ou d'un run, en dollars : c'est la monnaie de tout ce qu'un agent dépense
- * (prix des modèles, budgets, estimations), et l'écran d'un ticket mêlait € et US$ (S23-10). La
- * console ne convertit rien : l'API garde chaque écriture avec son taux du jour.
+ * A ticket's or a run's cost, in dollars: it is the currency of everything an agent spends
+ * (model prices, budgets, estimates), and a ticket's screen mixed € and US$ (S23-10). The
+ * console converts nothing: the API keeps each write with that day's rate.
  */
 export function CostChip({
   costUsd,
@@ -490,8 +490,8 @@ export function CostChip({
   );
 }
 
-// Les couleurs des cartes (S24-04) : prune l'agent, bleu la personne, ardoise la plateforme, vert le
-// train. La personne était un point d'encre — blanc pur en sombre.
+// The cards' colours (S24-04): plum the agent, blue the person, slate the platform, green the
+// train. The person used to be an ink dot, pure white in dark.
 const ACTORS: Record<string, { tone: Tone; label: string }> = {
   agent: { tone: "agent", label: "Agent" },
   user: { tone: "running", label: "Human" },
@@ -504,21 +504,21 @@ const ACTORS: Record<string, { tone: Tone; label: string }> = {
   decision: { tone: "neutral", label: "Decision" },
 };
 
-/** Le ton d'un acteur : celui de son point, dans la chronologie d'un ticket comme à côté de son nom. */
+/** An actor's tone: that of its dot, in a ticket's timeline as next to its name. */
 export function tonDActeur(kind: string): Tone {
   return ACTORS[kind]?.tone ?? "neutral";
 }
 
 /**
- * L'acteur d'une étape : un point dans sa couleur, et son nom. La couleur ne suffit pas — un
- * lecteur d'écran ne la voit pas, et un daltonien confond la prune et le gris : le type d'acteur
- * est toujours énoncé en toutes lettres.
+ * A step's actor: a dot in its colour, and its name. Colour is not enough: a
+ * screen reader does not see it, and a colour-blind person confuses plum and grey: the actor's
+ * type is always spelled out in full words.
  */
 export function ActorIcon({ kind, name, point = true }: { kind: string; name?: string | null; point?: boolean }) {
   const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "System" };
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted" title={actor.label}>
-      {/* Sans point quand un autre le porte déjà : le rail de la chronologie d'un ticket. */}
+      {/* No dot when another already carries it: the rail of a ticket's timeline. */}
       {point && <Dot tone={actor.tone} size={6} />}
       {name ? (
         <>
@@ -790,11 +790,11 @@ export function Button({
   onClick?: () => void;
   /** A name for a button whose text alone is not enough (an arrow, a bare "Remove" in a list). */
   "aria-label"?: string;
-  /** Ce qui explique le bouton — pourquoi il attend, ce qu'il va faire. */
+  /** What explains the button: why it waits, what it will do. */
   "aria-describedby"?: string;
   /**
-   * `primary` : la décision d'un humain (approuver) — l'iris, une par vue.
-   * `accent` : ce qui déclenche une machine (lancer, provisionner) — l'iris aussi.
+   * `primary`: a human's decision (approve), iris, one per view.
+   * `accent`: what triggers a machine (launch, provision), iris too.
    */
   tone?: keyof typeof TONE_TO_VARIANT;
   disabled?: boolean;
@@ -810,7 +810,7 @@ export function Button({
       title={title}
       aria-describedby={decritPar}
       aria-label={etiquette}
-      // Au doigt, 44 px de haut au moins (WCAG 2.5.8, S23-11) : `buttonClasses` les porte.
+      // For a finger, at least 44 px high (WCAG 2.5.8, S23-11): `buttonClasses` carries them.
       className={buttonClasses(TONE_TO_VARIANT[tone], size)}
     >
       {children}
@@ -819,10 +819,10 @@ export function Button({
 }
 
 /**
- * Une phrase du moteur, dont les noms (un agent, un champ produit) sont entre backticks : ils se
- * lisent comme du code, sans les backticks (S23-11).
+ * An engine sentence, whose names (an agent, a produced field) are between backticks: they
+ * read like code, without the backticks (S23-11).
  */
-export function PhraseDuMoteur({ texte }: { texte: string }) {
+export function EngineSentence({ texte }: { texte: string }) {
   return (
     <>
       {segmentsDeCode(texte).map((segment, index) =>
@@ -855,20 +855,20 @@ export const BreadcrumbBase = createContext<BreadcrumbStep[]>([]);
  */
 export function Breadcrumbs({ steps }: { steps: BreadcrumbStep[] }) {
   const base = useContext(BreadcrumbBase);
-  const etapes = [...base, ...steps];
+  const trail = [...base, ...steps];
   return (
     <nav aria-label="Breadcrumb" className="text-sm">
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-muted">
-        {etapes.map((etape, index) => (
+        {trail.map((step, index) => (
           <li key={index} className="flex min-w-0 items-center gap-2">
             {index > 0 && <span aria-hidden>/</span>}
-            {etape.href && index < etapes.length - 1 ? (
-              <Link href={etape.href} className="hover:underline">
-                {etape.label}
+            {step.href && index < trail.length - 1 ? (
+              <Link href={step.href} className="hover:underline">
+                {step.label}
               </Link>
             ) : (
               <span aria-current="page" className="truncate text-ink">
-                {etape.label}
+                {step.label}
               </span>
             )}
           </li>
@@ -934,7 +934,7 @@ export function Drawer({
   );
 }
 
-/** Une zone vide qui dit quoi faire : un filet pointillé discret, un titre, une phrase, une action. */
+/** An empty area that says what to do: a discreet dotted rule, a title, a sentence, an action. */
 export function Empty({
   children,
   title,
@@ -968,18 +968,18 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 }
 
 /**
- * Ce que montre une lecture tant qu'elle n'a rien de bon à montrer (S23-08) : son échec, avec un
- * moyen de relire, ou son chargement — jamais « rien » ni « vide ». Avant, une API en panne
- * affichait « no spend recorded. », « no batch », « measurements being computed. » ou un
- * « loading… » sans fin : une panne passait pour un projet calme. Une lecture désactivée (une
- * recherche pas encore lancée) ne dit rien.
+ * What a read shows while it has nothing good to show (S23-08): its failure, with a
+ * way to re-read, or its loading, never "nothing" or "empty". Before, an API that was down
+ * displayed "no spend recorded.", "no batch", "measurements being computed." or an endless
+ * "loading…": an outage passed for a quiet project. A disabled read (a search not
+ * launched yet) says nothing.
  */
-export function EtatDeLecture({
+export function ReadState({
   lecture,
   quoi,
 }: {
   lecture: { data: unknown; error: unknown; fetchStatus: string; refetch: () => unknown; isRefetching?: boolean };
-  /** Ce qui se lit, dans une phrase : « the costs », « the batches ». */
+  /** What is read, in a sentence: "the costs", "the batches". */
   quoi: string;
 }) {
   if (lecture.error) {
@@ -1015,3 +1015,7 @@ export function EtatDeLecture({
 export function Tabs({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return <nav className={cn("flex gap-6 overflow-x-auto border-b border-line pb-px", className)} {...props} />;
 }
+
+export { toneOfState as tonDEtat }; // alias:internal (S45-28): 1 file(s) outside this story still import the old name
+export { EngineSentence as PhraseDuMoteur }; // alias:internal (S45-28): 2 file(s) outside this story still import the old name
+export { ReadState as EtatDeLecture }; // alias:internal (S45-28): 1 file(s) outside this story still import the old name

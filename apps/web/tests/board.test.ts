@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kindOfOutcome, tonDEtat } from "@/components/ui";
+import { kindOfOutcome, toneOfState } from "@/components/ui";
 import { boardWorkflows, columnsFromGraph, foldedItems, itemsOf, TERMINAL_FOLD, visibleColumns } from "@/components/workflows/board";
 import { fieldsFromSchema, valuesForApi } from "@/components/workflows/fields";
 import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
@@ -7,35 +7,35 @@ import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
 const ticket = (id: string, state: string, workflow_name?: string) =>
   ({ id, state, workflow_name, title: id, tracker_key: id }) as unknown as WorkItemDto;
 
-describe("les colonnes d'un board (ADR 0031, S16-10)", () => {
-  // Le graphe du validateur : l'indentation du YAML n'y est plus pour rien — un YAML indenté de
-  // quatre espaces donnait zéro colonne au regex d'avant.
+describe("a board's columns (ADR 0031, S16-10)", () => {
+  // The validator's graph: the YAML's indentation no longer matters: a YAML indented by
+  // four spaces gave zero columns to the former regex.
   const graph = {
     nodes: [
-      { id: "arrivee", display: "Arrivée", kind: "wait" },
-      { id: "preparation", display: "Préparation", kind: "work" },
+      { id: "arrivee", display: "Arrival", kind: "wait" },
+      { id: "preparation", display: "Preparation", kind: "work" },
       { id: "fait", display: "Fait", kind: "terminal", terminal: true },
     ],
     edges: [],
   } as unknown as WorkflowGraph;
 
-  it("viennent des états du workflow, dans son ordre, avec leur genre", () => {
+  it("come from the workflow's states, in its order, with their kind", () => {
     const columns = columnsFromGraph(graph, [ticket("a", "preparation")]);
     expect(columns.map((c) => [c.state, c.display, c.kind, c.items.length])).toEqual([
-      ["arrivee", "Arrivée", "wait", 0],
-      ["preparation", "Préparation", undefined, 1],
+      ["arrivee", "Arrival", "wait", 0],
+      ["preparation", "Preparation", undefined, 1],
       ["fait", "Fait", "terminal", 0],
     ]);
   });
 
-  it("gardent visible un ticket dans un état que le workflow ne connaît plus", () => {
+  it("keep a ticket visible in a state that the workflow no longer knows", () => {
     const columns = columnsFromGraph(graph, [ticket("b", "ancien_etat")]);
     expect(columns.at(-1)?.state).toBe("ancien_etat");
-    // Et la colonne le dit : seule elle est hors du workflow (S23-04).
+    // And the column says so: it alone is outside the workflow (S23-04).
     expect(columns.filter((c) => c.horsWorkflow).map((c) => c.state)).toEqual(["ancien_etat"]);
   });
 
-  it("ne montrent que les tickets du workflow ; ceux d'avant l'épingle vont au défaut", () => {
+  it("show only the workflow's tickets; those from before the pin go to the default", () => {
     const tickets = [ticket("a", "x", "onboarding"), ticket("b", "x", "offboarding"), ticket("c", "x")];
     expect(itemsOf(tickets, "onboarding", true).map((t) => t.id)).toEqual(["a", "c"]);
     expect(itemsOf(tickets, "offboarding", false).map((t) => t.id)).toEqual(["b"]);
@@ -93,7 +93,7 @@ describe("what a board shows of its columns (2026-11-02)", () => {
   });
 });
 
-describe("les champs d'une demande, depuis `metadata.inputs`", () => {
+describe("a request's fields, from `metadata.inputs`", () => {
   const schema = {
     type: "object",
     required: ["date_arrivee", "poste"],
@@ -107,9 +107,9 @@ describe("les champs d'une demande, depuis `metadata.inputs`", () => {
     },
   };
 
-  it("se déduisent du schéma : contrôle, libellé, obligation, choix", () => {
-    const champs = fieldsFromSchema(schema);
-    expect(champs.map((c) => [c.name, c.control, c.required])).toEqual([
+  it("are derived from the schema: control, label, requirement, choices", () => {
+    const fields = fieldsFromSchema(schema);
+    expect(fields.map((c) => [c.name, c.control, c.required])).toEqual([
       ["date_arrivee", "date", true],
       ["poste", "choice", true],
       ["jours_d_essai", "integer", false],
@@ -117,15 +117,15 @@ describe("les champs d'une demande, depuis `metadata.inputs`", () => {
       ["materiel", "list", false],
       ["manager", "text", false],
     ]);
-    expect(champs[0]?.label).toBe("arrival date");
-    expect(champs[1]?.choices).toEqual(["dev", "rh", "commercial"]);
+    expect(fields[0]?.label).toBe("arrival date");
+    expect(fields[1]?.choices).toEqual(["dev", "rh", "commercial"]);
     expect(fieldsFromSchema(undefined)).toEqual([]);
   });
 
-  it("partent typés comme le schéma les attend ; un champ vide ne part pas", () => {
-    const champs = fieldsFromSchema(schema);
+  it("leave typed as the schema expects them; an empty field does not leave", () => {
+    const fields = fieldsFromSchema(schema);
     expect(
-      valuesForApi(champs, {
+      valuesForApi(fields, {
         date_arrivee: "2026-11-02",
         poste: "dev",
         jours_d_essai: "90",
@@ -168,9 +168,9 @@ describe("a terminal state's declared outcome", () => {
   });
 
   it("is never shown in the tone of a success when the request was declined or cancelled", () => {
-    expect(tonDEtat("applied", kindOfOutcome("success"))).toBe("succeeded");
-    expect(tonDEtat("declined", kindOfOutcome("declined"))).toBe("danger");
-    expect(tonDEtat("handed_back", kindOfOutcome("cancelled"))).toBe("neutral");
+    expect(toneOfState("applied", kindOfOutcome("success"))).toBe("succeeded");
+    expect(toneOfState("declined", kindOfOutcome("declined"))).toBe("danger");
+    expect(toneOfState("handed_back", kindOfOutcome("cancelled"))).toBe("neutral");
     expect(kindOfOutcome(null)).toBe("terminal");
   });
 });

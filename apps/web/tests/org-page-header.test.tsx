@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { adminGroups, GROUP_HUES, orgSection } from "@/components/coquille/navigation";
+import { adminGroups, GROUP_HUES, orgSection } from "@/components/shell/navigation";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { HUE_CLASSES } from "@/lib/workflow-hue";
 

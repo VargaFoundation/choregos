@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-/** Barre de décision : approuver, renvoyer, répondre, faire une tâche — depuis n'importe quel écran. */
+/** Decision bar: approve, send back, answer, do a task, from any screen. */
 "use client";
 
 import { useId, useState } from "react";
 import { api } from "@/lib/api";
 import type { HumanRequest } from "@/lib/types";
-import { champsManquants, SchemaForm, type JsonSchema } from "./schema-form";
+import { missingFields, SchemaForm, type JsonSchema } from "./schema-form";
 import { Button, ErrorNote, Input } from "./ui";
 
 export function DecisionBar({
@@ -16,7 +16,7 @@ export function DecisionBar({
 }: {
   itemId: string;
   kind?: string;
-  /** La demande en attente : une tâche y porte son formulaire et ce qu'elle fait attester. */
+  /** The pending request: a task carries its form there and what it makes one attest. */
   request?: Pick<HumanRequest, "payload">;
   onDone?: () => void;
 }) {
@@ -87,9 +87,9 @@ export function DecisionBar({
 }
 
 /**
- * Une tâche (S20-06) : ce qu'il faut faire, le formulaire dont les valeurs deviennent des champs du
- * ticket, et la phrase à attester, mot pour mot. « done » reste fermé tant qu'un champ requis manque
- * ou que l'attestation n'est pas cochée ; l'API reste juge, et le dit si elle refuse.
+ * A task (S20-06): what has to be done, the form whose values become fields of the
+ * ticket, and the sentence to attest, word for word. "done" stays closed while a required field is missing
+ * or the attestation is not ticked; the API remains the judge, and says so if it refuses.
  */
 function TaskForm({
   itemId,
@@ -109,7 +109,7 @@ function TaskForm({
   const [motif, setMotif] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const manquants = champsManquants(formulaire, valeurs);
+  const manquants = missingFields(formulaire, valeurs);
 
   async function send(body: Record<string, unknown>) {
     setBusy(true);

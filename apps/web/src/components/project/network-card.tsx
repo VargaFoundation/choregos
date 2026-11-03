@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSectionWrites } from "@/components/project-settings/section";
-import { Badge, Button, Card, ErrorNote, EtatDeLecture, Field, Input, Textarea } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, ReadState, Field, Input, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { flaggedByCeiling, parseHosts, type CeilingNetwork } from "@/lib/network";
 import { withSandboxNetwork, type SandboxNetwork } from "@/lib/policy-network";
@@ -21,7 +21,7 @@ export function ProjectNetworkCard({ slug }: { slug: string }) {
   return (
     <Card title="Network access" className="lg:col-span-2">
       <div className="space-y-3 text-sm" data-testid="project-network">
-        <EtatDeLecture lecture={network} quoi="the network access" />
+        <ReadState lecture={network} quoi="the network access" />
         {effective && (
           <>
             <div>

@@ -9,8 +9,8 @@ import { CatalogueFacets } from "@/components/catalogue/facets";
 import { InstallDrawer } from "@/components/catalogue/install-drawer";
 import { useEgressGuard } from "@/components/egress/egress-provider";
 import { RiskBadge } from "@/components/skills/gate";
-import { SkillTabs } from "@/components/skills/onglets";
-import { Badge, Button, ErrorNote, EtatDeLecture } from "@/components/ui";
+import { SkillTabs } from "@/components/skills/tabs";
+import { Badge, Button, ErrorNote, ReadState } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/catalogue";
@@ -53,7 +53,7 @@ export default function SkillCataloguePage() {
           Stars are a snapshot.
         </p>
       )}
-      <EtatDeLecture lecture={catalogue} quoi="the catalogue" />
+      <ReadState lecture={catalogue} quoi="the catalogue" />
       {catalogue.data && (
         <>
           <CatalogueFacets

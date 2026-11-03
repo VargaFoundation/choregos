@@ -3,7 +3,7 @@
 
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { orgSection } from "@/components/coquille/navigation";
+import { orgSection } from "@/components/shell/navigation";
 import { PageHeader } from "@/components/page-header";
 
 /**

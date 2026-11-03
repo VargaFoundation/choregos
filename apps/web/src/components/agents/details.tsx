@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button, Card, ErrorNote, Field, Input, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Agent } from "@/lib/types";
-import { readOnly } from "./registre";
+import { readOnly } from "./registry";
 import { TagEditor, TagList } from "./tags";
 
 /**

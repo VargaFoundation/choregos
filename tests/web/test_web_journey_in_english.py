@@ -40,10 +40,6 @@ PREFIXES = (
 )
 #: The former paths, each a shim until the one story that removes them (S45-29).
 SHIMS = (
-    "src/components/parcours/carte-du-parcours.tsx",
-    "src/components/parcours/modele.ts",
-    "src/components/workflows/carte/carte-du-workflow.tsx",
-    "src/components/workflows/carte/disposition.ts",
     "src/components/workflows/brouillon.tsx",
     "src/components/workflows/barre-du-brouillon.tsx",
     "src/components/workflows/panneaux.tsx",

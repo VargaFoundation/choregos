@@ -67,7 +67,7 @@ theme the person chooses.
   dark tokens turns `theme-provenance` red until the console declares it.
 - `e2e/accessibilite.spec.ts` runs axe on every page in both themes, and `e2e/theme.spec.ts` proves
   the default, the persistence of a choice, and that the head script alone applies it;
-  `e2e/coquille.spec.ts` proves the same for the folded sidebar, and the 48 px top bar at every
+  `e2e/shell.spec.ts` proves the same for the folded sidebar, and the 48 px top bar at every
   width.
 - The work is delivered as stream S24: tokens, fonts and theme (S24-01); restyled components
   (S24-02); a left sidebar and a 48 px top bar (S24-03); the map, the journey, the board and the

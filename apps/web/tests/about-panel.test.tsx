@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TopNav } from "@/app/top-nav";
 import { AboutPanel, aboutSupportText } from "@/components/edition";
-import { BarreLaterale } from "@/components/coquille/barre-laterale";
+import { Sidebar } from "@/components/shell/sidebar";
 import { api } from "@/lib/api";
 import { ThemeProvider } from "@/lib/theme";
 
@@ -61,7 +61,7 @@ describe("the About panel (S42-12)", () => {
 
   it("opens from the sidebar and says what the community edition runs", async () => {
     vi.mocked(api.edition).mockResolvedValue(COMMUNITY);
-    render(wrap(<BarreLaterale />));
+    render(wrap(<Sidebar />));
     fireEvent.click(within(screen.getByRole("complementary", { name: "Sidebar" })).getByRole("button", { name: "About" }));
     const panel = await screen.findByRole("dialog", { name: "About" });
     expect(await within(panel).findByText("Community edition")).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("the About panel (S42-12)", () => {
   it("stays reachable from the folded rail: an icon with its name and tooltip", () => {
     document.documentElement.dataset.sidebar = "rail";
     vi.mocked(api.edition).mockResolvedValue(COMMUNITY);
-    render(wrap(<BarreLaterale />));
+    render(wrap(<Sidebar />));
     const bouton = within(screen.getByRole("complementary", { name: "Sidebar" })).getByRole("button", { name: "About" });
     expect(bouton).toHaveAttribute("title", "About");
     expect(bouton.querySelector("svg")).not.toBeNull();

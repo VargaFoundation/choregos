@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
-import { Connecteurs } from "@/components/connecteurs";
+import { Connectors } from "@/components/connectors";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { proceduresApi } from "@/mocks/procedures";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
@@ -129,7 +129,7 @@ describe("the procedure at every add gesture (S39-23b)", () => {
     api.projectRequirements.mockResolvedValue([{ capability: "tracker", reasons: ["a ticket"], default_type: null }]);
     api.connectors.mockResolvedValue([]);
     api.connectorTypes.mockResolvedValue([type("tracker", "jira", "Jira Cloud", ["api_token"])]);
-    wrap(<Connecteurs slug="billing-api" />);
+    wrap(<Connectors slug="billing-api" />);
     fireEvent.click(await screen.findByRole("button", { name: /^(Add|Configure|Set up)/ }));
     const panel = await screen.findByTestId("procedure-panel");
     expect(panel).toHaveTextContent("Use Jira Cloud as the board");
@@ -141,7 +141,7 @@ describe("the procedure at every add gesture (S39-23b)", () => {
     api.projectRequirements.mockResolvedValue([{ capability: "tracker", reasons: ["a ticket"], default_type: null }]);
     api.connectors.mockResolvedValue([tracker]);
     api.connectorTypes.mockResolvedValue([type("tracker", "jira", "Jira Cloud", ["api_token"])]);
-    wrap(<Connecteurs slug="billing-api" />);
+    wrap(<Connectors slug="billing-api" />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await screen.findByRole("button", { name: "How to set this up" });
     expect(screen.queryByTestId("procedure-panel")).toBeNull();

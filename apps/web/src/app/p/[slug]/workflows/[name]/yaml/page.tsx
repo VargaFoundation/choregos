@@ -4,24 +4,24 @@
 import dynamic from "next/dynamic";
 import { useRef } from "react";
 import { Card, Empty, ErrorNote } from "@/components/ui";
-import type { PoigneeDeLEditeur } from "@/components/yaml-editor";
+import type { EditorHandle } from "@/components/yaml-editor";
 import { useBrouillon } from "@/components/workflows/brouillon";
 
-// L'éditeur (CodeMirror) n'est chargé qu'à l'ouverture de l'onglet : la page n'en paie pas le poids avant.
+// The editor (CodeMirror) is loaded only when the tab opens: the page does not pay for its weight before.
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
   ssr: false,
   loading: () => <p className="text-sm text-ink-muted">Loading the editor…</p>,
 });
 
 /**
- * Le YAML du workflow — une VUE du brouillon commun (S21-06) : ce qu'on tape ici est ce que la carte
- * et la vue processus montrent, et la barre du brouillon le publie, d'un seul bouton pour les trois
- * vues. La validation suit la frappe ; c'est celle du serveur, le code de l'orchestrateur.
+ * The workflow's YAML, a VIEW of the shared draft (S21-06): what is typed here is what the map
+ * and the process view show, and the draft bar publishes it, with a single button for the three
+ * views. Validation follows the typing; it is the server's, the orchestrator's code.
  */
 export default function YamlPage() {
-  const brouillon = useBrouillon();
-  const editeur = useRef<PoigneeDeLEditeur>(null);
-  const { definition, validation } = brouillon;
+  const draft = useBrouillon();
+  const editor = useRef<EditorHandle>(null);
+  const { definition, validation } = draft;
   if (definition.error) return <ErrorNote>{String(definition.error)}</ErrorNote>;
   if (!definition.data) return <Empty>Reading the workflow…</Empty>;
   const name = definition.data.name;
@@ -29,13 +29,13 @@ export default function YamlPage() {
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
       <Card title={`${name} — YAML`}>
         <YamlEditor
-          ref={editeur}
+          ref={editor}
           label={`YAML of ${name}`}
-          value={brouillon.yaml}
-          onChange={brouillon.ecrire}
-          readOnly={brouillon.occupe}
-          issues={brouillon.erreurs}
-          warnings={brouillon.avertissements}
+          value={draft.yaml}
+          onChange={draft.ecrire}
+          readOnly={draft.occupe}
+          issues={draft.erreurs}
+          warnings={draft.avertissements}
         />
         <p className="mt-2 text-xs text-ink-muted">
           Changes typed here, on the map or in the process view are one draft: the bar above publishes it.
@@ -48,17 +48,17 @@ export default function YamlPage() {
           ) : validation.etat === "injoignable" ? (
             <ErrorNote>
               Could not validate: {validation.message}.{" "}
-              <button type="button" className="underline" onClick={brouillon.revalider}>
+              <button type="button" className="underline" onClick={draft.revalider}>
                 Retry
               </button>
             </ErrorNote>
-          ) : brouillon.erreurs.length === 0 ? (
+          ) : draft.erreurs.length === 0 ? (
             <p className="text-ok">✓ valid workflow</p>
           ) : null}
-          {brouillon.erreurs.map((issue, index) => (
+          {draft.erreurs.map((issue, index) => (
             <ErrorNote key={index}>
               {issue.line ? (
-                <button type="button" className="underline" onClick={() => editeur.current?.allerALaLigne(issue.line!)}>
+                <button type="button" className="underline" onClick={() => editor.current?.allerALaLigne(issue.line!)}>
                   Line {issue.line}
                 </button>
               ) : null}
@@ -67,7 +67,7 @@ export default function YamlPage() {
               {issue.path ? ` (${issue.path})` : ""}
             </ErrorNote>
           ))}
-          {brouillon.avertissements.map((issue, index) => (
+          {draft.avertissements.map((issue, index) => (
             <p key={index} className="rounded border border-line border-l-2 border-l-warn bg-surface px-3 py-2 text-warn">
               {issue.message}
             </p>

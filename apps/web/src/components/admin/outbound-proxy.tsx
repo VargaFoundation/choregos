@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { endpointProblem, PROXY_KINDS, type ProxyKind } from "@/lib/outbound-proxy";
@@ -169,7 +169,7 @@ function ProxyForm({ org, stored }: { org: string; stored: OutboundProxy | null 
           </Button>
         )}
         {stored && (
-          <GesteConfirme
+          <ConfirmedGesture
             tonDuBouton="danger"
             question="Remove the outbound proxy and its sealed password? Web search and web reading go direct again, and the password does not come back."
             confirmer="Remove the proxy"
@@ -179,7 +179,7 @@ function ProxyForm({ org, stored }: { org: string; stored: OutboundProxy | null 
             }}
           >
             Remove
-          </GesteConfirme>
+          </ConfirmedGesture>
         )}
         {saved && <span className="text-sm text-ok">Outbound proxy saved</span>}
       </div>

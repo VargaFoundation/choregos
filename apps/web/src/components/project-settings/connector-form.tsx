@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
-import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
+import { SchemaForm, missingFields, type JsonSchema } from "@/components/schema-form";
 import {
   EMPTY_DRAFT,
   AddKey,
@@ -48,7 +48,7 @@ export function ConnectorForm({
   const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const choisi = types.find((t) => t.type === type);
   const schema = (choisi?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
-  const manquants = champsManquants(schema, config);
+  const manquants = missingFields(schema, config);
   const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
   const memeType = actuel?.type === type;
   const states = memeType ? (actuel?.secrets ?? []) : [];

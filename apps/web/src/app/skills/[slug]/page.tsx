@@ -12,24 +12,24 @@ import { relative } from "@/lib/format";
 import { skillFileLabel } from "@/lib/skill-files";
 import { useSession } from "@/lib/session";
 
-/** Un skill : ses versions, les fichiers de chacune, et les agents qui le portent. */
+/** A skill: its versions, the files of each, and the agents that carry it. */
 export default function SkillPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const { org, me } = useSession();
   const client = useQueryClient();
   const skill = useQuery({ queryKey: ["skill", org, slug], queryFn: () => api.skill(org, slug) });
   const [choisie, setChoisie] = useState<number | null>(null);
-  const numero = choisie ?? skill.data?.latest_version ?? null;
+  const versionNumber = choisie ?? skill.data?.latest_version ?? null;
   const version = useQuery({
-    queryKey: ["skill-version", org, slug, numero],
-    queryFn: () => api.skillVersion(org, slug, numero ?? 1),
-    enabled: numero !== null,
+    queryKey: ["skill-version", org, slug, versionNumber],
+    queryFn: () => api.skillVersion(org, slug, versionNumber ?? 1),
+    enabled: versionNumber !== null,
   });
   const [fichier, setFichier] = useState<string | null>(null);
   if (skill.error) return <ErrorNote>{String(skill.error)}</ErrorNote>;
   if (!skill.data) return <Empty>Reading the skill…</Empty>;
-  const fichiers = Object.keys(version.data?.files ?? {}).sort();
-  const montre = fichier && fichiers.includes(fichier) ? fichier : (fichiers.find((f) => f === "SKILL.md") ?? fichiers[0]);
+  const files = Object.keys(version.data?.files ?? {}).sort();
+  const montre = fichier && files.includes(fichier) ? fichier : (files.find((f) => f === "SKILL.md") ?? files[0]);
   return (
     <div className="space-y-6">
       <Breadcrumbs steps={[{ href: "/skills", label: "Skills" }, { label: <span data-donnee>{skill.data.slug}</span> }]} />
@@ -66,7 +66,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
               <Select
                 aria-label="Version to see"
                 className="w-auto"
-                value={numero ?? ""}
+                value={versionNumber ?? ""}
                 onChange={(e) => setChoisie(Number(e.target.value))}
               >
                 {[...(skill.data.versions ?? [])]
@@ -86,7 +86,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
         ) : (
           <div className="grid gap-4 md:grid-cols-[14rem_1fr]" data-testid="fichiers">
             <ul className="space-y-1 text-xs">
-              {fichiers.map((nom) => (
+              {files.map((nom) => (
                 <li key={nom}>
                   <button
                     type="button"

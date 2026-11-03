@@ -4,10 +4,10 @@ import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
 import SettingsGroupPage from "@/app/p/[slug]/settings/[group]/page";
 import SettingsPage from "@/app/p/[slug]/settings/page";
-import { manquantEnPremier } from "@/components/connecteurs";
+import { missingFirst } from "@/components/connectors";
 import { configurationEnClair, workflowsQuiExigent } from "@/components/project-settings/connector-card";
 import { activationGesture } from "@/components/project-settings/general-section";
-import { resumeDeLaPolitique } from "@/components/project-settings/guardrails-section";
+import { policySummary } from "@/components/project-settings/guardrails-section";
 import { api } from "@/lib/api";
 import { connectorTypes } from "@/mocks/data";
 import type { ConnectorDto, ProjectRequirement } from "@/lib/types";
@@ -106,7 +106,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
-vi.mock("@/components/operations-du-projet", () => ({ OperationsDuProjet: () => null }));
+vi.mock("@/components/project-operations", () => ({ ProjectOperations: () => null }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }), usePathname: () => "/p/dev/settings", notFound: vi.fn() }));
@@ -280,14 +280,14 @@ describe("the pieces of the page", () => {
   });
 
   it("orders required-and-missing first, keeping the rest in order", () => {
-    const parSorte = new Map(requirements.map((r) => [r.capability, r]));
-    expect(manquantEnPremier(["tracker", "scm", "cd", "runtime"], parSorte, connectors)).toEqual(["scm", "tracker", "cd", "runtime"]);
+    const byKind = new Map(requirements.map((r) => [r.capability, r]));
+    expect(missingFirst(["tracker", "scm", "cd", "runtime"], byKind, connectors)).toEqual(["scm", "tracker", "cd", "runtime"]);
   });
 
   it("summarises a policy", () => {
-    expect(resumeDeLaPolitique({ budgets: { per_ticket_usd: 25 }, release_train: { prod: { mode: "train" } } })).toBe(
+    expect(policySummary({ budgets: { per_ticket_usd: 25 }, release_train: { prod: { mode: "train" } } })).toBe(
       "budget $25 per ticket · release prod: train",
     );
-    expect(resumeDeLaPolitique(undefined)).toBe("defaults of the organisation");
+    expect(policySummary(undefined)).toBe("defaults of the organisation");
   });
 });

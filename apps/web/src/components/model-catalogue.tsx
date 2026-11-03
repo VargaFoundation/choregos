@@ -4,8 +4,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { Confirmation } from "@/components/geste-confirme";
-import { Alert, Badge, Button, Card, ErrorNote, EtatDeLecture, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Confirmation } from "@/components/confirmed-gesture";
+import { Alert, Badge, Button, Card, ErrorNote, ReadState, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { ModelCatalogue, ModelCatalogueEntry, ModelCuratePreview, ModelTiers, UsableModel } from "@/lib/types";
@@ -68,7 +68,7 @@ export function ModelCataloguePanel() {
   }
 
   if (catalogue.error || !catalogue.data) {
-    return <EtatDeLecture lecture={catalogue} quoi="the model catalogue" />;
+    return <ReadState lecture={catalogue} quoi="the model catalogue" />;
   }
   const data = catalogue.data;
   const enabled = data.entries.filter((e) => e.enabled);
@@ -315,7 +315,7 @@ function ListedByTheGateway({
   return (
     <Card title="Listed by the gateway">
       <div className="space-y-3 text-sm">
-        <EtatDeLecture lecture={usable} quoi="the gateway's models" />
+        <ReadState lecture={usable} quoi="the gateway's models" />
         {usable.data && listed.length === 0 && (
           <p className="text-ink-muted" data-testid="gateway-lists-nothing">
             The gateway lists no model, or could not be reached.{" "}

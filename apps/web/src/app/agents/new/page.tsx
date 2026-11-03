@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { slugFromName } from "@/components/agents/builder";
-import { creatableScopes, makeScopes } from "@/components/agents/registre";
+import { creatableScopes, makeScopes } from "@/components/agents/registry";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/lib/session";
 import { api, ApiError } from "@/lib/api";

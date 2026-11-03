@@ -10,8 +10,8 @@ import { TagList } from "@/components/agents/tags";
 import { estClient, extrait, urlDeLaPorte } from "@/lib/integrations";
 import type { AgentCatalogueConnection, AgentCatalogueEntry } from "@/lib/types";
 
-/** L'état d'une entrée dans l'organisation, en clair : ce que le bouton fera. */
-export function etatDeLEntree(entree: AgentCatalogueEntry): { libelle: string; action: "install" | "update" | null } {
+/** The state of an entry in the organisation, in plain words: what the button will do. */
+export function entryState(entree: AgentCatalogueEntry): { libelle: string; action: "install" | "update" | null } {
   if (entree.own_agent) return { libelle: "Your organisation has its own agent with this name", action: null };
   if (!entree.installed) return { libelle: "Not installed", action: "install" };
   if (entree.update_available)
@@ -20,9 +20,9 @@ export function etatDeLEntree(entree: AgentCatalogueEntry): { libelle: string; a
 }
 
 /**
- * Le catalogue de la plateforme (ADR 0040) — la revue du 07/10 ne trouvait dans `/agents` que les
- * coordinateurs RH. Les agents prêts à installer, un par rôle ; puis les assistants qui se connectent
- * en un clic, et ceux qui ne le peuvent pas encore ici, avec la raison.
+ * The platform's catalogue (ADR 0040): the review of 7 Oct found only the HR
+ * coordinators in `/agents`. The agents ready to install, one per role; then the assistants that connect
+ * in one click, and those that cannot yet here, with the reason.
  */
 export function AgentCatalogue({ org }: { org: string }) {
   const catalogue = useQuery({ queryKey: ["agent-catalogue", org], queryFn: () => api.agentCatalogue(org) });
@@ -55,7 +55,7 @@ export function AgentCatalogue({ org }: { org: string }) {
               </thead>
               <tbody>
                 {internes.map((entree) => (
-                  <LigneDuCatalogue key={entree.slug} org={org} entree={entree} />
+                  <CatalogueRow key={entree.slug} org={org} entree={entree} />
                 ))}
               </tbody>
             </table>
@@ -89,16 +89,16 @@ export function AiClientCatalogue({ org }: { org: string }) {
   );
 }
 
-function LigneDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogueEntry }) {
+function CatalogueRow({ org, entree }: { org: string; entree: AgentCatalogueEntry }) {
   const client = useQueryClient();
   const [erreur, setErreur] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
-  const etat = etatDeLEntree(entree);
+  const state = entryState(entree);
   async function agir() {
     setErreur(null);
     setOccupe(true);
     try {
-      await api.installCatalogueAgent(org, entree.slug, etat.action === "update");
+      await api.installCatalogueAgent(org, entree.slug, state.action === "update");
       await client.invalidateQueries({ queryKey: ["agent-catalogue", org] });
       await client.invalidateQueries({ queryKey: ["agents", org] });
     } catch (cause) {
@@ -126,11 +126,11 @@ function LigneDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogue
         <Badge tone="neutral">{entree.role}</Badge>
       </td>
       <td className="py-2 pr-2 text-xs text-ink-muted">{entree.summary}</td>
-      <td className="py-2 pr-2 text-xs">{etat.libelle}</td>
+      <td className="py-2 pr-2 text-xs">{state.libelle}</td>
       <td className="py-2 text-right">
-        {etat.action && (
+        {state.action && (
           <Button size="sm" onClick={() => void agir()} disabled={occupe}>
-            {etat.action === "update" ? "Update" : "Install"}
+            {state.action === "update" ? "Update" : "Install"}
           </Button>
         )}
         {erreur && <ErrorNote>{erreur}</ErrorNote>}

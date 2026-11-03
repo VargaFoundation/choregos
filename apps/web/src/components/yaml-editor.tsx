@@ -13,16 +13,16 @@ import type { WorkflowValidation } from "@/lib/types";
 
 type Issue = NonNullable<WorkflowValidation["errors"]>[number];
 
-export type PoigneeDeLEditeur = { allerALaLigne: (ligne: number) => void };
+export type EditorHandle = { allerALaLigne: (ligne: number) => void };
 
 /**
- * Éditeur YAML (CodeMirror 6), avec les erreurs de l'API posées **dans la marge**.
+ * YAML editor (CodeMirror 6), with the API's errors placed **in the margin**.
  *
- * La validation reste celle du serveur — le même code que l'orchestrateur : ce qu'on voit ici est
- * ce qui s'appliquera. L'éditeur n'ajoute pas de règles, il place celles du serveur à la bonne
- * ligne. Monaco, avant lui, se téléchargeait à l'exécution depuis un CDN dont la CSP bloquait la
- * feuille de style et la police : l'éditeur du dev s'affichait sans style (revue du 07/10).
- * CodeMirror est empaqueté avec la console, sans worker, et ses styles passent par `'unsafe-inline'`.
+ * Validation remains the server's, the same code as the orchestrator: what is seen here is
+ * what will apply. The editor adds no rules, it places the server's on the right
+ * line. Monaco, before it, was downloaded at run time from a CDN whose CSP blocked the
+ * stylesheet and the font: the dev's editor displayed unstyled (review of 7 Oct).
+ * CodeMirror is bundled with the console, without a worker, and its styles go through `'unsafe-inline'`.
  */
 export function YamlEditor({
   value,
@@ -39,17 +39,17 @@ export function YamlEditor({
   warnings?: Issue[];
   label: string;
   readOnly?: boolean;
-  ref?: Ref<PoigneeDeLEditeur>;
+  ref?: Ref<EditorHandle>;
 }) {
   const hote = useRef<HTMLDivElement>(null);
   const vue = useRef<EditorView | null>(null);
-  const surChangement = useRef(onChange);
+  const onChangeRef = useRef(onChange);
   const lecture = useRef(new Compartment());
   useEffect(() => {
-    surChangement.current = onChange;
+    onChangeRef.current = onChange;
   }, [onChange]);
 
-  // Une vue par montage ; elle se détruit au démontage (StrictMode la monte deux fois).
+  // One view per mount; it is destroyed on unmount (StrictMode mounts it twice).
   useEffect(() => {
     if (!hote.current) return;
     const instance = new EditorView({
@@ -70,15 +70,15 @@ export function YamlEditor({
           // In mono (ADR 0048) a long line no longer fits: it wraps, so the scroller never scrolls
           // sideways — a sideways region that holds no focusable element fails axe (read-only view).
           EditorView.lineWrapping,
-          // Pas d'`indentWithTab` : Tab doit sortir de l'éditeur, sinon le clavier y reste piégé.
+          // No `indentWithTab`: Tab must leave the editor, otherwise the keyboard stays trapped in it.
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorState.tabSize.of(2),
           lecture.current.of(EditorState.readOnly.of(readOnly)),
           EditorView.contentAttributes.of({ "aria-label": label }),
           EditorView.updateListener.of((maj) => {
-            // Ce qui vient du dehors (`value` changé) est marqué `remote` : il ne revient pas par onChange.
+            // What comes from outside (`value` changed) is marked `remote`: it does not come back through onChange.
             const venuDuDehors = maj.transactions.some((tr) => tr.annotation(Transaction.remote));
-            if (maj.docChanged && !venuDuDehors) surChangement.current(maj.state.doc.toString());
+            if (maj.docChanged && !venuDuDehors) onChangeRef.current(maj.state.doc.toString());
           }),
         ],
       }),
@@ -88,11 +88,11 @@ export function YamlEditor({
       instance.destroy();
       vue.current = null;
     };
-    // Le texte initial seulement : la suite arrive par l'effet ci-dessous.
+    // The initial text only: what follows arrives through the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Un texte changé au-dehors remplace le document.
+  // A text changed from outside replaces the document.
   useEffect(() => {
     const instance = vue.current;
     if (!instance || instance.state.doc.toString() === value) return;
@@ -106,7 +106,7 @@ export function YamlEditor({
     vue.current?.dispatch({ effects: lecture.current.reconfigure(EditorState.readOnly.of(readOnly)) });
   }, [readOnly]);
 
-  // Les erreurs et avertissements du serveur, à leur ligne.
+  // The server's errors and warnings, at their line.
   useEffect(() => {
     const instance = vue.current;
     if (!instance) return;
@@ -122,8 +122,8 @@ export function YamlEditor({
     allerALaLigne(ligne: number) {
       const instance = vue.current;
       if (!instance) return;
-      const cible = instance.state.doc.line(Math.min(Math.max(ligne, 1), instance.state.doc.lines));
-      instance.dispatch({ selection: { anchor: cible.from }, effects: EditorView.scrollIntoView(cible.from, { y: "center" }) });
+      const target = instance.state.doc.line(Math.min(Math.max(ligne, 1), instance.state.doc.lines));
+      instance.dispatch({ selection: { anchor: target.from }, effects: EditorView.scrollIntoView(target.from, { y: "center" }) });
       instance.focus();
     },
   }));
@@ -135,13 +135,13 @@ export function YamlEditor({
   );
 }
 
-/** Une erreur du serveur (ligne et colonne comptées à partir de 1), soulignée jusqu'au bout de sa ligne. */
+/** A server error (line and column counted from 1), underlined to the end of its line. */
 export function diagnostic(doc: Text, issue: Issue, severity: "error" | "warning"): Diagnostic {
-  const ligne = doc.line(Math.min(Math.max(issue.line ?? 1, 1), doc.lines));
-  const from = Math.min(ligne.from + Math.max((issue.column ?? 1) - 1, 0), ligne.to);
+  const line = doc.line(Math.min(Math.max(issue.line ?? 1, 1), doc.lines));
+  const from = Math.min(line.from + Math.max((issue.column ?? 1) - 1, 0), line.to);
   return {
     from,
-    to: Math.max(ligne.to, from),
+    to: Math.max(line.to, from),
     severity,
     message: issue.path ? `${issue.message} (${issue.path})` : issue.message,
     source: issue.code ?? "choregos",
@@ -153,7 +153,7 @@ const THEME = EditorView.theme({
   "&": { height: "100%", fontSize: "12px", color: "var(--choregos-ink)", backgroundColor: "var(--choregos-surface)" },
   ".cm-scroller": { fontFamily: "var(--choregos-font-mono)", lineHeight: "1.6" },
   ".cm-content": { caretColor: "var(--choregos-ink)" },
-  // `ink-muted`, pas `ink-subtle` : les numéros de ligne doivent passer le contraste AA (axe le mesure).
+  // `ink-muted`, not `ink-subtle`: the line numbers must pass the AA contrast (axe measures it).
   ".cm-gutters": { backgroundColor: "var(--choregos-surface-muted)", color: "var(--choregos-ink-muted)", borderRight: "1px solid var(--choregos-line)" },
   ".cm-activeLine": { backgroundColor: "var(--choregos-surface-muted)" },
   ".cm-activeLineGutter": { backgroundColor: "var(--choregos-surface-sunken)", color: "var(--choregos-ink)" },

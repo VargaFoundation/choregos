@@ -3,11 +3,11 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, ReadState, Input, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 import type { PolicyDef } from "@/lib/types";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 
 /**
  * The environments that have a release train: the keys of the active policy's `release_train`, in
@@ -25,7 +25,7 @@ export default function TrainsPage({ params }: { params: Promise<{ slug: string 
   return (
     <div className="space-y-4">
       {!policy.data ? (
-        <EtatDeLecture lecture={policy} quoi="the policy's release trains" />
+        <ReadState lecture={policy} quoi="the policy's release trains" />
       ) : envs.length === 0 ? (
         <Empty title="No release train">This project&apos;s policy declares no release_train environment.</Empty>
       ) : (
@@ -71,7 +71,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
       action={data && <StateBadge state={data.status} display={data.status} kind={data.frozen ? "blocked" : "work"} />}
     >
       {!data ? (
-        <EtatDeLecture lecture={train} quoi={`the ${env} train`} />
+        <ReadState lecture={train} quoi={`the ${env} train`} />
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
@@ -159,7 +159,7 @@ function History({ slug }: { slug: string }) {
                 <td>
                   {release.status === "awaiting_approval" && (
                     <span className="flex flex-wrap gap-2">
-                      <GesteConfirme
+                      <ConfirmedGesture
                         tonDuBouton="primary"
                         ton="primary"
                         question={`Approve the production release of batch R-${release.batch_no}? Its ${release.items?.length ?? 0} item(s) go to ${release.env}.`}
@@ -170,8 +170,8 @@ function History({ slug }: { slug: string }) {
                         }}
                       >
                         Approve
-                      </GesteConfirme>
-                      <GesteConfirme
+                      </ConfirmedGesture>
+                      <ConfirmedGesture
                         tonDuBouton="danger"
                         question={`Abort batch R-${release.batch_no}? Nothing of it reaches ${release.env}.`}
                         confirmer={`Abort R-${release.batch_no}`}
@@ -182,7 +182,7 @@ function History({ slug }: { slug: string }) {
                         }}
                       >
                         Abort
-                      </GesteConfirme>
+                      </ConfirmedGesture>
                     </span>
                   )}
                 </td>
@@ -191,7 +191,7 @@ function History({ slug }: { slug: string }) {
           </tbody>
         </table>
       </div>
-      <EtatDeLecture lecture={releases} quoi="the batches" />
+      <ReadState lecture={releases} quoi="the batches" />
       {releases.data?.items.length === 0 && <Empty>No batch</Empty>}
     </Card>
   );

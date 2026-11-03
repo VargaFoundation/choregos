@@ -10,9 +10,9 @@ import { shortDate } from "@/lib/format";
 import type { WorkflowDef } from "@/lib/types";
 
 /**
- * Les versions publiées d'un workflow (S16-13) : aucune n'est écrasée, un ticket finit sur la sienne.
- * Deux versions se comparent ligne à ligne ; une version passée se **restaure** en la republiant
- * comme la suivante — l'historique s'allonge, il ne se réécrit pas.
+ * The published versions of a workflow (S16-13): none is overwritten, a ticket ends on its own.
+ * Two versions are compared line by line; a past version is **restored** by republishing it
+ * as the next one: the history grows, it is never rewritten.
  */
 export default function HistoryPage({ params }: { params: Promise<{ slug: string; name: string }> }) {
   const { slug, name: brut } = use(params);
@@ -22,17 +22,17 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
     queryKey: ["workflow-versions", slug, name],
     queryFn: () => api.workflowVersions(slug, name),
   });
-  const liste = versions.data ?? [];
-  const active = liste.find((version) => version.is_active);
+  const versionList = versions.data ?? [];
+  const active = versionList.find((version) => version.is_active);
   const [avant, setAvant] = useState<number | null>(null);
   const [apres, setApres] = useState<number | null>(null);
   const [aConfirmer, setAConfirmer] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Par défaut : la version qui précède l'active, contre l'active.
-  const versionApres = apres ?? active?.version ?? liste[0]?.version ?? null;
+  // By default: the version before the active one, against the active one.
+  const versionAfter = apres ?? active?.version ?? versionList[0]?.version ?? null;
   const versionAvant =
-    avant ?? liste.find((version) => versionApres !== null && version.version < versionApres)?.version ?? null;
+    avant ?? versionList.find((version) => versionAfter !== null && version.version < versionAfter)?.version ?? null;
 
   async function restaurer(version: number) {
     setMessage(null);
@@ -71,7 +71,7 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
           </TR>
         </THead>
         <TBody>
-          {liste.map((version) => (
+          {versionList.map((version) => (
             <TR key={version.version}>
               <TD>v{version.version}</TD>
               <TD>
@@ -109,13 +109,13 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
         </p>
       )}
 
-      {liste.length > 1 && (
+      {versionList.length > 1 && (
         <Card title="Compare">
           <div className="flex flex-wrap gap-4">
             <Field label="From">
               {(props) => (
                 <Select {...props} value={versionAvant ?? ""} onChange={(event) => setAvant(Number(event.target.value))}>
-                  {liste.map((version) => (
+                  {versionList.map((version) => (
                     <option key={version.version} value={version.version}>
                       v{version.version}
                     </option>
@@ -125,8 +125,8 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
             </Field>
             <Field label="To">
               {(props) => (
-                <Select {...props} value={versionApres ?? ""} onChange={(event) => setApres(Number(event.target.value))}>
-                  {liste.map((version) => (
+                <Select {...props} value={versionAfter ?? ""} onChange={(event) => setApres(Number(event.target.value))}>
+                  {versionList.map((version) => (
                     <option key={version.version} value={version.version}>
                       v{version.version}
                     </option>
@@ -136,8 +136,8 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
             </Field>
           </div>
           <Diff
-            avant={liste.find((version) => version.version === versionAvant)}
-            apres={liste.find((version) => version.version === versionApres)}
+            avant={versionList.find((version) => version.version === versionAvant)}
+            apres={versionList.find((version) => version.version === versionAfter)}
           />
         </Card>
       )}
@@ -145,7 +145,7 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
   );
 }
 
-/** Les lignes qui changent entre deux versions, avec deux lignes de contexte autour. */
+/** The lines that change between two versions, with two lines of context around them. */
 function Diff({ avant, apres }: { avant?: WorkflowDef; apres?: WorkflowDef }) {
   const morceaux = useMemo(
     () => (avant && apres ? hunks(diffLines(avant.yaml, apres.yaml)) : []),
@@ -160,8 +160,8 @@ function Diff({ avant, apres }: { avant?: WorkflowDef; apres?: WorkflowDef }) {
           {morceau.map((ligne, rang) => (
             <div
               key={rang}
-              // Le texte reste à l'encre : la couleur n'est qu'un repère en marge (contraste AA), le
-              // signe et le texte pour lecteur d'écran portent le sens.
+              // The text stays in ink: the colour is only a marker in the margin (AA contrast), the
+              // sign and the screen-reader text carry the meaning.
               className={
                 ligne.kind === "add"
                   ? "border-l-2 border-ok bg-ok/10 pl-1 text-ink"

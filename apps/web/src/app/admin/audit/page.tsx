@@ -9,8 +9,8 @@ import { versCsv } from "@/lib/csv";
 import { shortDate } from "@/lib/format";
 
 /**
- * Le journal d'audit : filtré par acteur et par sorte de cible, page après page, exportable. L'API
- * ne rend que les organisations où l'on a VRAIMENT le droit de le lire (`audit:read`).
+ * The audit log: filtered by actor and by kind of target, page after page, exportable. The API
+ * returns only the organisations where one REALLY has the right to read it (`audit:read`).
  */
 export default function AuditPage() {
   const [acteur, setActeur] = useState("");
@@ -22,12 +22,12 @@ export default function AuditPage() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (derniere) => (derniere.meta.has_more ? (derniere.meta.next_cursor ?? undefined) : undefined),
   });
-  const lignes = pages.data?.pages.flatMap((page) => page.items) ?? [];
+  const rows = pages.data?.pages.flatMap((page) => page.items) ?? [];
 
   function exporter() {
     const csv = versCsv(
       ["when", "actor_kind", "actor", "action", "target_type", "target_id"],
-      lignes.map((e) => [e.ts, e.actor_kind, e.actor_id, e.action, e.target_type, e.target_id]),
+      rows.map((e) => [e.ts, e.actor_kind, e.actor_id, e.action, e.target_type, e.target_id]),
     );
     const lien = document.createElement("a");
     lien.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -40,8 +40,8 @@ export default function AuditPage() {
     <Card
       title="Audit log"
       action={
-        <Button size="sm" onClick={exporter} disabled={lignes.length === 0}>
-          Export the {lignes.length} rows (CSV)
+        <Button size="sm" onClick={exporter} disabled={rows.length === 0}>
+          Export the {rows.length} rows (CSV)
         </Button>
       }
     >
@@ -75,7 +75,7 @@ export default function AuditPage() {
         </Button>
       </form>
       {pages.error && <ErrorNote>{String(pages.error)}</ErrorNote>}
-      {lignes.length === 0 && !pages.isLoading ? (
+      {rows.length === 0 && !pages.isLoading ? (
         <Empty>No audit entry</Empty>
       ) : (
         <Table aria-label="Audit entries">
@@ -88,7 +88,7 @@ export default function AuditPage() {
             </TR>
           </THead>
           <TBody>
-            {lignes.map((entry) => (
+            {rows.map((entry) => (
               <TR key={entry.id}>
                 <TD>{shortDate(entry.ts)}</TD>
                 <TD>

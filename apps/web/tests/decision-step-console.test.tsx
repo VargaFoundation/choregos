@@ -144,8 +144,8 @@ describe("a decision step is told apart from the platform (ADR 0121)", () => {
     expect(actorKind("decision")).toBe("decision");
     expect(KIND_LABEL.decision).toBe("decision");
     expect(KIND_COLOURS.decision).toEqual({
-      bord: `var(--choregos-cat-${DECISION_HUE}-ink)`,
-      fond: `var(--choregos-cat-${DECISION_HUE}-soft)`,
+      border: `var(--choregos-cat-${DECISION_HUE}-ink)`,
+      fill: `var(--choregos-cat-${DECISION_HUE}-soft)`,
       text: `var(--choregos-cat-${DECISION_HUE}-ink)`,
     });
     render(<WorkflowMap graph={GRAPH} initial="inbox" actors={{ router: { type: "decision", role: "route_ticket" }, owner: { type: "human", group: "support" } }} />);

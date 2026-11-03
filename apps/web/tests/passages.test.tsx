@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { courte, lecture, modifieeApresCoup, Passages } from "@/components/passages";
+import { courte, lecture, editedAfterTheFact, Passages } from "@/components/passages";
 import type { HandOff, HandOffEvent } from "@/lib/types";
 
 const A = `sha256:${"a".repeat(64)}`;
@@ -15,8 +15,8 @@ const ev = (kind: "produced" | "read", digest: string, run_id: string, stage: st
   at: "2026-10-10T14:00:00Z",
 });
 
-describe("les reçus de passage, lus (S25-04)", () => {
-  it("une lecture a lu la révision produite juste avant elle, une autre, ou une qu'aucune étape n'a produite", () => {
+describe("the hand-off receipts, read (S25-04)", () => {
+    it("a read read the revision produced just before it, another one, or one that no step produced", () => {
     const passage: HandOff = {
       output: "spec_markdown",
       current_digest: B,
@@ -31,17 +31,17 @@ describe("les reçus de passage, lus (S25-04)", () => {
     expect([1, 3, 4].map((rang) => lecture(passage, rang))).toEqual(["same", "other", "unknown"]);
   });
 
-  it("une sortie modifiée après sa dernière production se voit ; retirée aussi", () => {
+    it("an output edited after its last production shows; a removed one too", () => {
     const base: HandOff = { output: "spec_markdown", current_digest: A, events: [ev("produced", A, "r1", "refine")] };
-    expect(modifieeApresCoup(base)).toBe(false);
-    expect(modifieeApresCoup({ ...base, current_digest: B })).toBe(true);
-    expect(modifieeApresCoup({ ...base, current_digest: null })).toBe(true);
-    // Rien de produit (une lecture seule) : rien à comparer.
-    expect(modifieeApresCoup({ output: "x", current_digest: A, events: [ev("read", A, "r1", "plan")] })).toBe(false);
+    expect(editedAfterTheFact(base)).toBe(false);
+    expect(editedAfterTheFact({ ...base, current_digest: B })).toBe(true);
+    expect(editedAfterTheFact({ ...base, current_digest: null })).toBe(true);
+        // Nothing produced (a read only): nothing to compare.
+    expect(editedAfterTheFact({ output: "x", current_digest: A, events: [ev("read", A, "r1", "plan")] })).toBe(false);
     expect(courte(A)).toBe("aaaaaaaaaaaa");
   });
 
-  it("la carte nomme chaque sortie, dit qui l'a produite et lue, et montre une modification après coup", () => {
+    it("the card names each output, says who produced and read it, and shows an after-the-fact edit", () => {
     render(
       <Passages
         passages={[
