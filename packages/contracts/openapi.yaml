@@ -7500,6 +7500,18 @@ components:
           properties:
             type: { type: string }
             capabilities: { type: array, items: { type: string } }
+            source:
+              type: string
+              enum: [organisation, deployment]
+              description: >-
+                Where the gateway is set: the organisation's own `gateway` connector, or the
+                deployment's environment (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no
+                screen changes.
+            base_url:
+              type: [string, "null"]
+              description: >-
+                The address the platform calls. The organisation's own is shown to its members; the
+                deployment's only to a platform administrator, null otherwise.
         tiers: { $ref: "#/components/schemas/ModelTiers" }
         entries: { type: array, items: { $ref: "#/components/schemas/ModelCatalogueEntry" } }
     ModelCatalogueSettings:
