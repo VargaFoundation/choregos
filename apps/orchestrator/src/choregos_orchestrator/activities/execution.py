@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités d'exécution d'une étape : lancer le run, l'attendre, l'abandonner.
+"""Execution activities of a step: launch the run, await it, abandon it.
 
-C'est la moitié de `stage` qui parle à l'exécuteur (Tekton, Job Kubernetes, Docker local,
-fake) ; toutes idempotentes par `run_id`. La préparation (modèle, clé, contexte) reste dans
-`stage`, le bilan (coût, résultat, findings) dans `bilan`.
+This is the half of `stage` that talks to the executor (Tekton, Kubernetes Job, local Docker,
+fake); all idempotent by `run_id`. The preparation (model, key, context) stays in `stage`, the
+outcome (cost, result, findings) in `outcome`.
 """
 
 from __future__ import annotations
@@ -29,9 +29,9 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from ..config import get_settings
-from ..gitops import PLAGES_PRIVEES
+from ..gitops import PRIVATE_RANGES
 from .base import db, project_bundle, without_secrets
-from .bilan import close_run_spend
+from .outcome import close_run_spend
 from .remote import mint_remote_token
 from .run_key import mint_run_key
 
@@ -40,42 +40,42 @@ START_REFUSED = "executor_configuration_refused"
 
 
 def _runner_namespace(settings: Any, slug: str) -> str:
-    """Où vivent les pods d'agent d'un projet. Une seule règle, lue partout."""
+    """Where the pods of a project's agent live. A single rule, read everywhere."""
     return str(settings.runner_namespace_pattern).format(slug=slug)
 
 
-def hotes_a_joindre_en_direct(settings: Any) -> list[str]:
-    """Les hôtes que le runner doit joindre SANS passer par le proxy d'egress.
+def hosts_to_reach_directly(settings: Any) -> list[str]:
+    """The hosts the runner must reach WITHOUT going through the egress proxy.
 
-    Ce ne sont pas des hôtes devinés : ce sont ceux que la plateforme lui donne elle-même —
-    l'URL de rappel de l'API interne, la passerelle de modèles, la mémoire. Les lire ici rend
-    la promesse de `NO_PROXY` vraie par construction au lieu de reposer sur un suffixe.
+    They are not guessed hosts: they are the ones the platform itself gives it: the internal API's
+    callback URL, the model gateway, the memory. Reading them here makes the promise of `NO_PROXY`
+    true by construction instead of resting on a suffix.
 
-    Le suffixe ne suffisait pas. `.svc` couvre `choregos-api.choregos.svc`, PAS `choregos-api`,
-    et c'est précisément la forme courte que la plateforme fabrique elle-même
-    (`callback_url` → `http://choregos-api:8000`). Sur le locataire dev du 2026-09-27, le
-    premier appel du runner — chercher son `StageInput` — partait donc vers un proxy d'egress
-    qui n'existait pas dans ce namespace, et mourait sur « Name or service not known ». Le
-    message ne nommait ni l'URL, ni le proxy : le runner concluait « StageInput introuvable ».
+    The suffix was not enough. `.svc` covers `choregos-api.choregos.svc`, NOT `choregos-api`, and
+    that is precisely the short form the platform builds itself (`callback_url` ->
+    `http://choregos-api:8000`). On the dev tenant on 2026-09-27, the runner's first call, fetching
+    its `StageInput`, therefore went to an egress proxy that did not exist in that namespace, and
+    died on "Name or service not known". The message named neither the URL nor the proxy: the
+    runner concluded "StageInput not found".
     """
-    hotes: list[str] = []
+    hosts: list[str] = []
     for url in (
         getattr(settings, "callback_url", ""),
         getattr(settings, "gateway_url", ""),
         getattr(settings, "memory_url", ""),
     ):
-        hote = urlsplit(str(url or "")).hostname
-        if hote and hote not in hotes:
-            hotes.append(hote)
-    return hotes
+        host = urlsplit(str(url or "")).hostname
+        if host and host not in hosts:
+            hosts.append(host)
+    return hosts
 
 
-def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
-    """L'environnement d'un pod d'agent : ce que le déploiement passe, plus le proxy d'egress.
+def runner_environment(settings: Any, namespace: str) -> dict[str, str]:
+    """The environment of an agent pod: what the deployment passes, plus the egress proxy.
 
-    `git`, `pip`, `npm`, `uv` et l'agent lisent `HTTP_PROXY`/`HTTPS_PROXY` ; `NO_PROXY`
-    garde le trafic du cluster (API interne, passerelle, mémoire) en direct — le proxy ne
-    sert qu'à sortir. Sans `runner_egress_proxy`, rien n'est ajouté.
+    `git`, `pip`, `npm`, `uv` and the agent read `HTTP_PROXY`/`HTTPS_PROXY`; `NO_PROXY` keeps the
+    cluster's traffic (internal API, gateway, memory) direct: the proxy only serves to get out.
+    Without `runner_egress_proxy`, nothing is added.
     """
     env = dict(settings.runner_env)
     if str(getattr(settings, "runner_egress_auth", "") or "") == "run":
@@ -93,27 +93,27 @@ def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
                     "127.0.0.1",
                     ".svc",
                     ".cluster.local",
-                    *hotes_a_joindre_en_direct(settings),
-                    *PLAGES_PRIVEES[:3],
+                    *hosts_to_reach_directly(settings),
+                    *PRIVATE_RANGES[:3],
                 )
             ),
         )
-        for nom in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
-            env[nom.lower()] = env[nom]
+        for name in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
+            env[name.lower()] = env[name]
     return env
 
 
-def classe_d_execution(settings: Any, policy: Any) -> str | None:
-    """La `RuntimeClass` d'un pod d'agent : celle qu'exige la politique, sinon celle du
-    déploiement, sinon aucune. Une politique `gvisor` ne se contourne pas par la valeur."""
+def runtime_class(settings: Any, policy: Any) -> str | None:
+    """The `RuntimeClass` of an agent pod: the one the policy requires, else the deployment's,
+    else none. A `gvisor` policy is not bypassed by the value."""
     if policy.sandbox.runtime == "gvisor":
         return "gvisor"
     return str(getattr(settings, "runner_runtime_class", "") or "") or None
 
 
-#: Combien de temps un run peut attendre une place avant d'être abandonné — six heures :
-#: une nuit de pointe, pas une éternité.
-FILE_MAX_MINUTES = 360
+#: How long a run may wait for a slot before being abandoned: six hours, a peak night, not
+#: an eternity.
+QUEUE_MAX_MINUTES = 360
 
 #: How many polls in a row the executor may answer that it no longer knows a run before the wait
 #: ends (S35-02c). One is not enough: an API server hiccup or a claim being replaced is not a lost
@@ -200,7 +200,7 @@ def _capabilities_of_run(executor: Any, run: Run, namespace: str) -> list[str]:
 
 @activity.defn(name="start_run")
 async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
-    """Démarre l'exécution (Tekton, Job K8s, Docker local, fake) — idempotent par `run_id`."""
+    """Start the execution (Tekton, Kubernetes Job, local Docker, fake); idempotent by `run_id`."""
     settings = get_settings()
     stage_input = StageInput.model_validate(payload["stage_input"])
     async with db() as session:
@@ -273,37 +273,37 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             kind = getattr(refusal, "code", START_REFUSED)
             raise ApplicationError(str(refusal), type=kind, non_retryable=True) from refusal
         capabilities = _capabilities_for(bundle.adapters.executor, ref, capabilities)
-        # Un exécuteur qui sait mettre en file (`queue`) a pu créer le run SANS pod, parce
-        # que le plafond de simultanéité était atteint. Le marquer « running » ferait
-        # mentir le board, la page du run et les mesures : rien ne tourne. On lui demande
-        # donc son état, et on ne pose la question qu'à ceux qui peuvent répondre.
-        en_file = False
-        motif = ""
+        # An executor that can queue (`queue`) may have created the run WITHOUT a pod, because the
+        # concurrency cap was reached. Marking it "running" would make the board, the run page and
+        # the measures lie: nothing runs. So it is asked for its state, and only those that can
+        # answer are asked.
+        in_queue = False
+        queue_reason = ""
         if "queue" in getattr(bundle.adapters.executor, "capabilities", frozenset()):
-            etat = await bundle.adapters.executor.status(ref)
-            en_file = etat.state == "pending" and bool(etat.message)
-            motif = etat.message if en_file else ""
+            state = await bundle.adapters.executor.status(ref)
+            in_queue = state.state == "pending" and bool(state.message)
+            queue_reason = state.message if in_queue else ""
         if run is not None:
             run.executor_kind = str(ref.kind)
             run.executor_ref = ref.name
-            run.status = "queued" if en_file else "running"
+            run.status = "queued" if in_queue else "running"
         await persist_event(
             session,
-            EventType.RUN_QUEUED if en_file else EventType.RUN_STARTED,
+            EventType.RUN_QUEUED if in_queue else EventType.RUN_STARTED,
             project_id=bundle.project.id,
             work_item_id=payload["work_item_id"],
             project_slug=bundle.slug,
             subject=stage_input.run_id,
             run_id=stage_input.run_id,
             executor=str(ref.kind),
-            **({"reason": motif} if en_file else {}),
+            **({"reason": queue_reason} if in_queue else {}),
         )
         return {
             "executor_ref": ref.name,
             "kind": str(ref.kind),
             "namespace": ref.namespace,
             "reused": False,
-            "queued": en_file,
+            "queued": in_queue,
             "capabilities": capabilities,
         }
 
@@ -382,21 +382,21 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
-    """Attend la fin du run, avec heartbeat et annulation propre (S1-03)."""
+    """Wait for the end of the run, with heartbeat and clean cancellation (S1-03)."""
     settings = get_settings()
     run_id = payload["run_id"]
     timeout_minutes = float(payload.get("timeout_minutes", 120))
     deadline = timedelta(minutes=timeout_minutes).total_seconds()
-    # Le temps passé EN FILE ne compte pas contre le budget de l'étape : le banc du
-    # 2026-09-25 a vu deux runs RH « dépasser 20 min » sans qu'un pod ait jamais tourné —
-    # leur Job attendait une place. La file a sa propre borne, bien plus large.
-    file_max = timedelta(
-        minutes=float(payload.get("queue_timeout_minutes", FILE_MAX_MINUTES))
+    # The time spent IN THE QUEUE does not count against the step's budget: the bench of
+    # 2026-09-25 saw two HR runs "exceed 20 min" without a pod ever running, their Job was waiting
+    # for a slot. The queue has its own, much wider bound.
+    queue_max = timedelta(
+        minutes=float(payload.get("queue_timeout_minutes", QUEUE_MAX_MINUTES))
     ).total_seconds()
     waited = 0.0
-    en_file = 0.0
+    in_queue = 0.0
     interval = float(payload.get("poll_seconds", settings.heartbeat_seconds))
-    a_tourne = False
+    has_run = False
     lost = 0
     while waited <= deadline:
         async with db() as session:
@@ -405,9 +405,9 @@ async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
             ref = ExecRef(
                 kind=(run.executor_kind if run and run.executor_kind else "fake"),
                 name=(run.executor_ref if run and run.executor_ref else run_id),
-                # Le MÊME namespace qu'au démarrage : sans lui, l'exécuteur Kubernetes
-                # interrogeait `/namespaces/None/jobs/…` et recevait un 403 dont le message
-                # parle de droits, jamais du namespace manquant.
+                # The SAME namespace as at start: without it, the Kubernetes executor queried
+                # `/namespaces/None/jobs/...` and got a 403 whose message speaks of rights, never of
+                # the missing namespace.
                 namespace=_runner_namespace(settings, bundle.slug),
                 run_id=run_id,
             )
@@ -416,37 +416,36 @@ async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 return {"status": "finished", "result": run.result}
             status = await bundle.adapters.executor.status(ref)
             await snapshot_live(bundle.adapters.executor, run, ref, status)
-            # Tant qu'il attend, son jeton vieillit. Minté à la préparation pour
-            # `max_minutes + 15`, il expire PENDANT l'attente si la file est longue, et
-            # l'agent démarre pour recevoir « Signature has expired » — vu sur le banc du
-            # 2026-09-24. On le remplace à chaque relevé, tant que rien n'a démarré.
+            # While it waits, its token ages. Minted at preparation for `max_minutes + 15`, it
+            # expires DURING the wait if the queue is long, and the agent starts to receive
+            # "Signature has expired" (seen on the bench of 2026-09-24). It is replaced at every
+            # poll, as long as nothing has started.
             if (
                 run is not None
                 and run.status == "queued"
                 and status.state == "pending"
                 and "renew" in getattr(bundle.adapters.executor, "capabilities", frozenset())
             ):
-                item_du_run = await session.get(WorkItem, run.work_item_id)
+                run_item = await session.get(WorkItem, run.work_item_id)
                 renew = getattr(bundle.adapters.executor, "renew", None)
-                if renew is not None and item_du_run is not None:
-                    # Un renouvellement raté ne tue pas le run : il peut encore démarrer à
-                    # temps, et s'il n'y arrive pas il échouera sur SON message à lui.
-                    # Un droit absent doit dégrader, pas détruire — c'est la deuxième fois
-                    # que cette leçon se paie (banc du 2026-09-24).
+                if renew is not None and run_item is not None:
+                    # A failed renewal does not kill the run: it may still start in time, and if it
+                    # cannot it will fail on ITS own message. A missing right must degrade, not
+                    # destroy; this is the second time that lesson is paid for (bench of 2026-09-24).
                     with contextlib.suppress(Exception):
                         await renew(
                             ref,
                             mint_run_token(
                                 run_id,
                                 project_slug=bundle.slug,
-                                work_item_key=item_du_run.tracker_key,
-                                # De quoi couvrir ce qu'il reste d'attente, plus l'étape.
+                                work_item_key=run_item.tracker_key,
+                                # Enough to cover what is left of the wait, plus the step.
                                 ttl_minutes=int(timeout_minutes) + 15,
                             ),
                         )
-            # Le run attendait une place et vient de l'obtenir : sans cette bascule, il
-            # resterait « en file » jusqu'à sa fin, alors qu'il tourne. C'est ici que ça
-            # se voit, parce que c'est ici qu'on interroge l'exécuteur.
+            # The run was waiting for a slot and has just got it: without this switch, it would
+            # stay "queued" until its end, although it runs. It shows here, because this is where the
+            # executor is queried.
             if run is not None and run.status == "queued" and status.state == "running":
                 run.status = "running"
                 run.started_at = run.started_at or utcnow()
@@ -467,8 +466,8 @@ async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 await archive_once(bundle.adapters.executor, run, ref, status)
                 if run is not None and run.result is not None:
                     return {"status": "finished", "result": run.result}
-                # Le runner n'a pas pu poster : on lit le résultat publié par l'exécuteur
-                # (`result-url` côté Tekton), et on l'enregistre nous-mêmes.
+                # The runner could not post: we read the result published by the executor
+                # (`result-url` on the Tekton side), and record it ourselves.
                 # First from the run's journal, which the API already holds (#410): the runner
                 # journals the whole result before posting it, on every executor.
                 fetched = await result_from_journal(session, run_id)
@@ -506,30 +505,30 @@ async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
         if lost >= LOST_POLLS:
             return await _lost_run(payload["project_id"], run_id, ref, status)
         with contextlib.suppress(RuntimeError):  # hors contexte Temporal (tests unitaires)
-            activity.heartbeat({"run_id": run_id, "waited_s": waited, "en_file_s": en_file})
+            activity.heartbeat({"run_id": run_id, "waited_s": waited, "en_file_s": in_queue})
         await asyncio.sleep(interval)
-        if status.state == "pending" and not a_tourne:
-            en_file += interval
-            if en_file > file_max:
-                await _abandonner(payload["project_id"], run_id, ref)
+        if status.state == "pending" and not has_run:
+            in_queue += interval
+            if in_queue > queue_max:
+                await _abandon(payload["project_id"], run_id, ref)
                 return {
                     "status": "queue_timed_out",
                     "result": StageResult(
                         status=StageStatus.FAILED,
                         summary=(
-                            f"never admitted: {en_file / 60:.0f} min in the queue "
+                            f"never admitted: {in_queue / 60:.0f} min in the queue "
                             f"({status.message or 'limit reached'})"
                         ),
                         reason="queue_timeout",
                     ).model_dump(mode="json", by_alias=True),
                 }
             continue
-        a_tourne = True
+        has_run = True
         waited += interval
-    # Un run qui dépasse son budget ne doit rien laisser derrière lui : un Job suspendu
-    # dont plus personne ne relève l'état reste en tête de file et bloque tous les suivants
-    # — vu sur le banc du 2026-09-25, cinq tickets figés derrière deux runs morts.
-    await _abandonner(payload["project_id"], run_id, ref)
+    # A run that exceeds its budget must leave nothing behind: a suspended Job whose state nobody
+    # reads any more stays at the head of the queue and blocks all the following ones (seen on the
+    # bench of 2026-09-25, five work items frozen behind two dead runs).
+    await _abandon(payload["project_id"], run_id, ref)
     return {
         "status": "timed_out",
         "result": StageResult(
@@ -551,7 +550,7 @@ async def _lost_run(project_id: str, run_id: str, ref: ExecRef, status: ExecStat
             if run is not None:
                 run.result = payload_result
             return {"status": "finished", "result": payload_result}
-    await _abandonner(project_id, run_id, ref)
+    await _abandon(project_id, run_id, ref)
     return {
         "status": "lost",
         "result": StageResult(
@@ -562,9 +561,9 @@ async def _lost_run(project_id: str, run_id: str, ref: ExecRef, status: ExecStat
     }
 
 
-async def _abandonner(project_id: str, run_id: str, ref: ExecRef) -> None:
-    """Retire le Job (ou l'équivalent) d'un run qu'on n'attend plus, sans jamais lever :
-    ce qui compte est que le run se termine, le nettoyage est un devoir, pas une condition."""
+async def _abandon(project_id: str, run_id: str, ref: ExecRef) -> None:
+    """Remove the Job (or the equivalent) of a run that is no longer awaited, never raising: what
+    matters is that the run ends; the cleanup is a duty, not a condition."""
     with contextlib.suppress(Exception):
         async with db() as session:
             bundle = await project_bundle(session, project_id)
@@ -603,7 +602,7 @@ async def abandon_queued_runs(project_id: str, run_ids: list[str]) -> None:
                     namespace=_runner_namespace(get_settings(), bundle.slug),
                     run_id=run.id,
                 )
-            await _abandonner(project_id, run_id, ref)
+            await _abandon(project_id, run_id, ref)
 
 
 @activity.defn(name="cancel_run")
@@ -632,3 +631,9 @@ async def cancel_run(payload: dict[str, Any]) -> None:
             run.status = "cancelled"
         run.ended_at = run.ended_at or utcnow()
     await close_run_spend(payload["project_id"], payload["run_id"])
+
+
+hotes_a_joindre_en_direct = hosts_to_reach_directly  # lang: fr-ok alias:internal
+env_du_runner = runner_environment  # lang: fr-ok alias:internal
+classe_d_execution = runtime_class  # lang: fr-ok alias:internal
+FILE_MAX_MINUTES = QUEUE_MAX_MINUTES  # lang: fr-ok alias:internal

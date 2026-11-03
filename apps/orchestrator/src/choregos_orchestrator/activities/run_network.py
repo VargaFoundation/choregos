@@ -86,7 +86,7 @@ def admit_network(
             f"run refused before it started: the agent `{agent.agent.slug}` needs hosts the project "
             f"`{bundle.slug}` or the organisation does not allow (project policy "
             f"sandbox.network.allow_domains, organisation policy ceiling): " + "; ".join(missing),
-            type="AgentIndisponible",
+            type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
             non_retryable=True,
         )
 

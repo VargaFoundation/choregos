@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les activités propres à l'interpréteur : charger le contexte d'un ticket, consigner la
-mort d'un interpréteur ou une migration, annoncer un ticket au train — et lire une erreur Temporal.
+"""The activities proper to the interpreter: load a work item's context, record the death of an
+interpreter or a migration, announce a work item to the train, and read a Temporal error.
 
-Elles vivaient dans le module du workflow, sous un `import activity` en fin de fichier ;
-un workflow n'a pas à porter ses activités.
+They used to live in the workflow module, under an `import activity` at the end of the file;
+a workflow has no business carrying its activities.
 """
 
 from __future__ import annotations
@@ -22,26 +22,26 @@ from temporalio.exceptions import ActivityError, ApplicationError
 from ..train_client import signal_release_train
 from ..wire_names import read_key, require_key
 from .base import db, load_work_item, project_bundle
-from .bilan import close_run_spend
 from .execution import abandon_queued_runs
+from .outcome import close_run_spend
 
 
 @activity.defn(name="load_context")
 async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
-    """Charge la définition épinglée, la politique et l'état courant du ticket."""
+    """Load the pinned definition, the policy and the current state of the work item."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
-        # Un interpréteur qui (re)démarre n'est plus mort : la marque tombe ici, et nulle
-        # part ailleurs — c'est la seule activité que tout démarrage traverse.
+        # An interpreter that (re)starts is no longer dead: the mark drops here, and nowhere
+        # else, since this is the only activity every start goes through.
         item.failure = None
-        # La version où le ticket est né (ADR 0031). Un ticket d'avant l'épingle la reçoit ici, une
-        # fois : rejouer l'activité relit la même. Seul le CORPS de l'activité change — aucune
-        # commande nouvelle dans l'historique, et les historiques archivés rejouent.
-        ligne = await workflow_du_ticket(session, item)
-        if item.workflow_def_id is None and ligne is not None:
-            item.workflow_def_id = ligne.id
-        workflow = workflow_model(ligne)
+        # The version the work item was born in (ADR 0031). A work item from before the pin gets it
+        # here, once: replaying the activity reads the same one. Only the BODY of the activity
+        # changes, with no new command in the history, so the archived histories replay.
+        pinned = await workflow_du_ticket(session, item)
+        if item.workflow_def_id is None and pinned is not None:
+            item.workflow_def_id = pinned.id
+        workflow = workflow_model(pinned)
         state, spent = await consistent_progress(session, item.id)
         return {
             "workflow": workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
@@ -54,8 +54,8 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "attempts_ceilings": bundle.engine.attempts_ceilings(),
             "tracker_key": item.tracker_key,
             "project_slug": bundle.slug,
-            # Ce que lit une date d'action (`not_before`, S20-05) ; un changement arrive ensuite
-            # par le signal `fields_changed`.
+            # What an action date reads (`not_before`, S20-05); a change then arrives through the
+            # `fields_changed` signal.
             "fields": dict(item.fields or {}),
             # The attempts each transition already spent, read from its runs (#550).
             "attempts_spent": spent,
@@ -144,11 +144,11 @@ async def attempts_spent(session: Any, work_item_id: str) -> dict[str, int]:
 
 @activity.defn(name="record_workflow_failure")
 async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
-    """Écrit sur le ticket que son interpréteur est mort, et publie l'événement.
+    """Write on the work item that its interpreter died, and publish the event.
 
-    C'est le workflow qui l'appelle en mourant. Ce n'est PAS un remplacement de l'état
-    Temporal — l'API le lit aussi — mais c'est ce qui reste quand Temporal a purgé
-    l'historique, et c'est ce que le front et la chronologie affichent.
+    The workflow calls it as it dies. It is NOT a replacement for the Temporal state (the API reads
+    that too), but it is what remains once Temporal has purged the history, and it is what the
+    front end and the timeline show.
     """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
@@ -193,49 +193,49 @@ async def _runs_without_spend(session: Any, work_item_id: str) -> list[str]:
 
 @activity.defn(name="record_migration")
 async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
-    """Consigne une migration (`migrate`, ADR 0031) : acceptée, l'épingle du ticket suit la
-    définition cible — un `continue_as_new` la rechargera ; refusée, le ticket reste sur la sienne,
-    et l'événement le dit.
+    """Record a migration (`migrate`, ADR 0031): accepted, the work item's pin follows the target
+    definition (a `continue_as_new` will reload it); refused, the work item stays on its own, and
+    the event says so.
 
-    Rejouable sans double effet (ADR 0008) : la clé de la migration (`<workflow>/<run>/<n>`) est
-    dans l'événement, et une clé déjà consignée ne l'est pas deux fois.
+    Replayable without a double effect (ADR 0008): the migration's key (`<workflow>/<run>/<n>`) is
+    in the event, and a key already recorded is not recorded twice.
     """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         # The key and the refusal are read under both spellings (S45-03), in the payload and in the
         # events already persisted; the event still persists `cle`.
-        cle = str(require_key(payload, "key"))
+        key = str(require_key(payload, "key"))
         types = (str(EventType.WORKITEM_MIGRATED), str(EventType.WORKITEM_MIGRATION_REFUSED))
-        consignes = (
+        recorded = (
             await session.execute(select(Event).where(Event.work_item_id == item.id, Event.type.in_(types)))
         ).scalars()
-        if any(read_key(e.payload or {}, "key") == cle for e in consignes):
+        if any(read_key(e.payload or {}, "key") == key for e in recorded):
             return {"recorded": False}
-        commun = {
+        common = {
             "project_id": bundle.project.id,
             "work_item_id": item.id,
             "project_slug": bundle.slug,
             "subject": item.tracker_key,
-            "cle": cle,
+            "cle": key,  # lang: fr-ok — recorded wire value, S45-39
             "from_state": payload.get("from_state"),
         }
         refusal = read_key(payload, "refusal")
         if refusal:
-            await persist_event(session, EventType.WORKITEM_MIGRATION_REFUSED, **commun, reason=str(refusal))
+            await persist_event(session, EventType.WORKITEM_MIGRATION_REFUSED, **common, reason=str(refusal))
             return {"recorded": True, "pinned": False}
-        cible = await session.get(WorkflowDef, str(payload.get("workflow_def_id") or ""))
-        if cible is not None and cible.project_id == bundle.project.id:
-            item.workflow_def_id = cible.id
+        target = await session.get(WorkflowDef, str(payload.get("workflow_def_id") or ""))
+        if target is not None and target.project_id == bundle.project.id:
+            item.workflow_def_id = target.id
         await persist_event(
             session,
             EventType.WORKITEM_MIGRATED,
-            **commun,
+            **common,
             to_state=payload.get("to_state"),
-            workflow_def_id=cible.id if cible is not None else None,
+            workflow_def_id=target.id if target is not None else None,
             workflow=payload.get("workflow"),
         )
-        return {"recorded": True, "pinned": cible is not None}
+        return {"recorded": True, "pinned": target is not None}
 
 
 @activity.defn(name="escalation_context")
@@ -326,47 +326,47 @@ def _escalation_targets(engine: Any, transition: Any) -> set[str]:
     return {str(t) for t in targets if t}
 
 
-#: Ce que Temporal met à la place d'un message absent, littéralement
-#: (`converter/_failure_converter.py`, branche `application_failure_info` :
-#: `failure.message or "Application error"`). Le message n'est donc JAMAIS vide, et un test de
-#: vacuité ne suffit pas : il faut reconnaître le bouche-trou pour préférer le type.
-BOUCHE_TROU_TEMPORAL = frozenset({"Application error", "Timeout", "Activity task failed"})
+#: What Temporal puts in place of an absent message, literally
+#: (`converter/_failure_converter.py`, `application_failure_info` branch:
+#: `failure.message or "Application error"`). The message is therefore NEVER empty, and an
+#: emptiness test is not enough: the stopgap must be recognised to prefer the type.
+TEMPORAL_PLACEHOLDERS = frozenset({"Application error", "Timeout", "Activity task failed"})
 
 
-def message_de(exc: BaseException) -> str:
-    """Le message utile d'une erreur Temporal : celui de la cause, pas « Activity task failed ».
+def message_of(exc: BaseException) -> str:
+    """The useful message of a Temporal error: the cause's, not "Activity task failed".
 
-        Une exception ordinaire traverse Temporal quand même : le convertisseur en fait une
-        `ApplicationError` dont `type` porte le nom de la classe et `message` le `str()`. Or beaucoup
-        d'erreurs réseau se lèvent **sans message** — `httpx.ConnectTimeout()` n'en a aucun. Le repli
-    valait alors `"Application error"` — la chaîne que Temporal substitue à un message
-        absent — et le ticket ne disait plus rien de sa mort. C'est arrivé le 2026-09-27 sur le
-        locataire dev : la vraie cause, l'API Kubernetes injoignable, ne vivait que dans le journal de
-        l'orchestrateur, que personne ne lit avant d'avoir une raison de le lire. À défaut de message,
-        le **type** est ce qu'il y a de plus utile.
+    An ordinary exception crosses Temporal all the same: the converter makes it an
+    `ApplicationError` whose `type` carries the class name and `message` the `str()`. Yet many
+    network errors are raised **without a message** (`httpx.ConnectTimeout()` has none). The
+    fallback was then `"Application error"`, the string Temporal substitutes for an absent
+    message, and the work item said nothing more of its death. It happened on 2026-09-27 on the dev
+    tenant: the real cause, the unreachable Kubernetes API, lived only in the orchestrator's log,
+    which nobody reads before having a reason to. Without a message, the **type** is the most
+    useful thing there is.
     """
-    repli: str | None = None
+    fallback: str | None = None
     cause: BaseException | None = exc
     while cause is not None:
         if isinstance(cause, ApplicationError):
-            if cause.message and cause.message not in BOUCHE_TROU_TEMPORAL:
+            if cause.message and cause.message not in TEMPORAL_PLACEHOLDERS:
                 return cause.message
-            if cause.type and repli is None:
-                repli = cause.type
+            if cause.type and fallback is None:
+                fallback = cause.type
         if cause.__cause__ is None:
             break
         cause = cause.__cause__
-    return repli or str(cause or exc)[:500]
+    return fallback or str(cause or exc)[:500]
 
 
-def activite_de(exc: BaseException) -> str | None:
+def activity_of(exc: BaseException) -> str | None:
     return exc.activity_type if isinstance(exc, ActivityError) else None
 
 
 @activity.defn(name="signal_train")
 async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
-    """Annonce au train de l'environnement qu'un ticket est prêt à embarquer, avec ses étiquettes et
-    l'approbation que son workflow exige du départ (ADR 0041) — absente des embarquements d'avant."""
+    """Announce to the environment's train that a work item is ready to board, with its labels and
+    the approval its workflow requires of the departure (ADR 0041), absent from earlier boardings."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
@@ -379,15 +379,19 @@ async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
                 "title": item.title,
                 "merged_at": utcnow().isoformat(),
                 "sha": (item.documents or {}).get("merge_sha", ""),
-                # Déclarée par l'agent dans `artifacts.reports["infra_pr"]` : le train
-                # l'appliquera via Atlantis pendant le départ, après approbation.
+                # Declared by the agent in `artifacts.reports["infra_pr"]`: the train will apply it
+                # through Atlantis during the departure, after approval.
                 "infra_pr_url": (item.documents or {}).get("infra_pr_url"),
                 "risk": item.risk,
-                # Les étiquettes du ticket, gardées depuis sa naissance : `hotfix` ouvre la voie
-                # express (#279). Un ticket né avant ce changement n'en a pas gardé.
+                # The work item's labels, kept since its birth: `hotfix` opens the express lane
+                # (#279). A work item born before this change kept none.
                 "labels": list((item.documents or {}).get("labels") or []),
                 "pr_url": item.pr_url,
                 **({"approval": payload["approval"]} if payload.get("approval") else {}),
             },
         )
         return {"signalled": True}
+
+
+message_de = message_of  # lang: fr-ok alias:internal
+activite_de = activity_of  # lang: fr-ok alias:internal

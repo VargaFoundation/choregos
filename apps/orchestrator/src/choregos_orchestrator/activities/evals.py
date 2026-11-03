@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités d'évals : exécution d'une cellule de la matrice et publication des résultats.
+"""Eval activities: running a cell of the matrix and publishing the results.
 
-Une cellule = (backend × modèle × mémoire) jouée sur les tickets de référence de
-`tests/fixtures/tickets`. Le verdict d'un ticket n'est **jamais** déclaratif : le dépôt
-jouet est recopié dans un espace de travail jetable, la modification est appliquée, puis
-les assertions du ticket sont vérifiées pour de bon (fichier présent, motif présent ou
-absent, fichier non touché, commande de test verte).
+A cell = (backend x model x memory) played on the reference work items of
+`tests/fixtures/tickets`. A work item's verdict is **never** declarative: the toy repository is
+copied into a throwaway workspace, the change is applied, then the work item's assertions are
+really checked (file present, pattern present or absent, file untouched, test command green).
 
 S37-09 (ADR 0055): a cell also has a context reduction (`none`, `rtk`, `headroom`,
 `rtk+headroom`), and its tokens and cost are read from the ledger: every ticket is played under
@@ -68,7 +67,7 @@ _NOT_TOY = {"__pycache__", ".pytest_cache", "node_modules", ".venv"}
 
 @dataclass(slots=True)
 class Check:
-    """Verdict d'une assertion : `ok=None` signifie ignorée (outil absent)."""
+    """Verdict of an assertion: `ok=None` means skipped (tool absent)."""
 
     label: str
     ok: bool | None
@@ -96,11 +95,11 @@ async def list_fixtures(payload: dict[str, Any]) -> list[str]:
 
 @activity.defn(name="run_eval_cell")
 async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
-    """Joue les tickets de référence pour un couple backend × modèle, avec et sans mémoire.
+    """Play the reference work items for a backend x model pair, with and without memory.
 
-    Chaque ticket a un critère de succès **déterministe** : la note ne dépend d'aucun
-    jugement subjectif. Un ticket dont les outils manquent (pas de `npm` sur le runner)
-    est ignoré, jamais compté comme réussi — même règle que la boucle DoD du runner.
+    Each work item has a **deterministic** success criterion: the grade depends on no subjective
+    judgement. A work item whose tools are missing (no `npm` on the runner) is skipped, never
+    counted as passed: the same rule as the runner's DoD loop.
     """
     fixtures: list[str] = payload.get("fixtures", [])
     context = _context(payload)
@@ -186,10 +185,10 @@ def _load_spec(name: str) -> dict[str, Any] | None:
 
 
 async def _play(spec: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    """Matérialise le dépôt jouet, applique la modification, vérifie les assertions."""
+    """Materialise the toy repository, apply the change, check the assertions."""
     repo = REPOS / str(spec.get("repo", ""))
     if not repo.is_dir():
-        return _skip(f"dépôt jouet absent : {spec.get('repo')}")
+        return _skip(f"toy repository absent: {spec.get('repo')}")
     async with db() as session:
         gateway = (await project_bundle(session, payload["project_slug"])).adapters.gateway
     context = str(payload.get("context", "none"))
@@ -285,11 +284,11 @@ def _skip(reason: str) -> dict[str, Any]:
 
 
 async def _apply_change(spec: dict[str, Any], payload: dict[str, Any], work: Path) -> dict[str, Any]:
-    """Applique la modification de l'agent dans l'espace de travail.
+    """Apply the agent's change in the workspace.
 
-    En mode scripté (CI, `CHOREGOS_FAKES=1`), la fixture fournit le diff : la matrice est
-    reproductible et les assertions portent sur de vrais fichiers. Avec un exécuteur réel,
-    c'est le `StageResult` du runner qui est relu.
+    In scripted mode (CI, `CHOREGOS_FAKES=1`), the fixture supplies the diff: the matrix is
+    reproducible and the assertions bear on real files. With a real executor, the runner's
+    `StageResult` is read back.
     """
     scripted = spec.get("scripted") or {}
     variant = scripted.get("with_memory" if payload.get("with_memory") else "without_memory")
@@ -307,7 +306,7 @@ async def _apply_change(spec: dict[str, Any], payload: dict[str, Any], work: Pat
             "turns": getattr(diagnostics, "turns", None),
         }
     if variant is None:
-        return {"skipped": True, "reason": f"aucune modification scriptée pour {spec.get('id')}"}
+        return {"skipped": True, "reason": f"no scripted change for {spec.get('id')}"}
     for relative, content in (variant.get("files") or {}).items():
         target = work / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -339,21 +338,21 @@ def _check_file(kind: str, raw: dict[str, Any], work: Path, before: dict[str, st
     path = work / relative
     label = f"{kind}:{relative}"
     if kind == "file_exists":
-        return Check(label, path.is_file(), "fichier attendu absent" if not path.is_file() else "")
+        return Check(label, path.is_file(), "expected file absent" if not path.is_file() else "")
     if kind == "file_absent":
-        return Check(label, not path.exists(), "fichier créé alors qu'il ne devait pas l'être")
+        return Check(label, not path.exists(), "file created although it must not be")
     if kind == "file_unchanged":
         now = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None
-        return Check(label, now == before.get(relative), "fichier modifié hors de l'attendu")
+        return Check(label, now == before.get(relative), "file modified outside what was expected")
     if kind == "file_matches":
         if not path.is_file():
-            return Check(label, False, "fichier absent")
+            return Check(label, False, "file absent")
         content = path.read_text(encoding="utf-8", errors="replace")
         found = re.search(str(raw.get("pattern", "")), content) is not None
         expect_absent = bool(raw.get("absent", False))
-        detail = f"motif {'présent' if found else 'absent'} : {raw.get('pattern')}"
+        detail = f"pattern {'present' if found else 'absent'}: {raw.get('pattern')}"
         return Check(label, found is not expect_absent, detail)
-    return Check(label, False, f"assertion inconnue : {kind}")
+    return Check(label, False, f"unknown assertion: {kind}")
 
 
 async def _check_command(raw: dict[str, Any], work: Path) -> Check:
@@ -361,7 +360,7 @@ async def _check_command(raw: dict[str, Any], work: Path) -> Check:
     label = f"command:{command}"
     required = raw.get("requires")
     if required and shutil.which(str(required)) is None:
-        return Check(label, None, f"outil absent sur ce runner : {required}")
+        return Check(label, None, f"tool absent on this runner: {required}")
     process = await asyncio.create_subprocess_shell(
         command,
         cwd=work,
@@ -373,7 +372,7 @@ async def _check_command(raw: dict[str, Any], work: Path) -> Check:
     except TimeoutError:
         process.kill()
         await process.wait()
-        return Check(label, False, f"délai dépassé ({ASSERTION_TIMEOUT_S:.0f} s)")
+        return Check(label, False, f"timed out ({ASSERTION_TIMEOUT_S:.0f} s)")
     output = stdout.decode("utf-8", errors="replace").strip()
     return Check(label, process.returncode == 0, "" if process.returncode == 0 else output[-600:])
 
@@ -599,7 +598,7 @@ def _verdict(spec: dict[str, Any], result: dict[str, Any] | None, failure: str) 
 
 @activity.defn(name="publish_matrix")
 async def publish_matrix(payload: dict[str, Any]) -> dict[str, Any]:
-    """Publie la matrice : `model_profiles.validated_backends` et `GET /models/matrix`."""
+    """Publish the matrix: `model_profiles.validated_backends` and `GET /models/matrix`."""
     results: list[dict[str, Any]] = payload.get("results", [])
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])

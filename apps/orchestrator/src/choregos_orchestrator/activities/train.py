@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités du release train : fenêtres, promotion GitOps, soak, canary, rollback, notes."""
+"""Release train activities: windows, GitOps promotion, soak, canary, rollback, notes."""
 
 from __future__ import annotations
 
@@ -23,30 +23,30 @@ from .base import db, project_bundle, send_courtesy
 logger = get_logger("choregos.train")
 
 
-async def _courtoisie(bundle: Any, message: Message) -> bool:
-    """Prévient le canal du projet, sans jamais faire échouer l'étape du train qui prévient.
+async def _courtesy(bundle: Any, message: Message) -> bool:
+    """Notify the project's channel, never making the train step that notifies fail.
 
-    Comme pour les demandes humaines (`tracker.py`, 2026-09-27) : la notification est une courtoisie,
-    pas l'acte. Sur le locataire dev, le 10/10, sans Slack, `finish_release` levait « [slack] ni
-    `bot_token` ni `webhook_url` configurés » APRÈS la promotion et la vérification : la transaction
-    était annulée (release jamais close, tickets jamais prévenus) et les deux trains mouraient avec
-    leur livraison faite (S22-26). Le silence se dit dans le journal et dans le retour."""
-    return await _envoyer(bundle.adapters.notify, bundle.config.notify.slack_channel or "#choregos", message)
+    As for human requests (`tracker.py`, 2026-09-27): the notification is a courtesy, not the act.
+    On the dev tenant, on 10/10, without Slack, `finish_release` raised "[slack] neither
+    `bot_token` nor `webhook_url` configured" AFTER the promotion and the verification: the
+    transaction was rolled back (release never closed, work items never notified) and both trains
+    died with their delivery done (S22-26). The silence is said in the log and in the return value."""
+    return await _send(bundle.adapters.notify, bundle.config.notify.slack_channel or "#choregos", message)
 
 
-async def _envoyer(notify: Any, canal: str, message: Message) -> bool:
+async def _send(notify: Any, channel: str, message: Message) -> bool:
     # The shared best-effort send (#497): no notifier failure may kill a train.
-    return await send_courtesy(notify, canal, message)
+    return await send_courtesy(notify, channel, message)
 
 
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 
 async def _observe(seconds: float) -> None:
-    """Attente d'observation (soak, palier de canary).
+    """Observation wait (soak, canary step).
 
-    Avec les adaptateurs simulés il n'y a rien à observer : l'attente est inutile et
-    ralentirait les tests et la démo. En réel, elle est plafonnée et jalonnée de heartbeats.
+    With the simulated adapters there is nothing to observe: the wait is useless and would slow
+    the tests and the demo. For real, it is capped and punctuated with heartbeats.
     """
     if get_settings().fakes or seconds <= 0:
         return
@@ -70,7 +70,7 @@ async def load_train_config(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_windows(windows: list[str]) -> list[tuple[set[int], int, int]]:
-    """`Mon-Thu 09:00-18:00` → (jours, minute de début, minute de fin)."""
+    """`Mon-Thu 09:00-18:00` -> (days, start minute, end minute)."""
     parsed: list[tuple[set[int], int, int]] = []
     for window in windows:
         try:
@@ -96,7 +96,7 @@ def _minutes(value: str) -> int:
 
 
 def _cron_due(schedule: str, now: datetime) -> bool:
-    """Cron à 5 champs, résolution minute : suffisant pour une cadence de train."""
+    """5-field cron, minute resolution: enough for a train cadence."""
     try:
         minute, hour, dom, month, dow = schedule.split()
     except ValueError:
@@ -135,7 +135,7 @@ def _cron_due(schedule: str, now: datetime) -> bool:
 
 @activity.defn(name="check_window")
 async def check_window(payload: dict[str, Any]) -> dict[str, Any]:
-    """La fenêtre est-elle ouverte, et le cron est-il dû ?"""
+    """Is the window open, and is the cron due?"""
     config = payload["config"]
     now = datetime.now(UTC)
     windows = _parse_windows(list(config.get("windows", [])))
@@ -191,7 +191,7 @@ async def create_release(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="promote")
 async def promote(payload: dict[str, Any]) -> dict[str, Any]:
-    """Promotion GitOps : une PR sur le dépôt d'environnements, jamais un `kubectl apply`."""
+    """GitOps promotion: a PR on the environments repository, never a `kubectl apply`."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         release = await session.get(Release, payload["release_id"])
@@ -227,11 +227,10 @@ async def promote(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _close_deployment(session: Any, release_id: str, status: str) -> None:
-    """Clôt la ligne de déploiement ouverte par `promote`.
+    """Close the deployment row opened by `promote`.
 
-    Sans cette clôture, un déploiement resterait éternellement « promoting » : les
-    métriques de livraison ne sauraient pas distinguer une mise en production réussie
-    d'une qui a été annulée.
+    Without this closing, a deployment would stay "promoting" forever: the delivery metrics could
+    not tell a successful production release from one that was cancelled.
     """
     row = (
         (
@@ -263,7 +262,7 @@ async def run_smoke(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="soak")
 async def soak(payload: dict[str, Any]) -> dict[str, Any]:
-    """Période d'observation : on regarde la santé, on ne déploie rien de plus."""
+    """Observation period: we look at the health, we deploy nothing more."""
     minutes = int(payload.get("minutes", 10))
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
@@ -292,7 +291,7 @@ async def request_approval(payload: dict[str, Any]) -> dict[str, Any]:
         if release is None:
             return {"requested": False}
         release.status = "awaiting_approval"
-        notifie = await _courtoisie(
+        notified = await _courtesy(
             bundle,
             Message(
                 title=f"Approval requested — {bundle.slug} → {payload['env']}",
@@ -310,12 +309,12 @@ async def request_approval(payload: dict[str, Any]) -> dict[str, Any]:
             release_id=release.id,
             group=payload.get("group"),
         )
-        return {"requested": True, "notified": notifie}
+        return {"requested": True, "notified": notified}
 
 
 @activity.defn(name="promote_canary_step")
 async def promote_canary_step(payload: dict[str, Any]) -> dict[str, Any]:
-    """Un palier de canary : on augmente le poids, on regarde l'analyse, on abandonne si elle échoue."""
+    """A canary step: raise the weight, look at the analysis, abandon if it fails."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         apps = list(bundle.config.gitops.apps) if bundle.config.gitops else [bundle.slug]
@@ -350,8 +349,8 @@ async def verify_prod(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="finish_release")
 async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
-    """Clôture : notes de version, tickets marqués déployés, événement, notification — et chaque
-    ticket du lot prévenu que SON train a livré (ADR 0041) : il attendait un `cd.*` que rien n'envoyait."""
+    """Closing: release notes, work items marked deployed, event, notification, and each work item
+    of the batch told that ITS train delivered (ADR 0041): it awaited a `cd.*` that nothing sent."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         release = await session.get(Release, payload["release_id"])
@@ -363,7 +362,7 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
         await _close_deployment(session, release.id, "succeeded")
         notes = _release_notes(release)
         release.notes = notes
-        tickets = await _tickets_du_lot(session, bundle, release)
+        tickets = await _release_work_items(session, bundle, release)
         for row in tickets.values():
             if row is not None:
                 documents = dict(row.documents or {})
@@ -379,7 +378,7 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
             env=release.env,
             items=len(release.items),
         )
-        notifie = await _courtoisie(
+        notified = await _courtesy(
             bundle,
             Message(
                 title=f"Deployed — {bundle.slug} → {release.env} (batch {release.batch_no})",
@@ -387,23 +386,25 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
                 severity="success",
             ),
         )
-        prevenir = _destinataires(bundle.slug, tickets)
+        to_notify = _recipients(bundle.slug, tickets)
         env = release.env
-    # Après la validation de la transaction : le ticket prévenu relit une release terminée.
-    await _prevenir_les_tickets(prevenir, "cd.rollout.completed", payload["release_id"], env)
-    return {"ok": True, "notes": notes, "notified": notifie}
+    # After the transaction commits: the notified work item re-reads a finished release.
+    await _notify_work_items(to_notify, "cd.rollout.completed", payload["release_id"], env)
+    return {"ok": True, "notes": notes, "notified": notified}
 
 
-async def _tickets_du_lot(session: Any, bundle: Any, release: Release) -> dict[str, WorkItem | None]:
-    return await _tickets(session, bundle, [str(item.get("work_item_key") or "") for item in release.items])
+async def _release_work_items(session: Any, bundle: Any, release: Release) -> dict[str, WorkItem | None]:
+    return await _work_items_by_key(
+        session, bundle, [str(item.get("work_item_key") or "") for item in release.items]
+    )
 
 
-async def _tickets(session: Any, bundle: Any, cles: list[str]) -> dict[str, WorkItem | None]:
+async def _work_items_by_key(session: Any, bundle: Any, keys: list[str]) -> dict[str, WorkItem | None]:
     tickets: dict[str, WorkItem | None] = {}
-    for cle in cles:
-        tickets[cle] = (
+    for key in keys:
+        tickets[key] = (
             await session.execute(
-                select(WorkItem).where(WorkItem.project_id == bundle.project.id, WorkItem.tracker_key == cle)
+                select(WorkItem).where(WorkItem.project_id == bundle.project.id, WorkItem.tracker_key == key)
             )
         ).scalar_one_or_none()
     return tickets
@@ -411,23 +412,25 @@ async def _tickets(session: Any, bundle: Any, cles: list[str]) -> dict[str, Work
 
 @activity.defn(name="confirm_auto_sync")
 async def confirm_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
-    """`auto_sync` : Argo suit `main`, il n'y a pas de départ. Le ticket est livré quand les applications
-    de l'environnement sont saines, rendu à un humain si elles se dégradent (#278) ; encore en cours,
-    rien n'est dit — le train redemande. Au dernier essai (`conclure`), ne pas être sain vaut échec :
-    le ticket attendait sinon 72 h sans que personne sache pourquoi."""
+    """`auto_sync`: Argo follows `main`, there is no departure. The work item is delivered when the
+    environment's applications are healthy, handed back to a human if they degrade (#278); still
+    in progress, nothing is said and the train asks again. At the last attempt (`conclude`), not
+    being healthy is a failure: the work item would otherwise wait 72 h with nobody knowing why."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         apps = list(bundle.config.gitops.apps) if bundle.config.gitops else [bundle.slug]
-        etats = {app: (await bundle.adapters.cd.health(app)).status for app in apps}
-        prevenir = _destinataires(bundle.slug, await _tickets(session, bundle, list(payload["items"])))
-    if all(etat == "Healthy" for etat in etats.values()):
+        states = {app: (await bundle.adapters.cd.health(app)).status for app in apps}
+        to_notify = _recipients(
+            bundle.slug, await _work_items_by_key(session, bundle, list(payload["items"]))
+        )
+    if all(state == "Healthy" for state in states.values()):
         type_, ok = "cd.rollout.completed", True
-    elif any(etat == "Degraded" for etat in etats.values()) or read_key(payload, "conclude"):
+    elif any(state == "Degraded" for state in states.values()) or read_key(payload, "conclude"):
         type_, ok = "cd.rollout.aborted", False
     else:
-        return {"ok": None, "etats": etats}
-    await _prevenir_les_tickets(prevenir, type_, str(payload["sync_id"]), str(payload["env"]))
-    return {"ok": ok, "etats": etats}
+        return {"ok": None, "etats": states}  # lang: fr-ok — recorded wire value, S45-39
+    await _notify_work_items(to_notify, type_, str(payload["sync_id"]), str(payload["env"]))
+    return {"ok": ok, "etats": states}  # lang: fr-ok — recorded wire value, S45-39
 
 
 @activity.defn(name="confirmer_auto_sync")  # lang: fr-ok
@@ -436,36 +439,36 @@ async def confirmer_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
     return await confirm_auto_sync(payload)
 
 
-def _destinataires(slug: str, tickets: dict[str, WorkItem | None]) -> list[tuple[str, str]]:
-    """L'interpréteur de chaque ticket connu : celui qu'il a consigné, sinon son identifiant déterministe."""
+def _recipients(slug: str, tickets: dict[str, WorkItem | None]) -> list[tuple[str, str]]:
+    """The interpreter of each known work item: the one it recorded, else its deterministic identifier."""
     from choregos_api.temporal import interpreter_id
 
     return [
-        (row.temporal_wf_id or interpreter_id(slug, cle), cle)
-        for cle, row in tickets.items()
+        (row.temporal_wf_id or interpreter_id(slug, key), key)
+        for key, row in tickets.items()
         if row is not None
     ]
 
 
-async def _prevenir_les_tickets(
-    destinataires: list[tuple[str, str]], type_: str, release_id: str, env: str
+async def _notify_work_items(
+    recipients: list[tuple[str, str]], type_: str, release_id: str, env: str
 ) -> None:
-    """Un signal `inbound` par ticket, comme un événement de CD. L'identifiant de livraison est stable :
-    une activité rejouée renvoie le même. Un ticket arrêté entre-temps n'écoute plus — ce n'est pas
-    une panne du train, il ne doit pas faire échouer sa clôture."""
-    for workflow_id, cle in destinataires:
-        evenement = {
+    """One `inbound` signal per work item, like a CD event. The delivery id is stable: a replayed
+    activity sends the same one. A work item stopped in the meantime no longer listens; that is not
+    a failure of the train, and it must not make its closing fail."""
+    for workflow_id, key in recipients:
+        event = {
             "type": type_,
             "source": "release-train",
-            "delivery_id": f"{release_id}:{cle}",
-            "work_item_key": cle,
+            "delivery_id": f"{release_id}:{key}",
+            "work_item_key": key,
             "payload": {"env": env, "release_id": release_id},
         }
         try:
-            await activity.client().get_workflow_handle(workflow_id).signal("inbound", evenement)
-        except Exception as erreur:
+            await activity.client().get_workflow_handle(workflow_id).signal("inbound", event)
+        except Exception as error:
             logger.warning(
-                "ticket non prévenu", workflow_id=workflow_id, release=release_id, erreur=str(erreur)
+                "work item not notified", workflow_id=workflow_id, release=release_id, error=str(error)
             )
 
 
@@ -479,8 +482,8 @@ def _release_notes(release: Release) -> str:
 
 @activity.defn(name="rollback")
 async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
-    """Rollback : abandon du rollout, release marquée, incident enregistré, alerte envoyée."""
-    prevenir: list[tuple[str, str]] = []
+    """Rollback: rollout aborted, release marked, incident recorded, alert sent."""
+    to_notify: list[tuple[str, str]] = []
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         release = await session.get(Release, payload["release_id"])
@@ -488,7 +491,7 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
         for app in apps:
             await bundle.adapters.cd.abort_rollout(app)
         if release is not None:
-            prevenir = _destinataires(bundle.slug, await _tickets_du_lot(session, bundle, release))
+            to_notify = _recipients(bundle.slug, await _release_work_items(session, bundle, release))
             release.status = "rolled_back"
             release.ended_at = utcnow()
             release.verdict = {"go": False, "reason": payload.get("reason", "")}
@@ -525,7 +528,7 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
                     provenance=Provenance(source="cd", ref=payload.get("release_id")),
                 ),
             )
-        notifie = await _courtoisie(
+        notified = await _courtesy(
             bundle,
             Message(
                 title=f"Rollback — {bundle.slug} → {payload['env']}",
@@ -533,9 +536,9 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
                 severity="error",
             ),
         )
-    # Le ticket attendait son train jusqu'au délai, puis finissait chez un humain sans savoir pourquoi.
-    await _prevenir_les_tickets(prevenir, "cd.rollout.aborted", payload["release_id"], payload["env"])
-    return {"ok": True, "notified": notifie}
+    # The work item waited for its train until the timeout, then ended with a human not knowing why.
+    await _notify_work_items(to_notify, "cd.rollout.aborted", payload["release_id"], payload["env"])
+    return {"ok": True, "notified": notified}
 
 
 @activity.defn(name="mark_release")
@@ -553,15 +556,15 @@ async def mark_release(payload: dict[str, Any]) -> dict[str, Any]:
 @activity.defn(name="train_stats")
 async def train_stats(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
-        candidats = (
+        candidates = (
             (await session.execute(select(Project).where(Project.slug == payload["project_slug"])))
             .scalars()
             .all()
         )
-        if len(candidats) != 1:
-            # Aucun, ou un slug dans deux organisations : les statistiques ne devinent pas.
+        if len(candidates) != 1:
+            # None, or a slug in two organisations: the statistics do not guess.
             return {}
-        project = candidats[0]
+        project = candidates[0]
         count = (
             await session.execute(
                 select(func.count()).select_from(Release).where(Release.project_id == project.id)
@@ -572,12 +575,12 @@ async def train_stats(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="apply_terraform")
 async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
-    """Déclenche l'`apply` Atlantis des PR d'infra du lot, après approbation (docs/plan/05).
+    """Trigger the Atlantis `apply` of the batch's infrastructure PRs, after approval (docs/plan/05).
 
-    Choregos ne détient aucun credential cloud : il commente `atlantis apply` sur la PR
-    d'infra et attend le verdict du check `atlantis/apply`. C'est Atlantis qui tient le
-    lock et les credentials ; le train se contente de choisir le moment — pendant un
-    départ, après l'approbation, jamais entre deux.
+    Choregos holds no cloud credential: it comments `atlantis apply` on the infrastructure PR
+    and awaits the verdict of the `atlantis/apply` check. Atlantis holds the lock and the
+    credentials; the train merely chooses the moment: during a departure, after the approval,
+    never in between.
     """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
@@ -608,7 +611,7 @@ async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
         await scm.comment_pr(ref, "atlantis apply")
         verdict = await _await_atlantis(scm, ref, int(payload.get("timeout_minutes", 30)))
         if verdict != "success":
-            await _envoyer(
+            await _send(
                 notify,
                 channel,
                 Message(
@@ -634,10 +637,10 @@ POLL_SECONDS = 15
 
 
 async def _await_atlantis(scm: Any, ref: PrRef, timeout_minutes: int) -> str:
-    """Attend le check `atlantis/apply`. Rend sa conclusion, ou `timeout`.
+    """Await the `atlantis/apply` check. Returns its conclusion, or `timeout`.
 
-    Le nombre de sondages est borné, pas seulement la durée : avec les adaptateurs
-    simulés, l'attente ne coûte rien et une borne temporelle seule tournerait à vide.
+    The number of polls is bounded, not only the duration: with the simulated adapters, the wait
+    costs nothing and a time bound alone would spin idle.
     """
     polls = max(1, int(timeout_minutes * 60 / POLL_SECONDS))
     for _ in range(polls):

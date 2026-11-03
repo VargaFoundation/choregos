@@ -30,7 +30,11 @@ NOMINAL_BUDGET_USD = 0.01
 
 
 def refuse(message: str) -> ApplicationError:
-    return ApplicationError(message, type="AgentIndisponible", non_retryable=True)
+    return ApplicationError(
+        message,
+        type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+        non_retryable=True,
+    )
 
 
 def a2a_runtime(agent: Any) -> Any:

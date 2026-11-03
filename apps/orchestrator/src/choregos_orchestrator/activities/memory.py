@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités mémoire : ingestion idempotente, context pack, écriture gouvernée."""
+"""Memory activities: idempotent ingestion, context pack, governed writing."""
 
 from __future__ import annotations
 
@@ -69,8 +69,8 @@ async def _propose_events(adapter: Any, namespace: str, events: list[dict[str, A
 async def _runs_by_id(session: Any, ids: list[str]) -> dict[str, Any]:
     if not ids:
         return {}
-    lignes = await session.execute(select(Run).where(Run.id.in_(ids)))
-    return {run.id: run for run in lignes.scalars()}
+    rows = await session.execute(select(Run).where(Run.id.in_(ids)))
+    return {run.id: run for run in rows.scalars()}
 
 
 async def _marked_items(session: Any, ids: set[str | None]) -> set[str]:
@@ -132,7 +132,7 @@ async def keep_the_lesson_of_a_failed_run(run_id: str) -> dict[str, Any]:
 
 @activity.defn(name="ingest_sources")
 async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
-    """Construit des faits depuis l'état de la plateforme et les pousse en upsert idempotent."""
+    """Build facts from the platform state and push them as an idempotent upsert."""
     sources: list[str] = payload.get("sources", [])
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
@@ -281,7 +281,7 @@ async def ingest_alert(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="write_run_lesson")
 async def write_run_lesson(payload: dict[str, Any]) -> dict[str, Any]:
-    """Écriture gouvernée : l'orchestrateur écrit des faits déterministes, l'agent propose."""
+    """Governed writing: the orchestrator writes deterministic facts, the agent proposes."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         if not bundle.engine.memory_enabled():
@@ -365,11 +365,11 @@ async def accept_pending_facts(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="memory_ab_report")
 async def memory_ab_report(payload: dict[str, Any]) -> dict[str, Any]:
-    """Rapport A/B hebdomadaire : la mémoire paie-t-elle ? (docs/plan/04, décision 4)
+    """Weekly A/B report: does the memory pay? (docs/plan/04, decision 4)
 
-    Le calcul vit dans `choregos_api.services` — c'est l'API qui possède le modèle de
-    données, et le même rapport est servi par `GET /orgs/{org}/memory/ab-report`. Ici, on
-    l'exécute et, si on le demande, on le poste là où les humains le liront.
+    The computation lives in `choregos_api.services`: the API owns the data model, and the same
+    report is served by `GET /orgs/{org}/memory/ab-report`. Here, it is run and, if asked, posted
+    where humans will read it.
     """
     from choregos_api.services import memory_ab_comparison
 

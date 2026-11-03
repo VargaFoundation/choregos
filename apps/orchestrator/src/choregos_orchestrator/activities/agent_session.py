@@ -39,7 +39,7 @@ from temporalio.exceptions import ApplicationError
 from ..config import get_settings
 from ..org_egress import org_runner_hosts
 from .base import db, project_bundle
-from .execution import _runner_namespace, classe_d_execution, env_du_runner
+from .execution import _runner_namespace, runner_environment, runtime_class
 from .run_network import network_permissions, run_network
 
 #: The pod could not start on what the deployment or the version says: retrying changes nothing.
@@ -143,8 +143,8 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
             gateway_key=keys.get(secret_name(session_id)) or None,
             stage_input=stage_input,
             timeout_minutes=minutes + 10,
-            runtime_class=classe_d_execution(settings, bundle.policy),
-            env=env_du_runner(settings, namespace),
+            runtime_class=runtime_class(settings, bundle.policy),
+            env=runner_environment(settings, namespace),
             labels={
                 "choregos/project": bundle.slug,
                 "choregos/run-id": run_id,
