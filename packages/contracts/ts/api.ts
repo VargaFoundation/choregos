@@ -3211,7 +3211,7 @@ export type ModelCatalogueEntry = {
   source: "gateway" | "manual";
   enabled: boolean;
   allowed_roles: Array<string>;
-  usages: Array<"agent" | "embed" | "distill" | "eval" | "route">;
+  usages: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   gateway?: ModelGatewayFacts | null;
@@ -3227,7 +3227,7 @@ export type ModelCatalogueEntryCreate = {
   display_name?: string | null;
   enabled?: boolean;
   allowed_roles?: Array<string>;
-  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route">;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   notes?: string;
@@ -3237,7 +3237,7 @@ export type ModelCataloguePatch = {
   display_name?: string | null;
   enabled?: boolean | null;
   allowed_roles?: Array<string> | null;
-  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route"> | null;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide"> | null;
   price_override?: PriceOverride | null;
   clear_price_override?: boolean;
   max_usd_per_minute?: number | null;
