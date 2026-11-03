@@ -4152,3 +4152,11 @@ stories:
     size: S
     depends_on: [S55-06]
     notes: "The part of ADR 0112 §4-6 the serpentine diagram lacked: building a workflow from the graph, not only from the list view."
+  - id: S55-10
+    title: "feat(web): the projects list tells its projects apart — an initial on the hue of each"
+    stream: S55
+    sprint: 3
+    priority: 3
+    size: S
+    depends_on: [S55-08]
+    notes: "ADR 0120 on the organisation's first page."

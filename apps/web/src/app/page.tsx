@@ -8,6 +8,9 @@ import { hasReleaseTrain } from "@/lib/release-train";
 import { useSession } from "@/lib/session";
 import { eur, percent, relative } from "@/lib/format";
 import { buttonClasses, Card, Empty, ErrorNote, Eyebrow, Heading, Lead, Stat, StateBadge } from "@/components/ui";
+import { Activity, FolderKanban, Wallet } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { HUE_CLASSES, hueOf } from "@/lib/workflow-hue";
 
 export default function ProjectsPage() {
   const { org } = useSession();
@@ -36,6 +39,8 @@ export default function ProjectsPage() {
       {data && projects.length === 0 && (
         <Empty
           title="No project"
+          icon={FolderKanban}
+          hue={1}
           action={
             <Link href="/projects/new" className={buttonClasses("primary", "sm")}>
               Create the first one
@@ -49,13 +54,13 @@ export default function ProjectsPage() {
       {projects.length > 0 && (
         <div className="grid grid-cols-2 border border-line md:grid-cols-3">
           <div className="p-6">
-            <Stat value={projects.length} label="Projects" />
+            <Stat value={projects.length} label="Projects" icon={FolderKanban} hue={1} />
           </div>
           <div className="border-l border-line p-6">
-            <Stat value={actifs} label="Tickets in flight" tone={actifs > 0 ? "accent" : "ink"} />
+            <Stat value={actifs} label="Tickets in flight" tone={actifs > 0 ? "accent" : "ink"} icon={Activity} hue={5} />
           </div>
           <div className="col-span-2 border-t border-line p-6 md:col-span-1 md:border-t-0 md:border-l">
-            <Stat value={eur(cout)} label="Spent this month" />
+            <Stat value={eur(cout)} label="Spent this month" icon={Wallet} hue={7} />
           </div>
         </div>
       )}
@@ -67,8 +72,14 @@ export default function ProjectsPage() {
               interactive
               className="h-full"
               eyebrow={project.slug}
-              title={project.name}
-              titreDonnee
+              title={
+                <span className="flex items-center gap-2.5">
+                  <ProjectAvatar name={project.name} slug={project.slug} />
+                  <h2 className="text-sm font-semibold text-ink" data-donnee>
+                    {project.name}
+                  </h2>
+                </span>
+              }
               action={
                 <StateBadge
                   state={project.status}
@@ -98,5 +109,22 @@ export default function ProjectsPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * A project's mark (S55-10): its initial on the hue of its slug, the same on every visit — the list
+ * read as a grid of identical grey cards. Decorative: the name is beside it.
+ */
+function ProjectAvatar({ name, slug }: { name: string; slug: string }) {
+  const hue = HUE_CLASSES[hueOf(slug)];
+  return (
+    <span
+      aria-hidden
+      data-testid={`project-avatar-${slug}`}
+      className={cn("flex size-8 shrink-0 items-center justify-center rounded-md border text-sm font-semibold", hue.soft, hue.line, hue.ink)}
+    >
+      {(name.trim()[0] ?? slug[0] ?? "?").toUpperCase()}
+    </span>
   );
 }
