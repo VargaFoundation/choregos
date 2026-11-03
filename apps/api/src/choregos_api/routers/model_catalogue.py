@@ -38,17 +38,11 @@ from ..schemas.definitions import (
 )
 from ..services import model_catalogue as service
 from ..services.gateway import org_brings_its_gateway, org_gateway, org_gateway_and_type
+from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["models"])
 
 EntryId = Annotated[str, Path(min_length=1, max_length=64)]
-
-
-async def _organisation(session: AsyncSession, org: str) -> Organization:
-    found = (await session.execute(select(Organization).where(Organization.slug == org))).scalar_one_or_none()
-    if found is None:
-        raise not_found("Organisation", org)
-    return found
 
 
 def _read(principal: Me, org: str) -> None:
@@ -141,7 +135,7 @@ async def _platform_admin(session: AsyncSession, principal: Me) -> bool:
 @router.get("/orgs/{org}/models", response_model=ModelCatalogue, operation_id="getModelCatalogue")
 async def get_catalogue(org: str, session: Db, principal: Me) -> ModelCatalogue:
     _read(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     settings = service.org_settings(organisation)
     return ModelCatalogue(
         mode=settings["mode"],
@@ -160,7 +154,7 @@ async def put_settings(
     org: str, body: ModelCatalogueSettings, session: Db, principal: Me
 ) -> ModelCatalogueSettings:
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     before = service.org_settings(organisation)
     tiers = body.tiers.model_dump()
     rows = {r.model_name: r for r in await _rows(session, organisation)}
@@ -191,7 +185,7 @@ async def put_settings(
 @router.post("/orgs/{org}/models/sync", response_model=ModelSyncResult, operation_id="syncModelCatalogue")
 async def sync_catalogue(org: str, session: Db, principal: Me) -> ModelSyncResult:
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     gateway = await org_gateway(session, organisation.id)
     if "list_models" not in gateway.capabilities:
         raise conflict("this gateway cannot list its models: add them by hand")
@@ -220,7 +214,7 @@ async def add_entry(
 ) -> ModelCatalogueEntry:
     """A model the gateway routes but does not list (a wildcard route, a private deployment)."""
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     if any(r.model_name == body.model_name for r in await _rows(session, organisation)):
         raise conflict(f"`{body.model_name}` is already in the catalogue")
     row = ModelCatalogueRow(
@@ -256,7 +250,7 @@ async def update_entry(
     org: str, entry_id: EntryId, body: ModelCataloguePatch, session: Db, principal: Me
 ) -> ModelCatalogueEntry:
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     row = await _row(session, organisation, entry_id)
     changes = body.model_dump(
         exclude_unset=True, exclude={"clear_price_override", "clear_max_usd_per_minute"}
@@ -297,7 +291,7 @@ async def update_entry(
 )
 async def delete_entry(org: str, entry_id: EntryId, session: Db, principal: Me) -> Response:
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     row = await _row(session, organisation, entry_id)
     if row.source != "manual":
         raise conflict("an entry the gateway lists cannot be deleted: disable it instead")
@@ -317,7 +311,7 @@ async def delete_entry(org: str, entry_id: EntryId, session: Db, principal: Me) 
 async def curate_preview(org: str, session: Db, principal: Me) -> ModelCuratePreview:
     """What switching to `curated` would refuse today, before anybody does it."""
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     refused = await service.preview_curation(session, organisation)
     return ModelCuratePreview(refused=[ModelCurationRefusal.model_validate(r) for r in refused])
 
@@ -333,7 +327,7 @@ async def usable_models(
     """The models an agent may be given: what the catalogue enables for this role and usage, plus,
     in `open` mode, what the gateway lists that the catalogue does not mention."""
     _read(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     settings = service.org_settings(organisation)
     policy = await service.load_policy(session, organisation.id)
     rows = {r.model_name: r for r in await _rows(session, organisation)}

@@ -20,6 +20,7 @@ from ..rbac import Permission
 from ..schemas.definitions import WorkflowAdopt, WorkflowCatalogueEntryDto, WorkflowDefDto, WorkflowShare
 from ..services.agent_governance import is_admin, is_member
 from ..services.definitions import publier_workflow, workflow_actif
+from ..services.organisations import organisation_by_slug
 from ..services.workflow_catalogue import (
     ORG,
     entries,
@@ -36,15 +37,6 @@ from .workflows import workflow_dto
 router = APIRouter(tags=["workflows"])
 
 
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", slug)
-    return organisation
-
-
 @router.get(
     "/orgs/{org}/workflow-catalogue",
     response_model=list[WorkflowCatalogueEntryDto],
@@ -54,7 +46,7 @@ async def list_workflow_catalogue(org: str, session: Db, principal: Me) -> list[
     # The right first: under RLS a non-member does not see the organisation, and would get a 404.
     if not is_member(principal, org):
         raise forbidden(f"reading the workflow catalogue of {org} requires being a member of it")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     return await entries(session, organisation.id)
 
 
@@ -147,7 +139,7 @@ async def share_workflow(
 ) -> WorkflowCatalogueEntryDto:
     if not is_admin(principal, org):
         raise forbidden(f"sharing a workflow to the catalogue of {org} needs the org_admin role")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     project = await _project_of(session, organisation, body.project)
     query = select(WorkflowDef).where(WorkflowDef.project_id == project.id, WorkflowDef.name == body.name)
     query = (
