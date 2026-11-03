@@ -16,7 +16,7 @@ async def _play_matrix(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], d
 
     @activity.defn(name="list_fixtures")
     async def list_fixtures(_: dict[str, Any]) -> list[str]:
-        return ["py-bug-arrondi"]
+        return ["py-rounding-bug"]
 
     @activity.defn(name="run_eval_cell")
     async def run_eval_cell(cell: dict[str, Any]) -> dict[str, Any]:
@@ -81,7 +81,7 @@ async def _play_live(payload: dict[str, Any], *, failing: str = "") -> tuple[lis
 
     plan = {"project_id": "p", "work_item_id": "w"}
     activities = [
-        stub("list_fixtures", ["py-bug-arrondi", "node-slug"]),
+        stub("list_fixtures", ["py-rounding-bug", "node-slug"]),
         stub(
             "seed_eval_ticket",
             lambda p: {"skipped": p["fixture"] == "node-slug", "reason": "npm", "plan": plan},
@@ -130,13 +130,13 @@ async def test_a_live_cell_runs_each_case_as_a_stage_then_judges_it() -> None:
     assert "run_eval_cell" not in calls, "a live cell plays no scripted change"
     (cell,) = result["results"]
     assert cell["context"] == "rtk"
-    assert [o["fixture"] for o in cell["outcomes"]] == ["py-bug-arrondi", "node-slug"]
+    assert [o["fixture"] for o in cell["outcomes"]] == ["py-rounding-bug", "node-slug"]
     assert cell["outcomes"][1]["skipped"]
 
 
 async def test_a_failed_run_is_still_accounted_and_judged() -> None:
     calls, result = await _play_live(
-        {"project_slug": "evals", "with_memory": [False], "fixtures": ["py-bug-arrondi"], "live": True},
+        {"project_slug": "evals", "with_memory": [False], "fixtures": ["py-rounding-bug"], "live": True},
         failing="await_run",
     )
     # `list_fixtures` is not asked: the payload names the fixtures.
@@ -155,7 +155,7 @@ async def test_a_failed_run_is_still_accounted_and_judged() -> None:
 
 async def test_a_case_that_cannot_be_prepared_is_skipped_and_the_matrix_goes_on() -> None:
     calls, result = await _play_live(
-        {"project_slug": "evals", "with_memory": [False], "fixtures": ["py-bug-arrondi"], "live": True},
+        {"project_slug": "evals", "with_memory": [False], "fixtures": ["py-rounding-bug"], "live": True},
         failing="prepare_stage",
     )
     assert calls == ["seed_eval_ticket", "prepare_stage", "summarize_eval_cell", "publish_matrix"]
@@ -207,7 +207,7 @@ async def _cancel_live(blocking: str) -> tuple[list[str], list[dict[str, Any]], 
     payload = {
         "project_slug": "evals",
         "with_memory": [False],
-        "fixtures": ["py-bug-arrondi", "node-slug"],
+        "fixtures": ["py-rounding-bug", "node-slug"],
         "live": True,
     }
     error: BaseException = AssertionError("the cancelled matrix ended normally")

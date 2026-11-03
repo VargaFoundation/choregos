@@ -1,9 +1,9 @@
-"""Le gabarit `github-software-delivery` traversé (S21-23), sur les faux, avec un VRAI `ReleaseTrain`.
+"""The `github-software-delivery` template walked through (S21-23), on fakes, with a REAL `ReleaseTrain`.
 
-`dev-simple` va du ticket à la production vérifiée sans humain ; `dev-complex` attend ses trois
-décisions humaines, plus le capitaine du train ; `study` fusionne un ADR MADR 4 et ne part nulle part ;
-un ADR sans décision ne passe pas. Les agents qui jouent sont ceux du catalogue, installés à la
-naissance du projet : chaque run nomme son agent.
+`dev-simple` goes from the work item to verified production without a human; `dev-complex` waits for
+its three human decisions, plus the train captain; `study` merges a MADR 4 ADR and goes nowhere; an
+ADR without a decision does not pass. The agents that play are the catalogue's, installed at the
+project's birth: each run names its agent.
 """
 
 from __future__ import annotations
@@ -39,11 +39,11 @@ pytestmark = pytest.mark.asyncio
 # ───────────────────────── dev-simple ─────────────────────────
 
 
-async def test_dev_simple_va_du_ticket_a_la_production_verifiee_sans_humain(
+async def test_dev_simple_goes_from_the_work_item_to_verified_production_without_a_human(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 7, "dev-simple")
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 7, "dev-simple")
     setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/7", [("src/billing/total.py", 12, 3)])
     setup.adapters.executor.handler = scripted_agents(
         {
@@ -56,19 +56,19 @@ async def test_dev_simple_va_du_ticket_a_la_production_verifiee_sans_humain(
     )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "in_pr")
             await report_ci_result(setup, ticket, "success", "ci-7")
-            train, embarquement = await start_requested_train(temporal_env, "prod")
-            assert embarquement["approval"] == {"required": False, "group": None}
-            issue = await asyncio.wait_for(ticket.result(), timeout=90)
+            train, boarding = await start_requested_train(temporal_env, "prod")
+            assert boarding["approval"] == {"required": False, "group": None}
+            outcome = await asyncio.wait_for(ticket.result(), timeout=90)
             await train.signal("abort", {"by": "test"})
             await train.result()
 
-    assert issue["state"] == "verified"
+    assert outcome["state"] == "verified"
     assert await requests_of_item(item_id) == [], "no human decision"
     (release,) = await releases_of("prod")
-    assert release.status == "done" and release.approved_by is None, "le train est parti seul"
+    assert release.status == "done" and release.approved_by is None, "the train left alone"
     assert [agent for _, agent in await runs_of(item_id)] == [
         "triager",
         "developer",
@@ -78,18 +78,18 @@ async def test_dev_simple_va_du_ticket_a_la_production_verifiee_sans_humain(
     ]
 
 
-async def test_dev_simple_arrete_un_ticket_trop_gros_au_triage(
+async def test_dev_simple_stops_a_work_item_too_big_at_triage(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Un ticket L n'est pas un petit correctif : un humain le migre vers `dev-complex`."""
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 8, "dev-simple")
+    """An L work item is not a small fix: a human migrates it to `dev-complex`."""
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 8, "dev-simple")
     setup.adapters.executor.handler = scripted_agents(
         {"t-triage": lambda: stage_result("big", outputs={"size": "L", "risk": "medium"})}
     )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "needs_human")
             await ticket.cancel()
     assert await runs_of(item_id) == [("t-triage", "triager")], "a single triage, no development"
@@ -98,13 +98,13 @@ async def test_dev_simple_arrete_un_ticket_trop_gros_au_triage(
 # ───────────────────────── dev-complex ─────────────────────────
 
 
-async def test_dev_complex_attend_trois_decisions_humaines_et_le_capitaine(
+async def test_dev_complex_waits_for_three_human_decisions_and_the_captain(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """La spec, la PR, et — la CI ayant rougi APRÈS l'approbation, le réparateur ayant poussé — la PR
-    encore : ce qui a changé n'a pas été vu. Puis staging sans approbation, la prod sous le capitaine."""
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 9, "dev-complex")
+    """The spec, the PR, and — the CI having turned red AFTER the approval, the fixer having pushed —
+    the PR again: what changed was not seen. Then staging without approval, prod under the captain."""
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 9, "dev-complex")
     setup.adapters.scm.set_diff(
         REPOSITORY,
         "main",
@@ -144,31 +144,31 @@ async def test_dev_complex_attend_trois_decisions_humaines_et_le_capitaine(
     )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "awaiting_spec_approval")
             await decide(ticket)
             await wait_for_state(ticket, "awaiting_pr_approval")
             await decide(ticket)
-            await report_ci_result(setup, ticket, "failure", "ci-9-rouge")
+            await report_ci_result(setup, ticket, "failure", "ci-9-red")
             await wait_for_state(ticket, "awaiting_pr_approval")
             await wait_until_state(ticket, "status", lambda s: bool(s["pending_request"]))
-            await report_ci_result(setup, ticket, "success", "ci-9-vert")
+            await report_ci_result(setup, ticket, "success", "ci-9-green")
             await decide(ticket)
 
-            staging, embarquement = await start_requested_train(temporal_env, "staging")
-            assert embarquement["approval"] == {"required": False, "group": None}
+            staging, boarding = await start_requested_train(temporal_env, "staging")
+            assert boarding["approval"] == {"required": False, "group": None}
             await wait_for_state(ticket, "staged")
-            prod, embarquement = await start_requested_train(temporal_env, "prod")
-            assert embarquement["approval"] == {"required": True, "group": "release-captains"}
+            prod, boarding = await start_requested_train(temporal_env, "prod")
+            assert boarding["approval"] == {"required": True, "group": "release-captains"}
             await wait_until_state(prod, "status_query", lambda s: s["status"] == "awaiting_approval")
-            assert (await ticket.query("status"))["state"] == "staged", "la prod attend son capitaine"
+            assert (await ticket.query("status"))["state"] == "staged", "prod waits for its captain"
             await prod.signal("approve", {"by": "marie"})
-            issue = await asyncio.wait_for(ticket.result(), timeout=90)
+            outcome = await asyncio.wait_for(ticket.result(), timeout=90)
             for train in (staging, prod):
                 await train.signal("abort", {"by": "test"})
                 await train.result()
 
-    assert issue["state"] == "verified"
+    assert outcome["state"] == "verified"
     assert await requests_of_item(item_id) == ["t-approve-spec", "t-approve-pr", "t-approve-pr"]
     (release,) = await releases_of("prod")
     assert release.approved_by == "marie"
@@ -177,9 +177,9 @@ async def test_dev_complex_attend_trois_decisions_humaines_et_le_capitaine(
     transitions = [t for t, _ in await runs_of(item_id)]
     assert transitions.count("t-fix-ci") == 1, transitions
     assert "t-document" in transitions, transitions
-    corps = next(iter(setup.adapters.scm.prs.values())).body
-    assert "## Documentation\n- docs/billing/queue.md" in corps, "the documentation report is in the PR"
-    assert "## Release notes\n- Invoices are queued." in corps, "les notes de version sont dans la PR"
+    body = next(iter(setup.adapters.scm.prs.values())).body
+    assert "## Documentation\n- docs/billing/queue.md" in body, "the documentation report is in the PR"
+    assert "## Release notes\n- Invoices are queued." in body, "the release notes are in the PR"
 
 
 async def test_dev_complex_without_documentation_waits_for_a_person(
@@ -187,8 +187,8 @@ async def test_dev_complex_without_documentation_waits_for_a_person(
 ) -> None:
     """A change that touches code and no documentation never reaches the review: `docs_updated` sends
     it back to the writer twice, then to a person (S39-15)."""
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 15, "dev-complex")
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 15, "dev-complex")
     setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/15", [("src/billing/queue.py", 120, 4)])
     setup.adapters.executor.handler = scripted_agents(
         {
@@ -207,7 +207,7 @@ async def test_dev_complex_without_documentation_waits_for_a_person(
     )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "awaiting_spec_approval")
             await decide(ticket)
             await wait_for_state(ticket, "needs_human")
@@ -220,32 +220,30 @@ async def test_dev_complex_without_documentation_waits_for_a_person(
 # ───────────────────────── study ─────────────────────────
 
 
-async def test_study_fusionne_un_adr_madr_approuve_et_ne_part_nulle_part(
+async def test_study_merges_an_approved_madr_adr_and_goes_nowhere(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     from choregos_orchestrator.train_client import fake_signals
 
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 11, "study")
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 11, "study")
     adr = ("docs/adr/0001-queue.md", 17, 0, PROPOSED_ADR)
     setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/11", [adr])
     setup.adapters.executor.handler = scripted_agents(study_results(PROPOSED_ADR))
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "awaiting_decision")
-            # L'architecte passera le statut à `accepted` : la branche le portera.
-            accepte = PROPOSED_ADR.replace('status: "proposed"', 'status: "accepted"\n+date: 2026-10-07')
-            setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/11", [(adr[0], 18, 0, accepte)])
+            # The architect will set the status to `accepted`: the branch will carry it.
+            accepted = PROPOSED_ADR.replace('status: "proposed"', 'status: "accepted"\n+date: 2026-10-07')
+            setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/11", [(adr[0], 18, 0, accepted)])
             await decide(ticket)
             await wait_for_state(ticket, "in_pr")
             await report_ci_result(setup, ticket, "success", "ci-11")
-            issue = await asyncio.wait_for(ticket.result(), timeout=90)
+            outcome = await asyncio.wait_for(ticket.result(), timeout=90)
 
-    assert issue["state"] == "adopted"
-    assert not [w for w in fake_signals() if w.startswith("train-dev")], (
-        "une étude n'embarque dans aucun train"
-    )
+    assert outcome["state"] == "adopted"
+    assert not [w for w in fake_signals() if w.startswith("train-dev")], "a study boards no train"
     assert await requests_of_item(item_id) == ["t-decide"]
     assert [a for _, a in await runs_of(item_id)] == [
         "spec-writer",
@@ -256,30 +254,30 @@ async def test_study_fusionne_un_adr_madr_approuve_et_ne_part_nulle_part(
     ]
 
 
-async def test_study_renumerote_un_adr_dont_le_numero_a_ete_pris_avant_la_fusion(
+async def test_study_renumbers_an_adr_whose_number_was_taken_before_the_merge(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """#287 : une autre étude fusionne son 0001 pendant que la nôtre attend la décision des architectes.
-    La fusion refuse le doublon (`adr_number_free`) et rend l'étude à l'architecte, qui renumérote ; la
-    PR fusionne ensuite, une seule fois."""
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 13, "study")
+    """#287: another study merges its 0001 while ours waits for the architects' decision.
+    The merge refuses the duplicate (`adr_number_free`) and hands the study back to the architect,
+    who renumbers; the PR then merges, once."""
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 13, "study")
     scm = setup.adapters.scm
-    accepte = PROPOSED_ADR.replace('status: "proposed"', 'status: "accepted"\n+date: 2026-10-10')
+    accepted = PROPOSED_ADR.replace('status: "proposed"', 'status: "accepted"\n+date: 2026-10-10')
     scm.set_diff(REPOSITORY, "main", "choregos/13", [("docs/adr/0001-queue.md", 17, 0, PROPOSED_ADR)])
-    acceptations: list[str] = []
+    acceptances: list[str] = []
 
-    def accepter() -> Any:
-        # Première fois : le statut passe à `accepted`. Seconde : l'architecte renumérote en 0002.
-        chemin = "docs/adr/0001-queue.md" if not acceptations else "docs/adr/0002-queue.md"
-        acceptations.append(chemin)
-        scm.set_diff(REPOSITORY, "main", "choregos/13", [(chemin, 18, 0, accepte)])
+    def accept() -> Any:
+        # First time: the status becomes `accepted`. Second: the architect renumbers to 0002.
+        path = "docs/adr/0001-queue.md" if not acceptances else "docs/adr/0002-queue.md"
+        acceptances.append(path)
+        scm.set_diff(REPOSITORY, "main", "choregos/13", [(path, 18, 0, accepted)])
         return stage_result("ADR accepted")
 
-    setup.adapters.executor.handler = scripted_agents({**study_results(PROPOSED_ADR), "t-accept": accepter})
+    setup.adapters.executor.handler = scripted_agents({**study_results(PROPOSED_ADR), "t-accept": accept})
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "awaiting_decision")
             await scm.commit_files(
                 REPOSITORY, "main", {"docs/adr/0001-cache.md": "# Cache\n"}, "another study"
@@ -287,29 +285,29 @@ async def test_study_renumerote_un_adr_dont_le_numero_a_ete_pris_avant_la_fusion
             await decide(ticket)
             await wait_for_state(ticket, "in_pr")
             await report_ci_result(setup, ticket, "success", "ci-13")
-            issue = await asyncio.wait_for(ticket.result(), timeout=90)
+            outcome = await asyncio.wait_for(ticket.result(), timeout=90)
 
-    assert issue["state"] == "adopted"
-    assert acceptations == ["docs/adr/0001-queue.md", "docs/adr/0002-queue.md"], "renuméroté, une fois"
+    assert outcome["state"] == "adopted"
+    assert acceptances == ["docs/adr/0001-queue.md", "docs/adr/0002-queue.md"], "renumbered, once"
     assert [t for t, _ in await runs_of(item_id)][-2:] == ["t-accept", "t-accept"]
-    assert len(scm.merge_queue) == 1, "fusionnée une seule fois, après la renumérotation"
+    assert len(scm.merge_queue) == 1, "merged only once, after the renumbering"
 
 
-async def test_un_adr_sans_decision_outcome_ne_passe_pas(
+async def test_an_adr_without_a_decision_outcome_does_not_pass(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 12, "study")
-    # La phrase de décision est là, pas sa section : c'est le gabarit MADR 4 qui manque, pas l'idée.
-    sans_decision = PROPOSED_ADR.replace("+## Decision Outcome\n+\n", "")
-    assert 'Chosen option: "' in sans_decision and "Decision Outcome" not in sans_decision
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 12, "study")
+    # The decision sentence is there, not its section: the MADR 4 template is missing, not the idea.
+    without_decision = PROPOSED_ADR.replace("+## Decision Outcome\n+\n", "")
+    assert 'Chosen option: "' in without_decision and "Decision Outcome" not in without_decision
     setup.adapters.scm.set_diff(
-        REPOSITORY, "main", "choregos/12", [("docs/adr/0001-queue.md", 13, 0, sans_decision)]
+        REPOSITORY, "main", "choregos/12", [("docs/adr/0001-queue.md", 13, 0, without_decision)]
     )
-    setup.adapters.executor.handler = scripted_agents(study_results(sans_decision))
+    setup.adapters.executor.handler = scripted_agents(study_results(without_decision))
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "needs_human")
             await ticket.cancel()
     runs = [t for t, _ in await runs_of(item_id)]

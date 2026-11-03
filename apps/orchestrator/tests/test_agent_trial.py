@@ -54,10 +54,10 @@ async def test_a_draft_runs_once_under_the_trial_s_cap(
         prompt = run.stage_input["playbook"]["prompt"]
         assert "by urgency, then say why" in prompt, "the draft's instructions replace the playbook"
         assert run.stage_input["budget"]["max_turns"] == 6
-        cle = (
+        gateway_key = (
             await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.run_id == run.id))
         ).scalar_one()
-        assert cle.budget_usd == pytest.approx(0.3), "the gateway key is minted at the trial's cap"
+        assert gateway_key.budget_usd == pytest.approx(0.3), "the gateway key is minted at the trial's cap"
 
 
 async def test_a_draft_s_day_budget_does_not_bound_its_trial(
@@ -85,7 +85,7 @@ async def test_a_draft_s_day_budget_does_not_bound_its_trial(
         )
     assert outcome["status"] == "done", outcome
     async with session_scope() as session:
-        cle = (
+        gateway_key = (
             await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.run_id == outcome["run_id"]))
         ).scalar_one()
-    assert cle.budget_usd == pytest.approx(0.3), "the draft's 0.10 $ a day does not cap a trial"
+    assert gateway_key.budget_usd == pytest.approx(0.3), "the draft's 0.10 $ a day does not cap a trial"

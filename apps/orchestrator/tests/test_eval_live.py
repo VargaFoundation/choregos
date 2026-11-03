@@ -56,8 +56,8 @@ async def eval_project(setup: Fixture) -> Fixture:
 
 async def test_the_toy_repository_is_committed_once_and_the_ticket_filed_once(eval_project: Fixture) -> None:
     scm = eval_project.adapters.scm
-    first = await evals.seed_eval_ticket(_cell("py-bug-arrondi"))
-    again = await evals.seed_eval_ticket(_cell("py-bug-arrondi"))
+    first = await evals.seed_eval_ticket(_cell("py-rounding-bug"))
+    again = await evals.seed_eval_ticket(_cell("py-rounding-bug"))
 
     assert not first["skipped"], first["reason"]
     assert first["plan"]["work_item_id"] == again["plan"]["work_item_id"], "a retry files no second ticket"
@@ -74,16 +74,16 @@ async def test_the_toy_repository_is_committed_once_and_the_ticket_filed_once(ev
 
 
 async def test_each_cell_has_its_own_ticket(eval_project: Fixture) -> None:
-    none = await evals.seed_eval_ticket(_cell("py-bug-arrondi", "none"))
-    rtk = await evals.seed_eval_ticket(_cell("py-bug-arrondi", "rtk"))
-    other_matrix = await evals.seed_eval_ticket(_cell("py-bug-arrondi", "rtk", matrix_id="evals-other"))
+    none = await evals.seed_eval_ticket(_cell("py-rounding-bug", "none"))
+    rtk = await evals.seed_eval_ticket(_cell("py-rounding-bug", "rtk"))
+    other_matrix = await evals.seed_eval_ticket(_cell("py-rounding-bug", "rtk", matrix_id="evals-other"))
     ids = {none["plan"]["work_item_id"], rtk["plan"]["work_item_id"], other_matrix["plan"]["work_item_id"]}
     assert len(ids) == 3
 
 
 async def test_the_plan_asks_the_cell_s_reduction_and_fails_without_headroom(eval_project: Fixture) -> None:
-    spec = yaml.safe_load((evals.TICKETS / "py-bug-arrondi.yaml").read_text(encoding="utf-8"))
-    plan = (await evals.seed_eval_ticket(_cell("py-bug-arrondi")))["plan"]
+    spec = yaml.safe_load((evals.TICKETS / "py-rounding-bug.yaml").read_text(encoding="utf-8"))
+    plan = (await evals.seed_eval_ticket(_cell("py-rounding-bug")))["plan"]
     assert plan["eval_cell"]["context"] == {
         "shell_filter": "rtk",
         "compression": "headroom",
@@ -95,14 +95,14 @@ async def test_the_plan_asks_the_cell_s_reduction_and_fails_without_headroom(eva
         spec.get("role", "implement"),
     )
     assert len(plan["eval_cell"]["facts"]) >= len(spec["assertions"])
-    alone = (await evals.seed_eval_ticket(_cell("py-bug-arrondi", context="headroom")))["plan"]
+    alone = (await evals.seed_eval_ticket(_cell("py-rounding-bug", context="headroom")))["plan"]
     assert alone["eval_cell"]["context"] == {"compression": "headroom", "on_unavailable": "fail"}
 
 
 @pytest.mark.parametrize(
     ("cell", "why"),
     [
-        (_cell("py-bug-arrondi", with_memory=True), "memory"),
+        (_cell("py-rounding-bug", with_memory=True), "memory"),
         (_cell("does-not-exist"), "no reference ticket"),
     ],
 )
@@ -115,7 +115,7 @@ async def test_a_case_a_live_cell_cannot_measure_is_skipped(
 
 
 async def test_a_project_with_memory_on_cannot_run_a_cell_without_it(setup: Fixture) -> None:
-    seeded = await evals.seed_eval_ticket(_cell("py-bug-arrondi"))
+    seeded = await evals.seed_eval_ticket(_cell("py-rounding-bug"))
     assert seeded["skipped"] and "memory on" in seeded["reason"]
 
 
@@ -125,8 +125,8 @@ async def test_the_kill_switch_skips_the_reduced_cells(
     monkeypatch.setenv("CHOREGOS_CONTEXT_REDUCTION", "off")
     reset_settings_cache()
     try:
-        reduced = await evals.seed_eval_ticket(_cell("py-bug-arrondi", "rtk"))
-        plain = await evals.seed_eval_ticket(_cell("py-bug-arrondi", "none"))
+        reduced = await evals.seed_eval_ticket(_cell("py-rounding-bug", "rtk"))
+        plain = await evals.seed_eval_ticket(_cell("py-rounding-bug", "none"))
     finally:
         monkeypatch.delenv("CHOREGOS_CONTEXT_REDUCTION")
         reset_settings_cache()
@@ -168,7 +168,7 @@ def test_the_facts_pass_on_the_scripted_change_and_fail_on_the_toy_repository(
 
 @pytest.mark.parametrize("kind", ["file_absent", "file_unchanged"])
 def test_a_file_fact_fails_when_the_agent_writes_outside_its_scope(kind: str, tmp_path: Path) -> None:
-    spec = yaml.safe_load((evals.TICKETS / "py-hors-perimetre.yaml").read_text(encoding="utf-8"))
+    spec = yaml.safe_load((evals.TICKETS / "py-out-of-scope.yaml").read_text(encoding="utf-8"))
     toy = evals.REPOS / spec["repo"]
     work = tmp_path / "repo"
     shutil.copytree(toy, work)
@@ -246,20 +246,20 @@ async def _live_case(
 async def test_the_runner_gets_the_toy_branch_the_facts_and_the_cell_s_reduction(
     eval_project: Fixture,
 ) -> None:
-    _, seen = await _live_case(eval_project, "py-bug-arrondi", "rtk+headroom")
+    _, seen = await _live_case(eval_project, "py-rounding-bug", "rtk+headroom")
     stage_input: StageInput = seen["stage_input"]
     assert stage_input.repo is not None and stage_input.repo.base_branch.startswith(
         "choregos-evals/python-toy-"
     )
     assert set(stage_input.project.fact_commands) == set(
-        evals._facts(yaml.safe_load((evals.TICKETS / "py-bug-arrondi.yaml").read_text()), evals.REPOS)
+        evals._facts(yaml.safe_load((evals.TICKETS / "py-rounding-bug.yaml").read_text()), evals.REPOS)
     )
     assert (stage_input.context.shell_filter, stage_input.context.compression) == ("rtk", "headroom")
     assert stage_input.context.on_unavailable == "fail"
 
 
 async def test_a_case_whose_facts_hold_succeeds_with_the_ledger_s_tokens(eval_project: Fixture) -> None:
-    verdict, _ = await _live_case(eval_project, "py-bug-arrondi", "none")
+    verdict, _ = await _live_case(eval_project, "py-rounding-bug", "none")
     assert verdict["ok"] and not verdict["skipped"], verdict["reason"]
     assert verdict["usage"] == {
         "tokens_in": 30_000,
@@ -272,19 +272,19 @@ async def test_a_case_whose_facts_hold_succeeds_with_the_ledger_s_tokens(eval_pr
 
 
 async def test_a_case_nothing_was_sent_for_has_no_measure(eval_project: Fixture) -> None:
-    verdict, _ = await _live_case(eval_project, "py-bug-arrondi", "none", billed=False)
+    verdict, _ = await _live_case(eval_project, "py-rounding-bug", "none", billed=False)
     assert verdict["ok"] and verdict["usage"] is None
 
 
 async def test_a_missing_tool_skips_the_case(eval_project: Fixture) -> None:
-    verdict, _ = await _live_case(eval_project, "node-slug-longueur", "none", facts=False)
+    verdict, _ = await _live_case(eval_project, "node-slug-length", "none", facts=False)
     assert verdict["skipped"] and "eval_1_requires" in verdict["reason"]
 
 
 async def test_the_kill_switch_still_wins_at_prepare_time(
     eval_project: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    seeded = await evals.seed_eval_ticket(_cell("py-bug-arrondi", "rtk+headroom"))
+    seeded = await evals.seed_eval_ticket(_cell("py-rounding-bug", "rtk+headroom"))
     monkeypatch.setenv("CHOREGOS_CONTEXT_REDUCTION", "off")
     reset_settings_cache()
     try:
@@ -297,24 +297,24 @@ async def test_the_kill_switch_still_wins_at_prepare_time(
 
 
 async def test_a_false_fact_fails_the_case(eval_project: Fixture) -> None:
-    verdict, _ = await _live_case(eval_project, "py-bug-arrondi", "none", facts=False)
+    verdict, _ = await _live_case(eval_project, "py-rounding-bug", "none", facts=False)
     assert not verdict["ok"] and not verdict["skipped"]
     assert "eval_0_" in verdict["reason"]
 
 
 async def test_a_ticket_that_must_block_fails_when_the_run_says_done(eval_project: Fixture) -> None:
-    done, _ = await _live_case(eval_project, "py-hors-perimetre", "none")
+    done, _ = await _live_case(eval_project, "py-out-of-scope", "none")
     assert not done["ok"] and "expected status blocked" in done["reason"]
 
 
 async def test_a_ticket_that_must_block_succeeds_when_the_run_blocks(eval_project: Fixture) -> None:
-    blocked, _ = await _live_case(eval_project, "py-hors-perimetre", "none", status=StageStatus.BLOCKED)
+    blocked, _ = await _live_case(eval_project, "py-out-of-scope", "none", status=StageStatus.BLOCKED)
     assert blocked["ok"], blocked["reason"]
 
 
 async def test_an_out_of_scope_ticket_also_accepts_a_question_to_a_human(eval_project: Fixture) -> None:
     # #736: the agent that asks instead of doing out-of-scope work did what the ticket wants.
-    asked, _ = await _live_case(eval_project, "py-hors-perimetre", "none", status=StageStatus.NEEDS_HUMAN)
+    asked, _ = await _live_case(eval_project, "py-out-of-scope", "none", status=StageStatus.NEEDS_HUMAN)
     assert asked["ok"], asked["reason"]
 
 
@@ -348,29 +348,34 @@ async def test_a_run_without_the_cell_s_reduction_is_skipped(
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
 
-    _, seen = await _live_case(eval_project, "py-bug-arrondi", "rtk+headroom")
+    _, seen = await _live_case(eval_project, "py-rounding-bug", "rtk+headroom")
     run_id = seen["stage_input"].run_id
     async with session_scope() as session:
         session.add(RunEvent(run_id=run_id, seq=900, type=event, payload=payload, ts=utcnow()))
     verdict = await evals.judge_eval_run(
-        {"run_id": run_id, "fixture": "py-bug-arrondi", "context": "rtk+headroom", "failure": ""}
+        {"run_id": run_id, "fixture": "py-rounding-bug", "context": "rtk+headroom", "failure": ""}
     )
     assert verdict["skipped"] and why in verdict["reason"]
 
 
 async def test_a_run_given_another_reduction_is_skipped(eval_project: Fixture) -> None:
-    _, seen = await _live_case(eval_project, "py-bug-arrondi", "none")
+    _, seen = await _live_case(eval_project, "py-rounding-bug", "none")
     verdict = await evals.judge_eval_run(
-        {"run_id": seen["stage_input"].run_id, "fixture": "py-bug-arrondi", "context": "rtk", "failure": ""}
+        {"run_id": seen["stage_input"].run_id, "fixture": "py-rounding-bug", "context": "rtk", "failure": ""}
     )
     assert verdict["skipped"] and "shell_filter=none" in verdict["reason"]
 
 
 async def test_a_run_without_result_fails_with_its_cause(eval_project: Fixture) -> None:
-    seeded = await evals.seed_eval_ticket(_cell("py-bug-arrondi", "none"))
+    seeded = await evals.seed_eval_ticket(_cell("py-rounding-bug", "none"))
     prepared = await stage_activities.prepare_stage(seeded["plan"])
     verdict = await evals.judge_eval_run(
-        {"run_id": prepared["run_id"], "fixture": "py-bug-arrondi", "context": "none", "failure": "OOMKilled"}
+        {
+            "run_id": prepared["run_id"],
+            "fixture": "py-rounding-bug",
+            "context": "none",
+            "failure": "OOMKilled",
+        }
     )
     assert not verdict["ok"] and not verdict["skipped"] and verdict["reason"] == "OOMKilled"
 

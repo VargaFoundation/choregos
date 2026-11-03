@@ -1,4 +1,4 @@
-"""Évals : les tickets de référence sont réellement joués, pas seulement déclarés."""
+"""Evals: the reference tickets are really played, not just declared."""
 
 from __future__ import annotations
 
@@ -36,20 +36,20 @@ needs_node_with_globs = pytest.mark.skipif(
 )
 
 
-def test_il_y_a_des_tickets_de_reference_et_des_depots_jouets() -> None:
-    assert TICKETS, "S12-01 : les tickets de référence sont livrés dans tests/fixtures/tickets"
+def test_there_are_reference_tickets_and_toy_repositories() -> None:
+    assert TICKETS, "S12-01: the reference tickets are shipped in tests/fixtures/tickets"
     repos = {p.name for p in evals.REPOS.iterdir() if p.is_dir()}
     assert {"python-toy", "node-toy"} <= repos
 
 
 @pytest.mark.parametrize("path", TICKETS, ids=lambda p: p.stem)
-def test_chaque_ticket_est_bien_forme(path: Path) -> None:
+def test_every_ticket_is_well_formed(path: Path) -> None:
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
-    assert spec["id"] == path.stem, "l'identifiant du ticket porte le nom du fichier"
+    assert spec["id"] == path.stem, "the ticket id carries the file name"
     assert (evals.REPOS / spec["repo"]).is_dir()
     assert spec["prompt"].strip() and spec["title"].strip()
-    assert spec["allowed_paths"], "un ticket accorde un périmètre d'écriture explicite"
-    assert spec["assertions"], "un ticket sans assertion ne mesure rien"
+    assert spec["allowed_paths"], "a ticket grants an explicit write scope"
+    assert spec["assertions"], "a ticket without an assertion measures nothing"
     for assertion in spec["assertions"]:
         assert assertion["kind"] in {
             "file_exists",
@@ -59,26 +59,26 @@ def test_chaque_ticket_est_bien_forme(path: Path) -> None:
             "command",
         }
     scripted = spec.get("scripted", {})
-    assert "with_memory" in scripted, "il faut une modification scriptée pour la CI"
+    assert "with_memory" in scripted, "a scripted change is needed for the CI"
     for variant in scripted.values():
         for relative in variant.get("files") or {}:
-            assert any(_matches(relative, motif) for motif in spec["allowed_paths"]), (
-                f"{relative} sort du périmètre accordé par le ticket"
+            assert any(_matches(relative, pattern) for pattern in spec["allowed_paths"]), (
+                f"{relative} is outside the scope granted by the ticket"
             )
 
 
-def _matches(relative: str, motif: str) -> bool:
+def _matches(relative: str, pattern: str) -> bool:
     from fnmatch import fnmatch
 
-    return fnmatch(relative, motif) or fnmatch(relative, motif.replace("**", "*"))
+    return fnmatch(relative, pattern) or fnmatch(relative, pattern.replace("**", "*"))
 
 
-async def test_la_liste_des_fixtures_est_celle_du_depot(setup: Fixture) -> None:
-    assert await evals.list_fixtures({}) == [p.stem for p in TICKETS]
+async def test_the_fixture_list_is_the_repository_s(setup: Fixture) -> None:
+    assert await evals.list_fixtures({}) == sorted(p.stem for p in TICKETS)
 
 
 @needs_node_with_globs
-async def test_une_cellule_avec_memoire_valide_les_tickets(setup: Fixture) -> None:
+async def test_a_cell_with_memory_validates_the_tickets(setup: Fixture) -> None:
     cell = await evals.run_eval_cell(
         {
             "project_slug": setup.project_slug,
@@ -88,8 +88,8 @@ async def test_une_cellule_avec_memoire_valide_les_tickets(setup: Fixture) -> No
             "fixtures": [p.stem for p in TICKETS],
         }
     )
-    echecs = [d for d in cell["details"] if d.get("ok") is False]
-    assert not echecs, echecs
+    failures = [d for d in cell["details"] if d.get("ok") is False]
+    assert not failures, failures
     assert cell["cases"] >= 5
     assert cell["success_rate"] == 1.0
     assert cell["validated"]
@@ -97,15 +97,15 @@ async def test_une_cellule_avec_memoire_valide_les_tickets(setup: Fixture) -> No
 
 
 @needs_node_with_globs
-async def test_sans_memoire_la_convention_projet_est_perdue(setup: Fixture) -> None:
-    """Sans mémoire, l'agent écrit du flottant là où le projet compte en centimes."""
+async def test_without_memory_the_project_convention_is_lost(setup: Fixture) -> None:
+    """Without memory, the agent writes a float where the project counts in cents."""
     cell = await evals.run_eval_cell(
         {
             "project_slug": setup.project_slug,
             "backend": "codex",
             "model": "platform/standard",
             "with_memory": False,
-            "fixtures": ["py-remise-volume"],
+            "fixtures": ["py-volume-discount"],
         }
     )
     assert cell["success_rate"] == 0.0
@@ -113,32 +113,32 @@ async def test_sans_memoire_la_convention_projet_est_perdue(setup: Fixture) -> N
     assert "float" in cell["details"][0]["reason"]
 
 
-async def test_un_ticket_pige_echoue_si_l_agent_sort_du_perimetre(setup: Fixture, tmp_path: Path) -> None:
-    """Le ticket hors périmètre n'est réussi que si rien n'est écrit hors du périmètre."""
-    spec = yaml.safe_load((evals.TICKETS / "py-hors-perimetre.yaml").read_text(encoding="utf-8"))
-    desobeissant = {
+async def test_a_trap_ticket_fails_if_the_agent_goes_out_of_scope(setup: Fixture, tmp_path: Path) -> None:
+    """The out-of-scope ticket succeeds only if nothing is written outside the scope."""
+    spec = yaml.safe_load((evals.TICKETS / "py-out-of-scope.yaml").read_text(encoding="utf-8"))
+    disobedient = {
         **spec,
         "scripted": {"with_memory": {"files": {"deploy/prod.yaml": "bus: prod\n"}, "status": "done"}},
     }
-    outcome = await evals._play(desobeissant, {"project_slug": setup.project_slug, "with_memory": True})
+    outcome = await evals._play(disobedient, {"project_slug": setup.project_slug, "with_memory": True})
     assert not outcome["ok"]
     assert "deploy/prod.yaml" in outcome["reason"] or "file_absent" in outcome["reason"]
 
 
-async def test_un_outil_absent_ignore_le_cas_sans_le_compter_reussi(setup: Fixture) -> None:
+async def test_an_absent_tool_skips_the_case_without_counting_it_passed(setup: Fixture) -> None:
     spec: dict[str, Any] = {
-        "id": "factice",
+        "id": "dummy",
         "repo": "python-toy",
-        "assertions": [{"kind": "command", "run": "licorne --version", "requires": "licorne-cli"}],
+        "assertions": [{"kind": "command", "run": "unicorn --version", "requires": "unicorn-cli"}],
         "scripted": {"with_memory": {"files": {}}},
     }
     outcome = await evals._play(spec, {"project_slug": setup.project_slug, "with_memory": True})
-    assert outcome["skipped"] and "licorne-cli" in outcome["reason"]
+    assert outcome["skipped"] and "unicorn-cli" in outcome["reason"]
 
 
-async def test_une_commande_rouge_fait_echouer_la_cellule(setup: Fixture) -> None:
+async def test_a_red_command_fails_the_cell(setup: Fixture) -> None:
     spec: dict[str, Any] = {
-        "id": "factice-rouge",
+        "id": "dummy-red",
         "repo": "python-toy",
         "assertions": [{"kind": "command", "run": "exit 3"}],
         "scripted": {"with_memory": {"files": {}}},
@@ -147,24 +147,24 @@ async def test_une_commande_rouge_fait_echouer_la_cellule(setup: Fixture) -> Non
     assert not outcome["ok"] and not outcome["skipped"]
 
 
-async def test_le_depot_jouet_n_est_jamais_modifie_sur_place(setup: Fixture) -> None:
-    avant = (evals.REPOS / "python-toy" / "src" / "panier" / "panier.py").read_text(encoding="utf-8")
+async def test_the_toy_repository_is_never_modified_in_place(setup: Fixture) -> None:
+    before = (evals.REPOS / "python-toy" / "src" / "cart" / "cart.py").read_text(encoding="utf-8")
     await evals.run_eval_cell(
         {
             "project_slug": setup.project_slug,
             "backend": "codex",
             "model": "platform/standard",
             "with_memory": True,
-            "fixtures": ["py-bug-arrondi"],
+            "fixtures": ["py-rounding-bug"],
         }
     )
-    apres = (evals.REPOS / "python-toy" / "src" / "panier" / "panier.py").read_text(encoding="utf-8")
-    assert avant == apres, "les évals travaillent dans une copie jetable"
+    after = (evals.REPOS / "python-toy" / "src" / "cart" / "cart.py").read_text(encoding="utf-8")
+    assert before == after, "the evals work in a throwaway copy"
 
 
 # ── S37-09: the context reduction as a dimension, tokens from the ledger (ADR 0055) ──
 
-PLAYABLE = ["py-bug-arrondi", "py-remise-volume", "py-test-manquant"]
+PLAYABLE = ["py-rounding-bug", "py-volume-discount", "py-missing-test"]
 
 
 def _usage(name: str, context: str) -> dict[str, int]:
@@ -248,7 +248,7 @@ async def test_the_cell_reports_what_the_ledger_says_not_what_the_fixture_script
         "model": "platform/standard",
         "with_memory": True,
         "context": "headroom",
-        "fixtures": ["py-bug-arrondi"],
+        "fixtures": ["py-rounding-bug"],
     }
     setup.adapters.gateway = Ledger(
         Spend(tokens_in=7_000, tokens_cached=3_000, tokens_out=500, cost_usd=0.04, requests=3)
@@ -311,11 +311,11 @@ async def test_a_cell_without_context_is_the_none_cell(setup: Fixture) -> None:
             "backend": "claude-code",
             "model": "platform/standard",
             "with_memory": True,
-            "fixtures": ["py-bug-arrondi"],
+            "fixtures": ["py-rounding-bug"],
         }
     )
     assert cell["context"] == "none"
-    assert cell["median_tokens_in"] == _usage("py-bug-arrondi", "none")["tokens_in"]
+    assert cell["median_tokens_in"] == _usage("py-rounding-bug", "none")["tokens_in"]
 
 
 async def test_a_backend_is_validated_by_its_cells_without_context_reduction(setup: Fixture) -> None:
@@ -342,3 +342,40 @@ async def test_a_backend_is_validated_by_its_cells_without_context_reduction(set
             )
         ).scalar_one()
     assert row.validated_backends == ["claude-code", "opencode"], "codex only passed with a reduction"
+
+
+# ── S45-24: the fixtures are English, the former names keep resolving (ADR 0098) ──
+
+
+async def test_former_fixture_name_still_runs(setup: Fixture) -> None:
+    """A stored matrix that names `py-bug-arrondi` plays the ticket that replaced it."""
+    assert evals.FORMER_FIXTURE_NAMES["py-bug-arrondi"] == "py-rounding-bug"  # lang: fr-ok
+    cell = await evals.run_eval_cell(
+        {
+            "project_slug": setup.project_slug,
+            "backend": "codex",
+            "model": "platform/standard",
+            "with_memory": True,
+            "fixtures": ["py-bug-arrondi"],  # lang: fr-ok
+        }
+    )
+    assert [(d["fixture"], d["ok"]) for d in cell["details"]] == [("py-rounding-bug", True)]
+    assert cell["cases"] == 1 and cell["success_rate"] == 1.0
+
+
+def test_every_former_fixture_name_resolves_to_a_ticket() -> None:
+    assert len(evals.FORMER_FIXTURE_NAMES) == 6
+    for former, current in evals.FORMER_FIXTURE_NAMES.items():
+        assert not (evals.TICKETS / f"{former}.yaml").exists(), former
+        assert (evals.TICKETS / f"{current}.yaml").is_file(), current
+        assert evals._load_spec(former) == evals._load_spec(current)
+
+
+def test_a_french_ticket_fixture_still_exists() -> None:
+    """`py-rounding-bug-fr` keeps a French prompt on purpose: the agent answers in English (S22-03)."""
+    path = evals.TICKETS / "py-rounding-bug-fr.yaml"
+    assert path.is_file()
+    assert "lang: fr-ok-file" in path.read_text(encoding="utf-8").splitlines()[0]
+    spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert spec["id"] == "py-rounding-bug-fr"
+    assert "moitié vers le haut" in spec["prompt"]  # lang: fr-ok

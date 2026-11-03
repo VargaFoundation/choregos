@@ -1,8 +1,8 @@
-"""Un environnement `auto_sync` prévient ses tickets (#278, S21-27).
+"""An `auto_sync` environment warns its work items (#278, S21-27).
 
-Argo suit `main` : il n'y a pas de départ. Le train y attendait `abort` sans rien lire, et un ticket
-qui y montait attendait 72 h puis finissait chez un humain. Ici, le preset `solo` met `dev` en
-`auto_sync` ; un VRAI `ReleaseTrain` y reçoit le ticket et le prévient.
+Argo follows `main`: there is no departure. The train waited there for `abort` without reading
+anything, and a work item that boarded waited 72 h then ended with a human. Here, the `solo` preset
+puts `dev` in `auto_sync`; a REAL `ReleaseTrain` receives the work item there and warns it.
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ from .conftest import Fixture, recording_history
 
 pytestmark = pytest.mark.asyncio
 
-HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
+HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 
-VERS_DEV = """apiVersion: choregos/v1
+TO_DEV = """apiVersion: choregos/v1
 kind: Workflow
 metadata: { name: to-dev, version: 1 }
 actors:
@@ -42,9 +42,9 @@ defaults:
 """
 
 
-async def _ticket_vers_dev(setup: Fixture, temporal_env: Any) -> tuple[Any, Any]:
-    """Le ticket, épinglé sur `to-dev` (un agent le prépare), poussé jusqu'au train ; et le train `dev`,
-    lancé pour de vrai."""
+async def _work_item_to_dev(setup: Fixture, temporal_env: Any) -> tuple[Any, Any]:
+    """The work item, pinned to `to-dev` (an agent prepares it), pushed up to the train; and the `dev`
+    train, launched for real."""
     from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import SYSTEM
@@ -53,13 +53,13 @@ async def _ticket_vers_dev(setup: Fixture, temporal_env: Any) -> tuple[Any, Any]
     from choregos_orchestrator.train_client import fake_signals
 
     async with session_scope() as session:
-        projet = await session.get(Project, setup.project_id)
-        assert projet is not None
-        definition = await publier_workflow(session, SYSTEM, projet, VERS_DEV)
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        definition = await publier_workflow(session, SYSTEM, project, TO_DEV)
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
         item.workflow_def_id = definition.id
-    ticket = await temporal_env.client.start_workflow(
+    work_item_run = await temporal_env.client.start_workflow(
         "WorkflowInterpreter",
         {
             "project_id": setup.project_id,
@@ -75,53 +75,53 @@ async def _ticket_vers_dev(setup: Fixture, temporal_env: Any) -> tuple[Any, Any]
         if fake_signals(train_id):
             break
         await asyncio.sleep(0.1)
-    ((_, embarquement),) = fake_signals(train_id)
+    ((_, boarding),) = fake_signals(train_id)
     train = await temporal_env.client.start_workflow(
         "ReleaseTrain", {"project_slug": setup.project_slug, "env": "dev"}, id=train_id, task_queue="test"
     )
-    await train.signal("merged", {k: v for k, v in embarquement.items() if k != "start_payload"})
-    return ticket, train
+    await train.signal("merged", {k: v for k, v in boarding.items() if k != "start_payload"})
+    return work_item_run, train
 
 
-async def test_un_environnement_auto_sync_sain_livre_le_ticket(
+async def test_a_healthy_auto_sync_environment_delivers_the_work_item(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket, train = await _ticket_vers_dev(setup, temporal_env)
-            issue = await asyncio.wait_for(ticket.result(), timeout=60)
+            work_item_run, train = await _work_item_to_dev(setup, temporal_env)
+            issue = await asyncio.wait_for(work_item_run.result(), timeout=60)
             assert (await train.query("status_query"))["status"] == "auto_sync"
             await train.signal("abort", {"by": "test"})
             await train.result()
-            historique = await train.fetch_history()
+            history = await train.fetch_history()
     assert issue["state"] == "live"
 
-    # L'historique du train rejoue contre le code courant — et s'archive pour les suivants.
+    # The train's history replays against the current code — and is archived for the next ones.
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
         english = recording_history() == "english"  # S34-02
-        cible = HISTORIQUES / (
+        target = HISTORIES / (
             "train-auto-sync-english-S34-02.json" if english else "train-auto-sync-S21-27.json"
         )
-        cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
-async def test_un_environnement_auto_sync_degrade_rend_le_ticket_a_un_humain(
+async def test_a_degraded_auto_sync_environment_hands_the_work_item_to_a_human(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     setup.adapters.cd.set_health("billing-api", "Degraded")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket, train = await _ticket_vers_dev(setup, temporal_env)
+            work_item_run, train = await _work_item_to_dev(setup, temporal_env)
             for _ in range(600):
-                if (await ticket.query("status"))["state"] == "needs_human":
+                if (await work_item_run.query("status"))["state"] == "needs_human":
                     break
                 await asyncio.sleep(0.1)
-            assert (await ticket.query("status"))["state"] == "needs_human"
+            assert (await work_item_run.query("status"))["state"] == "needs_human"
             await train.signal("abort", {"by": "test"})
             await train.result()
-            await ticket.cancel()
+            await work_item_run.cancel()

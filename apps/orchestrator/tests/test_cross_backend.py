@@ -1,4 +1,4 @@
-"""La revue croisée est un mécanisme, pas une intention : le backend change vraiment."""
+"""Cross review is a mechanism, not an intention: the backend really changes."""
 
 from __future__ import annotations
 
@@ -67,18 +67,18 @@ def _plan(setup: Fixture, role: str, backend: str | None = None) -> dict[str, An
     }
 
 
-async def test_le_relecteur_n_est_pas_l_implementeur(setup: Fixture) -> None:
+async def test_the_reviewer_is_not_the_implementer(setup: Fixture) -> None:
     await _set_cross_backend(setup.project_id, True)
     await _implemented_by(setup, "codex")
 
     prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="codex"))
 
     backend = prepared["stage_input"]["agent"]["backend"]
-    assert backend != "codex", "la politique exige un autre relecteur"
+    assert backend != "codex", "the policy requires another reviewer"
     assert backend in {"claude-code", "codex", "gemini-cli", "goose", "opencode", "copilot-cli"}
 
 
-async def test_sans_la_politique_le_backend_demande_est_respecte(setup: Fixture) -> None:
+async def test_without_the_policy_the_requested_backend_is_respected(setup: Fixture) -> None:
     await _set_cross_backend(setup.project_id, False)
     await _implemented_by(setup, "codex")
 
@@ -87,7 +87,7 @@ async def test_sans_la_politique_le_backend_demande_est_respecte(setup: Fixture)
     assert prepared["stage_input"]["agent"]["backend"] == "codex"
 
 
-async def test_un_relecteur_deja_different_n_est_pas_change(setup: Fixture) -> None:
+async def test_a_reviewer_already_different_is_not_changed(setup: Fixture) -> None:
     await _set_cross_backend(setup.project_id, True)
     await _implemented_by(setup, "codex")
 
@@ -96,8 +96,8 @@ async def test_un_relecteur_deja_different_n_est_pas_change(setup: Fixture) -> N
     assert prepared["stage_input"]["agent"]["backend"] == "goose"
 
 
-async def test_les_autres_roles_ne_sont_pas_touches(setup: Fixture) -> None:
-    """Seule la revue est croisée : l'implémentation garde le backend du projet."""
+async def test_the_other_roles_are_not_touched(setup: Fixture) -> None:
+    """Only the review is crossed: the implementation keeps the project's backend."""
     await _set_cross_backend(setup.project_id, True)
     await _implemented_by(setup, "codex")
 
@@ -106,8 +106,8 @@ async def test_les_autres_roles_ne_sont_pas_touches(setup: Fixture) -> None:
     assert prepared["stage_input"]["agent"]["backend"] == "codex"
 
 
-async def test_un_seul_backend_autorise_degrade_sans_bloquer(setup: Fixture) -> None:
-    """Un projet qui n'autorise qu'un backend ne doit pas voir ses tickets se bloquer."""
+async def test_a_single_allowed_backend_degrades_without_blocking(setup: Fixture) -> None:
+    """A project that allows only one backend must not see its work items block."""
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
 
@@ -123,47 +123,46 @@ async def test_un_seul_backend_autorise_degrade_sans_bloquer(setup: Fixture) -> 
     prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="codex"))
 
     assert prepared["stage_input"]["agent"]["backend"] == "codex"
-    assert prepared["run_id"], "le ticket avance malgré la revue dégradée"
+    assert prepared["run_id"], "the work item moves on despite the degraded review"
 
 
-# ──────── on n'annonce à l'agent que les serveurs MCP qui existent (2026-09-27) ────────
+# ──────── only the MCP servers that exist are announced to the agent (2026-09-27) ────────
 
 
-async def test_le_serveur_d_outils_est_annonce_a_tout_agent() -> None:
-    """L'adresse est locale, et quelqu'un la sert TOUJOURS — sidecar sous Tekton, runner ailleurs.
+async def test_the_tools_server_is_announced_to_every_agent() -> None:
+    """The address is local, and someone ALWAYS serves it — sidecar under Tekton, runner elsewhere.
 
-    J'ai brièvement rendu cette annonce conditionnelle, en croyant qu'aucun serveur n'existait
-    sous `k8s_job`. La condition retirait une annonce vraie et privait l'agent de ses outils :
-    `runner/outils_locaux.py` démarre le serveur quand rien ne répond, mais l'agent ne le sait que
-    si on le lui dit.
+    I briefly made this announcement conditional, believing no server existed under `k8s_job`.
+    The condition removed a true announcement and deprived the agent of its tools:
+    `runner/outils_locaux.py` starts the server when nothing answers, but the agent only knows it
+    if it is told.
     """
-    from choregos_orchestrator.activities.stage import _serveurs_mcp
+    from choregos_orchestrator.activities.stage import _mcp_servers
     from choregos_orchestrator.config import OrchestratorSettings
 
-    for executeur in ("tekton", "k8s_job", "local_docker", "aca"):
-        serveurs = _serveurs_mcp(
-            OrchestratorSettings(executor_kind=executeur, memory_url="http://ecphoria:8432")
+    for executor in ("tekton", "k8s_job", "local_docker", "aca"):
+        servers = _mcp_servers(
+            OrchestratorSettings(executor_kind=executor, memory_url="http://ecphoria:8432")
         )
-        assert serveurs["choregos"].url == "http://localhost:7777/mcp", executeur
+        assert servers["choregos"].url == "http://localhost:7777/mcp", executor
 
 
-async def test_l_url_de_la_memoire_vient_de_son_reglage_pas_d_un_remplacement_de_port() -> None:
-    """Elle était fabriquée par `gateway_url.replace("4000", "8432")`.
+async def test_the_memory_url_comes_from_its_setting_not_from_a_port_replacement() -> None:
+    """It was built by `gateway_url.replace("4000", "8432")`.
 
-    Le remplacement ne tient que si la passerelle et la mémoire partagent un hôte. Sur le
-    locataire dev, la passerelle est `http://litellm:4000` : la mémoire devenait
-    `http://litellm:8432` — mesuré sans réponse en huit secondes, quand `http://ecphoria:8432/mcp`
-    répond 401 en neuf millisecondes.
+    The replacement only holds if the gateway and the memory share a host. On the dev tenant, the
+    gateway is `http://litellm:4000`: the memory became `http://litellm:8432` — measured with no
+    answer in eight seconds, whereas `http://ecphoria:8432/mcp` answers 401 in nine milliseconds.
     """
-    from choregos_orchestrator.activities.stage import _serveurs_mcp
+    from choregos_orchestrator.activities.stage import _mcp_servers
     from choregos_orchestrator.config import OrchestratorSettings
 
-    reglages = OrchestratorSettings(
+    settings_under_test = OrchestratorSettings(
         executor_kind="k8s_job", gateway_url="http://litellm:4000", memory_url="http://ecphoria:8432"
     )
-    serveurs = _serveurs_mcp(reglages)
-    assert serveurs["memory"].url == "http://ecphoria:8432/mcp", serveurs["memory"].url
-    assert "litellm" not in serveurs["memory"].url, "la mémoire ne vit pas sur l'hôte de la passerelle"
+    servers = _mcp_servers(settings_under_test)
+    assert servers["memory"].url == "http://ecphoria:8432/mcp", servers["memory"].url
+    assert "litellm" not in servers["memory"].url, "the memory does not live on the gateway host"
 
-    # Sans mémoire configurée, on n'annonce pas un serveur de mémoire.
-    assert "memory" not in _serveurs_mcp(OrchestratorSettings(executor_kind="k8s_job", memory_url=""))
+    # Without a configured memory, no memory server is announced.
+    assert "memory" not in _mcp_servers(OrchestratorSettings(executor_kind="k8s_job", memory_url=""))
