@@ -260,10 +260,10 @@ async def test_an_organisation_agent_pinned_elsewhere_cannot_move_into_one_proje
 
 
 async def test_a_personal_agent_does_not_show_among_a_skills_users(client: AsyncClient, org: str) -> None:
-    from .test_bibliotheque_de_skills import FICHIERS
+    from .kits.skill_library import SKILL_FILES
 
     await as_user(client, ADMIN)
-    assert (await client.post(f"{ORG}/skills", json={"files": FICHIERS})).status_code == 201
+    assert (await client.post(f"{ORG}/skills", json={"files": SKILL_FILES})).status_code == 201
     uses = {"skills": [{"slug": "procedure-onboarding"}]}
     await as_user(client, DEV)
     assert (

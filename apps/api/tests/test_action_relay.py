@@ -5,7 +5,7 @@ because the API's lifespan starts it, and it holds against a real Temporal serve
 the server is unreachable, one run of `action-<id>` however many passes come. With the
 orchestrator's workers on the queue (S40-19c), the relayed workflow runs the action's effect once,
 and two replicas that both read the action as `approved` still run it once. In CI's second pass
-(`CHOREGOS_TEST_SUITE_SUR_POSTGRES=1`) the same tests run on a migrated PostgreSQL under RLS.
+(`CHOREGOS_TEST_SUITE_ON_POSTGRES=1`) the same tests run on a migrated PostgreSQL under RLS.
 """
 
 from __future__ import annotations

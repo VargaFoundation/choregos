@@ -10,7 +10,7 @@ import pytest
 from httpx import AsyncClient
 
 from .conftest import login
-from .test_coutures_identite import _connecter, _etat, client_greffe, greffon  # noqa: F401
+from .kits.identity_seams import connect, state_of
 
 SECRET = "s3cr3t-value-that-must-never-leak"
 ISSUER = "https://idp.example.test/realms/x"
@@ -114,20 +114,20 @@ async def test_a_member_who_is_not_a_platform_admin_is_refused(client: AsyncClie
     assert (await client.get(URL)).status_code == 403
 
 
-async def test_a_plugin_authority_grants_access(client_greffe: AsyncClient) -> None:  # noqa: F811
+async def test_a_plugin_authority_grants_access(extended_client: AsyncClient) -> None:
     from choregos_api.db.models import Membership, Organization, User
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    await _connecter(client_greffe, "admin@varga.dev")
+    await connect(extended_client, "admin@varga.dev")
     async with session_scope(orgs="*") as session:
         second = Organization(slug="seconde", name="S")
         session.add(second)
         await session.flush()
         admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
         session.add(Membership(user_id=admin.id, org_id=second.id, role="org_admin"))
-    await _connecter(client_greffe, "ops@varga.dev")
-    assert (await client_greffe.get(URL)).status_code == 403
-    _etat()["admins"].add("ops@varga.dev")
-    assert (await client_greffe.get(URL)).status_code == 200
-    assert "greffon_identite" in sys.modules
+    await connect(extended_client, "ops@varga.dev")
+    assert (await extended_client.get(URL)).status_code == 403
+    state_of()["admins"].add("ops@varga.dev")
+    assert (await extended_client.get(URL)).status_code == 200
+    assert "identity_extension" in sys.modules

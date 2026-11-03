@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from choregos_core import parse_workflow
 
-from .conftest import sans_postgres
+from .conftest import without_postgres
 
 #: Un workflow dont le premier état déclaré n'est PAS le nom le plus court. `fin` (3) passerait
 #: devant `commence` (8) dans l'ordre de `jsonb`.
@@ -87,7 +87,7 @@ def test_un_workflow_ne_peut_pas_commencer_par_sa_fin() -> None:
     assert "workflow.initial_state_terminal" in codes, f"attendu un refus, obtenu {codes}"
 
 
-@sans_postgres
+@without_postgres
 async def test_par_une_vraie_base_le_depart_survit(pg_app: object) -> None:
     """Le test qui compte : `jsonb` range les clés, et le départ doit tenir quand même."""
     from choregos_api.db.models import Organization, Project, WorkflowDef

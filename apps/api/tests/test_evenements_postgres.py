@@ -12,9 +12,9 @@ from typing import Any
 
 from sqlalchemy import select
 
-from .conftest import PG_URL, sans_postgres
+from .conftest import PG_URL, without_postgres
 
-pytestmark = sans_postgres
+pytestmark = without_postgres
 
 
 async def test_un_evenement_persiste_traverse_les_repliques(pg_app: Any) -> None:

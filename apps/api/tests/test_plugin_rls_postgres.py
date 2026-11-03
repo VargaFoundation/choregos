@@ -10,9 +10,9 @@ from typing import Any
 
 from sqlalchemy import select
 
-from .conftest import sans_postgres
+from .conftest import without_postgres
 
-pytestmark = sans_postgres
+pytestmark = without_postgres
 
 
 async def test_a_plugin_row_and_its_files_are_invisible_to_another_organisation(pg_app: Any) -> None:

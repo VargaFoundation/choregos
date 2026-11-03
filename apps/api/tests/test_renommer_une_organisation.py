@@ -17,6 +17,7 @@ from typing import Any
 from httpx import AsyncClient
 
 from .conftest import login
+from .kits.organisation import declare_administrator
 
 ORG = "/api/v1/orgs"
 
@@ -113,19 +114,12 @@ async def _retirer_les_appartenances(email: str) -> None:
         await session.execute(delete(Membership).where(Membership.user_id == moi.id))
 
 
-async def _declarer_administrateur(emails: set[str]) -> None:
-    from choregos_api.edition import declarer_un_administrateur_de_plateforme, reinitialiser
-
-    reinitialiser()
-    declarer_un_administrateur_de_plateforme(lambda session, principal: principal.email in emails)
-
-
 async def test_un_administrateur_de_plateforme_non_membre_renomme_nom_et_slug(
     client: AsyncClient, admin: str
 ) -> None:
     from choregos_api.edition import reinitialiser
 
-    await _declarer_administrateur({"plateforme@exemple.dev"})
+    await declare_administrator({"plateforme@exemple.dev"})
     try:
         await login(client, "plateforme@exemple.dev")
         await _retirer_les_appartenances("plateforme@exemple.dev")
@@ -155,7 +149,7 @@ async def test_un_administrateur_de_plateforme_non_membre_renomme_nom_et_slug(
 async def test_un_non_membre_sans_droit_de_plateforme_est_refuse(client: AsyncClient, admin: str) -> None:
     from choregos_api.edition import reinitialiser
 
-    await _declarer_administrateur({"plateforme@exemple.dev"})
+    await declare_administrator({"plateforme@exemple.dev"})
     try:
         await login(client, "curieux@exemple.dev")
         await _retirer_les_appartenances("curieux@exemple.dev")

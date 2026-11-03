@@ -17,15 +17,15 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from .conftest import SUITE_SUR_POSTGRES
+from .conftest import SUITE_ON_POSTGRES
 from .test_a2a_inbound import ENDPOINT, _ready, _send, _stream, _when_followed
 from .test_a2a_push import Receiver, _config, _happen, _set, enforce, receiver
 
 __all__ = ["enforce", "receiver"]  # fixtures, used by name
 
 on_postgres = pytest.mark.skipif(
-    not SUITE_SUR_POSTGRES,
-    reason="NOTIFY and SKIP LOCKED: PostgreSQL only (CHOREGOS_TEST_SUITE_SUR_POSTGRES)",
+    not SUITE_ON_POSTGRES,
+    reason="NOTIFY and SKIP LOCKED: PostgreSQL only (CHOREGOS_TEST_SUITE_ON_POSTGRES)",
 )
 
 

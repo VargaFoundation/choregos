@@ -9,14 +9,14 @@ import pytest
 from httpx import AsyncClient
 
 from . import knowledge_fixtures as fx
-from .conftest import SUITE_SUR_POSTGRES, sans_postgres
+from .conftest import SUITE_ON_POSTGRES, without_postgres
 
 BASE = "/api/v1/orgs/varga/knowledge"
 #: How the index ranks on the database the suite runs on: in the process on SQLite; on PostgreSQL,
 #: hybrid when pgvector is there (required where the image carries it), full-text otherwise.
 MODES = (
     {"in-process"}
-    if not SUITE_SUR_POSTGRES
+    if not SUITE_ON_POSTGRES
     else {"hybrid"}
     if os.environ.get("CHOREGOS_TEST_EXPECT_PGVECTOR") == "1"
     else {"hybrid", "full-text"}
@@ -261,7 +261,7 @@ async def test_a_run_searches_only_the_bases_it_is_served(
 # ───────────────────────────── PostgreSQL ─────────────────────────────
 
 
-@sans_postgres
+@without_postgres
 async def test_postgres_ranks_hybrid_with_pgvector_and_full_text_without(pg_app: Any) -> None:
     """With pgvector the mode is `hybrid`; without it (the migration could not create the extension),
     `full-text` — and both find the right passage. Which one runs depends on the database given."""

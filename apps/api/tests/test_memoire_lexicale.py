@@ -14,7 +14,7 @@ import pytest
 from choregos_core.domain import Fact, Provenance
 from httpx import ASGITransport, AsyncClient
 
-from .conftest import login, sans_postgres
+from .conftest import login, without_postgres
 
 
 @pytest.fixture(autouse=True)
@@ -91,7 +91,7 @@ async def test_sans_organisation_la_fabrique_refuse(app: Any) -> None:
         build("memory", "pgvector", {})
 
 
-@sans_postgres
+@without_postgres
 async def test_sur_postgres_chaque_organisation_ne_voit_que_sa_memoire(pg_app: Any) -> None:
     """Deux organisations, un projet `billing-api` chacune. L'adaptateur de `a` lit et
     écrit chez `a` ; celui de `b` ne voit pas les faits de `a` ; une session nue — l'ancien
