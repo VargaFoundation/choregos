@@ -111,6 +111,7 @@ test("findings : triage disponible", async ({ page }) => {
 
 test("wizard : validation du slug avant de continuer", async ({ page }) => {
   await page.goto("/projects/new");
+  await page.getByLabel(/^Software, from a code repository/).check();
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByLabel("Identifier (slug)").fill("Billing API");
   await expect(page.getByText("Lowercase letters, digits and dashes only")).toBeVisible();
