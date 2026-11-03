@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités de l'orchestrateur : tout ce qui touche au monde extérieur.
+"""The orchestrator's activities: everything that touches the outside world.
 
-Elles sont idempotentes, typées, et n'appellent jamais un modèle directement.
+They are idempotent, typed, and never call a model directly.
 """
 
 from __future__ import annotations
@@ -9,7 +9,6 @@ from __future__ import annotations
 from . import (
     actions,
     agent_session,
-    bilan,
     children,
     decision,
     evals,
@@ -19,6 +18,7 @@ from . import (
     hosted_build,
     knowledge,
     memory,
+    outcome,
     provisioning,
     schedules,
     scm,
@@ -63,8 +63,8 @@ ALL_ACTIVITIES = [
     suspension.suspend_run,
     suspension.release_suspended_run,
     suspension.resume_run,
-    bilan.collect_spend,
-    bilan.record_run_outcome,
+    outcome.collect_spend,
+    outcome.record_run_outcome,
     # A decision step (ADR 0121): no run, a call to the gateway's decision route.
     decision.decide,
     # The transition taken after a recorded step, on its ledger records (ADR 0121 §6).
@@ -121,13 +121,13 @@ ALL_ACTIVITIES = [
 
 __all__ = [
     "ALL_ACTIVITIES",
-    "bilan",
     "decision",
     "evals",
     "execution",
     "findings",
     "gates",
     "memory",
+    "outcome",
     "provisioning",
     "schedules",
     "scm",

@@ -1,10 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""La préparation d'une étape agent : modèle, clé, contexte, `StageInput`.
+"""The preparation of an agent step: model, key, context, `StageInput`.
 
-Chaque fonction est une activité Temporal ; toutes sont idempotentes par `run_id`. Le
-lancement et l'attente vivent dans `execution`, le bilan dans `bilan`, la garde contre
-l'injection dans `garde` — ce module les réexporte, l'interpréteur et les tests continuent
-de les lire ici.
+Each function is a Temporal activity; all are idempotent by `run_id`. The launch and the wait
+live in `execution`, the outcome in `outcome`, the guard against injection in `injection_guard`;
+this module re-exports them, and the interpreter and the tests keep reading them here.
 """
 
 from __future__ import annotations
@@ -64,18 +63,18 @@ from ..config import get_settings
 from ..context_reduction import forced_context, resolve_context, stage_input_payload
 from ..org_egress import org_runner_hosts
 from .base import db, load_work_item, org_memory, project_bundle, without_secrets
-from .bilan import collect_spend, record_run_outcome
 from .execution import (
-    FILE_MAX_MINUTES,
+    QUEUE_MAX_MINUTES,
     await_run,
     cancel_run,
-    classe_d_execution,
-    env_du_runner,
+    runner_environment,
+    runtime_class,
     start_run,
 )
-from .garde import garde_contre_l_injection
 from .images import named_image
+from .injection_guard import guard_against_injection
 from .job import NO_MODEL, prepare_job
+from .outcome import collect_spend, record_run_outcome
 from .plan import StagePlan
 from .remote import A2A_BACKEND, a2a_runtime, check_remote_agent, remote_budget, remote_call
 from .run_key import reserve_key
@@ -83,6 +82,7 @@ from .run_network import admit_network, network_permissions, run_network
 
 __all__ = [
     "FILE_MAX_MINUTES",
+    "QUEUE_MAX_MINUTES",
     "StagePlan",
     "await_run",
     "cancel_run",
@@ -91,31 +91,37 @@ __all__ = [
     "env_du_runner",
     "prepare_stage",
     "record_run_outcome",
+    "runner_environment",
+    "runtime_class",
     "start_run",
 ]
+
+FILE_MAX_MINUTES = QUEUE_MAX_MINUTES  # lang: fr-ok alias:internal
+classe_d_execution = runtime_class  # lang: fr-ok alias:internal
+env_du_runner = runner_environment  # lang: fr-ok alias:internal
 
 logger = structlog.get_logger("choregos.stage")
 
 
-def _serveurs_mcp(settings: Any, memory_scope: str = "project") -> dict[str, McpServerRef]:
-    """Les serveurs MCP qu'on annonce à l'agent — ceux qui existent, et eux seuls.
+def _mcp_servers(settings: Any, memory_scope: str = "project") -> dict[str, McpServerRef]:
+    """The MCP servers announced to the agent: the ones that exist, and only those.
 
-    Les deux étaient écrits en dur, et les deux étaient faux sur le locataire dev du 2026-09-27 :
-    le sidecar d'outils n'existe que sous l'exécuteur `tekton`, et l'URL de la mémoire était
-    fabriquée par `gateway_url.replace("4000", "8432")` — un remplacement de port qui ne tient
-    que si la passerelle et la mémoire partagent un hôte. Là-bas, la passerelle est
-    `http://litellm:4000` : la mémoire devenait `http://litellm:8432`, mesurée sans réponse en
-    huit secondes, quand `http://ecphoria:8432/mcp` répond en neuf millisecondes.
+    Both were hard-coded, and both were wrong on the dev tenant of 2026-09-27: the tools sidecar
+    only exists under the `tekton` executor, and the memory URL was built with
+    `gateway_url.replace("4000", "8432")`, a port replacement that only holds if the gateway and
+    the memory share a host. There, the gateway is `http://litellm:4000`: the memory became
+    `http://litellm:8432`, measured without an answer in eight seconds, when
+    `http://ecphoria:8432/mcp` answers in nine milliseconds.
     """
-    serveurs: dict[str, McpServerRef] = {}
-    if url := settings.url_du_sidecar_d_outils:
-        serveurs["choregos"] = McpServerRef(url=url)
+    servers: dict[str, McpServerRef] = {}
+    if url := settings.tools_sidecar_url:
+        servers["choregos"] = McpServerRef(url=url)
     # The memory server serves the PROJECT's shared memory: a run whose bindings are anything else (its
     # own memory, none, several, a global one) does not get it — it would read and write past its
     # bindings (S32-02, S40-11).
     if settings.memory_url and memory_scope == "project":
-        serveurs["memory"] = McpServerRef(url=f"{settings.memory_url.rstrip('/')}/mcp")
-    return serveurs
+        servers["memory"] = McpServerRef(url=f"{settings.memory_url.rstrip('/')}/mcp")
+    return servers
 
 
 async def _gateway_catalogue(bundle: Any) -> list[Any]:
@@ -165,14 +171,14 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         engine = bundle.engine
         if (refused := await _stage_cap(session, bundle, item, run_id, plan)) is not None:
             return refused
-        # Un agent du registre (ADR 0033) : sa version effective — l'épinglée du projet, surcharges
-        # appliquées — fixe modèle, backend, limites et budget, et ses instructions remplacent le
-        # playbook. Un agent révoqué, suspendu ou expiré ne part pas.
+        # An agent of the registry (ADR 0033): its effective version (the project's pin, overrides
+        # applied) sets model, backend, limits and budget, and its instructions replace the
+        # playbook. A revoked, suspended or expired agent does not start.
         # A trial (S32-03) runs a draft version, unpublished, in the agent's place: no daily budget
         # of a registry agent applies to it, its own cap does (below).
-        agent = _agent_d_essai(plan) or await _agent_du_plan(session, bundle, plan)
+        agent = _trial_agent(plan) or await _plan_agent(session, bundle, plan)
         if agent is not None and plan.trial_spec is None:
-            await _budget_du_jour(session, bundle, agent)
+            await _daily_budget(session, bundle, agent)
         # ADR 0070: an agent that needs a host its project or the organisation does not allow does
         # not start — before any key is reserved or minted. What the organisation opened for its
         # runners (S39-22d) joins the run as implied hosts; every deny list still wins.
@@ -187,7 +193,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             != "none",
         )
         if agent is not None:
-            plan = _plan_de_l_agent(plan, agent.spec)
+            plan = _agent_plan(plan, agent.spec)
         # The runtime that carries the step, if not an ACP agent. `_hosted_call` refuses here, before
         # any budget is reserved, a hosted image without a digest or a build not ready (ADR 0080).
         # A zip version's build is read from its row (S41-08): the version keeps the `pending` it
@@ -278,12 +284,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             session, bundle, item, plan, agent, remote=remote_runtime is not None
         )
         memory_scope = resolved_memories.legacy_scope or "none"
-        await garde_contre_l_injection(session, bundle, item, run_id, plan, context_pack)
+        await guard_against_injection(session, bundle, item, run_id, plan, context_pack)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
         playbook_ref = _playbook_ref(plan, agent, playbook_prompt)
         # A `read` agent writes no repository file: its scope matches only its deliverables (ADR 0119).
         allowed_paths = write_paths_for(workspace, list(item.allowed_paths or []))
-        depot = bundle.config.repo
+        repo_config = bundle.config.repo
         repo = _repo_ref(bundle, item, plan, workspace, remote=remote_runtime is not None, hosted=hosted)
         stage_input = StageInput(
             run_id=run_id,
@@ -293,11 +299,11 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             project=ProjectRef(
                 slug=bundle.slug,
                 org=bundle.org_slug,
-                test_command=depot.test_command if depot else "",
-                lint_command=depot.lint_command if depot else "",
-                typecheck_command=depot.typecheck_command if depot else "",
-                # Les commandes de faits viennent de la RACINE de la configuration, pas de
-                # `repo` : un projet sans dépôt doit pouvoir prouver quelque chose (ADR 0012).
+                test_command=repo_config.test_command if repo_config else "",
+                lint_command=repo_config.lint_command if repo_config else "",
+                typecheck_command=repo_config.typecheck_command if repo_config else "",
+                # The fact commands come from the ROOT of the configuration, not from `repo`: a
+                # project without a repository must be able to prove something (ADR 0012).
                 fact_commands=dict(bundle.config.dod.facts)
                 if plan.eval_cell is None
                 else dict(plan.eval_cell["facts"]),
@@ -342,13 +348,13 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             allowed_paths=allowed_paths,
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
-            tools=ToolsRef(mcp={} if remote_runtime is not None else _serveurs_mcp(settings, memory_scope)),
+            tools=ToolsRef(mcp={} if remote_runtime is not None else _mcp_servers(settings, memory_scope)),
             memory_scope=memory_scope,
             memories=resolved_memories.memories,
             # The container of a hosted agent reads no file of the runner's: skills would be lost on it.
             skills=[]
             if remote_runtime is not None or hosted is not None
-            else await _skills_de_l_agent(session, bundle, agent),
+            else await _agent_skills(session, bundle, agent),
             knowledge=[]
             if remote_runtime is not None
             else await _knowledge_of_agent(session, bundle, agent, item),
@@ -403,8 +409,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             session.add(run)
         await session.flush()
         await _journal_skipped_memories(session, run_id, resolved_memories.skipped)
-        # Ce que le prompt de ce run embarque des étapes d'avant, sous l'empreinte de la révision
-        # embarquée (S25-04). Rejouable : un reçu existant ne se réécrit pas (ADR 0008).
+        # What this run's prompt carries from the earlier steps, under the fingerprint of the
+        # embedded revision (S25-04). Replayable: an existing receipt is not rewritten (ADR 0008).
         # From the same reads, `_record_chain` writes the run's chain on the row (ADR 0077 §2).
         await consigner(
             session,
@@ -443,14 +449,21 @@ def _repo_ref(
     A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062); nor does a
     hosted one published with `workspace: none` (S41-18), nor any agent that declares
     `workspace: none` (ADR 0119)."""
-    depot = bundle.config.repo
-    if not depot or workspace == "none" or remote or (hosted is not None and hosted.workspace == "none"):
+    repo_config = bundle.config.repo
+    if (
+        not repo_config
+        or workspace == "none"
+        or remote
+        or (hosted is not None and hosted.workspace == "none")
+    ):
         return None
     return RepoRef(
-        url=depot.url,
-        base_branch=depot.default_branch if plan.eval_cell is None else str(plan.eval_cell["base_branch"]),
+        url=repo_config.url,
+        base_branch=repo_config.default_branch
+        if plan.eval_cell is None
+        else str(plan.eval_cell["base_branch"]),
         work_branch=bundle.config.branch_for(item.tracker_key),
-        clone_depth=depot.clone_depth,
+        clone_depth=repo_config.clone_depth,
     )
 
 
@@ -495,15 +508,16 @@ def _require_llm_guard(bundle: Any) -> None:
 async def _admettre(
     bundle: Any, item: Any, run_id: str, plan: StagePlan, backend: str, budget_usd: float
 ) -> None:
-    """Les admissions déclarées par les greffons (`choregos_core.admission`), avant toute clé.
+    """The admissions declared by the extensions (`choregos_core.admission`), before any key.
 
-    Un refus arrête l'étape SANS reprise, comme la garde contre l'injection : retenter ne changerait
-    rien tant que la règle tient, et le ticket est marqué mort avec la raison, qu'un humain lit.
+    A refusal stops the step WITHOUT a retry, like the guard against injection: retrying would
+    change nothing as long as the rule holds, and the work item is marked dead with the reason,
+    which a human reads.
     """
     from choregos_core.admission import AdmissionRefusee, DemandeDeRun, verifier
     from temporalio.exceptions import ApplicationError
 
-    demande = DemandeDeRun(
+    admission_request = DemandeDeRun(
         org=bundle.org_slug,
         project=bundle.slug,
         work_item=item.tracker_key,
@@ -513,11 +527,11 @@ async def _admettre(
         budget_usd=budget_usd,
     )
     try:
-        await verifier(demande)
-    except AdmissionRefusee as refus:
+        await verifier(admission_request)
+    except AdmissionRefusee as refusal:
         raise ApplicationError(
-            f"run refused before it started — {refus}", type="admission_refused", non_retryable=True
-        ) from refus
+            f"run refused before it started — {refusal}", type="admission_refused", non_retryable=True
+        ) from refusal
 
 
 async def _reservation(
@@ -724,7 +738,7 @@ async def _refuse_on_budget(
 
 
 def _run_id(plan: StagePlan) -> str:
-    """Identifiant déterministe : rejouer l'activité ne crée pas un second run."""
+    """Deterministic identifier: replaying the activity does not create a second run."""
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
 
 
@@ -959,16 +973,16 @@ def production_indicator_sources(config: Any, agent: Any = None) -> list[str]:
 
 
 def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None) -> str:
-    texte = _rendre_le_playbook(plan, bundle, item, context, agent)
-    reponse = str((item.documents or {}).get("human_answer") or "").strip()
-    if not reponse:
-        return texte
-    # Une personne a répondu à la question qui avait arrêté le ticket (#313) : l'agent qui reprend
-    # la lit en tête, sans que l'auteur du workflow ait eu à la déclarer en entrée.
-    return f"## A person answered the question that stopped this work item\n\n{reponse}\n\n---\n\n{texte}"
+    text = _render_playbook_text(plan, bundle, item, context, agent)
+    answer = str((item.documents or {}).get("human_answer") or "").strip()
+    if not answer:
+        return text
+    # A person answered the question that had stopped the work item (#313): the agent that
+    # resumes reads it first, without the workflow's author having to declare it as an input.
+    return f"## A person answered the question that stopped this work item\n\n{answer}\n\n---\n\n{text}"
 
 
-def _rendre_le_playbook(
+def _render_playbook_text(
     plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None
 ) -> str:
     from choregos_playbooks import frame, render_playbook
@@ -989,9 +1003,9 @@ def _rendre_le_playbook(
         },
         "spec": documents.get("spec_markdown", ""),
         "plan_markdown": documents.get("plan_markdown", ""),
-        # Les entrées que la transition déclare (`inputs: [profils]`), lues sous leur nom :
-        # c'est ainsi qu'une étape métier reçoit ce que la précédente a produit.
-        "inputs": {nom: documents.get(nom, "") for nom in (plan.inputs or [])},
+        # The inputs the transition declares (`inputs: [profils]`), read under their name: this is
+        # how a trade step receives what the previous one produced.
+        "inputs": {name: documents.get(name, "") for name in (plan.inputs or [])},
         "allowed_paths": list(item.allowed_paths or []),
         "context": context,
         "project": bundle.config,
@@ -1002,22 +1016,22 @@ def _rendre_le_playbook(
         from jinja2 import TemplateError
         from temporalio.exceptions import ApplicationError
 
-        # Rendues dans le bac à sable, puis cadrées : le contrat de sortie n'est pas à l'auteur. Un
-        # gabarit qui ne rend pas — une évasion refusée par le bac à sable comprise — ne se
-        # réessaie pas : il ne rendra pas mieux la cinquième fois.
+        # Rendered in the sandbox, then framed: the output contract is not the author's. A
+        # template that does not render (a sandbox-refused escape included) is not retried: it
+        # will not render any better the fifth time.
         try:
             return frame(rendre_les_instructions(agent.spec.instructions, **variables))
-        except TemplateError as erreur:
-            qui = f"{agent.agent.slug}@{agent.version}"
+        except TemplateError as error:
+            who = f"{agent.agent.slug}@{agent.version}"
             raise ApplicationError(
-                f"the instructions of the agent `{qui}` do not render: {erreur}",
-                type="InstructionsInvalides",
+                f"the instructions of the agent `{who}` do not render: {error}",
+                type="InstructionsInvalides",  # lang: fr-ok — recorded wire value, S45-39
                 non_retryable=True,
-            ) from erreur
+            ) from error
     return render_playbook(plan.playbook or plan.role, **variables)
 
 
-def _agent_d_essai(plan: StagePlan) -> Any:
+def _trial_agent(plan: StagePlan) -> Any:
     """The draft version a trial runs (S32-03): it stands in for a registry agent — its
     instructions, model, backend, limits and skills — without being published."""
     if plan.trial_spec is None:
@@ -1041,8 +1055,8 @@ def _body_with_its_reporter(item: Any) -> str:
     return f"Filed by: {reporter}\n\n{body}" if body else f"Filed by: {reporter}"
 
 
-async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:
-    """L'agent que l'acteur nomme, résolu pour ce projet ; `None` si l'acteur n'en nomme pas."""
+async def _plan_agent(session: Any, bundle: Any, plan: StagePlan) -> Any:
+    """The agent the actor names, resolved for this project; `None` if the actor names none."""
     if not plan.agent:
         return None
     from choregos_api.services.agents import AgentIndisponible, resoudre_l_agent
@@ -1053,8 +1067,12 @@ async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:
         resolved = await resoudre_l_agent(
             session, bundle.project.org_id, bundle.project.id, plan.agent, work_item_id=plan.work_item_id
         )
-    except AgentIndisponible as refus:
-        raise ApplicationError(str(refus), type="AgentIndisponible", non_retryable=True) from refus
+    except AgentIndisponible as refusal:
+        raise ApplicationError(
+            str(refusal),
+            type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+            non_retryable=True,
+        ) from refusal
     logger.info(
         "agent resolved",
         project=bundle.project.slug,
@@ -1067,22 +1085,22 @@ async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:
     return resolved
 
 
-async def _budget_du_jour(session: Any, bundle: Any, agent: Any) -> None:
-    """Un agent qui a dépensé son budget du jour — modèles et outils — ne lance plus de run avant
-    minuit (UTC). Le refus ne se réessaie pas : retenter ne rendrait pas le budget."""
+async def _daily_budget(session: Any, bundle: Any, agent: Any) -> None:
+    """An agent that has spent its daily budget (models and tools) launches no run before
+    midnight (UTC). The refusal is not retried: retrying would not give the budget back."""
     from choregos_api.services.agents import depense_du_jour, depense_du_mois
     from choregos_api.services.budget_alerts import suspend_for_budget
     from temporalio.exceptions import ApplicationError
 
     slug = agent.agent.slug
     org_id = bundle.project.org_id
-    plafond = agent.spec.budget.daily_usd
-    if plafond is not None:
-        depense = await depense_du_jour(session, org_id, slug)
-        if depense >= plafond:
+    cap = agent.spec.budget.daily_usd
+    if cap is not None:
+        spent_today = await depense_du_jour(session, org_id, slug)
+        if spent_today >= cap:
             raise ApplicationError(
-                f"run refused before it started — the agent `{slug}` spent {depense:.2f} $ "
-                f"today, for a daily budget of {plafond:.2f} $",
+                f"run refused before it started — the agent `{slug}` spent {spent_today:.2f} $ "
+                f"today, for a daily budget of {cap:.2f} $",
                 type="admission_refused",
                 non_retryable=True,
             )
@@ -1101,52 +1119,52 @@ async def _budget_du_jour(session: Any, bundle: Any, agent: Any) -> None:
             )
 
 
-async def _skills_de_l_agent(session: Any, bundle: Any, agent: Any) -> list[SkillRef]:
-    """Les skills que la version de l'agent porte : leur version (dite, sinon la dernière) et son
-    empreinte, que le runner vérifiera. Une skill absente de la bibliothèque arrête le run."""
+async def _agent_skills(session: Any, bundle: Any, agent: Any) -> list[SkillRef]:
+    """The skills the agent's version carries: their version (given, else the latest) and their
+    fingerprint, which the runner will verify. A skill absent from the library stops the run."""
     if agent is None or not agent.spec.skills:
         return []
     from choregos_api.db.models import Skill, SkillVersion
     from temporalio.exceptions import ApplicationError
 
     refs: list[SkillRef] = []
-    for demandee in agent.spec.skills:
-        requete = (
+    for requested in agent.spec.skills:
+        query = (
             select(SkillVersion)
             .join(Skill, Skill.id == SkillVersion.skill_id)
-            .where(Skill.org_id == bundle.project.org_id, Skill.slug == demandee.slug)
+            .where(Skill.org_id == bundle.project.org_id, Skill.slug == requested.slug)
         )
-        if demandee.version is not None:
-            requete = requete.where(SkillVersion.version == demandee.version)
+        if requested.version is not None:
+            query = query.where(SkillVersion.version == requested.version)
         else:
             # Unpinned: the latest APPROVED version — never one waiting for its second reviewer
             # (S32-06, ADR 0050). An activity, not workflow code: no replay concern.
-            requete = requete.where(SkillVersion.review_status == "approved")
-        ligne = (
-            await session.execute(requete.order_by(SkillVersion.version.desc()).limit(1))
+            query = query.where(SkillVersion.review_status == "approved")
+        row = (
+            await session.execute(query.order_by(SkillVersion.version.desc()).limit(1))
         ).scalar_one_or_none()
-        if ligne is not None and ligne.review_status != "approved":
+        if row is not None and row.review_status != "approved":
             raise ApplicationError(
-                f"the agent `{agent.agent.slug}` pins the skill `{demandee.slug}` v{ligne.version}, "
+                f"the agent `{agent.agent.slug}` pins the skill `{requested.slug}` v{row.version}, "
                 "which is high risk and waits for a second reviewer",
                 type="SkillPendingReview",
                 non_retryable=True,
             )
-        if ligne is None and demandee.version is None and await _skill_exists(session, bundle, demandee.slug):
+        if row is None and requested.version is None and await _skill_exists(session, bundle, requested.slug):
             raise ApplicationError(
-                f"the agent `{agent.agent.slug}` carries the skill `{demandee.slug}`, "
+                f"the agent `{agent.agent.slug}` carries the skill `{requested.slug}`, "
                 "which has no approved version yet",
                 type="SkillPendingReview",
                 non_retryable=True,
             )
-        if ligne is None:
+        if row is None:
             raise ApplicationError(
-                f"the agent `{agent.agent.slug}` carries the skill `{demandee.slug}`, "
+                f"the agent `{agent.agent.slug}` carries the skill `{requested.slug}`, "
                 "which is not in the library",
-                type="SkillAbsente",
+                type="SkillAbsente",  # lang: fr-ok — recorded wire value, S45-39
                 non_retryable=True,
             )
-        refs.append(SkillRef(slug=demandee.slug, version=ligne.version, digest=ligne.digest))
+        refs.append(SkillRef(slug=requested.slug, version=row.version, digest=row.digest))
     return refs
 
 
@@ -1190,16 +1208,16 @@ async def _skill_exists(session: Any, bundle: Any, slug: str) -> bool:
     return trouvee.first() is not None
 
 
-def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
-    """Le plan, avec ce que la version de l'agent fixe : modèle, backend, et des limites qui ne font
-    que resserrer celles de l'acteur."""
+def _agent_plan(plan: StagePlan, spec: Any) -> StagePlan:
+    """The plan, with what the agent's version sets: model, backend, and limits that only
+    tighten the actor's."""
     from dataclasses import replace
 
     from temporalio.exceptions import ApplicationError
 
-    def plus_strict(de_l_acteur: int | None, de_l_agent: int | None) -> int | None:
-        valeurs = [v for v in (de_l_acteur, de_l_agent) if v is not None]
-        return min(valeurs) if valeurs else None
+    def stricter(actor_limit: int | None, agent_limit: int | None) -> int | None:
+        values = [v for v in (actor_limit, agent_limit) if v is not None]
+        return min(values) if values else None
 
     runtime = getattr(spec, "runtime", None)
     backend = spec.backend
@@ -1210,7 +1228,7 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is written in code "
                 f"(runtime `code`): drop `backend:` from the actor",
-                type="AgentIndisponible",
+                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
                 non_retryable=True,
             )
         backend = CODE_BACKEND
@@ -1220,7 +1238,7 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is remote (runtime "
                 f"`a2a`): drop `backend:` from the actor",
-                type="AgentIndisponible",
+                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
                 non_retryable=True,
             )
         backend = A2A_BACKEND
@@ -1230,7 +1248,7 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is a prompt agent "
                 f"(runtime `prompt`): drop `backend:` from the actor",
-                type="AgentIndisponible",
+                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
                 non_retryable=True,
             )
         backend = PROMPT_BACKEND
@@ -1240,7 +1258,7 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is a hosted agent "
                 f"(runtime `hosted`): drop `backend:` from the actor",
-                type="AgentIndisponible",
+                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
                 non_retryable=True,
             )
         backend = HOSTED_BACKEND
@@ -1249,7 +1267,7 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
         raise ApplicationError(
             f"the agent's runtime `{runtime.kind}` cannot run as a workflow step "
             "(a voice agent runs only as a session)",
-            type="AgentIndisponible",
+            type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
             non_retryable=True,
         )
     elif runtime is not None and runtime.backend:
@@ -1259,8 +1277,8 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
         plan,
         model_request=spec.model or plan.model_request,
         backend=plan.backend or backend,
-        max_turns=plus_strict(plan.max_turns, spec.limits.max_turns),
-        max_minutes=plus_strict(plan.max_minutes, spec.limits.max_minutes),
+        max_turns=stricter(plan.max_turns, spec.limits.max_turns),
+        max_minutes=stricter(plan.max_minutes, spec.limits.max_minutes),
     )
 
 
@@ -1371,13 +1389,13 @@ async def _reviewer_backend(
     resolver: ModelResolver,
     plan: StagePlan,
 ) -> str:
-    """Un relecteur qui n'est pas l'implémenteur (politique `review.cross_backend`).
+    """A reviewer that is not the implementer (policy `review.cross_backend`).
 
-    La garantie est un mécanisme : si le backend prévu pour la revue est celui qui a écrit
-    le code, on en prend un autre — parmi ceux que le projet autorise et qui acceptent le
-    modèle demandé. Si aucun ne convient, on garde celui d'origine et on le dit : bloquer
-    un ticket parce qu'un seul backend est installé serait pire que la revue dégradée, et
-    `GET /projects/{id}/metrics/cross-backend` compte ces cas.
+    The guarantee is a mechanism: if the backend planned for the review is the one that wrote the
+    code, another one is taken, among those the project allows and that accept the requested
+    model. If none fits, the original is kept and that is said: blocking a work item because only
+    one backend is installed would be worse than the degraded review, and
+    `GET /projects/{id}/metrics/cross-backend` counts these cases.
     """
     implementer = (
         await session.execute(
@@ -1404,7 +1422,7 @@ async def _reviewer_backend(
         except ModelResolutionError:
             continue
         logger.info(
-            "revue croisée",
+            "cross review",
             project=bundle.slug,
             work_item=item.tracker_key,
             implementer=implementer,
@@ -1412,10 +1430,13 @@ async def _reviewer_backend(
         )
         return str(candidate)
     logger.warning(
-        "revue croisée impossible",
+        "cross review impossible",
         project=bundle.slug,
         work_item=item.tracker_key,
         implementer=implementer,
-        raison="aucun autre backend n'accepte le modèle demandé",
+        reason="no other backend accepts the requested model",
     )
     return wanted
+
+
+_serveurs_mcp = _mcp_servers  # lang: fr-ok alias:internal

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités de triage des findings : dédup, classement, ticket lié, mémoire (docs/plan/05 §5.4)."""
+"""Finding triage activities: dedup, ranking, linked work item, memory (docs/plan/05 §5.4)."""
 
 from __future__ import annotations
 
@@ -17,16 +17,16 @@ from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
-from .base import cle_de_ticket_interne, db, project_bundle, send_courtesy, tracker_possede_les_tickets
+from .base import db, internal_ticket_key, project_bundle, send_courtesy, tracker_owns_items
 
 TOKEN_RE = re.compile(r"[a-zà-ÿ0-9_]+")
 
 
 def embed(text: str) -> dict[str, float]:
-    """Sac de mots normalisé : une « empreinte » suffisante pour la dédup, sans appel modèle.
+    """Normalised bag of words: a "fingerprint" good enough for dedup, with no model call.
 
-    L'implémentation Ecphoria remplace ceci par de vrais embeddings (`platform/embed`) ;
-    le seuil de la politique s'applique de la même façon.
+    The Ecphoria implementation replaces this with real embeddings (`platform/embed`); the
+    policy threshold applies in the same way.
     """
     tokens = [t for t in TOKEN_RE.findall(text.lower()) if len(t) > 2]
     if not tokens:
@@ -47,7 +47,7 @@ def cosine(a: dict[str, float], b: dict[str, float]) -> float:
 
 @activity.defn(name="triage_finding")
 async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
-    """Déduplique, classe, crée le ticket lié et écrit le fait en mémoire."""
+    """Deduplicate, rank, create the linked work item and write the fact to memory."""
     settings = get_settings()
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
@@ -114,20 +114,20 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
         labels = ["finding", "source:agent", f"type:{row.type}", f"severity:{row.severity}", "needs-triage"]
         if origin is not None:
             labels.append(f"origin:{origin.tracker_key.rsplit('#', 1)[-1]}")
-        titre = f"[{row.type}] {row.title}"
-        if tracker_possede_les_tickets(bundle.adapters.tracker):
+        title = f"[{row.type}] {row.title}"
+        if tracker_owns_items(bundle.adapters.tracker):
             # A marked work item's finding is the run's content: the tracker gets none of it (ADR 0114).
             outward = (
                 NewItem(title=f"[{row.type}] {RESTRICTED_TITLE}", body=WITHHELD, labels=labels)
                 if restricted
-                else NewItem(title=titre, body=body, labels=labels)
+                else NewItem(title=title, body=body, labels=labels)
             )
             key = await bundle.adapters.tracker.create_item(outward)
         else:
-            # La plateforme tient le ticket : elle lui donne sa clé. Le connecteur interne
-            # rendait le titre, d'où des clés comme `[docs] Base de profils manquante`.
-            key = await cle_de_ticket_interne(session, bundle)
-        # Né dans le workflow que désignent ses étiquettes (ADR 0031) — plus en `inbox` en dur (#173).
+            # The platform holds the work item: it gives it its key. The internal connector used
+            # to return the title, hence keys like `[docs] Base de profils manquante`.
+            key = await internal_ticket_key(session, bundle)
+        # Born in the workflow its labels designate (ADR 0031), no longer hard-coded in `inbox` (#173).
         created = await nouveau_ticket(
             session,
             bundle.project,
@@ -265,7 +265,7 @@ def _ticket_body(row: Finding, origin: WorkItem | None, public_url: str, slug: s
 
 @activity.defn(name="finding_quality_ratio")
 async def finding_quality_ratio(payload: dict[str, Any]) -> dict[str, Any]:
-    """Taux de faux positifs sur 30 jours : au-delà du seuil, le prompt `implement` est à revoir."""
+    """False-positive rate over 30 days: beyond the threshold, the `implement` prompt needs a review."""
     from datetime import timedelta
 
     async with db() as session:

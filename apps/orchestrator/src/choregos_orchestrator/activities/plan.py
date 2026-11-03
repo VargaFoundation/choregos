@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ce que l'interpréteur transmet aux activités d'une étape : le plan d'un run."""
+"""What the interpreter hands to the activities of a step: the plan of a run."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 @dataclass
 class StagePlan:
-    """Ce que l'interpréteur transmet aux activités pour préparer un run."""
+    """What the interpreter hands to the activities to prepare a run."""
 
     project_id: str
     work_item_id: str
@@ -29,7 +29,7 @@ class StagePlan:
     inputs: list[str] | None = None
     #: The declared type of each output (ADR 0049).
     output_types: dict[str, str] | None = None
-    #: Un agent du registre (ADR 0033) : `slug` ou `slug@version`.
+    #: An agent of the registry (ADR 0033): `slug` or `slug@version`.
     agent: str | None = None
     #: A trial (S32-03): the draft version to run, unpublished — it stands in for a registry agent —
     #: and the budget cap of the trial, which only tightens the run's.

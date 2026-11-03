@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités de provisioning d'un projet (docs/plan/03 §3.3).
+"""Provisioning activities of a project (docs/plan/03 §3.3).
 
-Chaque étape est idempotente : rejouer un provisioning partiellement échoué reprend
-là où il s'est arrêté, sans rien créer en double.
+Every step is idempotent: replaying a partially failed provisioning resumes where it stopped,
+creating nothing twice.
 """
 
 from __future__ import annotations
@@ -22,22 +22,22 @@ from ..config import get_settings
 from .base import db, project_bundle
 
 
-def repertoire_templates() -> Path:
-    """Où vivent les templates de projet : `CHOREGOS_TEMPLATES_DIR`, sinon `templates/` du dépôt.
+def templates_dir() -> Path:
+    """Where the project templates live: `CHOREGOS_TEMPLATES_DIR`, else the repository's `templates/`.
 
-    `parents[5]` supposait la disposition du dépôt source ; dans l'image, c'est `/app`, et
-    `templates/` n'y était même pas copié. Le réglage dit où chercher, et l'absence se
-    voit à la première lecture, avec le chemin cherché.
+    `parents[5]` assumed the layout of the source repository; in the image it is `/app`, and
+    `templates/` was not even copied there. The setting says where to look, and an absence shows
+    on the first read, with the path searched.
     """
     import os
 
-    configure = os.environ.get("CHOREGOS_TEMPLATES_DIR", "").strip()
-    if configure:
-        return Path(configure)
+    configured = os.environ.get("CHOREGOS_TEMPLATES_DIR", "").strip()
+    if configured:
+        return Path(configured)
     return Path(__file__).resolve().parents[5] / "templates"
 
 
-TEMPLATES_DIR = repertoire_templates()
+TEMPLATES_DIR = templates_dir()
 
 LABELS = {
     "agent-ready": "0e8a16",
@@ -58,7 +58,7 @@ LABELS = {
 
 @activity.defn(name="load_template_steps")
 async def load_template_steps(payload: dict[str, Any]) -> dict[str, Any]:
-    """Lit le manifeste du template et rend la liste ordonnée des étapes."""
+    """Read the template manifest and return the ordered list of steps."""
     ref = payload.get("template_ref") or "github-tekton-argo-k8s@1.0.0"
     name = ref.split("@", 1)[0]
     manifest_path = TEMPLATES_DIR / name / "manifest.yaml"
@@ -77,7 +77,7 @@ async def load_template_steps(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="run_provision_step")
 async def run_provision_step(payload: dict[str, Any]) -> dict[str, Any]:
-    """Exécute une étape de provisioning et met à jour l'état visible dans le front (SSE)."""
+    """Run a provisioning step and update the state visible in the front end (SSE)."""
     name: str = payload["step"]
     params: dict[str, Any] = payload.get("params", {})
     settings = get_settings()
@@ -108,7 +108,7 @@ async def run_provision_step(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             message = await _execute(name, params, bundle, settings, payload)
             entry.update(status="succeeded", message=message, ended_at=utcnow().isoformat())
-        except Exception as exc:  # une étape qui échoue est réparable, pas fatale
+        except Exception as exc:  # a failing step is repairable, not fatal
             entry.update(
                 status="failed",
                 message=str(exc)[:500],
@@ -146,10 +146,10 @@ async def run_provision_step(payload: dict[str, Any]) -> dict[str, Any]:
 async def _execute(
     name: str, params: dict[str, Any], bundle: Any, settings: Any, payload: dict[str, Any]
 ) -> str:
-    """Aiguillage des étapes. Toute étape inconnue est ignorée explicitement, jamais devinée."""
-    handler = _ETAPES.get(name)
+    """Dispatch the steps. Any unknown step is skipped explicitly, never guessed."""
+    handler = _STEPS.get(name)
     if handler is None:
-        return _etape_inconnue(name)
+        return _unknown_step(name)
     return str(await handler(params, bundle, settings))
 
 
@@ -161,50 +161,50 @@ async def _github_install_app(params: dict[str, Any], bundle: Any, settings: Any
     return "App assumed installed (fakes mode)"
 
 
-#: La couleur d'une étiquette qu'un gabarit nomme sans la colorer.
-COULEUR_PAR_DEFAUT = "ededed"
+#: The colour of a label that a template names without colouring it.
+DEFAULT_COLOUR = "ededed"
 
 
-def etiquettes_du_pas(params: dict[str, Any]) -> dict[str, str]:
-    """Celles de la plateforme, puis celles que le gabarit ajoute (`labels:`, une liste de noms ou un
-    dictionnaire nom → couleur) : le routage d'un gabarit lit des étiquettes que le dépôt n'a pas
-    encore (`bug`, `adr`, `complex`…), et un ticket étiqueté d'une étiquette absente ne naît pas
-    dans le bon workflow (S21-22). Une couleur de la plateforme n'est jamais remplacée."""
-    ajoutees = params.get("labels") or {}
-    if isinstance(ajoutees, list):
-        ajoutees = dict.fromkeys((str(nom) for nom in ajoutees), COULEUR_PAR_DEFAUT)
-    return {**{str(nom): str(couleur).lstrip("#") for nom, couleur in dict(ajoutees).items()}, **LABELS}
+def step_labels(params: dict[str, Any]) -> dict[str, str]:
+    """The platform's labels, then those the template adds (`labels:`, a list of names or a
+    name -> colour dictionary): a template's routing reads labels the repository does not have
+    yet (`bug`, `adr`, `complex`...), and a work item labelled with an absent label is not born in
+    the right workflow (S21-22). A platform colour is never replaced."""
+    added = params.get("labels") or {}
+    if isinstance(added, list):
+        added = dict.fromkeys((str(name) for name in added), DEFAULT_COLOUR)
+    return {**{str(name): str(colour).lstrip("#") for name, colour in dict(added).items()}, **LABELS}
 
 
 async def _github_ensure_labels(params: dict[str, Any], bundle: Any, settings: Any) -> str:
-    etiquettes = etiquettes_du_pas(params)
+    labels = step_labels(params)
     ensure = getattr(bundle.adapters.tracker, "ensure_labels", None)
     if ensure is not None:
-        await ensure(etiquettes)
-    return f"{len(etiquettes)} labels ensured"
+        await ensure(labels)
+    return f"{len(labels)} labels ensured"
 
 
-#: Les champs du board quand le gabarit n'en nomme aucun.
-CHAMPS_DU_BOARD = ["Status", "Cost (€)", "Size", "Risk", "Run"]
+#: The board fields when the template names none.
+BOARD_FIELDS = ["Status", "Cost (€)", "Size", "Risk", "Run"]
 
 
 async def _github_ensure_project_board(params: dict[str, Any], bundle: Any, settings: Any) -> str:
-    """Les champs du board existent sous leur nom anglais ; un champ qu'un Choregos d'avant S22-21
-    a créé en français (`Taille`) est renommé, pas doublé — ses valeurs restent sur les cartes."""
-    fields = [str(nom) for nom in params.get("fields") or CHAMPS_DU_BOARD]
+    """The board fields exist under their English name; a field that a Choregos older than S22-21
+    created in French (`Taille`) is renamed, not doubled: its values stay on the cards."""
+    fields = [str(name) for name in params.get("fields") or BOARD_FIELDS]
     ensure = getattr(bundle.adapters.tracker, "ensure_project_fields", None)
     if ensure is None:
         return f"board checked ({', '.join(fields)})"
-    bilan = await ensure(fields)
-    if not any(bilan.values()):
+    outcome = await ensure(fields)
+    if not any(outcome.values()):
         return "no Projects v2 board configured: give its number to the connector"
-    parties = [
-        f"{len(bilan.get('kept', []))} kept",
-        f"{len(bilan.get('created', []))} created",
-        f"{len(bilan.get('renamed', []))} renamed",
+    parts = [
+        f"{len(outcome.get('kept', []))} kept",
+        f"{len(outcome.get('created', []))} created",
+        f"{len(outcome.get('renamed', []))} renamed",
     ]
-    renommes = bilan.get("renamed", [])
-    return f"board fields: {', '.join(parties)}" + (f" ({'; '.join(renommes)})" if renommes else "")
+    renamed = outcome.get("renamed", [])
+    return f"board fields: {', '.join(parts)}" + (f" ({'; '.join(renamed)})" if renamed else "")
 
 
 async def _github_ensure_webhooks(params: dict[str, Any], bundle: Any, settings: Any) -> str:
@@ -278,14 +278,14 @@ async def _notify_test_message(params: dict[str, Any], bundle: Any, settings: An
     return "test message sent"
 
 
-def _etape_constante(texte: str) -> Etape:
-    async def _etape(params: dict[str, Any], bundle: Any, settings: Any) -> str:
-        return texte
+def _constant_step(text: str) -> Step:
+    async def _step(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+        return text
 
-    return _etape
+    return _step
 
 
-def _etape_inconnue(name: str) -> str:
+def _unknown_step(name: str) -> str:
     return f"step `{name}` skipped (not implemented for this template)"
 
 
@@ -305,19 +305,19 @@ async def _aca_check_identity(params: dict[str, Any], bundle: Any, settings: Any
     return await _check_aca("aca.check_identity", bundle)
 
 
-Etape = Callable[[dict[str, Any], Any, Any], Awaitable[str]]
+Step = Callable[[dict[str, Any], Any, Any], Awaitable[str]]
 
-#: Une étape = une fonction ; ce qu'un template nomme et qui n'est pas ici est ignoré, et dit.
-_ETAPES: dict[str, Etape] = {
+#: A step = a function; what a template names and is not here is skipped, and says so.
+_STEPS: dict[str, Step] = {
     "github.install_app": _github_install_app,
     "github.ensure_labels": _github_ensure_labels,
     "github.ensure_project_board": _github_ensure_project_board,
-    "github.ensure_issue_template": _etape_constante("issue template added"),
+    "github.ensure_issue_template": _constant_step("issue template added"),
     "github.ensure_webhooks": _github_ensure_webhooks,
     "aca.check_environment": _aca_check_environment,
     "aca.check_identity": _aca_check_identity,
     "gitops.write_project_manifests": _gitops_write,
-    "gitops.open_pr_or_commit": _etape_constante("GitOps pull request opened on choregos-infra"),
+    "gitops.open_pr_or_commit": _constant_step("GitOps pull request opened on choregos-infra"),
     "argocd.wait_synced": _argocd_wait_synced,
     "repo.scaffold_pr": _repo_scaffold_pr,
     "memory.create_tenant": _memory_create_tenant,
@@ -328,10 +328,10 @@ _ETAPES: dict[str, Etape] = {
 
 
 async def _check_aca(step: str, bundle: Any) -> str:
-    """Vérifie l'environnement ACA **avant** le premier run, pas au premier ticket.
+    """Check the ACA environment **before** the first run, not at the first work item.
 
-    Un environnement absent ou une identité sans droit `AcrPull` ne se voit sinon qu'au
-    moment où un agent devrait démarrer : autant le dire pendant le provisioning.
+    A missing environment or an identity without the `AcrPull` right shows otherwise only when an
+    agent should start: better to say so during the provisioning.
     """
     executor = bundle.adapters.executor
     client = getattr(executor, "client", None)
@@ -353,9 +353,9 @@ async def _check_aca(step: str, bundle: Any) -> str:
 
 
 async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -> str:
-    """Écrit les manifests du projet dans le dépôt GitOps — Argo CD applique, pas l'API."""
+    """Write the project manifests into the GitOps repository: Argo CD applies, not the API."""
     path = str(params.get("path", "projects/{{slug}}/")).replace("{{slug}}", bundle.slug)
-    from choregos_core.quotas import quota_pour
+    from choregos_core.quotas import quota_for
 
     from ..gitops import EGRESS_IMAGE, render_project_manifests
     from ..org_egress import org_runner_hosts
@@ -370,7 +370,7 @@ async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -
         bundle.config,
         bundle.policy,
         egress_image=str(getattr(settings, "egress_image", "") or EGRESS_IMAGE),
-        quota=await quota_pour(bundle.org_slug, bundle.slug),
+        quota=await quota_for(bundle.org_slug, bundle.slug),
         org_allow_domains=org_hosts,
     )
     writer = getattr(bundle.adapters.cd, "write_files", None)
@@ -433,3 +433,7 @@ async def finish_provisioning(payload: dict[str, Any]) -> dict[str, Any]:
             except Exception as exc:  # the project is active; the worker start catches up
                 activity.logger.warning("memory loop not started for %s: %s", slug, exc)
     return {"status": state["status"], "failed": [s["name"] for s in failed]}
+
+
+repertoire_templates = templates_dir  # lang: fr-ok alias:internal
+etiquettes_du_pas = step_labels  # lang: fr-ok alias:internal

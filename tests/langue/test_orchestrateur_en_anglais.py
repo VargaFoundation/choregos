@@ -20,13 +20,6 @@ JOURNAUX = {"debug", "info", "warning", "error", "exception", "critical", "warn"
 
 #: (fichier relatif, début du littéral) — chacune avec sa raison.
 RESTE_EN_FRANCAIS = {
-    # Le banc d'évaluation des agents : un outil de la plateforme, lu par ses développeurs.
-    ("activities/evals.py", "fichier créé alors"),
-    ("activities/evals.py", "fichier modifié hors"),
-    ("activities/evals.py", "dépôt jouet absent"),
-    ("activities/evals.py", "aucune modification scriptée"),
-    ("activities/evals.py", "présent"),
-    ("activities/evals.py", "délai dépassé ("),
     # Une expression régulière, pas un texte.
     ("activities/findings.py", "[a-zà-ÿ0-9_]+"),
     # Les anciens noms des champs du board (`Coût (€)`, `Taille`, `Risque`) ne sont plus écrits par

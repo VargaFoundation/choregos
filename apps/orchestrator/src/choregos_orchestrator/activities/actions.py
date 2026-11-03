@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les activités de l'`ActionWorkflow` (ADR 0035) : charger l'action, jouer un effet sous sa clé,
-le compenser, clore.
+"""The activities of the `ActionWorkflow` (ADR 0035): load the action, play an effect under its key,
+compensate it, close.
 
-Le journal (`action_effects`) est la mémoire qui rend une reprise sûre :
-- un effet est CONSIGNÉ (`started`) dans sa propre transaction AVANT d'être tenté ;
-- il est CONFIRMÉ (`done`, avec sa réponse) après ;
-- une activité rejouée qui trouve sa clé `done` rend la réponse consignée sans rien refaire ;
-- une clé `started` non confirmée (un worker tué entre les deux) est retentée — les effets sont
-  idempotents par construction (`declarer_un_effet`).
+The journal (`action_effects`) is the memory that makes a resume safe:
+- an effect is RECORDED (`started`) in its own transaction BEFORE it is attempted;
+- it is CONFIRMED (`done`, with its response) after;
+- a replayed activity that finds its key `done` returns the recorded response and redoes nothing;
+- a `started` key that was never confirmed (a worker killed in between) is retried: effects are
+  idempotent by construction (`declare_effect`).
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import contextlib
 from typing import Any
 
 from choregos_api.db.models import Action, ActionEffect, Project, WorkItem
-from choregos_api.effets import ContexteEffet, EffetRefuse, effet, rendre
+from choregos_api.effects import EffectContext, EffectRefused, effect, render
 from choregos_api.logging import get_logger
 from choregos_api.services import persist_event
 from choregos_contracts import ActionOrigin, ActionStatus, EventType
@@ -34,29 +34,36 @@ logger = get_logger("choregos.actions")
 #: (`load_action` retried after it moved the row).
 EXECUTABLE = frozenset({ActionStatus.APPROVED.value, ActionStatus.RUNNING.value})
 
+#: Error types that histories record (ADR 0098 section 4): they stay French until S45-39.
+ACTION_NOT_FOUND = "ActionIntrouvable"  # lang: fr-ok — recorded wire value, S45-39
+ACTION_NOT_VISIBLE_YET = "ActionPasEncoreVisible"  # lang: fr-ok — recorded wire value, S45-39
+EFFECT_REFUSED = "EffetRefuse"  # lang: fr-ok — recorded wire value, S45-39
 
-async def _charger(session: Any, action_id: str) -> tuple[Action, Project]:
+
+async def _load(session: Any, action_id: str) -> tuple[Action, Project]:
     action = await session.get(Action, action_id)
     if action is None:
         raise ApplicationError(
-            f"action introuvable : {action_id}", type="ActionIntrouvable", non_retryable=True
+            f"action not found: {action_id}",
+            type=ACTION_NOT_FOUND,
+            non_retryable=True,
         )
-    projet = await session.get(Project, action.project_id)
-    if projet is None:
-        raise ApplicationError(f"projet introuvable : {action.project_id}", non_retryable=True)
-    return action, projet
+    project = await session.get(Project, action.project_id)
+    if project is None:
+        raise ApplicationError(f"project not found: {action.project_id}", non_retryable=True)
+    return action, project
 
 
-async def _faits(session: Any, action_id: str, avant: int) -> list[dict[str, Any]]:
-    """Les réponses des effets déjà faits, dans l'ordre : ce que les suivants peuvent citer."""
-    lignes = (
+async def _done_effects(session: Any, action_id: str, before: int) -> list[dict[str, Any]]:
+    """The responses of the effects already done, in order: what the following ones may cite."""
+    rows = (
         await session.execute(
             select(ActionEffect)
-            .where(ActionEffect.action_id == action_id, ActionEffect.position < avant)
+            .where(ActionEffect.action_id == action_id, ActionEffect.position < before)
             .order_by(ActionEffect.position)
         )
     ).scalars()
-    return [dict(ligne.result or {}) for ligne in lignes]
+    return [dict(row.result or {}) for row in rows]
 
 
 @activity.defn(name="load_action")
@@ -65,8 +72,8 @@ async def load_action(action_id: str) -> dict[str, Any]:
         if await session.get(Action, action_id) is None:
             # Started after the commit since ADR 0085; a replica of an older version still starts
             # it before. A passing error, which Temporal retries.
-            raise ApplicationError(f"action {action_id} not visible yet", type="ActionPasEncoreVisible")
-        action, _projet = await _charger(session, action_id)
+            raise ApplicationError(f"action {action_id} not visible yet", type=ACTION_NOT_VISIBLE_YET)
+        action, _project = await _load(session, action_id)
         if action.status not in EXECUTABLE:
             # Fail closed (ADR 0085): a workflow started by anything but a committed approval — a
             # decision whose transaction failed, a hand-made start, a finished action started again —
@@ -78,247 +85,260 @@ async def load_action(action_id: str) -> dict[str, Any]:
             )
         if action.status == ActionStatus.APPROVED.value:
             action.status = ActionStatus.RUNNING.value
-        return {"effets": len(action.effects or []), "statut": action.status}
+        return {
+            "effets": len(action.effects or []),
+            "statut": action.status,
+        }  # lang: fr-ok — recorded wire value, S45-39
 
 
 @activity.defn(name="execute_effect")
-async def execute_effect(entree: dict[str, Any]) -> dict[str, Any]:
-    action_id, position = str(entree["action_id"]), int(entree["position"])
-    cle = f"{action_id}:{position}"
+async def execute_effect(payload: dict[str, Any]) -> dict[str, Any]:
+    action_id, position = str(payload["action_id"]), int(payload["position"])
+    key = f"{action_id}:{position}"
     async with db() as session:
-        action, projet = await _charger(session, action_id)
-        ligne = (
-            await session.execute(select(ActionEffect).where(ActionEffect.key == cle))
+        action, project = await _load(session, action_id)
+        row = (
+            await session.execute(select(ActionEffect).where(ActionEffect.key == key))
         ).scalar_one_or_none()
-        if ligne is not None and ligne.status == "done":
-            # Déjà fait : la réponse consignée, sans rien refaire — c'est toute la garantie.
-            return {"key": cle, "replayed": True, "result": ligne.result}
+        if row is not None and row.status == "done":
+            # Already done: the recorded response, nothing redone. That is the whole guarantee.
+            return {"key": key, "replayed": True, "result": row.result}
         spec = (action.effects or [])[position]
-        contexte = {"params": action.params or {}, "effects": await _faits(session, action_id, position)}
+        context = {
+            "params": action.params or {},
+            "effects": await _done_effects(session, action_id, position),
+        }
         try:
-            params = rendre(spec.get("with") or {}, contexte)
-        except EffetRefuse as refus:
-            raise ApplicationError(str(refus), type="EffetRefuse", non_retryable=True) from refus
-        if ligne is None:
-            ligne = ActionEffect(
+            params = render(spec.get("with") or {}, context)
+        except EffectRefused as refused:
+            raise ApplicationError(str(refused), type=EFFECT_REFUSED, non_retryable=True) from refused
+        if row is None:
+            row = ActionEffect(
                 org_id=action.org_id,
                 action_id=action_id,
                 position=position,
-                key=cle,
+                key=key,
                 effect=str(spec["effect"]),
                 params=params,
                 status="started",
                 attempts=0,
             )
-            session.add(ligne)
-        ligne.attempts += 1
-        ligne.params, ligne.status, ligne.error = params, "started", None
-    # Consigné et validé AVANT la tentative : un worker tué ici laisse une clé `started`.
+            session.add(row)
+        row.attempts += 1
+        row.params, row.status, row.error = params, "started", None
+    # Recorded and committed BEFORE the attempt: a worker killed here leaves a `started` key.
     try:
         async with db() as session:
-            action, projet = await _charger(session, action_id)
-            resultat = await effet(str(spec["effect"]))(ContexteEffet(session, action, projet), params)
-    except EffetRefuse as refus:
-        await _noter_l_echec(cle, str(refus))
-        raise ApplicationError(str(refus), type="EffetRefuse", non_retryable=True) from refus
-    except Exception as panne:
-        await _noter_l_echec(cle, f"{type(panne).__name__}: {panne}")
+            action, project = await _load(session, action_id)
+            result = await effect(str(spec["effect"]))(EffectContext(session, action, project), params)
+    except EffectRefused as refused:
+        await _note_failure(key, str(refused))
+        raise ApplicationError(str(refused), type=EFFECT_REFUSED, non_retryable=True) from refused
+    except Exception as failure:
+        await _note_failure(key, f"{type(failure).__name__}: {failure}")
         raise
     async with db() as session:
-        ligne = (await session.execute(select(ActionEffect).where(ActionEffect.key == cle))).scalar_one()
-        ligne.status, ligne.result, ligne.finished_at = "done", resultat, utcnow()
-        action, projet = await _charger(session, action_id)
+        row = (await session.execute(select(ActionEffect).where(ActionEffect.key == key))).scalar_one()
+        row.status, row.result, row.finished_at = "done", result, utcnow()
+        action, project = await _load(session, action_id)
         await persist_event(
             session,
             EventType.ACTION_EFFECT_DONE,
-            project_id=projet.id,
+            project_id=project.id,
             work_item_id=action.work_item_id,
-            project_slug=projet.slug,
+            project_slug=project.slug,
             subject=action_id,
-            key=cle,
-            effect=ligne.effect,
+            key=key,
+            effect=row.effect,
         )
-    return {"key": cle, "replayed": False, "result": resultat}
+    return {"key": key, "replayed": False, "result": result}
 
 
-async def _noter_l_echec(cle: str, erreur: str) -> None:
+async def _note_failure(key: str, error: str) -> None:
     async with db() as session:
-        ligne = (
-            await session.execute(select(ActionEffect).where(ActionEffect.key == cle))
+        row = (
+            await session.execute(select(ActionEffect).where(ActionEffect.key == key))
         ).scalar_one_or_none()
-        if ligne is not None:
-            ligne.error = erreur[:2000]
+        if row is not None:
+            row.error = error[:2000]
 
 
 @activity.defn(name="compensate_effect")
-async def compensate_effect(entree: dict[str, Any]) -> dict[str, Any]:
-    """Défait un effet fait, avec ce que l'action a déclaré pour lui. Ne lève jamais : ce qu'elle
-    n'a pas pu défaire, elle le dit, et le workflow compense les suivants quand même."""
-    action_id, position = str(entree["action_id"]), int(entree["position"])
-    cle = f"{action_id}:{position}"
+async def compensate_effect(payload: dict[str, Any]) -> dict[str, Any]:
+    """Undo a done effect, with what the action declared for it. Never raises: what it could not
+    undo, it says, and the workflow compensates the following ones anyway."""
+    action_id, position = str(payload["action_id"]), int(payload["position"])
+    key = f"{action_id}:{position}"
     async with db() as session:
-        action, projet = await _charger(session, action_id)
-        ligne = (
-            await session.execute(select(ActionEffect).where(ActionEffect.key == cle))
+        action, project = await _load(session, action_id)
+        row = (
+            await session.execute(select(ActionEffect).where(ActionEffect.key == key))
         ).scalar_one_or_none()
-        if ligne is None or ligne.status != "done":
-            return {"key": cle, "undone": False, "reason": "not done"}
+        if row is None or row.status != "done":
+            return {"key": key, "undone": False, "reason": "not done"}
         compensation = (action.effects or [])[position].get("compensate")
         if not compensation:
-            ligne.status = "compensation_failed"
-            ligne.error = "no compensation declared"
-            return {"key": cle, "undone": False, "reason": "no compensation declared"}
-        contexte = {
+            row.status = "compensation_failed"
+            row.error = "no compensation declared"
+            return {"key": key, "undone": False, "reason": "no compensation declared"}
+        context = {
             "params": action.params or {},
-            "effects": await _faits(session, action_id, position),
-            "result": ligne.result or {},
+            "effects": await _done_effects(session, action_id, position),
+            "result": row.result or {},
         }
         try:
-            params = rendre(compensation.get("with") or {}, contexte)
-            await effet(str(compensation["effect"]))(ContexteEffet(session, action, projet), params)
-        except Exception as panne:
-            ligne.status, ligne.error = "compensation_failed", f"{type(panne).__name__}: {panne}"[:2000]
-            return {"key": cle, "undone": False, "reason": ligne.error}
-        ligne.status = "compensated"
+            params = render(compensation.get("with") or {}, context)
+            await effect(str(compensation["effect"]))(EffectContext(session, action, project), params)
+        except Exception as failure:
+            row.status, row.error = "compensation_failed", f"{type(failure).__name__}: {failure}"[:2000]
+            return {"key": key, "undone": False, "reason": row.error}
+        row.status = "compensated"
         await persist_event(
             session,
             EventType.ACTION_EFFECT_COMPENSATED,
-            project_id=projet.id,
+            project_id=project.id,
             work_item_id=action.work_item_id,
-            project_slug=projet.slug,
+            project_slug=project.slug,
             subject=action_id,
-            key=cle,
+            key=key,
         )
-        return {"key": cle, "undone": True}
+        return {"key": key, "undone": True}
 
 
 @activity.defn(name="close_action")
-async def close_action(entree: dict[str, Any]) -> dict[str, Any]:
-    action_id, statut = str(entree["action_id"]), str(entree["status"])
+async def close_action(payload: dict[str, Any]) -> dict[str, Any]:
+    action_id, status = str(payload["action_id"]), str(payload["status"])
     ticket: str | None = None
     async with db() as session:
-        action, projet = await _charger(session, action_id)
-        ticket = await _interpreteur_qui_attend(session, action, projet)
-        action.status = statut
-        action.error = entree.get("error")
-        # Fusionné : un effet a pu y consigner ce qu'il attend, une preuve ce qu'elle a vu (S20-08).
-        action.result = {**(action.result or {}), "compensations": entree.get("compensations") or []}
+        action, project = await _load(session, action_id)
+        ticket = await _waiting_interpreter(session, action, project)
+        action.status = status
+        action.error = payload.get("error")
+        # Merged: an effect may have recorded what it awaits there, an evidence what it saw (S20-08).
+        action.result = {**(action.result or {}), "compensations": payload.get("compensations") or []}
         action.finished_at = utcnow()
         await persist_event(
             session,
-            EventType.ACTION_SUCCEEDED if statut == ActionStatus.SUCCEEDED.value else EventType.ACTION_FAILED,
-            project_id=projet.id,
+            EventType.ACTION_SUCCEEDED if status == ActionStatus.SUCCEEDED.value else EventType.ACTION_FAILED,
+            project_id=project.id,
             work_item_id=action.work_item_id,
-            project_slug=projet.slug,
+            project_slug=project.slug,
             subject=action_id,
             error=action.error,
         )
-    # Après la validation : le ticket qui l'attend relira un état déjà écrit.
+    # After the commit: the work item that awaits it will re-read an already written state.
     if ticket is not None:
-        await _prevenir(ticket, action_id, statut)
-    return {"action_id": action_id, "status": statut}
+        await _notify(ticket, action_id, status)
+    return {"action_id": action_id, "status": status}
 
 
-async def _interpreteur_qui_attend(session: Any, action: Action, projet: Project) -> str | None:
-    """L'interpréteur dont une TRANSITION a proposé l'action (S20-05), ou rien : celui que la
-    proposition a consigné — c'est lui qui attend —, sinon celui du ticket."""
+async def _waiting_interpreter(session: Any, action: Action, project: Project) -> str | None:
+    """The interpreter whose TRANSITION proposed the action (S20-05), or nothing: the one the
+    proposal recorded (it is the one waiting), else the work item's."""
     from choregos_api.temporal import interpreter_id
 
     if action.origin != ActionOrigin.TRANSITION.value or action.work_item_id is None:
         return None
-    consigne = (action.proposed_by or {}).get("workflow_id")
-    if consigne:
-        return str(consigne)
+    recorded = (action.proposed_by or {}).get("workflow_id")
+    if recorded:
+        return str(recorded)
     item = await session.get(WorkItem, action.work_item_id)
-    return interpreter_id(projet.slug, item.tracker_key) if item is not None else None
+    return interpreter_id(project.slug, item.tracker_key) if item is not None else None
 
 
-async def _prevenir(workflow_id: str, action_id: str, statut: str) -> None:
-    """`action_settled` : le ticket n'attend pas sa prochaine relecture pour savoir. Un ticket
-    arrêté entre-temps n'écoute plus — ce n'est pas une panne de l'action."""
+async def _notify(workflow_id: str, action_id: str, status: str) -> None:
+    """`action_settled`: the work item does not wait for its next re-read to know. A work item
+    stopped in the meantime no longer listens; that is not a failure of the action."""
     try:
         await (
             activity.client()
             .get_workflow_handle(workflow_id)
-            .signal("action_settled", {"action_id": action_id, "status": statut})
+            .signal("action_settled", {"action_id": action_id, "status": status})
         )
-    except Exception as erreur:
-        logger.warning("ticket non prévenu", workflow_id=workflow_id, action=action_id, erreur=str(erreur))
+    except Exception as error:
+        logger.warning("work item not notified", workflow_id=workflow_id, action=action_id, error=str(error))
 
 
 @activity.defn(name="propose_transition_action")
-async def propose_transition_action(entree: dict[str, Any]) -> dict[str, Any]:
-    """L'action d'une transition système (S20-05), proposée une fois par tentative. Née approuvée —
-    chaque opération est permise à ce projet —, elle part aussitôt dans son `ActionWorkflow`.
+async def propose_transition_action(payload: dict[str, Any]) -> dict[str, Any]:
+    """The action of a system transition (S20-05), proposed once per attempt. Born approved (every
+    operation is allowed to this project), it leaves at once in its `ActionWorkflow`.
 
-    Un refus définitif (une variable absente, un effet inconnu, une opération interdite) revient en
-    `refus` : la transition échoue, nommée — ce n'est pas une panne à retenter."""
+    A final refusal (a missing variable, an unknown effect, a forbidden operation) comes back in
+    `refused`: the transition fails, named; it is not a failure to retry."""
     from choregos_api.errors import ApiError
     from choregos_api.services.actions import proposer_pour_une_transition
 
     async with db() as session:
-        projet = await session.get(Project, entree["project_id"])
-        item = await session.get(WorkItem, entree["work_item_id"])
-        if projet is None or item is None:
-            return {"refus": "work item or project not found"}
+        project = await session.get(Project, payload["project_id"])
+        item = await session.get(WorkItem, payload["work_item_id"])
+        if project is None or item is None:
+            return {"refus": "work item or project not found"}  # lang: fr-ok — recorded wire value, S45-39
         try:
             action = await proposer_pour_une_transition(
                 session,
-                projet,
+                project,
                 item,
-                dict(entree["action"]),
-                transition=str(entree["transition"]),
-                tentative=int(entree["attempt"]),
-                workflow_id=str(entree["workflow_id"]),
+                dict(payload["action"]),
+                transition=str(payload["transition"]),
+                tentative=int(payload["attempt"]),
+                workflow_id=str(payload["workflow_id"]),
             )
-        except EffetRefuse as refus:
-            return {"refus": str(refus)}
-        except ApiError as refus:
-            return {"refus": str(refus.detail or refus.title)}
-        identifiant, statut = action.id, action.status
-    if statut == ActionStatus.APPROVED.value:
-        await _demarrer(identifiant)
-    return {"action_id": identifiant, "status": statut}
+        except EffectRefused as refused:
+            return {"refus": str(refused)}  # lang: fr-ok — recorded wire value, S45-39
+        except ApiError as refused:
+            return {
+                "refus": str(refused.detail or refused.title)
+            }  # lang: fr-ok — recorded wire value, S45-39
+        identifier, status = action.id, action.status
+    if status == ActionStatus.APPROVED.value:
+        await _start(identifier)
+    return {"action_id": identifier, "status": status}
 
 
-async def _demarrer(action_id: str) -> None:
-    """`action-<id>`, une seule fois : une activité rejouée retrouve le workflow déjà parti."""
-    from choregos_api.temporal import action_id as identifiant
+async def _start(action_id: str) -> None:
+    """`action-<id>`, once: a replayed activity finds the workflow already started."""
+    from choregos_api.temporal import action_id as identifier
     from temporalio.exceptions import WorkflowAlreadyStartedError
 
     with contextlib.suppress(WorkflowAlreadyStartedError):
         await activity.client().start_workflow(
             "ActionWorkflow",
             {"action_id": action_id},
-            id=identifiant(action_id),
+            id=identifier(action_id),
             task_queue=activity.info().task_queue,
         )
 
 
 @activity.defn(name="mark_awaiting_evidence")
-async def mark_awaiting_evidence(entree: dict[str, Any]) -> dict[str, Any]:
-    """L'action attend la preuve d'un de ses effets (S20-08) — `awaiting_evidence`, avec l'effet et
-    l'échéance —, ou ne l'attend plus. Ce que l'on montre ; l'attente elle-même est au workflow."""
-    action_id = str(entree["action_id"])
+async def mark_awaiting_evidence(payload: dict[str, Any]) -> dict[str, Any]:
+    """The action awaits the evidence of one of its effects (S20-08) (`awaiting_evidence`, with the
+    effect and the deadline), or no longer awaits it. What is shown; the wait itself is the workflow's."""
+    action_id = str(payload["action_id"])
     async with db() as session:
-        action, _projet = await _charger(session, action_id)
-        resultat = dict(action.result or {})
+        action, _project = await _load(session, action_id)
+        result = dict(action.result or {})
         # The workflow's keys are read under both spellings (S45-03); what is persisted is unchanged.
-        if read_key(entree, "waiting"):
+        if read_key(payload, "waiting"):
             action.status = ActionStatus.AWAITING_EVIDENCE.value
-            until = require_key(entree, "until")
-            resultat["attente"] = {"position": entree["position"], "jusqu_a": until}  # lang: fr-ok
+            until = require_key(payload, "until")
+            result["attente"] = {
+                "position": payload["position"],
+                "jusqu_a": until,
+            }  # lang: fr-ok — recorded wire value, S45-39
         else:
             action.status = ActionStatus.RUNNING.value
-            resultat.pop("attente", None)
-            resultat.setdefault("preuves", []).append(dict(read_key(entree, "evidence") or {}))
-        action.result = resultat
+            result.pop("attente", None)  # lang: fr-ok — recorded wire value, S45-39
+            result.setdefault("preuves", []).append(
+                dict(read_key(payload, "evidence") or {})
+            )  # lang: fr-ok — recorded wire value, S45-39
+        action.result = result
     return {"action_id": action_id, "status": action.status}
 
 
 @activity.defn(name="action_state")
 async def action_state(action_id: str) -> dict[str, Any]:
-    """Relu en base : le filet quand un signal `action_settled` se perd."""
+    """Re-read from the database: the net when an `action_settled` signal is lost."""
     async with db() as session:
         action = await session.get(Action, action_id)
         return {"status": action.status if action is not None else ActionStatus.FAILED.value}
@@ -348,28 +368,28 @@ async def charger_l_action(action_id: str) -> dict[str, Any]:  # lang: fr-ok
 
 
 @activity.defn(name="executer_l_effet")  # lang: fr-ok
-async def executer_l_effet(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
-    return await execute_effect(entree)
+async def executer_l_effet(payload: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
+    return await execute_effect(payload)
 
 
 @activity.defn(name="compenser_l_effet")  # lang: fr-ok
-async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
-    return await compensate_effect(entree)
+async def compenser_l_effet(payload: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
+    return await compensate_effect(payload)
 
 
 @activity.defn(name="cloturer_l_action")  # lang: fr-ok
-async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
-    return await close_action(entree)
+async def cloturer_l_action(payload: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
+    return await close_action(payload)
 
 
 @activity.defn(name="proposer_l_action_de_transition")  # lang: fr-ok
-async def proposer_l_action_de_transition(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
-    return await propose_transition_action(entree)
+async def proposer_l_action_de_transition(payload: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
+    return await propose_transition_action(payload)
 
 
 @activity.defn(name="marquer_l_attente")  # lang: fr-ok
-async def marquer_l_attente(entree: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
-    return await mark_awaiting_evidence(entree)
+async def marquer_l_attente(payload: dict[str, Any]) -> dict[str, Any]:  # lang: fr-ok
+    return await mark_awaiting_evidence(payload)
 
 
 @activity.defn(name="etat_de_l_action")  # lang: fr-ok

@@ -245,7 +245,7 @@ async def test_un_signal_perdu_la_relecture_prend_le_relais(
     async def perdu(*_: Any) -> None:
         return None
 
-    monkeypatch.setattr(actions, "_prevenir", perdu)
+    monkeypatch.setattr(actions, "_notify", perdu)
     debut = await temporal_env.get_current_time()
     await _ticket(setup, _arrivee(), {"upn": "lea@acme.test", "date_arrivee": _iso(debut)})
     async with worker_factory():
