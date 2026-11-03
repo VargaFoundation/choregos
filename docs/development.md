@@ -49,7 +49,7 @@ names who becomes `org_admin`; everyone else is `developer`. The API refuses dev
 login in `staging` and `prod`. The front shows the development form when
 `NEXT_PUBLIC_DEV_LOGIN=true`.
 
-## An MCP gateway in the local install (ADR 0097)
+## An MCP gateway in the local install (ADR 0105)
 
 To try the organisation's MCP gateway (ADR 0105) without a real one, add the profile:
 
