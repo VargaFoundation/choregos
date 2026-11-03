@@ -97,7 +97,7 @@ export function useADecider(org: string, project?: string) {
   const tickets = useQueries({
     queries: slugs.map((slug) => ({
       queryKey: ["items", slug],
-      queryFn: () => api.workItems(slug),
+      queryFn: () => api.allWorkItems(slug),
       staleTime: 30_000,
     })),
   });

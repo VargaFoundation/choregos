@@ -4,7 +4,7 @@
 One row per trigger that has a token: its SHA-256 only, under forced RLS like `received_events`.
 
 Revision ID: f3b5d7e9a1c2
-Revises: c6e8a0b2d4f1
+Revises: d2f4a6c8e0b3
 Create Date: 2026-11-03 11:00:00+00:00
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f3b5d7e9a1c2"
-down_revision: str | None = "c6e8a0b2d4f1"
+down_revision: str | None = "d2f4a6c8e0b3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
