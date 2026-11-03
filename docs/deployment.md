@@ -1238,7 +1238,9 @@ the chart already assumes.
 the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, and **Tekton since
 0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
 the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (`?jeton=`, the former spelling, is still
-accepted). Outside development, a webhook whose secret is not configured is refused.
+accepted). On any deployed instance (`staging` or `prod`, or any instance served over https whatever its
+`CHOREGOS_ENV`), an unsigned GitHub or Tekton webhook, whose secret is not configured, is refused with a 401;
+only a local http instance accepts it.
 
 ### When a secret is not a secret
 
