@@ -23,6 +23,7 @@ export type {
   PlatformIdentityRow,
   Membership,
   MembershipUpsert,
+  TrackerIdentity,
   Org,
   OrgCreate,
   OrgUpdate,

@@ -122,6 +122,7 @@ import type {
   HandOff,
   Membership,
   MembershipUpsert,
+  TrackerIdentity,
   Org,
   OrgCreate,
   OrgUpdate,
@@ -404,6 +405,16 @@ export const api = {
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
     }),
+  /** A member's links to their accounts on trackers (S47-14): GitHub only for now. */
+  trackerIdentities: (org: string, userId: string) =>
+    request<TrackerIdentity[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities`),
+  setTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"], body: { external_id: string; login: string }) =>
+    request<TrackerIdentity>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"]) =>
+    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, { method: "DELETE" }),
   /** Les sections d'administration que les greffons déclarent, filtrées par l'API (ADR 0032). */
   adminSections: (org: string) => request<AdminSection[]>(`/ui/admin-sections?org=${encodeURIComponent(org)}`),
   /**
