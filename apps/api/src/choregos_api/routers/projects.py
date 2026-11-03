@@ -286,7 +286,7 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
     )
     session.add(project)
     await session.flush()
-    await ensure_defaults(session, project)
+    await ensure_defaults(session, project, refuse_unenforced=True)
     # A template whose tracker is a plugin's server wires it, or refuses the project (S43-07).
     await wire_template_tracker(session, project)
     session.add(
