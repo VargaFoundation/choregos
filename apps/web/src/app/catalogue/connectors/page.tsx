@@ -10,6 +10,7 @@ import { EnablementDrawer } from "@/components/catalogue/enablement-drawer";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { ConnectorIcon } from "@/components/connector-icon";
 import { Badge, Button, EtatDeLecture } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { NO_FILTERS, type CatalogueFilters } from "@/lib/catalogue";
 import { filterConnectorEntries } from "@/lib/connector-catalogue";
@@ -41,7 +42,7 @@ export default function ConnectorCataloguePage() {
   const shown = filterConnectorEntries(entries, filters);
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-semibold">Connector types</h1>
+      <OrgPageHeader title="Connector types" />
       <p className="max-w-3xl text-sm text-ink-muted">
         The systems Choregos can reach, by family. Installing one happens in Administration → Installed connectors. An organisation connector is declared once by the administrator and
         turned on for the projects that need it; a project connector is configured in the project&apos;s settings.

@@ -10,7 +10,8 @@ import { InstallDrawer } from "@/components/catalogue/install-drawer";
 import { useEgressGuard } from "@/components/egress/egress-provider";
 import { RiskBadge } from "@/components/skills/gate";
 import { SkillTabs } from "@/components/skills/onglets";
-import { Badge, Button, ErrorNote, EtatDeLecture, Eyebrow, Heading } from "@/components/ui";
+import { Badge, Button, ErrorNote, EtatDeLecture } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/catalogue";
 import { confirmationLines, filterSkillEntries, installAction } from "@/lib/skill-catalogue";
@@ -38,10 +39,7 @@ export default function SkillCataloguePage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>What agents know how to do</Eyebrow>
-        <Heading as="h1" size="xl">
-          Skills
-        </Heading>
+        <OrgPageHeader title="Skills" eyebrow="What agents know how to do" />
         <SkillTabs active="catalogue" />
       </div>
       <p className="max-w-3xl text-sm text-ink-muted">

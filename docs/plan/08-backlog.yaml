@@ -4160,3 +4160,11 @@ stories:
     size: S
     depends_on: [S55-08]
     notes: "ADR 0120 on the organisation's first page."
+  - id: S55-11
+    title: "feat(web): every organisation page wears its sidebar entry's icon and hue"
+    stream: S55
+    sprint: 3
+    priority: 3
+    size: S
+    depends_on: [S55-10]
+    notes: "ADR 0120 on Agents, Skills, Knowledge, Memories, the catalogues, Integrations, Spend and the administration."
