@@ -53,6 +53,13 @@ async def test_the_catalogue_lists_core_and_template_workflows_with_what_they_ne
     )
 
 
+async def test_the_list_leaves_every_entry_s_yaml_out(client: AsyncClient, admin: str) -> None:
+    """S55-04b: each entry's whole text made the library slow to load, and no page reads it."""
+    entries = (await client.get(BASE)).json()
+    assert entries, "the catalogue lists nothing: the test checks nothing"
+    assert all(entry["yaml"] is None for entry in entries)
+
+
 async def test_a_member_reads_the_catalogue_an_outsider_does_not(client: AsyncClient, admin: str) -> None:
     await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
     await login(client, "po@varga.dev")
@@ -134,8 +141,10 @@ async def test_sharing_copies_a_version_and_an_unresolved_agent_refuses_the_adop
     assert (
         await client.put(f"/api/v1/projects/{pid}/workflows/ghostly", json={"yaml": edited})
     ).status_code == 200
+    assert "display: Done" in entry["yaml"], "the share's answer carries the copy it made"
     listed = _entry((await client.get(BASE)).json(), "org", "ghostly")
-    assert "display: Done" in listed["yaml"], "a share is a copy: later edits do not reach it"
+    assert listed["version"] == 1, "a share is a copy: later edits do not reach it"
+    assert listed["yaml"] is None, "the list carries no YAML (S55-04b)"
     second = await client.post(BASE, json={"project": "billing-api", "name": "ghostly"})
     assert second.json()["version"] == 2 and "Finished" in second.json()["yaml"]
 
