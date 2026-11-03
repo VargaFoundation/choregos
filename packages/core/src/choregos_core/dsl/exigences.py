@@ -1,115 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ce que les workflows d'un projet exigent de ses connecteurs (ADR 0034).
-
-La revue produit du 2026-10-05 : les réglages d'un projet RH montraient `scm`, `ci`, `cd` — un
-dépôt, une intégration continue et un train qu'il n'a pas. Ce qu'un projet doit brancher se
-DÉDUIT de ce que ses workflows font :
-
-- une garantie lit des capacités (`scope_respected` un diff ; `ci_green` les checks de la PR, par le
-  dépôt — ce n'était pas la CI, que rien ne lit) : `gate_needs` ;
-- un agent dont le rôle travaille dans un dépôt (`implement`, `fix_ci`…) exige un `scm` ;
-- un train de release, un état de production (`production: true`, ou `deployed_prod*` pour un workflow
-  écrit avant #175) ou une vérification en prod exigent un `cd` ;
-- une transition système qui ouvre ou fusionne une PR (`does`, ou un état `pr_*` / `merged*` pour un
-  workflow écrit avant #175) exige un `scm` ;
-- des agents tournent quelque part (`runtime`) et appellent des modèles (`gateway`) ;
-- les tickets vivent dans un `tracker` — l'interne, tant qu'on n'en branche pas un autre.
-
-Chaque exigence dit POURQUOI : la console montre la raison, pas seulement la case.
-"""
+# lang: fr-ok-file alias:internal
+"""Former module path of `choregos_core.dsl.requirements` (ADR 0098 §3 (a))."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import dataclass
-
-from choregos_contracts import SystemActor, Workflow
-from choregos_contracts.enums import ActorType
-from choregos_contracts.workflow import effet_de_la_transition, est_un_etat_de_production
-
-from ..gates import gate_needs
-
-#: Les rôles dont le playbook travaille dans un dépôt : ils lisent un diff, poussent une branche.
-ROLES_DANS_UN_DEPOT = frozenset(
-    {"implement", "fix_ci", "address_review", "review", "release_notes", "architect", "document"}
+from .requirements import (
+    ORDER,
+    ROLES_IN_A_REPOSITORY,
+    ROLES_IN_PRODUCTION,
+    Requirement,
+    requirements,
 )
-#: Ceux qui regardent la production.
-ROLES_EN_PRODUCTION = frozenset({"verify_prod"})
 
-#: L'ordre dans lequel la console les montre.
-ORDRE = ("tracker", "scm", "ci", "cd", "runtime", "gateway", "memory", "notify")
+Exigence = Requirement
+ORDRE = ORDER
+ROLES_DANS_UN_DEPOT = ROLES_IN_A_REPOSITORY
+ROLES_EN_PRODUCTION = ROLES_IN_PRODUCTION
+exigences = requirements
 
-
-@dataclass(frozen=True)
-class Exigence:
-    capacite: str
-    raisons: tuple[str, ...]
-
-
-class _Raisons:
-    """Les raisons de chaque capacité, dans l'ordre où elles se découvrent, sans doublon."""
-
-    def __init__(self) -> None:
-        self.par_capacite: dict[str, list[str]] = {
-            "tracker": ["work items live in a tracker: the internal one unless you connect another"]
-        }
-
-    def exiger(self, capacite: str, raison: str) -> None:
-        liste = self.par_capacite.setdefault(capacite, [])
-        if raison not in liste:
-            liste.append(raison)
-
-
-def _acteurs(workflow: Workflow, raisons: _Raisons) -> None:
-    nom = workflow.metadata.name
-    for acteur, spec in workflow.actors.items():
-        if spec.type == ActorType.JOB:
-            raisons.exiger("runtime", f"{nom}: the job {acteur} runs somewhere")
-            continue
-        if spec.type != ActorType.AGENT:
-            continue
-        raisons.exiger("runtime", f"{nom}: the agent {acteur} runs somewhere")
-        raisons.exiger("gateway", f"{nom}: the agent {acteur} calls models")
-        role = str(getattr(spec, "role", ""))
-        if role in ROLES_DANS_UN_DEPOT:
-            raisons.exiger("scm", f"{nom}: the agent {acteur} ({role}) works in a repository")
-        if role in ROLES_EN_PRODUCTION:
-            raisons.exiger("cd", f"{nom}: the agent {acteur} ({role}) checks production")
-
-
-def _etats_et_transitions(workflow: Workflow, raisons: _Raisons) -> None:
-    nom = workflow.metadata.name
-    for etat, spec in workflow.states.items():
-        if est_un_etat_de_production(etat, spec):
-            raisons.exiger("cd", f"{nom}: the state {etat} is production")
-    for transition in workflow.transitions:
-        ident = transition.id or f"{transition.from_}->{transition.to}"
-        # Ce que la plateforme FAIT en franchissant une transition système (`does`, #175) — déduit du
-        # nom de l'état visé pour un workflow écrit avant.
-        effet = effet_de_la_transition(transition)
-        if effet and isinstance(workflow.actors.get(transition.by or ""), SystemActor):
-            geste = "opens" if effet == "open_pr" else "merges"
-            raisons.exiger("scm", f"{nom}: {ident} {geste} a pull request")
-        if transition.via == "release_train" or transition.train is not None:
-            raisons.exiger("cd", f"{nom}: {ident} goes through a release train")
-        for garantie in transition.gates:
-            for capacite in sorted(gate_needs(garantie.name)):
-                raisons.exiger(capacite, f"{nom}: the guarantee {garantie.name} on {ident}")
-
-
-def exigences(workflows: Iterable[Workflow]) -> list[Exigence]:
-    """Les capacités que ces workflows exigent, chacune avec ses raisons (sans doublon)."""
-    raisons = _Raisons()
-    for workflow in workflows:
-        _acteurs(workflow, raisons)
-        _etats_et_transitions(workflow, raisons)
-    rang = {capacite: index for index, capacite in enumerate(ORDRE)}
-    return [
-        Exigence(capacite, tuple(liste))
-        for capacite, liste in sorted(
-            raisons.par_capacite.items(), key=lambda item: (rang.get(item[0], len(ORDRE)), item[0])
-        )
-    ]
-
-
-__all__ = ["ORDRE", "ROLES_DANS_UN_DEPOT", "Exigence", "exigences"]
+__all__ = ["ORDRE", "ROLES_DANS_UN_DEPOT", "ROLES_EN_PRODUCTION", "Exigence", "exigences"]

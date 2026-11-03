@@ -100,8 +100,8 @@ transitions:
     by: responder
     inputs: [spec_markdown]
     on_fail: { to: addressing_review, max_attempts: 3, escalate_to: needs_human }
-  # Les notes de version s'écrivent AVANT la PR : elles entrent dans son corps. Une boucle
-  # `merged → merged` déclarée après le train n'était jamais choisie (#285).
+  # The release notes are written BEFORE the PR: they go into its body. A `merged → merged`
+  # loop declared after the train was never chosen (#285).
   - id: t-release-notes
     from: agent_review
     to: notes_written
@@ -115,8 +115,8 @@ transitions:
     gates: [evidence_present, scope_respected]
     on_fail: { to: notes_written, max_attempts: 2, escalate_to: needs_human }
     does: open_pr
-  # Le réparateur part de l'état où `t-merge` envoie une CI rouge : depuis `pr_open`, il n'était
-  # choisi que sur un résultat que l'interpréteur avait déjà oublié (#284).
+  # The repairer starts from the state where `t-merge` sends a red CI: from `pr_open`, it was
+  # only chosen on a result the interpreter had already forgotten (#284).
   - id: t-fix-ci
     from: fixing_ci
     to: pr_open

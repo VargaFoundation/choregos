@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Rendu d'un workflow en graphe (couloirs par acteur) pour le front et la CLI."""
+"""Rendering of a workflow as a graph (lanes per actor) for the front end and the CLI."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .flow import artifact_flow
 
 
 def _lane(wf: Workflow, state: str) -> str:
-    """Couloir d'un état : le type de l'acteur qui en sort."""
+    """The lane of a state: the type of the actor that leaves it."""
     for t in wf.transitions:
         if t.from_ != state:
             continue
@@ -32,9 +32,9 @@ def _lane(wf: Workflow, state: str) -> str:
 def to_graph(wf: Workflow) -> dict[str, Any]:
     """Graph {nodes, edges, artifacts} read by React Flow (`/p/{slug}/workflow`).
 
-    Les arêtes nominales (`kind: "nominal"`) viennent des transitions ; les arêtes
-    secondaires (rejet, reprise, escalade, défauts) sont rendues aussi, sinon les états
-    d'escalade apparaîtraient orphelins sur la carte alors qu'ils sont bien atteignables.
+    The nominal edges (`kind: "nominal"`) come from the transitions; the secondary edges
+    (rejection, retry, escalation, defaults) are rendered too, otherwise the escalation
+    states would appear orphaned on the map although they are reachable.
     """
     nodes = [
         {
@@ -112,7 +112,7 @@ def to_graph(wf: Workflow) -> dict[str, Any]:
             add(src, d.on_budget_exceeded, "default", "budget exceeded")
             add(src, d.on_timeout, "default", "timeout")
     if defaults and defaults.needs_human and defaults.needs_human.on_abandon:
-        # Même convention que le validateur : l'état où un humain est garé.
+        # The same convention as the validator: the state where a human is parked.
         for name, state in wf.states.items():
             if name == "needs_human" or state.kind == StateKind.WAIT:
                 add(name, defaults.needs_human.on_abandon, "default", "abandon")

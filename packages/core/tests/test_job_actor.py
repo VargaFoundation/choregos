@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 from choregos_contracts import JobActor, StateKind
 from choregos_core import ValidationError, WorkflowEngine, parse_workflow
-from choregos_core.dsl.exigences import exigences
 from choregos_core.dsl.graph import to_graph, to_mermaid
 from choregos_core.dsl.process import to_process
+from choregos_core.dsl.requirements import requirements
 
 WORKFLOW = """
 apiVersion: choregos/v1
@@ -121,7 +121,7 @@ def test_the_views_say_it_is_a_job() -> None:
 def test_a_job_needs_a_runtime_and_no_gateway() -> None:
     workflow = _workflow()
     workflow.actors = {k: v for k, v in workflow.actors.items() if k != "strategist"}
-    needs = {e.capacite: e.raisons for e in exigences([workflow])}
+    needs = {e.capability: e.reasons for e in requirements([workflow])}
     assert any("job engine" in reason for reason in needs["runtime"])
     assert "gateway" not in needs
     assert workflow.states["needs_human"].kind == StateKind.WAIT

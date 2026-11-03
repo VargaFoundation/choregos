@@ -1,4 +1,4 @@
-"""Chaque gate a un test vert et un test rouge (S1-05)."""
+"""Each gate has a green test and a red test (S1-05)."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def test_scan_secrets_detects_common_shapes() -> None:
     assert scan_secrets("AKIA1234567890ABCDEF") == ["AWS key"]
     assert scan_secrets("-----BEGIN PRIVATE KEY-----") == ["private key"]
     assert scan_secrets("ghp_" + "a" * 30) == ["GitHub token"]
-    assert scan_secrets("rien à voir") == []
+    assert scan_secrets("nothing to see") == []
 
 
 def test_coverage_delta_min() -> None:
@@ -100,9 +100,9 @@ def test_ci_green_is_pending_then_decides() -> None:
     assert evaluate("ci_green", GateContext(ci_status="success")).passed
     failed = evaluate("ci_green", GateContext(ci_status="failure"))
     assert failed.blocking
-    # Ce que `checks_conclusion` rend tant qu'un check tourne : en attente, pas rouge (S22-14).
-    en_cours = evaluate("ci_green", GateContext(ci_status="pending"))
-    assert en_cours.pending and not en_cours.blocking
+    # What `checks_conclusion` returns while a check runs: pending, not red (S22-14).
+    running = evaluate("ci_green", GateContext(ci_status="pending"))
+    assert running.pending and not running.blocking
 
 
 def test_review_approved() -> None:
@@ -125,12 +125,12 @@ def test_provenance_signed() -> None:
     assert evaluate("provenance_signed", GateContext(signed=False)).blocking
 
 
-def test_sans_check_de_provenance_la_ci_finie_la_garantie_echoue_au_lieu_d_attendre() -> None:
-    """Rien ne renseignait `signed` : la garantie attendait pour toujours (#283). La CI finie sans
-    check de provenance, elle échoue en disant quoi ajouter."""
-    sans = evaluate("provenance_signed", GateContext(ci_status="success"))
-    assert sans.blocking and not sans.pending
-    assert "no provenance check" in sans.detail
+def test_without_a_provenance_check_once_the_ci_is_done_the_guarantee_fails_instead_of_waiting() -> None:
+    """Nothing filled in `signed`: the guarantee waited forever (#283). With the CI done and no
+    provenance check, it fails, saying what to add."""
+    bare = evaluate("provenance_signed", GateContext(ci_status="success"))
+    assert bare.blocking and not bare.pending
+    assert "no provenance check" in bare.detail
 
 
 def test_flag_present() -> None:
@@ -154,156 +154,156 @@ def test_matches_any_globs() -> None:
     assert not matches_any("tests/a.py", ["src/**"])
 
 
-def test_outputs_present_est_la_gate_des_metiers_sans_tests() -> None:
-    """Un workflow hors logiciel n'a ni tests ni diff : sa garantie mécanique est que
-    l'étape a bien produit ce que la transition déclare."""
+def test_outputs_present_is_the_gate_of_trades_without_tests() -> None:
+    """A non-software workflow has neither tests nor a diff: its mechanical guarantee is that
+    the stage did produce what the transition declares."""
     from choregos_contracts import StageResult, StageStatus
 
     done = StageResult(
         schema="choregos/StageResult/v1",
         status=StageStatus.DONE,
-        summary="trois candidats",
-        outputs={"shortlist": "3 profils", "notes": "entretiens planifiés"},
+        summary="three candidates",
+        outputs={"shortlist": "3 profiles", "notes": "interviews scheduled"},
     )
     ctx = GateContext(result=done, expected_outputs=["shortlist", "notes"])
     assert evaluate("outputs_present", ctx).passed
 
-    manquant = GateContext(result=done, expected_outputs=["shortlist", "rapport"])
-    verdict = evaluate("outputs_present", manquant)
+    lacking = GateContext(result=done, expected_outputs=["shortlist", "report"])
+    verdict = evaluate("outputs_present", lacking)
     assert not verdict.passed
-    assert "rapport" in verdict.detail
+    assert "report" in verdict.detail
 
     assert not evaluate("outputs_present", GateContext(expected_outputs=["x"])).passed
 
 
-def test_une_garantie_sans_rien_a_verifier_refuse() -> None:
-    """Livrée le 2026-09-23, `outputs_present` PASSAIT quand la transition ne déclarait
-    aucune sortie — exactement le défaut qu'on venait de corriger sur les garanties de
-    diff. Une garantie demandée qui n'a rien regardé doit refuser ; la tolérer se dit."""
-    rien = GateContext()
-    verdict = evaluate("outputs_present", rien)
+def test_a_guarantee_with_nothing_to_check_refuses() -> None:
+    """Shipped on 2026-09-23, `outputs_present` PASSED when the transition declared
+    no output: exactly the defect just fixed on the diff guarantees.
+    A requested guarantee that looked at nothing must refuse; tolerating it is said."""
+    nothing = GateContext()
+    verdict = evaluate("outputs_present", nothing)
     assert not verdict.passed
     assert "no output declared" in verdict.detail
-    assert evaluate("outputs_present", rien, {"allow_empty": True}).passed
+    assert evaluate("outputs_present", nothing, {"allow_empty": True}).passed
 
     assert not evaluate("evidence_facts", GateContext()).passed
 
 
-def test_evidence_facts_lit_les_preuves_du_metier() -> None:
-    """`evidence_present` exige des tests, `outputs_present` croit ce que l'agent raconte.
-    Entre les deux : des faits nommés par le métier, et comparables."""
+def test_evidence_facts_reads_the_trades_evidence() -> None:
+    """`evidence_present` requires tests, `outputs_present` believes what the agent tells.
+    Between the two: facts named by the trade, and comparable."""
     from choregos_contracts import Evidence, StageResult, StageStatus
 
-    def resultat(**faits: object) -> StageResult:
+    def make_result(**facts: object) -> StageResult:
         return StageResult(
             schema="choregos/StageResult/v1",
             status=StageStatus.DONE,
-            summary="dossier instruit",
-            evidence=Evidence(facts=dict(faits)),  # type: ignore[arg-type]
+            summary="investigated file",
+            evidence=Evidence(facts=dict(facts)),  # type: ignore[arg-type]
         )
 
-    ok = GateContext(result=resultat(profils_retenus=3, piece_identite=True))
-    params = {"keys": ["profils_retenus", "piece_identite"], "min": {"profils_retenus": 1}}
+    ok = GateContext(result=make_result(profiles_kept=3, identity_document=True))
+    params = {"keys": ["profiles_kept", "identity_document"], "min": {"profiles_kept": 1}}
     assert evaluate("evidence_facts", ok, params).passed
 
-    absent = GateContext(result=resultat(piece_identite=True))
-    assert "profils_retenus" in evaluate("evidence_facts", absent, params).detail
+    absent = GateContext(result=make_result(identity_document=True))
+    assert "profiles_kept" in evaluate("evidence_facts", absent, params).detail
 
-    zero = GateContext(result=resultat(profils_retenus=0, piece_identite=True))
+    zero = GateContext(result=make_result(profiles_kept=0, identity_document=True))
     verdict = evaluate("evidence_facts", zero, params)
-    assert not verdict.passed, "un zéro poli n'est pas un résultat"
-    assert "profils_retenus = 0 < 1" in verdict.detail
+    assert not verdict.passed, "a polite zero is not a result"
+    assert "profiles_kept = 0 < 1" in verdict.detail
 
-    # Un booléen EST un entier en Python : sans garde, `false` passerait un `min: 0`.
-    faux = GateContext(result=resultat(profils_retenus=2, piece_identite=False))
+    # A boolean IS an integer in Python: without a guard, `false` would pass a `min: 0`.
+    not_true = GateContext(result=make_result(profiles_kept=2, identity_document=False))
     assert not evaluate(
-        "evidence_facts", faux, {"keys": ["piece_identite"], "must_be_true": ["piece_identite"]}
+        "evidence_facts", not_true, {"keys": ["identity_document"], "must_be_true": ["identity_document"]}
     ).passed
 
 
 def test_evidence_facts_max_is_a_ceiling_on_numbers_only() -> None:
     from choregos_contracts import Evidence, StageResult, StageStatus
 
-    def resultat(**faits: object) -> StageResult:
+    def make_result(**facts: object) -> StageResult:
         return StageResult(
             schema="choregos/StageResult/v1",
             status=StageStatus.DONE,
             summary="facts",
-            evidence=Evidence(facts=dict(faits)),  # type: ignore[arg-type]
+            evidence=Evidence(facts=dict(facts)),  # type: ignore[arg-type]
         )
 
     params = {"keys": ["diverging_excess"], "max": {"diverging_excess": 0}}
-    assert evaluate("evidence_facts", GateContext(result=resultat(diverging_excess=0)), params).passed
-    verdict = evaluate("evidence_facts", GateContext(result=resultat(diverging_excess=2)), params)
+    assert evaluate("evidence_facts", GateContext(result=make_result(diverging_excess=0)), params).passed
+    verdict = evaluate("evidence_facts", GateContext(result=make_result(diverging_excess=2)), params)
     assert not verdict.passed and "diverging_excess = 2 > 0" in verdict.detail
     # A bool is an int in Python: a declared `true` is not a number over a ceiling of 0.
-    assert evaluate("evidence_facts", GateContext(result=resultat(diverging_excess=True)), params).passed
+    assert evaluate("evidence_facts", GateContext(result=make_result(diverging_excess=True)), params).passed
     # `max` and `min` together bound a fact from both sides.
     both = {"keys": ["n"], "min": {"n": 1}, "max": {"n": 3}}
-    assert evaluate("evidence_facts", GateContext(result=resultat(n=2)), both).passed
-    assert not evaluate("evidence_facts", GateContext(result=resultat(n=4)), both).passed
-    assert not evaluate("evidence_facts", GateContext(result=resultat(n=0)), both).passed
+    assert evaluate("evidence_facts", GateContext(result=make_result(n=2)), both).passed
+    assert not evaluate("evidence_facts", GateContext(result=make_result(n=4)), both).passed
+    assert not evaluate("evidence_facts", GateContext(result=make_result(n=0)), both).passed
 
 
-def test_une_garantie_sans_diff_ne_se_prononce_pas() -> None:
-    """Sans diff — connecteur SCM incapable de comparer, dépôt injoignable — `scope_respected`
-    déclarerait le périmètre respecté et `no_secrets` l'absence de secrets, faute d'avoir
-    regardé quoi que ce soit. Une garantie qu'on ne peut pas évaluer n'est pas une garantie."""
-    aveugle = GateContext(diff_available=False, allowed_paths=["src/**"])
-    for nom in ("scope_respected", "diff_size_max", "no_secrets"):
-        verdict = evaluate(nom, aveugle, {"files": 10})
-        assert not verdict.passed, nom
+def test_a_guarantee_without_a_diff_does_not_rule() -> None:
+    """Without a diff (SCM connector unable to compare, unreachable repository) `scope_respected`
+    would declare the perimeter respected and `no_secrets` the absence of secrets, having
+    looked at nothing. A guarantee that cannot be evaluated is not a guarantee."""
+    blind = GateContext(diff_available=False, allowed_paths=["src/**"])
+    for name in ("scope_respected", "diff_size_max", "no_secrets"):
+        verdict = evaluate(name, blind, {"files": 10})
+        assert not verdict.passed, name
         assert "diff unavailable" in verdict.detail
 
-    # Avec un diff, rien ne change pour les cas déjà couverts.
+    # With a diff, nothing changes for the cases already covered.
     assert evaluate("no_secrets", GateContext()).passed
 
 
-def test_tool_called_lit_le_registre_pas_le_recit() -> None:
-    """Banc du 2026-09-24 : dix listages du catalogue, zéro appel, et `lieu_verifie: true`
-    consigné quand même. La garantie regarde ce que la plateforme a compté."""
+def test_tool_called_reads_the_ledger_not_the_narrative() -> None:
+    """Bench of 2026-09-24: ten catalogue listings, zero calls, and `place_verified: true`
+    recorded anyway. The guarantee looks at what the platform counted."""
     from choregos_contracts import StageResult, StageStatus
 
-    raconte = StageResult(
+    told = StageResult(
         schema="choregos/StageResult/v1",
         status=StageStatus.DONE,
-        summary="lieu vérifié",
-        evidence={"facts": {"lieu_verifie": True}},
+        summary="place verified",
+        evidence={"facts": {"place_verified": True}},
     )
-    sans_appel = GateContext(result=raconte, tool_calls=[])
-    verdict = evaluate("tool_called", sans_appel, {"tools": ["verifier_adresse"]})
+    without_call = GateContext(result=told, tool_calls=[])
+    verdict = evaluate("tool_called", without_call, {"tools": ["verify_address"]})
     assert not verdict.passed
-    assert "verifier_adresse" in verdict.detail and verdict.annotations == ["verifier_adresse"]
+    assert "verify_address" in verdict.detail and verdict.annotations == ["verify_address"]
 
-    avec_appel = GateContext(result=raconte, tool_calls=["verifier_adresse", "autre"])
-    assert evaluate("tool_called", avec_appel, {"tools": ["verifier_adresse"]}).passed
+    with_call = GateContext(result=told, tool_calls=["verify_address", "other"])
+    assert evaluate("tool_called", with_call, {"tools": ["verify_address"]}).passed
 
-    # demandée sans rien exiger : elle refuse, comme les autres garanties sans matière
-    assert not evaluate("tool_called", avec_appel).passed
-
-
-# ───────────────────────── outputs_in et markdown_sections (S21-20) ─────────────────────────
+    # requested without requiring anything: it refuses, like the other guarantees with nothing to check
+    assert not evaluate("tool_called", with_call).passed
 
 
-def _avec_sorties(**sorties: object) -> StageResult:
-    return StageResult(status=StageStatus.DONE, summary="ok", outputs=sorties)  # type: ignore[arg-type]
+# ───────────────────────── outputs_in and markdown_sections (S21-20) ─────────────────────────
 
 
-def test_outputs_in_refuse_une_revue_qui_demande_des_changements() -> None:
-    valeurs = {"values": {"verdict": ["approve"]}}
-    assert evaluate("outputs_in", GateContext(result=_avec_sorties(verdict="approve")), valeurs).passed
-    refus = evaluate("outputs_in", GateContext(result=_avec_sorties(verdict="request_changes")), valeurs)
-    assert refus.blocking and "verdict = 'request_changes' (allowed: approve)" in refus.detail
-    assert evaluate("outputs_in", GateContext(result=_avec_sorties()), valeurs).blocking, "absente : refusée"
-    assert evaluate("outputs_in", GateContext(), valeurs).blocking, "sans résultat : refusée"
-    assert not evaluate("outputs_in", GateContext(result=_avec_sorties(verdict="approve")), {}).passed
+def _with_outputs(**outputs: object) -> StageResult:
+    return StageResult(status=StageStatus.DONE, summary="ok", outputs=outputs)  # type: ignore[arg-type]
 
 
-def test_outputs_in_lit_plusieurs_sorties_ensemble() -> None:
-    valeurs = {"values": {"size": ["S", "M"], "risk": ["low", "medium"]}}
-    assert evaluate("outputs_in", GateContext(result=_avec_sorties(size="M", risk="low")), valeurs).passed
-    trop_gros = evaluate("outputs_in", GateContext(result=_avec_sorties(size="L", risk="low")), valeurs)
-    assert trop_gros.annotations == ["size = 'L' (allowed: S, M)"]
+def test_outputs_in_refuses_a_review_that_asks_for_changes() -> None:
+    allowed = {"values": {"verdict": ["approve"]}}
+    assert evaluate("outputs_in", GateContext(result=_with_outputs(verdict="approve")), allowed).passed
+    refusal = evaluate("outputs_in", GateContext(result=_with_outputs(verdict="request_changes")), allowed)
+    assert refusal.blocking and "verdict = 'request_changes' (allowed: approve)" in refusal.detail
+    assert evaluate("outputs_in", GateContext(result=_with_outputs()), allowed).blocking, "absent: refused"
+    assert evaluate("outputs_in", GateContext(), allowed).blocking, "no result: refused"
+    assert not evaluate("outputs_in", GateContext(result=_with_outputs(verdict="approve")), {}).passed
+
+
+def test_outputs_in_reads_several_outputs_together() -> None:
+    allowed = {"values": {"size": ["S", "M"], "risk": ["low", "medium"]}}
+    assert evaluate("outputs_in", GateContext(result=_with_outputs(size="M", risk="low")), allowed).passed
+    too_big = evaluate("outputs_in", GateContext(result=_with_outputs(size="L", risk="low")), allowed)
+    assert too_big.annotations == ["size = 'L' (allowed: S, M)"]
 
 
 ADR = """---
@@ -332,76 +332,76 @@ MADR = {
 }
 
 
-def test_markdown_sections_lit_le_texte_ajoute_pas_le_recit() -> None:
-    bon = GateContext(added_text={"docs/adr/0042-rls.md": ADR})
-    assert evaluate("markdown_sections", bon, MADR).passed
-    sans_decision = ADR.split("## Decision Outcome", maxsplit=1)[0]
-    mauvais = evaluate(
-        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": sans_decision}), MADR
+def test_markdown_sections_reads_the_added_text_not_the_narrative() -> None:
+    good = GateContext(added_text={"docs/adr/0042-rls.md": ADR})
+    assert evaluate("markdown_sections", good, MADR).passed
+    without_decision = ADR.split("## Decision Outcome", maxsplit=1)[0]
+    bad = evaluate(
+        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": without_decision}), MADR
     )
-    assert mauvais.blocking
-    assert "docs/adr/0042-rls.md: section “Decision Outcome” missing" in mauvais.annotations
-    assert any("not found" in a for a in mauvais.annotations), "le motif « Chosen option » non plus"
-    # Le récit de l'agent ne compte pas : seul le texte que la branche ajoute.
-    ailleurs = GateContext(result=_avec_sorties(adr_markdown=ADR), added_text={"README.md": ADR})
-    assert "0 file(s) matching" in evaluate("markdown_sections", ailleurs, MADR).detail
+    assert bad.blocking
+    assert "docs/adr/0042-rls.md: section “Decision Outcome” missing" in bad.annotations
+    assert any("not found" in a for a in bad.annotations), "the “Chosen option” pattern neither"
+    # The agent's narrative does not count: only the text the branch adds.
+    elsewhere = GateContext(result=_with_outputs(adr_markdown=ADR), added_text={"README.md": ADR})
+    assert "0 file(s) matching" in evaluate("markdown_sections", elsewhere, MADR).detail
 
 
-def test_markdown_sections_refuse_sans_diff_et_sans_chemin() -> None:
+def test_markdown_sections_refuses_without_a_diff_and_without_a_path() -> None:
     assert "diff unavailable" in evaluate("markdown_sections", GateContext(diff_available=False), MADR).detail
     assert evaluate("markdown_sections", GateContext(added_text={"docs/adr/0042-x.md": ADR}), {}).blocking
 
 
-def test_un_statut_accepte_se_verifie_par_un_motif() -> None:
-    accepte = {"paths": MADR["paths"], "patterns": ['(?m)^status: "?accepted"?\\s*$']}
+def test_an_accepted_status_is_checked_by_a_pattern() -> None:
+    accepted = {"paths": MADR["paths"], "patterns": ['(?m)^status: "?accepted"?\\s*$']}
     assert not evaluate(
-        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": ADR}), accepte
+        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": ADR}), accepted
     ).passed
-    ecrit = ADR.replace('status: "proposed"', 'status: "accepted"')
+    written = ADR.replace('status: "proposed"', 'status: "accepted"')
     assert evaluate(
-        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": ecrit}), accepte
+        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": written}), accepted
     ).passed
 
 
 # ───────────────────────── adr_number_free (#287, S22-20) ─────────────────────────
 
-SUR_MAIN = ["docs/adr/0001-queue.md", "docs/adr/0002-cache.md", "docs/adr/README.md"]
+ON_MAIN = ["docs/adr/0001-queue.md", "docs/adr/0002-cache.md", "docs/adr/README.md"]
 
 
-def test_adr_number_free_laisse_passer_un_numero_libre() -> None:
-    libre = GateContext(changed_files=["docs/adr/0003-rls.md"], default_branch_files=SUR_MAIN)
-    out = evaluate("adr_number_free", libre)
+def test_adr_number_free_lets_a_free_number_through() -> None:
+    free = GateContext(changed_files=["docs/adr/0003-rls.md"], default_branch_files=ON_MAIN)
+    out = evaluate("adr_number_free", free)
     assert out.passed and "docs/adr/0003-rls.md" in out.detail
 
 
-def test_adr_number_free_refuse_un_numero_deja_pris_sur_la_branche_par_defaut() -> None:
-    """Deux études lisent le même « plus grand plus un » : la seconde à fusionner est refusée."""
-    pris = GateContext(changed_files=["docs/adr/0002-rls.md", "src/x.py"], default_branch_files=SUR_MAIN)
-    out = evaluate("adr_number_free", pris)
+def test_adr_number_free_refuses_a_number_already_taken_on_the_default_branch() -> None:
+    """Two studies read the same "largest plus one": the second to merge is refused."""
+    taken = GateContext(changed_files=["docs/adr/0002-rls.md", "src/x.py"], default_branch_files=ON_MAIN)
+    out = evaluate("adr_number_free", taken)
     assert out.blocking
-    assert out.annotations == ["docs/adr/0002-rls.md"], "les fichiers en cause"
+    assert out.annotations == ["docs/adr/0002-rls.md"], "the files at fault"
     assert "0002 is already taken on the default branch by docs/adr/0002-cache.md" in out.detail
     assert "next free number: 0003" in out.detail
 
 
-def test_adr_number_free_ne_dit_rien_sans_adr_ajoute() -> None:
-    sans_adr = GateContext(changed_files=["src/x.py", "docs/adr/README.md"], default_branch_files=SUR_MAIN)
-    assert evaluate("adr_number_free", sans_adr).passed
-    # Le même chemin, déjà sur la branche par défaut, n'est pas un ajout : c'est le même fichier.
-    retouche = GateContext(changed_files=["docs/adr/0002-cache.md"], default_branch_files=SUR_MAIN)
-    assert evaluate("adr_number_free", retouche).passed
-    # Sans ADR, il n'y a rien à comparer : le listage manquant ne bloque pas.
+def test_adr_number_free_says_nothing_without_an_added_adr() -> None:
+    without_adr = GateContext(changed_files=["src/x.py", "docs/adr/README.md"], default_branch_files=ON_MAIN)
+    assert evaluate("adr_number_free", without_adr).passed
+    # The same path, already on the default branch, is not an addition: it is the same file.
+    touched_up = GateContext(changed_files=["docs/adr/0002-cache.md"], default_branch_files=ON_MAIN)
+    assert evaluate("adr_number_free", touched_up).passed
+    # Without an ADR, there is nothing to compare: the missing listing does not block.
     assert evaluate("adr_number_free", GateContext(changed_files=["src/x.py"])).passed
 
 
-def test_adr_number_free_refuse_quand_il_ne_peut_pas_regarder() -> None:
+def test_adr_number_free_refuses_when_it_cannot_look() -> None:
     assert "diff unavailable" in evaluate("adr_number_free", GateContext(diff_available=False)).detail
-    aveugle = evaluate("adr_number_free", GateContext(changed_files=["docs/adr/0003-rls.md"]))
-    assert aveugle.blocking and "default branch unavailable" in aveugle.detail
+    blind = evaluate("adr_number_free", GateContext(changed_files=["docs/adr/0003-rls.md"]))
+    assert blind.blocking and "default branch unavailable" in blind.detail
 
 
-def test_adr_number_free_suit_son_motif() -> None:
-    motif = {"pattern": "decisions/[0-9][0-9][0-9]-*.md"}
+def test_adr_number_free_follows_its_pattern() -> None:
+    pattern = {"pattern": "decisions/[0-9][0-9][0-9]-*.md"}
     ctx = GateContext(changed_files=["decisions/007-x.md"], default_branch_files=["decisions/007-y.md"])
-    assert evaluate("adr_number_free", ctx, motif).blocking
-    assert evaluate("adr_number_free", ctx).passed, "le motif par défaut ne voit pas ces fichiers"
+    assert evaluate("adr_number_free", ctx, pattern).blocking
+    assert evaluate("adr_number_free", ctx).passed, "the default pattern does not see these files"

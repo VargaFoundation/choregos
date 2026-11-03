@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Moteur du DSL : la logique de décision de l'interpréteur, **sans Temporal**.
+"""DSL engine: the interpreter's decision logic, **without Temporal**.
 
-L'orchestrateur (apps/orchestrator) se contente d'appeler ces fonctions pures, ce qui
-permet de tester tout le comportement d'un workflow sans serveur Temporal ni base.
+The orchestrator (apps/orchestrator) just calls these pure functions, which makes it possible to
+test the whole behaviour of a workflow without a Temporal server or a database.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from .legacy import legacy_outputs
 
 @dataclass(slots=True, frozen=True)
 class Decision:
-    """Ce que l'interpréteur doit faire après une étape."""
+    """What the interpreter must do after a stage."""
 
     next_state: str
     retried: bool = False
@@ -43,7 +43,7 @@ class Decision:
         return f"→ {self.next_state}{suffix} : {self.reason}"
 
 
-# Résultats possibles d'une étape, utilisés pour choisir la transition suivante.
+# Possible results of a stage, used to choose the next transition.
 OUTCOME_CI_FAILED = "ci_failed"
 OUTCOME_CHANGES_REQUESTED = "changes_requested"
 OUTCOME_APPROVED = "approved"
@@ -51,12 +51,12 @@ OUTCOME_REJECTED = "rejected"
 
 
 class WorkflowEngine:
-    """Vue calculatoire d'un workflow : sélection de transition et suites d'une étape."""
+    """Computational view of a workflow: transition selection and what follows a stage."""
 
     def __init__(self, workflow: Workflow) -> None:
         self.wf = workflow
 
-    # ───────────────────────── sélection ─────────────────────────
+    # ───────────────────────── selection ─────────────────────────
 
     @property
     def initial_state(self) -> str:
@@ -187,7 +187,7 @@ class WorkflowEngine:
         actor = self.wf.actor_of(transition)
         return actor if isinstance(actor, HumanActor) else None
 
-    # ───────────────────────── suites d'une étape ─────────────────────────
+    # ───────────────────────── what follows a stage ─────────────────────────
 
     def max_attempts(self, transition: Transition) -> int:
         retry = transition.on_fail or transition.on_changes_requested
@@ -230,7 +230,7 @@ class WorkflowEngine:
         ceiling: int | None = None,
         require_outputs: bool = True,
     ) -> Decision:
-        """Décide de l'état suivant après un run d'agent (docs/plan/02 §2.1).
+        """Decide the next state after an agent run (docs/plan/02 §2.1).
 
         `require_outputs`: a `done` result that lacks a declared output fails the stage, whatever
         the output's type (S31-02, ADR 0049) — with or without an `outputs_present` gate. False
@@ -316,7 +316,7 @@ class WorkflowEngine:
         return Decision(target, escalated=True, reason="deployment failed or aborted")
 
     def after_gates(self, transition: Transition, outcomes: list[GateOutcome], attempts: int) -> Decision:
-        """Suites d'une transition `system` : uniquement des gates."""
+        """What follows a `system` transition: gates only."""
         blocking = [g for g in outcomes if g.blocking]
         if blocking:
             return self.retry_or_escalate(
@@ -329,17 +329,17 @@ class WorkflowEngine:
     def after_action(
         self, transition: Transition, status: str, outcomes: list[GateOutcome], attempts: int
     ) -> Decision:
-        """Suites d'une transition à action (S20-05). Rejetée, l'action suit `on_reject` quand la
-        transition en déclare un ; sinon elle est une garantie comme les autres — `action_succeeded`,
-        implicite —, et un échec suit `on_fail`, que le validateur exige : sans lui, le ticket
-        reviendrait à son état et proposerait la même action, sans fin."""
+        """What follows a transition with an action (S20-05). Rejected, the action follows `on_reject` when
+        the transition declares one; otherwise it is a guarantee like the others (`action_succeeded`,
+        implicit), and a failure follows `on_fail`, which the validator requires: without it, the work
+        item would return to its state and propose the same action, endlessly."""
         from ..gates import GateContext, evaluate
 
         if status == "rejected" and transition.on_reject:
             return Decision(transition.on_reject, reason="action rejected")
         verdict = evaluate("action_succeeded", GateContext(action_status=status))
-        autres = [o for o in outcomes if o.name != "action_succeeded"]
-        return self.after_gates(transition, [verdict, *autres], attempts)
+        others = [o for o in outcomes if o.name != "action_succeeded"]
+        return self.after_gates(transition, [verdict, *others], attempts)
 
     def timeout_state(self) -> str | None:
         return self._default_state("on_timeout")
@@ -365,7 +365,7 @@ class WorkflowEngine:
     def can_migrate_to(
         self, other: Workflow, current_state: str, mapping: dict[str, str] | None = None
     ) -> str:
-        """État correspondant dans une autre définition, ou erreur explicite."""
+        """The matching state in another definition, or an explicit error."""
         mapping = mapping or {}
         target = mapping.get(current_state, current_state)
         if target not in other.states:

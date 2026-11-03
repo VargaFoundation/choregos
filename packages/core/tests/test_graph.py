@@ -1,4 +1,4 @@
-"""Tests du rendu de workflow en graphe (React Flow) et en Mermaid."""
+"""Tests of the rendering of a workflow as a graph (React Flow) and as Mermaid."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def workflow() -> Workflow:
     return load_template("advanced")
 
 
-def test_chaque_etat_est_un_noeud_avec_son_couloir(workflow: Workflow) -> None:
+def test_each_state_is_a_node_with_its_lane(workflow: Workflow) -> None:
     graph = to_graph(workflow)
     assert {n["id"] for n in graph["nodes"]} == set(workflow.states)
     lanes = {n["lane"] for n in graph["nodes"]}
@@ -43,28 +43,28 @@ def test_chaque_etat_est_un_noeud_avec_son_couloir(workflow: Workflow) -> None:
     assert all(n["lane"] == "terminal" for n in graph["nodes"] if n["terminal"])
 
 
-def test_un_noeud_porte_de_quoi_dessiner_la_carte(workflow: Workflow) -> None:
+def test_a_node_carries_what_the_map_needs_to_draw_it(workflow: Workflow) -> None:
     node = next(n for n in to_graph(workflow)["nodes"] if n["id"] == workflow.initial_state)
     assert node["display"] and node["kind"]
     assert node["terminal"] is False
 
 
-def test_les_aretes_pointent_vers_des_etats_connus(workflow: Workflow) -> None:
+def test_edges_point_to_known_states(workflow: Workflow) -> None:
     for edge in to_graph(workflow)["edges"]:
         assert edge["from"] in workflow.states
         assert edge["to"] in workflow.states
 
 
-def test_le_joker_est_developpe_en_une_arete_par_etat_agent() -> None:
+def test_the_wildcard_expands_into_one_edge_per_agent_state() -> None:
     wf, _ = parse_workflow(WILDCARD_YAML, strict=False)
     wildcards = [e for e in to_graph(wf)["edges"] if e["wildcard"]]
     expanded = {e["from"] for e in wildcards}
     assert expanded == wf.agent_driven_states()
     assert "*" not in expanded
-    assert len({e["id"] for e in wildcards}) == len(wildcards), "des identifiants d'arête en double"
+    assert len({e["id"] for e in wildcards}) == len(wildcards), "duplicate edge ids"
 
 
-def test_les_etats_d_escalade_sont_relies(workflow: Workflow) -> None:
+def test_escalation_states_are_linked(workflow: Workflow) -> None:
     edges = to_graph(workflow)["edges"]
     kinds = {e["kind"] for e in edges}
     assert {"nominal", "default"} <= kinds
@@ -73,29 +73,29 @@ def test_les_etats_d_escalade_sont_relies(workflow: Workflow) -> None:
     assert {e["to"] for e in questions} == {"needs_human"}
 
 
-def test_le_retour_apres_rejet_est_une_arete(workflow: Workflow) -> None:
+def test_the_return_after_a_rejection_is_an_edge(workflow: Workflow) -> None:
     rejects = [e for e in to_graph(workflow)["edges"] if e["kind"] == "reject"]
-    assert rejects, "le template avancé a des approbations humaines rejetables"
+    assert rejects, "the advanced template has human approvals that can be rejected"
     for edge in rejects:
         origin = next(t for t in workflow.transitions if t.from_ == edge["from"] and t.on_reject)
         assert edge["to"] == origin.on_reject
 
 
-def test_le_train_est_identifie_comme_tel(workflow: Workflow) -> None:
+def test_the_train_is_identified_as_such(workflow: Workflow) -> None:
     trains = [e for e in to_graph(workflow)["edges"] if e["via"] == "release_train"]
-    assert trains, "le template avancé passe par un train de release"
+    assert trains, "the advanced template goes through a release train"
     assert all(e["actor_type"] == "train" for e in trains)
 
 
-def test_les_gates_voyagent_avec_l_arete(workflow: Workflow) -> None:
+def test_gates_travel_with_the_edge(workflow: Workflow) -> None:
     gated = [e for e in to_graph(workflow)["edges"] if e["gates"]]
-    assert gated, "des transitions sont conditionnées par des gates"
+    assert gated, "some transitions are conditioned by gates"
     known = {g for t in workflow.transitions for g in t.gate_names()}
     assert all(set(e["gates"]) <= known for e in gated)
 
 
 @pytest.mark.parametrize("name", TEMPLATE_NAMES)
-def test_le_mermaid_est_coherent(name: str) -> None:
+def test_the_mermaid_is_consistent(name: str) -> None:
     wf = load_template(name)
     mermaid = to_mermaid(wf)
     assert mermaid.startswith("stateDiagram-v2")
@@ -106,7 +106,7 @@ def test_le_mermaid_est_coherent(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", TEMPLATE_NAMES)
-def test_le_graphe_de_chaque_template_est_connexe(name: str) -> None:
+def test_the_graph_of_each_template_is_connected(name: str) -> None:
     wf = load_template(name)
     graph = to_graph(wf)
     reachable = {wf.initial_state}
@@ -118,5 +118,5 @@ def test_le_graphe_de_chaque_template_est_connexe(name: str) -> None:
             if src in reachable and dst not in reachable:
                 reachable.add(dst)
                 changed = True
-    assert reachable == set(wf.states), f"états injoignables : {set(wf.states) - reachable}"
-    assert len({e["id"] for e in graph["edges"]}) == len(graph["edges"]), "identifiants d'arête en double"
+    assert reachable == set(wf.states), f"unreachable states: {set(wf.states) - reachable}"
+    assert len({e["id"] for e in graph["edges"]}) == len(graph["edges"]), "duplicate edge ids"
