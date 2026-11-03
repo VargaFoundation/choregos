@@ -9,13 +9,11 @@ this module re-exports them, and the interpreter and the tests keep reading them
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
-from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
 import structlog
-from choregos_api.db.models import BackendRegistryRow, Run
+from choregos_api.db.models import Run
 from choregos_api.services import persist_event
 from choregos_api.services.artifacts import producing_runs
 from choregos_api.services.hosted_builds import builds_for
@@ -29,14 +27,10 @@ from choregos_contracts import (
     ContextPack,
     EventType,
     HostedCall,
-    KnowledgeRef,
     LaunchSpec,
-    McpServerRef,
     PlaybookRef,
     ProjectRef,
-    PromptCall,
     RepoRef,
-    SkillRef,
     StageInput,
     StageMemory,
     StageRole,
@@ -48,15 +42,12 @@ from choregos_contracts import (
 from choregos_core import (
     ModelResolutionError,
     ModelResolver,
-    backend_enabled,
     telemetry,
     utcnow,
 )
-from choregos_core.cross_review import reviewer_candidates
-from choregos_core.memory_bindings import Binding, legacy_scope, merge_context_packs
+from choregos_core.memory_bindings import merge_context_packs
 from choregos_core.redaction import REDACTED
 from choregos_core.workspace import write_paths_for
-from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
@@ -79,11 +70,56 @@ from .plan import StagePlan
 from .remote import A2A_BACKEND, a2a_runtime, check_remote_agent, remote_budget, remote_call
 from .run_key import reserve_key
 from .run_network import admit_network, network_permissions, run_network
+from .stage_backend import (
+    CODE_BACKEND,
+    HOSTED_BACKEND,
+    PROMPT_BACKEND,
+    STEPLESS_RUNTIMES,
+    _agent_plan,
+    _backend_row,
+    _code_runtime,
+    _fixed_backend,
+    _hosted_call,
+    _hosted_image,
+    _prompt_call,
+    _require_backend_allowed,
+    _require_backend_enabled,
+    _reviewer_backend,
+)
+from .stage_refusals import (
+    _admettre,
+    _daily_budget,
+    _refuse_on_budget,
+    _require_llm_guard,
+    _reservation,
+    _stage_cap,
+)
+from .stage_tools import (
+    MEMORY_DISABLED,
+    ResolvedMemories,
+    _agent_skills,
+    _gateway_catalogue,
+    _knowledge_of_agent,
+    _mcp_servers,
+    _memory_bindings,
+    _skill_exists,
+    production_indicator_sources,
+)
 
 __all__ = [
+    "CODE_BACKEND",
     "FILE_MAX_MINUTES",
+    "HOSTED_BACKEND",
+    "MEMORY_DISABLED",
+    "PROMPT_BACKEND",
     "QUEUE_MAX_MINUTES",
+    "STEPLESS_RUNTIMES",
+    "ResolvedMemories",
     "StagePlan",
+    "_backend_row",
+    "_hosted_call",
+    "_hosted_image",
+    "_skill_exists",
     "await_run",
     "cancel_run",
     "classe_d_execution",
@@ -101,42 +137,6 @@ classe_d_execution = runtime_class  # lang: fr-ok alias:internal
 env_du_runner = runner_environment  # lang: fr-ok alias:internal
 
 logger = structlog.get_logger("choregos.stage")
-
-
-def _mcp_servers(settings: Any, memory_scope: str = "project") -> dict[str, McpServerRef]:
-    """The MCP servers announced to the agent: the ones that exist, and only those.
-
-    Both were hard-coded, and both were wrong on the dev tenant of 2026-09-27: the tools sidecar
-    only exists under the `tekton` executor, and the memory URL was built with
-    `gateway_url.replace("4000", "8432")`, a port replacement that only holds if the gateway and
-    the memory share a host. There, the gateway is `http://litellm:4000`: the memory became
-    `http://litellm:8432`, measured without an answer in eight seconds, when
-    `http://ecphoria:8432/mcp` answers in nine milliseconds.
-    """
-    servers: dict[str, McpServerRef] = {}
-    if url := settings.tools_sidecar_url:
-        servers["choregos"] = McpServerRef(url=url)
-    # The memory server serves the PROJECT's shared memory: a run whose bindings are anything else (its
-    # own memory, none, several, a global one) does not get it — it would read and write past its
-    # bindings (S32-02, S40-11).
-    if settings.memory_url and memory_scope == "project":
-        servers["memory"] = McpServerRef(url=f"{settings.memory_url.rstrip('/')}/mcp")
-    return servers
-
-
-async def _gateway_catalogue(bundle: Any) -> list[Any]:
-    """The models the project's gateway declares, so that the resolver sees behind an alias.
-
-    Without them `provider_model` stayed empty, and the runner's `claude-code` refused every run on
-    `platform/*`: it only takes a model it can see is a Claude (S28-02, 2026-10-12). A gateway that
-    cannot list its models degrades to the old behaviour — no catalogue, no check — rather than
-    stopping the stage.
-    """
-    try:
-        return list(await bundle.adapters.gateway.list_models())
-    except Exception as error:  # the catalogue sharpens the resolution, it is not a precondition
-        logger.warning("gateway catalogue unavailable", error=str(error)[:300])
-        return []
 
 
 @activity.defn(name="prepare_stage")
@@ -492,163 +492,6 @@ def _resolve_model(resolver: ModelResolver, plan: StagePlan, bundle: Any, item: 
         raise ApplicationError(str(refusal), type="ModelResolutionError", non_retryable=True) from refusal
 
 
-def _require_llm_guard(bundle: Any) -> None:
-    """A policy that masks secrets on the LLM path needs a gateway that can (ADR 0084): refused
-    before the budget is reserved, and escalated like a model the project cannot use — the
-    configuration, not the run, has to change."""
-    from choregos_adapters.base import llm_guard_refusal
-    from temporalio.exceptions import ApplicationError
-
-    if not getattr(bundle.policy.sandbox, "llm_security_analyzer", False):
-        return
-    if (refusal := llm_guard_refusal(bundle.adapters.gateway)) is not None:
-        raise ApplicationError(refusal, type="ModelResolutionError", non_retryable=True)
-
-
-async def _admettre(
-    bundle: Any, item: Any, run_id: str, plan: StagePlan, backend: str, budget_usd: float
-) -> None:
-    """The admissions declared by the extensions (`choregos_core.admission`), before any key.
-
-    A refusal stops the step WITHOUT a retry, like the guard against injection: retrying would
-    change nothing as long as the rule holds, and the work item is marked dead with the reason,
-    which a human reads.
-    """
-    from choregos_core.admission import AdmissionRefusee, DemandeDeRun, verifier
-    from temporalio.exceptions import ApplicationError
-
-    admission_request = DemandeDeRun(
-        org=bundle.org_slug,
-        project=bundle.slug,
-        work_item=item.tracker_key,
-        run_id=run_id,
-        role=plan.role,
-        backend=backend,
-        budget_usd=budget_usd,
-    )
-    try:
-        await verifier(admission_request)
-    except AdmissionRefusee as refusal:
-        raise ApplicationError(
-            f"run refused before it started — {refusal}", type="admission_refused", non_retryable=True
-        ) from refusal
-
-
-async def _reservation(
-    session: Any,
-    bundle: Any,
-    item: Any,
-    run_id: str,
-    agent: Any,
-    stage_usd: float,
-    *,
-    trial: bool = False,
-) -> Any:
-    """What this run may spend (ADR 0047): the smallest of what is left under the stage budget, the
-    agent's run, day and month budgets, the ticket budget, the project's day budget and the
-    organisation's month budget. What is left under a scope is its cap, minus the ledger, minus the
-    keys still open at that scope (S27-11). A trial has no day or month budget: its runs belong to
-    no agent, so no spend is counted against one (S32-03).
-
-    Serialized per scope: the scopes this stage reserves from are locked until the transaction ends
-    (`lock_budget_scopes`), so a second stage reads the first one's reservation instead of the same
-    remainder."""
-    from choregos_api.db.models import Organization
-    from choregos_api.services.agents import depense_du_jour, depense_du_mois
-    from choregos_api.services.budgets import (
-        lock_budget_scopes,
-        open_reservations,
-        org_spent_since,
-        project_spent_since,
-        reserve,
-        start_of_day,
-        start_of_month,
-        ticket_budget,
-        ticket_spent,
-    )
-    from choregos_api.services.definitions import ceiling_of
-
-    engine = bundle.engine
-    org_id = bundle.project.org_id
-    org_cap = None
-    if (ceiling := ceiling_of(await session.get(Organization, org_id))) is not None:
-        org_cap = ceiling.budgets.monthly_org_usd
-    agent_slug = agent.agent.slug if agent is not None and not trial else None
-    agent_capped = (
-        agent is not None
-        and not trial
-        and (agent.spec.budget.daily_usd is not None or agent.spec.budget.monthly_usd is not None)
-    )
-    scopes = [f"ticket:{item.id}"]
-    if engine.daily_budget() is not None:
-        scopes.append(f"project:{bundle.project.id}")
-    if org_cap is not None:
-        scopes.append(f"org:{org_id}")
-    if agent_capped:
-        scopes.append(f"agent:{org_id}:{agent_slug}")
-    await lock_budget_scopes(session, scopes)
-
-    left: dict[str, float | None] = {"stage": stage_usd}
-    if agent is not None:
-        left["agent_run"] = agent.spec.budget.run_usd
-        if agent.spec.budget.daily_usd is not None and not trial:
-            spent = await depense_du_jour(session, org_id, agent.agent.slug)
-            held = await open_reservations(
-                session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
-            )
-            left["agent_day"] = agent.spec.budget.daily_usd - spent - held
-        if agent.spec.budget.monthly_usd is not None and not trial:
-            # The monthly cap is a reservation too (S27-09): a run cannot spend past it, nor can
-            # the agent's runs in flight, each of which may still spend its key's cap (S27-11).
-            month = await depense_du_mois(session, org_id, agent.agent.slug)
-            held = await open_reservations(
-                session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
-            )
-            left["agent_month"] = agent.spec.budget.monthly_usd - month - held
-    left["ticket"] = (
-        ticket_budget(engine, item)
-        - await ticket_spent(session, item.id)
-        - await open_reservations(session, work_item_id=item.id, exclude_run=run_id)
-    )
-    if (day := engine.daily_budget()) is not None:
-        left["project_day"] = (
-            day
-            - await project_spent_since(session, bundle.project.id, start_of_day())
-            - await open_reservations(session, project_id=bundle.project.id, exclude_run=run_id)
-        )
-    if org_cap is not None:
-        left["org_month"] = (
-            org_cap
-            - await org_spent_since(session, org_id, start_of_month())
-            - await open_reservations(session, org_id=org_id, exclude_run=run_id)
-        )
-    return reserve(left)
-
-
-async def _stage_cap(
-    session: Any, bundle: Any, item: Any, run_id: str, plan: StagePlan
-) -> dict[str, Any] | None:
-    """The work item ran every agent stage the policy allows (`attempts.max_stages_per_ticket`,
-    S27-08): no key, no run, a person decides. Counted from the runs table, so a restart, a replay or
-    a resume does not reset it."""
-    from sqlalchemy import func
-
-    cap = bundle.engine.max_stages_per_ticket()
-    ran = (
-        await session.execute(
-            select(func.count()).select_from(Run).where(Run.work_item_id == item.id, Run.id != run_id)
-        )
-    ).scalar_one()
-    if ran < cap:
-        return None
-    logger.info("stage refused: stage cap", run_id=run_id, ran=ran, cap=cap)
-    detail = (
-        f"the stage `{plan.role}` did not start: the work item already ran {ran} agent stages, "
-        f"the policy's max_stages_per_ticket is {cap}"
-    )
-    return {"run_id": run_id, "refused": {"reason": "max_stages", "detail": detail}}
-
-
 async def _resolve_on_enabled_backend(
     session: Any, agent: Any, resolver: ModelResolver, plan: StagePlan, bundle: Any, item: Any, backend: str
 ) -> Any:
@@ -658,176 +501,9 @@ async def _resolve_on_enabled_backend(
     return _resolve_model(resolver, plan, bundle, item, backend)
 
 
-async def _backend_row(session: Any, backend: str) -> Any:
-    return (
-        await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == backend))
-    ).scalar_one_or_none()
-
-
-def _require_backend_allowed(agent: Any, bundle: Any, backend: str) -> None:
-    """Refuse the stage when the project's `agent.allowed_backends` does not list its backend.
-
-    An empty list restricts nothing. A runtime that fixes its own backend is not concerned. The
-    refusal has the same typed, non retryable shape as a backend the platform disabled."""
-    from temporalio.exceptions import ApplicationError
-
-    if _fixed_backend(agent):
-        return
-    allowed = list(bundle.config.agent.allowed_backends)
-    if not allowed or backend in allowed:
-        return
-    logger.info("stage refused: backend not allowed", backend=backend, allowed=allowed)
-    raise ApplicationError(
-        f"the agent backend `{backend}` is not one this project allows ({', '.join(allowed)}): "
-        "add it to the project's agent settings, or choose another backend.",
-        type="BackendDisabled",
-        non_retryable=True,
-    )
-
-
-async def _require_backend_enabled(session: Any, agent: Any, backend: str) -> None:
-    """Refuse the stage when the platform administrator disabled its coding-agent backend.
-
-    Read from the `agent_backends` table inside the activity (ADR 0008: a replay reads it again
-    and a stage that already started is never re-checked). No row means nothing was ever
-    switched off: the backend stays enabled (fresh install). The refusal is a typed, non
-    retryable error the interpreter escalates as a configuration refusal."""
-    from temporalio.exceptions import ApplicationError
-
-    if _fixed_backend(agent):
-        return
-    row = await _backend_row(session, backend)
-    if backend_enabled(backend, row.enabled if row else None):
-        return
-    if row is None:
-        raise ApplicationError(
-            f"the agent backend `{backend}` is disabled by the platform administrator (it was never "
-            "enabled on the platform page). Enable it there, or choose another backend.",
-            type="BackendDisabled",
-            non_retryable=True,
-        )
-    reason = f" Reason given: {row.disabled_reason}." if row.disabled_reason else ""
-    logger.info("stage refused: backend disabled", backend=backend)
-    raise ApplicationError(
-        f"the agent backend `{backend}` is disabled by the platform administrator.{reason} "
-        "Enable it on the platform page, or choose another backend.",
-        type="BackendDisabled",
-        non_retryable=True,
-    )
-
-
-async def _refuse_on_budget(
-    session: Any, bundle: Any, item: Any, run_id: str, plan: StagePlan, reservation: Any
-) -> dict[str, Any]:
-    """Not enough left to start: no key, no run. The interpreter sends the ticket to a person."""
-    detail = f"the stage `{plan.role}` did not start: {reservation.describe()}"
-    logger.info("stage refused on budget", run_id=run_id, bound_by=reservation.bound_by)
-    await persist_event(
-        session,
-        EventType.COST_ALERT,
-        project_id=bundle.project.id,
-        work_item_id=item.id,
-        project_slug=bundle.slug,
-        subject=item.tracker_key,
-        reason="budget",
-        stage=plan.role,
-        bound_by=reservation.bound_by,
-        left=reservation.left,
-    )
-    return {"run_id": run_id, "refused": {"reason": "budget", "detail": detail}}
-
-
 def _run_id(plan: StagePlan) -> str:
     """Deterministic identifier: replaying the activity does not create a second run."""
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
-
-
-#: Why every binding of a run is skipped when the project's policy turns memory off (S51-01).
-MEMORY_DISABLED = "the project's policy disables memory (memory.enabled: false)"
-
-
-@dataclass(slots=True)
-class ResolvedMemories:
-    """The memories a run reads and writes, resolved for its project (S40-11, ADR 0075)."""
-
-    memories: list[StageMemory]
-    #: Bindings that did not resolve: `{memory, reason}`; the run starts without them (ADR 0007).
-    skipped: list[dict[str, str]]
-
-    @property
-    def legacy_scope(self) -> str | None:
-        return legacy_scope([Binding(m.scope, m.slug, m.mode) for m in self.memories])
-
-
-async def _memory_bindings(session: Any, bundle: Any, agent: Any) -> ResolvedMemories:
-    """Turn the agent version's effective bindings into the memories THIS run reads and writes.
-
-    A global memory must exist, be active and reach the run's project; a named project memory must
-    exist and be active in the run's project; `shared` and `own` always resolve (`own` needs an agent).
-    What does not resolve is skipped with its reason, never fatal: memory never blocks a stage
-    (ADR 0007). A playbook run, with no agent, is `[project:shared write]`, as before.
-    """
-    from choregos_api.db.models import MemoryStore
-    from choregos_api.services.memory_access import reaches_project
-    from choregos_core.memory_bindings import OWN, SHARED, effective_bindings, namespace_of_binding
-    from sqlalchemy import select
-
-    spec = getattr(agent, "spec", None)
-    bindings = (
-        effective_bindings(None, "project")
-        if spec is None
-        else [Binding(b.scope, b.slug, b.mode) for b in spec.effective_memories()]
-    )
-    if not bundle.engine.memory_enabled():
-        # The project's policy is authoritative (S51-01): a run of a project whose policy says
-        # `memory.enabled: false` binds nothing, whatever its agent asks for, so it gets neither a
-        # memory to write nor the memory server. Each binding is journaled as skipped, never fatal.
-        return ResolvedMemories([], [{"memory": b.label, "reason": MEMORY_DISABLED} for b in bindings])
-    agent_slug = agent.agent.slug if agent is not None else None
-    stores = {
-        (store.scope, store.owner_key, store.slug): store
-        for store in (
-            await session.execute(select(MemoryStore).where(MemoryStore.org_id == bundle.project.org_id))
-        ).scalars()
-    }
-    resolved: list[StageMemory] = []
-    skipped: list[dict[str, str]] = []
-    for binding in bindings:
-        reason: str | None = None
-        if binding.scope == "global":
-            store = stores.get(("global", "org", binding.slug))
-            if store is None:
-                reason = "the memory does not exist"
-            elif store.status != "active":
-                reason = "the memory is archived"
-            elif not reaches_project(store, bundle.slug):
-                reason = f"the memory does not reach project {bundle.slug}"
-        elif binding.slug == OWN and not agent_slug:
-            reason = "a playbook run has no agent, so no memory of its own"
-        elif binding.slug not in (SHARED, OWN):
-            store = stores.get(("project", str(bundle.project.id), binding.slug))
-            if store is None:
-                reason = f"the project has no memory `{binding.slug}`"
-            elif store.status != "active":
-                reason = "the memory is archived"
-        if reason is not None:
-            skipped.append({"memory": binding.label, "reason": reason})
-            continue
-        namespace = namespace_of_binding(
-            bundle.org_memory_key or bundle.org_slug, bundle.slug, agent_slug, binding
-        )
-        if namespace is None:  # unreachable: `own` without an agent is refused above
-            continue
-        resolved.append(
-            StageMemory(
-                label=binding.label,
-                scope=binding.scope,
-                slug=binding.slug,
-                mode=binding.mode,
-                namespace=namespace,
-            )
-        )
-    return ResolvedMemories(resolved, skipped)
 
 
 def _playbook_ref(plan: StagePlan, agent: Any, prompt: str) -> str:
@@ -941,37 +617,6 @@ async def _context_pack(
     )
 
 
-#: What the name of an agent's MCP server must contain to count as a production indicator source (the
-#: same cue as the `devops` agent: Loki, Prometheus, Grafana...).
-_OBSERVABILITY_MCP_NAMES = ("grafana", "prometheus", "loki", "datadog", "sentry", "newrelic", "honeycomb")
-
-
-def production_indicator_sources(config: Any, agent: Any = None) -> list[str]:
-    """The production indicator sources THIS run can read, by name (S22-48).
-
-    The production verifier demanded before/after figures for errors and latency, and a project with
-    no source of them (the dev tenant: demo CD, no metrics) was refused every time, with smoke_ok
-    measured true. Its instructions now say what to demand from what the project can measure; the
-    platform tells it, the agent does not guess.
-
-    Two sources, the ones a run actually reaches: the deployment catalogue's tools the project may
-    call and that the deployment files under `observability`; the agent version's MCP servers named
-    after an observability tool. Empty = none.
-    """
-    from choregos_api.catalogue import project_tools
-
-    sources = {
-        tool.name
-        for tool in project_tools(list(config.tools or []), list(config.groups or []))
-        if "observability" in tool.categories
-    }
-    servers = getattr(getattr(agent, "spec", None), "mcp_servers", None) or []
-    sources |= {
-        s.connector for s in servers if any(m in s.connector.lower() for m in _OBSERVABILITY_MCP_NAMES)
-    }
-    return sorted(sources)
-
-
 def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None) -> str:
     text = _render_playbook_text(plan, bundle, item, context, agent)
     answer = str((item.documents or {}).get("human_answer") or "").strip()
@@ -1083,360 +728,6 @@ async def _plan_agent(session: Any, bundle: Any, plan: StagePlan) -> Any:
         agent_source=resolved.source,
     )
     return resolved
-
-
-async def _daily_budget(session: Any, bundle: Any, agent: Any) -> None:
-    """An agent that has spent its daily budget (models and tools) launches no run before
-    midnight (UTC). The refusal is not retried: retrying would not give the budget back."""
-    from choregos_api.services.agents import depense_du_jour, depense_du_mois
-    from choregos_api.services.budget_alerts import suspend_for_budget
-    from temporalio.exceptions import ApplicationError
-
-    slug = agent.agent.slug
-    org_id = bundle.project.org_id
-    cap = agent.spec.budget.daily_usd
-    if cap is not None:
-        spent_today = await depense_du_jour(session, org_id, slug)
-        if spent_today >= cap:
-            raise ApplicationError(
-                f"run refused before it started — the agent `{slug}` spent {spent_today:.2f} $ "
-                f"today, for a daily budget of {cap:.2f} $",
-                type="admission_refused",
-                non_retryable=True,
-            )
-    monthly = agent.spec.budget.monthly_usd
-    if monthly is not None:
-        spent = await depense_du_mois(session, org_id, slug)
-        if spent >= monthly:
-            # The hard stop of the monthly cap (S27-09); normally the spend that crossed it has
-            # already suspended the agent, this covers a cap set below what was already spent.
-            await suspend_for_budget(session, org_id, slug, spent=spent, cap=monthly)
-            raise ApplicationError(
-                f"run refused before it started — the agent `{slug}` spent {spent:.2f} $ "
-                f"this month, for a monthly budget of {monthly:.2f} $",
-                type="admission_refused",
-                non_retryable=True,
-            )
-
-
-async def _agent_skills(session: Any, bundle: Any, agent: Any) -> list[SkillRef]:
-    """The skills the agent's version carries: their version (given, else the latest) and their
-    fingerprint, which the runner will verify. A skill absent from the library stops the run."""
-    if agent is None or not agent.spec.skills:
-        return []
-    from choregos_api.db.models import Skill, SkillVersion
-    from temporalio.exceptions import ApplicationError
-
-    refs: list[SkillRef] = []
-    for requested in agent.spec.skills:
-        query = (
-            select(SkillVersion)
-            .join(Skill, Skill.id == SkillVersion.skill_id)
-            .where(Skill.org_id == bundle.project.org_id, Skill.slug == requested.slug)
-        )
-        if requested.version is not None:
-            query = query.where(SkillVersion.version == requested.version)
-        else:
-            # Unpinned: the latest APPROVED version — never one waiting for its second reviewer
-            # (S32-06, ADR 0050). An activity, not workflow code: no replay concern.
-            query = query.where(SkillVersion.review_status == "approved")
-        row = (
-            await session.execute(query.order_by(SkillVersion.version.desc()).limit(1))
-        ).scalar_one_or_none()
-        if row is not None and row.review_status != "approved":
-            raise ApplicationError(
-                f"the agent `{agent.agent.slug}` pins the skill `{requested.slug}` v{row.version}, "
-                "which is high risk and waits for a second reviewer",
-                type="SkillPendingReview",
-                non_retryable=True,
-            )
-        if row is None and requested.version is None and await _skill_exists(session, bundle, requested.slug):
-            raise ApplicationError(
-                f"the agent `{agent.agent.slug}` carries the skill `{requested.slug}`, "
-                "which has no approved version yet",
-                type="SkillPendingReview",
-                non_retryable=True,
-            )
-        if row is None:
-            raise ApplicationError(
-                f"the agent `{agent.agent.slug}` carries the skill `{requested.slug}`, "
-                "which is not in the library",
-                type="SkillAbsente",  # lang: fr-ok — recorded wire value, S45-39
-                non_retryable=True,
-            )
-        refs.append(SkillRef(slug=requested.slug, version=row.version, digest=row.digest))
-    return refs
-
-
-async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any, item: Any) -> list[KnowledgeRef]:
-    """The knowledge bases the agent version reads (ADR 0051), pinned for this run. A base that does
-    not exist, is not served to this project, or is restricted and not readable by the person who
-    started the work item (ADR 0097), stops the run: it would answer without its reference."""
-    if agent is None or not agent.spec.knowledge:
-        return []
-    from choregos_api.knowledge.on_behalf import OnBehalf
-    from choregos_api.knowledge.serving import KnowledgeRefusedError, pin
-    from choregos_core.restricted import mark
-    from temporalio.exceptions import ApplicationError
-
-    on_behalf = OnBehalf(session, bundle.project.org_id, bundle.project.id, item.initiated_by)
-    try:
-        refs = await pin(
-            session,
-            bundle.project.org_id,
-            bundle.project.slug,
-            [ref.slug for ref in agent.spec.knowledge],
-            on_behalf,
-        )
-    except KnowledgeRefusedError as refusal:
-        raise ApplicationError(
-            f"the agent `{agent.agent.slug}` reads a knowledge base it cannot be served: {refusal}",
-            type="KnowledgeRefused",
-            non_retryable=True,
-        ) from refusal
-    # What this run writes lands under the work item: it is now read only by the bases' readers (ADR 0114).
-    mark(item, on_behalf.restricted_served)
-    return refs
-
-
-async def _skill_exists(session: Any, bundle: Any, slug: str) -> bool:
-    from choregos_api.db.models import Skill
-
-    trouvee = await session.execute(
-        select(Skill.id).where(Skill.org_id == bundle.project.org_id, Skill.slug == slug)
-    )
-    return trouvee.first() is not None
-
-
-def _agent_plan(plan: StagePlan, spec: Any) -> StagePlan:
-    """The plan, with what the agent's version sets: model, backend, and limits that only
-    tighten the actor's."""
-    from dataclasses import replace
-
-    from temporalio.exceptions import ApplicationError
-
-    def stricter(actor_limit: int | None, agent_limit: int | None) -> int | None:
-        values = [v for v in (actor_limit, agent_limit) if v is not None]
-        return min(values) if values else None
-
-    runtime = getattr(spec, "runtime", None)
-    backend = spec.backend
-    if runtime is not None and runtime.kind == "code":
-        # A code agent runs as the `code` backend and no other (ADR 0063): an actor that names
-        # `codex` for it contradicts the version, which a retry would not change.
-        if plan.backend and plan.backend != CODE_BACKEND:
-            raise ApplicationError(
-                f"the actor asks for the backend `{plan.backend}`, but the agent is written in code "
-                f"(runtime `code`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
-                non_retryable=True,
-            )
-        backend = CODE_BACKEND
-    elif runtime is not None and runtime.kind == "a2a":
-        # A remote agent runs as no local backend (ADR 0062); an actor naming one contradicts it.
-        if plan.backend and plan.backend != A2A_BACKEND:
-            raise ApplicationError(
-                f"the actor asks for the backend `{plan.backend}`, but the agent is remote (runtime "
-                f"`a2a`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
-                non_retryable=True,
-            )
-        backend = A2A_BACKEND
-    elif runtime is not None and runtime.kind == "prompt":
-        # A prompt agent is the runner's own tool loop (ADR 0080): no coding agent to choose.
-        if plan.backend and plan.backend != PROMPT_BACKEND:
-            raise ApplicationError(
-                f"the actor asks for the backend `{plan.backend}`, but the agent is a prompt agent "
-                f"(runtime `prompt`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
-                non_retryable=True,
-            )
-        backend = PROMPT_BACKEND
-    elif runtime is not None and runtime.kind == "hosted":
-        # A hosted agent is its own container (ADR 0080): no coding agent to choose either.
-        if plan.backend and plan.backend != HOSTED_BACKEND:
-            raise ApplicationError(
-                f"the actor asks for the backend `{plan.backend}`, but the agent is a hosted agent "
-                f"(runtime `hosted`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
-                non_retryable=True,
-            )
-        backend = HOSTED_BACKEND
-    elif runtime is not None and runtime.kind in STEPLESS_RUNTIMES:
-        # ADR 0080: a voice agent never runs as a step; a step that started one would run nothing.
-        raise ApplicationError(
-            f"the agent's runtime `{runtime.kind}` cannot run as a workflow step "
-            "(a voice agent runs only as a session)",
-            type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
-            non_retryable=True,
-        )
-    elif runtime is not None and runtime.backend:
-        backend = runtime.backend
-
-    return replace(
-        plan,
-        model_request=spec.model or plan.model_request,
-        backend=plan.backend or backend,
-        max_turns=stricter(plan.max_turns, spec.limits.max_turns),
-        max_minutes=stricter(plan.max_minutes, spec.limits.max_minutes),
-    )
-
-
-CODE_BACKEND = "code"
-PROMPT_BACKEND = "prompt"
-HOSTED_BACKEND = "hosted"
-#: Runtimes no step can run (ADR 0080): a voice agent runs only as a session.
-STEPLESS_RUNTIMES = frozenset({"voice"})
-
-
-def _fixed_backend(agent: Any) -> bool:
-    """Whether the agent's runtime fixes its backend (`code`, `prompt`, `hosted`): no rotation swaps it."""
-    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
-    return runtime is not None and runtime.kind in {CODE_BACKEND, PROMPT_BACKEND, HOSTED_BACKEND}
-
-
-def _prompt_call(agent: Any) -> PromptCall | None:
-    """The step a prompt agent carries (ADR 0080), from its version's runtime; `None` for any other."""
-    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
-    if runtime is None or runtime.kind != "prompt":
-        return None
-    return PromptCall(
-        max_output_tokens=runtime.max_output_tokens,
-        tool_choice=runtime.tool_choice,
-        response_format=runtime.response_format,
-    )
-
-
-def _hosted_call(
-    agent: Any, builds: Mapping[str, Any] | None = None, *, session: bool = False
-) -> HostedCall | None:
-    """The step a hosted agent carries (ADR 0080), from its version's runtime; `None` for any other.
-
-    Refused, never retried, when no pod could run it as published: an image without a digest, a zip
-    whose build is not `ready`, or, for a workflow step, a version that serves only `invocations_ws`
-    (a `session`'s pod relays that socket, S41-21)."""
-    from temporalio.exceptions import ApplicationError
-
-    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
-    if runtime is None or runtime.kind != "hosted":
-        return None
-    who = f"`{agent.agent.slug}` v{agent.version}"
-    socket = "invocations_ws" in runtime.protocols
-    protocol = next((p for p in runtime.protocols if p in ("responses", "invocations")), None)
-    if protocol is None and session and socket:
-        protocol = "responses"  # never sent: a session reaches it only on `/realtime`
-    if protocol is None:
-        raise ApplicationError(
-            f"the hosted agent {who} serves only `invocations_ws`; a workflow step is sent over "
-            "`responses` or `invocations`",
-            type="hosted_protocol_unsupported",
-            non_retryable=True,
-        )
-    return HostedCall(
-        protocol=protocol,
-        image=_hosted_image(runtime, who, builds),
-        port=runtime.port,
-        readiness_timeout_s=runtime.readiness_timeout_s,
-        termination_grace_s=runtime.termination_grace_s,
-        workspace=runtime.workspace,
-        env=dict(runtime.env),
-        agent_slug=agent.agent.slug,
-        agent_version=agent.version,
-        socket=socket and session,
-    )
-
-
-def _hosted_image(runtime: Any, who: str, builds: Mapping[str, Any] | None = None) -> str:
-    """`ref@sha256:…`: the digest publication pinned, or the image a zip's build produced, as its
-    `hosted_builds` row says (the version's own `build` when there is no row)."""
-    from temporalio.exceptions import ApplicationError
-
-    source = runtime.source
-    if source.type == "zip":
-        build = runtime.build
-        row = (builds or {}).get(build.key) if build is not None else None
-        status = (row or build).status if build is not None else "not started"
-        image = (row or build).image if build is not None else None
-        if status != "ready" or not image or "@sha256:" not in image:
-            raise ApplicationError(
-                f"the hosted agent {who} is built from a zip whose build is {status}: a step runs "
-                "only an image a `ready` build produced",
-                type="hosted_build_not_ready",
-                non_retryable=True,
-            )
-        return str(image)
-    if not source.digest:
-        raise ApplicationError(
-            f"the hosted agent {who} names `{source.ref}` without a digest: publication pins every "
-            "hosted image, and a step never runs a tag",
-            type="hosted_image_unpinned",
-            non_retryable=True,
-        )
-    return f"{source.ref.split('@', 1)[0]}@{source.digest}"
-
-
-def _code_runtime(agent: Any) -> Any:
-    """The `code` runtime of the resolved agent version, or `None` for any other."""
-    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
-    return runtime if runtime is not None and runtime.kind == "code" else None
-
-
-async def _reviewer_backend(
-    session: Any,
-    bundle: Any,
-    item: Any,
-    wanted: str,
-    resolver: ModelResolver,
-    plan: StagePlan,
-) -> str:
-    """A reviewer that is not the implementer (policy `review.cross_backend`).
-
-    The guarantee is a mechanism: if the backend planned for the review is the one that wrote the
-    code, another one is taken, among those the project allows and that accept the requested
-    model. If none fits, the original is kept and that is said: blocking a work item because only
-    one backend is installed would be worse than the degraded review, and
-    `GET /projects/{id}/metrics/cross-backend` counts these cases.
-    """
-    implementer = (
-        await session.execute(
-            select(Run.backend)
-            .where(
-                Run.work_item_id == item.id,
-                Run.stage_role == str(StageRole.IMPLEMENT),
-                Run.backend.is_not(None),
-            )
-            .order_by(Run.created_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if not implementer or implementer != wanted:
-        return wanted
-    for candidate in reviewer_candidates(implementer, list(bundle.config.agent.allowed_backends)):
-        stored = await _backend_row(session, candidate)
-        if not backend_enabled(candidate, stored.enabled if stored else None):
-            continue  # S42-07c: a backend the platform disabled is not a reviewer
-        try:
-            resolver.resolve(
-                plan.model_request, project=bundle.config, size=item.size, backend=candidate, role=plan.role
-            )
-        except ModelResolutionError:
-            continue
-        logger.info(
-            "cross review",
-            project=bundle.slug,
-            work_item=item.tracker_key,
-            implementer=implementer,
-            reviewer=candidate,
-        )
-        return str(candidate)
-    logger.warning(
-        "cross review impossible",
-        project=bundle.slug,
-        work_item=item.tracker_key,
-        implementer=implementer,
-        reason="no other backend accepts the requested model",
-    )
-    return wanted
 
 
 _serveurs_mcp = _mcp_servers  # lang: fr-ok alias:internal
