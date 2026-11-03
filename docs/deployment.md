@@ -1331,6 +1331,102 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading to 0.21
+
+Read this page top to bottom before upgrading from 0.20.x: each item below can stop a start, fail a
+render or change what runs, and says how to see it and what to do. The identifier renames of the
+chart are not repeated here: they are in [Renamed in 0.21 (ADR 0098)](#renamed-in-021-adr-0098).
+
+### Session secret (S47-01)
+The API refuses to start when `CHOREGOS_SESSION_SECRET` is empty. On a deployed instance (staging or
+prod, or a public or API URL over https) it also refuses a secret shorter than 32 bytes or the
+published default. You see it in the API pod's log at start-up. Generate one with
+`openssl rand -base64 48` before upgrading. Only the API checks it; the workers and the Jobs do not.
+`CHOREGOS_SESSION_SECRET_PREVIOUS` (rotation) in `global.extraEnv` now fails the render: use the
+`session-secret-previous` key of the API secret, or `externalSecrets.sessionSecretPrevious`. Sign-ins
+in flight at the upgrade (10 minutes at most) fail once; session cookies of the previous release
+keep working for one release.
+
+### Trusted proxies (S47-02)
+The sign-in and webhook rate limit keys on the address the nearest trusted proxy saw, not on the
+client-written `X-Forwarded-For`. `choregos-api.trustedProxyCidrs` defaults to the private ranges.
+If a load balancer, CDN or WAF with public addresses sits in front of the API, add its ranges, or
+every client behind it shares one window. On-prem, narrow the list to your proxies. The limit
+applies per replica.
+
+### CORS origins (S47-03)
+The chart renders `CHOREGOS_CORS_ORIGINS`, and the API refuses cross-origin cookie mutations. A
+`CHOREGOS_CORS_ORIGINS` in `global.extraEnv` fails the render: move it to `choregos-api.corsOrigins`
+(a list). Left empty, it defaults to the console's public URL.
+
+### OIDC discovery and subject binding (S47-04, ADR 0100)
+OIDC discovery is mandatory and its `issuer` must equal `CHOREGOS_OIDC_ISSUER`; the Keycloak
+fallback is gone and a failed discovery answers 503, retried at the next sign-in. A provider
+without discovery needs `choregos-api.oidcEndpoints` (all three endpoints). A console sign-in is
+bound to the provider's `sub`, and an address the provider reports as `email_verified: false` never
+links, renames or creates an account (`choregos-api.oidcRequireEmailVerified`, default true). To
+migrate the instance's provider, set `choregos-api.oidcRelinkVerifiedEmail: true` temporarily, then
+back to `false`. Accounts created before this change are not migrated.
+
+### Roles from the identity provider (S47-05)
+An IdP sign-in now removes the organisation roles it granted (`memberships.source` `idp`) and no longer maps; roles
+granted by administrators stay. Roles that the provider withdrew before the upgrade are not
+revoked retroactively: review them once from the members page.
+
+### Governance the platform does not enforce (S47-11, ADR 0101)
+A policy that sets `approvals.*`, `attempts.default_max` or `review.require_human_for_risk` is
+refused with 422 when saved or when a project is created from a template; a workflow with
+`review.humans` or review agents other than the `by` actor is invalid. Stored documents keep
+loading. The `advanced` template is version 3 and no longer promises a maintainer review. Remove
+the keys from the policies you write.
+
+### Catalogue tools need `read_only` (S47-12)
+A POST or MCP catalogue tool without `read_only: true` is no longer listed or callable. Mark pure
+readers `read_only: true`; move writers to an organisation MCP connector.
+
+### Webhooks and tracker commands (S47-13, S47-14, S47-38, ADR 0102)
+- Unsigned GitHub and Tekton webhooks are refused on any https instance, even with
+  `CHOREGOS_ENV=dev`: set `CHOREGOS_GITHUB_WEBHOOK_SECRET` and `CHOREGOS_GENERIC_WEBHOOK_SECRET`.
+- A `/choregos ...` comment on a tracker ticket no longer reaches the workflow: Choregos replies with
+  a console link and audits it. A webhook for an ended interpreter no longer fails.
+- `/choregos pause|resume|stop` in a signed GitHub delivery applies with the rights of the member
+  whose GitHub numeric user id an organisation administrator linked. Decisions still need the console.
+- Moving a card on a GitHub Projects or Jira board no longer moves the work item: move it from the
+  console. The board follows Choregos, not the reverse.
+
+### Project allowlist of backends (S47-20)
+`agent.allowed_backends` is now enforced at stage start. A stage on a backend the project does not
+list escalates with "the agent backend `x` is not one this project allows". Check existing projects
+before upgrading: a project seeded with `['opencode']` whose workflow names a claude-code actor is
+refused.
+
+### MCP gateway (S46-09, S46-12, ADR 0105)
+Nothing changes unless `global.mcpGateway` is set (an organisation's own gateway, never part of this
+chart). When it is:
+- `global.mcpGateway.internalHosts` is rendered as `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`: the exact
+  host names the platform treats as the gateway. The API refuses them as a run's destination and
+  lets the platform itself call them.
+- `namespace`, `podLabels` (in-cluster) or `cidrs` (external) and `ports` open egress for the `api`
+  and `workers` families, and `hosts` are appended to those families of `egress.ceiling`, when
+  declared. Runners never get them, and the opening is revoked when the organisation moves or
+  deletes the gateway.
+- An organisation whose gateway is in `required` mode can no longer declare or call direct `mcp`
+  connectors. Organisation connectors that are plugin servers (`org_connectors.plugin_server` set)
+  are exempt: they run in the cluster, run by the platform, and are not upstreams. `mcp-gateway`
+  connectors are called through the gateway with the signed identity of the call.
+
+### Changes merged after 0.20.6
+- **Runner confinement** (ADR 0094): the runner confines the agent with Landlock by default.
+  `CHOREGOS_RUNNER_CONFINEMENT` in the chart's `runner.env` is `off`, `best_effort` (default) or
+  `enforce`; `enforce` on a kernel without Landlock ends the run with exit code 90. The run's
+  journal records `agent.confinement`. See [usage](usage.md).
+- **Plugins** (ADR 0093): `global.plugins.sources`, `defaultPlugins` and `offline` are rendered into
+  the ConfigMap `choregos-plugins` (`CHOREGOS_PLUGINS_CONFIG`); an unusable configuration stops the
+  API at start-up. See [Plugins](#plugins).
+- **Plugin servers** (ADR 0096): `global.plugins.servers.enabled`, `namespace` and `registries` give
+  the API a Role in the `choregos-plugins` namespace, under the Kyverno policy
+  `infra/policies/plugin-servers.yaml`. See [Plugin servers](#plugin-servers).
+
 ## Operating it
 
 What the chart does for a multi-node installation, and the knobs behind it:
