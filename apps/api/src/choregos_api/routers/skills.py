@@ -12,16 +12,15 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from choregos_contracts import skill_file_bytes
-from choregos_core.egress import EgressRefusedError
 from fastapi import APIRouter, Path, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..config import Settings
-from ..db.models import Agent, AgentVersion, Connector, Organization, Project, Skill, SkillVersion
+from ..db.models import Organization, Skill, SkillVersion
 from ..deps import Config, Db, Me
-from ..errors import ApiError, conflict, forbidden, not_found, unprocessable, upstream
+from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
     SkillCandidate,
@@ -41,7 +40,6 @@ from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host, user_agent
 from ..services.skill_gate import assess
 from ..services.skill_sources import (
-    DEFAULT_SOURCES,
     SHA,
     SOURCE,
     FoundSkill,
@@ -55,7 +53,14 @@ from ..services.skill_sources import (
     folder,
     get_fetcher,
     parse_repo_url,
-    read_tarball,
+)
+from ..services.skill_views import (
+    require_skill_reader,
+    skill_dto,
+    skill_snapshot,
+    skill_sources,
+    skill_version_dto,
+    source_unavailable,
 )
 from ..services.skills import SkillRefusee, empreinte, publish_version, read_zip, valider
 
@@ -80,74 +85,14 @@ def _gerer(principal: Me, org: str) -> None:
         raise forbidden("publishing a skill needs the org_admin role")
 
 
-def _lire(principal: Me, org: str) -> None:
-    if not principal.can(Permission.PROJECT_READ, org):
-        raise forbidden(f"reading the skills of {org} requires being a member of it")
-
-
-async def _utilisee_par(session: AsyncSession, organisation: Organization, slug: str) -> list[str]:
-    lignes = await session.execute(
-        select(Agent.slug, AgentVersion.version, AgentVersion.spec)
-        .join(Agent, Agent.id == AgentVersion.agent_id)
-        # A personal agent is its owner's business: it does not show among the skill's users (ADR 0061).
-        .where(AgentVersion.org_id == organisation.id, Agent.scope != "personal")
-        .order_by(Agent.slug, AgentVersion.version)
-    )
-    return [
-        f"{agent}@{version}"
-        for agent, version, spec in lignes.tuples()
-        if any(ref.get("slug") == slug for ref in (spec or {}).get("skills", []))
-    ]
-
-
-def _version_dto(version: SkillVersion, *, files: bool = False) -> SkillVersionDto:
-    return SkillVersionDto(
-        version=version.version,
-        digest=version.digest,
-        created_by=version.created_by,
-        created_at=version.created_at,
-        files=version.files if files else None,
-        source=SkillSourceDto.model_validate(version.source) if version.source else None,
-        risk=version.risk,
-        review_status=version.review_status or "approved",
-        findings=[SkillFinding.model_validate(f) for f in version.findings or []],
-        reviewed_by=version.reviewed_by,
-        reviewed_at=version.reviewed_at,
-    )
-
-
-async def _dto(
-    session: AsyncSession, organisation: Organization, skill: Skill, *, avec_versions: bool = False
-) -> SkillDto:
-    versions = list(
-        (
-            await session.execute(
-                select(SkillVersion)
-                .where(SkillVersion.skill_id == skill.id)
-                .order_by(SkillVersion.version.desc())
-            )
-        ).scalars()
-    )
-    return SkillDto(
-        slug=skill.slug,
-        description=skill.description,
-        status=skill.status,
-        latest_version=versions[0].version if versions else 0,
-        used_by=await _utilisee_par(session, organisation, skill.slug),
-        versions=[_version_dto(v) for v in versions] if avec_versions else None,
-        risk=versions[0].risk if versions else None,
-        review_status=(versions[0].review_status if versions else None) or "approved",
-    )
-
-
 @router.get("/orgs/{org}/skills", response_model=list[SkillDto], operation_id="listSkills")
 async def list_skills(org: str, session: Db, principal: Me) -> list[SkillDto]:
-    _lire(principal, org)
+    require_skill_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     skills = (
         await session.execute(select(Skill).where(Skill.org_id == organisation.id).order_by(Skill.slug))
     ).scalars()
-    return [await _dto(session, organisation, skill) for skill in skills]
+    return [await skill_dto(session, organisation, skill) for skill in skills]
 
 
 @router.post(
@@ -169,7 +114,7 @@ async def create_skill(org: str, body: SkillFiles, session: Db, principal: Me) -
     ).first():
         raise conflict(f"skill `{nom}` already exists: publish its next version instead")
     skill, _ = await publish_version(session, principal, organisation, body.files, None)
-    return await _dto(session, organisation, skill, avec_versions=True)
+    return await skill_dto(session, organisation, skill, with_versions=True)
 
 
 @router.post(
@@ -192,14 +137,16 @@ async def import_skill(org: str, request: Request, session: Db, principal: Me) -
     skill, _ = await publish_version(
         session, principal, organisation, fichiers, None, executables=executables
     )
-    return await _dto(session, organisation, skill, avec_versions=True)
+    return await skill_dto(session, organisation, skill, with_versions=True)
 
 
 @router.get("/orgs/{org}/skills/{slug}", response_model=SkillDto, operation_id="getSkill")
 async def get_skill(org: str, slug: Slug, session: Db, principal: Me) -> SkillDto:
-    _lire(principal, org)
+    require_skill_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
-    return await _dto(session, organisation, await _skill(session, organisation, slug), avec_versions=True)
+    return await skill_dto(
+        session, organisation, await _skill(session, organisation, slug), with_versions=True
+    )
 
 
 @router.post(
@@ -215,7 +162,7 @@ async def publish_skill_version(
     organisation = await organisation_by_slug(session, org)
     await _skill(session, organisation, slug)
     _, version = await publish_version(session, principal, organisation, body.files, slug)
-    return _version_dto(version)
+    return skill_version_dto(version)
 
 
 @router.get(
@@ -226,7 +173,7 @@ async def publish_skill_version(
 async def get_skill_version(
     org: str, slug: Slug, version: int, session: Db, principal: Me
 ) -> SkillVersionDto:
-    _lire(principal, org)
+    require_skill_reader(principal, org)
     skill = await _skill(session, await organisation_by_slug(session, org), slug)
     ligne = (
         await session.execute(
@@ -235,32 +182,10 @@ async def get_skill_version(
     ).scalar_one_or_none()
     if ligne is None:
         raise not_found("Skill version", f"{slug}@{version}")
-    return _version_dto(ligne, files=True)
+    return skill_version_dto(ligne, files=True)
 
 
 # ───────────────────────────── from a git repository (S32-05, ADR 0050) ─────────────────────────────
-
-
-async def _skill_sources(session: AsyncSession, organisation: Organization) -> tuple[list[str], bool]:
-    """The organisation's allowlist, and whether it is the default one.
-
-    By default: `github.com/anthropics/skills`, and the GitHub owner of each repository a project
-    of the organisation is connected to — its own repositories."""
-    ecrites = (organisation.settings or {}).get("skill_sources")
-    if isinstance(ecrites, list):
-        return [str(source) for source in ecrites], False
-    sources = list(DEFAULT_SOURCES)
-    configs = await session.execute(
-        select(Connector.config)
-        .join(Project, Project.id == Connector.project_id)
-        .where(Project.org_id == organisation.id, Connector.type.in_(("github", "github-issues")))
-    )
-    for (config,) in configs.tuples():
-        depot = str((config or {}).get("repo") or "")
-        proprietaire = f"github.com/{depot.split('/', 1)[0]}" if "/" in depot else ""
-        if proprietaire and SOURCE.match(proprietaire) and proprietaire not in sources:
-            sources.append(proprietaire)
-    return sources, True
 
 
 def _may_import(principal: Me, org: str, source: GitSource, permis: bool, existantes: list[str]) -> None:
@@ -318,33 +243,13 @@ async def _network_gate(session: AsyncSession, org_id: str, source: GitSource) -
     return await user_agent(session, org_id)
 
 
-def _unavailable(source: GitSource, panne: SourceUnavailable) -> ApiError:
-    """An egress refusal is the organisation's to fix (422, naming the host and who opens it), not
-    an upstream failure (502)."""
-    refusal = panne.__cause__
-    if isinstance(refusal, EgressRefusedError):
-        return unprocessable(str(refusal))
-    return upstream(source.host, str(panne))
-
-
 async def _resolve(fetcher: SourceFetcher, source: GitSource, ref: str, agent: str = "") -> str:
     try:
         return await fetcher.resolve(source, ref, user_agent=agent)
     except SourceRefused as refus:
         raise unprocessable(str(refus)) from refus
     except SourceUnavailable as panne:
-        raise _unavailable(source, panne) from panne
-
-
-async def _snapshot(
-    fetcher: SourceFetcher, source: GitSource, sha: str, path: str, agent: str = ""
-) -> Snapshot:
-    try:
-        return read_tarball(await fetcher.tarball(source, sha, user_agent=agent), path)
-    except SourceRefused as refus:
-        raise unprocessable(str(refus)) from refus
-    except SourceUnavailable as panne:
-        raise _unavailable(source, panne) from panne
+        raise source_unavailable(source, panne) from panne
 
 
 async def _latest_versions(
@@ -365,8 +270,8 @@ def _licence(skill: FoundSkill, snapshot: Snapshot) -> str | None:
 
 @router.get("/orgs/{org}/skill-sources", response_model=SkillSources, operation_id="getSkillSources")
 async def get_skill_sources(org: str, session: Db, principal: Me) -> SkillSources:
-    _lire(principal, org)
-    sources, defaut = await _skill_sources(session, await organisation_by_slug(session, org))
+    require_skill_reader(principal, org)
+    sources, defaut = await skill_sources(session, await organisation_by_slug(session, org))
     return SkillSources(sources=sources, default=defaut)
 
 
@@ -400,7 +305,7 @@ async def preview_skills_from_git(
     the import then names that SHA and the skills a person picked."""
     organisation = await organisation_by_slug(session, org)
     source, base = _source(body.repo_url, body.path)
-    sources, _ = await _skill_sources(session, organisation)
+    sources, _ = await skill_sources(session, organisation)
     permis = allowed(source, sources)
     _may_import(principal, org, source, permis, [])
     agent = await _network_gate(session, organisation.id, source)
@@ -408,7 +313,7 @@ async def preview_skills_from_git(
     fetcher = get_fetcher(settings.fakes)
     async with egress_scope(session, organisation, "api", f"skill-import:{source.key}", settings):
         sha = await _resolve(fetcher, source, body.ref, agent)
-        snapshot = await _snapshot(fetcher, source, sha, base, agent)
+        snapshot = await skill_snapshot(fetcher, source, sha, base, agent)
     existantes = await _latest_versions(
         session, organisation, [skill.name for skill in snapshot.skills if skill.name]
     )
@@ -460,14 +365,14 @@ async def import_skills_from_git(
         )
     organisation = await organisation_by_slug(session, org)
     source, base = _source(body.repo_url, body.path)
-    sources, _ = await _skill_sources(session, organisation)
+    sources, _ = await skill_sources(session, organisation)
     noms = list(dict.fromkeys(body.skills))
     existantes = await _latest_versions(session, organisation, noms)
     _may_import(principal, org, source, allowed(source, sources), sorted(existantes))
     agent = await _network_gate(session, organisation.id, source)
     await _egress_gate(session, principal, organisation, source, body.allow_egress, settings)
     async with egress_scope(session, organisation, "api", f"skill-import:{source.key}", settings):
-        snapshot = await _snapshot(get_fetcher(settings.fakes), source, body.sha, base, agent)
+        snapshot = await skill_snapshot(get_fetcher(settings.fakes), source, body.sha, base, agent)
     choisies: list[FoundSkill] = []
     for nom in noms:
         trouvees = [skill for skill in snapshot.skills if skill.name == nom]
@@ -498,7 +403,7 @@ async def import_skills_from_git(
             repo_licences=snapshot.licences,
         )
         publiees.append(publiee)
-    return [await _dto(session, organisation, skill, avec_versions=True) for skill in publiees]
+    return [await skill_dto(session, organisation, skill, with_versions=True) for skill in publiees]
 
 
 @router.get("/orgs/{org}/skills/{slug}/update", response_model=SkillUpdate, operation_id="checkSkillUpdate")
@@ -541,7 +446,7 @@ async def check_skill_update(
         reponse.digest = derniere.digest
         return reponse
     async with egress_scope(session, organisation, "api", f"skill-import:{source.key}", settings):
-        snapshot = await _snapshot(fetcher, source, sha, chemin, agent)
+        snapshot = await skill_snapshot(fetcher, source, sha, chemin, agent)
     trouvee = next((s for s in snapshot.skills if s.path == chemin), None)
     if trouvee is None:
         reponse.problem = f"there is no skill at `{chemin or '/'}` any more at {sha[:12]}"
@@ -603,4 +508,4 @@ async def approve_skill_version(
         risk=ligne.risk,
         imported_by=ligne.created_by,
     )
-    return _version_dto(ligne, files=True)
+    return skill_version_dto(ligne, files=True)

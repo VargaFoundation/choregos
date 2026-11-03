@@ -33,11 +33,10 @@ from choregos_core import utcnow
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..config import Settings, get_settings
-from ..db.models import ApiToken, Membership, Organization, Project, User
+from ..db.models import ApiToken, Membership, Organization, User
 from ..db.org_aliases import current_slugs, organisation_by_slug_or_alias
 from ..deps import Config, Db, DbPlateforme, Me, resolve_project
 from ..edition import mappeur_de_groupes
@@ -46,6 +45,7 @@ from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
+from ..services.api_tokens import api_token_dto, linked_projects
 from ..tenant_sign_in import OidcProvider, SignInHint, TenantSignIn, email_domain, resolve
 
 router = APIRouter(tags=["session"])
@@ -839,8 +839,8 @@ async def list_my_tokens(session: Db, principal: Me) -> list[ApiTokenDto]:
             )
         ).scalars()
     )
-    projets = await _projets_lies(session, {row.project_id for row in rows if row.project_id})
-    return [_token_dto(row, projets.get(row.project_id or "")) for row in rows]
+    projets = await linked_projects(session, {row.project_id for row in rows if row.project_id})
+    return [api_token_dto(row, projets.get(row.project_id or "")) for row in rows]
 
 
 @router.post(
@@ -900,7 +900,7 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
         scopes=portees,
         project=projet_nom,
     )
-    return ApiTokenCreated(**_token_dto(row, projet_nom).model_dump(), token=raw)
+    return ApiTokenCreated(**api_token_dto(row, projet_nom).model_dump(), token=raw)
 
 
 @router.delete("/me/tokens/{id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="revokeMyToken")
@@ -911,28 +911,3 @@ async def revoke_my_token(id: str, session: Db, principal: Me) -> Response:
     await session.delete(row)
     await record(session, principal, "token.revoke", org_id=None, target_type="api_token", target_id=id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-def _token_dto(row: ApiToken, projet: str | None = None) -> ApiTokenDto:
-    return ApiTokenDto(
-        id=row.id,
-        name=row.name,
-        created_at=row.created_at,
-        expires_at=row.expires_at,
-        last_used_at=row.last_used_at,
-        scopes=list(row.scopes or ["*"]),
-        project=projet,
-        last_client=row.last_client,
-    )
-
-
-async def _projets_lies(session: AsyncSession, ids: set[str]) -> dict[str, str]:
-    """`{id: "org:slug"}` des projets auxquels des jetons sont liés."""
-    if not ids:
-        return {}
-    rows = await session.execute(
-        select(Project.id, Organization.slug, Project.slug)
-        .join(Organization, Project.org_id == Organization.id)
-        .where(Project.id.in_(ids))
-    )
-    return {pid: f"{org}:{slug}" for pid, org, slug in rows}

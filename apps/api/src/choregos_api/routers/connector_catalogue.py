@@ -17,7 +17,7 @@ from ..errors import forbidden
 from ..schemas import ConnectorCatalogueDto
 from ..services.catalogue_rights import CatalogueAction, decide
 from ..services.connector_catalogue import list_entries
-from .org_connectors import _organisation
+from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["connectors"])
 
@@ -39,6 +39,6 @@ async def list_connector_catalogue(
     decision = decide(principal, org, CatalogueAction.SEE)
     if not decision.allowed:
         raise forbidden(decision.reason or "refused")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     entries = await list_entries(session, principal, organisation, q=q or "", family=family, scope=scope)
     return ConnectorCatalogueDto(entries=entries)
