@@ -991,8 +991,9 @@ export type ProcessStep = {
   to: string;
   to_display?: string;
   actor: string;
-  actor_type: "agent" | "human" | "system" | "job" | "release_train";
+  actor_type: "agent" | "human" | "system" | "job" | "decision" | "release_train";
   who: string;
+  /** What the step writes; for a decision step (ADR 0121), each question's `<name>` and `<name>_confidence`, which a `when` compares. */
   outputs?: Array<string>;
   gates?: Array<{
     name?: string;
@@ -1012,9 +1013,9 @@ export type ProcessStep = {
   sentence: string;
   /** The registry agent the actor names, `slug` or `slug@N` (ADR 0033); null for an implicit playbook actor and for any actor that is not an agent. */
   agent?: string | null;
-  /** The role of an agent or job actor. */
+  /** The role of an agent, job or decision actor. */
   role?: string | null;
-  /** The model or profile of an agent actor, as written (`profile:standard`). */
+  /** The model or profile of an agent actor, as written (`profile:standard`); the catalogue entry of a decision actor (`platform/decide`). */
   model?: string | null;
   /** The group of a human actor. */
   group?: string | null;

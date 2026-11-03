@@ -1028,6 +1028,13 @@ probability is a guess. The validator warns `decision.threshold_without_human` w
 step nor leads to a state a human step leaves: the work items the model was least sure of would move
 on unchecked, and nobody's verdict would measure the decision.
 
+On the map a decision step has its own lane — a teal diamond on the diagram, the word "decision" on
+its box — and its card lists the questions with what each may answer, what it sends, its model and
+time limit, and the `<name>` and `<name>_confidence` outputs a `when` compares. The **Actors** panel
+creates one ("A decision") and edits it: the sources are chips checked against the patterns above,
+questions are added and removed with their options or levels, and only the fields that changed are
+written back, as one gesture you can undo (ADR 0112).
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated
