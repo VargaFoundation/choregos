@@ -54,6 +54,44 @@ spec:
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-demo-fakes } } }]
       ports: [{ protocol: TCP, port: {{ .Values.demoFakes.port }} }]
     {{- end }}
+{{- /* ADR 0105: the API and the workers may reach the MCP gateway; runner pods are never selected. */}}
+{{- $gw := .Values.global.mcpGateway | default dict }}
+{{- if or $gw.namespace $gw.cidrs }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-mcp-gateway-egress
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [choregos-api, choregos-orchestrator]
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        {{- if $gw.namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $gw.namespace | quote }}
+          {{- with $gw.podLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+        {{- end }}
+        {{- range $gw.cidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range ($gw.ports | default (list 443)) }}
+        - protocol: TCP
+          port: {{ int . }}
+        {{- end }}
+{{- end }}
 ---
 {{- /* The API pods a runner reports to: the platform namespaces above are named, this one is the release's. */ -}}
 {{- $api := index .Values "choregos-api" | default dict }}
