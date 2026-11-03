@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Normalisation des webhooks GitHub en `InboundEvent`, et commandes `/choregos …`.
+"""Normalization of GitHub webhooks into `InboundEvent`, and the `/choregos ...` commands.
 
-C'est ici que le tracker devient une interface : une carte déplacée, un label posé deviennent
-des événements que l'orchestrateur comprend.
+This is where the tracker becomes an interface: a moved card or a label that was set become
+events the orchestrator understands.
 
-Les commentaires `/choregos …` sont ANALYSÉS en `HUMAN_DECISION`, mais l'orchestrateur ne les
-traduit en rien : aucune décision ne passe par eux (#138). Un login de tracker n'est pas un
-principal Choregos — ni droits, ni authentification récente, ni contrôles de geste. Les brancher
-demandera de résoudre ce login vers un utilisateur et de passer par `greffons.controler`.
+The `/choregos ...` comments are PARSED into `HUMAN_DECISION`, but the orchestrator translates
+them into nothing: no decision goes through them (#138). A tracker login is not a Choregos
+principal: no rights, no recent authentication, no gesture checks. Wiring them up will mean
+resolving that login to a user and going through `extensions.check_gesture`.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def _issue_key(payload: dict[str, Any], issue: dict[str, Any]) -> str:
 
 
 def parse_github_event(event_name: str, delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
-    """Traduit un webhook GitHub en zéro, un ou plusieurs `InboundEvent`."""
+    """Translates a GitHub webhook into zero, one or several `InboundEvent`."""
     handler = _HANDLERS.get(event_name)
     if handler is None:
         return []
@@ -140,7 +140,7 @@ def _issue_comment(delivery_id: str, payload: dict[str, Any]) -> list[InboundEve
 
 
 def _projects_v2_item(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
-    """Déplacement d'une carte : c'est une décision humaine autant qu'un changement d'état."""
+    """A card move: as much a human decision as a state change."""
     changes = payload.get("changes", {}) or {}
     field_value = changes.get("field_value", {}) or {}
     item = payload.get("projects_v2_item", {}) or {}
@@ -235,7 +235,7 @@ BRANCH_KEY_RE = re.compile(r"choregos/(?P<number>\d+)")
 
 
 def _work_item_from_branch(branch: str, payload: dict[str, Any]) -> str | None:
-    """`choregos/123-slug` désigne le ticket #123 du dépôt."""
+    """`choregos/123-slug` designates ticket #123 of the repository."""
     match = BRANCH_KEY_RE.search(branch or "")
     if match is None:
         return None

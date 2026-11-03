@@ -46,11 +46,11 @@ class GitHubScm:
         self.use_merge_queue = use_merge_queue
 
     async def mint_token(self, repo: str, ttl_s: int, scopes: list[str]) -> str:
-        """Jeton de dépôt, TTL court, permissions minimales : ce que le runner reçoit (§2.4)."""
+        """A repository token, short TTL, minimal permissions: what the runner receives (§2.4)."""
         if self.client.auth is None:
             if self.client.static_token:
                 return self.client.static_token
-            raise UpstreamError("github", "aucune App configurée pour minter un jeton")
+            raise UpstreamError("github", "no App configured to mint a token")
         permissions = {k: v for k, v in RUNNER_PERMISSIONS.items() if not scopes or k in scopes}
         token = await self.client.auth.token_for(
             self.client._client, repo, permissions=permissions or RUNNER_PERMISSIONS, ttl_s=ttl_s
@@ -84,38 +84,38 @@ class GitHubScm:
         return True
 
     async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
-        """Écrit des fichiers sur une branche par l'API Contents, un commit par fichier modifié.
+        """Writes files on a branch through the Contents API, one commit per modified file.
 
-        Pour que la PLATEFORME ouvre une PR avec des changements (effet `gitops.pull_request`) : le
-        jeton reste ici, l'agent ne le tient jamais. Idempotent : un fichier déjà identique sur la
-        branche n'est pas réécrit, donc un rejeu ne crée aucun commit. Rend le SHA du dernier commit
-        écrit (vide si rien n'a changé).
+        For the PLATFORM to open a PR with changes (effect `gitops.pull_request`): the token stays
+        here, the agent never holds it. Idempotent: a file already identical on the branch is not
+        rewritten, so a replay creates no commit. Returns the SHA of the last commit written (empty
+        if nothing changed).
         """
-        dernier = ""
-        for chemin, contenu in sorted(files.items()):
-            url = f"/repos/{repo}/contents/{quote(chemin)}"
-            sha_actuel = None
+        last = ""
+        for path, content in sorted(files.items()):
+            url = f"/repos/{repo}/contents/{quote(path)}"
+            current_sha = None
             try:
-                actuel = await self.client.request("GET", url, repo=repo, params={"ref": branch})
+                current = await self.client.request("GET", url, repo=repo, params={"ref": branch})
             except UpstreamError as exc:
                 if exc.status_code != 404:
                     raise
             else:
-                sha_actuel = actuel.get("sha")
-                if actuel.get("encoding") == "base64" and base64.b64decode(actuel.get("content", "")) == (
-                    contenu.encode()
+                current_sha = current.get("sha")
+                if current.get("encoding") == "base64" and base64.b64decode(current.get("content", "")) == (
+                    content.encode()
                 ):
                     continue
-            corps: dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "message": message,
-                "content": base64.b64encode(contenu.encode()).decode(),
+                "content": base64.b64encode(content.encode()).decode(),
                 "branch": branch,
             }
-            if sha_actuel:
-                corps["sha"] = sha_actuel
-            ecrit = await self.client.request("PUT", url, repo=repo, json=corps)
-            dernier = str((ecrit.get("commit") or {}).get("sha") or dernier)
-        return dernier
+            if current_sha:
+                payload["sha"] = current_sha
+            written = await self.client.request("PUT", url, repo=repo, json=payload)
+            last = str((written.get("commit") or {}).get("sha") or last)
+        return last
 
     async def open_pr(self, repo: str, head: str, base: str, title: str, body: str, draft: bool) -> PrRef:
         owner = repo.split("/", 1)[0]
@@ -150,7 +150,7 @@ class GitHubScm:
             )
 
     async def comment_pr(self, ref: PrRef, body: str) -> str:
-        """Commente une PR. C'est par là que passent les ordres Atlantis (`atlantis apply`)."""
+        """Comments on a PR. This is how the Atlantis orders (`atlantis apply`) go through."""
         comment = await self.client.request(
             "POST",
             f"/repos/{ref.repo}/issues/{ref.number}/comments",
@@ -218,7 +218,7 @@ class GitHubScm:
         )
 
     async def enqueue_merge(self, ref: PrRef) -> None:
-        """Merge queue : `enablePullRequestAutoMerge`, sinon merge direct si la politique l'autorise."""
+        """Merge queue: `enablePullRequestAutoMerge`, otherwise a direct merge if the policy allows it."""
         pr = await self.client.request("GET", f"/repos/{ref.repo}/pulls/{ref.number}", repo=ref.repo)
         if self.use_merge_queue:
             await self.client.graphql(
@@ -252,19 +252,19 @@ class GitHubScm:
         )
 
     async def list_files(self, repo: str, ref: str, directory: str) -> list[str]:
-        """Les fichiers d'un dossier sur une branche (API Contents, un seul niveau). Un dossier absent
-        n'a pas de fichiers ; une autre erreur remonte : une panne n'est pas une absence."""
+        """The files of a folder on a branch (Contents API, a single level). An absent folder has no
+        files; any other error is raised: a failure is not an absence."""
         try:
-            entrees = await self.client.request(
+            entries = await self.client.request(
                 "GET", f"/repos/{repo}/contents/{quote(directory.strip('/'))}", repo=repo, params={"ref": ref}
             )
         except UpstreamError as exc:
             if exc.status_code == 404:
                 return []
             raise
-        if not isinstance(entrees, list):  # un fichier, pas un dossier
+        if not isinstance(entries, list):  # a file, not a folder
             return []
-        return sorted(str(e["path"]) for e in entrees if e.get("type") == "file")
+        return sorted(str(e["path"]) for e in entries if e.get("type") == "file")
 
     async def create_check_run(
         self,
@@ -294,7 +294,7 @@ class GitHubScm:
                             "start_line": 1,
                             "end_line": 1,
                             "annotation_level": "failure",
-                            "message": "fichier hors du périmètre autorisé",
+                            "message": "file outside the authorised perimeter",
                         }
                         for path in (annotations or [])[:50]
                     ],

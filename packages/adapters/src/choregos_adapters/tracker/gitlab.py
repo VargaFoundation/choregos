@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TrackerAdapter GitLab : issues, labels scopés, notes, champs dans la description.
+"""The GitLab TrackerAdapter: issues, scoped labels, notes, fields in the description.
 
-GitLab ressemble davantage à GitHub qu'à Jira : des issues numérotées, des labels, des
-notes. Deux différences comptent : les labels **scopés** (`choregos::implement`) sont
-exclusifs entre eux côté GitLab, ce qui reflète exactement un état de workflow ; et il n'y
-a pas de champs de board, donc le coût, la taille et le risque vivent dans un bloc de
-métadonnées en fin de description, réécrit à chaque fois.
+GitLab looks more like GitHub than Jira: numbered issues, labels, notes. Two differences
+matter: the **scoped** labels (`choregos::implement`) are mutually exclusive on the GitLab side,
+which reflects a workflow state exactly; and there are no board fields, so the cost, the size
+and the risk live in a metadata block at the end of the description, rewritten every time.
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItem
 
 from ..errors import ConfigurationError
 from ..http import RestClient
-from .champs import RISQUE, TAILLE, nom_actuel
+from .fields import RISK, SIZE, current_name
 from .gitlab_events import parse_gitlab_event
 from .start_rules import label_searches
 
@@ -32,7 +31,7 @@ METADATA_RE = re.compile(re.escape(METADATA_START) + r"(?P<json>.*?)" + re.escap
 
 
 class GitLabTracker:
-    """GitLab Issues (API v4). `project` est le chemin complet (`groupe/sous-groupe/projet`)."""
+    """GitLab Issues (API v4). `project` is the full path (`group/subgroup/project`)."""
 
     owns_items = True
 
@@ -45,7 +44,7 @@ class GitLabTracker:
         label_prefix: str = "choregos::",
     ) -> None:
         if not project:
-            raise ConfigurationError("`project` est obligatoire pour le tracker GitLab")
+            raise ConfigurationError("`project` is required for the GitLab tracker")
         self.client = client
         self.project = project
         self.encoded = quote(project, safe="")
@@ -73,8 +72,8 @@ class GitLabTracker:
             url=issue.get("web_url"),
             state=issue.get("state"),
             labels=list(issue.get("labels") or []),
-            size=_as_enum(Size, metadata.get(TAILLE), upper=True),
-            risk=_as_enum(Risk, metadata.get(RISQUE)),
+            size=_as_enum(Size, metadata.get(SIZE), upper=True),
+            risk=_as_enum(Risk, metadata.get(RISK)),
             assignees=[a.get("username", "") for a in issue.get("assignees", [])],
             author=(issue.get("author") or {}).get("username"),
             comments=[
@@ -103,7 +102,7 @@ class GitLabTracker:
             found.update({self._key(int(issue["iid"])): None for issue in issues})
         return list(found)
 
-    # ───────────────────────── écriture ─────────────────────────
+    # ───────────────────────── writing ─────────────────────────
 
     async def create_item(self, data: NewItem) -> str:
         issue = await self.client.request(
@@ -118,7 +117,7 @@ class GitLabTracker:
         return self._key(int(issue["iid"]))
 
     async def set_state(self, key: str, state_mapping: TrackerStateMapping) -> None:
-        """Un label scopé `choregos::<état>` : GitLab garantit lui-même l'exclusivité."""
+        """A scoped label `choregos::<state>`: GitLab itself guarantees the exclusivity."""
         iid = self._iid(key)
         payload: dict[str, Any] = {}
         if state_mapping.label:
@@ -142,7 +141,7 @@ class GitLabTracker:
     async def upsert_status_comment(
         self, key: str, markdown: str, marker: str = STATUS_COMMENT_MARKER
     ) -> None:
-        """Une unique note de suivi, réécrite à chaque étape (§4.3)."""
+        """A single status note, rewritten at every stage (§4.3)."""
         iid = self._iid(key)
         body = markdown if marker in markdown else f"{marker}\n{markdown}"
         notes = await self.client.paginate(f"/api/v4/projects/{self.encoded}/issues/{iid}/notes")
@@ -166,7 +165,7 @@ class GitLabTracker:
         return str(note.get("id", ""))
 
     async def link(self, a: str, b: str, relation: Literal["origin", "duplicate", "blocks"]) -> None:
-        """GitLab a des liens d'issues typés (`relates_to`, `blocks`, `is_blocked_by`)."""
+        """GitLab has typed issue links (`relates_to`, `blocks`, `is_blocked_by`)."""
         link_type = {"origin": "relates_to", "duplicate": "relates_to", "blocks": "blocks"}[relation]
         await self.client.request(
             "POST",
@@ -179,11 +178,11 @@ class GitLabTracker:
         )
 
     async def set_fields(self, key: str, fields: dict[str, Any]) -> None:
-        """Pas de champs de board côté GitLab : un bloc de métadonnées en fin de description."""
+        """No board fields on the GitLab side: a metadata block at the end of the description."""
         iid = self._iid(key)
         issue = await self.client.request("GET", f"/api/v4/projects/{self.encoded}/issues/{iid}")
         description = issue.get("description") or ""
-        merged = {**_read_metadata(description), **{nom_actuel(k): str(v) for k, v in fields.items()}}
+        merged = {**_read_metadata(description), **{current_name(k): str(v) for k, v in fields.items()}}
         body = _strip_metadata(description).rstrip()
         payload = json.dumps(merged, ensure_ascii=False, sort_keys=True)
         await self.client.request(
@@ -200,7 +199,7 @@ class GitLabTracker:
         return parse_gitlab_event(event, delivery, json.loads(body or b"{}"))
 
     def verify_webhook(self, headers: Mapping[str, str], body: bytes) -> bool:
-        """GitLab envoie un jeton partagé, pas une signature HMAC."""
+        """GitLab sends a shared token, not an HMAC signature."""
         import hmac
 
         token = headers.get("X-Gitlab-Token", headers.get("x-gitlab-token", ""))
@@ -217,10 +216,10 @@ def _read_metadata(description: str) -> dict[str, str]:
         return {}
     if not isinstance(parsed, dict):
         return {}
-    brut = {str(k): str(v) for k, v in parsed.items()}
-    # Un bloc écrit avant S22-21 porte `Taille`, `Risque`, `Coût (€)` : on le lit sous le nom
-    # d'aujourd'hui, et la prochaine écriture le réécrit ainsi (le nouveau nom l'emporte s'il y est).
-    return {nom_actuel(k): v for k, v in brut.items() if nom_actuel(k) == k or nom_actuel(k) not in brut}
+    raw = {str(k): str(v) for k, v in parsed.items()}
+    # A block written before S22-21 carries the former French names of the fields: it is read under
+    # today's name, and the next write rewrites it that way (the new name wins when both are there).
+    return {current_name(k): v for k, v in raw.items() if current_name(k) == k or current_name(k) not in raw}
 
 
 def _strip_metadata(description: str) -> str:

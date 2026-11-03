@@ -1,4 +1,4 @@
-"""Le SCM GitHub : branches, PR, checks, merge queue — ce qui part sur le fil."""
+"""The GitHub SCM: branches, PRs, checks, merge queue, and what goes out on the wire."""
 
 from __future__ import annotations
 
@@ -7,76 +7,76 @@ from choregos_adapters.errors import UpstreamError
 from choregos_adapters.github.client import GitHubClient
 from choregos_adapters.scm.github import GitHubScm
 
-from ._transport import Fil
+from ._transport import Wire
 
 API = "https://api.github.test"
 REPO = "varga/billing"
 
 
-def scm(fil: Fil, **kwargs: object) -> GitHubScm:
-    client = GitHubClient(token="t", base_url=API, graphql_url=f"{API}/graphql", client=fil.client())
+def scm(wire: Wire, **kwargs: object) -> GitHubScm:
+    client = GitHubClient(token="t", base_url=API, graphql_url=f"{API}/graphql", client=wire.client())
     return GitHubScm(client, default_repo=REPO, **kwargs)  # type: ignore[arg-type]
 
 
-async def test_une_branche_existante_n_est_pas_recreee() -> None:
-    fil = Fil(
+async def test_an_existing_branch_is_not_recreated() -> None:
+    wire = Wire(
         {("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (200, {"ref": "refs/heads/choregos/12-x"})}
     )
-    await scm(fil).ensure_branch(REPO, "choregos/12-x", "main")
-    assert fil.envoyees("POST") == []
+    await scm(wire).ensure_branch(REPO, "choregos/12-x", "main")
+    assert wire.sent("POST") == []
 
 
-async def test_une_branche_absente_part_du_sha_de_la_base() -> None:
-    fil = Fil(
+async def test_a_missing_branch_starts_from_the_base_sha() -> None:
+    wire = Wire(
         {
             ("GET", f"/repos/{REPO}/git/ref/heads/main"): (200, {"object": {"sha": "abc123"}}),
             ("POST", f"/repos/{REPO}/git/refs"): (201, {}),
         }
     )
-    await scm(fil).ensure_branch(REPO, "choregos/12-x", "main")
-    assert fil.corps(-1) == {"ref": "refs/heads/choregos/12-x", "sha": "abc123"}
+    await scm(wire).ensure_branch(REPO, "choregos/12-x", "main")
+    assert wire.body(-1) == {"ref": "refs/heads/choregos/12-x", "sha": "abc123"}
 
 
-async def test_une_panne_sur_la_branche_n_est_pas_prise_pour_une_absence() -> None:
-    fil = Fil({("GET", f"/repos/{REPO}/git/ref/heads/x"): (401, {"message": "Bad credentials"})})
+async def test_a_failure_on_the_branch_is_not_taken_for_an_absence() -> None:
+    wire = Wire({("GET", f"/repos/{REPO}/git/ref/heads/x"): (401, {"message": "Bad credentials"})})
     with pytest.raises(UpstreamError):
-        await scm(fil).ensure_branch(REPO, "x", "main")
-    assert fil.envoyees("POST") == [], "on ne crée pas une branche sur un 401"
+        await scm(wire).ensure_branch(REPO, "x", "main")
+    assert wire.sent("POST") == [], "no branch is created on a 401"
 
 
 async def test_branch_exists_reads_the_ref() -> None:
-    present = Fil({("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (200, {"ref": "x"})})
+    present = Wire({("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (200, {"ref": "x"})})
     assert await scm(present).branch_exists(REPO, "choregos/12-x") is True
-    absent = Fil({("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (404, {"message": "Not Found"})})
+    absent = Wire({("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (404, {"message": "Not Found"})})
     assert await scm(absent).branch_exists(REPO, "choregos/12-x") is False
 
 
 async def test_an_outage_reading_the_branch_is_not_an_absence() -> None:
     """S22-46: only a 404 means "no branch"; a 403 or a 5xx is raised, and retried upstream."""
     for status in (403, 502):
-        fil = Fil({("GET", f"/repos/{REPO}/git/ref/heads/x"): (status, {"message": "nope"})})
+        wire = Wire({("GET", f"/repos/{REPO}/git/ref/heads/x"): (status, {"message": "nope"})})
         with pytest.raises(UpstreamError):
-            await scm(fil).branch_exists(REPO, "x")
+            await scm(wire).branch_exists(REPO, "x")
 
 
-async def test_ouvrir_une_pr_reutilise_celle_qui_existe() -> None:
-    fil = Fil({("GET", f"/repos/{REPO}/pulls"): (200, [{"number": 7, "html_url": "https://gh/pr/7"}])})
-    ref = await scm(fil).open_pr(REPO, "choregos/12-x", "main", "titre", "corps", draft=True)
+async def test_opening_a_pr_reuses_the_existing_one() -> None:
+    wire = Wire({("GET", f"/repos/{REPO}/pulls"): (200, [{"number": 7, "html_url": "https://gh/pr/7"}])})
+    ref = await scm(wire).open_pr(REPO, "choregos/12-x", "main", "titre", "request_body", draft=True)
     assert ref.number == 7 and ref.url == "https://gh/pr/7"
-    assert fil.requetes[0].url.params["head"] == "varga:choregos/12-x"
-    assert fil.envoyees("POST") == []
+    assert wire.requests[0].url.params["head"] == "varga:choregos/12-x"
+    assert wire.sent("POST") == []
 
 
-async def test_ouvrir_une_pr_en_brouillon_quand_il_n_y_en_a_pas() -> None:
-    fil = Fil(
+async def test_opening_a_draft_pr_when_there_is_none() -> None:
+    wire = Wire(
         {("GET", f"/repos/{REPO}/pulls"): (200, []), ("POST", f"/repos/{REPO}/pulls"): (201, {"number": 8})}
     )
-    ref = await scm(fil).open_pr(REPO, "h", "main", "titre", "corps", draft=True)
-    assert ref.number == 8 and fil.corps(-1)["draft"] is True
+    ref = await scm(wire).open_pr(REPO, "h", "main", "titre", "request_body", draft=True)
+    assert ref.number == 8 and wire.body(-1)["draft"] is True
 
 
-async def test_sortir_du_brouillon_passe_par_graphql() -> None:
-    fil = Fil(
+async def test_leaving_draft_goes_through_graphql() -> None:
+    wire = Wire(
         {
             ("PATCH", f"/repos/{REPO}/pulls/8"): (200, {}),
             ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
@@ -85,14 +85,14 @@ async def test_sortir_du_brouillon_passe_par_graphql() -> None:
     )
     from choregos_core.domain import PrRef
 
-    await scm(fil).update_pr(PrRef(repo=REPO, number=8), body="nouveau corps", draft=False)
-    assert fil.envoyees() == [
+    await scm(wire).update_pr(PrRef(repo=REPO, number=8), body="nouveau request_body", draft=False)
+    assert wire.sent() == [
         ("PATCH", f"/repos/{REPO}/pulls/8"),
         ("GET", f"/repos/{REPO}/pulls/8"),
         ("POST", "/graphql"),
     ]
-    assert fil.corps(-1)["variables"] == {"id": "PR_x"}
-    assert "markPullRequestReadyForReview" in fil.corps(-1)["query"]
+    assert wire.body(-1)["variables"] == {"id": "PR_x"}
+    assert "markPullRequestReadyForReview" in wire.body(-1)["query"]
 
 
 async def test_a_draft_left_as_it_is_is_not_marked_ready() -> None:
@@ -100,15 +100,15 @@ async def test_a_draft_left_as_it_is_is_not_marked_ready() -> None:
     `markPullRequestReadyForReview`, so the draft stays one."""
     from choregos_core.domain import PrRef
 
-    fil = Fil({("PATCH", f"/repos/{REPO}/pulls/8"): (200, {})})
-    await scm(fil).update_pr(PrRef(repo=REPO, number=8), body="new body", draft=None)
-    assert fil.envoyees() == [("PATCH", f"/repos/{REPO}/pulls/8")]
+    wire = Wire({("PATCH", f"/repos/{REPO}/pulls/8"): (200, {})})
+    await scm(wire).update_pr(PrRef(repo=REPO, number=8), body="new body", draft=None)
+    assert wire.sent() == [("PATCH", f"/repos/{REPO}/pulls/8")]
 
 
-async def test_l_etat_d_une_pr_assemble_checks_relectures_et_fichiers() -> None:
+async def test_a_prs_state_gathers_checks_reviews_and_files() -> None:
     from choregos_core.domain import PrRef
 
-    fil = Fil(
+    wire = Wire(
         {
             ("GET", f"/repos/{REPO}/pulls/8"): (
                 200,
@@ -145,51 +145,57 @@ async def test_l_etat_d_une_pr_assemble_checks_relectures_et_fichiers() -> None:
             ),
         }
     )
-    etat = await scm(fil).get_pr(PrRef(repo=REPO, number=8))
-    assert etat.head_sha == "s1" and etat.body == "" and etat.labels == ["size:M"]
-    assert [c.conclusion for c in etat.checks] == ["success"]
-    assert [(r.reviewer, r.state) for r in etat.reviews] == [("marie", "approved")], (
-        "PENDING n'est pas une relecture"
+    pr_state = await scm(wire).get_pr(PrRef(repo=REPO, number=8))
+    assert pr_state.head_sha == "s1" and pr_state.body == "" and pr_state.labels == ["size:M"]
+    assert [c.conclusion for c in pr_state.checks] == ["success"]
+    assert [(r.reviewer, r.state) for r in pr_state.reviews] == [("marie", "approved")], (
+        "PENDING is not a review"
     )
-    assert etat.files == ["src/a.py", "src/b.py"]
+    assert pr_state.files == ["src/a.py", "src/b.py"]
 
 
-async def test_la_merge_queue_ou_le_merge_direct_selon_la_configuration() -> None:
+async def test_the_merge_queue_or_the_direct_merge_depending_on_the_configuration() -> None:
     from choregos_core.domain import PrRef
 
-    fil = Fil(
+    wire = Wire(
         {
             ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
             ("POST", "/graphql"): (200, {"data": {}}),
         }
     )
-    await scm(fil).enqueue_merge(PrRef(repo=REPO, number=8))
-    assert fil.corps(-1)["variables"] == {"pullRequestId": "PR_x", "method": "SQUASH"}
+    await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8))
+    assert wire.body(-1)["variables"] == {"pullRequestId": "PR_x", "method": "SQUASH"}
 
-    direct = Fil(
+    direct = Wire(
         {
             ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
             ("PUT", f"/repos/{REPO}/pulls/8/merge"): (200, {}),
         }
     )
     await scm(direct, use_merge_queue=False, merge_method="REBASE").enqueue_merge(PrRef(repo=REPO, number=8))
-    assert direct.corps(-1) == {"merge_method": "rebase"}
+    assert direct.body(-1) == {"merge_method": "rebase"}
 
 
-async def test_le_check_run_de_perimetre_annote_au_plus_cinquante_fichiers() -> None:
-    fil = Fil({("POST", f"/repos/{REPO}/check-runs"): (201, {})})
-    hors = [f"src/{i}.py" for i in range(80)]
-    await scm(fil).create_check_run(
-        REPO, "s1", "choregos/scope", "failure", "80 fichiers hors périmètre", hors
+async def test_the_scope_check_run_annotates_at_most_fifty_files() -> None:
+    wire = Wire({("POST", f"/repos/{REPO}/check-runs"): (201, {})})
+    out_of_scope = [f"src/{i}.py" for i in range(80)]
+    await scm(wire).create_check_run(
+        REPO, "s1", "choregos/scope", "failure", "80 files out of scope", out_of_scope
     )
-    corps = fil.corps(-1)
-    assert corps["head_sha"] == "s1" and corps["conclusion"] == "failure" and corps["status"] == "completed"
-    assert len(corps["output"]["annotations"]) == 50, "GitHub refuse plus de 50 annotations par appel"
-    assert corps["output"]["annotations"][0]["annotation_level"] == "failure"
+    request_body = wire.body(-1)
+    assert (
+        request_body["head_sha"] == "s1"
+        and request_body["conclusion"] == "failure"
+        and request_body["status"] == "completed"
+    )
+    assert len(request_body["output"]["annotations"]) == 50, (
+        "GitHub refuses more than 50 annotations per call"
+    )
+    assert request_body["output"]["annotations"][0]["annotation_level"] == "failure"
 
 
-async def test_la_comparaison_traduit_les_statuts_de_fichiers() -> None:
-    fil = Fil(
+async def test_the_comparison_translates_the_file_statuses() -> None:
+    wire = Wire(
         {
             ("GET", f"/repos/{REPO}/compare/main...h"): (
                 200,
@@ -202,14 +208,14 @@ async def test_la_comparaison_traduit_les_statuts_de_fichiers() -> None:
             )
         }
     )
-    diff = await scm(fil).compare(REPO, "main", "h")
+    diff = await scm(wire).compare(REPO, "main", "h")
     assert [(f.path, f.status) for f in diff.files] == [("a", "added"), ("b", "modified")]
     assert diff.files[1].patch == "@@"
 
 
-async def test_lister_un_dossier_de_la_branche_par_defaut() -> None:
-    """`adr_number_free` (#287) lit les ADR déjà fusionnés : les fichiers, pas les sous-dossiers."""
-    fil = Fil(
+async def test_listing_a_folder_of_the_default_branch() -> None:
+    """`adr_number_free` (#287) reads the ADRs already merged: the files, not the subfolders."""
+    wire = Wire(
         {
             ("GET", f"/repos/{REPO}/contents/docs/adr"): (
                 200,
@@ -221,86 +227,86 @@ async def test_lister_un_dossier_de_la_branche_par_defaut() -> None:
             )
         }
     )
-    assert await scm(fil).list_files(REPO, "main", "docs/adr") == [
+    assert await scm(wire).list_files(REPO, "main", "docs/adr") == [
         "docs/adr/0001-queue.md",
         "docs/adr/0002-cache.md",
     ]
-    assert fil.requetes[0].url.params["ref"] == "main"
+    assert wire.requests[0].url.params["ref"] == "main"
 
 
-async def test_un_dossier_absent_est_vide_mais_une_panne_remonte() -> None:
-    assert await scm(Fil()).list_files(REPO, "main", "docs/adr") == [], "pas encore d'ADR : 404"
-    panne = Fil({("GET", f"/repos/{REPO}/contents/docs/adr"): (401, {"message": "Bad credentials"})})
+async def test_an_absent_folder_is_empty_but_a_failure_comes_up() -> None:
+    assert await scm(Wire()).list_files(REPO, "main", "docs/adr") == [], "no ADR yet: 404"
+    panne = Wire({("GET", f"/repos/{REPO}/contents/docs/adr"): (401, {"message": "Bad credentials"})})
     with pytest.raises(UpstreamError):
         await scm(panne).list_files(REPO, "main", "docs/adr")
 
 
-async def test_les_relecteurs_se_repartissent_entre_personnes_et_equipes() -> None:
+async def test_reviewers_are_split_between_people_and_teams() -> None:
     from choregos_core.domain import PrRef
 
-    fil = Fil({("POST", f"/repos/{REPO}/pulls/8/requested_reviewers"): (201, {})})
-    await scm(fil).request_review(PrRef(repo=REPO, number=8), ["marie", "varga/maintainers"])
-    assert fil.corps(-1) == {"reviewers": ["marie"], "team_reviewers": ["maintainers"]}
-    await scm(fil).request_review(PrRef(repo=REPO, number=8), [])
-    assert len(fil.requetes) == 1, "sans relecteur, pas d'appel"
+    wire = Wire({("POST", f"/repos/{REPO}/pulls/8/requested_reviewers"): (201, {})})
+    await scm(wire).request_review(PrRef(repo=REPO, number=8), ["marie", "varga/maintainers"])
+    assert wire.body(-1) == {"reviewers": ["marie"], "team_reviewers": ["maintainers"]}
+    await scm(wire).request_review(PrRef(repo=REPO, number=8), [])
+    assert len(wire.requests) == 1, "without a reviewer, no call"
 
 
-async def test_le_jeton_du_runner_est_le_jeton_statique_ou_un_jeton_d_app_reduit() -> None:
-    fil = Fil()
-    assert await scm(fil).mint_token(REPO, 900, []) == "t"
-    sans = GitHubScm(GitHubClient(base_url=API, client=fil.client()))
-    with pytest.raises(UpstreamError, match="aucune App"):
-        await sans.mint_token(REPO, 900, [])
+async def test_the_runners_token_is_the_static_token_or_a_narrowed_app_token() -> None:
+    wire = Wire()
+    assert await scm(wire).mint_token(REPO, 900, []) == "t"
+    without_app = GitHubScm(GitHubClient(base_url=API, client=wire.client()))
+    with pytest.raises(UpstreamError, match="no App"):
+        await without_app.mint_token(REPO, 900, [])
 
 
-# ───────────────────────── écrire des fichiers (effet gitops.pull_request) ─────────────────────────
+# ───────────────────────── writing files (effect gitops.pull_request) ─────────────────────────
 
 
-def _b64(texte: str) -> str:
+def _b64(text: str) -> str:
     import base64
 
-    return base64.b64encode(texte.encode()).decode()
+    return base64.b64encode(text.encode()).decode()
 
 
-async def test_ecrire_des_fichiers_cree_met_a_jour_et_saute_l_identique() -> None:
-    contenu = f"/repos/{REPO}/contents/platform"
-    fil = Fil(
+async def test_writing_files_creates_updates_and_skips_the_identical_one() -> None:
+    contents = f"/repos/{REPO}/contents/platform"
+    wire = Wire(
         {
-            ("GET", f"{contenu}/a.yaml"): (404, {"message": "Not Found"}),
-            ("PUT", f"{contenu}/a.yaml"): (201, {"commit": {"sha": "c1"}}),
-            ("GET", f"{contenu}/b.yaml"): (
+            ("GET", f"{contents}/a.yaml"): (404, {"message": "Not Found"}),
+            ("PUT", f"{contents}/a.yaml"): (201, {"commit": {"sha": "c1"}}),
+            ("GET", f"{contents}/b.yaml"): (
                 200,
-                {"sha": "s-b", "encoding": "base64", "content": _b64("ancien\n")},
+                {"sha": "s-b", "encoding": "base64", "content": _b64("old\n")},
             ),
-            ("PUT", f"{contenu}/b.yaml"): (200, {"commit": {"sha": "c2"}}),
-            ("GET", f"{contenu}/c.yaml"): (
+            ("PUT", f"{contents}/b.yaml"): (200, {"commit": {"sha": "c2"}}),
+            ("GET", f"{contents}/c.yaml"): (
                 200,
-                {"sha": "s-c", "encoding": "base64", "content": _b64("pareil\n")},
+                {"sha": "s-c", "encoding": "base64", "content": _b64("same\n")},
             ),
         }
     )
-    sha = await scm(fil).commit_files(
+    sha = await scm(wire).commit_files(
         REPO,
         "choregos/p-1",
-        {"platform/a.yaml": "nouveau\n", "platform/b.yaml": "neuf\n", "platform/c.yaml": "pareil\n"},
-        "fix: redémarrer les nœuds",
+        {"platform/a.yaml": "new\n", "platform/b.yaml": "fresh\n", "platform/c.yaml": "same\n"},
+        "fix: restart the nodes",
     )
     assert sha == "c2"
-    assert fil.envoyees("PUT") == [("PUT", f"{contenu}/a.yaml"), ("PUT", f"{contenu}/b.yaml")]
-    assert all(r.url.params["ref"] == "choregos/p-1" for r in fil.requetes if r.method == "GET")
+    assert wire.sent("PUT") == [("PUT", f"{contents}/a.yaml"), ("PUT", f"{contents}/b.yaml")]
+    assert all(r.url.params["ref"] == "choregos/p-1" for r in wire.requests if r.method == "GET")
     index = next(
-        i for i, r in enumerate(fil.requetes) if (r.method, r.url.path) == ("PUT", f"{contenu}/b.yaml")
+        i for i, r in enumerate(wire.requests) if (r.method, r.url.path) == ("PUT", f"{contents}/b.yaml")
     )
-    assert fil.corps(index) == {
-        "message": "fix: redémarrer les nœuds",
-        "content": _b64("neuf\n"),
+    assert wire.body(index) == {
+        "message": "fix: restart the nodes",
+        "content": _b64("fresh\n"),
         "branch": "choregos/p-1",
         "sha": "s-b",
     }
 
 
-async def test_une_panne_en_lecture_n_ecrit_rien() -> None:
-    fil = Fil({("GET", f"/repos/{REPO}/contents/x.yaml"): (401, {"message": "Bad credentials"})})
+async def test_a_failure_on_read_writes_nothing() -> None:
+    wire = Wire({("GET", f"/repos/{REPO}/contents/x.yaml"): (401, {"message": "Bad credentials"})})
     with pytest.raises(UpstreamError):
-        await scm(fil).commit_files(REPO, "b", {"x.yaml": "y"}, "m")
-    assert fil.envoyees("PUT") == []
+        await scm(wire).commit_files(REPO, "b", {"x.yaml": "y"}, "m")
+    assert wire.sent("PUT") == []

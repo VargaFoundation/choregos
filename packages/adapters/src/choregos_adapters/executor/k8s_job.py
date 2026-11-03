@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Executor Job Kubernetes : le repli quand Tekton n'est pas disponible (§2.3).
+"""The Kubernetes Job executor: the fallback when Tekton is not available (§2.3).
 
-Même contrat que Tekton : un Job par run, un Secret pour le jeton (rattaché au Job, donc
-ramassé avec lui), un nettoyage automatique par `ttlSecondsAfterFinished`.
+The same contract as Tekton: one Job per run, one Secret for the token (attached to the Job, so
+collected with it), an automatic cleanup through `ttlSecondsAfterFinished`.
 
-DENSITÉ — un Job par étape, sans plafond, met le cluster à la merci d'une pointe : dix
-tickets qui démarrent ensemble font dix pods qui tirent la même image en même temps, et un
-quota de namespace qui refuse le onzième sans que rien ne l'explique. La réponse ici est
-celle de Kubernetes lui-même : `spec.suspend`. Un Job créé **suspendu** n'a pas de pod ; il
-attend son tour, visible, ordonné, sans rien consommer. L'admission se fait au fil des
-relevés d'état — l'orchestrateur interroge déjà chaque run — et dans l'ordre d'arrivée.
+DENSITY: one Job per step, with no ceiling, leaves the cluster at the mercy of a spike: ten
+tickets that start together make ten pods pulling the same image at the same time, and a
+namespace quota that refuses the eleventh with nothing to explain it. The answer here is
+Kubernetes' own: `spec.suspend`. A Job created **suspended** has no pod; it waits its turn,
+visible, ordered, consuming nothing. Admission happens as the state polls come in (the
+orchestrator already polls every run), and in arrival order.
 
-Ce n'est pas un ordonnanceur : le plafond est SOUPLE. Deux runs peuvent s'admettre dans la
-même fenêtre et dépasser d'un. C'est le prix à payer pour n'ajouter aucun composant, et il
-est sans commune mesure avec le problème qu'on évite.
+This is not a scheduler: the ceiling is SOFT. Two runs can be admitted in the same window and
+exceed it by one. That is the price to pay for adding no component, and it is out of all
+proportion with the problem it avoids.
 """
 
 from __future__ import annotations
@@ -55,9 +55,9 @@ RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernete
 
 class KubernetesJobExecutor:
     kind = ExecutorKind.K8S_JOB
-    # `queue` seulement : Kubernetes ne sait pas suspendre un Job DÉJÀ démarré sans
-    # détruire son pod, donc ni `suspend` ni `snapshot` ici. Le dire plutôt que de le
-    # laisser supposer, c'est ce qui permettra d'en brancher un autre sans rien casser.
+    # `queue` only: Kubernetes cannot suspend a Job that has ALREADY started without destroying
+    # its pod, so neither `suspend` nor `snapshot` here. Saying so rather than letting it be
+    # assumed is what will allow plugging in another one without breaking anything.
     capabilities = frozenset({"queue", "renew"})
 
     def __init__(
@@ -75,17 +75,16 @@ class KubernetesJobExecutor:
         self.client = client or KubernetesClient()
         self.service_account = service_account
         self.ttl_seconds = ttl_seconds
-        # Réglables : un namespace sous LimitRange refuse le pod entier au-delà de son
-        # plafond par conteneur (4 Gi chez un locataire Diametral), sans dire pourquoi au Job.
+        # Adjustable: a namespace under a LimitRange refuses the whole pod beyond its per-container
+        # ceiling (4 Gi at a Diametral tenant), without telling the Job why.
         self.cpu_limit = cpu_limit
         self.memory_limit = memory_limit
-        # Secrets injectés EN ENTIER dans le pod d'agent (`envFrom`) : identifiants git,
-        # jeton d'un backend. Par référence, jamais par valeur — une valeur recopiée ici
-        # se retrouverait dans la spec du Job, lisible par qui peut lire un pod.
+        # Secrets injected WHOLE into the agent pod (`envFrom`): git credentials, a backend's
+        # token. By reference, never by value: a value copied here would end up in the Job's
+        # spec, readable by whoever can read a pod.
         self.env_from_secrets = list(env_from_secrets or [])
-        # Nombre de runs qui peuvent tourner EN MÊME TEMPS dans un namespace. 0 = sans
-        # plafond, le comportement d'avant : un déploiement qui ne dit rien ne change pas
-        # de régime du jour au lendemain.
+        # The number of runs that may run AT THE SAME TIME in a namespace. 0 = no ceiling, the
+        # former behaviour: a deployment that says nothing does not change regime overnight.
         self.max_active = max(0, int(max_active))
         #: The pull secrets of the runner's pod (S51-09), by name: a job step's named image, or a
         #: hosted agent's, may sit in a private registry project the runner image is not in.
@@ -122,15 +121,15 @@ class KubernetesJobExecutor:
             # may have been handing the Secret to the Job. Seen on the dev tenant on
             # 2026-09-27 — `PATCH .../secrets/run-... -> 403`, the activity retried, found the
             # Job, returned... and the Secret stayed ownerless for good. It is handed over here.
-            await self._rattacher_le_secret(spec.namespace, name, existing)
+            await self._attach_secret(spec.namespace, name, existing)
             return ExecRef(kind=self.kind, name=name, namespace=spec.namespace, run_id=spec.run_id)
         await self._ensure_secret(spec, name)
         job = self._job(spec, name)
         if self.max_active:
-            actifs, _ = await self._file(spec.namespace)
-            if actifs >= self.max_active:
-                # Suspendu : aucun pod, aucune image tirée, aucune place prise dans le
-                # quota. Le tour viendra à un relevé d'état, dans l'ordre d'arrivée.
+            active, _ = await self._queue_state(spec.namespace)
+            if active >= self.max_active:
+                # Suspended: no pod, no image pulled, no place taken in the quota. Its turn will
+                # come at a state poll, in arrival order.
                 job["spec"]["suspend"] = True
         try:
             created = await self.client.request(
@@ -139,18 +138,17 @@ class KubernetesJobExecutor:
         except Exception:
             await self._drop_secret_without_job(spec.namespace, name)
             raise
-        await self._rattacher_le_secret(spec.namespace, name, created)
+        await self._attach_secret(spec.namespace, name, created)
         return ExecRef(kind=self.kind, name=name, namespace=spec.namespace, run_id=spec.run_id)
 
-    async def _rattacher_le_secret(self, namespace: str, name: str, job: Any) -> None:
-        """Le secret du run appartient à son Job : quand `ttlSecondsAfterFinished` emporte
-        le Job, le ramasse-miettes emporte le jeton avec lui.
+    async def _attach_secret(self, namespace: str, name: str, job: Any) -> None:
+        """The run's secret belongs to its Job: when `ttlSecondsAfterFinished` takes the Job away,
+        the garbage collector takes the token with it.
 
-        Sans ce lien, chaque run laissait son secret derrière lui — soixante-quatre jetons
-        de runs finis dans le namespace du banc, valides jusqu'à leur expiration, et une
-        liste qui ne fait que grandir. `cancel` supprime explicitement ; ici c'est la fin
-        normale qui nettoie. Sans `uid` (client qui ne renvoie pas l'objet créé), rien ne
-        se casse : le secret reste orphelin, comme avant.
+        Without this link, every run left its secret behind: sixty-four tokens of finished runs in
+        the bench namespace, valid until they expire, and a list that only grows. `cancel` deletes
+        explicitly; here it is the normal end that cleans up. Without a `uid` (a client that does
+        not return the created object), nothing breaks: the secret stays orphaned, as before.
         """
         uid = ((job or {}).get("metadata") or {}).get("uid") if isinstance(job, dict) else None
         if not uid:
@@ -177,38 +175,38 @@ class KubernetesJobExecutor:
             if await self.client.request("GET", f"{BATCH_API}/namespaces/{namespace}/jobs/{name}") is None:
                 await self.client.request("DELETE", f"{CORE_API}/namespaces/{namespace}/secrets/{name}")
 
-    async def _file(self, namespace: str) -> tuple[int, list[dict[str, Any]]]:
-        """Combien de runs tournent, et quels Jobs attendent — les plus anciens d'abord."""
-        selecteur = "choregos/run-id"
+    async def _queue_state(self, namespace: str) -> tuple[int, list[dict[str, Any]]]:
+        """How many runs are running, and which Jobs are waiting, the oldest first."""
+        selector = "choregos/run-id"
         payload = await self.client.request(
-            "GET", f"{BATCH_API}/namespaces/{namespace}/jobs", params={"labelSelector": selecteur}
+            "GET", f"{BATCH_API}/namespaces/{namespace}/jobs", params={"labelSelector": selector}
         )
-        actifs = 0
-        suspendus: list[dict[str, Any]] = []
+        active = 0
+        suspended: list[dict[str, Any]] = []
         for item in (payload or {}).get("items", []):
-            statut = item.get("status", {}) or {}
-            if statut.get("succeeded") or statut.get("failed"):
+            job_status = item.get("status", {}) or {}
+            if job_status.get("succeeded") or job_status.get("failed"):
                 continue
             if (item.get("spec", {}) or {}).get("suspend"):
-                suspendus.append(item)
+                suspended.append(item)
             else:
-                actifs += 1
-        suspendus.sort(key=lambda j: str(j.get("metadata", {}).get("creationTimestamp", "")))
-        return actifs, suspendus
+                active += 1
+        suspended.sort(key=lambda j: str(j.get("metadata", {}).get("creationTimestamp", "")))
+        return active, suspended
 
-    async def _admettre(self, ref: ExecRef, job: dict[str, Any]) -> bool:
-        """Réveille ce Job si une place s'est libérée ET qu'il est le prochain sur la liste.
+    async def _admit(self, ref: ExecRef, job: dict[str, Any]) -> bool:
+        """Wakes this Job if a place has freed up AND it is next on the list.
 
-        L'ordre d'arrivée compte : sans lui, le dernier ticket posé passerait devant les
-        autres à chaque relevé, et un run malchanceux attendrait indéfiniment.
+        Arrival order matters: without it, the last ticket laid down would go ahead of the others
+        at every poll, and an unlucky run would wait indefinitely.
         """
         namespace = ref.namespace or ""
-        actifs, suspendus = await self._file(namespace)
-        places = self.max_active - actifs
+        active, suspended = await self._queue_state(namespace)
+        places = self.max_active - active
         if places <= 0:
             return False
-        prochains = {j.get("metadata", {}).get("name") for j in suspendus[:places]}
-        if ref.name not in prochains:
+        next_up = {j.get("metadata", {}).get("name") for j in suspended[:places]}
+        if ref.name not in next_up:
             return False
         try:
             await self.client.request(
@@ -218,21 +216,21 @@ class KubernetesJobExecutor:
                 headers={"Content-Type": "application/merge-patch+json"},
             )
         except Exception:
-            # Une admission ratée n'est PAS la fin du run : il reste en file, et le relevé
-            # suivant réessaiera. Sans ce filet, un droit manquant (`patch` absent du Role)
-            # faisait échouer l'activité et mourir le workflow du ticket — trois tickets
-            # perdus sur le banc du 2026-09-24, dont un expiré sans avoir tourné.
-            # Le manque se voit quand même : le run reste « en attente d'une place ».
+            # A failed admission is NOT the end of the run: it stays queued, and the next poll
+            # will try again. Without this net, a missing right (`patch` absent from the Role)
+            # made the activity fail and the ticket's workflow die: three tickets lost on the
+            # bench of 2026-09-24, one of which expired without having run.
+            # The lack still shows: the run stays "waiting for a slot".
             return False
         return True
 
     async def _ensure_secret(self, spec: StageJobSpec, name: str) -> None:
-        """Écrit le jeton du run, MÊME si un secret de ce nom existe déjà.
+        """Writes the run's token, EVEN if a secret of that name already exists.
 
-        Le nom est déterministe (il vaut celui du Job), donc un run rejoué retombe sur le
-        secret d'avant. Le laisser tel quel faisait tourner l'agent avec un jeton périmé :
-        l'API répondait « Signature verification failed », et le message accuse la
-        signature — jamais le secret qu'on a cru inutile de réécrire.
+        The name is deterministic (it is the Job's), so a replayed run lands on the earlier
+        secret. Leaving it as it was made the agent run with a stale token: the API answered
+        "Signature verification failed", and the message blames the signature, never the secret
+        that was thought not worth rewriting.
         """
         existing = await self.client.request("GET", f"{CORE_API}/namespaces/{spec.namespace}/secrets/{name}")
         if existing is not None:
@@ -266,8 +264,8 @@ class KubernetesJobExecutor:
             "restartPolicy": "Never",
             "serviceAccountName": self.service_account,
             "automountServiceAccountToken": False,
-            # Le contexte du POD, pas seulement du conteneur : la règle Kyverno stricte
-            # (`infra/policies/pod-security.yaml`) exige le profil seccomp à ce niveau.
+            # The POD's context, not only the container's: the strict Kyverno rule
+            # (`infra/policies/pod-security.yaml`) requires the seccomp profile at this level.
             "securityContext": {
                 "runAsNonRoot": True,
                 "runAsUser": 1000,
@@ -341,12 +339,12 @@ class KubernetesJobExecutor:
                 },
             },
             "spec": {
-                "backoffLimit": 0,  # la reprise est décidée par l'orchestrateur, pas par Kubernetes
+                "backoffLimit": 0,  # the retry is decided by the orchestrator, not by Kubernetes
                 "ttlSecondsAfterFinished": self.ttl_seconds,
                 "activeDeadlineSeconds": spec.timeout_minutes * 60,
                 "template": {
-                    # Un label STABLE en plus de l'identifiant du run : les politiques réseau
-                    # (Cilium, NetworkPolicy) sélectionnent les runners par famille, pas un à un.
+                    # A STABLE label besides the run's identifier: the network policies
+                    # (Cilium, NetworkPolicy) select runners by family, not one by one.
                     "metadata": {"labels": {"choregos/run-id": spec.run_id, **RUNNER_POD_LABELS}},
                     "spec": pod_spec,
                 },
@@ -402,13 +400,13 @@ class KubernetesJobExecutor:
         pod_spec["terminationGracePeriodSeconds"] = agent.termination_grace_s
 
     async def renew(self, ref: ExecRef, run_token: str) -> None:
-        """Remplace le jeton d'un run qui n'a pas encore démarré.
+        """Replaces the token of a run that has not started yet.
 
-        Un jeton est minté quand l'étape est préparée, et il vit `max_minutes + 15`. Avec
-        une file d'attente, ce compte à rebours court PENDANT l'attente : un run admis plus
-        tard démarre avec un jeton périmé et reçoit « Signature has expired » sur son
-        premier appel — vu sur le banc du 2026-09-24. Le secret porte le même nom que le
-        Job, donc le remplacer suffit : le pod le lira à son démarrage.
+        A token is minted when the step is prepared, and lives `max_minutes + 15`. With a queue,
+        this countdown runs DURING the wait: a run admitted later starts with a stale token and
+        receives "Signature has expired" on its first call, as seen on the bench of 2026-09-24.
+        The secret has the same name as the Job, so replacing it is enough: the pod will read it
+        when it starts.
 
         A merge PATCH of the `token` key alone, never a PUT of the whole object: a PUT
         replaces the metadata, and a Secret rewritten without `ownerReferences` no longer
@@ -439,20 +437,22 @@ class KubernetesJobExecutor:
             state = "running"
         else:
             state = "pending"
-        attente = ""
+        waiting_text = ""
         if state == "pending" and (payload.get("spec", {}) or {}).get("suspend"):
-            # C'est ici que la file avance : l'orchestrateur relève déjà l'état de chaque
-            # run, donc chaque tour de boucle est une occasion d'admettre le suivant. Pas
-            # de composant en plus, pas de minuterie à régler.
-            admis = await self._admettre(ref, payload) if self.max_active else False
-            attente = "" if admis else f"en attente d'une place (plafond {self.max_active} par namespace)"
-        message = attente or "; ".join(c.get("message", "") for c in status.get("conditions", []) or [])[:500]
+            # This is where the queue advances: the orchestrator already polls every run's state,
+            # so each pass of the loop is a chance to admit the next one. No extra component, no
+            # timer to tune.
+            admitted = await self._admit(ref, payload) if self.max_active else False
+            waiting_text = "" if admitted else f"waiting for a slot (cap {self.max_active} per namespace)"
+        message = (
+            waiting_text or "; ".join(c.get("message", "") for c in status.get("conditions", []) or [])[:500]
+        )
         code = None
         reason: str | None = None
         if state == "failed":
-            # « Job has reached the specified backoff limit » ne dit pas pourquoi : le pod le sait —
-            # son code de sortie, que le runner choisit (`choregos_core.sorties`), ou la raison pour
-            # laquelle son conteneur n'a jamais démarré (image, secret, configuration).
+            # "Job has reached the specified backoff limit" does not say why: the pod knows, through
+            # its exit code, which the runner chooses (`choregos_core.sorties`), or the reason its
+            # container never started (image, secret, configuration).
             code, cause = await self._diagnostic(ref)
             reason = await self._termination_reason(ref)
             if cause:
@@ -467,8 +467,8 @@ class KubernetesJobExecutor:
         )
 
     async def _diagnostic(self, ref: ExecRef) -> tuple[int | None, str]:
-        """Le code de sortie du conteneur du runner et ce qu'il dit, lus sur le DERNIER pod du run ;
-        ou pourquoi ce conteneur attend encore. Jamais les journaux : ils peuvent tout contenir."""
+        """The runner container's exit code and what it says, read on the run's LAST pod; or why
+        that container is still waiting. Never the logs: they can contain anything."""
         pods = await self.client.request(
             "GET",
             f"{CORE_API}/namespaces/{ref.namespace}/pods",
@@ -479,23 +479,23 @@ class KubernetesJobExecutor:
             key=lambda pod: str((pod.get("metadata") or {}).get("creationTimestamp") or ""),
         )
         if not items:
-            return None, "aucun pod du run : refusé à l'admission, ou déjà effacé"
-        etats = (items[-1].get("status") or {}).get("containerStatuses") or []
-        conteneur = next((c for c in etats if c.get("name") == "runner"), etats[0] if etats else None)
-        if conteneur is None:
+            return None, "no pod for the run: refused at admission, or already deleted"
+        states = (items[-1].get("status") or {}).get("containerStatuses") or []
+        container = next((c for c in states if c.get("name") == "runner"), states[0] if states else None)
+        if container is None:
             return None, ""
-        etat = conteneur.get("state") or {}
-        dernier = conteneur.get("lastState") or {}
-        termine = etat.get("terminated") or dernier.get("terminated")
-        if termine:
-            code = termine.get("exitCode")
-            raison = str(termine.get("reason") or "terminé")
-            sens = explication(code)
-            return code, f"runner sorti en {code} ({raison}{' : ' + sens if sens else ''})"
-        attente = etat.get("waiting")
-        if attente:
-            detail = str(attente.get("message") or "")[:200]
-            return None, f"runner jamais démarré : {attente.get('reason')}{' — ' + detail if detail else ''}"
+        current = container.get("state") or {}
+        previous = container.get("lastState") or {}
+        terminated = current.get("terminated") or previous.get("terminated")
+        if terminated:
+            code = terminated.get("exitCode")
+            reason = str(terminated.get("reason") or "terminated")
+            meaning = explication(code)
+            return code, f"runner exited with {code} ({reason}{': ' + meaning if meaning else ''})"
+        waiting = current.get("waiting")
+        if waiting:
+            detail = str(waiting.get("message") or "")[:200]
+            return None, f"runner never started: {waiting.get('reason')}{' - ' + detail if detail else ''}"
         return None, ""
 
     async def _termination_reason(self, ref: ExecRef) -> str | None:

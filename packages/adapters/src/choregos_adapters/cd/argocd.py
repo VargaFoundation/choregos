@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CdAdapter Argo CD + Argo Rollouts : promotion par PR GitOps, santé, canary, abandon.
+"""The Argo CD + Argo Rollouts CdAdapter: promotion by GitOps PR, health, canary, abort.
 
-Choregos ne fait **jamais** `kubectl apply` : il écrit dans le dépôt GitOps et Argo applique.
-C'est ce qui rend une promotion auditable et réversible.
+Choregos **never** runs `kubectl apply`: it writes to the GitOps repository and Argo applies.
+That is what makes a promotion auditable and reversible.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from ..github.client import GitHubClient
 
 
 class ArgoCdAdapter:
-    """API Argo CD pour la lecture, dépôt GitOps (via l'App GitHub) pour l'écriture."""
+    """The Argo CD API for reading, the GitOps repository (through the GitHub App) for writing."""
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class ArgoCdAdapter:
         )
 
     async def rollout_status(self, app: str) -> RolloutState:
-        """État du Rollout : l'analyse SLO échouée se voit ici avant le rollback."""
+        """State of the Rollout: a failed SLO analysis shows here before the rollback."""
         payload = await self._request(
             "GET",
             f"/api/v1/applications/{app}/resource",
@@ -92,7 +92,7 @@ class ArgoCdAdapter:
             },
         )
         if payload is None:
-            return RolloutState(phase="Unknown", message="aucun Rollout trouvé")
+            return RolloutState(phase="Unknown", message="no Rollout found")
         import json
 
         manifest = payload.get("manifest")
@@ -121,7 +121,7 @@ class ArgoCdAdapter:
         )
 
     async def set_sync_window(self, app: str, windows: list[Window]) -> None:
-        """Garde-fou déclaratif : même si Choregos tombe, Argo refuse hors fenêtre."""
+        """A declarative guard rail: even if Choregos goes down, Argo refuses outside the window."""
         payload = {
             "spec": {
                 "syncWindows": [
@@ -140,10 +140,10 @@ class ArgoCdAdapter:
         await self._request("PATCH", f"/api/v1/applications/{app}", json=payload)
 
     async def promote(self, env: str, changes: list[Change], release: str) -> PromotionRef:
-        """Écrit les tags d'images dans le dépôt GitOps, via une PR titrée `release(<env>)`."""
+        """Writes the image tags in the GitOps repository, through a PR titled `release(<env>)`."""
         if self.github is None or not self.gitops_repo:
             raise ConfigurationError(
-                "promotion GitOps impossible : dépôt GitOps ou App GitHub non configurés"
+                "GitOps promotion impossible: GitOps repository or GitHub App not configured"
             )
         branch = f"choregos/release-{release}".replace(" ", "-")
         base = await self._default_branch()
@@ -186,12 +186,12 @@ class ArgoCdAdapter:
             json={"ref": f"refs/heads/{branch}", "sha": head["object"]["sha"]},
         )
 
-    async def _contenu(self, path: str, branch: str) -> dict[str, Any] | None:
-        """Le fichier sur la branche, ou `None` s'il n'existe pas.
+    async def _content(self, path: str, branch: str) -> dict[str, Any] | None:
+        """The file on the branch, or `None` when it does not exist.
 
-        Le client GitHub lève sur un 404, il ne rend pas `None` : la première promotion
-        vers un environnement — sans `releases/<env>/manifest.yaml` encore écrit — échouait
-        donc toujours, et une kustomization absente aussi (trouvé par le test de contrat).
+        The GitHub client raises on a 404, it does not return `None`: the first promotion to an
+        environment, with no `releases/<env>/manifest.yaml` written yet, therefore always failed,
+        and so did an absent kustomization (found by the contract test).
         """
         assert self.github is not None
         try:
@@ -209,7 +209,7 @@ class ArgoCdAdapter:
 
     async def _patch_image(self, path: str, branch: str, change: Change) -> None:
         assert self.github is not None
-        current = await self._contenu(path, branch)
+        current = await self._content(path, branch)
         if current is None:
             return
         content = base64.b64decode(current["content"]).decode("utf-8")
@@ -229,7 +229,7 @@ class ArgoCdAdapter:
         )
 
     async def _write_manifest(self, env: str, release: str, changes: list[Change], branch: str) -> None:
-        """`releases/<env>/manifest.yaml` : le journal du lot, lisible par un humain."""
+        """`releases/<env>/manifest.yaml`: the batch's journal, readable by a human."""
         assert self.github is not None
         import yaml
 
@@ -243,7 +243,7 @@ class ArgoCdAdapter:
             sort_keys=False,
             allow_unicode=True,
         )
-        current = await self._contenu(path, branch)
+        current = await self._content(path, branch)
         body: dict[str, Any] = {
             "message": f"release({env}): {release}",
             "content": base64.b64encode(payload.encode()).decode(),
@@ -261,7 +261,7 @@ class ArgoCdAdapter:
 
 
 def _replace_image_tag(content: str, change: Change) -> str:
-    """Remplace `newTag:` dans le kustomization de l'overlay, sans toucher au reste."""
+    """Replaces `newTag:` in the overlay's kustomization, leaving the rest untouched."""
     if not change.tag:
         return content
     lines = content.splitlines()
@@ -283,13 +283,13 @@ def _replace_image_tag(content: str, change: Change) -> str:
 
 def _promotion_body(env: str, release: str, changes: list[Change]) -> str:
     lines = [
-        f"Promotion du lot **{release}** vers `{env}`.",
+        f"Promotion of the batch **{release}** to `{env}`.",
         "",
         "| application | image |",
         "|:--|:--|",
         *[f"| {change.app} | `{change.tag or change.image}` |" for change in changes],
         "",
-        "_PR ouverte par le release train de Choregos. Le lot, les tickets et les risques",
-        "sont détaillés dans `releases/{env}/manifest.yaml`._".replace("{env}", env),
+        "_PR opened by Choregos' release train. The batch, the tickets and the risks",
+        "are detailed in `releases/{env}/manifest.yaml`._".replace("{env}", env),
     ]
     return "\n".join(lines)

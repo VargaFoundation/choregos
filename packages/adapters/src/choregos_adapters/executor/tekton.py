@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Executor Tekton : un `PipelineRun` par étape d'agent (docs/plan/02 §2.3).
+"""The Tekton executor: one `PipelineRun` per agent step (docs/plan/02 §2.3).
 
-Le secret du run est créé pour ce run et supprimé à la fin ; le PipelineRun porte les
-labels qui permettent de retrouver le run depuis un événement Tekton.
+The run's secret is created for that run and deleted at the end; the PipelineRun carries the
+labels that make it possible to find the run again from a Tekton event.
 
 The run's Secret belongs to its PipelineRun (`ownerReferences`), and goes with it however the
 run ends (#501).
@@ -26,7 +26,7 @@ CORE_API = "/api/v1"
 
 
 class KubernetesClient:
-    """Client REST Kubernetes minimal : ce dont l'exécuteur a besoin, rien de plus."""
+    """A minimal Kubernetes REST client: what the executor needs, nothing more."""
 
     def __init__(
         self,
@@ -47,10 +47,10 @@ class KubernetesClient:
         headers = {"Accept": "application/json"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        # Les en-têtes de l'appelant s'AJOUTENT aux nôtres. Sans cette fusion, passer
-        # `headers=` levait `got multiple values for keyword argument 'headers'` —
-        # invisible en relecture, et fatal au premier PATCH, qui doit annoncer son
-        # `Content-Type: application/merge-patch+json` sous peine d'être refusé par l'API.
+        # The caller's headers are ADDED to ours. Without this merge, passing `headers=` raised
+        # `got multiple values for keyword argument 'headers'`: invisible in review, and fatal at
+        # the first PATCH, which must announce its `Content-Type: application/merge-patch+json`
+        # or be refused by the API.
         headers.update(kwargs.pop("headers", None) or {})
         response = await self._client.request(method, f"{self.base_url}{path}", headers=headers, **kwargs)
         if response.status_code == 404:
@@ -63,8 +63,8 @@ class KubernetesClient:
             )
         if not response.content:
             return {}
-        # Les journaux d'un pod arrivent en `text/plain` : les parser en JSON levait une
-        # erreur de décodage sur la première ligne, et `logs()` ne rendait jamais rien.
+        # A pod's logs arrive as `text/plain`: parsing them as JSON raised a decoding error on
+        # the first line, and `logs()` never returned anything.
         if "json" not in response.headers.get("content-type", ""):
             return response.text
         return response.json()
@@ -78,7 +78,7 @@ def _in_cluster_token() -> str | None:
 
 
 class TektonExecutor:
-    """Crée et suit les `PipelineRun` d'étapes d'agent."""
+    """Creates and follows the `PipelineRun`s of agent steps."""
 
     kind = ExecutorKind.TEKTON
     capabilities: frozenset[str] = frozenset()
@@ -100,7 +100,7 @@ class TektonExecutor:
         return f"run-{run_id}"[:63].lower()
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
-        """Idempotent : si le PipelineRun existe déjà, on le réutilise."""
+        """Idempotent: if the PipelineRun already exists, it is reused."""
         if spec.agent_container is not None:
             raise ConfigurationError(
                 "a hosted agent's container runs beside the runner in one pod (ADR 0080), which "
@@ -231,8 +231,8 @@ class TektonExecutor:
                     {"name": "run-id", "value": spec.run_id},
                     {"name": "api-url", "value": spec.api_url},
                     {"name": "runner-image", "value": spec.runner_image},
-                    # Vide quand le projet n'a pas de dépôt : la tâche de clonage du
-                    # pipeline saute, et le runner prépare un répertoire vide lui-même.
+                    # Empty when the project has no repository: the pipeline's clone task is
+                    # skipped, and the runner prepares an empty directory itself.
                     {
                         "name": "repo-url",
                         "value": (depot.url if depot else ""),
@@ -287,7 +287,7 @@ class TektonExecutor:
         )
 
     async def fetch_result(self, ref: ExecRef) -> StageResult | None:
-        """Lit le `StageResult` publié par le runner via les résultats Tekton, si besoin."""
+        """Reads the `StageResult` published by the runner through the Tekton results, if needed."""
         status = await self.status(ref)
         if not status.result_url or not status.result_url.startswith("http"):
             return None
@@ -314,7 +314,7 @@ class TektonExecutor:
                 yield line
 
     async def cancel(self, ref: ExecRef) -> None:
-        """Annulation propre : Tekton arrête les Task, puis on nettoie le secret."""
+        """A clean cancellation: Tekton stops the Tasks, then the secret is cleaned up."""
         await self.client.request(
             "PATCH",
             f"{TEKTON_API}/namespaces/{ref.namespace}/pipelineruns/{ref.name}",

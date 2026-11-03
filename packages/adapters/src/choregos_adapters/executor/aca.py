@@ -1,18 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Executor Azure Container Apps : un *job* ACA par run (§2.3, S13-05).
+"""The Azure Container Apps executor: one ACA *job* per run (§2.3, S13-05).
 
-Même contrat que Tekton et les Jobs Kubernetes : un run = une exécution isolée, démarrée
-de façon idempotente, interrogeable, annulable. Trois différences propres à ACA :
+The same contract as Tekton and the Kubernetes Jobs: a run = an isolated execution, started
+idempotently, queryable, cancellable. Three differences specific to ACA:
 
-- la définition du job (`Microsoft.App/jobs`) est créée par un `PUT` **idempotent**, puis
-  déclenchée par `start` — ce sont deux appels distincts ;
-- le jeton du run ne part pas en variable d'environnement en clair : ACA a des *secrets*
-  de job, référencés par `secretRef` ;
-- les logs ne sont pas dans ARM mais dans Log Analytics. Sans espace de travail configuré,
-  `logs()` dit où regarder plutôt que de rendre le silence.
+- the job definition (`Microsoft.App/jobs`) is created by an **idempotent** `PUT`, then triggered
+  by `start`: these are two distinct calls;
+- the run's token does not go out as a plain environment variable: ACA has job *secrets*,
+  referenced by `secretRef`;
+- the logs are not in ARM but in Log Analytics. Without a configured workspace, `logs()` says
+  where to look rather than return silence.
 
-Aucun credential cloud n'est détenu par le runner : c'est l'identité managée du job qui
-tire l'image, et le jeton de run est scopé à ce run.
+No cloud credential is held by the runner: it is the job's managed identity that pulls the
+image, and the run token is scoped to that run.
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ LOG_ANALYTICS = "https://api.loganalytics.io/v1"
 
 
 class AzureArmClient:
-    """Client ARM minimal : un jeton AAD mis en cache, et des appels REST."""
+    """A minimal ARM client: a cached AAD token, and REST calls."""
 
-    def __init__(  # noqa: PLR0913 — la configuration ARM, tout en mots-clés avec défauts
+    def __init__(  # noqa: PLR0913 - the ARM configuration, all keywords with defaults
         self,
         *,
         subscription_id: str = "",
@@ -65,13 +65,13 @@ class AzureArmClient:
         return f"/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}"
 
     async def token(self) -> str:
-        """Jeton client-credentials, renouvelé une minute avant l'expiration."""
+        """A client-credentials token, renewed one minute before it expires."""
         if self._token and time.time() < self._expires_at - 60:
             return self._token
         if not (self.tenant_id and self.client_id and self.client_secret):
             raise ConfigurationError(
-                "identité Azure incomplète : `tenant_id`, `client_id` et `client_secret` "
-                "(ou un `token` déjà obtenu) sont nécessaires"
+                "incomplete Azure identity: `tenant_id`, `client_id` and `client_secret` "
+                "(or an already obtained `token`) are required"
             )
         response = await self._client.post(
             f"{self.login_url}/{self.tenant_id}/oauth2/v2.0/token",
@@ -90,7 +90,7 @@ class AzureArmClient:
         return self._token
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
-        """Appel ARM. `404` rend `None` : c'est une absence, pas une panne."""
+        """An ARM call. `404` returns `None`: it is an absence, not a failure."""
         url = path if path.startswith("http") else f"{self.base_url}{path}"
         params = {"api-version": API_VERSION, **(kwargs.pop("params", None) or {})}
         headers = {
@@ -111,7 +111,7 @@ class AzureArmClient:
 
 
 class AcaExecutor:
-    """Un job ACA par run, déclenché manuellement, nettoyé par le cycle de vie ACA."""
+    """One ACA job per run, triggered manually, cleaned up by the ACA lifecycle."""
 
     kind = ExecutorKind.ACA
     capabilities: frozenset[str] = frozenset()
@@ -140,7 +140,7 @@ class AcaExecutor:
         self.memory = memory
 
     def _name(self, run_id: str) -> str:
-        """ACA impose 32 caractères, minuscules, tirets."""
+        """ACA imposes 32 characters, lower case, hyphens."""
         return f"run-{run_id}".replace("_", "-").lower()[:32].rstrip("-")
 
     def _path(self, name: str) -> str:
@@ -149,7 +149,7 @@ class AcaExecutor:
     # ───────────────────────── cycle de vie ─────────────────────────
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
-        """Crée le job s'il n'existe pas, puis le déclenche. Rejouable sans double exécution."""
+        """Creates the job if it does not exist, then triggers it. Replayable without a double execution."""
         if spec.agent_container is not None:
             raise ConfigurationError(
                 "a hosted agent's container runs beside the runner in one pod (ADR 0080), which this "
@@ -160,8 +160,8 @@ class AcaExecutor:
         existing = await self.client.request("GET", self._path(name))
         if existing is None:
             await self.client.request("PUT", self._path(name), json=self._definition(spec, name))
-        # Un job par run : s'il a déjà une exécution, c'est celle de ce run. On ne
-        # redéclenche pas — c'est ce qui rend `start` rejouable sans double facturation.
+        # One job per run: if it already has an execution, it is this run's. It is not triggered
+        # again, which is what makes `start` replayable without double billing.
         if not await self._executions(name):
             await self.client.request("POST", f"{self._path(name)}/start")
         return ExecRef(
@@ -180,8 +180,8 @@ class AcaExecutor:
             "env": [
                 {"name": "CHOREGOS_RUN_ID", "value": spec.run_id},
                 {"name": "CHOREGOS_API_URL", "value": spec.api_url},
-                # Le jeton passe par un secret de job : il n'apparaît pas dans la définition
-                # rendue par ARM, donc pas dans un `az containerapp job show`.
+                # The token goes through a job secret: it does not appear in the definition
+                # rendered by ARM, so not in an `az containerapp job show` either.
                 {"name": "CHOREGOS_RUN_TOKEN", "secretRef": "run-token"},
                 # The run's gateway key, a job secret too (#523): never in the rendered definition.
                 *(
@@ -202,7 +202,7 @@ class AcaExecutor:
         configuration: dict[str, Any] = {
             "triggerType": "Manual",
             "replicaTimeout": spec.timeout_minutes * 60,
-            "replicaRetryLimit": 0,  # la reprise est décidée par l'orchestrateur
+            "replicaRetryLimit": 0,  # the retry is decided by the orchestrator
             "manualTriggerConfig": {"parallelism": 1, "replicaCompletionCount": 1},
             "secrets": [
                 {"name": "run-token", "value": spec.run_token},
@@ -235,15 +235,15 @@ class AcaExecutor:
         return definition
 
     def _resources(self, spec: StageJobSpec) -> dict[str, Any]:
-        """Ressources de l'étape, avec les valeurs de l'exécuteur en repli.
+        """The step's resources, with the executor's values as a fallback.
 
-        L'exécuteur k8s honore `spec.cpu`/`spec.memory` ; celui-ci les ignorait et imposait les
-        siennes. Une étape qui demande 4 vCPU en obtenait 1 selon le backend, en silence — le même
-        workflow n'avait donc pas le même comportement d'un exécuteur à l'autre.
+        The k8s executor honours `spec.cpu`/`spec.memory`; this one ignored them and imposed its
+        own. A step that asked for 4 vCPU got 1 depending on the backend, silently: the same
+        workflow therefore did not behave the same from one executor to another.
 
-        ACA veut un nombre pour le CPU et n'accepte que certaines combinaisons (mémoire = 2 × vCPU
-        en Gi). Une valeur illisible retombe sur celle de l'exécuteur plutôt que de faire échouer le
-        run ; une combinaison invalide est refusée par ARM, avec son message.
+        ACA wants a number for the CPU and only accepts certain combinations (memory = 2 x vCPU in
+        Gi). An unreadable value falls back to the executor's rather than fail the run; an invalid
+        combination is refused by ARM, with its message.
         """
         try:
             cpu = float(spec.cpu) if spec.cpu else self.cpu
@@ -256,16 +256,16 @@ class AcaExecutor:
         return list((payload or {}).get("value", []))
 
     async def status(self, ref: ExecRef) -> ExecStatus:
-        """État de l'exécution, traduit depuis celui d'ACA.
+        """The execution's state, translated from ACA's.
 
-        `ended_at` est **indicatif** : ARM rend un statut terminal sans `endTime` dans certains cas
-        (observé sur un run tué par son `replicaTimeout`). L'orchestrateur horodate lui-même la fin
-        d'un run, donc la durée rapportée ne dépend pas de ce champ — s'y fier ici donnerait des
-        étapes de zéro seconde dans le commentaire du ticket, ce qui est pire qu'un champ vide.
+        `ended_at` is **indicative**: ARM returns a terminal status without `endTime` in some cases
+        (observed on a run killed by its `replicaTimeout`). The orchestrator timestamps the end of a
+        run itself, so the reported duration does not depend on this field: relying on it here would
+        give zero-second steps in the ticket comment, which is worse than an empty field.
         """
         executions = await self._executions(ref.name)
         if not executions:
-            return ExecStatus(state="unknown", message="aucune exécution pour ce job")
+            return ExecStatus(state="unknown", message="no execution for this job")
         properties = executions[0].get("properties", {}) or {}
         raw = str(properties.get("status", "")).lower()
         state = {
@@ -290,11 +290,11 @@ class AcaExecutor:
                 await self.client.request("POST", f"{self._path(ref.name)}/executions/{name}/stop")
 
     async def logs(self, ref: ExecRef) -> AsyncIterator[str]:
-        """Les logs d'ACA vivent dans Log Analytics, pas dans ARM."""
+        """ACA's logs live in Log Analytics, not in ARM."""
         if not self.log_analytics_workspace_id:
             yield (
-                "logs indisponibles depuis ARM — configurez `log_analytics_workspace_id`, "
-                f"ou interrogez ContainerAppConsoleLogs_CL où ContainerGroupName_s == '{ref.name}'"
+                "logs unavailable from ARM: configure `log_analytics_workspace_id`, "
+                f"or query ContainerAppConsoleLogs_CL where ContainerGroupName_s == '{ref.name}'"
             )
             return
         query = (
@@ -313,25 +313,25 @@ class AcaExecutor:
                 yield str(row[-1])
 
 
-# Azure refuse `< > % & \\ ? /` dans un **nom** de tag — sauf pour les préfixes réservés
-# `hidden` et `link`. Nos étiquettes sont écrites à la mode Kubernetes (`choregos/run-id`), qui est
-# exactement la forme interdite : sans cette traduction, ARM répond 400 et **aucun job n'est jamais
-# créé**. Les 18 tests contre transport simulé n'ont rien vu, parce qu'un transport simulé ne
-# valide pas les noms de tags ; un abonnement réel l'a dit au premier appel (S13-05).
+# Azure refuses `< > % & \\ ? /` in a tag **name**, except for the reserved prefixes `hidden` and
+# `link`. Our labels are written Kubernetes-style (`choregos/run-id`), which is exactly the
+# forbidden shape: without this translation, ARM answers 400 and **no job is ever created**. The 18
+# tests against a simulated transport saw nothing, because a simulated transport does not validate
+# tag names; a real subscription said so on the first call (S13-05).
 _TAG_RESERVED = "<>%&\\?/"
 
 
 def _tag_name(name: str) -> str:
-    """Nom de tag acceptable par ARM. `choregos/run-id` → `choregos_run-id`."""
+    """A tag name ARM accepts. `choregos/run-id` -> `choregos_run-id`."""
     return "".join("_" if c in _TAG_RESERVED else c for c in name)
 
 
 def _tags(tags: dict[str, str]) -> dict[str, str]:
-    """Traduit les noms, garde les valeurs.
+    """Translates the names, keeps the values.
 
-    Les valeurs, elles, acceptent tout : seul le *nom* est contraint. Une collision de noms après
-    traduction (`a/b` et `a_b`) garde la dernière — assez improbable pour ne pas mériter un
-    échec, et de toute façon visible dans le tag rendu.
+    The values accept anything: only the *name* is constrained. A name collision after
+    translation (`a/b` and `a_b`) keeps the last one: unlikely enough not to deserve a failure,
+    and visible in the returned tag anyway.
     """
     return {_tag_name(key): value for key, value in tags.items()}
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Client GitHub : REST + GraphQL, avec backoff sur 429/secondary limits et file par installation."""
+"""GitHub client: REST + GraphQL, with backoff on 429/secondary limits and a queue per installation."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ MAX_RETRIES = 4
 
 @dataclass
 class RateLimiter:
-    """Une file par installation : GitHub compte ses quotas par installation, pas par dépôt."""
+    """One queue per installation: GitHub counts its quotas per installation, not per repository."""
 
     _locks: dict[str, asyncio.Lock] = field(default_factory=dict)
 
@@ -32,7 +32,7 @@ class RateLimiter:
 
 
 class GitHubClient:
-    """Enveloppe fine autour de l'API GitHub, partagée par le tracker et le SCM."""
+    """A thin wrapper around the GitHub API, shared by the tracker and the SCM."""
 
     def __init__(
         self,
@@ -58,7 +58,7 @@ class GitHubClient:
         if self.static_token:
             return self.static_token
         if self.auth is None or repo is None:
-            raise UpstreamError("github", "aucune authentification configurée")
+            raise UpstreamError("github", "no authentication configured")
         installation = await self.auth.token_for(self._client, repo, permissions=DEFAULT_PERMISSIONS)
         return installation.token
 
@@ -72,7 +72,7 @@ class GitHubClient:
         params: dict[str, Any] | None = None,
         accept: str = "application/vnd.github+json",
     ) -> Any:
-        """Appel REST avec retries exponentiels sur 429, 403 secondaire et 5xx."""
+        """A REST call with exponential retries on 429, secondary 403 and 5xx."""
         url = path if path.startswith("http") else f"{self.base_url}{path}"
         token = await self._token(repo)
         headers = {"Authorization": f"Bearer {token}", "Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
@@ -97,14 +97,14 @@ class GitHubClient:
                 if response.status_code == 204 or not response.content:
                     return None
                 return response.json()
-        raise UpstreamError("github", f"{method} {path} : quota épuisé après {MAX_RETRIES} tentatives")
+        raise UpstreamError("github", f"{method} {path}: quota exhausted after {MAX_RETRIES} attempts")
 
     @staticmethod
     def _retry_after(response: httpx.Response, attempt: int) -> float:
         header = response.headers.get("retry-after")
         if header and header.isdigit():
             return float(header)
-        return float(min(60.0, (2**attempt) + random.random()))  # noqa: S311 - jitter, pas de crypto
+        return float(min(60.0, (2**attempt) + random.random()))  # noqa: S311 - jitter, not crypto
 
     @staticmethod
     def _reset_in(response: httpx.Response) -> int | None:

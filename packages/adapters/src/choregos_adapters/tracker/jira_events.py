@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Normalisation des webhooks Jira Cloud en `InboundEvent`.
+"""Normalization of Jira Cloud webhooks into `InboundEvent`.
 
-Jira envoie un `webhookEvent` (`jira:issue_created`, `jira:issue_updated`, `comment_created`)
-et, pour les mises à jour, un `changelog` qui dit ce qui a bougé. C'est là qu'on lit un
-changement de statut ou l'ajout d'un label — l'équivalent Jira d'une carte déplacée.
+Jira sends a `webhookEvent` (`jira:issue_created`, `jira:issue_updated`, `comment_created`)
+and, for updates, a `changelog` that says what moved. That is where a status change or the
+addition of a label is read: Jira's equivalent of a moved card.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from .github_events import parse_command
 
 
 def parse_jira_event(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
-    """Traduit un webhook Jira en zéro, un ou plusieurs `InboundEvent`."""
+    """Translates a Jira webhook into zero, one or several `InboundEvent`."""
     kind = str(payload.get("webhookEvent", ""))
     handler = _HANDLERS.get(kind)
     if handler is None:
@@ -40,7 +40,7 @@ def _base(delivery_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "jira",
         "delivery_id": delivery_id,
-        # Le projet Choregos porte le même slug que la clé de projet Jira, en minuscules.
+        # The Choregos project carries the same slug as the Jira project key, in lower case.
         "project_slug": str(key).split("-")[0].lower() if key else None,
         "work_item_key": key,
         "actor": user.get("displayName") or user.get("accountId"),
@@ -88,7 +88,7 @@ def _deleted(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
 
 
 def _updated(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
-    """Un `changelog` par champ modifié : statut, labels, résolution."""
+    """One `changelog` entry per modified field: status, labels, resolution."""
     common = _base(delivery_id, payload)
     body = _body(payload)
     items = ((payload.get("changelog") or {}).get("items")) or []

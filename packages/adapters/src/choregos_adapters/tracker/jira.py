@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TrackerAdapter Jira Cloud : issues, transitions, commentaires, champs personnalisés.
+"""The Jira Cloud TrackerAdapter: issues, transitions, comments, custom fields.
 
-Jira n'a ni labels scopés comme GitHub ni colonnes libres : l'état du DSL devient une
-**transition** de workflow, et les champs structurés (coût, taille, risque, run) sont des
-champs personnalisés nommés, résolus une fois puis mis en cache.
+Jira has neither scoped labels like GitHub nor free columns: the DSL state becomes a workflow
+**transition**, and the structured fields (cost, size, risk, run) are named custom fields,
+resolved once and then cached.
 
-Les commentaires partent en Atlassian Document Format via l'API v3 : le tableau de suivi
-(§4.3) est converti, sinon Jira afficherait du markdown brut.
+Comments go out in Atlassian Document Format through the v3 API: the status table (§4.3) is
+converted, otherwise Jira would display raw markdown.
 
 Credentials: an API token with its account's email, as HTTP Basic. A classic token is sent to the
 site itself; a *scoped* token (the only kind an Atlassian service account has) is refused there and
@@ -24,7 +24,7 @@ from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItem
 from ..errors import ConfigurationError, UpstreamError
 from ..http import RestClient
 from .adf import markdown_to_adf, text_of_adf
-from .champs import ANCIENS_NOMS, COUT, RISQUE, RUN, TAILLE, nom_actuel
+from .fields import COST, FORMER_NAMES, RISK, RUN, SIZE, current_name
 from .jira_events import parse_jira_event, person_of
 from .ticket_fields import TRACKER_FIELD, jira_answers, person, tracker_block
 
@@ -33,8 +33,8 @@ GATEWAY = "https://api.atlassian.com"
 AGENT_READY_LABEL = "agent-ready"
 
 
-# Les trois catégories de statut de Jira ont des clés stables dans toutes les langues ; leurs
-# noms, eux, sont traduits. Voir `JiraTracker._transition`.
+# Jira's three status categories have keys that are stable in every language; their names, on the
+# other hand, are translated. See `JiraTracker._transition`.
 _CANONICAL_CATEGORIES = {"to do": "new", "in progress": "indeterminate", "done": "done"}
 
 
@@ -65,7 +65,7 @@ class JiraGatewayClient(RestClient):
 
 
 class JiraTracker:
-    """Jira Cloud (REST v3). `project_key` est le préfixe des clés (`BILL-42`)."""
+    """Jira Cloud (REST v3). `project_key` is the prefix of the keys (`BILL-42`)."""
 
     owns_items = True
 
@@ -81,20 +81,21 @@ class JiraTracker:
         candidates_jql: str | None = None,
     ) -> None:
         if not project_key:
-            raise ConfigurationError("`project_key` est obligatoire pour le tracker Jira")
+            raise ConfigurationError("`project_key` is required for the Jira tracker")
         self.client = client
         # Where a person opens an issue: the site, even when the API is called through the gateway.
         self.site_url = (site_url or getattr(client, "site", None) or client.base_url).rstrip("/")
         self.project_key = project_key.upper()
         self.webhook_secret = webhook_secret
-        # Noms côté Jira des champs structurés que Choregos écrit. Une configuration d'avant S22-21
-        # les désignait par leur ancien nom logique (`Taille`) : il vaut le nouveau (`Size`).
+        # The Jira-side names of the structured fields Choregos writes. A configuration from before
+        # S22-21 designated them by their former logical name (French `Taille`): it counts as the
+        # new one (`Size`).
         self.field_names = {
-            COUT: COUT,
-            TAILLE: TAILLE,
-            RISQUE: RISQUE,
+            COST: COST,
+            SIZE: SIZE,
+            RISK: RISK,
             RUN: RUN,
-            **{nom_actuel(logique): nom for logique, nom in (field_names or {}).items()},
+            **{current_name(logical): name for logical, name in (field_names or {}).items()},
         }
         self.agent_ready_label = agent_ready_label
         # The issues the poll takes on without any Jira-side setup (no webhook, no automation rule).
@@ -127,8 +128,8 @@ class JiraTracker:
             state=((fields.get("status") or {}).get("name")),
             labels=labels,
             item_type=((fields.get("issuetype") or {}).get("name")),
-            size=_parse_enum(Size, fields, self._nom_present(TAILLE, fields)),
-            risk=_parse_enum(Risk, fields, self._nom_present(RISQUE, fields)),
+            size=_parse_enum(Size, fields, self._present_name(SIZE, fields)),
+            risk=_parse_enum(Risk, fields, self._present_name(RISK, fields)),
             assignees=[a for a in [((fields.get("assignee") or {}).get("displayName"))] if a],
             author=person_of(fields.get("reporter")),
             fields={TRACKER_FIELD: tracker},
@@ -164,7 +165,7 @@ class JiraTracker:
         )
         return [str(issue["key"]) for issue in payload.get("issues", [])]
 
-    # ───────────────────────── écriture ─────────────────────────
+    # ───────────────────────── writing ─────────────────────────
 
     async def create_item(self, data: NewItem) -> str:
         payload: dict[str, Any] = {
@@ -182,7 +183,7 @@ class JiraTracker:
         return str(issue["key"])
 
     async def set_state(self, key: str, state_mapping: TrackerStateMapping) -> None:
-        """L'état du DSL devient une transition Jira ; le label suit en parallèle."""
+        """The DSL state becomes a Jira transition; the label follows in parallel."""
         if state_mapping.status:
             await self._transition(key, state_mapping.status)
         if state_mapping.label or state_mapping.remove_labels:
@@ -200,24 +201,24 @@ class JiraTracker:
         return
 
     async def _transition(self, key: str, status: str) -> None:
-        """Jira ne se laisse pas *écrire* un statut : il faut trouver la transition qui y mène.
+        """Jira does not let a status be *written*: the transition that leads to it must be found.
 
-        Trois façons de désigner la cible, dans cet ordre :
+        Three ways to designate the target, in this order:
 
-        1. le **nom exact** du statut d'arrivée ou de la transition — ce qu'un projet écrit
-           dans son propre `workflow.yaml` ;
-        2. une **catégorie** explicite, `category:new`, `category:indeterminate` ou
-           `category:done` — les trois clés que Jira garde identiques dans toutes les langues ;
-        3. un des trois **noms canoniques anglais** (`To Do`, `In Progress`, `Done`), traduit
-           vers sa catégorie.
+        1. the **exact name** of the destination status or of the transition: what a project
+           writes in its own `workflow.yaml`;
+        2. an explicit **category**, `category:new`, `category:indeterminate` or
+           `category:done`: the three keys that Jira keeps identical in every language;
+        3. one of the three **canonical English names** (`To Do`, `In Progress`, `Done`),
+           translated to its category.
 
-        Le troisième cas existe parce que Jira **traduit les noms de statuts** avec la langue du
-        site : sur une instance française, « In Progress » s'appelle « En cours » et
-        « Done » « Terminé(e) ». Les templates de Choregos écrivent les noms anglais ; sans ce
-        repli, aucun ticket ne bougeait sur un Jira francophone — c'est le test live contre
-        `meltingcode.atlassian.net` qui l'a montré. Le repli par catégorie ne s'applique que si
-        **une seule** transition y mène : deux statuts « en cours » (« En cours », « En revue »)
-        ne se départagent pas au hasard, ils lèvent une erreur qui les nomme.
+        The third case exists because Jira **translates the status names** into the language of the
+        site: on a French instance, "In Progress" is translated, and so is "Done".
+        Choregos' templates write the English names; without this fallback, no ticket moved on a
+        French-speaking Jira, which is what the live test against `meltingcode.atlassian.net`
+        showed. The category fallback only applies when **a single** transition leads there: two
+        "in progress" statuses (one in progress, one in review) are not told apart by chance, they raise an
+        error that names them.
         """
         payload = await self.client.request("GET", f"/rest/api/3/issue/{key}/transitions")
         transitions = payload.get("transitions", [])
@@ -244,16 +245,16 @@ class JiraTracker:
                 await self._apply(key, matches[0])
                 return
             if len(matches) > 1:
-                noms = ", ".join((t.get("to") or {}).get("name", "?") for t in matches)
+                names = ", ".join((t.get("to") or {}).get("name", "?") for t in matches)
                 raise ConfigurationError(
-                    f"« {status} » désigne la catégorie `{category}`, et plusieurs statuts de {key} "
-                    f"y mènent ({noms}) : nommez celui que vous voulez dans `workflow.yaml`"
+                    f'"{status}" designates the category `{category}`, and several statuses of {key} '
+                    f"lead there ({names}): name the one you want in `workflow.yaml`"
                 )
 
         available = ", ".join((t.get("to") or {}).get("name", t.get("name", "?")) for t in transitions)
         raise ConfigurationError(
-            f"aucune transition Jira ne mène à « {status} » depuis l'état courant de {key} "
-            f"(disponibles : {available or 'aucune'})"
+            f'no Jira transition leads to "{status}" from the current state of {key} '
+            f"(available: {available or 'none'})"
         )
 
     async def _apply(self, key: str, transition: dict[str, Any]) -> None:
@@ -266,7 +267,7 @@ class JiraTracker:
     async def upsert_status_comment(
         self, key: str, markdown: str, marker: str = STATUS_COMMENT_MARKER
     ) -> None:
-        """Un unique commentaire de suivi, réécrit à chaque étape (§4.3)."""
+        """A single status comment, rewritten at every stage (§4.3)."""
         body = markdown if marker in markdown else f"{marker}\n{markdown}"
         document = markdown_to_adf(body)
         comments = await self.client.request(
@@ -289,7 +290,7 @@ class JiraTracker:
         return str(created.get("id", ""))
 
     async def link(self, a: str, b: str, relation: Literal["origin", "duplicate", "blocks"]) -> None:
-        """Jira a de vrais liens d'issues : on les utilise plutôt qu'un commentaire."""
+        """Jira has real issue links: they are used rather than a comment."""
         link_type = {"origin": "Relates", "duplicate": "Duplicate", "blocks": "Blocks"}[relation]
         await self.client.request(
             "POST",
@@ -302,26 +303,26 @@ class JiraTracker:
         )
 
     async def set_fields(self, key: str, fields: dict[str, Any]) -> None:
-        """Écrit les champs personnalisés, en ignorant ceux que le projet Jira n'a pas."""
+        """Writes the custom fields, ignoring those the Jira project does not have."""
         mapping = await self._field_ids()
         payload: dict[str, Any] = {}
         for name, value in fields.items():
-            field_id = mapping.get(self._nom_present(nom_actuel(name), mapping, casefold=True).casefold())
+            field_id = mapping.get(self._present_name(current_name(name), mapping, casefold=True).casefold())
             if field_id is None:
-                continue  # un champ absent n'est pas une panne : Choregos écrit ce qu'il peut
+                continue  # a missing field is not a failure: Choregos writes what it can
             payload[field_id] = str(value) if not isinstance(value, int | float) else value
         if payload:
             await self.client.request("PUT", f"/rest/api/3/issue/{key}", json={"fields": payload})
 
-    def _nom_present(self, logique: str, presents: Mapping[str, Any], *, casefold: bool = False) -> str:
-        """Le nom Jira du champ : celui configuré, sinon — s'il n'est pas configuré et que le projet
-        Jira a été monté avant S22-21 — son ancien nom français (`Taille`)."""
-        nom = self.field_names.get(logique, logique)
-        ancien = ANCIENS_NOMS.get(nom) if nom == logique else None
-        cle = str.casefold if casefold else str
-        if ancien is not None and cle(nom) not in presents and cle(ancien) in presents:
-            return ancien
-        return nom
+    def _present_name(self, logical: str, present: Mapping[str, Any], *, casefold: bool = False) -> str:
+        """The Jira name of the field: the configured one, otherwise (when it is not configured and
+        the Jira project was set up before S22-21) its former French name (`Taille`)."""  # lang: fr-ok
+        name = self.field_names.get(logical, logical)
+        former = FORMER_NAMES.get(name) if name == logical else None
+        fold = str.casefold if casefold else str
+        if former is not None and fold(name) not in present and fold(former) in present:
+            return former
+        return name
 
     async def _field_ids(self) -> dict[str, str]:
         if self._fields is None:
@@ -355,7 +356,7 @@ class JiraTracker:
         return parse_jira_event(headers.get("X-Atlassian-Webhook-Identifier", ""), json.loads(body or b"{}"))
 
     def verify_webhook(self, headers: Mapping[str, str], body: bytes) -> bool:
-        """Jira Cloud ne signe pas ses webhooks : on exige un secret partagé en en-tête."""
+        """Jira Cloud does not sign its webhooks: a shared secret is required in a header."""
         import hmac
 
         provided = headers.get("X-Choregos-Secret", headers.get("x-choregos-secret", ""))
@@ -380,7 +381,7 @@ def _refusal(status_code: int | None, project_key: str) -> str:
 
 
 def _parse_enum(enum: Any, fields: dict[str, Any], name: str) -> Any:
-    """Lit une taille ou un risque dans un champ personnalisé, quelle que soit sa forme."""
+    """Reads a size or a risk from a custom field, whatever its shape."""
     raw = fields.get(name)
     if isinstance(raw, dict):
         raw = raw.get("value") or raw.get("name")

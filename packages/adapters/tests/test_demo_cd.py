@@ -73,8 +73,7 @@ def test_the_demo_type_is_refused_in_staging_and_prod_and_reaches_the_fakes_proc
     assert "demo" in available("cd")
     for environment in ("staging", "prod"):
         monkeypatch.setenv("CHOREGOS_ENV", environment)
-        # The message is the registry's (S45-10 translates it).
-        with pytest.raises(ConfigurationError, match="refusé"):  # lang: fr-ok
+        with pytest.raises(ConfigurationError, match="refused"):
             build("cd", "demo", {})
     monkeypatch.setenv("CHOREGOS_ENV", "dev")
     remote: Any = build("cd", "demo", {"url": "http://choregos-demo-fakes:8090/cd/mcp", "api_key": TOKEN})

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Adaptateurs de gateway de modèles."""
+"""Model gateway adapters."""
 
 from __future__ import annotations
 
