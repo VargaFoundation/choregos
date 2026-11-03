@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les actions gouvernées (ADR 0035) : les proposer, les décider — jamais les exécuter ici.
+"""Governed actions (ADR 0035): propose them, decide them, never execute them here.
 
-Une action approuvée part dans Temporal (`ActionWorkflow`, `action-<id>`) : la réponse HTTP quitte
-l'API avant le moindre effet. La décision se garde de quatre façons :
-- une SESSION humaine, récente (`step_up_required` au-delà de la fraîcheur demandée) — un jeton
-  d'API ou un client MCP ne décide jamais (ADR 0030) ;
-- le RANG : au moins celui d'un approbateur demandé ;
-- la SÉPARATION DES RÔLES : qui propose ne décide pas — ni l'humain qui l'a proposée, ni le
-  propriétaire de l'agent qui l'a proposée ;
-- la CONCURRENCE : la ligne est relue verrouillée, et le passage à `approved` est un
-  compare-and-set ; de deux approbations simultanées, une seule démarre l'action.
+An approved action leaves for Temporal (`ActionWorkflow`, `action-<id>`): the HTTP response leaves
+the API before the slightest effect. The decision is guarded four ways:
+- a recent HUMAN SESSION (`step_up_required` beyond the freshness asked for): an API token or an
+  MCP client never decides (ADR 0030);
+- the RANK: at least that of a requested approver;
+- the SEPARATION OF DUTIES: whoever proposes does not decide, neither the human who proposed it nor
+  the owner of the agent that proposed it;
+- CONCURRENCY: the row is re-read locked, and the move to `approved` is a compare-and-set; of two
+  simultaneous approvals, only one starts the action.
 """
 
 from __future__ import annotations
@@ -19,104 +19,105 @@ from typing import Any
 
 from choregos_contracts import ActionOrigin, ActionStatus, EventType
 from choregos_core import utcnow
+from choregos_core.compat import alias_names
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Action, ActionEffect, Agent, Project, User, WorkItem
 from ..errors import ApiError, conflict, forbidden, unprocessable
-from ..fraicheur import age_de_l_authentification, exiger_une_authentification_fraiche
+from ..freshness import authentication_age, require_fresh_authentication
 from ..schemas.actions import ActionCreate, ActionDto, ActionEffectDto, ApprovalSpec
-from .evenements import persist_event
+from .events import persist_event
 from .human_groups import groups_for_org
 
-#: Du moins au plus : un approbateur doit avoir au moins le rang demandé.
-RANGS = {"viewer": 0, "developer": 1, "release_captain": 2, "project_owner": 3, "org_admin": 4}
+#: From lowest to highest: an approver must have at least the rank asked for.
+RANKS = {"viewer": 0, "developer": 1, "release_captain": 2, "project_owner": 3, "org_admin": 4}
 
 
-def rang(principal: Any, org: str, projet: str) -> int:
-    roles = [principal.role_for(org, projet), principal.org_roles.get(org)]
-    return max((RANGS.get(str(r), -1) for r in roles if r is not None), default=-1)
+def rank(principal: Any, org: str, project: str) -> int:
+    roles = [principal.role_for(org, project), principal.org_roles.get(org)]
+    return max((RANKS.get(str(r), -1) for r in roles if r is not None), default=-1)
 
 
-#: L'espace des identifiants d'actions de transition : un ticket, une transition, une tentative
-#: donnent toujours le même — une activité rejouée retrouve l'action, elle n'en crée pas une autre.
-_ESPACE_DES_TRANSITIONS = uuid.UUID("6f1c9a52-3b0e-4d7a-9e21-5c8b0d4f7a13")
+#: The namespace of transition action ids: a work item, a transition and an attempt always give the
+#: same one, so a replayed activity finds the action instead of creating another.
+_TRANSITION_NAMESPACE = uuid.UUID("6f1c9a52-3b0e-4d7a-9e21-5c8b0d4f7a13")
 
 
-async def politique_de_l_action(
-    session: AsyncSession, projet: Project, effets: list[dict[str, Any]], params: dict[str, Any]
+async def action_policy(
+    session: AsyncSession, project: Project, effects: list[dict[str, Any]], params: dict[str, Any]
 ) -> tuple[str, list[str]]:
-    """La plus stricte des politiques que ses effets — et leurs compensations — exigent pour CE
-    projet (ADR 0034), et ce qui l'impose. `forbidden` refuse l'action ; `approval` demande une
-    personne ; `allowed` : la politique de l'organisation suffit."""
-    from ..effets import EffetRefuse, politique_de_l_effet, rendre
-    from .connecteurs import RANG, politique_pour_le_projet
+    """The strictest of the policies that its effects, and their compensations, demand for THIS
+    project (ADR 0034), and what imposes it. `forbidden` refuses the action; `approval` asks for a
+    person; `allowed`: the organisation's policy is enough."""
+    from ..effects import EffectRefused, effect_policy, render
+    from .connectors import RANK, policy_for_project
 
-    pire, motifs = "allowed", []
-    for spec in [*effets, *(dict(e["compensate"]) for e in effets if e.get("compensate"))]:
-        nom = str(spec.get("effect"))
-        if nom == "connector.call":
+    worst, reasons = "allowed", []
+    for spec in [*effects, *(dict(e["compensate"]) for e in effects if e.get("compensate"))]:
+        name = str(spec.get("effect"))
+        if name == "connector.call":
             try:
-                appel = rendre(dict(spec.get("with") or {}), {"params": params, "effects": []})
-                connecteur, operation = str(appel.get("connector", "")), str(appel.get("operation", ""))
-            except EffetRefuse:
-                # Le connecteur se déduit d'un effet précédent : on ne sait pas encore lequel, une
-                # personne décide.
-                connecteur, operation, politique = "?", "?", "approval"
+                call = render(dict(spec.get("with") or {}), {"params": params, "effects": []})
+                connector, operation = str(call.get("connector", "")), str(call.get("operation", ""))
+            except EffectRefused:
+                # The connector is deduced from a previous effect: we do not know yet which one,
+                # a person decides.
+                connector, operation, policy = "?", "?", "approval"
             else:
-                politique = await politique_pour_le_projet(session, projet, connecteur, operation)
-            sujet = f"{connecteur}/{operation}"
+                policy = await policy_for_project(session, project, connector, operation)
+            subject = f"{connector}/{operation}"
         else:
-            politique, sujet = politique_de_l_effet(nom), nom
-        if politique != "allowed":
-            motifs.append(f"{sujet}: {politique}")
-        if RANG[politique] > RANG[pire]:
-            pire = politique
-    return pire, motifs
+            policy, subject = effect_policy(name), name
+        if policy != "allowed":
+            reasons.append(f"{subject}: {policy}")
+        if RANK[policy] > RANK[worst]:
+            worst = policy
+    return worst, reasons
 
 
-async def proposer(
+async def propose(
     session: AsyncSession,
-    projet: Project,
-    corps: ActionCreate,
+    project: Project,
+    body: ActionCreate,
     *,
-    origine: str,
-    propose_par: dict[str, Any],
+    origin: str,
+    proposed_by: dict[str, Any],
     principal: Any,
     run_id: str | None = None,
     action_id: str | None = None,
 ) -> Action:
-    """Enregistre une action en attente de décision ; ses effets doivent être déclarés, et aucun
-    ne doit appeler ce que ce projet s'interdit : une action condamnée ne se présente pas."""
-    from ..effets import effets_declares
+    """Record an action awaiting a decision; its effects must be declared, and none may call what
+    this project forbids itself: a doomed action is not presented."""
+    from ..effects import declared_effects
 
-    connus = effets_declares()
-    nommes = {e.effect for e in corps.effects} | {
-        str(e.compensate.get("effect")) for e in corps.effects if e.compensate is not None
+    known = declared_effects()
+    named = {e.effect for e in body.effects} | {
+        str(e.compensate.get("effect")) for e in body.effects if e.compensate is not None
     }
-    inconnus = sorted(nommes - connus)
-    if inconnus:
-        raise unprocessable(f"unknown effects: {', '.join(inconnus)} (known: {', '.join(sorted(connus))})")
-    effets = [e.model_dump(by_alias=True, exclude_none=True) for e in corps.effects]
-    pire, motifs = await politique_de_l_action(session, projet, effets, corps.params)
-    if pire == "forbidden":
-        interdits = [m for m in motifs if m.endswith("forbidden")]
-        raise unprocessable(f"action forbidden in this project: {'; '.join(interdits)}")
+    unknown = sorted(named - known)
+    if unknown:
+        raise unprocessable(f"unknown effects: {', '.join(unknown)} (known: {', '.join(sorted(known))})")
+    effects = [e.model_dump(by_alias=True, exclude_none=True) for e in body.effects]
+    worst, reasons = await action_policy(session, project, effects, body.params)
+    if worst == "forbidden":
+        forbidden_ones = [m for m in reasons if m.endswith("forbidden")]
+        raise unprocessable(f"action forbidden in this project: {'; '.join(forbidden_ones)}")
     action = Action(
         **({"id": action_id} if action_id else {}),
-        org_id=projet.org_id,
-        project_id=projet.id,
-        work_item_id=corps.work_item_id,
+        org_id=project.org_id,
+        project_id=project.id,
+        work_item_id=body.work_item_id,
         run_id=run_id,
-        origin=origine,
-        kind=corps.kind,
-        title=corps.title,
-        justification=corps.justification,
-        params=corps.params,
-        effects=effets,
-        proposed_by=propose_par,
-        approval=corps.approval.model_dump(mode="json"),
+        origin=origin,
+        kind=body.kind,
+        title=body.title,
+        justification=body.justification,
+        params=body.params,
+        effects=effects,
+        proposed_by=proposed_by,
+        approval=body.approval.model_dump(mode="json"),
         decisions=[],
         status=ActionStatus.PENDING_APPROVAL.value,
     )
@@ -126,75 +127,75 @@ async def proposer(
         session,
         principal,
         "action.propose",
-        org_id=projet.org_id,
+        org_id=project.org_id,
         target_type="action",
         target_id=action.id,
-        kind=corps.kind,
-        origin=origine,
+        kind=body.kind,
+        origin=origin,
     )
     await persist_event(
         session,
         EventType.ACTION_PROPOSED,
-        project_id=projet.id,
-        work_item_id=corps.work_item_id,
-        project_slug=projet.slug,
+        project_id=project.id,
+        work_item_id=body.work_item_id,
+        project_slug=project.slug,
         subject=action.id,
-        kind=corps.kind,
-        title=corps.title,
-        proposed_by=propose_par,
+        kind=body.kind,
+        title=body.title,
+        proposed_by=proposed_by,
     )
     return action
 
 
-async def proposer_pour_une_transition(
+async def propose_for_transition(
     session: AsyncSession,
-    projet: Project,
+    project: Project,
     item: WorkItem,
     spec: dict[str, Any],
     *,
     transition: str,
-    tentative: int,
+    attempt: int,
     workflow_id: str,
 ) -> Action:
-    """L'action qu'une transition SYSTÈME propose (S20-05), une fois par tentative.
+    """The action a SYSTEM transition proposes (S20-05), once per attempt.
 
-    Son titre, sa justification et ses paramètres se rendent avec les champs du ticket. Quand
-    chacune des opérations qu'elle appelle est permise à ce projet et que le workflow n'exige pas
-    de validation, la politique décide : elle naît approuvée. Sinon elle attend une personne,
-    comme toute autre — le workflow peut ajouter une validation, jamais en retirer une.
-    Une variable absente, un effet inconnu, une opération interdite : `EffetRefuse` ou 422.
+    Its title, justification and parameters are rendered with the work item's fields. When each of
+    the operations it calls is allowed to this project and the workflow demands no validation, the
+    policy decides: it is born approved. Otherwise it waits for a person, like any other: the
+    workflow can add a validation, never remove one.
+    A missing variable, an unknown effect, a forbidden operation: `EffectRefused` or 422.
     """
     from choregos_contracts import TransitionAction
 
-    from ..effets import rendre
+    from ..effects import render
     from ..rbac import SYSTEM
 
-    identifiant = str(uuid.uuid5(_ESPACE_DES_TRANSITIONS, f"{item.id}:{transition}:{tentative}"))
-    deja = await session.get(Action, identifiant)
-    if deja is not None:
-        return deja
+    identifier = str(uuid.uuid5(_TRANSITION_NAMESPACE, f"{item.id}:{transition}:{attempt}"))
+    existing = await session.get(Action, identifier)
+    if existing is not None:
+        return existing
     action = TransitionAction.model_validate(spec)
-    contexte = {
+    context = {
         "fields": dict(item.fields or {}),
         "work_item": {"id": item.id, "key": item.tracker_key, "title": item.title},
     }
-    corps = ActionCreate(
+    body = ActionCreate(
         kind=action.kind,
-        title=str(rendre(action.title, contexte))[:300],
-        justification=str(rendre(action.justification, contexte)) if action.justification else None,
-        params=dict(rendre(action.params, contexte)),
+        title=str(render(action.title, context))[:300],
+        justification=str(render(action.justification, context)) if action.justification else None,
+        params=dict(render(action.params, context)),
         effects=[e.model_dump(by_alias=True, exclude_none=True) for e in action.effects],
         approval=ApprovalSpec.model_validate(action.approval.model_dump())
         if action.approval
         else ApprovalSpec(),
         work_item_id=item.id,
     )
-    nouvelle = await proposer(
+    proposed = await propose(
         session,
-        projet,
-        corps,
-        origine=ActionOrigin.TRANSITION.value,
-        propose_par={
+        project,
+        body,
+        origin=ActionOrigin.TRANSITION.value,
+        proposed_by={
             "kind": "system",
             "id": "system",
             "via": "transition",
@@ -202,13 +203,13 @@ async def proposer_pour_une_transition(
             "workflow_id": workflow_id,
         },
         principal=SYSTEM,
-        action_id=identifiant,
+        action_id=identifier,
     )
-    pire, _motifs = await politique_de_l_action(session, projet, nouvelle.effects, nouvelle.params or {})
-    if action.approval is None and pire == "allowed":
-        # Démarrée par l'activité qui l'a proposée, une fois la ligne écrite (orchestrateur).
-        await approuvee_par_la_politique(session, projet, nouvelle)
-    return nouvelle
+    worst, _reasons = await action_policy(session, project, proposed.effects, proposed.params or {})
+    if action.approval is None and worst == "allowed":
+        # Started by the activity that proposed it, once the row is written (orchestrator).
+        await approved_by_policy(session, project, proposed)
+    return proposed
 
 
 def start_once_committed(session: AsyncSession, action: Action) -> None:
@@ -219,26 +220,26 @@ def start_once_committed(session: AsyncSession, action: Action) -> None:
     (Temporal down, the process killed), `action_relay` finds the row and starts it again — under
     the same id, `action-<id>`, so never twice."""
     from ..db.session import after_commit
-    from ..temporal import action_id as identifiant
+    from ..temporal import action_id as workflow_id_of
     from ..temporal import get_temporal
 
     action_id = action.id
-    action.temporal_wf_id = identifiant(action_id)
+    action.temporal_wf_id = workflow_id_of(action_id)
 
     async def start() -> None:
-        await get_temporal().start_action(identifiant(action_id), {"action_id": action_id})
+        await get_temporal().start_action(workflow_id_of(action_id), {"action_id": action_id})
 
     after_commit(session, start)
 
 
-async def approuvee_par_la_politique(session: AsyncSession, projet: Project, action: Action) -> None:
-    """Chaque opération qu'elle appelle est permise à ce projet : la politique décide, l'action naît
-    approuvée — journalisée, compensable, jouée par l'`ActionWorkflow` comme toute autre. Qui la
-    démarre (l'activité d'une transition, le courtier) le fait une fois la ligne VISIBLE."""
-    from ..temporal import action_id as identifiant_temporal
+async def approved_by_policy(session: AsyncSession, project: Project, action: Action) -> None:
+    """Each operation it calls is allowed to this project: the policy decides, the action is born
+    approved, journalled, compensable, played by the `ActionWorkflow` like any other. Whoever starts
+    it (a transition's activity, the broker) does so once the row is VISIBLE."""
+    from ..temporal import action_id as temporal_workflow_id
 
     action.status = ActionStatus.APPROVED.value
-    action.temporal_wf_id = identifiant_temporal(action.id)
+    action.temporal_wf_id = temporal_workflow_id(action.id)
     action.decisions = [
         {
             "by": "policy",
@@ -251,9 +252,9 @@ async def approuvee_par_la_politique(session: AsyncSession, projet: Project, act
     await persist_event(
         session,
         EventType.ACTION_DECIDED,
-        project_id=projet.id,
+        project_id=project.id,
         work_item_id=action.work_item_id,
-        project_slug=projet.slug,
+        project_slug=project.slug,
         subject=action.id,
         decision="approve",
         by="policy",
@@ -261,166 +262,164 @@ async def approuvee_par_la_politique(session: AsyncSession, projet: Project, act
     )
 
 
-async def _prevenir_le_ticket(session: AsyncSession, projet: Project, action: Action) -> None:
-    """Une action de transition réglée hors de son workflow — rejetée ici — réveille le ticket qui
-    l'attend (`action_settled`) ; celle qui réussit ou échoue le fait depuis l'`ActionWorkflow`."""
+async def _notify_work_item(session: AsyncSession, project: Project, action: Action) -> None:
+    """A transition action settled outside its workflow (rejected here) wakes the work item that
+    waits for it (`action_settled`); one that succeeds or fails does so from the `ActionWorkflow`."""
     if action.origin != ActionOrigin.TRANSITION.value or action.work_item_id is None:
         return
     from ..temporal import get_temporal, interpreter_id
 
-    cible = (action.proposed_by or {}).get("workflow_id")
-    if not cible:
+    target = (action.proposed_by or {}).get("workflow_id")
+    if not target:
         item = await session.get(WorkItem, action.work_item_id)
         if item is None:
             return
-        cible = interpreter_id(projet.slug, item.tracker_key)
+        target = interpreter_id(project.slug, item.tracker_key)
     await get_temporal().signal(
-        str(cible), "action_settled", {"action_id": action.id, "status": action.status}
+        str(target), "action_settled", {"action_id": action.id, "status": action.status}
     )
 
 
-async def signaler_une_preuve(action_id: str, position: int, ok: bool, detail: str) -> None:
-    """La couture d'une PREUVE (S20-08) : un effet a demandé qu'on l'attende (`attendre_une_preuve`) ;
-    ce qui la constate — un rapport du collecteur, un événement extérieur — la remet à l'action.
-    Favorable, l'action reprend ; contraire, elle échoue et ce qu'elle avait fait se compense."""
-    from ..temporal import action_id as identifiant
+async def signal_evidence(action_id: str, position: int, ok: bool, detail: str) -> None:
+    """The seam of an EVIDENCE (S20-08): an effect asked to wait for it; what
+    establishes it, a collector report or an outside event, hands it to the action.
+    Favourable, the action resumes; unfavourable, it fails and what it had done is compensated."""
+    from ..temporal import action_id as workflow_id_of
     from ..temporal import get_temporal
 
     await get_temporal().signal(
         # `evidence`: the English name of the signal (S34-02); the workflow still accepts `preuve`.
-        identifiant(action_id),
+        workflow_id_of(action_id),
         "evidence",
         {"position": position, "ok": ok, "detail": detail},
     )
 
 
-async def _proprietaire_de_l_agent(
-    session: AsyncSession, propose_par: dict[str, Any], org_id: str
-) -> str | None:
-    if propose_par.get("kind") != "agent":
+async def _agent_owner(session: AsyncSession, proposed_by: dict[str, Any], org_id: str) -> str | None:
+    if proposed_by.get("kind") != "agent":
         return None
-    slug = str(propose_par.get("id", "")).removeprefix("agent:")
+    slug = str(proposed_by.get("id", "")).removeprefix("agent:")
     agent = (
         await session.execute(select(Agent).where(Agent.org_id == org_id, Agent.slug == slug))
     ).scalar_one_or_none()
     if agent is None or agent.owner_id is None:
         return None
-    proprietaire = await session.get(User, agent.owner_id)
-    return proprietaire.email.lower() if proprietaire is not None else None
+    owner = await session.get(User, agent.owner_id)
+    return owner.email.lower() if owner is not None else None
 
 
-async def decider(
+async def decide(
     session: AsyncSession,
-    projet: Project,
+    project: Project,
     org_slug: str,
     action_id: str,
     decision: str,
-    raison: str | None,
+    reason: str | None,
     principal: Any,
 ) -> Action:
-    if principal.kind != "user" or principal.authentifie_le is None:
-        # Un jeton d'API, un client MCP : ils proposent, ils ne décident pas (ADR 0030).
+    if principal.kind != "user" or principal.authenticated_at is None:
+        # An API token, an MCP client: they propose, they do not decide (ADR 0030).
         raise forbidden("a decision is made in a human session (decision_requires_session)")
-    if decision == "reject" and not (raison or "").strip():
+    if decision == "reject" and not (reason or "").strip():
         raise unprocessable("a rejection must say why")
     action = (
         await session.execute(
-            select(Action).where(Action.id == action_id, Action.project_id == projet.id).with_for_update()
+            select(Action).where(Action.id == action_id, Action.project_id == project.id).with_for_update()
         )
     ).scalar_one_or_none()
     if action is None:
         raise ApiError(404, "Action not found", action_id)
     if action.status != ActionStatus.PENDING_APPROVAL.value:
         raise conflict(f"the action is already {action.status}")
-    approbation = action.approval or {}
-    approbateurs = approbation.get("approvers") or [{"role": "project_owner", "min": 1}]
-    mon_rang = rang(principal, org_slug, projet.slug)
-    assez_haut = [a for a in approbateurs if mon_rang >= RANGS.get(str(a.get("role") or "project_owner"), 3)]
-    if not assez_haut:
+    approval = action.approval or {}
+    approvers = approval.get("approvers") or [{"role": "project_owner", "min": 1}]
+    my_rank = rank(principal, org_slug, project.slug)
+    high_enough = [a for a in approvers if my_rank >= RANKS.get(str(a.get("role") or "project_owner"), 3)]
+    if not high_enough:
         raise forbidden("deciding this action needs an approver's rank")
     # A group named by the rule (ADR 0052) is a second condition, not an alternative: a project owner
     # outside `netops-approvers` does not approve a firewall rule. The groups are the identity
     # provider's, as of the decider's last sign-in through it.
-    mes_groupes = groups_for_org(principal.groups, org_slug)
-    if not any(not a.get("group") or str(a["group"]) in mes_groupes for a in assez_haut):
-        groupes = sorted({str(a["group"]) for a in assez_haut if a.get("group")})
+    my_groups = groups_for_org(principal.groups, org_slug)
+    if not any(not a.get("group") or str(a["group"]) in my_groups for a in high_enough):
+        groups = sorted({str(a["group"]) for a in high_enough if a.get("group")})
         raise forbidden(
-            f"deciding this action needs membership of the group {' or '.join(groupes)} "
+            f"deciding this action needs membership of the group {' or '.join(groups)} "
             "(identity-provider groups, as of your last sign-in)"
         )
-    if approbation.get("separation_of_duties", True):
-        propose_par = action.proposed_by or {}
-        moi = principal.email.lower()
-        if (propose_par.get("kind") == "user" and str(propose_par.get("id", "")).lower() == moi) or (
-            await _proprietaire_de_l_agent(session, propose_par, projet.org_id)
-        ) == moi:
+    if approval.get("separation_of_duties", True):
+        proposed_by = action.proposed_by or {}
+        me = principal.email.lower()
+        if (proposed_by.get("kind") == "user" and str(proposed_by.get("id", "")).lower() == me) or (
+            await _agent_owner(session, proposed_by, project.org_id)
+        ) == me:
             raise unprocessable(
                 "separation of duties: whoever proposes (or owns the agent that proposes) does not decide"
             )
     if any(d.get("by", "").lower() == principal.email.lower() for d in action.decisions or []):
         raise conflict("you have already decided this action")
-    # `step_up_minutes` absent (`None`) : la règle n'exige pas d'authentification récente — ce que peut
-    # dire une politique d'un greffon (l'ontologie) ; une action proposée par l'API en a toujours une.
-    fraicheur = approbation.get("step_up_minutes", 10)
+    # `step_up_minutes` absent (`None`): the rule demands no recent authentication, which an
+    # extension's policy (the ontology) can say; an action proposed by the API always has one.
+    freshness = approval.get("step_up_minutes", 10)
     age = (
-        exiger_une_authentification_fraiche(principal, int(fraicheur))
-        if decision == "approve" and fraicheur is not None
-        else age_de_l_authentification(principal)
+        require_fresh_authentication(principal, int(freshness))
+        if decision == "approve" and freshness is not None
+        else authentication_age(principal)
     )
-    entree = {
+    entry = {
         "by": principal.email,
         "decision": decision,
-        "reason": raison,
+        "reason": reason,
         "at": utcnow().isoformat(),
         "auth_age_seconds": age,
     }
-    decisions = [*(action.decisions or []), entree]
-    approuvees = {d["by"].lower() for d in decisions if d.get("decision") == "approve"}
-    minimum = max(int(a.get("min", 1)) for a in approbateurs)
-    statut = (
+    decisions = [*(action.decisions or []), entry]
+    approved = {d["by"].lower() for d in decisions if d.get("decision") == "approve"}
+    minimum = max(int(a.get("min", 1)) for a in approvers)
+    new_status = (
         ActionStatus.REJECTED.value
         if decision == "reject"
         else ActionStatus.APPROVED.value
-        if len(approuvees) >= minimum
+        if len(approved) >= minimum
         else ActionStatus.PENDING_APPROVAL.value
     )
-    # Compare-and-set : la ligne n'avance que si elle est encore en attente. Sur PostgreSQL le
-    # verrou de la lecture sérialise déjà ; ailleurs, c'est ce qui garde le second décideur.
-    fait = await session.execute(
+    # Compare-and-set: the row only moves while it is still pending. On PostgreSQL the read's lock
+    # already serialises; elsewhere this is what guards against the second decider.
+    done = await session.execute(
         update(Action)
         .where(Action.id == action.id, Action.status == ActionStatus.PENDING_APPROVAL.value)
-        .values(decisions=decisions, status=statut, updated_at=utcnow())
+        .values(decisions=decisions, status=new_status, updated_at=utcnow())
         .execution_options(synchronize_session=False)
     )
-    if fait.rowcount != 1:  # type: ignore[attr-defined]
+    if done.rowcount != 1:  # type: ignore[attr-defined]
         raise conflict("another decision has just been made")
     await session.refresh(action)
     await record(
         session,
         principal,
         "action.decide",
-        org_id=projet.org_id,
+        org_id=project.org_id,
         target_type="action",
         target_id=action.id,
         decision=decision,
-        status=statut,
+        status=new_status,
         auth_age_seconds=age,
     )
     await persist_event(
         session,
         EventType.ACTION_DECIDED,
-        project_id=projet.id,
+        project_id=project.id,
         work_item_id=action.work_item_id,
-        project_slug=projet.slug,
+        project_slug=project.slug,
         subject=action.id,
         decision=decision,
         by=principal.email,
-        status=statut,
+        status=new_status,
     )
-    if statut == ActionStatus.APPROVED.value:
+    if new_status == ActionStatus.APPROVED.value:
         start_once_committed(session, action)
-    elif statut == ActionStatus.REJECTED.value:
-        await _prevenir_le_ticket(session, projet, action)
+    elif new_status == ActionStatus.REJECTED.value:
+        await _notify_work_item(session, project, action)
     return action
 
 
@@ -430,8 +429,70 @@ async def dto(session: AsyncSession, action: Action) -> ActionDto:
             select(ActionEffect).where(ActionEffect.action_id == action.id).order_by(ActionEffect.position)
         )
     ).scalars()
-    resultat = ActionDto.model_validate(action)
-    resultat.journal = [ActionEffectDto.model_validate(e) for e in journal]
-    projet = await session.get(Project, action.project_id)
-    resultat.project_slug = projet.slug if projet is not None else None
-    return resultat
+    result = ActionDto.model_validate(action)
+    result.journal = [ActionEffectDto.model_validate(e) for e in journal]
+    project = await session.get(Project, action.project_id)
+    result.project_slug = project.slug if project is not None else None
+    return result
+
+
+async def proposer(  # lang: fr-ok alias:internal
+    session: AsyncSession,
+    project: Project,
+    body: ActionCreate,
+    *,
+    origine: str,  # lang: fr-ok alias:internal
+    propose_par: dict[str, Any],  # lang: fr-ok alias:internal
+    principal: Any,
+    run_id: str | None = None,
+    action_id: str | None = None,
+) -> Action:
+    """The former name of `propose`, with its former keywords (`origine`, `propose_par`): the broker,
+    the ontology and the actions router still call it so."""
+    return await propose(  # lang: fr-ok alias:internal
+        session,
+        project,
+        body,
+        origin=origine,  # lang: fr-ok alias:internal
+        proposed_by=propose_par,  # lang: fr-ok alias:internal
+        principal=principal,
+        run_id=run_id,
+        action_id=action_id,
+    )
+
+
+async def proposer_pour_une_transition(  # lang: fr-ok alias:internal
+    session: AsyncSession,
+    project: Project,
+    item: WorkItem,
+    spec: dict[str, Any],
+    *,
+    transition: str,
+    tentative: int,  # lang: fr-ok alias:internal
+    workflow_id: str,
+) -> Action:
+    """The former name of `propose_for_transition`, with its former keyword `tentative`: the
+    orchestrator's activity still calls it so."""
+    return await propose_for_transition(
+        session, project, item, spec, transition=transition, attempt=tentative, workflow_id=workflow_id
+    )
+
+
+RANGS = RANKS  # lang: fr-ok alias:internal
+rang = rank  # lang: fr-ok alias:internal
+politique_de_l_action = action_policy  # lang: fr-ok alias:internal
+approuvee_par_la_politique = approved_by_policy  # lang: fr-ok alias:internal
+signaler_une_preuve = signal_evidence  # lang: fr-ok alias:internal
+decider = decide  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {
+        "RANGS": "RANKS",  # lang: fr-ok alias:internal
+        "rang": "rank",  # lang: fr-ok alias:internal
+        "politique_de_l_action": "action_policy",  # lang: fr-ok alias:internal
+        "approuvee_par_la_politique": "approved_by_policy",  # lang: fr-ok alias:internal
+        "signaler_une_preuve": "signal_evidence",  # lang: fr-ok alias:internal
+        "decider": "decide",  # lang: fr-ok alias:internal
+    },
+)

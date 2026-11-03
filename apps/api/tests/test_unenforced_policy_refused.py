@@ -67,7 +67,7 @@ async def test_a_lazy_provisioning_does_not_refuse(app: Any, monkeypatch: pytest
     real = gabarits.livraison
 
     def promising(*args: Any, **kwargs: Any) -> Any:
-        return dataclasses.replace(real(*args, **kwargs), politique=PROMISING_POLICY)
+        return dataclasses.replace(real(*args, **kwargs), policy=PROMISING_POLICY)
 
     monkeypatch.setattr(gabarits, "livraison", promising)
 

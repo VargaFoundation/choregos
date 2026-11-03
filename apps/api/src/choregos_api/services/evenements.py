@@ -1,48 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Un seul chemin pour un événement : la table `events` et le bus SSE."""
+# lang: fr-ok-file alias:internal; former `services.events`, ADR 0098
+"""The former name of `choregos_api.services.events`: the same module object, so a patch on one
+is a patch on the other."""
 
 from __future__ import annotations
 
-from typing import Any
+import sys
 
-from choregos_contracts import ChoregosEvent, EventType
-from choregos_core import (
-    utcnow,
+from choregos_core.compat import replace_module
+
+from .events import (
+    persist_event,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import (
-    Event,
-)
-from ..events import diffuser
+__all__ = [
+    "persist_event",
+]
 
-
-async def persist_event(
-    session: AsyncSession,
-    type_: EventType,
-    *,
-    project_id: str | None = None,
-    work_item_id: str | None = None,
-    subject: str | None = None,
-    project_slug: str | None = None,
-    **payload: Any,
-) -> Event:
-    """Persiste dans `events` **et** publie sur le bus SSE : un seul chemin pour tout."""
-    row = Event(
-        project_id=project_id,
-        work_item_id=work_item_id,
-        type=str(type_),
-        subject=subject,
-        payload=payload,
-        ts=utcnow(),
-    )
-    session.add(row)
-    # `source` peut venir de l'appelant (« github », « jira ») : c'est la source CloudEvents,
-    # pas une donnée — l'ancien `emit()` la prenait de la même façon.
-    source = str(payload.get("source") or "/choregos/api")
-    donnees = {k: v for k, v in payload.items() if k != "source"}
-    await diffuser(
-        session,
-        ChoregosEvent.emit(type_, source=source, subject=subject, project_slug=project_slug, **donnees),
-    )
-    return row
+replace_module(__name__, sys.modules["choregos_api.services.events"])

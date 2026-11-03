@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le registre d'agents, côté service (ADR 0033) : ce qu'une épingle de projet peut changer d'une
-version, la version effective, et la résolution d'une référence `slug[@version]` pour un run."""
+"""The agent registry, service side (ADR 0033): what a project pin may change in a version, the
+effective version, and the resolution of a `slug[@version]` reference for a run."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 
 from choregos_core import utcnow
+from choregos_core.compat import alias_names
 from choregos_core.hosted import native_sidecars_refusal
 from choregos_core.instructions import erreurs_des_instructions
 from sqlalchemy import select
@@ -24,36 +25,36 @@ from .agent_governance import usable_in_project
 from .agent_releases import served
 
 
-def empreinte(spec: AgentSpec) -> str:
-    """L'empreinte d'une version : ce qu'un run enregistre, et ce qu'on compare."""
-    contenu = spec.model_dump(mode="json")
+def digest(spec: AgentSpec) -> str:
+    """The digest of a version: what a run records, and what is compared."""
+    content = spec.model_dump(mode="json")
     # Added after versions were published (ADR 0051): absent, it leaves their digest unchanged.
-    if not contenu.get("knowledge"):
-        contenu.pop("knowledge", None)
+    if not content.get("knowledge"):
+        content.pop("knowledge", None)
     # The default memory scope (S32-02) is left out: a version published before the field existed
     # keeps its digest, and the catalogue does not see every agent as changed.
-    if contenu.get("memory") == "project":
-        del contenu["memory"]
+    if content.get("memory") == "project":
+        del content["memory"]
     # Same for the runtime (ADR 0063): a version that names none keeps the digest it had.
-    if contenu.get("runtime") is None:
-        contenu.pop("runtime", None)
+    if content.get("runtime") is None:
+        content.pop("runtime", None)
     # `memories` (S40-11) needs nothing here: `AgentSpec` does not serialise it while unset, so every
     # version published before it keeps its digest.
     # The default network (ADR 0070): every field unset, as in a version published before it existed.
-    if not any(value is not None for value in (contenu.get("network") or {}).values()):
-        contenu.pop("network", None)
-    blob = json.dumps(contenu, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if not any(value is not None for value in (content.get("network") or {}).values()):
+        content.pop("network", None)
+    blob = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def erreurs_d_une_version(spec: AgentSpec) -> None:
-    """Des instructions qui ne rendraient pas — syntaxe, variable inconnue, ou accès refusé par le
-    bac à sable — sont refusées à la publication, pas découvertes au premier run."""
-    erreurs = erreurs_des_instructions(spec.instructions)
-    if erreurs:
+def version_errors(spec: AgentSpec) -> None:
+    """Instructions that would not render (syntax, unknown variable, or access refused by the
+    sandbox) are refused at publication, not discovered at the first run."""
+    errors = erreurs_des_instructions(spec.instructions)
+    if errors:
         raise unprocessable(
             "the agent's instructions do not render",
-            [{"loc": ["instructions"], "msg": e} for e in erreurs],
+            [{"loc": ["instructions"], "msg": e} for e in errors],
         )
     if isinstance(spec.runtime, CodeRuntime):
         # The image is a NAME the operator mapped (ADR 0063): an unknown one would fail at the first
@@ -99,53 +100,55 @@ def erreurs_d_une_version(spec: AgentSpec) -> None:
                 ) from exc
 
 
-def _outils(spec: AgentSpec) -> set[str]:
-    return {outil for serveur in spec.mcp_servers for outil in serveur.tools}
+def _tools(spec: AgentSpec) -> set[str]:
+    return {tool for server in spec.mcp_servers for tool in server.tools}
 
 
-def elargissements(spec: AgentSpec, surcharges: AgentOverrides) -> list[str]:
-    """Ce qu'une surcharge ÉLARGIRAIT : un projet ne fait que resserrer une version."""
-    ecarts: list[str] = []
-    for groupe in ("limits", "budget"):
-        de_la_version = getattr(spec, groupe)
-        du_projet = getattr(surcharges, groupe)
-        for champ in type(de_la_version).model_fields:
-            plafond, demande = getattr(de_la_version, champ), getattr(du_projet, champ)
-            if demande is not None and plafond is not None and demande > plafond:
-                ecarts.append(f"{groupe}.{champ}: {demande} exceeds the version's {plafond}")
-    if surcharges.tools is not None:
-        en_trop = sorted(set(surcharges.tools) - _outils(spec))
-        if en_trop:
-            ecarts.append(f"tools the version does not grant: {', '.join(en_trop)}")
-    return ecarts
+def widenings(spec: AgentSpec, overrides: AgentOverrides) -> list[str]:
+    """What an override WOULD WIDEN: a project only ever tightens a version."""
+    gaps: list[str] = []
+    for group in ("limits", "budget"):
+        of_version = getattr(spec, group)
+        of_project = getattr(overrides, group)
+        for field in type(of_version).model_fields:
+            ceiling, asked = getattr(of_version, field), getattr(of_project, field)
+            if asked is not None and ceiling is not None and asked > ceiling:
+                gaps.append(f"{group}.{field}: {asked} exceeds the version's {ceiling}")
+    if overrides.tools is not None:
+        extra = sorted(set(overrides.tools) - _tools(spec))
+        if extra:
+            gaps.append(f"tools the version does not grant: {', '.join(extra)}")
+    return gaps
 
 
-def effective(spec: AgentSpec, surcharges: AgentOverrides) -> AgentSpec:
-    """La version, surcharges appliquées : ce qui tournera."""
-    resultat = spec.model_copy(deep=True)
-    for groupe in ("limits", "budget"):
-        cible = getattr(resultat, groupe)
-        for champ in type(cible).model_fields:
-            demande = getattr(getattr(surcharges, groupe), champ)
-            if demande is None:
+def effective(spec: AgentSpec, overrides: AgentOverrides) -> AgentSpec:
+    """The version with its overrides applied: what will run."""
+    result = spec.model_copy(deep=True)
+    for group in ("limits", "budget"):
+        target = getattr(result, group)
+        for field in type(target).model_fields:
+            asked = getattr(getattr(overrides, group), field)
+            if asked is None:
                 continue
             # The minimum, never an assignment: a pin that follows a channel meets revisions its
             # override was not validated against (S40-02), and a looser one must not widen them.
-            plafond = getattr(cible, champ)
-            setattr(cible, champ, demande if plafond is None else min(plafond, demande))
-    if surcharges.tools is not None:
-        gardes = set(surcharges.tools)
-        for serveur in resultat.mcp_servers:
-            serveur.tools = [outil for outil in serveur.tools if outil in gardes]
-    return resultat
+            ceiling = getattr(target, field)
+            setattr(target, field, asked if ceiling is None else min(ceiling, asked))
+    if overrides.tools is not None:
+        kept = set(overrides.tools)
+        for server in result.mcp_servers:
+            server.tools = [tool for tool in server.tools if tool in kept]
+    return result
 
 
-class AgentIndisponible(RuntimeError):  # noqa: N818 - un refus motivé, dit au run
-    """L'agent qu'un acteur nomme n'existe pas, n'est pas actif, ou a expiré : le run ne part pas."""
+class AgentUnavailable(RuntimeError):  # noqa: N818 - a refusal with its reason, told to the run
+    """The agent an actor names does not exist, is not active, or has expired: the run does not start.
+
+    The Temporal error type recorded for it stays `AgentIndisponible` (S45-39)."""
 
 
 @dataclass(frozen=True)
-class AgentResolu:
+class ResolvedAgent:
     agent: Agent
     version: int
     spec: AgentSpec
@@ -159,36 +162,36 @@ class AgentResolu:
     channel: str | None = None
 
 
-async def resoudre_l_agent(
+async def resolve_agent(
     session: AsyncSession,
     org_id: str,
     project_id: str,
     reference: str,
     *,
     work_item_id: str | None = None,
-) -> AgentResolu:
+) -> ResolvedAgent:
     """The revision a run loads, first match wins (ADR 0071): `slug@N`; the project's fixed pin; its
     pin on a channel; the project's "follow testing" switch; the deterministic canary share of the
     work item; production. The project's overrides apply in every case: they only tighten."""
-    slug, _, demandee = reference.partition("@")
+    slug, _, requested = reference.partition("@")
     agent = (
         await session.execute(select(Agent).where(Agent.org_id == org_id, Agent.slug == slug))
     ).scalar_one_or_none()
     if agent is None:
-        raise AgentIndisponible(f"agent `{slug}` does not exist in the project's organisation")
+        raise AgentUnavailable(f"agent `{slug}` does not exist in the project's organisation")
     # A personal agent never runs in a workflow, a project's agent only in its project (ADR 0061).
-    refus = usable_in_project(agent.scope, agent.project_id, agent.slug, project_id)
-    if refus is not None:
-        raise AgentIndisponible(refus)
+    refusal = usable_in_project(agent.scope, agent.project_id, agent.slug, project_id)
+    if refusal is not None:
+        raise AgentUnavailable(refusal)
     if agent.status != "active":
-        raise AgentIndisponible(f"agent `{slug}` is {agent.status}: the run does not start")
+        raise AgentUnavailable(f"agent `{slug}` is {agent.status}: the run does not start")
     if agent.lifecycle == "retired":
-        raise AgentIndisponible(f"agent `{slug}` is retired: the run does not start")
+        raise AgentUnavailable(f"agent `{slug}` is retired: the run does not start")
     if agent.lifecycle == "draft":
-        raise AgentIndisponible(f"agent `{slug}` is a draft: activate it before a run uses it")
+        raise AgentUnavailable(f"agent `{slug}` is a draft: activate it before a run uses it")
     if agent.expires_at is not None and _aware(agent.expires_at) <= utcnow():
-        raise AgentIndisponible(f"agent `{slug}` expired on {agent.expires_at:%Y-%m-%d}")
-    epingle = (
+        raise AgentUnavailable(f"agent `{slug}` expired on {agent.expires_at:%Y-%m-%d}")
+    pin = (
         await session.execute(
             select(ProjectAgent).where(
                 ProjectAgent.project_id == project_id, ProjectAgent.agent_id == agent.id
@@ -196,14 +199,14 @@ async def resoudre_l_agent(
         )
     ).scalar_one_or_none()
     channel: str | None
-    if demandee:
-        version: int | None = int(demandee)
+    if requested:
+        version: int | None = int(requested)
         source, channel = "explicit", None
     else:
         project = await session.get(Project, project_id)
         version, source, channel = served(
             agent,
-            pin=epingle,
+            pin=pin,
             project_channel=(project.agent_channel if project is not None else "stable") or "stable",
             work_item_id=work_item_id,
         )
@@ -216,28 +219,26 @@ async def resoudre_l_agent(
                 .limit(1)
             )
         ).scalar_one()
-    ligne = (
+    row = (
         await session.execute(
             select(AgentVersion).where(AgentVersion.agent_id == agent.id, AgentVersion.version == version)
         )
     ).scalar_one_or_none()
-    if ligne is None:
-        raise AgentIndisponible(f"agent `{slug}` has no version {version}")
-    spec = AgentSpec.model_validate(ligne.spec)
-    surcharges = (
-        AgentOverrides.model_validate(epingle.overrides or {}) if epingle is not None else AgentOverrides()
-    )
-    return AgentResolu(
+    if row is None:
+        raise AgentUnavailable(f"agent `{slug}` has no version {version}")
+    spec = AgentSpec.model_validate(row.spec)
+    overrides = AgentOverrides.model_validate(pin.overrides or {}) if pin is not None else AgentOverrides()
+    return ResolvedAgent(
         agent=agent,
         version=version,
-        spec=effective(spec, surcharges),
+        spec=effective(spec, overrides),
         pinned=source in {"pin", "pin_channel"},
         source=source,
         channel=channel,
     )
 
 
-async def depense_depuis(session: AsyncSession, org_id: str, agent_slug: str, since: datetime) -> float:
+async def spend_since(session: AsyncSession, org_id: str, agent_slug: str, since: datetime) -> float:
     """What the agent's runs cost since `since`, models AND tools."""
     from sqlalchemy import func
 
@@ -254,26 +255,52 @@ async def depense_depuis(session: AsyncSession, org_id: str, agent_slug: str, si
     return float(total)
 
 
-async def depense_du_jour(session: AsyncSession, org_id: str, agent_slug: str) -> float:
+async def spend_today(session: AsyncSession, org_id: str, agent_slug: str) -> float:
     """What the agent's runs have cost since midnight (UTC), models AND tools."""
-    minuit = datetime.combine(utcnow().date(), time.min, tzinfo=utcnow().tzinfo)
-    return await depense_depuis(session, org_id, agent_slug, minuit)
+    midnight = datetime.combine(utcnow().date(), time.min, tzinfo=utcnow().tzinfo)
+    return await spend_since(session, org_id, agent_slug, midnight)
 
 
-async def depense_du_mois(session: AsyncSession, org_id: str, agent_slug: str) -> float:
+async def spend_this_month(session: AsyncSession, org_id: str, agent_slug: str) -> float:
     """What the agent's runs have cost since the first of the month (UTC), models AND tools."""
     first = datetime.combine(utcnow().date().replace(day=1), time.min, tzinfo=utcnow().tzinfo)
-    return await depense_depuis(session, org_id, agent_slug, first)
+    return await spend_since(session, org_id, agent_slug, first)
 
+
+empreinte = digest  # lang: fr-ok alias:internal
+erreurs_d_une_version = version_errors  # lang: fr-ok alias:internal
+elargissements = widenings  # lang: fr-ok alias:internal
+AgentIndisponible = AgentUnavailable  # lang: fr-ok alias:internal
+AgentResolu = ResolvedAgent  # lang: fr-ok alias:internal
+resoudre_l_agent = resolve_agent  # lang: fr-ok alias:internal
+depense_depuis = spend_since  # lang: fr-ok alias:internal
+depense_du_jour = spend_today  # lang: fr-ok alias:internal
+depense_du_mois = spend_this_month  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {
+        "empreinte": "digest",  # lang: fr-ok alias:internal
+        "erreurs_d_une_version": "version_errors",  # lang: fr-ok alias:internal
+        "elargissements": "widenings",  # lang: fr-ok alias:internal
+        "AgentIndisponible": "AgentUnavailable",  # lang: fr-ok alias:internal
+        "AgentResolu": "ResolvedAgent",  # lang: fr-ok alias:internal
+        "resoudre_l_agent": "resolve_agent",  # lang: fr-ok alias:internal
+        "depense_depuis": "spend_since",  # lang: fr-ok alias:internal
+        "depense_du_jour": "spend_today",  # lang: fr-ok alias:internal
+        "depense_du_mois": "spend_this_month",  # lang: fr-ok alias:internal
+    },
+)
 
 __all__ = [
-    "AgentIndisponible",
-    "AgentResolu",
-    "depense_depuis",
-    "depense_du_jour",
-    "depense_du_mois",
+    "AgentUnavailable",
+    "ResolvedAgent",
+    "digest",
     "effective",
-    "elargissements",
-    "erreurs_d_une_version",
-    "resoudre_l_agent",
+    "resolve_agent",
+    "spend_since",
+    "spend_this_month",
+    "spend_today",
+    "version_errors",
+    "widenings",
 ]

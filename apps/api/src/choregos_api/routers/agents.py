@@ -1343,7 +1343,7 @@ async def resolve_project_agents(
     explicit `@N`, else the project's pin, else the project's channel, else production (ADR 0071).
     A canary share depends on the work item, so it is reported (`candidate_percent`), not applied.
     Read only, no audit record."""
-    from ..services.catalogue_d_agents import catalogue_of
+    from ..services.agent_catalogue import catalogue_of
 
     offered = await catalogue_of(session, ctx.project.org_id)
     reponses: list[AgentResolution] = []
@@ -1743,14 +1743,14 @@ async def list_agent_catalogue(
 ) -> list[AgentCatalogueEntry]:
     """The agents the platform offers, and where they stand in the organisation: installed, in
     which version, an update available — or an agent of the organisation that carries that name."""
-    from ..services import catalogue_d_agents as catalogue
+    from ..services import agent_catalogue as catalogue
 
     require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     rendered = []
     for proposal in (await catalogue.catalogue_of(session, organisation.id)).entries:
-        offer_state = await catalogue.etat(session, organisation.id, proposal)
-        is_offered, reason_text = catalogue.offre(proposal, settings)
+        offer_state = await catalogue.state(session, organisation.id, proposal)
+        is_offered, reason_text = catalogue.offer(proposal, settings)
         rendered.append(
             AgentCatalogueEntry(
                 slug=proposal.slug,
@@ -1764,11 +1764,11 @@ async def list_agent_catalogue(
                 tags=list(proposal.tags),
                 client=proposal.client,
                 reach=proposal.reach,
-                installed=offer_state.installe,
-                installed_version=offer_state.version_installee,
-                own_agent=offer_state.installe and not offer_state.du_catalogue,
+                installed=offer_state.installed,
+                installed_version=offer_state.installed_version,
+                own_agent=offer_state.installed and not offer_state.catalogue_agent,
                 scope=offer_state.scope,
-                update_available=offer_state.mise_a_jour,
+                update_available=offer_state.update_available,
                 offered=is_offered,
                 unavailable_reason=reason_text,
             )
@@ -1791,7 +1791,7 @@ async def install_catalogue_agent(
 ) -> AgentDto:
     """Install the agent as version 1 (201); already installed, `upgrade` publishes the next version if the
     catalogue changed (200). An agent of the organisation with the same name is never touched (409)."""
-    from ..services import catalogue_d_agents as catalogue
+    from ..services import agent_catalogue as catalogue
 
     _admin(principal, org)
     organisation = await organisation_by_slug(session, org)
@@ -1799,11 +1799,11 @@ async def install_catalogue_agent(
     proposal = view.entry(slug)
     if proposal is None:
         raise not_found("Catalogue agent", slug)
-    offer_state = await catalogue.etat(session, organisation.id, proposal)
-    if not offer_state.installe:
-        await catalogue.installer(session, organisation.id, proposal, principal, view)
+    offer_state = await catalogue.state(session, organisation.id, proposal)
+    if not offer_state.installed:
+        await catalogue.install(session, organisation.id, proposal, principal, view)
         response.status_code = status.HTTP_201_CREATED
-    elif not offer_state.du_catalogue:
+    elif not offer_state.catalogue_agent:
         raise conflict(
             f"`{slug}` is an agent of {org} that does not come from the catalogue: it is left untouched"
         )
@@ -1817,7 +1817,7 @@ async def install_catalogue_agent(
             "if that is what you want"
         )
     else:
-        await catalogue.mettre_a_jour(session, organisation.id, proposal, principal, view)
+        await catalogue.upgrade(session, organisation.id, proposal, principal, view)
     return await agent_dto(
         session, await agent_in_org(session, organisation, slug), principal, org, with_versions=True
     )
@@ -1844,7 +1844,7 @@ async def connect_catalogue_client(
     from datetime import timedelta
 
     from ..security import generate_api_token
-    from ..services import catalogue_d_agents as catalogue
+    from ..services import agent_catalogue as catalogue
 
     connect_body = body or AgentCatalogueConnect()
     require_agent_reader(principal, org)
@@ -1854,7 +1854,7 @@ async def connect_catalogue_client(
     proposal = (await catalogue.catalogue_of(session, organisation.id)).entry(slug)
     if proposal is None or proposal.kind != "external":
         raise not_found("Catalogue client", slug)
-    is_offered, reason_text = catalogue.offre(proposal, settings)
+    is_offered, reason_text = catalogue.offer(proposal, settings)
     if not is_offered:
         raise conflict(f"`{slug}` is not offered here: {reason_text}")
     agent = (
@@ -1862,7 +1862,7 @@ async def connect_catalogue_client(
     ).scalar_one_or_none()
     if agent is None:
         _admin(principal, org)
-        await catalogue.installer(session, organisation.id, proposal, principal)
+        await catalogue.install(session, organisation.id, proposal, principal)
         agent = await agent_in_org(session, organisation, slug)
     elif agent.kind != "external":
         raise conflict(f"`{slug}` is an internal agent of {org}: it cannot carry a client")

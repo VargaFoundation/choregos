@@ -84,6 +84,7 @@ CONSTRUCTEURS = {
     "Refusal",
     # Le refus rendu au run, dont la console montre la raison.
     "AgentIndisponible",
+    "AgentUnavailable",
 }
 #: Les clés d'un dictionnaire littéral dont la valeur part dans une réponse d'erreur.
 CLES_LUES = {"title", "detail", "msg", "error"}
